@@ -18,6 +18,7 @@ import { ENVIRONMENT_SETUP_SERVICE, EnvironmentSetupService } from '../setup/env
 import { RUN_DEPS_FACTORY, RunDepsFactory } from './run-deps.factory';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator, admissionRefOf } from './admission-coordinator';
 import type { StuckDetector } from '../maintenance/stuck-detector';
+import { queueRegistrations } from './queue-limits';
 
 // The Run as a DBOS Transact workflow (ADR-046): workflowID = runId makes the
 // start idempotent, the queue is partitioned by org for fairness, and every
@@ -42,6 +43,8 @@ export const setupWorkflowId = (key: string) => `setup:${key}`;
 /** The queued Run a fork's gate starts once approved. */
 export const approvedRunWorkflowId = (runId: string) => `${runId}:run`;
 const runIdOfWorkflow = (workflowId: string) => workflowId.replace(/:run$/, '');
+/** Workflow ids per DBOS query of the sweep (two per live Run: its workflow and its approved fork). */
+export const SWEEP_BATCH = 200;
 export const admissionAttemptWorkflowId = (ref: AdmissionRef, generation: number, ownerEpoch: number, repairBucket?: number) =>
     `admission:${jsonTupleHex([ref.organizationId, ref.kind, ref.key])}:${generation}:${ownerEpoch}${repairBucket === undefined ? '' : `:repair:${repairBucket}`}`;
 
@@ -180,13 +183,8 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         }
         DBOS.setConfig({ name: 'kody-runtime', systemDatabaseUrl: this.config.databaseUrl, logLevel: this.config.dbosLogLevel, applicationVersion: this.config.releaseVersion, ...(this.config.executorId ? { executorID: this.config.executorId } : {}) });
         await DBOS.launch();
-        if (this.config.durableAdmission) {
-            await DBOS.registerQueue(EXECUTION_QUEUE, { concurrency: this.config.admission.globalExecuting, partitionConcurrency: this.config.admission.perOrgExecuting, onConflict: 'always_update' });
-            await DBOS.registerQueue(ADMISSION_QUEUE, { concurrency: this.config.admission.attemptConcurrency, partitionConcurrency: this.config.admission.attemptPerOrg, onConflict: 'always_update' });
-            await DBOS.registerQueue(ADMISSION_FINALIZE_QUEUE, { concurrency: this.config.admission.attemptConcurrency, partitionConcurrency: this.config.admission.attemptPerOrg, onConflict: 'always_update' });
-        } else {
-            await DBOS.registerQueue(RUN_QUEUE, { concurrency: this.config.globalConcurrency, partitionConcurrency: this.config.partitionConcurrency, onConflict: 'always_update' });
-            await DBOS.registerQueue(SETUP_QUEUE, { concurrency: this.config.globalConcurrency, partitionConcurrency: this.config.setupPerOrg, onConflict: 'always_update' });
+        for (const [name, options] of queueRegistrations(this.config, { execution: EXECUTION_QUEUE, admission: ADMISSION_QUEUE, finalize: ADMISSION_FINALIZE_QUEUE, runs: RUN_QUEUE, setups: SETUP_QUEUE })) {
+            await DBOS.registerQueue(name, options);
         }
         this.launched = true;
         this.logger.log({ msg: 'dbos.launched', queue: this.config.durableAdmission ? EXECUTION_QUEUE : RUN_QUEUE, partitionConcurrency: this.config.partitionConcurrency, globalConcurrency: this.config.globalConcurrency });
@@ -497,16 +495,24 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         }
     }
 
-    /** Runs the engine stopped by itself (45 min timeout, error) and the 30 min queue limit. */
+    /**
+     * Runs the engine stopped by itself (45 min timeout, error) and the 30 min queue limit. It asks
+     * DBOS about the workflows of the Runs still live in the projection, in batches of
+     * SWEEP_BATCH ids, not about a window of DBOS's history: a window of the last 200 stopped
+     * workflows filled with Runs already final, and a live Run past it was never swept.
+     */
     async sweep(now = new Date()) {
-        const since = new Date(now.getTime() - 6 * 3_600_000).toISOString();
-        const stuck = (
-            await Promise.all(
-                [RUN_WORKFLOW, FORK_GATE_WORKFLOW].map((workflowName) => DBOS.listWorkflows({ workflowName, status: ['CANCELLED', 'ERROR', 'ENQUEUED'], startTime: since, limit: 200 })),
-            )
-        ).flat();
+        const live = (await this.projection.listLive()).filter((r) => !isTerminal(r.state));
+        const ids = live.flatMap((r) => [r.runId, approvedRunWorkflowId(r.runId)]);
+        const stuck: Awaited<ReturnType<typeof DBOS.listWorkflows>> = [];
+        for (let i = 0; i < ids.length; i += SWEEP_BATCH) {
+            stuck.push(...(await DBOS.listWorkflows({ workflowIDs: ids.slice(i, i + SWEEP_BATCH), status: ['CANCELLED', 'ERROR', 'ENQUEUED'], loadInput: false, loadOutput: false })));
+        }
+        // The Run's own workflow before its fork gate, as when they were listed by name.
+        stuck.sort((a, b) => Number(b.workflowName === RUN_WORKFLOW) - Number(a.workflowName === RUN_WORKFLOW));
         const seen = new Set<string>();
         for (const wf of stuck) {
+            if (wf.workflowName !== RUN_WORKFLOW && wf.workflowName !== FORK_GATE_WORKFLOW) continue;
             const runId = runIdOfWorkflow(wf.workflowID);
             if (seen.has(runId)) continue;
             seen.add(runId);

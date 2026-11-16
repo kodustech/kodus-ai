@@ -7,11 +7,13 @@ import type { Channel, ConsumeMessage } from 'amqplib';
 
 import {
     RUNTIME_CONTROL_ROUTING_KEY,
+    RUNTIME_RETRY_DELAY_HEADER,
     RUNTIME_RUN_RETRY_EXCHANGE,
     RUNTIME_RUN_ROUTING_KEY,
+    runtimeRetryDelay,
 } from '@libs/runtime/run/run-messages';
 
-/** The keys the product initializer binds on the retry exchange: one edge per lane. */
+/** The keys the product initializer binds on the retry's return exchange: one edge per lane. */
 const RETRYABLE_ROUTES = new Set([RUNTIME_RUN_ROUTING_KEY, RUNTIME_CONTROL_ROUTING_KEY]);
 
 export interface RuntimeRetryPolicy {
@@ -112,13 +114,12 @@ export class RuntimeRunRetry {
         delete headers['x-last-error'];
         delete headers['x-last-error-message'];
         headers['x-retry-count'] = count + 1;
-        const delayMs = Math.min(
-            this.policy.maxDelayMs,
-            this.policy.delayMs * 2 ** count,
+        // The wait queue of the backoff (run-messages.ts RUNTIME_RUN_RETRY_EXCHANGE): never shorter.
+        const delayMs = runtimeRetryDelay(
+            Math.min(this.policy.maxDelayMs, this.policy.delayMs * 2 ** count),
         );
-        // amqplib auto-encodes small numbers as signed byte, which x-delayed
-        // does not accept. Force a supported int32 even for sub-128ms retries.
-        headers['x-delay'] = { '!': 'int', 'value': delayMs };
+        delete headers['x-delay'];
+        headers[RUNTIME_RETRY_DELAY_HEADER] = String(delayMs);
         try {
             // The publish promise resolves only on the broker's ack and rejects on a nack or the timeout; the
             // resolved boolean is only whether the write buffer had room (backpressure), never a refusal.

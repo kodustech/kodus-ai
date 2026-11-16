@@ -269,6 +269,11 @@ func (b *nativeSystemdBus) Start(ctx context.Context, u systemdUnit) error {
 	return awaitSystemdJob(ctx, done)
 }
 
+// SetMemoryMax changes a running slice's MemoryMax (claimlimits.Resizer).
+func (b *nativeSystemdBus) SetMemoryMax(ctx context.Context, name string, bytes uint64) error {
+	return b.conn.SetUnitPropertiesContext(ctx, name, true, systemdbus.Property{Name: "MemoryMax", Value: dbus.MakeVariant(bytes)})
+}
+
 func (b *nativeSystemdBus) Stop(ctx context.Context, name string) error {
 	done := make(chan string, 1)
 	if _, err := b.conn.StopUnitContext(ctx, name, "replace", done); err != nil {

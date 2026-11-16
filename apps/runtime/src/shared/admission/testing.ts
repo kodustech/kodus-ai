@@ -154,6 +154,7 @@ export class InMemoryAdmissionStore extends AdmissionStoreBase {
                         orgExecuting: active.filter(
                             (row) => row.organizationId === org,
                         ).length,
+                        setups: active.filter((row) => row.kind === 'setup').length,
                         orgSetups: active.filter(
                             (row) =>
                                 row.organizationId === org &&

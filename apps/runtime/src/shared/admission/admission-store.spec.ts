@@ -235,6 +235,17 @@ describe('logical admission state and ownership', () => {
         ).toBe('global_limit');
     });
 
+    // RUNTIME_SETUP_CONCURRENCY: setups of different orgs wait their turn past the global setup limit; Runs do not.
+    it('holds setups across organizations to the global setup limit, and only setups', async () => {
+        const first = await take(setup('org-a'));
+        const second = await take(setup('org-b'));
+        const r = await take(run('org-b'));
+        const capped = { ...limits, globalSetups: 1 };
+        expect((await store.reserveExecution(first, capped)).status).toBe('reserved');
+        expect((await store.reserveExecution(second, capped)).status).toBe('setup_limit');
+        expect((await store.reserveExecution(r, capped)).status).toBe('reserved');
+    });
+
     it('retains a cancelled permit through lease expiry until explicit confirmed cleanup', async () => {
         const input = run();
         const lease = await take(input);

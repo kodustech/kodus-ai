@@ -77,10 +77,10 @@ const ticket = (row: AdmissionRecord): PhysicalAdmissionTicket => ({
                 requestedAt: new Date().toISOString(),
             },
         });
-        const setup = (): AdmissionPayload => {
+        const setup = (organizationId = org): AdmissionPayload => {
             const request: RuntimeEnvironmentSetupRequested = {
                 key: randomUUID(),
-                organizationId: org,
+                organizationId,
                 environmentId: `env-${randomUUID()}`,
                 teamId: 't',
                 repositoryId: 'r',
@@ -206,6 +206,15 @@ const ticket = (row: AdmissionRecord): PhysicalAdmissionTicket => ({
                     )
                 ).rows[0].n,
             ).toBe(1);
+        });
+
+        // RUNTIME_SETUP_CONCURRENCY: the setups column counts every org's executing setups.
+        it('holds setups of every organization to the global setup limit, across two store instances', async () => {
+            const first = await take(setup(ownOrg()));
+            expect((await a.reserveExecution(first, limits)).status).toBe('reserved');
+            const capped = { ...limits, globalSetups: 1 };
+            expect((await b.reserveExecution(await take(setup(ownOrg())), capped)).status).toBe('setup_limit');
+            expect((await b.reserveExecution(await take(run(ownOrg())), capped)).status).toBe('reserved');
         });
 
         it('shares Run/setup grant counters and setup exclusivity across two store instances', async () => {

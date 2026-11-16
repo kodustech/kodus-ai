@@ -1,5 +1,7 @@
 import { QUEUE_TIMEOUT_MS } from '../run/run-orchestrator';
-import { queuedPastLimit, runPastLimit } from './run-engine.service';
+import { DBOS } from '@dbos-inc/dbos-sdk';
+
+import { approvedRunWorkflowId, queuedPastLimit, RUN_WORKFLOW, RunEngineService, runPastLimit, SWEEP_BATCH } from './run-engine.service';
 
 describe('sweep: a queued Run with no workflow', () => {
     const now = new Date('2026-10-31T12:00:00Z');
@@ -32,5 +34,33 @@ describe('sweep: the 45 min of a Run that waited for room (ADR-070)', () => {
         expect(runPastLimit({ state: 'testing', bootingAt: ago(44 * MIN) }, now)).toBe(false);
         // A projection from before `at` was recorded: from bootingAt, as before.
         expect(runPastLimit({ state: 'booting', bootingAt: ago(46 * MIN), capacityWait: { side: 'pr', since: ago(46 * MIN), signature: 'no_capacity', message: '' } }, now)).toBe(true);
+    });
+});
+
+describe('sweep: the workflows of the live Runs, not a window of DBOS history', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    // A window of the last 200 stopped workflows of the last 6 h filled with Runs already final; a
+    // live Run past it, or older than the window, was never swept.
+    it('asks DBOS about every live Run in batches and stops the one whose workflow stopped, however old', async () => {
+        const now = new Date('2026-11-16T12:00:00Z');
+        const live = Array.from({ length: 250 }, (_, i) => ({ runId: `run-${i}`, organizationId: 'org-a', state: 'testing', requestedAt: now.toISOString(), bootingAt: now.toISOString() }));
+        const asked: string[][] = [];
+        jest.spyOn(DBOS, 'listWorkflows').mockImplementation(async (input: any) => {
+            asked.push(input.workflowIDs);
+            expect(input).not.toHaveProperty('startTime');
+            // run-249 errored 7 h ago, past the old window.
+            return input.workflowIDs.includes('run-249') ? [{ workflowID: 'run-249', workflowName: RUN_WORKFLOW, status: 'ERROR', createdAt: now.getTime() - 7 * 3_600_000 }] as any : [];
+        });
+        jest.spyOn(DBOS, 'getWorkflowStatus').mockResolvedValue({} as any);
+        const projection = { listLive: async () => live, get: async (id: string) => live.find((r) => r.runId === id) ?? null };
+        const engine = new RunEngineService({ sweeper: false } as any, {} as any, projection as any, {} as any, {} as any, {} as any);
+        const stop = jest.spyOn(engine, 'stop').mockResolvedValue(undefined as any);
+        await engine.sweep(now);
+        expect(asked.every((ids) => ids.length <= SWEEP_BATCH)).toBe(true);
+        expect(asked.flat()).toHaveLength(500);
+        expect(asked.flat()).toEqual(expect.arrayContaining(['run-0', approvedRunWorkflowId('run-0'), 'run-249']));
+        expect(stop).toHaveBeenCalledTimes(1);
+        expect(stop.mock.calls[0][1]).toBe('errored');
     });
 });

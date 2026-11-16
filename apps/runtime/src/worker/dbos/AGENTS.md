@@ -4,7 +4,7 @@ The runtime-worker's engine: it registers the DBOS workflows and queues, starts,
 
 ## Owns
 - Workflow registration and launch: `run-engine.service.ts` `RunEngineService.onModuleInit` registers `runtimeRun`, `runtimeForkGate`, `runtimeRunStop`, `runtimeEnvironmentSetup` (when a setup service is wired) and `runtimeAdmission` (durable admission), sets `applicationVersion` from `RUNTIME_RELEASE_VERSION`, and declares the queues.
-- Queues and workflow ids: `RUN_QUEUE` and `SETUP_QUEUE` partitioned by org (`RUNTIME_ORG_CONCURRENCY`, `RUNTIME_SETUP_PER_ORG`), or `EXECUTION_QUEUE`, `ADMISSION_QUEUE`, `ADMISSION_FINALIZE_QUEUE` with durable admission; `workflowID = runId` for a Run, `approvedRunWorkflowId`, `setupWorkflowId`, `admissionAttemptWorkflowId`.
+- Queues and workflow ids: `queue-limits.ts` `queueRegistrations` sizes them (limits clamped to each queue's global one, which DBOS requires; `RUNTIME_WORKER_CONCURRENCY` per replica): `RUN_QUEUE` and `SETUP_QUEUE` partitioned by org (`RUNTIME_ORG_CONCURRENCY`, `RUNTIME_SETUP_PER_ORG`, `RUNTIME_SETUP_CONCURRENCY`), or `EXECUTION_QUEUE`, `ADMISSION_QUEUE`, `ADMISSION_FINALIZE_QUEUE` with durable admission; the sweep asks DBOS about the workflows of the live Runs in batches (`SWEEP_BATCH`); `workflowID = runId` for a Run, `approvedRunWorkflowId`, `setupWorkflowId`, `admissionAttemptWorkflowId`.
 - Entry points the handlers call (`commands/run-engine.port.ts` `RunEngine`): `start`, `startSetup`, `approve` (sends on `APPROVAL_TOPIC`), `stop` (cancels, then starts the stop workflow and returns); `status` and `result` read a Run workflow by runId.
 - The step wrapper `dbosStep`: one try per step, except publish steps (`isPublishStep`), which retry with `PUBLISH_STEP_RETRY` for about ten minutes.
 - Maintenance: `RunEngineService.maintenanceTick` every 15 s under the `runtime-worker/maintenance` lock: `repairAdmission`, `sweep` (`runPastLimit`, `queuedPastLimit`), the reaper, hourly retention, then the stuck pass (`worker/maintenance`).
@@ -36,7 +36,7 @@ The runtime-worker's engine: it registers the DBOS workflows and queues, starts,
 
 ## Module map
 
-Files (3, tests apart): `admission-coordinator.ts`, `run-deps.factory.ts`, `run-engine.service.ts`
+Files (4, tests apart): `admission-coordinator.ts`, `queue-limits.ts`, `run-deps.factory.ts`, `run-engine.service.ts`
 
 Imports these Runtime modules:
 

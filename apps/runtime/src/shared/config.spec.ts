@@ -110,6 +110,16 @@ describe('runtime config', () => {
                 .admission.perOrgExecuting,
         ).toBe(1);
     });
+    it('runs 4 setups across the app and 10 workflows per replica unless set, never above the global limit', () => {
+        const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
+        const c = loadWorkerConfig(base);
+        expect([c.setupConcurrency, c.workerConcurrency, c.admission.globalSetups]).toEqual([4, 10, 4]);
+        const small = loadWorkerConfig({ ...base, RUNTIME_GLOBAL_CONCURRENCY: '3' });
+        expect([small.setupConcurrency, small.workerConcurrency]).toEqual([3, 3]);
+        expect(loadWorkerConfig({ ...base, RUNTIME_SETUP_CONCURRENCY: '1', RUNTIME_WORKER_CONCURRENCY: '20' }).workerConcurrency).toBe(20);
+        for (const [name, bad] of [['RUNTIME_SETUP_CONCURRENCY', '0'], ['RUNTIME_WORKER_CONCURRENCY', '21'], ['RUNTIME_WORKER_CONCURRENCY', '0']])
+            expect(() => loadWorkerConfig({ ...base, [name]: bad })).toThrow(new RegExp(name));
+    });
     it("runs 2 setups of one organization at once unless set, between 1 and 8", () => {
         const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
         expect(loadWorkerConfig(base).setupPerOrg).toBe(2);

@@ -90,7 +90,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                     uri: config.rabbitUrl,
                     // The Runtime's broker user may not configure workflow.exchange: it is
                     // checked (passive), never declared (scripts/runtime/dev-runtime-users.sh).
-                    exchanges: [{ name: 'workflow.exchange', type: 'topic', createExchangeIfNotExists: false }, { name: RUNTIME_RUN_RETRY_EXCHANGE, type: 'x-delayed-message', createExchangeIfNotExists: false }],
+                    exchanges: [{ name: 'workflow.exchange', type: 'topic', createExchangeIfNotExists: false }, { name: RUNTIME_RUN_RETRY_EXCHANGE, type: 'headers', createExchangeIfNotExists: false }],
                     channels: { 'channel-runtime-run': { prefetchCount: config.brokerPrefetch }, 'channel-runtime-control': { prefetchCount: config.brokerPrefetch } },
                     connectionInitOptions: { wait: true, timeout: 30_000 },
                     enableControllerDiscovery: false,

@@ -115,13 +115,14 @@ func wireDockerGVisor(ctx context.Context, w wiring, cfg *agent.Config) (opened,
 		return errors.Join(errs...)
 	}
 	var limits claimlimits.Manager
+	var budgets claimlimits.Resizer
 	if st.GVisorClaimLimits == "required" {
 		manager, err := configureClaimLimits(ctx, dockercli.CLI{}, st, w.cellID)
 		if err != nil {
 			return opened{}, fmt.Errorf("claim resource enforcement: %w", err)
 		}
 		closers = append(closers, func(context.Context) error { return manager.Close() })
-		limits = manager
+		limits, budgets = manager, manager
 		cfg.RequireMemoryAdmission = true
 	}
 	// Without ceiling flags a claim may ask what the host has (never less than the default).
@@ -137,7 +138,7 @@ func wireDockerGVisor(ctx context.Context, w wiring, cfg *agent.Config) (opened,
 	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
 		HostMemoryMB: hostMB, HostCPUs: runtime.NumCPU(),
 		BakeStateDir: filepath.Join(st.StateDir, "bakes"), IOLimits: st.MicroVM.gvisorIOLimits(),
-		ClaimLimits: limits, ClaimLimitBackend: st.GVisorClaimLimitBackend, CellID: w.cellID, HolderImage: st.GVisorHolderImage, SandboxImage: st.Sandbox.Image, WorkDir: filepath.Join(st.WorkDir, "compose"), EgressContainer: st.GVisorEgressContainer, BuilderImage: st.GVisorBuilderImage, BuilderTrustsCellCA: builderTrustsCellCA(st.GVisorBuilderImage, st.GVisorBuilderTrust), HelperImage: st.GVisorHelperImage, MirrorGoProxy: st.GVisorMirrorGoProxy, MirrorNPM: st.GVisorMirrorNPM, MirrorPyPI: st.GVisorMirrorPyPI, MirrorRegistry: st.GVisorMirrorRegistry, MemLimit: st.GVisorMemLimit,
+		ClaimLimits: limits, ClaimBudgets: budgets, ClaimLimitBackend: st.GVisorClaimLimitBackend, CellID: w.cellID, HolderImage: st.GVisorHolderImage, SandboxImage: st.Sandbox.Image, WorkDir: filepath.Join(st.WorkDir, "compose"), EgressContainer: st.GVisorEgressContainer, BuilderImage: st.GVisorBuilderImage, BuilderTrustsCellCA: builderTrustsCellCA(st.GVisorBuilderImage, st.GVisorBuilderTrust), HelperImage: st.GVisorHelperImage, MirrorGoProxy: st.GVisorMirrorGoProxy, MirrorNPM: st.GVisorMirrorNPM, MirrorPyPI: st.GVisorMirrorPyPI, MirrorRegistry: st.GVisorMirrorRegistry, MemLimit: st.GVisorMemLimit,
 		MemMax: st.GVisorMemMax, CPUsMax: st.GVisorCPUsMax, MemReady: st.GVisorMemReady, HealthStartInterval: st.GVisorHealthStart, NoGoldenData: !st.GVisorGoldenData, BuilderUID: st.GVisorBuilderUID, BuilderGID: st.GVisorBuilderGID,
 		PersistBuildState: st.GVisorBuildState, BuildStateKeep: st.GVisorBuildStateKeep, BuildStateMinFreeBytes: int64(st.GVisorBuildStateMinFreeGB) << 30,
 		BuildCacheRemote: st.GVisorBuildCacheRemote, BuildCacheRemoteAuth: remoteAuth,

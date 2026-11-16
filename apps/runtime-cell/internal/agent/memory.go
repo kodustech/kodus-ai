@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"context"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
@@ -114,14 +116,29 @@ func (a *Agent) countSandbox(c *claims.Claim) {
 	a.nudgeHeartbeat()
 }
 
-// countReady counts a claim whose builds are over at its ready size. A
-// sandbox builds nothing: it stays at its size (countSandbox).
-func (a *Agent) countReady(c *claims.Claim) {
+// countReady counts a claim whose builds are over at its ready size, or at
+// the smaller ceiling its driver enforces on it from now on (ReadyMemory,
+// docker-gvisor under claim limits, which counts a ready claim at its whole
+// ceiling otherwise). The driver lowers the ceiling before it answers: the
+// count never drops below what the claim may use. A sandbox builds nothing:
+// it stays at its size (countSandbox).
+func (a *Agent) countReady(ctx context.Context, c *claims.Claim) {
 	if a.mem == nil || isSandbox(c) {
 		return
 	}
-	if a.mem.Count(c.ID) != a.budget.ClaimMemory(claimSize(c.Acquire)).ReadyMB {
-		a.mem.Set(c.ID, a.budget.ClaimMemory(claimSize(c.Acquire)).ReadyMB)
+	ready := a.budget.ClaimMemory(claimSize(c.Acquire)).ReadyMB
+	if s := a.cfg.Parts.ReadyMemory; s != nil {
+		mb, err := s.SettleReady(ctx, c.Machines().Workload)
+		switch {
+		case err != nil:
+			c.Log.Warn("claim.memory.settle_failed", "readyMb", ready, "err", err)
+		case mb > 0 && mb < ready:
+			c.Log.Info("claim.memory.settled", "readyMb", mb, "ceilingMb", ready)
+			ready = mb
+		}
+	}
+	if a.mem.Count(c.ID) != ready {
+		a.mem.Set(c.ID, ready)
 		a.nudgeHeartbeat()
 	}
 }

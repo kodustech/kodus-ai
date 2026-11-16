@@ -39,6 +39,9 @@ type Parts struct {
 	// driver, counts a code sandbox for more than its size names.
 	Memory        MemoryBudget
 	SandboxMemory SandboxBudget
+	// ReadyMemory, on such a driver, enforces a smaller ceiling on a claim
+	// once it is ready, and admission counts that instead of ReadyMB.
+	ReadyMemory ReadySettler
 	// Diagnoser, ServiceLogs and Health read a claim's machines for the
 	// failure bundle, a probe round's logs and a step's vmHealth.
 	Diagnoser   Diagnoser

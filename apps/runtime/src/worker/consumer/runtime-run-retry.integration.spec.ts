@@ -16,10 +16,17 @@ import {
 } from 'amqplib';
 
 import {
+    RUNTIME_RETRY_DELAY_HEADER,
+    RUNTIME_RETRY_RETURN_EXCHANGE,
     RUNTIME_RUN_RETRY_EXCHANGE,
     RuntimeEventName,
     runtimeEnvelope,
+    runtimeRetryWaitQueue,
 } from '@libs/runtime/run/run-messages';
+import {
+    bindRuntimeRetryLane,
+    declareRuntimeRetry,
+} from '@libs/core/infrastructure/queue/config/runtime-retry-topology';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
@@ -125,7 +132,7 @@ describe('Runtime retry source permission boundary', () => {
 });
 
 (enabled ? describe : describe.skip)(
-    'Runtime retry with isolated real delayed broker and restricted identity',
+    'Runtime retry on an isolated real broker (no delayed-message plugin) and a restricted identity',
     () => {
         let admin: ChannelModel;
         let channel: ConfirmChannel;
@@ -219,8 +226,6 @@ describe('Runtime retry source permission boundary', () => {
                 write: policy.write,
                 read: policy.read,
             });
-            for (const topic of policy.topics)
-                await api(`/api/topic-permissions/${own}/${own}`, 'PUT', topic);
             adminAddress.pathname = '/' + own;
             userAddress = new URL(adminAddress);
             userAddress.username = own;
@@ -232,19 +237,19 @@ describe('Runtime retry source permission boundary', () => {
             await channel.assertExchange('workflow.exchange', 'topic', {
                 durable: true,
             });
+            // RabbitMQ 4.3 refuses topic permissions on an exchange that does not exist yet.
+            for (const topic of policy.topics)
+                await api(`/api/topic-permissions/${own}/${own}`, 'PUT', topic);
             await channel.assertExchange('workflow.exchange.dlx', 'topic', {
                 durable: true,
             });
-            await channel.assertExchange(
-                'workflow.exchange.delayed',
-                'x-delayed-message',
-                { durable: true, arguments: { 'x-delayed-type': 'topic' } },
-            );
-            await channel.assertExchange(
-                RUNTIME_RUN_RETRY_EXCHANGE,
-                'x-delayed-message',
-                { durable: true, arguments: { 'x-delayed-type': 'direct' } },
-            );
+            // The product's shared delayed exchange, by name only: the permission checks
+            // below are name-based, and this broker needs no plugin.
+            await channel.assertExchange('workflow.exchange.delayed', 'topic', {
+                durable: true,
+            });
+            // The product initializer's own topology functions.
+            await declareRuntimeRetry(channel);
             await channel.assertQueue('workflow.jobs.runtime_run.queue', {
                 durable: true,
                 arguments:
@@ -252,10 +257,9 @@ describe('Runtime retry source permission boundary', () => {
                         'workflow.jobs.runtime_run.queue'
                     ],
             });
-            await channel.bindQueue(
+            await bindRuntimeRetryLane(
+                channel,
                 'workflow.jobs.runtime_run.queue',
-                RUNTIME_RUN_RETRY_EXCHANGE,
-                'workflow.jobs.created.RUNTIME_RUN',
             );
             await channel.assertQueue('workflow.jobs.dlq', {
                 durable: true,
@@ -274,6 +278,7 @@ describe('Runtime retry source permission boundary', () => {
                     durable: true,
                     arguments: WORKFLOW_JOB_QUEUE_ARGUMENTS[name],
                 });
+                await bindRuntimeRetryLane(channel, name);
                 await channel.bindQueue(
                     name,
                     'workflow.exchange.delayed',
@@ -397,7 +402,8 @@ describe('Runtime retry source permission boundary', () => {
             await within(awaited);
             expect(canonical).toEqual(new Set([request.runId]));
             expect(counts.get(request.runId)).toBe(2);
-            expect(attempts[1] - attempts[0]).toBeGreaterThanOrEqual(80);
+            // A 100 ms backoff waits the shortest wait queue, 1 s.
+            expect(attempts[1] - attempts[0]).toBeGreaterThanOrEqual(900);
             expect(actions.indexOf('confirmed')).toBeLessThan(
                 actions.indexOf('ack'),
             );
@@ -533,13 +539,32 @@ describe('Runtime retry source permission boundary', () => {
             ).toBe(true);
             expect(
                 await denied((ch) =>
-                    ch.assertExchange(
-                        RUNTIME_RUN_RETRY_EXCHANGE,
-                        'x-delayed-message',
-                        {
-                            durable: true,
-                            arguments: { 'x-delayed-type': 'direct' },
-                        },
+                    ch.assertExchange(RUNTIME_RUN_RETRY_EXCHANGE, 'headers', {
+                        durable: true,
+                    }),
+                ),
+            ).toBe(true);
+            // The wait is not skippable: no write on the return exchange, nor on a wait
+            // queue through the default exchange.
+            expect(
+                await denied((ch) =>
+                    confirmed(
+                        ch,
+                        RUNTIME_RETRY_RETURN_EXCHANGE,
+                        'workflow.jobs.created.RUNTIME_RUN',
+                        Buffer.from('{}'),
+                        { persistent: true },
+                    ),
+                ),
+            ).toBe(true);
+            expect(
+                await denied((ch) =>
+                    confirmed(
+                        ch,
+                        '',
+                        runtimeRetryWaitQueue(1000),
+                        Buffer.from('{}'),
+                        { persistent: true },
                     ),
                 ),
             ).toBe(true);
@@ -556,14 +581,15 @@ describe('Runtime retry source permission boundary', () => {
                     { persistent: true },
                 ),
             ).resolves.toEqual(expect.any(Boolean));
-            // Topic-key ACLs are not claimed for x-delayed. Unknown keys confirm,
-            // but cannot reach product/control destinations through this topology.
+            // Topic-key ACLs are not claimed for a headers exchange. A product key with
+            // the delay header waits, then finds no return edge; one without the header
+            // matches no wait queue. Neither reaches a product queue.
             await confirmed(
                 ch,
                 RUNTIME_RUN_RETRY_EXCHANGE,
                 'workflow.jobs.created.CODE_REVIEW',
                 Buffer.from('{}'),
-                { persistent: true },
+                { persistent: true, headers: { [RUNTIME_RETRY_DELAY_HEADER]: '1000' } },
             );
             await confirmed(
                 ch,
@@ -572,6 +598,7 @@ describe('Runtime retry source permission boundary', () => {
                 Buffer.from('{}'),
                 { persistent: true },
             );
+            await new Promise((res) => setTimeout(res, 1500));
             expect(
                 await channel.get('workflow.jobs.code_review.queue', {
                     noAck: true,

@@ -103,6 +103,8 @@ export interface AdmissionLimits {
     perOrgWaiting: number;
     globalExecuting: number;
     perOrgExecuting: number;
+    /** Setups executing at once across the app (RUNTIME_SETUP_CONCURRENCY); default globalExecuting. */
+    globalSetups?: number;
     maxAttempts: number;
     maxPayloadBytes?: number;
     globalBacklogBytes?: number;

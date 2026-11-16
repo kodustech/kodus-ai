@@ -212,6 +212,7 @@ export class PgAdmissionStore extends AdmissionStoreBase {
                         COALESCE(sum(payload_bytes) FILTER (WHERE NOT permit_held AND (state IN ('awaiting_approval','waiting','owned') OR ticket IS NOT NULL) AND org_id=$1),0) AS org_bytes,
                         count(*) FILTER (WHERE permit_held) AS executing,
                         count(*) FILTER (WHERE permit_held AND org_id=$1) AS org_executing,
+                        count(*) FILTER (WHERE permit_held AND kind='setup') AS setups,
                         count(*) FILTER (WHERE permit_held AND org_id=$1 AND kind='setup') AS org_setups
                         FROM runtime.runtime_admission_requests WHERE permit_held OR state IN ('awaiting_approval','waiting','owned') OR ticket IS NOT NULL`,
                         [org],
@@ -224,6 +225,7 @@ export class PgAdmissionStore extends AdmissionStoreBase {
                         orgBytes: Number(row.org_bytes),
                         executing: Number(row.executing),
                         orgExecuting: Number(row.org_executing),
+                        setups: Number(row.setups),
                         orgSetups: Number(row.org_setups),
                     };
                 },

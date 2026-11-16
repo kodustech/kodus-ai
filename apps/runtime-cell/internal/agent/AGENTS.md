@@ -10,7 +10,7 @@ The cell agent: the application of the cell process ([architecture.md](../../../
 - Egress: `egress_policy.go` `EgressRules.ClaimPolicy`, `PolicySpec`, `InspectRulesFor`; `egress_sync.go` (store and push the hub's allowlist); `recipe_requirements.go` `CheckRecipeEgress`.
 - Images and the pool: `image_policy.go` (`bake`, `bakeSource`, `poolTarget`, taint checks), `pool_claims.go`, `sandbox_pool.go` (blank sandboxes).
 - Sandboxes: `sandbox.go` (`sandbox.acquire`, the guest clients), `org_secrets.go` (placeholders per claim, cell trust), `canaries.go`.
-- Memory and disk: `memory.go` (what a claim is counted for, the heartbeat's memory), `disk_watch.go` (free disk of Docker's data root).
+- Memory and disk: `memory.go` (what a claim is counted for, the heartbeat's memory; `countReady` asks `Parts.ReadyMemory` to lower a ready claim's ceiling before counting it lower), `disk_watch.go` (free disk of Docker's data root).
 - Alerts and frames out: `alerts.go` `watchAlerts`, `onExfiltration`; `source_health.go` (work admitted only while every alert feed answers); `redaction.go` `claimRedactor`, `redactOutbound`; `settle.go` `deliver`, `deliverOnce`; `progress.go` (`claim.progress`); `manifest.go` `readyBody`.
 - Previews: `preview.go` (tunnel, routes, `previewTargetExposed`). Multi-repository claims: `workspace.go`.
 - Construction: `config.go` `Config`, `Config.complete` (required ports, memory admission, isolation check); `agent.go` `New`, `recoverBakes`.

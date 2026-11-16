@@ -796,6 +796,16 @@ type Pooler interface {
 	Adopt(ctx context.Context, p PoolMachine, claimID string) error
 }
 
+// ReadySettler, on a driver with a MemoryBudget, enforces a smaller ceiling
+// once a claim is ready: SettleReady lowers what the claim of ref may use to what
+// it holds plus room and returns that, in MB, for admission to count from
+// then on (0: nothing lowered, count ClaimMemory's ReadyMB). The enforced
+// ceiling is lowered before it returns, never after; on an error the claim
+// stays counted as it was.
+type ReadySettler interface {
+	SettleReady(ctx context.Context, ref MachineRef) (mb int, err error)
+}
+
 // ClaimMemory is what one claim is counted for on a cell that shares its
 // host memory between claims (ADR-070), in MB: BootMB while it boots (its
 // builds run then, each with the claim's memory limit), ReadyMB once it is

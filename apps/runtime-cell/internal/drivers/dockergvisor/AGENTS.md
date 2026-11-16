@@ -5,7 +5,7 @@ The cell's driver for self-hosted Linux hosts (`-driver docker-gvisor`, the defa
 ## Owns
 - Configuration and construction: `driver.go` `Config`, `New`, `Parts` (nearly every part: bake, reset, compose, recipes, pool, memory, diagnosis, SQL observers, sweep, sandboxes when a sandbox image is set).
 - The host's Docker as split ports: `docker.go` `Docker` (`daemonPort`, `backendPort`, …); `dockercli.CLI` implements them all.
-- A claim's network: `network.go` `PrepareClaim`, `ReleaseClaim`. Machines: `lifecycle.go` `Create`, `Suspend`, `Resume`, `Reset`, `Destroy`, `List`, `SetExpiry`; per-machine state `machines.go`; sizes `size.go` `ClaimMemory`; cgroup limits `claim_limits.go`.
+- A claim's network: `network.go` `PrepareClaim`, `ReleaseClaim`. Machines: `lifecycle.go` `Create`, `Suspend`, `Resume`, `Reset`, `Destroy`, `List`, `SetExpiry`; per-machine state `machines.go`; sizes `size.go` `ClaimMemory`; cgroup limits `claim_limits.go`; a ready claim's lowered ceiling and machine health under them, `settle.go` `SettleReady` (`Parts.ReadyMemory`), `MachineHealth` (`Parts.Health`), both only with `Config.ClaimBudgets`.
 - A project's boot: `up.go` `Up`, six steps on one `projectBoot` (sandbox, build, render, data, up, record). The compose file is rewritten and checked by `internal/compose/sandbox` before anything starts.
 - Builds with rootless BuildKit under runsc: `build.go`; the image transfer (`registry.go`, subpackage `registry`); BuildKit state and exported cache (`build_states.go`, `cache.go`, `cache_remote.go`, subpackages `buildstate`, `buildcache`, `remotecache`); host directories only the cell and builder can write (`hostdirs.go`, `owner_*.go`).
 - Bakes and their generations: `bake.go` `PinBakeSource`, `Bake`; `generation.go` `AcknowledgeBake`, `RecoverBakes` over `internal/bakecatalog`; data kept by a bake (`data.go`) and golden data for fast resets (`golden.go`).
@@ -39,7 +39,7 @@ The cell's driver for self-hosted Linux hosts (`-driver docker-gvisor`, the defa
 
 ## Module map
 
-Files (36, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `data.go`, `decoy.go`, `diagnose.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `size.go`, `sweep.go`, `up.go`, `workspace_exec.go`
+Files (37, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `data.go`, `decoy.go`, `diagnose.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, `size.go`, `sweep.go`, `up.go`, `workspace_exec.go`
 
 Imports these Runtime modules:
 

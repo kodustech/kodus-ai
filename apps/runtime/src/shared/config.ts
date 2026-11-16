@@ -135,6 +135,18 @@ export interface WorkerConfig extends RuntimeConfig {
      */
     setupPerOrg: number;
     /**
+     * RUNTIME_SETUP_CONCURRENCY (1..64, default 4, never above RUNTIME_GLOBAL_CONCURRENCY): setups
+     * that run at once across the app. A setup builds and bakes on a cell at full size and may ask
+     * the LLM for a recipe; it waits its turn on the setup queue, or as setup_limit under durable admission.
+     */
+    setupConcurrency: number;
+    /**
+     * RUNTIME_WORKER_CONCURRENCY (1..global, default min(10, RUNTIME_GLOBAL_CONCURRENCY)): Runs and
+     * setups one replica runs at once, so one replica never takes every global slot while its
+     * Postgres pool (RUNTIME_PG_POOL_MAX) serves a share of them.
+     */
+    workerConcurrency: number;
+    /**
      * RUNTIME_ROUND_SNAPSHOTS (0 or 1, default 1): each Run side's acquire step also keeps the claim
      * as its round snapshot once ready, and the Run's resets restore it (RunDeps.roundSnapshots).
      */
@@ -393,6 +405,7 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
     const evidenceStore = z.enum(['file', 's3']).parse(env.RUNTIME_EVIDENCE_STORE || 'file');
     const brokerRetryDelayMs = retrySetting(env, 'RUNTIME_COMMAND_RETRY_DELAY_MS', 'WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS', 1000, 1, 60_000);
     const brokerPrefetch = boundedInt(env, 'RUNTIME_BROKER_PREFETCH', 10, 1, 100);
+    const setupConcurrency = Math.min(boundedInt(env, 'RUNTIME_SETUP_CONCURRENCY', 4, 1, 64), base.globalConcurrency);
     const executorId = executorIdOf(env, base.productionImage);
     return {
         ...base,
@@ -419,10 +432,13 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
             orgBacklogBytes: boundedInt(env, 'RUNTIME_ADMISSION_ORG_BACKLOG_BYTES', ADMISSION_BYTE_LIMITS.orgBacklogBytes, 1024, 1024 * 1024 * 1024),
             attemptConcurrency: boundedInt(env, 'RUNTIME_ADMISSION_ATTEMPT_CONCURRENCY', 8, 1, 128),
             attemptPerOrg: boundedInt(env, 'RUNTIME_ADMISSION_ATTEMPT_ORG_CONCURRENCY', 1, 1, 16),
+            globalSetups: setupConcurrency,
             retryMs: boundedInt(env, 'RUNTIME_ADMISSION_RETRY_MS', 5000, 100, 60_000),
             leaseMs: boundedInt(env, 'RUNTIME_ADMISSION_LEASE_MS', 30_000, 30_000, 120_000),
         },
         setupPerOrg: boundedInt(env, 'RUNTIME_SETUP_PER_ORG', 2, 1, 8),
+        setupConcurrency,
+        workerConcurrency: boundedInt(env, 'RUNTIME_WORKER_CONCURRENCY', Math.min(10, base.globalConcurrency), 1, base.globalConcurrency),
         roundSnapshots: flag01(env, 'RUNTIME_ROUND_SNAPSHOTS', '1'),
         secretSealKey,
         git: {

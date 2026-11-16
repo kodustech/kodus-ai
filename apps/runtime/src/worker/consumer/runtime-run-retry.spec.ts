@@ -6,7 +6,6 @@ import {
     RABBIT_HANDLER,
 } from '@golevelup/nestjs-rabbitmq';
 import { Logger } from '@nestjs/common';
-import { dirname, join } from 'path';
 import type { ConsumeMessage } from 'amqplib';
 import { AmqpConnectionManagerClass } from 'amqp-connection-manager';
 
@@ -142,7 +141,7 @@ describe('Runtime-scoped confirmed Run retry', () => {
         expect(publish).toHaveBeenCalledTimes(1);
         expect(channel.ack).not.toHaveBeenCalled();
         const [exchange, key, bytes, properties] = publish.mock.calls[0];
-        expect(exchange).toBe('workflow.exchange.runtime_run_retry');
+        expect(exchange).toBe('workflow.exchange.runtime_retry');
         expect(key).toBe(input.fields.routingKey);
         expect(bytes).toBe(input.content);
         expect(properties).toMatchObject({
@@ -154,9 +153,11 @@ describe('Runtime-scoped confirmed Run retry', () => {
             headers: {
                 'original': 'preserved',
                 'x-retry-count': 1,
-                'x-delay': { '!': 'int', 'value': 100 },
+                // A 100 ms backoff waits in the shortest wait queue, never less.
+                'kodus-runtime-retry-delay-ms': '1000',
             },
         });
+        expect(properties.headers).not.toHaveProperty('x-delay');
         expect(JSON.stringify(log.error.mock.calls)).not.toContain('SECRET');
         confirm(false); // confirmed false is backpressure, not rejection.
         await pending;
@@ -384,20 +385,7 @@ describe('Runtime-scoped confirmed Run retry', () => {
         expect(publish.mock.calls[0][3].headers).not.toHaveProperty(
             'x-last-error',
         );
-        expect(publish.mock.calls[0][3].headers['x-delay']).toEqual({
-            '!': 'int',
-            'value': 200,
-        });
-        const codec = require(
-            join(dirname(require.resolve('amqplib')), 'lib/codec.js'),
-        );
-        const table = Buffer.alloc(128);
-        codec.encodeTable(
-            table,
-            { 'x-delay': publish.mock.calls[0][3].headers['x-delay'] },
-            0,
-        );
-        expect(String.fromCharCode(table[12])).toBe('I'); // signed int32, never signed byte for short delays.
+        expect(publish.mock.calls[0][3].headers['kodus-runtime-retry-delay-ms']).toBe('1000');
         expect(msg.properties.headers!['x-last-error']).toBe('SECRET');
     });
 

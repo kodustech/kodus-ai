@@ -97,6 +97,7 @@ type everyPart struct {
 	driver.SessionForgetter
 	driver.MemoryBudget
 	driver.SandboxBudget
+	driver.ReadySettler
 	driver.Diagnoser
 	driver.ServiceLogReader
 	driver.HealthReader

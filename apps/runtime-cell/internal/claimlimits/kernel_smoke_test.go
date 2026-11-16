@@ -159,6 +159,105 @@ func TestKernelCeilings(t *testing.T) {
 	t.Log("delegated-root lock released after manager close")
 }
 
+// TestKernelLowerReclaimsFileCacheWithoutKilling is what SettleReady relies
+// on: a group whose memory.current is mostly file cache (a claim after its
+// builds) takes a memory.max below memory.current but above its working set
+// by reclaiming the cache, with no process killed.
+func TestKernelLowerReclaimsFileCacheWithoutKilling(t *testing.T) {
+	root := os.Getenv("KODY_CGROUP_TEST_ROOT")
+	if root == "" {
+		t.Skip("requires an exclusive delegated KODY_CGROUP_TEST_ROOT on local Linux")
+	}
+	manager, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A cleanup, not a defer: cleanups run after the function returns, last
+	// registered first, so the group is removed before the manager closes.
+	t.Cleanup(func() { _ = manager.Close() })
+	keyBytes := make([]byte, 32)
+	if _, err = rand.Read(keyBytes); err != nil {
+		t.Fatal(err)
+	}
+	key := hex.EncodeToString(keyBytes)
+	if _, err = manager.Ensure(key, Limits{MemoryBytes: 512 << 20, CPUQuota: 100000, CPUPeriod: 100000, Pids: 64}); err != nil {
+		t.Fatal(err)
+	}
+	group, err := manager.root.Open(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = group.Mkdir("member"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = group.Remove("member")
+		group.Close()
+		if err := manager.Remove(key); err != nil {
+			t.Error(err)
+		}
+	})
+	child, err := group.Open("member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// On disk, not tmpfs: tmpfs pages are shmem, which nothing reclaims.
+	dir, err := os.MkdirTemp(".", "cache-smoke-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestKernelResourceHelper$", "-test.count=1")
+	cmd.Env = append(os.Environ(), "KODY_CGROUP_HELPER=cache", "KODY_CGROUP_CACHE_DIR="+dir)
+	cmd.SysProcAttr = &syscall.SysProcAttr{UseCgroupFD: true, CgroupFD: int(child.(*localDirectory).file.Fd())}
+	start, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cmd.Start()
+	child.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = start.Write([]byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	ready := make([]byte, 6)
+	if _, err = io.ReadFull(out, ready); err != nil || string(ready) != "cached" {
+		t.Fatalf("helper: %q %v", ready, err)
+	}
+	u, err := manager.Usage(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("before: current=%d file=%d shmem=%d working=%d", u.CurrentBytes, u.FileBytes, u.ShmemBytes, u.WorkingSetBytes())
+	if u.CurrentBytes < 200<<20 || u.WorkingSetBytes() > 96<<20 {
+		t.Fatalf("the helper did not fill the group with cache: %+v", u)
+	}
+	lowered := u.WorkingSetBytes() + 64<<20
+	if err = manager.Lower(key, lowered); err != nil {
+		t.Fatal(err)
+	}
+	after, err := manager.Usage(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("after: current=%d max=%d oom_kill=%d", after.CurrentBytes, lowered, after.OOMKills)
+	if after.CurrentBytes > lowered || after.OOMKills != 0 {
+		t.Fatalf("lowered to %d: %+v", lowered, after)
+	}
+	_ = start.Close()
+	if err = cmd.Wait(); err != nil {
+		t.Fatalf("the helper did not survive the lower: %v", err)
+	}
+}
+
 func counter(raw, name string) int64 {
 	for _, row := range strings.Split(raw, "\n") {
 		fields := strings.Fields(row)
@@ -199,6 +298,31 @@ func TestKernelResourceHelper(t *testing.T) {
 			go func() { runtime.LockOSThread(); select {} }()
 		}
 		time.Sleep(2 * time.Second)
+	case "cache":
+		// 256 MB of file cache and 16 MB of its own, then wait for the lower.
+		f, err := os.Create(os.Getenv("KODY_CGROUP_CACHE_DIR") + "/fill")
+		if err != nil {
+			t.Fatal(err)
+		}
+		chunk := make([]byte, 1<<20)
+		for i := 0; i < 256; i++ {
+			if _, err = f.Write(chunk); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err = f.Sync(); err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+		own := make([]byte, 16<<20)
+		for i := 0; i < len(own); i += 4096 {
+			own[i] = 1
+		}
+		if _, err = os.Stdout.Write([]byte("cached")); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.ReadAll(os.Stdin)
+		runtime.KeepAlive(own)
 	default:
 		t.Fatal(fmt.Errorf("unexpected owned helper mode"))
 	}

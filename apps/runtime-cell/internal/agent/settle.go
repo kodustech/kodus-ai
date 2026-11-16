@@ -36,7 +36,7 @@ func (a *Agent) bringUp(ctx context.Context, c *claims.Claim, hard time.Time) {
 			return
 		}
 		a.observeClaims()
-		a.countReady(c)
+		a.countReady(ctx, c)
 		body := a.readyBody(c)
 		c.Log.Info("claim.ready", timingAttrs(body.Timing)...)
 		if err := a.deliver(ctx, c, "claim.ready", body); err != nil {
@@ -78,7 +78,7 @@ func (a *Agent) bringUp(ctx context.Context, c *claims.Claim, hard time.Time) {
 		}
 		a.observeClaims()
 		// Its builds are over: the held machines are counted as a ready claim's.
-		a.countReady(c)
+		a.countReady(ctx, c)
 		body.Held = &held
 		_ = a.deliver(ctx, c, "claim.failed", body)
 		return

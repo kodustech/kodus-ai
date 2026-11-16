@@ -65,7 +65,7 @@ describe('native DBOS workflow identity during admission', () => {
 
         expect(h.rows.get(h.req.runId)).toMatchObject({ status: 'DELAYED', queueName: 'runtime-executions' });
         expect([...h.rows.values()].filter((row) => row.queueName === 'runtime-admissions')).toHaveLength(1);
-        expect(h.queues).toHaveBeenCalledWith('runtime-executions', expect.objectContaining({ concurrency: 2, partitionConcurrency: 2 }));
+        expect(h.queues).toHaveBeenCalledWith('runtime-executions', expect.objectContaining({ globalConcurrency: 2, partitionConcurrency: 2 }));
     });
 
     it('a refused attempt schedules another delayed attempt without waking native execution', async () => {

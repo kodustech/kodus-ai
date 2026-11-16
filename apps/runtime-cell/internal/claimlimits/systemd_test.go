@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,8 @@ type fakeSystemdBus struct {
 	startErr, stopErr, listErr error
 	alter                      func(*systemdUnit)
 	closed                     bool
+	memorySets                 []string
+	skipKernel                 bool
 }
 
 func fakeSystemd(t *testing.T) (*Systemd, *fakeSystemdBus, *fakeDirectory) {
@@ -83,6 +86,22 @@ func (b *fakeSystemdBus) Stop(_ context.Context, n string) error {
 	return nil
 }
 func (b *fakeSystemdBus) Close() error { b.closed = true; return nil }
+
+// SetMemoryMax models systemd: the unit's property and, unless skipKernel,
+// the kernel file systemd writes for it.
+func (b *fakeSystemdBus) SetMemoryMax(_ context.Context, n string, bytes uint64) error {
+	b.memorySets = append(b.memorySets, n)
+	u, ok := b.units[n]
+	if !ok {
+		return fs.ErrNotExist
+	}
+	u.MemoryMax = bytes
+	b.units[n] = u
+	if !b.skipKernel {
+		b.root.dirs[n].files["memory.max"] = strconv.FormatUint(bytes, 10)
+	}
+	return nil
+}
 
 func TestSystemdCreatesOwnedSliceAndVerifiesKernelWithoutFilesystemWrites(t *testing.T) {
 	m, b, r := fakeSystemd(t)

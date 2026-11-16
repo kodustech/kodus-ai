@@ -4,7 +4,7 @@ The `MachineDriver` port: everything a cell knows about the cloud, cluster or ho
 
 ## Owns
 - The core contract: `driver.go` `MachineDriver`, split into `Describer`, `ClaimNetworker`, `MachineCreator`, `MachineKeeper`; what a machine is (`MachineSpec`, `MachineRef`, `Role`) and what a driver states about itself (`Capabilities`, `Isolation`, `ProductionIsolation`).
-- Every optional capability, in one struct: `parts.go` `Parts` (`Baker`, `Resetter`, `Composer`, `Recipes`, `Pooler`, `Sandboxes`, `Snapshots`, `Memory`, `Diagnoser`, `SQLObservers`, `Sweeper` and the rest) and what derives from it (`Bakes`, `SnapshotsMemory`, `SandboxMemoryMB`).
+- Every optional capability, in one struct: `parts.go` `Parts` (`Baker`, `Resetter`, `Composer`, `Recipes`, `Pooler`, `Sandboxes`, `Snapshots`, `Memory`, `ReadyMemory`, `Diagnoser`, `SQLObservers`, `Sweeper` and the rest) and what derives from it (`Bakes`, `SnapshotsMemory`, `SandboxMemoryMB`).
 - What a boot must honor: `request.go` `UpRequest`, `SandboxRequest`; the sandbox capability `sandbox.go` `Sandboxer`; compose and recipe boots `ownership.go` `ComposeBooter`, `RecipeRunner`, `RecipeStepError`.
 - The ceiling and lease tags: `driver.go` `MachineSpec.AllTags`, `Ceiling`, `Expired`, `ClampToCeiling`, `LeaseEnd`, `LeaseLapsed`, `Matches`; the claim id rule `ownership.go` `ValidateClaimID`.
 - The errors every driver returns and the agent reads: `ErrNotOwned`, `ErrUnsupported`, `ErrWorkloadBoot` (`WorkloadBootFailed`), `ErrWorkloadRecipe`, `ErrOutOfMemory`, `ErrImageTooLarge`, `ErrSizeUnavailable`, `ErrDiskCapacity` in `driver.go`; `resource_errors.go` `ErrResourceEnforcement`, `ErrResourceCleanupPending`; `observer_sql.go` `ObserverSQLError`.

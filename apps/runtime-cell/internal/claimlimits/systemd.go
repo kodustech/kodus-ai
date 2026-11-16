@@ -20,6 +20,7 @@ import (
 // Startup must prune then require an empty managed tree before fresh admission.
 type Lifecycle interface {
 	Manager
+	Resizer
 	PruneEmpty() error
 	RequireEmpty() error
 	Close() error
@@ -58,6 +59,7 @@ type systemdBus interface {
 	List(context.Context, string) ([]string, error)
 	Start(context.Context, systemdUnit) error
 	Stop(context.Context, string) error
+	SetMemoryMax(context.Context, string, uint64) error
 	Close() error
 }
 
@@ -126,8 +128,12 @@ func (m *Systemd) name(key string) string {
 	return strings.TrimSuffix(m.rootSlice, ".slice") + "-" + key + ".slice"
 }
 
+// description names the slice's owner and the parts of its budget that never
+// change. Memory is not in it: Lower changes MemoryMax, which systemd cannot
+// pair with a new Description on a running unit; MemoryMax is compared on
+// its own (sameSystemdUnit) and read back from the kernel.
 func (m *Systemd) description(key string, l Limits) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%d:%d", l.MemoryBytes, l.CPUQuota, l.CPUPeriod, l.Pids)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%d", l.CPUQuota, l.CPUPeriod, l.Pids)))
 	return RootSliceDescription(m.cellID) + " claim " + key + " budget " + hex.EncodeToString(h[:])
 }
 

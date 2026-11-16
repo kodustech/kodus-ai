@@ -67,6 +67,7 @@ export interface AdmissionStats {
     orgBytes: number;
     executing: number;
     orgExecuting: number;
+    setups: number;
     orgSetups: number;
 }
 export interface AdmissionTransaction {
@@ -104,13 +105,14 @@ const checkedPayload = (raw: AdmissionPayload): AdmissionPayload => {
     return parsed.data;
 };
 const checkedLimits = (limits: AdmissionLimits) => {
-    const value = { ...ADMISSION_BYTE_LIMITS, ...limits };
+    const value = { ...ADMISSION_BYTE_LIMITS, globalSetups: limits.globalExecuting, ...limits };
     if (
         ![
             'globalWaiting',
             'perOrgWaiting',
             'globalExecuting',
             'perOrgExecuting',
+            'globalSetups',
             'maxAttempts',
             'maxPayloadBytes',
             'globalBacklogBytes',
@@ -486,7 +488,7 @@ export abstract class AdmissionStoreBase implements AdmissionStore {
             if (row.permitHeld)
                 return { status: 'reserved', record: publicRow(row) };
             const stats = await tx.stats(row.organizationId);
-            if (row.kind === 'setup' && stats.orgSetups >= 1)
+            if (row.kind === 'setup' && (stats.orgSetups >= 1 || stats.setups >= cap.globalSetups))
                 return { status: 'setup_limit' };
             if (stats.executing >= cap.globalExecuting)
                 return { status: 'global_limit' };

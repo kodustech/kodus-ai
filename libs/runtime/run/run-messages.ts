@@ -26,8 +26,26 @@ import { isSealedSecret } from './sealed-secret';
 // transformMessageToMessageBroker ({ event_name, payload, ... }).
 
 export const RUNTIME_EXCHANGE = 'workflow.exchange';
-/** Product-owned topology; the Runtime may publish here, never bind or configure it. */
-export const RUNTIME_RUN_RETRY_EXCHANGE = 'workflow.exchange.runtime_run_retry';
+/**
+ * The Runtime's private retry, product-owned topology
+ * (libs/core/infrastructure/queue/config/runtime-retry-topology.ts); the Runtime may publish to the
+ * exchange, never bind or configure it. No delayed-message plugin: it is archived, and RabbitMQ 4.3
+ * refuses it (kodus-ai#1663). A retry carries
+ * RUNTIME_RETRY_DELAY_HEADER, so the headers exchange routes it to the wait queue of that delay;
+ * the queue's TTL dead-letters it to the return exchange, which routes by the lane's routing key
+ * (kept from the publish) to the Runtime queue it came from.
+ */
+export const RUNTIME_RUN_RETRY_EXCHANGE = 'workflow.exchange.runtime_retry';
+export const RUNTIME_RETRY_RETURN_EXCHANGE = 'workflow.exchange.runtime_retry.return';
+/** Not an x- header: a headers exchange ignores x- headers when it matches. */
+export const RUNTIME_RETRY_DELAY_HEADER = 'kodus-runtime-retry-delay-ms';
+/** One wait queue per delay; a retry waits the smallest that is not shorter than its backoff. */
+export const RUNTIME_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 60_000] as const;
+export const runtimeRetryWaitQueue = (delayMs: number) => `workflow.jobs.runtime_retry.wait.${delayMs}ms`;
+/** The wait a backoff of delayMs gets: never shorter, at most the longest wait queue. */
+export function runtimeRetryDelay(delayMs: number): number {
+    return RUNTIME_RETRY_DELAYS_MS.find((d) => d >= delayMs) ?? RUNTIME_RETRY_DELAYS_MS[RUNTIME_RETRY_DELAYS_MS.length - 1];
+}
 export const RUNTIME_RUN_QUEUE = 'workflow.jobs.runtime_run.queue';
 export const RUNTIME_PUBLISH_QUEUE = 'workflow.jobs.runtime_publish.queue';
 export const RUNTIME_RUN_ROUTING_KEY = `workflow.jobs.created.${WorkflowType.RUNTIME_RUN}`;

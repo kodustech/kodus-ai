@@ -67,7 +67,7 @@ func (d *Driver) groupFor(ctx context.Context, network, org string, size driver.
 	if pids == 0 {
 		pids = 2048
 	}
-	g := limitGroup{key: resourceKey(d.cfg.CellID, org, network), network: network, limits: claimlimits.Limits{MemoryBytes: int64(mem) << 20, CPUQuota: int64(cpu * float64(cpuPeriod)), CPUPeriod: cpuPeriod, Pids: int64(pids)}}
+	g := d.lowered(limitGroup{key: resourceKey(d.cfg.CellID, org, network), network: network, limits: claimlimits.Limits{MemoryBytes: int64(mem) << 20, CPUQuota: int64(cpu * float64(cpuPeriod)), CPUPeriod: cpuPeriod, Pids: int64(pids)}})
 	if err = d.ensureGroup(&g); err != nil {
 		return limitGroup{}, err
 	}
@@ -192,6 +192,7 @@ func (d *Driver) groupFromHolder(ctx context.Context, ref driver.MachineRef) (li
 		if g.limits.MemoryBytes > int64(d.maxSize.MemoryMB)<<20 || g.limits.CPUQuota > d.maxCPUQuota() {
 			return limitGroup{}, ErrResourceEnforcement
 		}
+		g = d.lowered(g)
 		if err = d.ensureGroup(&g); err != nil {
 			return limitGroup{}, err
 		}

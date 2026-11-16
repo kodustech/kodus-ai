@@ -57,6 +57,10 @@ type Config struct {
 	IOLimits *driver.IOLimits
 	// ClaimLimits enforces the whole container tree; nil leaves legacy per-container limits.
 	ClaimLimits claimlimits.Manager
+	// ClaimBudgets lowers a ready claim's memory ceiling and reads what its
+	// budget holds (settle.go); the same backend as ClaimLimits. nil: a
+	// ready claim stays counted, and capped, at its whole ceiling.
+	ClaimBudgets claimlimits.Resizer
 	// ClaimLimitBackend is explicit: cgroupfs (default) or systemd.
 	ClaimLimitBackend string
 	// MirrorGoProxy is the GOPROXY every build gets as a build argument
@@ -544,6 +548,9 @@ func (d *Driver) Parts() driver.Parts {
 	}
 	if d.SandboxesEnabled() {
 		p.Sandboxes = d
+	}
+	if _, ok := d.resizer(); ok {
+		p.ReadyMemory, p.Health = d, d
 	}
 	return p
 }

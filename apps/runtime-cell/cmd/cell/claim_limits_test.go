@@ -81,6 +81,10 @@ type testLimitLifecycle struct {
 func (f *testLimitLifecycle) Ensure(string, claimlimits.Limits) (string, error) { return "", nil }
 func (f *testLimitLifecycle) Verify(string, int) error                          { return nil }
 func (f *testLimitLifecycle) Remove(string) error                               { return nil }
+func (f *testLimitLifecycle) Lower(string, int64) error                         { return nil }
+func (f *testLimitLifecycle) Usage(string) (claimlimits.Usage, error) {
+	return claimlimits.Usage{}, nil
+}
 func (f *testLimitLifecycle) PruneEmpty() error {
 	f.calls = append(f.calls, "prune")
 	if f.fail == "prune" {
