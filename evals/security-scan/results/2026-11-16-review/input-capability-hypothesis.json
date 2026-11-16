@@ -1,0 +1,14 @@
+{
+  "observedCandidate": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f",
+  "observedCase": "revised-candidate.cases/is-control.json",
+  "frozenBeforeInspectionCommit": "46c2eb3d6",
+  "observation": "The completed is control again reports a real regex performance pitfall through a caller-created symbol-keyed object while inventing a downstream Node service. Its normal JSON/string inputs do not carry the crafted symbol property. Exact source evidence and false judgment remain retained.",
+  "hypothesis": "The generic API-boundary paragraph distinguishes code and data but does not explicitly require provenance for non-JSON capabilities such as symbol-keyed properties. Making that input-origin requirement explicit in the shared finder/verifier paragraph may reduce invented callers while preserving ordinary string/byte intrinsic defects and actual shipped restricted execution boundaries.",
+  "changeScope": "One generic sentence in the existing library paragraph. No benchmark repository, case, function, regex, title or advisory in production prompts. The separate bounded native completion retry is already preregistered.",
+  "invariants": [
+    "No blanket library or prototype exclusion; a shipped path delivering such inputs from a less-trusted caller remains in scope.",
+    "Preserve ordinary hostile strings/bytes, intrinsic validation/memory/identity defects and the confirmed UUID race.",
+    "Keep actual production engine/harness, caps, model route, steps, class set, target precision, sampler and all prior failures."
+  ],
+  "confirmation": "All positive/confirmation descriptions remain blind during these corrections. Do not claim quality from contract checks; finish and retain the active failed candidate, then freeze and measure a separate candidate."
+}

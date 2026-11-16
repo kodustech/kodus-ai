@@ -1520,33 +1520,66 @@
           ]
         }
       ],
-      "is-control|resource_exhaustion|source/index.ts|getObjectType|184": {
-        "sourceResult": "results/2026-11-16-review/fresh.cases/is-control.json",
-        "sourceResultSha256": "a82d8c492f34360fc32021b96568004c4bacf1594dd508e0a5e61f64ba9e93a3",
-        "findingSha256": "0bcc5d7913327cb90d8c4b3a12eb8f5f28121e1d7baa6ded6bbe8651f811283c",
-        "verdict": "false",
-        "judge": "Codex",
-        "date": "2026-11-16",
-        "reason": "The regex has a real superlinear performance pitfall (bounded primary-pattern timing confirms it), but the reported security path invents an external sandbox/plugin integration. A Symbol.toStringTag object requires caller-supplied JavaScript; JSON inputs cannot carry that symbol. This library also invokes object properties/getters and supplies no restricted execution boundary. No shipped remote or constrained-sandbox caller is shown gaining a capability it lacked, so this does not meet the scan's concrete-boundary criterion.",
-        "sources": [
-          {
-            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L181",
-            "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
-          },
-          {
-            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L245",
-            "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
-          },
-          {
-            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L804",
-            "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
-          },
-          {
-            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/readme.md#L23",
-            "sha256": "eb5c868dc4995817b9c51e6bc0d1508d9aaa1936feef56cbd373609d6892aab3"
-          }
-        ]
-      },
+      "is-control|resource_exhaustion|source/index.ts|getObjectType|184": [
+        {
+          "sourceResult": "results/2026-11-16-review/fresh.cases/is-control.json",
+          "sourceResultSha256": "a82d8c492f34360fc32021b96568004c4bacf1594dd508e0a5e61f64ba9e93a3",
+          "findingSha256": "0bcc5d7913327cb90d8c4b3a12eb8f5f28121e1d7baa6ded6bbe8651f811283c",
+          "verdict": "false",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The regex has a real superlinear performance pitfall (bounded primary-pattern timing confirms it), but the reported security path invents an external sandbox/plugin integration. A Symbol.toStringTag object requires caller-supplied JavaScript; JSON inputs cannot carry that symbol. This library also invokes object properties/getters and supplies no restricted execution boundary. No shipped remote or constrained-sandbox caller is shown gaining a capability it lacked, so this does not meet the scan's concrete-boundary criterion.",
+          "sources": [
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L181",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L245",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L804",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/readme.md#L23",
+              "sha256": "eb5c868dc4995817b9c51e6bc0d1508d9aaa1936feef56cbd373609d6892aab3"
+            }
+          ]
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/revised-candidate.cases/is-control.json",
+          "sourceResultSha256": "5ab676ea3396d70d91b8914af6faeabbd1c46e8a472dc6c155673c7177c037c8",
+          "findingSha256": "067dfb0b96d70e9966fa885b89dba7f41df300953c9ca2c59535c40703665dd1",
+          "verdict": "false",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The underlying unanchored regex has the already measured superlinear behavior; this exact report does not establish its claimed remote/service boundary. getObjectType derives its string from Object.prototype.toString at source/index.ts:182; the crafted string requires a symbol-keyed Symbol.toStringTag property, not an ordinary JSON string/key. detect returns primitive strings directly at lines 206-207, and a JSON object has the normal Object tag. No shipped network/limited-plugin consumer that creates and passes attacker-selected symbol properties is identified. A public JS caller able to construct such an object is not by itself a less-trusted host actor. The existing bounded regex probe confirms performance only, not an invented Node service exploit. The earlier exact-claim false judgment is preserved.",
+          "sources": [
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L182",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L184",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L206",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L245",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            },
+            {
+              "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L666",
+              "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
+            }
+          ]
+        }
+      ],
       "uuid-control|misconfiguration|version1.go|NewUUID|36": {
         "sourceResult": "results/2026-11-16-review/fresh.cases/uuid-control.json",
         "sourceResultSha256": "aafb7cea62885bdbb53de7d9ac9a5013d973b6e7f5f6eb404cb06dc2eae3f770",
