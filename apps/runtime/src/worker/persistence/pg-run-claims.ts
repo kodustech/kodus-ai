@@ -12,22 +12,25 @@ import type { RunClaims } from '../run/ports';
 export class PgRunClaims implements RunClaims, HardExpiredClaims {
     constructor(private readonly pool: Pick<Pool, 'query'>) {}
 
-    async forRun(runId: string) {
-        const r = await this.pool.query(`SELECT claim_id, side FROM runtime.runtime_claims WHERE run_id = $1 AND released_at IS NULL`, [runId]);
+    async forRun(organizationId: string, runId: string) {
+        const r = await this.pool.query(`SELECT claim_id, side FROM runtime.runtime_claims WHERE run_id = $1 AND org_id = $2 AND released_at IS NULL`, [runId, organizationId]);
         return r.rows.map((x) => ({ claimId: x.claim_id as string, side: x.side as string }));
     }
 
-    async egressBlocked(claimIds: string[]) {
+    async egressBlocked(organizationId: string, claimIds: string[]) {
         if (!claimIds.length) return [];
-        const r = await this.pool.query(`SELECT host, port, phase FROM runtime.runtime_egress_events WHERE claim_id = ANY($1::text[]) ORDER BY at`, [claimIds]);
+        const r = await this.pool.query(`SELECT host, port, phase FROM runtime.runtime_egress_events WHERE claim_id = ANY($1::text[]) AND org_id = $2 ORDER BY at`, [
+            claimIds,
+            organizationId,
+        ]);
         return r.rows as { host: string; port: number; phase: string }[];
     }
 
-    async securityViolations(claimIds: string[]) {
+    async securityViolations(organizationId: string, claimIds: string[]) {
         if (!claimIds.length) return [];
         const r = await this.pool.query(
-            `SELECT claim_id, side, signature FROM runtime.runtime_claim_blockers WHERE kind = 'security_violation' AND claim_id = ANY($1::text[]) ORDER BY at`,
-            [claimIds],
+            `SELECT claim_id, side, signature FROM runtime.runtime_claim_blockers WHERE kind = 'security_violation' AND claim_id = ANY($1::text[]) AND org_id = $2 ORDER BY at`,
+            [claimIds, organizationId],
         );
         return r.rows.map((x) => ({ claimId: x.claim_id as string, side: x.side as string, signature: x.signature as string }));
     }

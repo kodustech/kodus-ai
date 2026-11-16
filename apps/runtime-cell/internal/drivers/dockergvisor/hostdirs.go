@@ -12,11 +12,11 @@ import (
 
 // The builder (rootless BuildKit, user 1000 in its image) writes host
 // directories through bind mounts: an environment's BuildKit state and a
-// build's overlay of it (state.go), a setup build's exported cache
-// (cache.go), and the image tarball it leaves for the cell to load. A host
-// user who could write any of them would put layers into a later build or
-// swap the image the cell loads (cache poisoning), so they are never
-// world-writable. Two layers keep everyone but the cell and the builder out:
+// build's overlay of it (build_states.go, buildstate), a setup build's
+// exported cache (cache.go), and the image tarball it leaves for the cell to
+// load. A host user who could write any of them would put layers into a
+// later build or swap the image the cell loads (cache poisoning), so they
+// are never world-writable. Two layers keep everyone but the cell and the builder out:
 //
 //  1. The roots they live under (cache, buildkit and builds in WorkDir) are
 //     the cell's own real directories, mode 0700: no other host user

@@ -239,8 +239,9 @@ export interface RecipeNeed {
 }
 
 /**
- * The keys no cell acts on yet, in docs §6 order. Not here: services.needs,
- * which a cell refuses, and expose, which describes a Runo VM. Legacy non-sizing limits are named individually.
+ * The keys no cell acts on yet. Not here: services.needs, which a cell
+ * applies (the multi-repo workspace, docs/runtime/multi-repo.md), and expose,
+ * which describes a Runo VM. Legacy non-sizing limits are named individually.
  */
 export const RECIPE_UNAPPLIED_KEYS = ['flags', 'llm', 'ui'] as const;
 

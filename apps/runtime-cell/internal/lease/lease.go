@@ -1,5 +1,5 @@
 // Package lease keeps each claim's lease, sweeps machines by tag and runs the
-// dead-man switch (docs §1b "Limpeza", §4 "Lease e varredura").
+// dead-man switch.
 package lease
 
 import (

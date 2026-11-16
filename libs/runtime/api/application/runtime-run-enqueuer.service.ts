@@ -27,9 +27,10 @@ export interface RuntimePlatformResolver {
 export { runTargetOf };
 
 /**
- * The one way the product enqueues a Run ("Run again" today, the PR trigger
- * next): the publish target goes to the product's `runtime_run_targets` first,
- * then the outbox row. The publisher takes the target only from that record
+ * The one way the product enqueues a Run (the PR trigger, a Run asked on a
+ * PR, "Run again", a simulation): the publish target goes to the product's
+ * `runtime_run_targets` first, then the outbox row; a simulation stores no
+ * target. The publisher takes the target only from that record
  * (ADR-052), so a Run without one publishes nothing.
  */
 @Injectable()

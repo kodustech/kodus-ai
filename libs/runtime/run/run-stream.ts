@@ -1,7 +1,9 @@
 // The Run stream (ADR-047): an ordered, resumable log of events, read by
-// offset in the Durable Streams style. The runtime-hub writes it to the
-// Runtime object store at {orgId}/streams/{runId}; the API serves it after
-// the object-level check. The offset is opaque to clients.
+// offset in the Durable Streams style. The runtime-hub writes it
+// (RUNTIME_STREAM_STORE): to Postgres, runtime_run_events
+// (adapters/pg-run-stream.store.ts, the default), or to files under
+// RUNTIME_STREAM_DIR (adapters/file-run-stream.store.ts). The API serves it
+// after the object-level check. The offset is opaque to clients.
 
 export const RUN_STREAM_EVENT_TYPES = ['state', 'phase', 'step.started', 'step.finished', 'verdict', 'published', 'security'] as const;
 export type RunStreamEventType = (typeof RUN_STREAM_EVENT_TYPES)[number];

@@ -566,7 +566,7 @@ describe('runRuntimeRun', () => {
         expect((await projection.get(req.runId))!.state).toBe('superseded');
         expect(published.map((p) => p.kind)).toEqual(['check']);
         expect(published[0].check!.conclusion).toBe('cancelled');
-        expect(await deps.claims.forRun(req.runId)).toEqual([]);
+        expect(await deps.claims.forRun(req.organizationId, req.runId)).toEqual([]);
     });
 
     it('cancel does nothing once publishing started', async () => {

@@ -9,7 +9,6 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 - Cell choice: `cell-directory.ts` `PgCellDirectory` (`reserveCell`, `replicaForClaim`, `replicaForCell`), `reserveCellFor` / `reserveCellCapped` (the capped, org-locked reservation in `runtime_cell_reservations`), `reserveCellRow` (the hub's uncapped one), and the SQL they share (`RESERVE_CELL_SQL`, `CELL_CAPACITY_SQL`, `BEST_CELL_SQL`).
 - Previews: `preview-store.ts` `PgPreviewStore` (records and state, tunnel tickets, edge sessions, grants seen, tunnel holders), `normalizedSerial`, `sessionHashOf`.
 - Snapshot placements: `snapshot-placements.ts` `PgSnapshotPlacements` (which cell holds a sandbox's template or session snapshot, and the PR a session belongs to).
-- `pg-run-stream-store.ts`: a re-export of `libs/runtime/run/adapters/pg-run-stream.store.ts`, kept for the hub's imports.
 
 ## Does not own
 - `runtime_claims` and its transitions: `apps/runtime/src/hub/hub-store.ts` ([claims](../../../AGENTS.md#claims)); the worker's read of it: `worker/persistence/pg-run-claims.ts`.
@@ -36,7 +35,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 
 ## Module map
 
-Files (9, tests apart): `cell-directory.ts`, `lock-scoped-pg.ts`, `locks.ts`, `pg-command-store.ts`, `pg-run-stream-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `testing.ts`
+Files (8, tests apart): `cell-directory.ts`, `lock-scoped-pg.ts`, `locks.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `testing.ts`
 
 Imports these Runtime modules:
 

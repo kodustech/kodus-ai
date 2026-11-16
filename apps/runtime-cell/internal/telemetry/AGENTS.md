@@ -14,7 +14,7 @@ The cell's side of the Runtime telemetry taxonomy ([`docs/runtime/observability.
 ## Rules and limits
 - No secret value, placeholder, canary or token reaches a log line or a span; this is the Go half of `libs/runtime/telemetry/telemetry-guard.ts`.
 - `taxonomy.json` is a byte copy of `libs/runtime/telemetry/taxonomy.json` (`TestTaxonomyFileMatchesTS`). Every `cell_*` metric registered under `internal/` or `cmd/` must be listed in it (`TestEveryCellMetricIsInTheTaxonomy`).
-- `traceparentShape` in `telemetry.go` is a literal copy of `protocol.TraceparentShapePattern`, not the generated constant.
+- `traceparentShape` in `telemetry.go` compiles the generated `protocol.TraceparentShapePattern`.
 
 ## Where new code goes
 - A new span attribute or log field with a fixed name: `libs/runtime/telemetry/taxonomy.json` first, copied here, then its constant in `telemetry.go`.

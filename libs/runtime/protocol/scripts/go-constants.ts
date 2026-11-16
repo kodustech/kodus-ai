@@ -8,7 +8,7 @@
 import { AUTHORED_FILE_PATH_PATTERN, AUTHORED_FILES_LIMITS } from '@libs/runtime/contracts/authored-files';
 import { RECIPE_FILE_PATHS, SECURITY_VIOLATION_SIGNATURE } from '@libs/runtime/contracts/enums';
 import { MACHINE_SIZE_LIMITS } from '@libs/runtime/contracts/machine-size';
-import { PREVIEW_ID_PATTERN } from '@libs/runtime/contracts/preview';
+import { PREVIEW_ID_PATTERN, PREVIEW_LIMITS, PREVIEW_STREAM_HEADERS, PREVIEW_TUNNEL_AUTH_SCHEME } from '@libs/runtime/contracts/preview';
 import { TRACEPARENT_SHAPE } from '@libs/runtime/contracts/trace-context';
 import {
     FALLBACK_REPOSITORY_ALIAS,
@@ -19,9 +19,20 @@ import {
 } from '@libs/runtime/contracts/workspace';
 import { RUNTIME_SECRET_NAME_PATTERN, RUNTIME_SECRET_RESERVED_NAMES, RUNTIME_SECRET_RESERVED_PREFIXES } from '@libs/runtime/api/domain/secrets';
 import { testValueFor } from '@libs/runtime/blockers/catalog';
+import { PROBE_LOG_TAIL_TEXT_MAX } from '@libs/runtime/probe/probe.schema';
 import { TELEMETRY_SECRET_SHAPES } from '@libs/runtime/telemetry/telemetry-guard';
 
-import { CELL_FEATURES, HUB_ACCEPTED_FEATURES, MAX_CELL_MEMORY_MB, MAX_CLAIM_SECRETS } from '../messages';
+import {
+    BLOCKED_MESSAGE_MAX,
+    CELL_FEATURES,
+    CLAIM_FAILED_REASON_MAX,
+    HUB_ACCEPTED_FEATURES,
+    LOG_LINE_MAX,
+    MAX_CELL_MEMORY_MB,
+    MAX_CLAIM_SECRETS,
+    STEP_EXEC_OUTPUT_MAX,
+    STEP_STREAM_CHUNK_MAX,
+} from '../messages';
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '../recipe';
 import {
     SANDBOX_ENVIRONMENT_ID,
@@ -73,6 +84,18 @@ export function goConstants(): GoConstant[] {
         { go: 'SecurityViolationSignaturePattern', from: 'SECURITY_VIOLATION_SIGNATURE (libs/runtime/contracts/enums.ts)', doc: 'the signature of a security_violation blocker', pattern: SECURITY_VIOLATION_SIGNATURE },
         { go: 'TraceparentShapePattern', from: 'TRACEPARENT_SHAPE (libs/runtime/contracts/trace-context.ts)', doc: 'a W3C traceparent of version 00, without the all-zero rule', pattern: TRACEPARENT_SHAPE },
         { go: 'PreviewIDPattern', from: 'PREVIEW_ID_PATTERN (libs/runtime/contracts/preview.ts)', doc: 'a preview id', pattern: PREVIEW_ID_PATTERN },
+        { go: 'PreviewTunnelAuthScheme', from: 'PREVIEW_TUNNEL_AUTH_SCHEME (libs/runtime/contracts/preview.ts)', doc: 'the Authorization scheme the preview tunnel ticket rides in', value: PREVIEW_TUNNEL_AUTH_SCHEME },
+        { go: 'PreviewStreamHeaderPreviewID', from: 'PREVIEW_STREAM_HEADERS.previewId (libs/runtime/contracts/preview.ts)', doc: 'the header the edge names a preview stream in', value: PREVIEW_STREAM_HEADERS.previewId },
+        { go: 'PreviewStreamHeaderSession', from: 'PREVIEW_STREAM_HEADERS.session (libs/runtime/contracts/preview.ts)', doc: "the header the edge names the viewer's session in", value: PREVIEW_STREAM_HEADERS.session },
+        { go: 'PreviewMaxStreams', from: 'PREVIEW_LIMITS.concurrentStreams (libs/runtime/contracts/preview.ts)', doc: 'the most concurrent streams of one preview', value: PREVIEW_LIMITS.concurrentStreams },
+        { go: 'PreviewMaxRequestBodyBytes', from: 'PREVIEW_LIMITS.requestBodyBytes (libs/runtime/contracts/preview.ts)', doc: 'the largest request body of one preview stream', value: PREVIEW_LIMITS.requestBodyBytes },
+        { go: 'PreviewRequestTimeoutMs', from: 'PREVIEW_LIMITS.requestTimeoutMs (libs/runtime/contracts/preview.ts)', doc: 'how long one preview request may take, in ms', value: PREVIEW_LIMITS.requestTimeoutMs },
+        { go: 'MaxStepExecOutput', from: `STEP_EXEC_OUTPUT_MAX (${MESSAGES})`, doc: 'the longest stdout or stderr a step.result exec carries', value: STEP_EXEC_OUTPUT_MAX },
+        { go: 'MaxStepStreamChunk', from: `STEP_STREAM_CHUNK_MAX (${MESSAGES})`, doc: 'the longest chunk one step.stream carries', value: STEP_STREAM_CHUNK_MAX },
+        { go: 'MaxClaimFailedReason', from: `CLAIM_FAILED_REASON_MAX (${MESSAGES})`, doc: 'the longest reason a claim.failed carries', value: CLAIM_FAILED_REASON_MAX },
+        { go: 'MaxBlockedMessage', from: `BLOCKED_MESSAGE_MAX (${MESSAGES})`, doc: 'the longest message a blocked carries', value: BLOCKED_MESSAGE_MAX },
+        { go: 'MaxLogLine', from: `LOG_LINE_MAX (${MESSAGES})`, doc: 'the longest log line a failure bundle or a claim.progress carries', value: LOG_LINE_MAX },
+        { go: 'MaxProbeLogTailText', from: 'PROBE_LOG_TAIL_TEXT_MAX (libs/runtime/probe/probe.schema.ts)', doc: 'the longest text of one evidence log line', value: PROBE_LOG_TAIL_TEXT_MAX },
         { go: 'MaxCellMemoryMB', from: `MAX_CELL_MEMORY_MB (${MESSAGES})`, doc: 'the most memory a heartbeat may name, in MB', value: MAX_CELL_MEMORY_MB },
         { go: 'MaxClaimSecrets', from: `MAX_CLAIM_SECRETS (${MESSAGES})`, doc: 'the most org secrets one claim carries', value: MAX_CLAIM_SECRETS },
         { go: 'MaxHealthTimeoutSeconds', from: 'MAX_HEALTH_TIMEOUT_SECONDS (libs/runtime/protocol/recipe.ts)', doc: 'the most a boot waits for the app, in seconds', value: MAX_HEALTH_TIMEOUT_SECONDS },

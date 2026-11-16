@@ -124,7 +124,7 @@ describe('external verification uses independent replay', () => {
         ).toBe(true);
         expect(h.rawEnv.resets).toHaveLength(4);
         expect(h.published).toHaveLength(0);
-        expect(await h.claims.forRun(row.runId)).toEqual([]);
+        expect(await h.claims.forRun(row.organizationId, row.runId)).toEqual([]);
     });
     it('cannot turn a submitted allegation into a finding when both independently measured sides agree', async () => {
         const h = await rig(false);
@@ -181,6 +181,6 @@ describe('external verification uses independent replay', () => {
         ]);
         expect(h.seen).toHaveLength(0);
         expect(h.published).toHaveLength(0);
-        expect(await h.claims.forRun(row.runId)).toEqual([]);
+        expect(await h.claims.forRun(row.organizationId, row.runId)).toEqual([]);
     });
 });

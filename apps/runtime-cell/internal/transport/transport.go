@@ -24,7 +24,8 @@ type Transport interface {
 	Upload(ctx context.Context, ref driver.MachineRef, srcDir, dst string, output func(line string)) error
 }
 
-// Local runs each machine as a directory under Root. Fake cell only.
+// Local runs each machine as a directory under Root, with no isolation: the
+// fake cell, and the dev-only local-docker driver, whose transport wraps it.
 type Local struct{ Root string }
 
 func (l Local) machineDir(ref driver.MachineRef) (string, error) {
@@ -32,7 +33,7 @@ func (l Local) machineDir(ref driver.MachineRef) (string, error) {
 		return "", errors.New("transport: bad machine id")
 	}
 	dir := filepath.Join(l.Root, ref.MachineID)
-	return dir, os.MkdirAll(dir, 0o755) //nolint:gosec // G301: fake cell only (Local); a developer's scratch machine dir
+	return dir, os.MkdirAll(dir, 0o755) //nolint:gosec // G301: fake cell and local-docker only (Local); a developer's scratch machine dir
 }
 
 func resolveInside(base, rel string) (string, error) {
@@ -53,7 +54,7 @@ func (l Local) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.Req
 	if err != nil {
 		return kodyexec.Result{}, err
 	}
-	if err := os.MkdirAll(cwd, 0o755); err != nil { //nolint:gosec // G301: fake cell only (Local); a developer's scratch machine dir
+	if err := os.MkdirAll(cwd, 0o755); err != nil { //nolint:gosec // G301: fake cell and local-docker only (Local); a developer's scratch machine dir
 		return kodyexec.Result{}, err
 	}
 	req.Cwd = cwd
@@ -79,7 +80,7 @@ func (l Local) Upload(_ context.Context, ref driver.MachineRef, srcDir, dst stri
 			return errors.New("transport: symlink in upload")
 		}
 		if d.IsDir() {
-			return os.MkdirAll(out, 0o755) //nolint:gosec // G301: fake cell only (Local); a developer's scratch machine dir
+			return os.MkdirAll(out, 0o755) //nolint:gosec // G301: fake cell and local-docker only (Local); a developer's scratch machine dir
 		}
 		info, err := d.Info()
 		if err != nil {

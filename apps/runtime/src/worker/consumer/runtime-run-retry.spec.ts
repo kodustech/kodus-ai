@@ -1,4 +1,4 @@
-import { consumerWith } from './testing';
+import { confirmTransport, consumerWith } from './testing';
 import {
     AmqpConnection,
     MessageHandlerErrorBehavior,
@@ -314,6 +314,26 @@ describe('Runtime-scoped confirmed Run retry', () => {
             expect(channel.nack).not.toHaveBeenCalled();
             expect(JSON.stringify(log.mock.calls)).not.toContain('SECRET');
         } finally {
+            log.mockRestore();
+        }
+    });
+
+    it.each([
+        ['a full write buffer, then the broker ack, schedules the retry and acks the original', false, null],
+        ['a broker nack leaves the original unacked', true, new Error('message nacked')],
+    ])('on the installed transport, %s', async (_name, writeHasRoom, confirm) => {
+        const transport = await confirmTransport(writeHasRoom, confirm);
+        const retry = new RuntimeRunRetry({ publish: transport.publish }, { maxRetries: 2, delayMs: 100, maxDelayMs: 30000 });
+        const channel = { ack: jest.fn(), nack: jest.fn() };
+        const log = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        try {
+            const handled = runtimeRunErrorHandler(channel as any, raw({}), retry.failure());
+            if (confirm) await expect(handled).rejects.toThrow('runtime_run_retry_publish_failed');
+            else await handled;
+            expect(channel.ack).toHaveBeenCalledTimes(confirm ? 0 : 1);
+            expect(channel.nack).not.toHaveBeenCalled();
+        } finally {
+            await transport.close();
             log.mockRestore();
         }
     });

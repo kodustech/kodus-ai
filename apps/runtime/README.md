@@ -48,7 +48,7 @@ sequenceDiagram
 | `ClaimService` | `hub/claims/claim.service.ts` | Acquire (rebind on retry, a duplicate joins the round in flight), claim outcomes, release, heartbeat reconciliation, security violations. |
 | `ClaimEgressService` | `hub/claims/claim-egress.service.ts` | The environment's approved egress hosts: in the acquire, after `claim.ready` and on a new approval. Never to the PR side of a fork (`receivesApprovedHosts`). |
 | `ClaimImageService` | `hub/claims/claim-image.service.ts` | Image bake (setup claims only) and pool target (from a baked image, never a claim). |
-| `StepDispatcher` | `hub/claims/step-dispatcher.ts` | probe.run, exec and machine.reset on a bound claim, at most once per stepId. |
+| `StepDispatcher` | `hub/claims/step-dispatcher.ts` | probe.run, exec, machine.reset, browser.explore, sandbox.op and claim.snapshot on a bound claim, at most once per stepId. |
 
 The CA is `hub/ca/x509.ts`. It signs cell certificates (OU=cell, CN=cellId) and verifies every certificate it issues against itself. The DER and CSR handling is hand-written and is not replaced by a library yet.
 
@@ -94,7 +94,7 @@ They do not bound incoming message queues or total process connections.
   - `runtimeRun` on the fair queue (`runtime-runs`, partition = org).
   - `runtimeForkGate`, off the queue. It waits for a fork approval, then enqueues `${runId}:run`.
   - `runtimeRunStop`.
-  - `runtimeEnvironmentSetup` on `runtime-setups` (one per org at a time).
+  - `runtimeEnvironmentSetup` on `runtime-setups` (`RUNTIME_SETUP_PER_ORG` per org at a time, default 2).
   - `stop()` cancels the Run and starts the stop workflow. It never waits for the Run to end.
 - **Orchestrator**: `worker/run/run-orchestrator.ts`, phases in order:
   - **boot**: base and PR together; a lost cell gets one more try per side.
@@ -211,10 +211,12 @@ The product seals the repo token and the Run token with AES-256-GCM (`libs/runti
 
 `RuntimeRunRequestedSchema` refuses a Run request with unsealed tokens. A setup token that arrives plain is sealed at ingress (`sealedForInput` in `worker/secrets/sealed-tokens.ts`). Either way, DBOS only ever stores sealed values.
 
-Tokens are opened only in two places:
+Tokens are opened only inside the call that sends them (`SecretOpener.open`):
 
-- The repo token: in `HubEnvironmentClient.acquire` (`worker/env/hub-environment-runtime.ts`), inside the acquire step.
-- The Run token: in `HttpLlmGateway.complete` (`worker/agent/http-llm-gateway.ts`).
+- The repo tokens (a Run's or a setup's, every workspace member's): in `HubEnvironmentClient.acquire` (`worker/env/hub-environment-runtime.ts`), inside the acquire step.
+- The Run token, in the Authorization header of a product call: `HttpLlmGateway.complete` (`worker/agent/http-llm-gateway.ts`; a setup's learn loop opens the setup token there, bound to the setup key), `HttpRunPlanClient` (`worker/agent/http-run-plan.ts`), `HttpModelTurnClient` (`worker/agent/http-model-turn.ts`) and `WorkerRunPlanClient` (`worker/agent/worker-plan-client.ts`).
+- The setup token, in the Authorization header: `HttpRecipeAuthorClient` (`worker/agent/http-recipe-author.ts`) and `HttpSetupRepoTokensClient` (`worker/agent/http-setup-repo-tokens.ts`), which also opens each repo token it gets back to check it is bound to the setup, and keeps none opened.
+- On the product side, the model-turn gateway (`libs/runtime/api/application/use-cases/model-turn-gateway.use-case.ts`) opens the Run token it receives to check its Run.
 
 Neither call returns or logs the plain value. Canaries are an HMAC keyed from the seal key (`canaryKeyFrom`).
 
@@ -238,13 +240,21 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_MANAGED_CELLS` | `{}` | cellId → certificate serial. |
 | `RUNTIME_ORG_CONCURRENCY`, `RUNTIME_GLOBAL_CONCURRENCY` | 2, 20 | Fair-queue limits. |
 | `RUNTIME_RELEASE_VERSION` | `development` outside production | Worker only. Required in production; immutable release identifier passed to DBOS `applicationVersion` (with `+planner-worker` appended when `RUNTIME_PLANNER_HOST=worker`). 1–128 letters, digits, dots, underscores or hyphens; starts with a letter or digit. |
+| `RUNTIME_EXECUTOR_ID` (or `DBOS__VMID`) | unset outside production | Worker only. Required in production. This replica's DBOS executor id: a restarting replica recovers the PENDING workflows recorded under it, and DBOS gives every replica without one the same `local`, so one restart would resume the live replicas' workflows too. Unique and stable per replica (e.g. the pod or task name of a stateful set); passed to DBOS as `executorID`. Same alphabet as `RUNTIME_RELEASE_VERSION`, never `local`; when both are set they must agree. |
+| `RUNTIME_BROKER_PREFETCH` | 10 | Worker only, 1–100. Unacked deliveries per lane (`channel-runtime-run`, `channel-runtime-control`). |
+| `RUNTIME_PG_POOL_MAX` | 10 | Worker only, 2–200. Connections of the store pool (stores, projection reads, DBOS steps). The PR and maintenance locks have a pool of their own, `2 × RUNTIME_BROKER_PREFETCH + 1` connections, so a lock holder never waits on its own pool for the read it makes inside the lock. |
+| `RUNTIME_PG_CONNECTION_TIMEOUT_MS` | 5000 | Worker only, 100–60000. Longest wait for a connection from either pool; past it the delivery fails and is retried, instead of hanging. |
 | `RUNTIME_PLANNER_HOST` | `product` | Worker only; `product` or `worker`. Where a Run's test planner runs: `product` calls the product's planner endpoint; `worker` drives the planner in this worker against the product's model-turn gateway and requires `RUNTIME_LLM_GATEWAY_URL`. Any other value refuses to start. The host is part of the DBOS version, so a workflow never resumes on the other host; drain the previous host's Runs before switching. |
 | `RUNTIME_ORG_SHARED_CLAIM_CAP` | 8 | Hub and worker must agree. Live claims/ticket slots one org may hold on shared cells at once. |
+| `RUNTIME_MACHINE_MINUTES_PER_ORG_DAY` | 10000 | Hub and API. Machine minutes per org per UTC day the hub admits claims for, reserved per claim round before it reaches a cell. `0` = unlimited, still counted. |
+| `RUNTIME_PRODUCT_SECRETS_READ_URL` | unset | Hub only. The product Postgres, read-only, as the role that may read only the org secrets' id, name and hosts (`scripts/runtime/runtime-secrets-reader-grants.sql`). Unset: no claim gets the org's secrets. |
+| `RUNTIME_SETUP_PER_ORG` | 2 | Worker only; 1 to 8. Environment setups of one org that run at once on the setup queue; the next waits its turn. |
 | `RUNTIME_SANDBOX_MEMORY_MB` | 2048 | Hub only. The memory a code sandbox that asks no size is admitted at on a cell whose hello names no `sandboxSize` (a cell that names one is admitted at its own, `-sandbox-memory-mb`). Never the cell's default Run size. |
 | `RUNTIME_PREVIEW_DOMAIN` | unset | Worker and preview edge. The registrable domain previews are served under (docs/runtime/preview-urls.md), never the one Kodus runs on. Unset: previews are off and the product says so; the edge refuses to start. |
 | `RUNTIME_PREVIEW_TUNNEL_URL` | unset | Hub only. The edge's `wss://<host>[:port]/v1/cells/tunnel` the hub sends a preview claim's cell to dial. Unset: no preview is routed. |
 | `RUNTIME_PREVIEW_APP_URL` | required (edge) | Preview edge. The web app's origin, for links back and the same-site check (`RUNTIME_PREVIEW_ALLOW_SAME_SITE=true` overrides it, as a warning). |
 | `RUNTIME_PREVIEW_SESSION_REVALIDATE_MINUTES` | 15 | Preview edge. A preview session older than this is not served: a page load goes back to the app's preview page for a fresh grant (the app checks access again), a script request gets 401. 1 to 720. |
+| `RUNTIME_PREVIEW_EDGE_INTERNAL_URL` | unset (one replica) | Preview edge. This replica's browser listener as the other replicas reach it: an http(s) origin with no path. |
 | `RUNTIME_PREVIEW_GRANT_PUBLIC_KEY` | required (edge) | Preview edge. The Ed25519 public key of the API's `RUNTIME_PREVIEW_GRANT_PRIVATE_KEY`: a PEM, the base64 of one, or the base64 of its SPKI DER. |
 | `RUNTIME_PREVIEW_TLS_CERT` / `_KEY` | required unless `RUNTIME_PREVIEW_TLS_UPSTREAM=1` | Preview edge. Paths of the wildcard certificate for `*.<domain>` (browser listener, `RUNTIME_PREVIEW_EDGE_PORT`, 3430). With `RUNTIME_PREVIEW_TLS_UPSTREAM=1` it serves plain HTTP behind a balancer that terminates TLS. |
 | `RUNTIME_PREVIEW_TUNNEL_TLS_CERT` / `_KEY` | required (edge) | Preview edge. Paths of the tunnel listener's certificate (`RUNTIME_PREVIEW_TUNNEL_PORT`, 3431), which the cells verify against their hub CA; the listener checks the cells' certificates against `RUNTIME_TLS_CA`. Never behind a TLS-terminating balancer. |
@@ -303,9 +313,9 @@ For the isolated stack with the TS fake cell (`src/fake-cell`), use `docker-comp
   - Covers the guarded claim transitions, replica-scoped disconnect, slot reservation, registration atomicity, revocation, the keyed run stream (and the API's read-only read of it, and its batched retention), the advisory locks, migrations, and the run and setup workflows.
   - Use `--runInBand`: two DBOS launches on a fresh database race.
 - **S3 evidence** (opt-in): `RUNTIME_IT_S3_ENDPOINT=http://localhost:9000 API_NODE_ENV=test npx jest apps/runtime/src/shared/evidence/s3-evidence-store.integration.spec.ts` against the dev MinIO (keys `RUNTIME_IT_S3_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`). A cell's PUT with a grant, a refused content type, the take, an oversized upload, an expired grant, the presigned read.
-- **Go cell ↔ hub over mTLS**: `src/hub/go-cell-hub.integration.spec.ts`.
-  - Runs when `go`, `docker` and `openssl` are present.
-  - Builds `apps/runtime-cell` and starts a throwaway Postgres.
+- **Go cell ↔ hub over mTLS** (opt-in): `RUNTIME_IT_GO_CELL=1`, `src/hub/go-cell-hub.integration.spec.ts` (`src/testing/go-cell.ts`). Finding `go`, `docker` or `openssl` on the machine does not turn it on.
+  - Needs `go` and `openssl`; `RUNTIME_IT_CELL_BINARY` reuses a built cell.
+  - Builds `apps/runtime-cell` once and uses a database of its own on `RUNTIME_IT_DATABASE_URL`, else a throwaway Postgres container (docker).
   - Checks both listeners, revocation, and renewal across a hub restart.
 
 
@@ -328,6 +338,6 @@ Apply Runtime migrations 17/18 and the additive product lifecycle migration thro
 
 `env_validate(sessionId, name)` resolves only checks pinned from a confirmed default-branch recipe. It shares exec scopes/quota/audit, returns a step ID and requires current isolated workload execution; it never supplies observer proof or boot readiness.
 
-Run/setup/cancel admission retry uses the product-owned private delayed direct exchange `workflow.exchange.runtime_run_retry`. Runtime has publish-only access there. `RUNTIME_COMMAND_MAX_RETRIES` and `RUNTIME_COMMAND_RETRY_DELAY_MS` bound retries; a broker storage confirmation does not guarantee future delivery. Durable PR generation records reject stale known deliveries; drain old consumers before relying on that invariant. Control commands keep their existing NACK policy. Ordering records are retained until a safe replay/collection horizon exists.
+Run/setup/cancel admission retry uses the product-owned private delayed direct exchange `workflow.exchange.runtime_run_retry`. Runtime has publish-only access there. `RUNTIME_COMMAND_MAX_RETRIES` and `RUNTIME_COMMAND_RETRY_DELAY_MS` bound retries; a broker storage confirmation does not guarantee future delivery. Durable PR generation records reject stale known deliveries; drain old consumers before relying on that invariant. Control commands (stop, revoke, approvals, pool, settings) retry the same way on their own edge (`workflow.jobs.created.RUNTIME_CONTROL`); their handlers are idempotent, and a schema-invalid one still goes straight to the dead-letter queue. Ordering records are retained until a safe replay/collection horizon exists.
 
 `RUNTIME_EXTERNAL_MAINTENANCE_ENABLED` defaults off in the product worker. It requires Runtime enabled and the code-review role; it reconciles overdue tasks and retains terminal/rejected tasks for at least 30 days while protecting aliases/retry relatives. Closed outcome/count/duration telemetry separates failures from verified application findings. The API persists product-owned receipts/terminal task CAS; it never writes Runtime state. The product maintenance job only reads Runtime projections.

@@ -6,9 +6,13 @@ import { Logger } from '@nestjs/common';
 import type { Channel, ConsumeMessage } from 'amqplib';
 
 import {
+    RUNTIME_CONTROL_ROUTING_KEY,
     RUNTIME_RUN_RETRY_EXCHANGE,
     RUNTIME_RUN_ROUTING_KEY,
 } from '@libs/runtime/run/run-messages';
+
+/** The keys the product initializer binds on the retry exchange: one edge per lane. */
+const RETRYABLE_ROUTES = new Set([RUNTIME_RUN_ROUTING_KEY, RUNTIME_CONTROL_ROUTING_KEY]);
 
 export interface RuntimeRetryPolicy {
     maxRetries: number;
@@ -56,7 +60,7 @@ export const runtimeRunErrorHandler: MessageErrorHandler = async (
     else channel.nack(message, false, false);
 };
 
-/** Run/setup requests may retry before durable admission, never the execution's individual steps. */
+/** Run/setup requests may retry before durable admission, never the execution's individual steps; control commands are idempotent. */
 export class RuntimeRunRetry {
     private readonly logger = new Logger(RuntimeRunRetry.name);
     constructor(
@@ -93,7 +97,7 @@ export class RuntimeRunRetry {
         if (
             count === undefined ||
             count >= this.policy.maxRetries ||
-            message.fields.routingKey !== RUNTIME_RUN_ROUTING_KEY
+            !RETRYABLE_ROUTES.has(message.fields.routingKey)
         ) {
             this.logger.warn({
                 msg: 'runtime.command.retry',
@@ -116,8 +120,12 @@ export class RuntimeRunRetry {
         // does not accept. Force a supported int32 even for sub-128ms retries.
         headers['x-delay'] = { '!': 'int', 'value': delayMs };
         try {
-            // AmqpConnection uses a confirm channel. Both resolved booleans mean broker ACK;
-            // false indicates backpressure. Only rejection means publish failed.
+            // The publish promise resolves only on the broker's ack and rejects on a nack or the timeout; the
+            // resolved boolean is only whether the write buffer had room (backpressure), never a refusal.
+            // Installed sources: @golevelup/nestjs-rabbitmq 9.0.2 lib/amqp/connection.js:610 (ChannelWrapper.publish),
+            // :670 (no `confirm`, so a confirm channel); amqp-connection-manager 5.0.0 dist/cjs/ChannelWrapper.js:266,
+            // :461-476 (resolve with channel.publish's result on ack, reject on error), :199-212 (timeout);
+            // amqplib 2.0.1 lib/connection.js:501 (publish returns the buffer's write()), lib/channel.js:33 (nack).
             // ChannelWrapper's supported timeout removes queued/unconfirmed messages on
             // expiry; Promise.race alone would leave a disconnected publisher accumulating work.
             const options = {

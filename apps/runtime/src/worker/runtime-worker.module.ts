@@ -3,7 +3,7 @@ import { PR_ADMISSION_STORE, PgPrAdmissionStore } from '../shared/admission/pr-a
 import { AmqpConnection, RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { DynamicModule, Inject, Logger, Module, OnApplicationShutdown } from '@nestjs/common';
 import { DBOS } from '@dbos-inc/dbos-sdk';
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 
 import { PgLessonStore } from '@libs/runtime/blockers/pg-lesson.store';
 import type { RunProjectionStore } from '@libs/runtime/run';
@@ -57,6 +57,18 @@ import { SANDBOX_SERVICE, SandboxService } from './sandbox/sandbox.service';
 import { PgEnvSessionStore } from './env-session/env-session.store';
 
 const HUB_CLIENT = Symbol('HUB_CLIENT');
+/** The PR and maintenance locks' own connections (runtimePgPoolOptions). */
+export const RUNTIME_LOCK_PG_POOL = Symbol('RUNTIME_LOCK_PG_POOL');
+
+/**
+ * A lock holder keeps its lock connection and asks the store pool for another one, so the locks get
+ * their own pool sized to every delivery the two lanes can hold at once: a full store pool then only
+ * slows a holder, never deadlocks it. Both wait at most connectionTimeoutMs for a connection.
+ */
+export function runtimePgPoolOptions(config: Pick<WorkerConfig, 'databaseUrl' | 'pg'>): { store: PoolConfig; locks: PoolConfig } {
+    const common = { connectionString: config.databaseUrl, connectionTimeoutMillis: config.pg.connectionTimeoutMs };
+    return { store: { ...common, max: config.pg.poolMax }, locks: { ...common, max: config.pg.lockPoolMax } };
+}
 const logger = new Logger('RuntimeWorker');
 
 /**
@@ -65,7 +77,10 @@ const logger = new Logger('RuntimeWorker');
  */
 @Module({})
 export class RuntimeWorkerModule implements OnApplicationShutdown {
-    constructor(@Inject(RUNTIME_PG_POOL) private readonly pool: Pool) {}
+    constructor(
+        @Inject(RUNTIME_PG_POOL) private readonly pool: Pool,
+        @Inject(RUNTIME_LOCK_PG_POOL) private readonly lockPool: Pool,
+    ) {}
 
     static forConfig(config: WorkerConfig): DynamicModule {
         return {
@@ -76,7 +91,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                     // The Runtime's broker user may not configure workflow.exchange: it is
                     // checked (passive), never declared (scripts/runtime/dev-runtime-users.sh).
                     exchanges: [{ name: 'workflow.exchange', type: 'topic', createExchangeIfNotExists: false }, { name: RUNTIME_RUN_RETRY_EXCHANGE, type: 'x-delayed-message', createExchangeIfNotExists: false }],
-                    channels: { 'channel-runtime-run': { prefetchCount: 10 }, 'channel-runtime-control': { prefetchCount: 10 } },
+                    channels: { 'channel-runtime-run': { prefetchCount: config.brokerPrefetch }, 'channel-runtime-control': { prefetchCount: config.brokerPrefetch } },
                     connectionInitOptions: { wait: true, timeout: 30_000 },
                     enableControllerDiscovery: false,
                 }),
@@ -101,12 +116,14 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                     provide: RUNTIME_PG_POOL,
                     useFactory: async () => {
                         await ensureDatabase(config.databaseUrl);
-                        const pool = new Pool({ connectionString: config.databaseUrl, max: 10, ...(config.durableAdmission ? { connectionTimeoutMillis: 5000 } : {}) });
+                        const pool = new Pool(runtimePgPoolOptions(config).store);
                         await ensureRuntimeSchema(pool);
                         return pool;
                     },
                 },
-                { provide: RUN_ENGINE_LOCKS, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgDistributedLocks(pool) },
+                // After RUNTIME_PG_POOL: the database and schema exist by then.
+                { provide: RUNTIME_LOCK_PG_POOL, inject: [RUNTIME_PG_POOL], useFactory: () => new Pool(runtimePgPoolOptions(config).locks) },
+                { provide: RUN_ENGINE_LOCKS, inject: [RUNTIME_LOCK_PG_POOL], useFactory: (pool: Pool) => new PgDistributedLocks(pool) },
                 {
                     // The hang detector: one pass at the end of each maintenance tick (docs/runtime/observability.md part 4).
                     provide: RUN_ENGINE_STUCK,
@@ -328,7 +345,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
 
     async onApplicationShutdown() {
         // Shutting down: a pool that fails to end has nothing left to serve, and the process exits next.
-        await this.pool.end().catch(() => undefined);
+        await Promise.all([this.pool.end().catch(() => undefined), this.lockPool.end().catch(() => undefined)]);
     }
 }
 

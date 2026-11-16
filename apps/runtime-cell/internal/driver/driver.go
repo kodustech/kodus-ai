@@ -1,4 +1,5 @@
-// Package driver is the MachineDriver contract (docs §4b, ADR-027): the only
+// Package driver is the MachineDriver contract
+// (docs/runtime/isolation-architecture.md, ADR-027): the only
 // thing a cell knows about the cloud or cluster it runs in.
 package driver
 
@@ -689,8 +690,8 @@ func Matches(tags, selector map[string]string) bool {
 	return true
 }
 
-// Diagnoser is a driver that can tell why a setup failed (§11 runbook
-// "Setup falha e o Blocker não explica"): service states, the last log
+// Diagnoser is a driver that can tell why a setup failed when its blocker
+// does not explain it: service states, the last log
 // lines of each service, the exposed ports and the disk. The agent redacts
 // what it returns before it leaves the cell.
 type Diagnoser interface {

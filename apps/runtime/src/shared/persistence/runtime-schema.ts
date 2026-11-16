@@ -2,7 +2,9 @@ import { inTransaction, lockKey, lockStatement } from '@libs/runtime/run/adapter
 import type { Pool } from 'pg';
 
 // Tables of the Runtime database next to the DBOS system tables (docs §8).
-// Only the hub role writes runtime_cell_sessions and runtime_steps_index.
+// The hub writes runtime_cell_sessions and runtime_steps_index. One exception:
+// the worker's PgCellDirectory (cell-directory.ts) decrements a session's
+// free_slots when it reserves a cell; the next heartbeat overwrites it.
 
 export const RUNTIME_SCHEMA_SQL = `
 CREATE SCHEMA IF NOT EXISTS runtime;

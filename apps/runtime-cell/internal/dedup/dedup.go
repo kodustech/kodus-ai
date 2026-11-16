@@ -1,5 +1,5 @@
 // Package dedup keeps the steps a cell has seen for an hour, so a step is
-// executed at most once (docs §1b "Entrega do passo").
+// executed at most once.
 package dedup
 
 import (

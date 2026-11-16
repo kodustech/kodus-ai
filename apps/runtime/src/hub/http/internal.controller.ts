@@ -36,7 +36,8 @@ const AcquireBody = z.strictObject({
     runId: Id.optional(),
     imageId: z.string().optional(),
     ref: z.strictObject({ side: z.enum(['base', 'pr', 'setup']), sha: Sha }),
-    consumer: z.enum(['runtime', 'setup', 'mcp', 'custom_agent', 'preview']),
+    // A sandbox claim has its own route (SandboxAcquireBody).
+    consumer: Consumer.exclude(['sandbox']),
     idempotencyKey: z.string().min(1).max(256),
     expose: z.array(ExposeSchema),
     repo: RepoRefSchema,

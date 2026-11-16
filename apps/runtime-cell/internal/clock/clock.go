@@ -1,6 +1,8 @@
 // Package clock is the time source of the cell's control side: the agent,
-// the leases and the certificate renewer read the time and wait through it,
-// so tests run their retries and expiries without sleeping.
+// its outbox and pool, the drivers, the mirror and the preview tunnel read
+// the time and wait through it, so tests run their retries and expiries
+// without sleeping. The leases and the certificate renewer take a plain
+// now func instead.
 package clock
 
 import (

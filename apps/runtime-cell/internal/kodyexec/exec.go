@@ -1,6 +1,8 @@
 // Package kodyexec runs setup and internal-evidence commands inside the VM
-// (docs §4 "VM e kody-exec"). Its output is evidence, never a verdict
-// (ADR-053): the PR can be root in the VM and forge anything printed here.
+// (cmd/kody-exec), and on the cell host it runs the docker binary with the
+// same output caps and secret masking (dockercli, RunArgv). Its output is
+// evidence, never a verdict (ADR-053): the PR can be root in the VM and
+// forge anything printed here.
 package kodyexec
 
 import (

@@ -178,7 +178,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
                 wake: (id) => DBOS.setWorkflowDelay(id, 0.001),
             }), { name: ADMISSION_WORKFLOW });
         }
-        DBOS.setConfig({ name: 'kody-runtime', systemDatabaseUrl: this.config.databaseUrl, logLevel: this.config.dbosLogLevel, applicationVersion: this.config.releaseVersion });
+        DBOS.setConfig({ name: 'kody-runtime', systemDatabaseUrl: this.config.databaseUrl, logLevel: this.config.dbosLogLevel, applicationVersion: this.config.releaseVersion, ...(this.config.executorId ? { executorID: this.config.executorId } : {}) });
         await DBOS.launch();
         if (this.config.durableAdmission) {
             await DBOS.registerQueue(EXECUTION_QUEUE, { concurrency: this.config.admission.globalExecuting, partitionConcurrency: this.config.admission.perOrgExecuting, onConflict: 'always_update' });

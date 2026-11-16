@@ -1,5 +1,5 @@
-// Package egress is the cell's only way out (docs §4 "Proxy de saída",
-// ADR-040, ADR-056). It never opens TLS: it reads the SNI of the
+// Package egress is the cell's only way out
+// (docs/runtime/egress-allowlist.md, ADR-040, ADR-056). It never opens TLS: it reads the SNI of the
 // ClientHello (or the Host of the plain HTTP request), checks it against
 // the claim's exact allowlist and the Kodus deny list, and checks that the
 // address the client was going to is one the cell resolver handed the claim

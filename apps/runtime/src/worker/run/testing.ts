@@ -17,24 +17,28 @@ import type { RunClaims, RunDeps, RunLogEvent } from './ports';
  */
 export class InMemoryRunClaims implements RunClaims {
     readonly claims = new Map<string, { claimId: string; cellId: string; runId: string; organizationId: string; side: string; released: boolean; hardExpiresAt: string }>();
-    readonly egress: { claimId: string; host: string; port: number; phase: string }[] = [];
-    readonly violations: { claimId: string; side: string; signature: string }[] = [];
+    /** Rows the hub recorded; without `organizationId` a row belongs to its claim's org. */
+    readonly egress: { claimId: string; organizationId?: string; host: string; port: number; phase: string }[] = [];
+    readonly violations: { claimId: string; organizationId?: string; side: string; signature: string }[] = [];
 
     async record(c: { claimId: string; cellId: string; runId: string; organizationId: string; side: 'base' | 'pr'; hardExpiresAt: string }) {
         if (!this.claims.has(c.claimId)) this.claims.set(c.claimId, { ...c, released: false });
     }
-    async forRun(runId: string) {
-        return [...this.claims.values()].filter((c) => c.runId === runId && !c.released);
+    async forRun(organizationId: string, runId: string) {
+        return [...this.claims.values()].filter((c) => c.runId === runId && c.organizationId === organizationId && !c.released);
     }
     async markReleased(claimId: string) {
         const c = this.claims.get(claimId);
         if (c) c.released = true;
     }
-    async egressBlocked(claimIds: string[]) {
-        return this.egress.filter((e) => claimIds.includes(e.claimId));
+    async egressBlocked(organizationId: string, claimIds: string[]) {
+        return this.egress.filter((e) => claimIds.includes(e.claimId) && this.orgOf(e) === organizationId).map(({ host, port, phase }) => ({ host, port, phase }));
     }
-    async securityViolations(claimIds: string[]) {
-        return this.violations.filter((v) => claimIds.includes(v.claimId));
+    async securityViolations(organizationId: string, claimIds: string[]) {
+        return this.violations.filter((v) => claimIds.includes(v.claimId) && this.orgOf(v) === organizationId).map(({ claimId, side, signature }) => ({ claimId, side, signature }));
+    }
+    private orgOf(row: { claimId: string; organizationId?: string }) {
+        return row.organizationId ?? this.claims.get(row.claimId)?.organizationId;
     }
     async hardExpiryOf(organizationId: string, claimId: string) {
         const c = this.claims.get(claimId);

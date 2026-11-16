@@ -115,8 +115,9 @@ func Flatten(layers []Layer, w io.Writer, opt Options) error {
 	for p, e := range t.m {
 		h := e.hdr
 		if sandbox {
-			// No way to become root in a sandbox: no set-id file and no
-			// device node (the guest's /dev is the kernel's devtmpfs).
+			// No way to become root in a sandbox: no set-id file, no
+			// device node (the guest's /dev is the kernel's devtmpfs) and
+			// no FIFO.
 			if h.Typeflag == tar.TypeChar || h.Typeflag == tar.TypeBlock || h.Typeflag == tar.TypeFifo {
 				delete(t.m, p)
 				continue

@@ -7,6 +7,9 @@ import { EVIDENCE_UPLOAD_TYPES } from '@libs/runtime/contracts/evidence';
 // shell runs inside the VM and is internal evidence: it can only accompany a
 // finding the observer proved.
 
+/** The longest text of one evidence log line (the cell clips to it, internal/redact). */
+export const PROBE_LOG_TAIL_TEXT_MAX = 512;
+
 const timeoutMs = z.number().int().min(1).max(600_000);
 
 /**
@@ -210,7 +213,7 @@ export const ProbeEvidenceSchema = z.strictObject({
         .strictObject({
             lines: count,
             truncated: z.boolean(),
-            tail: z.array(z.strictObject({ at: sinceT0, service: z.string().min(1).max(128), text: z.string().max(512) })).max(50),
+            tail: z.array(z.strictObject({ at: sinceT0, service: z.string().min(1).max(128), text: z.string().max(PROBE_LOG_TAIL_TEXT_MAX) })).max(50),
         })
         .optional(),
     // dbEffects: per-table rows inserted, updated and deleted in the window (read-only connection).

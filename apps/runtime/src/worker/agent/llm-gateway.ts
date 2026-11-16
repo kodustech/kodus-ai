@@ -2,8 +2,9 @@ import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 // The runtime-worker never holds an LLM key (ADR-057): it calls the product's
 // gateway with the Run token, and the gateway applies the budget. Here the
-// gateway is a port; the only implementation in this PR replays recorded
-// responses, so no real LLM is ever called.
+// gateway is a port: HttpLlmGateway (http-llm-gateway.ts) calls the product
+// when RUNTIME_LLM_GATEWAY_URL is set; without it, RecordedLlmGateway replays
+// recorded responses, so no real LLM is called.
 
 export interface LlmMessage {
     role: 'system' | 'user' | 'assistant';

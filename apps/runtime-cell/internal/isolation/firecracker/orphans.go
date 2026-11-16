@@ -52,8 +52,8 @@ func (b *Backend) procDir() string {
 }
 
 // ReapOrphans ends what a machine left on the host without a record: a
-// VMM process, a cgroup under the cell's parent, a jail, a states file or a
-// tap. A record is written before any of them exists and removed after all
+// VMM process, a cgroup under the cell's parent, a jail, a states file, a
+// tap or (when the network has them, NetnsInventory) a network namespace. A record is written before any of them exists and removed after all
 // of them are gone (Create, Destroy), so none of them is ever in flight
 // without one. It names each thing it removed.
 func (b *Backend) ReapOrphans(ctx context.Context) ([]string, error) {

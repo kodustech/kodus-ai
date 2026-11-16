@@ -1,5 +1,6 @@
 // Package outbox delivers the cell's claim-scoped frames (claim.ready,
-// claim.failed, step.result) until the hub acks them, over whatever
+// claim.failed, step.result, blocked; claim.progress is sent once, with no
+// retry) until the hub acks them, over whatever
 // connection the cell holds at each attempt: a frame lost with a connection
 // is sent again on the next one. The hub is idempotent by claimId and
 // stepId, so a resend of what it already has is acked.
@@ -60,7 +61,7 @@ func New(cfg Config) *Outbox {
 	}
 	return &Outbox{
 		cfg:        cfg,
-		deliveries: cfg.Metrics.Counter("cell_hub_deliveries_total", "Claim frames the cell delivered, by kind and outcome (acked, nacked, gave_up, dropped).", "kind", "outcome"),
+		deliveries: cfg.Metrics.Counter("cell_hub_deliveries_total", "Claim frames the cell delivered, by kind and outcome (acked, nacked, gave_up, dropped, refused).", "kind", "outcome"),
 		retries:    cfg.Metrics.Counter("cell_hub_delivery_retries_total", "Resends of claim frames the hub did not ack.", "kind"),
 	}
 }

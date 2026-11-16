@@ -1,9 +1,9 @@
 //go:build unix
 
 // Package guest is the guest agent: the one process inside a sandbox machine
-// (a tool container under gVisor today, a microVM later) that runs its
-// commands and touches its files on the cell's behalf. The cell speaks to it
-// over a byte stream (docker exec's stdio or a unix socket now, vsock later)
+// (a tool container under gVisor, or a microVM) that runs its commands and
+// touches its files on the cell's behalf. The cell speaks to it over a byte
+// stream (docker exec's stdio, a unix socket, or vsock in a microVM)
 // in the cell protocol's own frames (sandbox.op in, guest.result out), so
 // the machine side is the same whatever carries the stream.
 //

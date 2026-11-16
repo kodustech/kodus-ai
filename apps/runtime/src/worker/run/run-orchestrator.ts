@@ -420,9 +420,9 @@ function roomBudget(deps: RunDeps, req: RuntimeRunRequested, started: { at: stri
 }
 
 /** Releases the Run's claims through the hub; a failed release is reported and left to the reaper. */
-export async function releaseClaims(deps: RunDeps, runId: string): Promise<void> {
+export async function releaseClaims(deps: RunDeps, organizationId: string, runId: string): Promise<void> {
     await deps.step('claims:release', async () => {
-        for (const c of await deps.claims.forRun(runId)) {
+        for (const c of await deps.claims.forRun(organizationId, runId)) {
             await deps.env.release(c.claimId).catch((e) => deps.onReleaseFailed?.(c.claimId, e as Error));
         }
     });
@@ -758,7 +758,7 @@ async function finishRun(run: RunScope, state: RunState, verdict?: VerdictOutcom
         return { state: current?.state ?? state };
     }
     tally.published = (await publish(deps, { ...req, headSha: req.pullRequest.headSha }, state, verdict, reason, canaries, ctx)) ?? [];
-    await releaseClaims(deps, req.runId);
+    await releaseClaims(deps, req.organizationId, req.runId);
     await deps.step('log:finished', async () => {
         const at = deps.now().getTime();
         // Inside the step, so a replayed Run never counts its duration twice.
@@ -1141,7 +1141,7 @@ function startEarlyPlan(run: RunScope, first: { base: Promise<AcquireTry>; pr: P
                   }
                 : {}),
             leasesHeld: async (base, pr) => {
-                const securityOf = async (claimId: string) => (await deps.claims.securityViolations([claimId]))[0]?.signature;
+                const securityOf = async (claimId: string) => (await deps.claims.securityViolations(req.organizationId, [claimId]))[0]?.signature;
                 for (const [side, claim] of [['base', base], ['pr', pr]] as const) {
                     if (claim && (await checkClaimLease(deps.env, claim.claimId, 'runtime', { side, securityOf }))) return false;
                 }
@@ -1175,7 +1175,7 @@ async function baseAhead(run: RunScope, firstBase: Promise<AcquireTry>, plan: Ag
     if (!plan.probes.length || !base.manifest.imageId) return undefined;
     const booted = await firstBase.catch(() => undefined);
     const roundSnapshotId = booted && 'claim' in booted ? booted.roundSnapshotId : undefined;
-    const securityOf = async (claimId: string) => (await deps.claims.securityViolations([claimId]))[0]?.signature;
+    const securityOf = async (claimId: string) => (await deps.claims.securityViolations(req.organizationId, [claimId]))[0]?.signature;
     const rounds: RoundOut[] = [];
     for (const [index, planned] of plan.probes.entries()) {
         if (signal.aborted || prAnswered()) break;
@@ -1400,7 +1400,7 @@ async function testSides(run: RunScope, ready: ReadySides, providedPlan: AgentPl
         classified: verdicts,
         testingAt,
     };
-    const securityOf = async (claimId: string) => (await deps.claims.securityViolations([claimId]))[0]?.signature;
+    const securityOf = async (claimId: string) => (await deps.claims.securityViolations(req.organizationId, [claimId]))[0]?.signature;
     try {
         t.plan = await planProbes(run, ready, behavior, providedPlan, securityOf);
         await replayProbes(run, ready, t, behavior, securityOf);
@@ -1441,9 +1441,9 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
     });
 
     const egress = await deps.step('egress', async () => {
-        const hosts = await deps.claims.egressBlocked([base.claimId, pr.claimId]);
+        const hosts = await deps.claims.egressBlocked(req.organizationId, [base.claimId, pr.claimId]);
         // A violation the hub recorded between steps (no step of ours saw it) halts the Run too.
-        const violations = await deps.claims.securityViolations([base.claimId, pr.claimId]);
+        const violations = await deps.claims.securityViolations(req.organizationId, [base.claimId, pr.claimId]);
         const v = violations[0];
         const violation = v ? { side: (v.claimId === pr.claimId ? 'pr' : 'base') as 'base' | 'pr', signature: v.signature } : undefined;
         return { hosts: redactDeep(hosts, canaries), leaked: containsCanary(JSON.stringify(hosts), canaries), ...(violation ? { violation } : {}) };
@@ -1602,7 +1602,7 @@ export async function finalizeStoppedRun(
 ): Promise<boolean> {
     const current = await deps.step('stopped:read', () => deps.projection.get(run.runId));
     if (!current || isTerminal(current.state) || current.publishStartedAt) return false;
-    await releaseClaims(deps, run.runId);
+    await releaseClaims(deps, run.organizationId, run.runId);
     const moved = await transition(deps, run, state, { reason });
     if (!moved) return false;
     const published = (await publish(deps, run, state, undefined, reason)) ?? [];

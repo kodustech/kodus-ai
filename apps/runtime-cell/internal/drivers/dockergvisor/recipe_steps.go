@@ -18,7 +18,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
-// The recipe's boot steps (docs §6: setup, data.migrate, data.seed) run in
+// The recipe's boot steps (setup, data.migrate, data.seed) run in
 // the project once it is up, in this order, through the exec the agent's
 // steps take: inside a service container, under runsc on the claim
 // network, never on the cell host (S-10). The forms Runo runs on its VM's

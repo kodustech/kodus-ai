@@ -42,7 +42,7 @@ sequenceDiagram
 ### 2. Consumer and refusals
 
 - **Consumer.** `RuntimePublishRequestedConsumer` (`infrastructure/runtime-publish-requested.consumer.ts`) acks every refusal. On a thrown error, the shared RabbitMQ error handler retries through `workflow.exchange.delayed` and then dead-letters the message. Prefetch is 5 on `channel-runtime-publish`.
-- **Refusals.** Every refusal is a `RefusalReason` in `application/publish-runtime-request.use-case.ts`. These can only mean a bug or tampering on the Runtime side, so they log at error level with `metadata.alert = 'runtime_publish_refused'`:
+- **Refusals.** Every refusal is a `RefusalReason` (`application/publication-outcome.ts`), decided in `application/publish-runtime-request.use-case.ts`. Those in `ALERT_REFUSALS` can only mean a bug or tampering on the Runtime side, so they log at error level with `metadata.alert = 'runtime_publish_refused'`:
   `invalid_message`, `key_mismatch`, `unstructured_body`, `attempt_mismatch`, `incomplete_record`, `repository_not_in_org`, `repository_mismatch`, `platform_mismatch`.
   The other refusals log at warn level.
 - **Logged invalid messages** carry only Zod issue paths and codes, never values. The publisher never handles the Run's repo token or run token: they travel in `RuntimeRunRequested`, a different message.
@@ -77,7 +77,7 @@ Publication keys are per message, so on their own they cannot stop two phases of
 
 ### 5. Check run
 
-`publishCheck`, with the name `KODY_RUNTIME_CHECK_NAME = 'Kody Runtime'` for the environment the repository is the primary of, and `Kody Runtime (<environment>)` (its primary's alias) for another one, so a later success in one environment never hides a failure in another (`checkNameOf`):
+`CheckPublisher.publish` (`application/check-publisher.ts`), with the name `KODY_RUNTIME_CHECK_NAME = 'Kody Runtime'` for the environment the repository is the primary of, and `Kody Runtime (<environment>)` (its primary's alias) for another one, so a later success in one environment never hides a failure in another (`checkNameOf`):
 
 - **Platforms with checks.** Only GitHub and Forgejo have a checks API (`CHECKS_PLATFORMS`). Elsewhere the check is `skipped: checks_unavailable` at once, and the comment carries the result.
 - **Finding the run.** The check run comes from the first of: the publication's own `checkRunId`; for the final key, the run recorded under the `awaiting_approval` key; the adapter's `findCheckRun` on the head SHA.

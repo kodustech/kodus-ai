@@ -1,10 +1,17 @@
 import { isSealedSecret, openSecret, sealSecret, type SealedSecret } from '@libs/runtime/run';
 
-// The repo token and the Run token stay sealed (libs/runtime/run/sealed-secret)
-// in every input the workflow engine stores and in every log line; they are
-// opened only inside the step that uses them: the claim acquire (repo token,
-// handed to the hub over mTLS for the cell's download) and the LLM gateway
-// call (Run token, in the Authorization header).
+// The repo tokens, the Run token and the setup token stay sealed
+// (libs/runtime/run/sealed-secret) in every input the workflow engine stores
+// and in every log line; they are opened only inside the call that sends them:
+// - the claim acquire (repo tokens, handed to the hub over mTLS for the cell's
+//   download): env/hub-environment-runtime.ts;
+// - product calls with the Run token in the Authorization header:
+//   agent/http-llm-gateway.ts (also a setup's learn loop, bound to the setup
+//   key), agent/http-run-plan.ts, agent/http-model-turn.ts,
+//   agent/worker-plan-client.ts;
+// - product calls with the setup token: agent/http-recipe-author.ts and
+//   agent/http-setup-repo-tokens.ts, which also opens each repo token it gets
+//   back only to check it is bound to the setup.
 
 export const SECRET_OPENER = Symbol('SECRET_OPENER');
 

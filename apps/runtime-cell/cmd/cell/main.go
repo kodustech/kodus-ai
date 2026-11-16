@@ -1,4 +1,4 @@
-// Command cell is the cell agent (docs §4): the outbound connection to the
+// Command cell is the cell agent (apps/runtime-cell/README.md): the outbound connection to the
 // runtime-hub, the leases, the dead-man switch, the repo tarball and the
 // claim's observer. "cell extract" is the no-network extraction child. This
 // file only wires: every part it builds lives in a package.

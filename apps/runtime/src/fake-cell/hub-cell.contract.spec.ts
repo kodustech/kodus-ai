@@ -134,7 +134,7 @@ describe('hub ↔ fake cell contract', () => {
         await new Promise((r) => setTimeout(r, 10));
         const req = shopRunRequest();
         const { deps, projection, claims } = inMemoryRunDeps({ env: viaHub(hub, req) });
-        claims.egressBlocked = async (ids) => store.egress.filter((e) => ids.includes(e.claimId));
+        claims.egressBlocked = async (org, ids) => store.egress.filter((e) => e.orgId === org && ids.includes(e.claimId));
         await projection.upsert(req.runId, { state: 'queued', organizationId: req.organizationId, requestedAt: req.requestedAt });
         const result = await runRuntimeRun(req, deps);
         expect(store.egress).toHaveLength(1);

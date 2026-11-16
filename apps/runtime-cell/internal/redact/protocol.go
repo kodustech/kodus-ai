@@ -7,14 +7,14 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
-// Protocol limits the redacted text must still fit (libs/runtime/protocol).
+// Protocol limits the redacted text must still fit, from constants_gen.go.
 const (
-	MaxExecStream   = 16384
-	MaxStreamChunk  = 65536
-	MaxReason       = 4096
-	MaxBundleLine   = 2048
-	MaxBlockMessage = 4096
-	MaxLogTailText  = 512
+	MaxExecStream   = protocol.MaxStepExecOutput
+	MaxStreamChunk  = protocol.MaxStepStreamChunk
+	MaxReason       = protocol.MaxClaimFailedReason
+	MaxBundleLine   = protocol.MaxLogLine
+	MaxBlockMessage = protocol.MaxBlockedMessage
+	MaxLogTailText  = protocol.MaxProbeLogTailText
 )
 
 // StepResult redacts every text field of a step.result in place (exec

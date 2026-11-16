@@ -1,5 +1,5 @@
 // Package injector is the only piece of the cell that holds a test
-// credential (Inc. 5, docs §4 "Injetor de credencial"). The proxy sends it
+// credential (docs/runtime/sandbox.md "Secrets: OpenBao"). The proxy sends it
 // only the hosts a claim declared with a credential, with the address the
 // proxy validated for that host in the PROXY line. The injector terminates
 // the VM's TLS with the cell CA, adds the header, and goes to exactly that

@@ -8,7 +8,7 @@ import { type CellLocation, type CellRefusal, type InTransaction, PgCellDirector
 import { PgDistributedLocks } from '../shared/persistence/locks';
 import { PgRunClaims } from '../worker/persistence/pg-run-claims';
 import { PgCommandStore } from '../shared/persistence/pg-command-store';
-import { PgRunStreamStore } from '../shared/persistence/pg-run-stream-store';
+import { PgRunStreamStore } from '@libs/runtime/run/adapters/pg-run-stream.store';
 import { applyRetention, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { PgRuntimeRunStreamReader } from '@libs/runtime/api/infrastructure/pg-runtime-run-stream.reader';
 import { PgRuntimeClaimUsageReader } from '@libs/runtime/api/infrastructure/pg-runtime-claim-usage.reader';
@@ -594,6 +594,18 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         await pool.query(`DELETE FROM runtime.runtime_cell_revocations WHERE cell_id = $1`, [id]);
     });
 
+    it("the worker reads a Run's claims and egress events of its own org only", async () => {
+        const c = claim('bound');
+        await store.insertClaim(c);
+        await store.insertEgress({ claimId: c.claimId, cellId: c.cellId, orgId: 'org-a', host: 'telemetry.example.test', port: 443, phase: 'test', at: new Date().toISOString() });
+        const claims = new PgRunClaims(pool);
+        expect((await claims.forRun('org-a', 'run-1')).map((x) => x.claimId)).toContain(c.claimId);
+        expect((await claims.forRun('org-b', 'run-1')).map((x) => x.claimId)).not.toContain(c.claimId);
+        expect(await claims.egressBlocked('org-a', [c.claimId])).toEqual([{ host: 'telemetry.example.test', port: 443, phase: 'test' }]);
+        expect(await claims.egressBlocked('org-b', [c.claimId])).toEqual([]);
+        await pool.query('DELETE FROM runtime.runtime_egress_events WHERE claim_id = $1', [c.claimId]);
+    });
+
     it('a security violation is recorded once per claim and alert kind, and the worker reads it for the Run', async () => {
         const c = claim('bound');
         await store.insertClaim(c);
@@ -602,7 +614,8 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         await store.recordClaimBlocker(row);
         await store.recordClaimBlocker(row);
         expect(await store.claimBlockers([c.claimId])).toHaveLength(1);
-        expect(await new PgRunClaims(pool).securityViolations([c.claimId])).toEqual([{ claimId: c.claimId, side: 'pr', signature: 'credential_exfiltration' }]);
+        expect(await new PgRunClaims(pool).securityViolations('org-a', [c.claimId])).toEqual([{ claimId: c.claimId, side: 'pr', signature: 'credential_exfiltration' }]);
+        expect(await new PgRunClaims(pool).securityViolations('org-b', [c.claimId])).toEqual([]);
         // A compromised claim is still released at the Run's end.
         expect(await store.transitionClaim(c.claimId, ['pending', 'bound', 'held', 'blocked', 'failed', 'compromised'], 'released', { reason: 'released' })).toBe(true);
         await pool.query('DELETE FROM runtime.runtime_claim_blockers WHERE claim_id = $1', [c.claimId]);

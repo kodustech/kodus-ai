@@ -111,7 +111,7 @@ const runWorkflow = DBOS.registerWorkflow(async (req: RuntimeRunRequested) => ru
         const moved = await finalizeStoppedRun({ ...slow.deps, step: (_n, fn) => fn() }, { ...req, headSha: req.pullRequest.headSha }, 'superseded', 'new push');
         expect(moved).toBe(true);
         expect((await slow.projection.get(req.runId))!.state).toBe('superseded');
-        expect(await slow.claims.forRun(req.runId)).toEqual([]);
+        expect(await slow.claims.forRun(req.organizationId, req.runId)).toEqual([]);
         // No verdict was published for the cancelled Run, only the cancelled check.
         const mine = slow.published.filter((p) => p.runId === req.runId);
         expect(mine.filter((p) => !p.progress).map((p) => [p.kind, p.check?.conclusion])).toEqual([['check', 'cancelled']]);

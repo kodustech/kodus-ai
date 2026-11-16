@@ -59,7 +59,8 @@
 # outside the claims' pool (10.213.0.0/16) and this host's other networks.
 # The cell takes the injector's CA certificate (-cell-ca-cert, never its key)
 # and this host's public roots, and mounts the two into every machine of a
-# claim with org secrets (internal/machinetrust), so they trust the injector.
+# claim with org secrets, and of every claim when -egress-recommended inspects
+# over TLS (internal/machinetrust), so they trust the injector.
 # PREVIEW=1 adds -preview: the cell names the preview feature and dials the
 # preview edge the hub names (RUNTIME_PREVIEW_TUNNEL_URL), whose tunnel
 # certificate must chain to ca.pem (docs/runtime/preview-urls.md §14.6).

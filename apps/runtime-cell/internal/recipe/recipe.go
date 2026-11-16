@@ -1,4 +1,5 @@
-// Package recipe is the environment recipe (docs §6): how a checkout boots,
+// Package recipe is the environment recipe
+// (docs/runtime/environment-setup.md §3): how a checkout boots,
 // in the format Runo reads from .kodus/workspace.yaml. The product sends the
 // default branch's recipe in claim.acquire and the agent writes it into the
 // checkout at Path, over the PR's copy; the drivers read it from there.
@@ -38,7 +39,7 @@ const DefaultHealthTimeout = 2 * time.Minute
 // and boots in a cell all the same.
 const MaxHealthTimeout = protocol.MaxHealthTimeoutSeconds * time.Second
 
-// Recipe is .kodus/workspace.yaml. Every key of docs §6 is known, so an
+// Recipe is .kodus/workspace.yaml. Every key of the recipe format is known, so an
 // unknown key is an error. Resource nodes are validated and normalized;
 // fields not acted on are retained so the setup can identify them.
 type Recipe struct {
@@ -97,7 +98,7 @@ type Compose struct {
 	PublicPort    int      `yaml:"public_port"`
 	Health        string   `yaml:"health"`
 	HealthTimeout Duration `yaml:"health_timeout"`
-	// Env is new (not in docs §6): variables every service's container gets
+	// Env is the cell's own (Runo has no such key): variables every service's container gets
 	// (over the compose file's own), and local-docker's compose
 	// interpolation. Never secrets; Parse refuses anything that looks like one.
 	Env map[string]string `yaml:"env"`
@@ -377,13 +378,15 @@ func (r *Recipe) ResetStrategy() string {
 func (r *Recipe) HasBootSteps() bool { return len(r.Setup) > 0 || r.SeedsData() }
 
 // Unapplied are the keys the recipe sets that no cell acts on yet, in the
-// order docs §6 lists them. Each cell boots as if they were absent, so the
+// order RECIPE_UNAPPLIED_KEYS lists them. Each cell boots as if they were absent, so the
 // product tells the person who wrote them (the setup's recipe step) rather
 // than let them think they took effect. libs/runtime/protocol/recipe.ts
 // lists the same keys (the recipe contract holds both to it).
 //
-// Not here: services.needs, which a cell refuses (other repositories must
-// boot beside this one, or what runs is not the app); limits and expose,
+// Not here: services.needs, which is applied: a cell that lays workspaces
+// out boots the other repositories beside this one when the hub sent every
+// one, and any other cell refuses the recipe (agent checkNeeds), since what
+// runs without them is not the app; limits and expose,
 // which describe a Runo VM (its instance, how it is reached from outside)
 // and mean nothing in a cell by design.
 func (r *Recipe) Unapplied() []string {

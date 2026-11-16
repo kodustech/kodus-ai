@@ -134,9 +134,10 @@ func start(ctx context.Context, g *lifecycle.Group, log *slog.Logger, d *dataPla
 
 	mirrorMetrics := cellmetrics.NewRegistry()
 	if f.mirror != "" {
-		// The registry mirror (docs §4): plain HTTP on the claim networks;
-		// what it serves is pinned by the claim's lockfile and verified by
-		// the client against it. It alone reaches the registries' upstreams.
+		// The registry mirror (docs/runtime/egress-allowlist.md §6): plain
+		// HTTP on the claim networks; Go modules and images only as the
+		// checkout pins them, npm and PyPI by name, each checked by the
+		// client against its lockfile. It alone reaches the upstreams.
 		up, err := url.Parse(f.goUpstream)
 		if err != nil {
 			return fmt.Errorf("go-upstream: %w", err)

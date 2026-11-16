@@ -33,6 +33,7 @@ Imports these Runtime modules:
 - [`libs/runtime/api/domain`](../../api/domain/AGENTS.md)
 - [`libs/runtime/blockers`](../../blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../contracts/AGENTS.md)
+- [`libs/runtime/probe`](../../probe/AGENTS.md)
 - [`libs/runtime/protocol`](../AGENTS.md)
 - [`libs/runtime/telemetry`](../../telemetry/AGENTS.md)
 

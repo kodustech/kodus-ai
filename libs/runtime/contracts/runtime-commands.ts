@@ -12,8 +12,11 @@ import { isSealedSecret } from '@libs/runtime/run/sealed-secret';
 // Decisions taken in the product that change Runtime state. Only the Runtime
 // writes its database, so the API never writes the tables (runtime_fork_approvals, runtime_egress_approvals,
 // runtime_cell_tokens, runtime_cell_revocations): it records the decision as an
-// outbox row on the runtime_run queue, in the same envelope as
-// RuntimeRunRequested, and the runtime-worker applies it idempotently.
+// outbox row in the same envelope as RuntimeRunRequested, and the
+// runtime-worker applies it idempotently. runtimeCommandRoute picks the queue:
+// an environment setup (work, like a Run) goes on the runtime_run queue, every
+// other command on workflow.jobs.runtime_control.queue, so a stop or an
+// approval never waits behind queued Runs.
 
 export const RuntimeCommandName = {
     ForkApproved: 'runtime.run.fork_approved',

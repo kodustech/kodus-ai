@@ -6,7 +6,7 @@ import type { RunStreamEvent, RunStreamStore } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { RuntimeLogger } from '../shared/observability/logger';
-import type { KeyedRunStreamStore } from '../shared/persistence/pg-run-stream-store';
+import type { KeyedRunStreamStore } from '@libs/runtime/run/adapters/pg-run-stream.store';
 import { CaMaterial } from './ca/x509';
 import { capabilitiesOfHello } from './cell-capabilities';
 import { ClaimLeaseService } from './claims/claim-lease';

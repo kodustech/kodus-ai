@@ -24,7 +24,7 @@ const (
 	// Failed: claim.failed sent; nothing runs.
 	Failed
 	// Held: a failed setup claim kept for diagnosis until its ceiling;
-	// only exec runs (§11 runbook).
+	// only exec runs.
 	Held
 	// Released: the cell is tearing the claim down or has.
 	Released

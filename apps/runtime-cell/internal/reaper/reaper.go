@@ -1,7 +1,9 @@
 // Package reaper destroys what passed kodus:hard-expires, even while the hub
-// and the cell keep renewing (docs §4 "Reaper", ADR-056, S-08). It runs
-// outside the cell's VPC with its own credential, which can only describe
-// and terminate this cell's machines.
+// and the cell keep renewing (ADR-056, S-08). It runs apart from the cell
+// agent with its own credential, which can only list and destroy this
+// cell's machines: on AWS a role outside the cell's VPC, on Kubernetes a
+// service account, on a docker-gvisor or microvm host a timer that reads
+// only the host and the cell's state (cmd/reaper).
 package reaper
 
 import (

@@ -4,9 +4,12 @@ import { AcquireRequest, FakeEnvironment, FakeEnvironmentRuntime, isBlocked, isE
 import { CELL_FEATURES, decodeFrame, Envelope, MACHINE_SIZE_LIMITS, MessageBody, MessageType, PROTOCOL_VERSION } from '@libs/runtime/protocol';
 
 // A cell that speaks the real protocol over WebSocket and runs the in-memory
-// driver behind it. It stands in for apps/runtime-cell (Go, PR 1b) in the
-// local stack and in the end-to-end Run. It deduplicates steps by stepId and
-// command hash, like the real cell must (ADR-051).
+// driver behind it. It stands in for apps/runtime-cell (Go) in the local stack
+// (runtime-fake-cell in docker-compose.runtime.yml, main.ts) and in the hub
+// contract spec (hub-cell.contract.spec.ts). It handles probe.run, exec and
+// machine.reset, each at most once per stepId: a repeat is nacked
+// duplicate_step, or step_reused when the command differs, like the real cell
+// (ADR-051).
 
 export interface FakeCellOptions {
     cellId: string;

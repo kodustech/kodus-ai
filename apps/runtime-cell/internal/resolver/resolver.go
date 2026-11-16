@@ -1,5 +1,6 @@
-// Package resolver is the only DNS the VMs and the observer have (docs §4
-// "Resolver DNS"). It answers app.kody.internal and the claim's exact
+// Package resolver is the only DNS the VMs and the observer have
+// (docs/runtime/egress-allowlist.md). It answers app.kody.internal, the
+// registry mirror's name (mirror.cell.internal) and the claim's exact
 // allowlist; every other name gets NXDOMAIN without any query leaving the
 // cell. Every query is logged by claim, every address it hands a claim is
 // recorded (netguard.Answers) so the proxy accepts exactly those, answers

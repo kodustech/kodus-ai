@@ -6,6 +6,7 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { EnvironmentPoolRequestedHandler } from './command-handlers';
 import { AmqpPublishRequester, PUBLISH_CONFIRM_TIMEOUT_MS } from '../publish/amqp-publish-requester';
+import { confirmTransport } from '../consumer/testing';
 import { inMemoryRunDeps } from '../run/testing';
 import { runRuntimeRun } from '../run/run-orchestrator';
 import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
@@ -171,13 +172,28 @@ describe('AmqpPublishRequester', () => {
         return published.find((p) => p.kind === 'check' && !p.progress)!;
     }
 
-    it('waits for the broker confirm, with a deadline, and fails the step when the broker refuses or times out', async () => {
+    it('waits for the broker confirm, with a deadline, and fails the step only when the publish rejects', async () => {
         const msg = await realCheck();
         const publish = jest.fn(async (..._a: unknown[]) => true);
         await new AmqpPublishRequester({ publish } as any).request(msg);
         expect(publish.mock.calls[0][3]).toMatchObject({ persistent: true, messageId: msg.key, timeout: PUBLISH_CONFIRM_TIMEOUT_MS });
-        await expect(new AmqpPublishRequester({ publish: async () => false } as any).request(msg)).rejects.toThrow(/broker refused/);
+        await expect(new AmqpPublishRequester({ publish: async () => false } as any).request(msg)).resolves.toBeUndefined();
         await expect(new AmqpPublishRequester({ publish: async () => Promise.reject(new Error('confirm timeout')) } as any).request(msg)).rejects.toThrow(/confirm timeout/);
+    });
+
+    it.each([
+        ['a full write buffer, then the broker ack, completes the step', false, null, undefined],
+        ['the broker nack fails the step', true, new Error('message nacked'), /message nacked/],
+    ])('on the installed transport, %s', async (_name, writeHasRoom, confirm, failure) => {
+        const msg = await realCheck();
+        const transport = await confirmTransport(writeHasRoom, confirm);
+        try {
+            const sent = new AmqpPublishRequester({ publish: transport.publish }).request(msg);
+            if (failure) await expect(sent).rejects.toThrow(failure);
+            else await expect(sent).resolves.toBeUndefined();
+        } finally {
+            await transport.close();
+        }
     });
 
     it('every check and comment a Run sends carries the structured report, never free text', async () => {

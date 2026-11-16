@@ -112,6 +112,21 @@ export interface WorkerConfig extends RuntimeConfig {
     plannerHost: 'product' | 'worker';
     /** Bounded broker retries before durable Run/setup admission; independent of workflow execution. */
     brokerRetry: { maxRetries: number; delayMs: number; maxDelayMs: number };
+    /** RUNTIME_BROKER_PREFETCH (1..100, default 10): unacked deliveries per lane (run, control). */
+    brokerPrefetch: number;
+    /**
+     * The Runtime Postgres pools. poolMax (RUNTIME_PG_POOL_MAX, 2..200, default 10) serves the stores and
+     * DBOS steps; lockPoolMax (two lanes of prefetch, plus the maintenance lock) holds the PR locks, so a
+     * lock holder never waits on its own pool for a second connection. connectionTimeoutMs
+     * (RUNTIME_PG_CONNECTION_TIMEOUT_MS, 100..60000, default 5000): a wait for a connection fails instead of hanging.
+     */
+    pg: { poolMax: number; lockPoolMax: number; connectionTimeoutMs: number };
+    /**
+     * RUNTIME_EXECUTOR_ID, else DBOS__VMID: this replica's DBOS executor id, the owner a restart recovers
+     * PENDING workflows for. Unique and stable per replica; required in production (DBOS defaults every
+     * replica to the same 'local'). Unset outside production.
+     */
+    executorId?: string;
     admission: AdmissionLimits & { retryMs: number; leaseMs: number; attemptConcurrency: number; attemptPerOrg: number };
     /**
      * RUNTIME_SETUP_PER_ORG (1..8, default 2): environment setups of one org
@@ -334,6 +349,22 @@ export const PLANNER_WORKER_VERSION_SUFFIX = '+planner-worker';
 export const workflowReleaseOf = (release: string, plannerHost: WorkerConfig['plannerHost']) =>
     plannerHost === 'worker' ? `${release}${PLANNER_WORKER_VERSION_SUFFIX}` : release;
 
+/** Every replica on DBOS's default 'local' would recover the PENDING workflows of the live ones. */
+function executorIdOf(env: Env, productionImage: boolean): string | undefined {
+    const own = env.RUNTIME_EXECUTOR_ID || undefined;
+    const vmid = env.DBOS__VMID || undefined;
+    if (own && vmid && own !== vmid) throw new Error('RUNTIME_EXECUTOR_ID and DBOS__VMID disagree; set one of them');
+    const id = own ?? vmid;
+    if (!id) {
+        if (productionImage) throw new Error('RUNTIME_EXECUTOR_ID (or DBOS__VMID) is required in production: a unique, stable id per worker replica');
+        return undefined;
+    }
+    if (id === 'local' || id.length > 128 || !/^[A-Za-z0-9]/.test(id) || /[^A-Za-z0-9._-]/.test(id)) {
+        throw new Error("RUNTIME_EXECUTOR_ID must be 1-128 letters, digits, dots, underscores or hyphens, starting with a letter or digit, and not 'local'");
+    }
+    return id;
+}
+
 export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
     const base = loadRuntimeConfig(env);
     if (base.durableAdmission && env.RUNTIME_SWEEPER === 'false') throw new Error('RUNTIME_DURABLE_ADMISSION requires RUNTIME_SWEEPER for durable repair');
@@ -361,8 +392,17 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
     const evidencePort = env.RUNTIME_EVIDENCE_PORT ? int(env, 'RUNTIME_EVIDENCE_PORT', 0, 1) : undefined;
     const evidenceStore = z.enum(['file', 's3']).parse(env.RUNTIME_EVIDENCE_STORE || 'file');
     const brokerRetryDelayMs = retrySetting(env, 'RUNTIME_COMMAND_RETRY_DELAY_MS', 'WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS', 1000, 1, 60_000);
+    const brokerPrefetch = boundedInt(env, 'RUNTIME_BROKER_PREFETCH', 10, 1, 100);
+    const executorId = executorIdOf(env, base.productionImage);
     return {
         ...base,
+        brokerPrefetch,
+        pg: {
+            poolMax: boundedInt(env, 'RUNTIME_PG_POOL_MAX', 10, 2, 200),
+            lockPoolMax: 2 * brokerPrefetch + 1,
+            connectionTimeoutMs: boundedInt(env, 'RUNTIME_PG_CONNECTION_TIMEOUT_MS', 5000, 100, 60_000),
+        },
+        ...(executorId ? { executorId } : {}),
         brokerRetry: {
             maxRetries: retrySetting(env, 'RUNTIME_COMMAND_MAX_RETRIES', 'WORKFLOW_QUEUE_WORKER_MAX_RETRIES', 5, 0, 10),
             delayMs: brokerRetryDelayMs,

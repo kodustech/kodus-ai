@@ -14,15 +14,16 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/metrics"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
 
 const (
 	// AuthScheme is PREVIEW_TUNNEL_AUTH_SCHEME: the ticket rides in its own
 	// Authorization scheme, beside the client certificate.
-	AuthScheme = "KodusTunnel"
+	AuthScheme = protocol.PreviewTunnelAuthScheme
 	// DefaultIdleClose is how long the tunnel stays open after its last
-	// route is gone (§4.2): nothing is open when nobody previews.
+	// route is gone (docs/runtime/preview-urls.md §4.2): nothing is open when nobody previews.
 	DefaultIdleClose = 5 * time.Minute
 	// maxMessage bounds one WebSocket message from the edge (a chunk of the
 	// HTTP/2 byte stream, a few frames at most).

@@ -38,7 +38,7 @@ const recipeCompose = `services:
   cache: { image: redis:7, ports: ["6379:6379"] }
 `
 
-// recipe.Parse accepts every §6 key; local-docker says which it ignores and
+// recipe.Parse accepts every recipe key; local-docker says which it ignores and
 // refuses what it cannot run.
 func TestRecipeKeysLocalDockerIgnoresOrRefuses(t *testing.T) {
 	r, err := recipe.Parse([]byte(recipeYAML))

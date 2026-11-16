@@ -3,10 +3,14 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 // What the product worker published on the PR for a Run (ADR-052), in the
 // product Postgres. The schema is the migration
 // MoveRuntimeProductStoresToPostgres2026111200000000; the stores write it
-// with SQL (pg-publication.store.ts, pg-comment-slot.store.ts) for their
-// atomic claims.
+// with SQL (typeorm-publication.store.ts, typeorm-comment-slot.store.ts)
+// for their atomic claims.
 
-/** One row per idempotency key `runId:attempt:kind`. */
+/**
+ * One row per idempotency key: `runId:attempt:check`, `runId:attempt:comment`,
+ * `runId:attempt:comment:<phase>`, `runId:attempt:check:awaiting_approval`,
+ * `runId:attempt:reply:<suggestionId>`.
+ */
 @Entity('runtime_publications')
 @Index('IDX_runtime_publications_run', ['organizationId', 'runId'])
 @Index('IDX_runtime_publications_redrive', { synchronize: false })
@@ -31,7 +35,7 @@ export class RuntimePublicationModel {
     @Column('timestamptz', { name: 'updated_at' }) updatedAt: Date;
 }
 
-/** The one Runtime comment of a pull request, and the short lease a delivery holds while it creates or edits it. */
+/** The one Runtime comment of a pull request in one environment (environment_key), and the short lease a delivery holds while it creates or edits it. */
 @Entity('runtime_pr_comments')
 export class RuntimePullRequestCommentModel {
     @PrimaryColumn('text', { name: 'organization_id', primaryKeyConstraintName: 'PK_runtime_pr_comments' }) organizationId: string;

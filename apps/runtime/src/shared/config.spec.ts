@@ -141,6 +141,7 @@ describe('runtime config', () => {
                     // The production image refuses the dev key (test below).
                     RUNTIME_SECRET_SEAL_KEY: 'a1'.repeat(32),
                     RUNTIME_RELEASE_VERSION: 'runtime-e968eceb5',
+                    RUNTIME_EXECUTOR_ID: 'runtime-worker-0',
                 }).releaseVersion,
             ).toBe('runtime-e968eceb5');
         }
@@ -165,6 +166,18 @@ describe('runtime config', () => {
                 expect((e as Error).message).not.toContain('SECRET');
             }
         }
+    });
+
+    // DBOS recovers PENDING workflows by executor id, and every replica without one is 'local'.
+    it('a production worker refuses to start without its own DBOS executor id', () => {
+        const prod = { NODE_ENV: 'production', RUNTIME_RELEASE_VERSION: 'r1', RUNTIME_SECRET_SEAL_KEY: 'a1'.repeat(32) };
+        expect(() => loadWorkerConfig(prod)).toThrow(/RUNTIME_EXECUTOR_ID \(or DBOS__VMID\) is required in production/);
+        expect(() => loadWorkerConfig({ ...prod, DBOS__VMID: 'local' })).toThrow(/not 'local'/);
+        expect(() => loadWorkerConfig({ ...prod, RUNTIME_EXECUTOR_ID: 'a', DBOS__VMID: 'b' })).toThrow(/disagree/);
+        expect(() => loadWorkerConfig({ ...prod, RUNTIME_EXECUTOR_ID: 'worker/0' })).toThrow(/RUNTIME_EXECUTOR_ID must be/);
+        expect(loadWorkerConfig({ ...prod, RUNTIME_EXECUTOR_ID: 'runtime-worker-0' }).executorId).toBe('runtime-worker-0');
+        expect(loadWorkerConfig({ ...prod, DBOS__VMID: 'runtime-worker-1' }).executorId).toBe('runtime-worker-1');
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX }).executorId).toBeUndefined();
     });
 
     it('gives each org 10000 machine minutes a day unless RUNTIME_MACHINE_MINUTES_PER_ORG_DAY says otherwise, 0 meaning unlimited', () => {
@@ -274,7 +287,7 @@ describe('runtime config', () => {
     });
 
     it('a production worker refuses the dev-only evidence signing secret, or one shorter than 32 characters', () => {
-        const prod = { NODE_ENV: 'production', RUNTIME_RELEASE_VERSION: 'r1', RUNTIME_SECRET_SEAL_KEY: 'a1'.repeat(32) };
+        const prod = { NODE_ENV: 'production', RUNTIME_RELEASE_VERSION: 'r1', RUNTIME_SECRET_SEAL_KEY: 'a1'.repeat(32), RUNTIME_EXECUTOR_ID: 'runtime-worker-0' };
         expect(() => loadWorkerConfig({ ...prod, RUNTIME_EVIDENCE_SIGNING_SECRET: 'dev-only-runtime-evidence-signing-secret-000000' })).toThrow(/RUNTIME_EVIDENCE_SIGNING_SECRET is the dev-only value/);
         expect(() => loadWorkerConfig({ ...prod, RUNTIME_EVIDENCE_SIGNING_SECRET: 'short' })).toThrow(/RUNTIME_EVIDENCE_SIGNING_SECRET must be at least 32 characters/);
         expect(loadWorkerConfig({ ...prod, RUNTIME_EVIDENCE_SIGNING_SECRET: 'e'.repeat(40) }).evidence.secret).toBe('e'.repeat(40));

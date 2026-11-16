@@ -1,4 +1,4 @@
-// Package awsec2 is the aws-ec2 MachineDriver (docs §4, ADR-056). It is
+// Package awsec2 is the aws-ec2 MachineDriver (ADR-056). It is
 // written against EC2API, the subset of the AWS SDK it needs, so tests run
 // on a mock and nothing here calls AWS unless a real client is passed in.
 package awsec2

@@ -177,9 +177,9 @@ type Config struct {
 	SecretHostDenied func(host string) bool
 	// CellTrust: the driver mounts the cell's trust files (the injector's
 	// CA with the public roots, machinetrust) into the machines of a claim
-	// with org secrets, asked in UpRequest.CellTrust and
-	// SandboxRequest.CellTrust (org_secrets.go; a sandbox only when the
-	// driver's Capabilities.SandboxCellTrust). Such a sandbox is never a
+	// with org secrets, or of every claim under InspectEgress, asked in
+	// UpRequest.CellTrust and SandboxRequest.CellTrust (org_secrets.go; a
+	// sandbox only when the driver's Capabilities.SandboxCellTrust). Such a sandbox is never a
 	// blank pool one, made before the claim without them. False: no machine
 	// gets them.
 	CellTrust bool

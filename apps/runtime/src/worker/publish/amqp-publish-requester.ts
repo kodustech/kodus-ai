@@ -36,7 +36,12 @@ export class AmqpPublishRequester implements PublishRequester {
             // amqp-connection-manager's per-publish confirm deadline.
             timeout: PUBLISH_CONFIRM_TIMEOUT_MS,
         };
-        const ok = await this.amqp.publish(RUNTIME_EXCHANGE, RUNTIME_PUBLISH_ROUTING_KEY, envelope, options as Parameters<AmqpConnection['publish']>[3]);
-        if (ok === false) throw new Error('broker refused RuntimePublishRequested');
+        // The publish promise resolves only on the broker's ack and rejects on a nack or the timeout; the
+        // resolved boolean is only whether the write buffer had room (backpressure), never a refusal.
+        // Installed sources: @golevelup/nestjs-rabbitmq 9.0.2 lib/amqp/connection.js:610 (ChannelWrapper.publish),
+        // :670 (no `confirm`, so a confirm channel); amqp-connection-manager 5.0.0 dist/cjs/ChannelWrapper.js:266,
+        // :461-476 (resolve with channel.publish's result on ack, reject on error), :199-212 (timeout);
+        // amqplib 2.0.1 lib/connection.js:501 (publish returns the buffer's write()), lib/channel.js:33 (nack).
+        await this.amqp.publish(RUNTIME_EXCHANGE, RUNTIME_PUBLISH_ROUTING_KEY, envelope, options as Parameters<AmqpConnection['publish']>[3]);
     }
 }

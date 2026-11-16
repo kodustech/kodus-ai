@@ -17,7 +17,11 @@ export interface RunEventSink {
     append(orgId: string, runId: string, event: RunStreamEvent, key?: string): Promise<void>;
 }
 
-/** RuntimePublishRequested to workflow.jobs.runtime_publish.queue (ADR-052). */
+/**
+ * RuntimePublishRequested on workflow.exchange with routing key
+ * workflow.jobs.created.RUNTIME_PUBLISH (ADR-052); the product binds it to
+ * workflow.jobs.runtime_publish.queue (libs/runtime/run/run-messages.ts).
+ */
 export interface PublishRequester {
     request(msg: RuntimePublishRequested): Promise<void>;
 }
@@ -27,12 +31,12 @@ export interface PublishRequester {
  * only writer of runtime_claims), so cancel, timeout and the reaper can release them.
  */
 export interface RunClaims {
-    /** Claims of the Run not yet released. */
-    forRun(runId: string): Promise<{ claimId: string; side: string }[]>;
-    /** Outbound requests the proxy denied for these claims during the test. */
-    egressBlocked(claimIds: string[]): Promise<{ host: string; port: number; phase: string }[]>;
-    /** Security violations the cell reported on these claims (the hub records them): side and alert kind. */
-    securityViolations(claimIds: string[]): Promise<{ claimId: string; side: string; signature: string }[]>;
+    /** Claims of the org's Run not yet released. */
+    forRun(organizationId: string, runId: string): Promise<{ claimId: string; side: string }[]>;
+    /** Outbound requests the proxy denied for these claims of the org during the test. */
+    egressBlocked(organizationId: string, claimIds: string[]): Promise<{ host: string; port: number; phase: string }[]>;
+    /** Security violations the cell reported on these claims of the org (the hub records them): side and alert kind. */
+    securityViolations(organizationId: string, claimIds: string[]): Promise<{ claimId: string; side: string; signature: string }[]>;
     /**
      * The hard ceiling the hub gave the claim's boot round (runtime_claims.hard_expires_at), of the
      * org's claim only; undefined when the hub has recorded no round of it yet (a first acquire).

@@ -390,8 +390,10 @@ function shapeProblem(msg: RuntimePublishRequested): RefusalReason | null {
 }
 
 /**
- * `runId:attempt:kind`, or `runId:attempt:check:awaiting_approval` for the
- * fork check that waits for a maintainer: completed with action_required only.
+ * `runId:attempt:kind`; `runId:attempt:comment:<phase>` for a progress
+ * comment; or `runId:attempt:check:awaiting_approval` for the fork check that
+ * waits for a maintainer: completed with action_required only. Replies are
+ * keyed by ReplyPublisher (`runId:attempt:reply:<suggestionId>`).
  */
 function keyMatches(msg: RuntimePublishRequested): boolean {
     if (msg.kind === 'comment' && msg.progress) {

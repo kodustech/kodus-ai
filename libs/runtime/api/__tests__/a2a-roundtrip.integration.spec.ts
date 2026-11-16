@@ -234,7 +234,7 @@ describe('official A2A client → product admission → independent worker repla
             expect(rawEnv.resets).toHaveLength(regression ? 4 : 3);
             expect(planner).not.toHaveBeenCalled();
             expect(worker.published).toHaveLength(0);
-            expect(await worker.claims.forRun(req.runId)).toEqual([]);
+            expect(await worker.claims.forRun(req.organizationId, req.runId)).toEqual([]);
             expect(task(await client.sendMessage(verifyMessage)).id).toBe(
                 verificationId,
             );

@@ -151,6 +151,19 @@ export function claimReposError(repos: readonly { alias: string }[] | undefined)
  */
 export const MAX_CLAIM_SECRETS = 100;
 export const MAX_CLAIM_SECRET_HOSTS = 16;
+
+// Text bounds the cell clips its redacted output to (internal/redact).
+/** The longest stdout or stderr a step.result exec carries. */
+export const STEP_EXEC_OUTPUT_MAX = 16_384;
+/** The longest chunk one step.stream carries. */
+export const STEP_STREAM_CHUNK_MAX = 65_536;
+/** The longest reason a claim.failed carries. */
+export const CLAIM_FAILED_REASON_MAX = 4_096;
+/** The longest message a blocked carries. */
+export const BLOCKED_MESSAGE_MAX = 4_096;
+/** The longest log line a failure bundle or a claim.progress carries. */
+export const LOG_LINE_MAX = 2_048;
+
 export const ClaimSecretSchema = z.strictObject({
     id: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
     name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
@@ -473,7 +486,7 @@ export const FailureBundleSchema = z.strictObject({
             z.strictObject({
                 name: z.string().min(1).max(128),
                 state: z.string().max(128),
-                logTail: z.array(z.string().max(2_048)).max(500),
+                logTail: z.array(z.string().max(LOG_LINE_MAX)).max(500),
             }),
         )
         .max(32),
@@ -771,7 +784,7 @@ export const MessageBodySchemas = {
     'claim.failed': z.strictObject({
         kind: BlockerKindSchema,
         signature: z.string().min(1).max(256),
-        reason: z.string().max(4_096),
+        reason: z.string().max(CLAIM_FAILED_REASON_MAX),
         bundle: FailureBundleSchema.optional(),
         held: z.boolean().optional(),
         // Where the boot spent its time until it stopped; only to a hub whose
@@ -839,8 +852,8 @@ export const MessageBodySchemas = {
         exec: z
             .strictObject({
                 exitCode: z.number().int(),
-                stdout: z.string().max(16_384),
-                stderr: z.string().max(16_384),
+                stdout: z.string().max(STEP_EXEC_OUTPUT_MAX),
+                stderr: z.string().max(STEP_EXEC_OUTPUT_MAX),
                 truncated: z.boolean(),
                 outputRef: z.string().optional(),
                 durationMs: z.number().int().min(0),
@@ -870,7 +883,7 @@ export const MessageBodySchemas = {
         if (b.probe && b.executor !== 'observer') ctx.addIssue({ code: 'custom', message: 'a probe result comes from the observer', path: ['executor'] });
         if (b.exec && b.executor !== 'vm') ctx.addIssue({ code: 'custom', message: 'an exec result comes from the VM', path: ['executor'] });
     }),
-    'step.stream': z.strictObject({ stepId: z.uuid(), chunk: z.string().max(65_536) }),
+    'step.stream': z.strictObject({ stepId: z.uuid(), chunk: z.string().max(STEP_STREAM_CHUNK_MAX) }),
     // Only for a commit the worker checked is the default branch head (S-52);
     // never tied to a PR claim (the hub refuses, the cell nacks).
     'image.bake': z.strictObject({
@@ -906,7 +919,7 @@ export const MessageBodySchemas = {
             kind: BlockerKindSchema,
             signature: z.string().min(1).max(256),
             evidenceRef: z.string().max(1_024).optional(),
-            message: z.string().max(4_096),
+            message: z.string().max(BLOCKED_MESSAGE_MAX),
         })
         .refine((b) => b.kind !== 'security_violation' || SECURITY_VIOLATION_SIGNATURE.test(b.signature), {
             message: 'a security_violation signature is the alert kind (lower snake case, at most 64 characters)',
@@ -928,7 +941,7 @@ export const MessageBodySchemas = {
         state: z.enum(['started', 'done']),
         at: z.iso.datetime(),
         ms: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
-        lines: z.array(z.string().max(2_048)).max(40).optional(),
+        lines: z.array(z.string().max(LOG_LINE_MAX)).max(40).optional(),
         // Where the boot spent its time so far (the build's phases, the one
         // running marked so); only to a hub whose hello ack accepts
         // bootPhases. A boot the hub stops at its ceiling sends no

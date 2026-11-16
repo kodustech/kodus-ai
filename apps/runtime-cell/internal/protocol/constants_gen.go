@@ -100,6 +100,42 @@ const TraceparentShapePattern = `^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$`
 // PreviewIDPattern is PREVIEW_ID_PATTERN (libs/runtime/contracts/preview.ts): a preview id.
 const PreviewIDPattern = `^prv_[a-z2-7]{26}$`
 
+// PreviewTunnelAuthScheme is PREVIEW_TUNNEL_AUTH_SCHEME (libs/runtime/contracts/preview.ts): the Authorization scheme the preview tunnel ticket rides in.
+const PreviewTunnelAuthScheme = "KodusTunnel"
+
+// PreviewStreamHeaderPreviewID is PREVIEW_STREAM_HEADERS.previewId (libs/runtime/contracts/preview.ts): the header the edge names a preview stream in.
+const PreviewStreamHeaderPreviewID = "kodus-preview-id"
+
+// PreviewStreamHeaderSession is PREVIEW_STREAM_HEADERS.session (libs/runtime/contracts/preview.ts): the header the edge names the viewer's session in.
+const PreviewStreamHeaderSession = "kodus-preview-session"
+
+// PreviewMaxStreams is PREVIEW_LIMITS.concurrentStreams (libs/runtime/contracts/preview.ts): the most concurrent streams of one preview.
+const PreviewMaxStreams = 64
+
+// PreviewMaxRequestBodyBytes is PREVIEW_LIMITS.requestBodyBytes (libs/runtime/contracts/preview.ts): the largest request body of one preview stream.
+const PreviewMaxRequestBodyBytes = 33554432
+
+// PreviewRequestTimeoutMs is PREVIEW_LIMITS.requestTimeoutMs (libs/runtime/contracts/preview.ts): how long one preview request may take, in ms.
+const PreviewRequestTimeoutMs = 300000
+
+// MaxStepExecOutput is STEP_EXEC_OUTPUT_MAX (libs/runtime/protocol/messages.ts): the longest stdout or stderr a step.result exec carries.
+const MaxStepExecOutput = 16384
+
+// MaxStepStreamChunk is STEP_STREAM_CHUNK_MAX (libs/runtime/protocol/messages.ts): the longest chunk one step.stream carries.
+const MaxStepStreamChunk = 65536
+
+// MaxClaimFailedReason is CLAIM_FAILED_REASON_MAX (libs/runtime/protocol/messages.ts): the longest reason a claim.failed carries.
+const MaxClaimFailedReason = 4096
+
+// MaxBlockedMessage is BLOCKED_MESSAGE_MAX (libs/runtime/protocol/messages.ts): the longest message a blocked carries.
+const MaxBlockedMessage = 4096
+
+// MaxLogLine is LOG_LINE_MAX (libs/runtime/protocol/messages.ts): the longest log line a failure bundle or a claim.progress carries.
+const MaxLogLine = 2048
+
+// MaxProbeLogTailText is PROBE_LOG_TAIL_TEXT_MAX (libs/runtime/probe/probe.schema.ts): the longest text of one evidence log line.
+const MaxProbeLogTailText = 512
+
 // MaxCellMemoryMB is MAX_CELL_MEMORY_MB (libs/runtime/protocol/messages.ts): the most memory a heartbeat may name, in MB.
 const MaxCellMemoryMB = 1048576
 

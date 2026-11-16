@@ -103,7 +103,7 @@ type Store struct {
 	// under it.
 	mu    sync.Mutex
 	holds map[string]*stateHold
-	// stuck are the overlays whose unmount failed (state_overlays.go).
+	// stuck are the overlays whose unmount failed (overlays.go).
 	stuck []stuckOverlay
 	seq   int
 

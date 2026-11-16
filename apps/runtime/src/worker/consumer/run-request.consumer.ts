@@ -9,7 +9,7 @@ import { RUNTIME_CONTROL_BINDING, RUNTIME_CONTROL_QUEUE, RUNTIME_EXCHANGE, RUNTI
 import type { CommandHandler } from '../commands/command-handlers';
 import { RUNTIME_COMMAND_HANDLERS } from '../commands/runtime-command-handlers';
 import { isRunLaneEvent } from '@libs/runtime/contracts/runtime-commands';
-import { RUNTIME_RUN_ROUTING_KEY } from '@libs/runtime/run/run-messages';
+import { RUNTIME_CONTROL_ROUTING_KEY, RUNTIME_RUN_ROUTING_KEY } from '@libs/runtime/run/run-messages';
 import { deserializeRuntimeCommand, RuntimeRunRetry, runtimeRunErrorHandler } from './runtime-run-retry';
 
 export type { EgressPolicyPusher } from '../commands/command-handlers';
@@ -77,14 +77,22 @@ export class RuntimeCommandConsumer {
         routingKey: RUNTIME_CONTROL_BINDING,
         queue: RUNTIME_CONTROL_QUEUE,
         errorBehavior: MessageHandlerErrorBehavior.NACK,
+        errorHandler: runtimeRunErrorHandler,
         deserializer: deserializeRuntimeCommand,
         queueOptions: { channel: 'channel-runtime-control', arguments: WORKFLOW_JOB_QUEUE_ARGUMENTS[RUNTIME_CONTROL_QUEUE] },
     })
-    async onControl(msg: unknown) {
+    async onControl(@RabbitPayload() msg: unknown, @RabbitRequest() raw?: ConsumeMessage) {
         const parsed = unwrap(msg);
         if (!parsed || isRunLaneEvent(parsed.event)) return this.reject('invalid_control_lane');
+        if (raw && raw.fields.routingKey !== RUNTIME_CONTROL_ROUTING_KEY) return this.reject('invalid_control_route');
+        if (this.retry && !this.retry.validCounter(raw)) return this.reject('invalid_retry_counter');
+        // Every control handler is idempotent (keyed or state-guarded writes), so a failure retries with delay.
+        // A schema-invalid command returns from handle() as a Nack and never reaches the retry.
         try { return await this.handle(msg); }
-        catch { return this.reject('control_dispatch_unavailable'); }
+        catch {
+            if (this.retry) throw this.retry.failure();
+            return this.reject('control_dispatch_unavailable');
+        }
     }
 
     async handle(msg: unknown, delivery?: RunDeliveryContext): Promise<void | Nack> {

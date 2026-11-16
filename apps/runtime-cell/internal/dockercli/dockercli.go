@@ -1,5 +1,7 @@
-// Package dockercli is the one adapter to the docker binary both Docker
-// drivers use (docker-gvisor and the dev-only local-docker).
+// Package dockercli is the one adapter to the docker binary: the two Docker
+// drivers (docker-gvisor with its registry, and the dev-only local-docker),
+// the gVisor isolation and Docker placement under them, the cell's wiring
+// and the reaper all go through it.
 //
 // A command gets a minimal environment unless the caller hands it one:
 // docker compose interpolates ${VAR} in the compose file from its own

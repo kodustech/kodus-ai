@@ -13,7 +13,11 @@ import type { RuntimePublication } from './runtime-publication';
 /** A final publication untouched this long, failed or with an expired lease, is re-driven. */
 export const REDRIVE_AFTER_MS = 2 * 60 * 1000;
 
-/** Re-deliveries of the stored request before the sweeper stops (a comment gets one fallback on top). */
+/**
+ * Re-deliveries of the stored request before the sweeper stops. A final
+ * publication then gets one fallback on top (hasFallback): the report comment
+ * a short notice, the completed check closed neutral.
+ */
 export const MAX_REDRIVE_ATTEMPTS = 5;
 
 /** Rows taken per sweep: a backlog drains over a few ticks instead of one burst on the platform. */

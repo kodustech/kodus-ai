@@ -25,6 +25,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
 //go:embed taxonomy.json
@@ -125,7 +127,7 @@ func Setup(ctx context.Context, service string) (func(context.Context) error, er
 	return tp.Shutdown, nil
 }
 
-var traceparentShape = regexp.MustCompile(`^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$`)
+var traceparentShape = regexp.MustCompile(protocol.TraceparentShapePattern)
 
 // Remote is ctx with the remote parent a valid traceparent names; ctx
 // unchanged for an absent or invalid one (the frame's decoder already

@@ -55,7 +55,7 @@ The hub↔cell WebSocket protocol.
 - Paths never start with `//` and never contain a backslash. Header names are RFC 9110 tokens, and header values contain no CR or LF.
 - SQL must start with SELECT/WITH/EXPLAIN/SHOW and be one statement. That is a first filter; the guard is the observer's READ ONLY transaction.
 - `ProbeResultSchema` is what the observer returns, bounded in size.
-- The compare floor lives in `apps/runtime/src/worker/run/probe-fields.ts`, not here: an http probe always compares `status` and `json`, a sql probe `db_count`, so a narrow `compare` cannot hide a regression.
+- The compare floor lives in `libs/runtime/gate/probe-fields.ts` (`effectiveCompare`), not here; `apps/runtime/src/worker/run/probe-fields.ts` only turns a round into a gate step with it: an http probe always compares `status` and `json`, a sql probe `db_count`, so a narrow `compare` cannot hide a regression.
 
 ### gate — `@libs/runtime/gate`
 `decideProbe(steps, { pinnedImageId })` is a pure function. It compares the normalized fields of observer steps from base and PR rounds and never reads text as an instruction. It answers either `more_rounds` or a verdict. The defaults are 4 rounds per side and at most 5 masked fields. In order:
@@ -132,7 +132,7 @@ This data is for inspection, not execution authority or an exact replay package.
 ### planner — `@libs/runtime/planner`
 The shared test-planning core: bounded repository reads/search/windows, the planner specification/tools and no-model decisions. It depends on the `RepoReader` and `AgentRunner` contracts; it does not resolve Git credentials, model slots or BYOK keys and imports no API adapters. Callers import it from `@libs/runtime/planner/*`; the recipe author's `repo-reader` re-export is the one API entry point left.
 
-This extraction preserves the planner behavior and limits. The active production planner still runs through the API wrapper; moving its loop to `runtime-worker` also requires a gateway contract that carries model tool-call/result turns. The extraction alone does not complete that migration.
+Where a Run's planner runs is `RUNTIME_PLANNER_HOST` (worker config). The default, `product`, runs it in the API wrapper (`HttpRunPlanClient`, `/internal/runtime/plan`). `worker` runs this core's loop in `runtime-worker` (`WorkerRunPlanClient`, `apps/runtime/src/worker/agent/worker-plan-client.ts`), with only each model turn sent to the product's model-turn gateway, so the org's key never reaches the worker.
 
 ### api — `@libs/runtime/api`
 The Nest side the product runs. `RuntimeApiModule` (`runtime-api.module.ts`) is imported by `apps/api`. `RuntimeTriggerModule` (`runtime-trigger.module.ts`, the PR trigger consumer) is imported by `apps/worker`.

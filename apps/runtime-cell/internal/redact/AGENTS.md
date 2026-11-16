@@ -18,7 +18,7 @@ The cell's last pass over everything that leaves it (S-51): exact values the cel
 - `rules/gitleaks-rules.json` is a byte copy of `libs/runtime/redaction/gitleaks-rules.json` (`TestRulesFileMatchesTS`); `Variants` matches the TS original on `testdata/ts-variants.json`.
 - A known value shorter than `MinKnownLen` (4) is not matched exactly, so it cannot break earlier markers.
 - Nothing downstream needs a redacted value: credentials reach the app through the injector, never through output.
-- The protocol caps in `protocol.go` (`MaxExecStream`, `MaxReason`…) are literals copied from `libs/runtime/protocol`, not constants from `protocol/constants_gen.go`.
+- The protocol caps in `protocol.go` (`MaxExecStream`, `MaxReason`…) come from `protocol/constants_gen.go`; a new cap is a named export in `libs/runtime/protocol` first.
 
 ## Where new code goes
 - A new token pattern: `libs/runtime/redaction/gitleaks-rules.json`, copied here, with examples the rule must redact (`TestEveryRuleRedactsItsExamples`).

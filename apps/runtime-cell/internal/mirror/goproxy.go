@@ -1,11 +1,13 @@
-// Package mirror is the cell's registry mirror (docs §4, "Espelho de
-// registry"): a read-only pull-through of public registries for the claims
-// of this cell. The VM reaches only the mirror; the mirror alone reaches a
-// fixed upstream per ecosystem, so a shared CDN (storage.googleapis.com
-// behind the Go proxy) never enters a claim's allowlist. A claim gets only
-// what its lockfile pins: a package fetched by name is a way out (a Go
-// "module" named attacker.example/<data> makes the upstream proxy call the
-// attacker), so nothing else is served.
+// Package mirror is the cell's registry mirror
+// (docs/runtime/egress-allowlist.md §6): a read-only pull-through of public
+// registries for the claims of this cell. The VM reaches only the mirror;
+// the mirror alone reaches a fixed upstream per ecosystem, so a shared CDN
+// (storage.googleapis.com behind the Go proxy) never enters a claim's
+// allowlist. Go modules and images are served only as the checkout pins
+// them: a Go module fetched by name is a way out (a "module" named
+// attacker.example/<data> makes the upstream proxy call the attacker).
+// npm and PyPI packages are fetched by name (packages.go), and the client
+// checks each download against its lockfile's integrity.
 package mirror
 
 import (

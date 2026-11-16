@@ -195,7 +195,7 @@ export function issueClientCert(ca: CaMaterial, spki: Buffer, opts: { commonName
     return { certPem, serial: normalizeSerial(x.serialNumber), notAfter };
 }
 
-/** A self-signed P-256 CA (tests and a hub started without RUNTIME_TLS_CA). */
+/** A self-signed P-256 CA: tests, and the ephemeral CA of a hub in the test-only plaintext mode (RUNTIME_TEST_ONLY_PLAINTEXT); otherwise the hub refuses to start without RUNTIME_TLS_CA and RUNTIME_TLS_CA_KEY. */
 export function createCa(commonName: string, days = 365, now = new Date()): CaMaterial {
     const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const subject = name([

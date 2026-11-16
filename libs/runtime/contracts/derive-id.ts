@@ -43,7 +43,11 @@ export function deriveId(namespace: string, parts: readonly string[], hexLen = 6
     return h.digest('hex').slice(0, hexLen);
 }
 
-/** A name-based UUID from a digest: its first 16 bytes with version 5 and variant 10xx (RFC 9562 §5.5 layout). */
+/**
+ * A UUID-shaped id from a digest: its first 16 bytes with version 5 and
+ * variant 10xx (the RFC 9562 §5.5 layout). Over a sha256 digest it is not a
+ * true UUIDv5 (SHA-1); RFC 9562 would call that UUIDv8 (§5.8).
+ */
 export function uuidV5From(digest: Buffer): string {
     const b = Buffer.from(digest.subarray(0, 16));
     b[6] = (b[6] & 0x0f) | 0x50;

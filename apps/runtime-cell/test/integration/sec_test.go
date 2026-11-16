@@ -164,7 +164,7 @@ func TestS52PRNeverPoisonsImageOrPool(t *testing.T) {
 	}
 }
 
-// §11 runbook: a failed setup sends a redacted failure bundle; with the
+// A failed setup sends a redacted failure bundle; with the
 // diagnostic hold the machines stay, exec works and verdict probes do not.
 func TestSetupFailureBundleAndDiagnosticHold(t *testing.T) {
 	w := newWorld(t)

@@ -271,7 +271,7 @@ describe('a Run side\'s round when the Run ends early', () => {
         }
         expect(env.rounds.size).toBe(2);
         expect(await finalizeStoppedRun(h.deps, { ...req, headSha: req.pullRequest.headSha }, 'cancelled', 'pr_closed')).toBe(true);
-        expect(await h.deps.claims.forRun(req.runId)).toEqual([]);
+        expect(await h.deps.claims.forRun(req.organizationId, req.runId)).toEqual([]);
         expect(env.rounds.size).toBe(0);
     });
 });

@@ -1,10 +1,12 @@
 // Package machinetrust is what a claim's machines trust when the claim
-// carries org secrets (docs/runtime/sandbox.md "Secrets: OpenBao"). A
-// request to a secret's host goes to the injector, which terminates the
-// machine's TLS with the cell CA. So the cell mounts, read-only into every
-// machine of such a claim, a bundle of the public roots and the cell CA
-// (BundleTarget) and the cell CA alone (CellCATarget), and points the usual
-// variables at them (Env). A claim without secrets gets neither.
+// carries org secrets (docs/runtime/sandbox.md "Secrets: OpenBao"), and on
+// every claim of a cell that inspects the recommended egress list over TLS
+// (-egress-recommended with -cell-ca-cert). A request to a secret's or an
+// inspected host goes to the injector, which terminates the machine's TLS
+// with the cell CA. So the cell mounts, read-only into every machine of such
+// a claim, a bundle of the public roots and the cell CA (BundleTarget) and
+// the cell CA alone (CellCATarget), and points the usual variables at them
+// (Env). Any other claim gets neither.
 //
 // The public roots come from the cell's own trust store (SystemRootFiles),
 // read once when the cell starts, never from the network. The bundle holds

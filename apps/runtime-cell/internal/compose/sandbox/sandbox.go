@@ -1,5 +1,4 @@
-// Package sandbox is the gVisor cell's compose allowlist (docs §4b, Inc. 4,
-// S-10). Root on a shared host is the threat, so the PR's compose file is
+// Package sandbox is the gVisor cell's compose allowlist (S-10). Root on a shared host is the threat, so the PR's compose file is
 // checked, and rewritten, before any container starts:
 //
 //   - Apply reads the file the PR wrote. Every key is on an allowlist (a new
@@ -13,9 +12,12 @@
 //     invariants again, so YAML tricks, merges or defaults the first reader
 //     did not model cannot slip past it.
 //
-// What it refuses outright: building (a Dockerfile's RUN steps would run in
-// the host's BuildKit, under runc and outside the claim network: the cell
-// runs images its own builder made), interpolation outside the few fields
+// Builds: a build section the cell can build inside the checkout (Builds,
+// build.go) gives way to the image the cell's own builder made (Options.Built);
+// any other is refused, since compose would run the Dockerfile's RUN steps in
+// the host's BuildKit, under runc and outside the claim network.
+//
+// What it refuses outright: interpolation outside the few fields
 // meant for the container's shell (compose reads ${VAR} from its own
 // environment), named volumes that are not the project's own, and every
 // host-sharing option.

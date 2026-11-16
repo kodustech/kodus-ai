@@ -8,7 +8,7 @@ import { DEV_SECRET_SEAL_KEY_HEX } from '../../testing/dev-seal-key';
 import { RuntimeCommandConsumer } from '../consumer/run-request.consumer';
 import { RuntimeRunRetry } from '../consumer/runtime-run-retry';
 import { RUN_ENGINE_LOCKS } from '../dbos/run-engine.service';
-import { RuntimeWorkerModule } from '../runtime-worker.module';
+import { RUNTIME_LOCK_PG_POOL, RuntimeWorkerModule } from '../runtime-worker.module';
 import { CONSUMER_LOCKS, RUNTIME_COMMAND_HANDLERS, runtimeCommandHandlersProvider } from './runtime-command-handlers';
 
 /** The worker module's own providers for these tokens, as production wires them. */
@@ -28,6 +28,7 @@ function leavesWithout(...missing: unknown[]): Provider[] {
         ...leaves.map((token) => ({ provide: token as symbol, useValue: { setup: {} } })),
         { provide: AmqpConnection, useValue: { publish: jest.fn() } },
         { provide: RUNTIME_PG_POOL, useValue: { connect: jest.fn(), query: jest.fn() } },
+        { provide: RUNTIME_LOCK_PG_POOL, useValue: { connect: jest.fn(), query: jest.fn() } },
     ];
 }
 

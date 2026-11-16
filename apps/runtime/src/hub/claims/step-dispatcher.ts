@@ -16,7 +16,8 @@ import type { StepRepository } from '../hub-store';
 import type { ClaimRef, HubLog, HubMetrics, StepOutcome } from '../hub-types';
 import type { ClaimService } from './claim.service';
 
-// Steps on a bound claim (probe.run, exec, machine.reset), at most once: the
+// Steps on a bound claim (probe.run, exec, machine.reset, browser.explore,
+// sandbox.op, claim.snapshot), at most once: the
 // stepId is indexed before the frame goes out (S-30: a reused stepId with
 // another command is refused), and a step sent and not answered before the
 // connection drops becomes transport 'lost', never resent.

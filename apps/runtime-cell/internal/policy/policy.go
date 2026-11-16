@@ -1,5 +1,5 @@
 // Package policy is the per-claim egress policy the cell agent signs and the
-// proxy and resolver verify (docs §4 "Proxy de saída", ADR-040, ADR-056).
+// proxy and resolver verify (docs/runtime/egress-allowlist.md, ADR-040, ADR-056).
 // The proxy and the resolver hold no credential; they hold the agent's
 // public key and nothing else.
 package policy

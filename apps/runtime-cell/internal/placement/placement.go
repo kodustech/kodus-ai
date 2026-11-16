@@ -5,8 +5,8 @@
 //
 // A claim's network has no route out: the cell's egress (proxy and
 // resolver) joins it and is the only way out of it. Placements: docker (the
-// host's Docker, the cell's behaviour before the split); containerd,
-// kubernetes and ec2 later.
+// host's Docker, the cell's behaviour before the split) and hostnet (a host
+// bridge with a tap per microVM, for Firecracker).
 package placement
 
 import (

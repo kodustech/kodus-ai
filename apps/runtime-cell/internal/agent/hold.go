@@ -11,7 +11,7 @@ import (
 )
 
 // startHold keeps a failed setup claim's machines until hardExpiresAt when
-// the claim asked for it (§11 runbook): only a setup claim that never ran
+// the claim asked for it: only a setup claim that never ran
 // PR code, only with machines to look at. The lease moves to the ceiling,
 // so the sweep, the dead-man and the reaper take it at kodus:hard-expires,
 // and ReapDeadClaims ends the hold there. It returns when the hold ends.

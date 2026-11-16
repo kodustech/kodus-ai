@@ -1,9 +1,11 @@
 import type { PublishedCommentRef } from './runtime-publication';
 
-// The Runtime keeps one comment per pull request, edited at every phase and
-// at the result (screen 6). Publication keys are per message, so they cannot
-// serialize two phases of the same PR delivered at once: the slot does. One
-// row per (org, repo, PR) in the product's Postgres (`runtime_pr_comments`),
+// The Runtime keeps one comment per pull request and environment, edited at
+// every phase and at the result (screen 6). Publication keys are per message,
+// so they cannot serialize two phases of the same PR delivered at once: the
+// slot does. One row per (org, repo, PR, environment key) in the product's
+// Postgres (`runtime_pr_comments`; '' is the environment the repository is
+// the primary of, publish-environment.ts),
 // held under a short lease while a delivery creates or edits the comment.
 
 export const RUNTIME_PR_COMMENT_SLOT_STORE_TOKEN = Symbol.for(

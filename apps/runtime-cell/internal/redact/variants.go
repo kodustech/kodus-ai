@@ -1,5 +1,5 @@
 // Package redact is the cell's last pass over everything that leaves it
-// (docs §10, S-51): exact values the cell knows, in every spelling, then a
+// (S-51): exact values the cell knows, in every spelling, then a
 // token-pattern net for the values it never knew. The replacement is one
 // way, "[redacted:<rule>]": nothing downstream needs the value, because
 // credentials reach the app through the injector, never through output.

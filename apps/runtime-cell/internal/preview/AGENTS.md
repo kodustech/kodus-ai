@@ -17,7 +17,7 @@ The cell's side of preview URLs ([`docs/runtime/preview-urls.md`](../../../../do
 - A stream reaches an app only through a live route of its claim, past its `Until`, and only its http expose entry; another claim cannot take a routed id. Preview traffic never becomes probe evidence.
 - The edge's `Kodus-Preview-Id` and `Kodus-Preview-Session` headers never reach the app. Refusals carry `observer.PreviewRefusedHeader` (`no_route`, `busy`, `too_large`, `upstream`).
 - TLS 1.3 at least, with the cell's client certificate and the edge's roots; the ticket rides in its own `Authorization` scheme. The tunnel closes `DefaultIdleClose` after its last route.
-- The per-preview limits, the auth scheme and the header names are literals here, not constants generated from `libs/runtime/contracts/preview.ts`; only the id pattern comes from `protocol.PreviewIDPattern`.
+- The per-preview limits, the auth scheme, the header names and the id pattern come from `protocol/constants_gen.go` (generated from `libs/runtime/contracts/preview.ts`).
 
 ## Where new code goes
 - A new preview limit or header: in `libs/runtime/contracts/preview.ts` first, then here, with a case in `preview_test.go`.

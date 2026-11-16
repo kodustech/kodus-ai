@@ -1,4 +1,4 @@
-// Package agent is the cell agent (docs §4 "Agente da célula"): it holds the
+// Package agent is the cell agent (apps/runtime-cell/README.md): it holds the
 // outbound connection to the hub, executes its messages, keeps the leases
 // and runs the dead-man switch. It decides nothing about the PR.
 //

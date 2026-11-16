@@ -1,5 +1,5 @@
 // Package dockergvisor is the docker-gvisor MachineDriver for self-hosted
-// (docs §4b, Inc. 4): each side of a Run is a compose project whose services
+// (docs/runtime/isolation-architecture.md): each side of a Run is a compose project whose services
 // run under gVisor (runtime: runsc) in the host's Docker. Root on a shared
 // host is the threat (S-10): the compose file goes through the allowlist
 // (internal/compose/sandbox) before any container starts, docker runs with
@@ -73,9 +73,9 @@ type Config struct {
 	// MirrorRegistry is the cell's registry mirror (host:port) every build's
 	// BuildKit pulls docker.io images through; empty: straight to Docker Hub.
 	MirrorRegistry string
-	// PersistBuildState keeps BuildKit's state per environment (state.go):
-	// the default branch's setup writes it, every other build reads it
-	// through a throwaway overlay. Off: each build starts from the exported
+	// PersistBuildState keeps BuildKit's state per environment
+	// (build_states.go, buildstate): the default branch's setup writes it,
+	// every other build reads it through a throwaway overlay. Off: each build starts from the exported
 	// cache alone.
 	PersistBuildState bool
 	// BuildStateMinFreeBytes: below this free space on the cell's disk, the
@@ -240,8 +240,8 @@ type Driver struct {
 	adopted map[string]string
 	// dirs makes the host directories the builder writes (hostdirs.go).
 	dirs hostDirs
-	// states are the environments' BuildKit states (state.go); caches
-	// their exported build caches (cache.go).
+	// states are the environments' BuildKit states (build_states.go,
+	// buildstate); caches their exported build caches (cache.go).
 	states stateStore
 	caches *buildcache.Generations
 	// remote is the build cache's store off the cell; nil: none.

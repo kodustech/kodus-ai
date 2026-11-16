@@ -15,7 +15,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
-// hardCeiling is the absolute lifetime per consumer (§10, S-08).
+// hardCeiling is the absolute lifetime per consumer (S-08).
 func hardCeiling(c protocol.Consumer) time.Duration {
 	switch c {
 	case protocol.ConsumerRuntime:

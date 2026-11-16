@@ -9,9 +9,10 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
 )
 
-// What a claim with org secrets trusts (internal/machinetrust): the
-// injector's cell CA, which terminates its requests to a secret's host, and
-// the public roots the cell itself trusts.
+// What a claim with org secrets, or any claim of a cell that inspects the
+// recommended egress list, trusts (internal/machinetrust): the injector's
+// cell CA, which terminates its requests to a secret's or an inspected host,
+// and the public roots the cell itself trusts.
 type trustSettings struct {
 	// CellCA is the injector's -cell-ca-cert, its certificate only.
 	CellCA string
@@ -21,7 +22,7 @@ type trustSettings struct {
 }
 
 func (s *trustSettings) register(fs *flag.FlagSet) {
-	fs.StringVar(&s.CellCA, "cell-ca-cert", "", "the injector's cell CA certificate (its -cell-ca-cert, never the key): mounted, with the public roots, into every machine of a claim with org secrets, so they trust the injector; empty: those machines do not trust it and a secret's HTTPS fails verification")
+	fs.StringVar(&s.CellCA, "cell-ca-cert", "", "the injector's cell CA certificate (its -cell-ca-cert, never the key): mounted, with the public roots, into every machine of a claim with org secrets (and of every claim when -egress-recommended inspects over TLS), so they trust the injector; empty: those machines do not trust it and a secret's HTTPS fails verification")
 	fs.StringVar(&s.Roots, "machine-roots", "", "the public roots (PEM) bundled with -cell-ca-cert; empty: the cell's own trust store, read at start")
 }
 

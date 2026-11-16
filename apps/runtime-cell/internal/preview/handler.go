@@ -14,19 +14,22 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/metrics"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
-const (
-	// HeaderPreviewID and HeaderSession are set by the edge only
-	// (PREVIEW_STREAM_HEADERS): the preview a stream is for, and the
-	// viewer's session id for the logs. Neither reaches the app.
-	HeaderPreviewID = "Kodus-Preview-Id"
-	HeaderSession   = "Kodus-Preview-Session"
+// HeaderPreviewID and HeaderSession are set by the edge only
+// (PREVIEW_STREAM_HEADERS): the preview a stream is for, and the
+// viewer's session id for the logs. Neither reaches the app.
+var (
+	HeaderPreviewID = http.CanonicalHeaderKey(protocol.PreviewStreamHeaderPreviewID)
+	HeaderSession   = http.CanonicalHeaderKey(protocol.PreviewStreamHeaderSession)
+)
 
-	// Per-preview limits (§4.2, PREVIEW_LIMITS).
-	DefaultMaxStreams     = 64
-	DefaultMaxRequestBody = 32 << 20
-	DefaultRequestTimeout = 5 * time.Minute
+// Per-preview limits (PREVIEW_LIMITS), from constants_gen.go.
+const (
+	DefaultMaxStreams     = protocol.PreviewMaxStreams
+	DefaultMaxRequestBody = protocol.PreviewMaxRequestBodyBytes
+	DefaultRequestTimeout = protocol.PreviewRequestTimeoutMs * time.Millisecond
 )
 
 // handler serves the tunnel's streams.
