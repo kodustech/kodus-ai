@@ -21,6 +21,14 @@ export const ENV_SESSION_MAX_LIVE_PER_KEY = 2;
 export const ENV_EXEC_DEFAULT_TIMEOUT_MS = 120_000;
 export const ENV_EXEC_MAX_TIMEOUT_MS = 600_000;
 export const ENV_EXEC_MAX_COMMAND = 8_192;
+/**
+ * env_upload bounds: the files of one call, and their decoded bytes together. A call
+ * fits the listener's 1 MiB body as base64; the cell takes more (4 MiB a file, 16 a step).
+ */
+export const ENV_UPLOAD_MAX_FILES = 32;
+export const ENV_UPLOAD_MAX_BYTES = 512 * 1_024;
+/** How long the API waits for an env_upload: the hub gives the cell's writes 120 s. */
+export const ENV_UPLOAD_WAIT_MS = 150_000;
 /** A step still running this long after its own timeout is reported lost (its worker went away). */
 export const ENV_STEP_LOST_AFTER_MS = 60_000;
 /** How long the open call waits for the claim before answering `acquiring`. */
@@ -116,6 +124,35 @@ export const EnvSessionExecSchema = z.strictObject({
     repository: RepositoryAliasSchema.optional(),
 });
 export type EnvSessionExec = z.infer<typeof EnvSessionExecSchema>;
+
+/**
+ * env_upload: files written into the checkout of a ready session, relative to it
+ * (the cell refuses `.`/`..` segments, `.git` and its own `.kodus*`/`.kody*` files).
+ * contentBase64 is the file's bytes; the worker keeps each as an evidence object
+ * of the org before the cell reads it.
+ */
+export const EnvSessionUploadSchema = z.strictObject({
+    ...EnvSessionOwnerSchema.shape,
+    stepId: z.uuid(),
+    files: z
+        .array(
+            z.strictObject({
+                path: z.string().min(1).max(1_024),
+                contentBase64: z.string().max(Math.ceil(ENV_UPLOAD_MAX_BYTES / 3) * 4),
+                mode: z.number().int().min(0).max(0o777).optional(),
+            }),
+        )
+        .min(1)
+        .max(ENV_UPLOAD_MAX_FILES),
+});
+export type EnvSessionUpload = z.infer<typeof EnvSessionUploadSchema>;
+
+/** What env_upload wrote: each file's path, size and digest, never its bytes. */
+export interface EnvUploadView {
+    stepId: string;
+    sessionId: string;
+    files: Array<{ path: string; bytes: number; sha256: string }>;
+}
 
 export const EnvSessionValidationSchema = z.strictObject({ ...EnvSessionOwnerSchema.shape, name: RecipeValidationNameSchema });
 export interface EnvValidationResolution {

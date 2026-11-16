@@ -1,5 +1,5 @@
 // Test doubles of the API's ports (libs/runtime/AGENTS.md): specs and test fixtures import them, production code never does.
-import type { EnvAuditKind, EnvAuditRecord, RuntimeEnvAuditStore } from './domain/env-tools';
+import { ENV_QUOTA_KINDS, type EnvAuditKind, type EnvAuditRecord, type RuntimeEnvAuditStore } from './domain/env-tools';
 import { RECONCILE_MAX_ATTEMPTS, RECONCILE_STALE_CLAIM_MS, type ReconciledHeadKey, type ReconciledHeadStore } from './domain/webhook-reconciler';
 
 type HeadRow = { state: 'claimed' | 'decided' | 'failed'; attempts: number; claimedAt: number; outcome?: string };
@@ -51,7 +51,7 @@ export class InMemoryRuntimeEnvAuditStore implements RuntimeEnvAuditStore {
         return this.rows.filter(
             (r) =>
                 r.organizationId === q.organizationId &&
-                r.kind === 'env_exec' &&
+                (ENV_QUOTA_KINDS as readonly string[]).includes(r.kind) &&
                 r.outcome === 'accepted' &&
                 r.at >= q.since &&
                 (!q.keyId || r.keyId === q.keyId),

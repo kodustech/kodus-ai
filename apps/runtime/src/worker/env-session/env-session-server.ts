@@ -6,6 +6,7 @@ import {
     EnvSessionExecSchema,
     EnvSessionOpenSchema,
     EnvSessionOwnerSchema,
+    EnvSessionUploadSchema,
     EnvSessionNonces,
     EnvSessionValidationSchema,
     verifiedEnvSessionRequest,
@@ -38,7 +39,7 @@ const idOf = (id: string | undefined) => {
 const HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 
 export interface EnvSessionServerOptions {
-    service: Pick<EnvSessionService, 'open' | 'get' | 'exec' | 'step' | 'close' | 'validation'>;
+    service: Pick<EnvSessionService, 'open' | 'get' | 'exec' | 'step' | 'close' | 'validation' | 'upload'>;
     /** envSessionKeyFrom(RUNTIME_SECRET_SEAL_KEY). */
     key: Buffer;
     now?: () => number;
@@ -73,11 +74,13 @@ function readBody(req: IncomingMessage, max = MAX_BODY): Promise<string | null> 
     });
 }
 
-const ROUTES: Array<{ pattern: RegExp; handle: (s: EnvSessionServerOptions['service'], id: string | undefined, body: unknown) => Promise<unknown> }> = [
+const ROUTES: Array<{ pattern: RegExp; maxBody?: number; handle: (s: EnvSessionServerOptions['service'], id: string | undefined, body: unknown) => Promise<unknown> }> = [
     { pattern: /^\/env\/sessions$/, handle: (s, _id, body) => s.open(EnvSessionOpenSchema.parse(body)) },
     { pattern: /^\/env\/sessions\/([^/]+)\/status$/, handle: (s, id, body) => s.get(EnvSessionOwnerSchema.parse(body), idOf(id)) },
     { pattern: /^\/env\/sessions\/([^/]+)\/validation$/, handle: (s,id,body) => {const req=EnvSessionValidationSchema.parse(body);return s.validation(req,idOf(id),req.name);} },
     { pattern: /^\/env\/sessions\/([^/]+)\/exec$/, handle: (s, id, body) => s.exec({ ...EnvSessionExecSchema.parse(body), sessionId: idOf(id) }) },
+    // An upload carries up to 512 KiB of base64 files: its route takes the sandbox write's larger body.
+    { pattern: /^\/env\/sessions\/([^/]+)\/upload$/, maxBody: 1024 * 1024, handle: (s, id, body) => s.upload({ ...EnvSessionUploadSchema.parse(body), sessionId: idOf(id) }) },
     { pattern: /^\/env\/sessions\/([^/]+)\/release$/, handle: (s, id, body) => s.close(EnvSessionOwnerSchema.parse(body), idOf(id)) },
     { pattern: /^\/env\/steps\/([^/]+)$/, handle: (s, id, body) => s.step(EnvSessionOwnerSchema.parse(body), idOf(id)) },
 ];
@@ -113,7 +116,7 @@ export function envSessionRequestHandler(opts: EnvSessionServerOptions) {
             const preview = opts.previews && Object.hasOwn(PREVIEW, path) ? PREVIEW[path] : undefined;
             const route = ROUTES.map((r) => ({ r, m: r.pattern.exec(path) })).find((x) => x.m);
             if (!route && !sandbox && !preview) return send(res, 404, { code: 'not_found' });
-            const raw = await readBody(req, sandbox ? MAX_SANDBOX_BODY : MAX_BODY);
+            const raw = await readBody(req, sandbox ? MAX_SANDBOX_BODY : (route?.r.maxBody ?? MAX_BODY));
             if (raw === null) return send(res, 413, { code: 'too_large' });
             const signature = req.headers[ENV_SESSION_SIGNATURE_HEADER];
             const at = now();

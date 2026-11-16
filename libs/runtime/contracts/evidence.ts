@@ -35,9 +35,10 @@ export const EVIDENCE_UPLOAD_TYPES = [
 ] as const;
 export type EvidenceUploadType = (typeof EVIDENCE_UPLOAD_TYPES)[number];
 
-export type EvidenceType = 'output' | 'screenshot' | 'proxy_log' | 'app_log' | EvidenceUploadType;
+/** `input`: a file the dev's agent sent into an env session (env_upload), kept for the cell to read. */
+export type EvidenceType = 'output' | 'screenshot' | 'proxy_log' | 'app_log' | 'input' | EvidenceUploadType;
 /** Every type a key may name: the worker's own and the uploaded ones. */
-export const EVIDENCE_TYPES: readonly EvidenceType[] = [...new Set<EvidenceType>(['output', 'screenshot', 'video', 'trace', 'har', 'proxy_log', 'app_log', ...EVIDENCE_UPLOAD_TYPES])];
+export const EVIDENCE_TYPES: readonly EvidenceType[] = [...new Set<EvidenceType>(['output', 'screenshot', 'video', 'trace', 'har', 'proxy_log', 'app_log', 'input', ...EVIDENCE_UPLOAD_TYPES])];
 
 /** The only content types evidence is stored as; an upload of any other is refused. */
 export const EVIDENCE_CONTENT_TYPES = ['application/json', 'text/plain', 'image/png', 'video/webm', 'application/zip'] as const;

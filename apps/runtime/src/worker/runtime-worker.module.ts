@@ -296,14 +296,16 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                 {
                     // The dev's interactive sessions over /mcp/env (Inc. 1): claims with consumer mcp, through the same hub client.
                     provide: ENV_SESSION_SERVICE,
-                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, COMMAND_STORE],
-                    useFactory: async (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, commands: PgCommandStore) => {
+                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, COMMAND_STORE, EVIDENCE_STORE],
+                    useFactory: async (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, commands: PgCommandStore, evidence: EvidenceStore | null) => {
                         await PgEnvSessionStore.ensureSchema(pool);
                         return new EnvSessionService({
                             store: new PgEnvSessionStore(pool),
                             setups,
                             environment: (input) => deps.envForSession(input),
                             isStopped: (org) => commands.isStopped(org),
+                            // env_upload keeps a call's files where the cells read the Runs' evidence.
+                            ...(evidence ? { evidence } : {}),
                             onWarn: (msg, meta) => logger.warn({ msg, ...meta }),
                         });
                     },

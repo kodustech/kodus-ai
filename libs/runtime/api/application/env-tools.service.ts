@@ -20,7 +20,9 @@ import {
     ENV_EXEC_DEFAULT_TIMEOUT_MS,
     ENV_EXEC_MAX_COMMAND,
     ENV_EXEC_MAX_TIMEOUT_MS,
+    ENV_UPLOAD_MAX_FILES,
     type EnvSessionOwner,
+    type EnvUploadView,
     type EnvSessionView,
     type EnvSessionWorkspaceRepository,
     type EnvStepView,
@@ -66,8 +68,8 @@ import { blockerGroups, EnvironmentViewBuilder, memoryFor, type RuntimeBlockerGr
 // here, never a user or the service credential (S-45). Every call checks the
 // exact capability, then loads the object and checks org, team and the key's
 // repo list on it: anything outside answers 404 and nothing reaches the cell
-// (S-46). env_exec is quota-limited per key and per org and every call is
-// audited (S-27).
+// (S-46). env_exec and env_upload share a quota per key and per org and every
+// call is audited (S-27).
 
 const RECIPE_PATH = '.kodus/workspace.yaml';
 const EnvValidateInputSchema = z.strictObject({
@@ -87,6 +89,15 @@ export interface EnvBlockersView {
 }
 
 export type EnvFixResult = { action: 'retry_setup'; setupRequested: true } | { action: RecipePrAction; pullRequest: { number: number; url: string } };
+
+// The shape only: paths, base64 and sizes are the worker's to check (it knows the checkout's rules).
+const EnvUploadInputSchema = z.strictObject({
+    sessionId: z.string().min(1).max(128),
+    files: z
+        .array(z.strictObject({ path: z.string().min(1).max(1_024), contentBase64: z.string(), mode: z.number().int().min(0).max(0o777).optional() }))
+        .min(1)
+        .max(ENV_UPLOAD_MAX_FILES),
+});
 
 const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 128;
 const notFound = (what = 'Environment') => new NotFoundException(`${what} not found`);
@@ -334,18 +345,7 @@ export class RuntimeEnvToolsService {
             at: at.toISOString(),
             outcome: 'accepted',
         };
-        // Recorded first, counted after: two calls at the limit may both be refused, never both pass.
-        await this.audit.record(record);
-        const since = new Date(at.getTime() - ENV_EXEC_QUOTA.windowMs).toISOString();
-        const [byKey, byOrg] = await Promise.all([
-            this.audit.countAccepted({ organizationId: p.organizationId, keyId: p.keyId, since }),
-            this.audit.countAccepted({ organizationId: p.organizationId, since }),
-        ]);
-        if (byKey > ENV_EXEC_QUOTA.perKeyPerHour || byOrg > ENV_EXEC_QUOTA.perOrgPerHour) {
-            const which = byKey > ENV_EXEC_QUOTA.perKeyPerHour ? `${ENV_EXEC_QUOTA.perKeyPerHour} per key` : `${ENV_EXEC_QUOTA.perOrgPerHour} per organization`;
-            await this.audit.setOutcome(p.organizationId, record.auditId, 'refused_quota', which);
-            throw new HttpException({ code: 'env_exec_quota', message: `env_exec is limited to ${which} per hour. Try again later.` }, 429);
-        }
+        await this.admit(p, record, at);
         try {
             return await this.sessions.exec(owner, session.sessionId, {
                 stepId,
@@ -364,6 +364,69 @@ export class RuntimeEnvToolsService {
                     e instanceof EnvSessionPortError ? e.code : 'unavailable',
                 )
                 .catch((error: unknown) => this.auditOutcomeLost(p.organizationId, record.auditId, 'env_exec', error));
+            return fromPort(e);
+        }
+    }
+
+    /**
+     * Records the call, then counts it against the shared hour (ENV_EXEC_QUOTA, env_exec and env_upload):
+     * recorded first, counted after, so two calls at the limit may both be refused, never both pass.
+     */
+    private async admit(p: EnvKeyPrincipal, record: EnvAuditRecord, at: Date) {
+        await this.audit.record(record);
+        const since = new Date(at.getTime() - ENV_EXEC_QUOTA.windowMs).toISOString();
+        const [byKey, byOrg] = await Promise.all([
+            this.audit.countAccepted({ organizationId: p.organizationId, keyId: p.keyId, since }),
+            this.audit.countAccepted({ organizationId: p.organizationId, since }),
+        ]);
+        if (byKey > ENV_EXEC_QUOTA.perKeyPerHour || byOrg > ENV_EXEC_QUOTA.perOrgPerHour) {
+            const which = byKey > ENV_EXEC_QUOTA.perKeyPerHour ? `${ENV_EXEC_QUOTA.perKeyPerHour} per key` : `${ENV_EXEC_QUOTA.perOrgPerHour} per organization`;
+            await this.audit.setOutcome(p.organizationId, record.auditId, 'refused_quota', which);
+            throw new HttpException({ code: 'env_exec_quota', message: `env_exec and env_upload together are limited to ${which} per hour. Try again later.` }, 429);
+        }
+    }
+
+    /**
+     * env_upload: files into the checkout of a ready session (at most 32, 512 KiB together), answered once the
+     * cell wrote them. Audited with each path and size, never the bytes; counted with env_exec in its quota.
+     */
+    async upload(p: EnvKeyPrincipal, input: { sessionId?: unknown; files?: unknown }): Promise<EnvUploadView> {
+        this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC);
+        const parsed = EnvUploadInputSchema.safeParse(input);
+        if (!parsed.success) {
+            throw new BadRequestException(`files lists 1 to ${ENV_UPLOAD_MAX_FILES} files, each a path relative to the checkout and its contentBase64`);
+        }
+        const owner = this.owner(p);
+        const session = this.checked(p, await this.sessions.status(owner, parsed.data.sessionId).catch(fromPort));
+        const stepId = randomUUID();
+        const at = this.now();
+        const listed = parsed.data.files.map((f) => `${f.path} (${Math.floor((f.contentBase64.length * 3) / 4) - (f.contentBase64.match(/=*$/)?.[0].length ?? 0)} B)`).join(', ');
+        const record: EnvAuditRecord = {
+            auditId: randomUUID(),
+            kind: 'env_upload',
+            organizationId: p.organizationId,
+            teamId: p.teamId,
+            keyId: p.keyId,
+            repositoryId: session.repositoryId,
+            environmentId: session.environmentId,
+            sessionId: session.sessionId,
+            stepId,
+            command: redactPatterns(`upload ${listed}`).text.slice(0, ENV_AUDIT_MAX_COMMAND),
+            at: at.toISOString(),
+            outcome: 'accepted',
+        };
+        await this.admit(p, record, at);
+        try {
+            return await this.sessions.upload(owner, session.sessionId, { stepId, files: parsed.data.files });
+        } catch (e) {
+            await this.audit
+                .setOutcome(
+                    p.organizationId,
+                    record.auditId,
+                    e instanceof EnvSessionPortError ? 'refused' : 'failed',
+                    e instanceof EnvSessionPortError ? e.code : 'unavailable',
+                )
+                .catch((error: unknown) => this.auditOutcomeLost(p.organizationId, record.auditId, 'env_upload', error));
             return fromPort(e);
         }
     }

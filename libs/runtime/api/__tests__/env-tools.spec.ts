@@ -87,6 +87,12 @@ class FakeEnvSessionPort implements RuntimeEnvSessionPort {
         this.execs.push({ sessionId: id, ...req });
         return { stepId: req.stepId, sessionId: id, state: 'running', command: req.command, startedAt: 'x' };
     }
+    readonly uploads: Array<{ sessionId: string; stepId: string; files: Array<{ path: string; contentBase64: string; mode?: number }> }> = [];
+    async upload(owner: EnvSessionOwner, id: string, req: { stepId: string; files: Array<{ path: string; contentBase64: string; mode?: number }> }) {
+        this.find(owner, id);
+        this.uploads.push({ sessionId: id, ...req });
+        return { stepId: req.stepId, sessionId: id, files: req.files.map((f) => ({ path: f.path, bytes: Buffer.from(f.contentBase64, 'base64').length, sha256: 'c'.repeat(64) })) };
+    }
     async step(_owner: EnvSessionOwner, _stepId: string): Promise<EnvStepView> {
         throw new EnvSessionPortError(404, 'not_found', 'not found');
     }
@@ -570,5 +576,46 @@ describe('named env validation authority and quota', () => {
             h.service.validate({ ...KEY, capabilities: ['env:*'] }, { sessionId: session.sessionId, name: 'lint' }),
         ).rejects.toMatchObject({ status: 403 });
         expect(h.sessions.execs).toEqual([]);
+    });
+});
+
+describe('env_upload (/mcp/env)', () => {
+    const b64 = (x: string) => Buffer.from(x).toString('base64');
+
+    it('writes the files into a ready session, audited with their paths and sizes, never their bytes', async () => {
+        const h = harness();
+        const { sessionId } = await h.service.up(KEY, { environmentId: 'env-a' });
+        const secret = 'ghp_' + 'a'.repeat(36);
+        const out = await h.service.upload(KEY, { sessionId, files: [{ path: 'fixtures/users.json', contentBase64: b64(`{"token":"${secret}"}`) }] });
+        expect(out.files).toEqual([{ path: 'fixtures/users.json', bytes: 52, sha256: 'c'.repeat(64) }]);
+        expect(h.sessions.uploads).toHaveLength(1);
+        expect(h.sessions.uploads[0].stepId).toBe(out.stepId);
+        const [row] = h.audit.rows;
+        expect(row).toMatchObject({ kind: 'env_upload', keyId: 'key-a', repositoryId: 'repo-a', environmentId: 'env-a', sessionId, stepId: out.stepId, outcome: 'accepted' });
+        expect(row.command).toBe('upload fixtures/users.json (52 B)');
+        expect(JSON.stringify(h.audit.rows)).not.toContain(b64(`{"token":"${secret}"}`));
+    });
+
+    it('shares the env_exec hourly quota: an upload counts against it and is refused past it', async () => {
+        const h = harness();
+        const { sessionId } = await h.service.up(KEY, { environmentId: 'env-a' });
+        for (let i = 0; i < ENV_EXEC_QUOTA.perKeyPerHour - 1; i++) await h.service.exec(KEY, { sessionId, command: 'true' });
+        await h.service.upload(KEY, { sessionId, files: [{ path: 'a.txt', contentBase64: b64('x') }] });
+        await expect(h.service.exec(KEY, { sessionId, command: 'true' })).rejects.toMatchObject({ status: 429 });
+        await expect(h.service.upload(KEY, { sessionId, files: [{ path: 'b.txt', contentBase64: b64('y') }] })).rejects.toMatchObject({ status: 429 });
+        expect(h.sessions.uploads).toHaveLength(1);
+        expect(h.audit.rows.at(-1)).toMatchObject({ kind: 'env_upload', outcome: 'refused_quota' });
+    });
+
+    it('needs env:exec and a session of the key; refuses a malformed list before anything is recorded', async () => {
+        const h = harness();
+        const { sessionId } = await h.service.up(KEY, { environmentId: 'env-a' });
+        await expect(h.service.upload({ ...KEY, capabilities: ['env:fix'] }, { sessionId, files: [{ path: 'a', contentBase64: b64('x') }] })).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(h.service.upload({ ...KEY, keyId: 'key-b' }, { sessionId, files: [{ path: 'a', contentBase64: b64('x') }] })).rejects.toBeInstanceOf(NotFoundException);
+        for (const files of [undefined, [], [{ path: 'a' }], [{ path: 5, contentBase64: 'eA==' }], Array.from({ length: 33 }, (_, i) => ({ path: `f${i}`, contentBase64: 'eA==' }))]) {
+            await expect(h.service.upload(KEY, { sessionId, files })).rejects.toMatchObject({ status: 400 });
+        }
+        expect(h.audit.rows).toHaveLength(0);
+        expect(h.sessions.uploads).toHaveLength(0);
     });
 });

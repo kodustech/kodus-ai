@@ -1,12 +1,14 @@
-import type { EnvSessionOpen, EnvSessionOwner, EnvSessionView, EnvStepView, EnvValidationResolution } from '@libs/runtime/contracts/env-session';
+import type { EnvSessionOpen, EnvSessionOwner, EnvSessionUpload, EnvSessionView, EnvStepView, EnvUploadView, EnvValidationResolution } from '@libs/runtime/contracts/env-session';
 
 // The API side of the /mcp/env tools (§4 "MCP e CLI", Inc. 1, S-27, S-46).
 
-/** env_exec quota per team key and per org, in a sliding hour (S-27: a leaked key does not become free compute). */
+/** env_exec quota per team key and per org, in a sliding hour (S-27: a leaked key does not become free compute); env_upload counts against it. */
 export const ENV_EXEC_QUOTA = { perKeyPerHour: 120, perOrgPerHour: 600, windowMs: 3_600_000 } as const;
 /** The command as the audit keeps it: redacted, then cut. */
 export const ENV_AUDIT_MAX_COMMAND = 2_048;
-export const ENV_AUDIT_KINDS = ['env_exec', 'env_fix'] as const;
+export const ENV_AUDIT_KINDS = ['env_exec', 'env_fix', 'env_upload'] as const;
+/** The kinds the env_exec quota counts: each sends work to a cell. */
+export const ENV_QUOTA_KINDS = ['env_exec', 'env_upload'] as const;
 export type EnvAuditKind = (typeof ENV_AUDIT_KINDS)[number];
 
 /** A team key as the env tools see it, resolved from the request credential (never from tool arguments). */
@@ -28,7 +30,7 @@ export interface EnvAuditRecord {
     environmentId?: string;
     sessionId?: string;
     stepId?: string;
-    /** Redacted with the gitleaks rules before it is stored. */
+    /** Redacted with the gitleaks rules before it is stored; an upload's is its paths and sizes. */
     command: string;
     at: string;
     outcome: 'accepted' | 'refused_quota' | 'refused' | 'failed';
@@ -39,7 +41,7 @@ export interface EnvAuditRecord {
 export interface RuntimeEnvAuditStore {
     record(r: EnvAuditRecord): Promise<void>;
     setOutcome(organizationId: string, auditId: string, outcome: EnvAuditRecord['outcome'], reason?: string): Promise<void>;
-    /** Accepted env_exec records since `since`, of the org or only of one key. */
+    /** Accepted env_exec and env_upload records (ENV_QUOTA_KINDS) since `since`, of the org or only of one key. */
     countAccepted(q: { organizationId: string; keyId?: string; since: string }): Promise<number>;
     list(q: { organizationId: string; kind: EnvAuditKind; limit: number; before?: string }): Promise<EnvAuditRecord[]>;
 }
@@ -63,6 +65,7 @@ export interface RuntimeEnvSessionPort {
     exec(owner: EnvSessionOwner, sessionId: string, req: { stepId: string; command: string; cwd?: string; repository?: string; timeoutMs: number; validationName?: string; executionScope?: 'workload' }): Promise<EnvStepView>;
     step(owner: EnvSessionOwner, stepId: string): Promise<EnvStepView>;
     release(owner: EnvSessionOwner, sessionId: string): Promise<EnvSessionView>;
+    upload(owner: EnvSessionOwner, sessionId: string, req: Pick<EnvSessionUpload, 'stepId' | 'files'>): Promise<EnvUploadView>;
 }
 
 export const RUNTIME_ENV_SESSION_PORT = Symbol.for('RuntimeApi.EnvSessionPort');

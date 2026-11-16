@@ -1,4 +1,6 @@
-import {createHash} from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { evidenceKey } from '@libs/runtime/contracts/evidence';
+import { UPLOAD_PATH } from '@libs/runtime/protocol/messages';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { RecipeValidationSnapshotSchema } from '@libs/runtime/contracts/recipe-validation';
 import type {EnvValidationResolution} from '@libs/runtime/contracts/env-session';
@@ -8,13 +10,16 @@ import {
     ENV_SESSION_MAX_LIVE_PER_ORG,
     ENV_SESSION_OPEN_WAIT_MS,
     ENV_STEP_LOST_AFTER_MS,
+    ENV_UPLOAD_MAX_BYTES,
     envSessionTokenBinding,
     type EnvSessionExec,
     type EnvSessionOpen,
     type EnvSessionOwner,
     type EnvSessionRepositoryView,
+    type EnvSessionUpload,
     type EnvSessionView,
     type EnvStepView,
+    type EnvUploadView,
     isLiveEnvSession,
     ownsEnvSession,
 } from '@libs/runtime/contracts/env-session';
@@ -22,6 +27,7 @@ import { type Claim, type EnvironmentRuntime, isBlocked, isEnvError } from '@lib
 import type { ClaimWorkspace, EnvironmentSetupRecord, WorkspaceClaimRepo } from '@libs/runtime/run';
 import { safeFailure } from '@libs/runtime/telemetry/failure';
 
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
 import type { EnvSessionRow, EnvSessionStore, EnvStepRow } from './env-session.store';
 
@@ -103,6 +109,27 @@ export interface EnvSessionDeps {
     capacityWaitMs?: number;
     sleep?: (ms: number) => Promise<void>;
     onWarn?: (msg: string, meta: Record<string, unknown>) => void;
+    /** Where env_upload keeps a call's files for the cell to read (the Runs' evidence store); absent: upload_unavailable. */
+    evidence?: Pick<EvidenceStore, 'put'>;
+}
+
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const invalidUpload = (why: string) => new EnvSessionError(409, 'invalid_upload', why);
+
+/** The decoded files of one env_upload, or invalid_upload naming the first that cannot go. */
+function uploadFilesOf(files: EnvSessionUpload['files']): Array<{ path: string; body: Buffer; mode?: number }> {
+    const seen = new Set<string>();
+    let total = 0;
+    return files.map((f, i) => {
+        if (!UPLOAD_PATH.test(f.path)) throw invalidUpload(`files[${i}].path must be relative to the checkout, without . or .. segments`);
+        if (seen.has(f.path)) throw invalidUpload(`files[${i}].path names ${f.path.slice(0, 200)} twice`);
+        seen.add(f.path);
+        if (!BASE64.test(f.contentBase64)) throw invalidUpload(`files[${i}].contentBase64 is not base64`);
+        const body = Buffer.from(f.contentBase64, 'base64');
+        total += body.length;
+        if (total > ENV_UPLOAD_MAX_BYTES) throw invalidUpload(`one env_upload takes at most ${ENV_UPLOAD_MAX_BYTES} bytes; split the files over several calls`);
+        return { path: f.path, body, ...(f.mode !== undefined ? { mode: f.mode } : {}) };
+    });
 }
 
 export function envSessionView(row: EnvSessionRow): EnvSessionView {
@@ -441,6 +468,40 @@ export class EnvSessionService {
             result = { error: 'cell_unavailable' };
         }
         await this.deps.store.finishStep(row.organizationId, step.stepId, { state: 'done', finishedAt: this.now().toISOString(), result });
+    }
+
+    /**
+     * env_upload: each file becomes an evidence object of the session's org
+     * ({org}/{session}/pr/{uuid}/input), then the cell reads every one by its
+     * key and writes it into the checkout (digest-checked). Answers once the
+     * cell wrote them all; a refusal of the cell is passed on with its reason.
+     */
+    async upload(req: EnvSessionUpload & { sessionId: string }): Promise<EnvUploadView> {
+        const row = await this.load(req, req.sessionId);
+        if (row.state !== 'ready' || !row.claimId) {
+            throw new EnvSessionError(409, 'session_not_ready', row.reason ?? `The session is ${row.state}; wait for ready (env_up) before env_upload.`);
+        }
+        const files = uploadFilesOf(req.files);
+        const env = this.env(row);
+        if (!this.deps.evidence || typeof env.upload !== 'function') {
+            throw new EnvSessionError(409, 'upload_unavailable', 'This deployment cannot take files into an environment (no evidence store the cells read).');
+        }
+        const written = [];
+        for (const f of files) {
+            const key = evidenceKey({ organizationId: row.organizationId, runId: row.sessionId, side: 'pr', stepId: randomUUID(), type: 'input' });
+            await this.deps.evidence.put(key, f.body, 'application/octet-stream');
+            written.push({ ...f, key, sha256: createHash('sha256').update(f.body).digest('hex') });
+        }
+        await this.deps.store.update(row.organizationId, row.sessionId, { lastUsedAt: this.now().toISOString() });
+        const r = await env.upload(row.claimId, {
+            stepId: req.stepId,
+            files: written.map((f) => ({ path: f.path, contentRef: f.key, sha256: f.sha256, ...(f.mode !== undefined ? { mode: f.mode } : {}) })),
+        });
+        if (isEnvError(r)) {
+            if (r.code === 'upload_unavailable') throw new EnvSessionError(409, 'upload_unavailable', "The session's cell cannot take files.");
+            throw new EnvSessionError(409, r.code, r.code === 'upload_failed' ? `Nothing was written: ${r.reason.slice(0, 500)}` : `Nothing was written (${r.code}).`);
+        }
+        return { stepId: req.stepId, sessionId: row.sessionId, files: written.map((f) => ({ path: f.path, bytes: f.body.length, sha256: f.sha256 })) };
     }
 
     async step(owner: EnvSessionOwner, stepId: string): Promise<EnvStepView> {

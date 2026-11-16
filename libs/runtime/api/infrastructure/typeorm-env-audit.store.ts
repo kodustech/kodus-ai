@@ -1,6 +1,6 @@
 import { DocumentTable, jsonb } from '@libs/runtime/run/adapters/pg-document';
 
-import type { EnvAuditKind, EnvAuditRecord, RuntimeEnvAuditStore } from '../domain/env-tools';
+import { ENV_QUOTA_KINDS, type EnvAuditKind, type EnvAuditRecord, type RuntimeEnvAuditStore } from '../domain/env-tools';
 import type { Sql } from './typeorm-sql';
 
 /** Every env_exec and env_fix of a team key (S-27), in the product Postgres, kept 90 days (RuntimeProductRetention). */
@@ -46,7 +46,7 @@ export class TypeOrmRuntimeEnvAuditStore implements RuntimeEnvAuditStore {
         const row = (
             await this.sql.query(
                 `SELECT count(*)::int AS n FROM ${RUNTIME_ENV_AUDIT_TABLE}
-                 WHERE organization_id = $1 AND kind = 'env_exec' AND outcome = 'accepted' AND at >= $2::timestamptz${q.keyId ? ' AND key_id = $3' : ''}`,
+                 WHERE organization_id = $1 AND kind IN (${ENV_QUOTA_KINDS.map((k) => `'${k}'`).join(', ')}) AND outcome = 'accepted' AND at >= $2::timestamptz${q.keyId ? ' AND key_id = $3' : ''}`,
                 q.keyId ? [q.organizationId, q.since, q.keyId] : [q.organizationId, q.since],
             )
         ).rows[0];

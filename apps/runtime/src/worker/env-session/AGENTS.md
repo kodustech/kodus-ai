@@ -4,6 +4,7 @@ The worker side of the developer's interactive environments (the `/mcp/env` tool
 
 ## Owns
 - Sessions: `env-session.service.ts` `EnvSessionService` (`open`, `get`, `exec`, `step`, `validation`, `close`, `sweep`). `open` answers at once in `acquiring` and boots in the background (`settle` waits for it in tests); the recipe, expose and machine size come from the environment's setup, never from the checkout.
+- Uploads: `upload` (env_upload) keeps each file of a call as an evidence object of the session's org (`{org}/{session}/pr/{uuid}/input`, `deps.evidence`, the Runs' store) and asks the cell to write them into the checkout by key and digest (`EnvironmentRuntime.upload`); paths are checked with the protocol's `UPLOAD_PATH` first, at most `ENV_UPLOAD_MAX_FILES` files and `ENV_UPLOAD_MAX_BYTES` a call. No store or a cell that takes no files: 409 `upload_unavailable`.
 - Ownership: `ownsSession` (org, team, key, and every repository of a multi-repository session still reachable by the key); anyone else's row is the same 404 as a missing one.
 - Pinned validation checks: `validation` resolves only checks pinned from a confirmed default-branch recipe, and `exec` never lets a caller replace a pinned command, cwd or repository.
 - The listener: `env-session-server.ts` `envSessionRequestHandler` (POST only, every request signed by the API with a key derived from the seal key, each signature served once through `EnvSessionNonces`); `env-session.listener.ts` `EnvSessionListener` starts it on `RUNTIME_ENV_SESSION_PORT`, sweeps idle sessions every minute and ticks previews every 10 s.
@@ -18,7 +19,7 @@ The worker side of the developer's interactive environments (the `/mcp/env` tool
 - A session opens nothing while the Runtime is stopped for the org, for a repository outside the key's list, or past `ENV_SESSION_MAX_LIVE_PER_KEY` / `ENV_SESSION_MAX_LIVE_PER_ORG`.
 - The developer's commit runs on the PR side's policy (test-phase egress only); its repo token is sealed to the session (`envSessionTokenBinding`) ([apps/runtime/AGENTS.md](../../../AGENTS.md) "Secrets").
 - Idle for `ENV_SESSION_IDLE_MS` or past its lease, a session is released on the next call or sweep; a step that stops reporting past its timeout is lost. Output kept per stream is bounded (`MAX_OUTPUT`, 64 KiB).
-- Signatures cover method, path, time, nonce and body, within a 15 s skew; refusals carry no detail. Bodies are capped (64 KiB, 1 MiB for a sandbox write).
+- Signatures cover method, path, time, nonce and body, within a 15 s skew; refusals carry no detail. Bodies are capped (64 KiB, 1 MiB for a sandbox write and an env upload).
 - Gap: the two tables are created by `PgEnvSessionStore.ensureSchema` at boot, not by `RUNTIME_MIGRATIONS`, unlike the rest of the Runtime schema ([apps/runtime/AGENTS.md](../../../AGENTS.md) "Protocol and schema"); a later column is a migration.
 
 ## Where new code goes
@@ -39,6 +40,7 @@ Files (5, tests apart): `env-session-server.ts`, `env-session.listener.ts`, `env
 Imports these Runtime modules:
 
 - [`apps/runtime/src/shared`](../../shared/AGENTS.md)
+- [`apps/runtime/src/shared/evidence`](../../shared/evidence/AGENTS.md)
 - [`apps/runtime/src/worker/env`](../env/AGENTS.md)
 - [`apps/runtime/src/worker/preview`](../preview/AGENTS.md)
 - [`apps/runtime/src/worker/sandbox`](../sandbox/AGENTS.md)

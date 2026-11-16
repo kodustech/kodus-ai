@@ -1,9 +1,12 @@
 import {
     ENV_SESSION_OPEN_WAIT_MS,
     ENV_SESSION_SIGNATURE_HEADER,
+    ENV_UPLOAD_WAIT_MS,
     type EnvSessionOpen,
     type EnvSessionOwner,
+    type EnvSessionUpload,
     type EnvSessionView,
+    type EnvUploadView,
     type EnvValidationResolution,
     type EnvStepView,
     envSessionKeyFrom,
@@ -105,6 +108,10 @@ export class HttpEnvSessionClient implements RuntimeEnvSessionPort, RuntimePrevi
 
     step(owner: EnvSessionOwner, stepId: string) {
         return this.post<EnvStepView>(`/env/steps/${encodeURIComponent(stepId)}`, owner);
+    }
+
+    upload(owner: EnvSessionOwner, sessionId: string, req: Pick<EnvSessionUpload, 'stepId' | 'files'>) {
+        return this.post<EnvUploadView>(`/env/sessions/${encodeURIComponent(sessionId)}/upload`, { ...owner, ...req }, ENV_UPLOAD_WAIT_MS);
     }
 
     release(owner: EnvSessionOwner, sessionId: string) {

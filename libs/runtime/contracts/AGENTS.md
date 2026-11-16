@@ -20,7 +20,7 @@ The shared vocabulary and the product↔Runtime contracts, defined once and impo
 - Pure ([`AGENTS.md`](../AGENTS.md) "Dependency direction"); `crypto` only. It still imports `probe`, `protocol` (`strict-json`, `sandbox`, `messages`), `run` (`run-messages`, `sealed-secret`, `environment-setup`), `gate` (a type) and `entry-points` (a type), so a new import from those must not close a cycle.
 - A command carries no plain token: the schemas require sealed ones.
 - Shared vocabulary is added in `enums.ts` and derived elsewhere, never redeclared.
-- The evidence key is built on the server from the authorized Run; only the step id, side and type come from outside, each from a closed set. Read URLs last at most 5 minutes, upload grants at most 15.
+- The evidence key is built on the server from the authorized Run; only the step id, side and type come from outside, each from a closed set. An env_upload's `input` objects are keyed the same way under the env session's id (the worker draws their step ids). Read URLs last at most 5 minutes, upload grants at most 15.
 - `testing.ts` (`InMemoryCellTokenStore`) is a test double: not in the barrel, never imported by production code.
 - `runtime-commands.ts`'s header comment still says every command goes on the runtime_run queue; `runtimeCommandRoute` sends all but setups to the control queue.
 

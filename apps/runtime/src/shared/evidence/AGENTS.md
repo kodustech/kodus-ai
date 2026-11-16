@@ -45,6 +45,7 @@ Imported by:
 - [`apps/runtime/src/worker`](../../worker/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../../worker/dbos/AGENTS.md)
 - [`apps/runtime/src/worker/env`](../../worker/env/AGENTS.md)
+- [`apps/runtime/src/worker/env-session`](../../worker/env-session/AGENTS.md)
 - [`apps/runtime/src/worker/evidence`](../../worker/evidence/AGENTS.md)
 - [`apps/runtime/src/worker/run`](../../worker/run/AGENTS.md)
 

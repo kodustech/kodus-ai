@@ -51,6 +51,8 @@ const EgressInspectListSchema = z.array(EgressInspectSchema).max(256);
 const SEGMENT = '(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_.-]+)';
 // A file path segment: anything but a separator, a backslash, NUL, `.` or `..`.
 const FILE_SEGMENT = '(?:[^/\\\\.\\x00][^/\\\\\\x00]*|\\.[^/\\\\.\\x00][^/\\\\\\x00]*|\\.\\.[^/\\\\\\x00]+)';
+/** An upload's path: relative, segments of FILE_SEGMENT (the cell also refuses `.git` and its own `.kodus*`/`.kody*`). */
+export const UPLOAD_PATH = new RegExp(`^${FILE_SEGMENT}(/${FILE_SEGMENT})*$`);
 // A DNS name whose last label starts with a letter: no IPv4 literal.
 const DNS_HOST = '(?:[A-Za-z0-9-]+\\.)*[A-Za-z][A-Za-z0-9-]*';
 
@@ -844,11 +846,7 @@ export const MessageBodySchemas = {
             .array(
                 z.strictObject({
                     // Relative to the checkout, no `.` or `..` segment.
-                    path: z
-                        .string()
-                        .min(1)
-                        .max(1_024)
-                        .regex(new RegExp(`^${FILE_SEGMENT}(/${FILE_SEGMENT})*$`)),
+                    path: z.string().min(1).max(1_024).regex(UPLOAD_PATH),
                     contentRef: z.string().min(1).max(1_024),
                     // The read grant of contentRef the worker signed (an
                     // evidence read URL, at most 5 minutes, that one object
