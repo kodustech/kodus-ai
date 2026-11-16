@@ -1483,6 +1483,41 @@
               "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
             }
           ]
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/library-candidate.cases/itsdangerous-control.json",
+          "sourceResultSha256": "e53eabda29484f1149fcdd8aa677dcd5b93aab822daf055e337390cb657a6b13",
+          "findingSha256": "cc04cbb4ed7004e3aba7b15d22377e291e3b1b270c0deb78f86d411e59b0629a",
+          "verdict": "false",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The decompression and potential expansion are real, but the report invents an outside caller and server consumer. The normal loads path verifies the signature before load_payload; loads_unsafe and the cited failure-inspection example explicitly omit that guarantee for debugging. Calling that API does not bypass a signature boundary it promises to enforce, and the codec performs its intended expansion rather than violating an implemented output bound. A deployed caller could misuse it, but no such caller ships in this library.",
+          "sources": [
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L328",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L349",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L380",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/url_safe.py#L15",
+              "sha256": "6b3e1ee5f5e2fefb3e61b5a3f186709f8c2254a7de0fef8610a453e547aee0fe"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/url_safe.py#L44",
+              "sha256": "6b3e1ee5f5e2fefb3e61b5a3f186709f8c2254a7de0fef8610a453e547aee0fe"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/docs/serializer.rst#L36",
+              "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
+            }
+          ]
         }
       ],
       "is-control|resource_exhaustion|source/index.ts|getObjectType|184": {

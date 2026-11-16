@@ -1,0 +1,14 @@
+{
+  "beforeCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "hypothesis": "The generic library paragraph is insufficient against the resource lens's unconditional decompression-without-cap hunt. An explicit class exclusion distinguishing intended codec expansion from a broken library guarantee or an unbounded shipped untrusted consumer may prevent this repeated false report.",
+  "observedFinding": "library-candidate.cases/itsdangerous-control.json, finding index 0; exact-claim judgment in adjudications.json.",
+  "sourceEvidence": [
+    "src/itsdangerous/serializer.py:339 verifies before loading payload on the normal path.",
+    "src/itsdangerous/serializer.py:352 documents the omitted signature guarantee and debugging-only use.",
+    "docs/serializer.rst:39 warns that inspection is unsafe and for debugging.",
+    "src/itsdangerous/url_safe.py:16 defines compression/decompression as the codec operation."
+  ],
+  "changeScope": "Only the generic resource-exhaustion exclusion, shared by finder and verifier. No case/repository/function/advisory names. Do not exclude intrinsic memory safety, validation, supported uniqueness, superlinear processing, or a real application that feeds hostile compressed data to an unbounded consumer.",
+  "invariants": "Keep all seven classes, native completion validation, model route/effort, tools, step/unit limits, USD caps, source cases, sampler, advisory matcher and precision target. Keep original control expectations and all failed/incomplete observations.",
+  "measurement": "Retain the failed 71df control measurement. Combine this scope clarification with the independently preregistered native-submission instruction, then measure the same four controls before any candidate positive run. Keep confirmation descriptions blind during development."
+}
