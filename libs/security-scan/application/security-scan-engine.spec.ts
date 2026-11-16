@@ -729,7 +729,8 @@ describe('SecurityScanEngine', () => {
         expect(
             commands.some((c) => c.startsWith('[ ! -w') && c.includes("mountpoint -q '/repo'")),
         ).toBe(true);
-        // Dependencies install there, never in the checkout the lenses read.
+        // No automatic package downloads in a network-isolated reproduction.
+        expect(commands.some((c) => /npm (?:ci|install)|pnpm install|yarn install/.test(c))).toBe(false);
         expect(commands.some((c) => c.startsWith("cd '/repo' &&"))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(
             expect.objectContaining({
@@ -741,7 +742,7 @@ describe('SecurityScanEngine', () => {
         );
     });
 
-    it('runs the test, its install and its clone as a user of its own, never as the review user', async () => {
+    it('runs the test and its clone as a user of its own, never as the review user', async () => {
         const sandbox = fakeSandbox('e2b');
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>

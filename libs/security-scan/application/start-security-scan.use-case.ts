@@ -136,6 +136,13 @@ export class StartSecurityScanUseCase {
             host: repositoryHost(repository.http_url),
             id: String(repository.id),
         };
+        // Read access uses this same complete identity. Queuing a hostless
+        // scan would spend the team's BYOK budget on a record it cannot see.
+        if (!repositoryKey.host) {
+            throw new BadRequestException(
+                'The repository has no readable Git host. Reconnect it before starting a security scan.',
+            );
+        }
 
         await this.scans.failStale(orgTeam.organizationId, STALE_SCAN_AFTER);
         const active = await this.scans.findActive(

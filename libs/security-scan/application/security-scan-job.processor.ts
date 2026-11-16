@@ -811,6 +811,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 context: SecurityScanJobProcessor.name,
                 error,
                 metadata: {
+                    organizationId: scan.organizationId,
+                    teamId: scan.teamId,
                     scanId: scan.uuid,
                     filePath: finding.filePath,
                 },

@@ -71,6 +71,9 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
             await model?.collection.drop();
             await connection?.close();
         });
+        beforeEach(async () => {
+            await model.deleteMany({});
+        });
         it('keeps one unchanged issue, requires two distinct misses, and resets misses on a sighting', async () => {
             expect((await repository.upsertScanFinding(finding)).outcome).toBe(
                 'created',
@@ -120,6 +123,57 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
             });
             expect(await missed('scan-8')).toBe(0);
             expect(await model.countDocuments()).toBe(1);
+        });
+
+        it('isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records', async () => {
+            const foreignRepositories = [
+                { ...finding.repository, host: 'other.example.com' },
+                { ...finding.repository, platform: PlatformType.GITLAB },
+                { id: '123', platform: PlatformType.GITHUB, name: 'legacy' },
+            ];
+            const foreign = await model.create(
+                foreignRepositories.map((repository, i) => ({
+                    ...finding,
+                    repository,
+                    fingerprint: `foreign-${i}`,
+                    contributingSuggestions: [],
+                    status: IssueStatus.OPEN,
+                    lastSeenScanId: 'foreign-original',
+                    lastSeenAt: '2026-01-01T00:00:00.000Z',
+                    consecutiveScanMisses: 1,
+                })),
+            );
+            await repository.upsertScanFinding(finding);
+            const scope = {
+                organizationId: finding.organizationId,
+                repositoryPlatform: PlatformType.GITHUB,
+                repositoryHost: 'github.com',
+                repositoryId: '123',
+            };
+            expect(await repository.markScanFindingsSeen({
+                ...scope,
+                scanId: 'own-sighting',
+                fingerprints: [finding.fingerprint, ...foreign.map((f) => f.fingerprint!)],
+                foundAgain: true,
+            })).toEqual({ sighted: 1, reopened: 0 });
+            expect(await missed('own-miss-1')).toBe(0);
+            expect(await missed('own-miss-2')).toBe(1);
+            for (const entry of foreign) {
+                // The unique index rejects an identity collision; the full
+                // scope must never overwrite the foreign issue instead.
+                await expect(repository.upsertScanFinding({
+                    ...finding,
+                    fingerprint: entry.fingerprint,
+                    lastSeenScanId: 'own-upsert',
+                })).rejects.toMatchObject({ code: 11000 });
+                expect(await model.findById(entry._id).lean()).toMatchObject({
+                    status: IssueStatus.OPEN,
+                    lastSeenScanId: 'foreign-original',
+                    lastSeenAt: '2026-01-01T00:00:00.000Z',
+                    consecutiveScanMisses: 1,
+                });
+            }
+            expect(await model.countDocuments()).toBe(4);
         });
     },
 );

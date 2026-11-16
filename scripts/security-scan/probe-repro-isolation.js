@@ -11,7 +11,6 @@ const {
 const {
     SecurityScanEngine,
 } = require('../../libs/security-scan/application/security-scan-engine.ts');
-const { redactSecrets } = require('../../libs/llm/review-error-diagnostics.ts');
 const out = process.argv
     .find((a) => a.startsWith('--output='))
     ?.slice('--output='.length);
@@ -71,10 +70,9 @@ echo 'loopback, external network, shared proxy, checkout writes, shell writes an
                             : command.includes('unshare --net')
                               ? 'network namespace'
                               : 'reproduction setup',
-                        exitCode: error.exitCode,
-                        error: redactSecrets(
-                            String(error.stderr || error.message),
-                        ).slice(0, 500),
+                        ...(Number.isInteger(error.exitCode)
+                            ? { exitCode: error.exitCode }
+                            : {}),
                     });
                 throw error;
             }
@@ -89,7 +87,6 @@ echo 'loopback, external network, shared proxy, checkout writes, shell writes an
         }
         await engine.runReproduction(
             { sandbox, deadlineAt: Date.now() + 120_000 },
-            'unknown',
             record,
         );
         const result = {
@@ -104,7 +101,6 @@ echo 'loopback, external network, shared proxy, checkout writes, shell writes an
             executed: record.executed,
             passed: record.executed && record.exitCode === 0,
             exitCode: record.exitCode,
-            output: record.output,
         };
         if (out) fs.writeFileSync(out, JSON.stringify(result, null, 2) + '\n');
         console.log('ISOLATION_PROBE', JSON.stringify(result));
@@ -113,7 +109,7 @@ echo 'loopback, external network, shared proxy, checkout writes, shell writes an
         await sandbox.cleanup();
     }
 }
-main().catch((error) => {
-    console.error(redactSecrets(error.message));
+main().catch(() => {
+    console.error('Isolation probe failed before producing a complete result.');
     process.exitCode = 2;
 });

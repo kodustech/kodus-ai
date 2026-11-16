@@ -27,6 +27,7 @@ function useCaseWith(
     last: Record<string, unknown> | null,
     platform: string | null | Error = 'GITHUB',
     defaultBranch: string | Error = 'trunk',
+    repositoryOverrides: Record<string, unknown> = {},
 ) {
     const scans = {
         failStale: jest.fn(async () => 0),
@@ -48,6 +49,7 @@ function useCaseWith(
                     // Stored when the repository was connected.
                     default_branch: 'main',
                     http_url: 'https://GitHub.com/acme/shop',
+                    ...repositoryOverrides,
                 },
             ]),
         } as any,
@@ -177,6 +179,18 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(scans.create).not.toHaveBeenCalled();
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
+
+    it.each([undefined, '', 'not a URL'])(
+        'refuses a repository without a confirmed host (%s) before writing or queuing a scan',
+        async (http_url) => {
+            const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', 'trunk', { http_url });
+            await expect(start()).rejects.toThrow(/Git host.*reconnect/i);
+            expect(scans.failStale).not.toHaveBeenCalled();
+            expect(scans.findActive).not.toHaveBeenCalled();
+            expect(scans.create).not.toHaveBeenCalled();
+            expect(jobQueue.enqueue).not.toHaveBeenCalled();
+        },
+    );
 
     it('lets a failed integration lookup through as the error it is, not as a missing integration', async () => {
         const { scans, start } = useCaseWith(null, new Error('postgres down'));

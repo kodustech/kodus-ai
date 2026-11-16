@@ -156,14 +156,20 @@ type Reproduction = NonNullable<
 export const reproductionStatus = (
     reproduction: Pick<Reproduction, "executed" | "reproduced" | "exitCode">,
 ): { label: string; tone: "danger" | "warning" | "neutral" } => {
-    if (reproduction.executed && reproduction.reproduced) {
+    if (reproduction.executed === true && reproduction.reproduced === true) {
         return { label: "Reproduced in an isolated sandbox", tone: "danger" };
     }
 
     // A test that did not pass here most often needed what the sandbox does
     // not have (the app running, its database, a secret): it is no evidence
     // against the finding, so it reads as a test to run, not a verdict.
-    return { label: "Reproduction test to run", tone: "neutral" };
+    if (
+        reproduction.executed === false ||
+        (reproduction.executed === true && reproduction.reproduced === false)
+    ) {
+        return { label: "Reproduction test to run", tone: "neutral" };
+    }
+    return { label: "Reproduction status not recorded", tone: "neutral" };
 };
 
 /** The API's "no known price" refusal: the scan can only be capped in tokens. */

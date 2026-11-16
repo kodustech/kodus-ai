@@ -1505,7 +1505,7 @@ export class SecurityScanEngine {
             if (sandbox.type !== 'e2b') {
                 return;
             }
-            await this.runReproduction(params, finding.language, record);
+            await this.runReproduction(params, record);
         } catch (error) {
             // A checkout that could not be put back stops the scan.
             if (error instanceof ScanFailure) {
@@ -1527,11 +1527,11 @@ export class SecurityScanEngine {
 
     /**
      * Runs a reproduction test where it cannot touch what the lenses read.
-     * The test, its command and the dependency install are model output or
-     * repository code: all of it runs as a user of its own (REPRO_USER), in
+     * The test and its command are model output or repository code:
+     * all of it runs as a user of its own (REPRO_USER), in
      * a clone of the scanned commit in that user's home, kept for the job
-     * (so dependencies install once) and reset to that commit before each
-     * test. That user cannot write the review user's home, whose git config
+     * and reset to that commit before each test. That user cannot write
+     * the review user's home, whose git config
      * and shell profile every lens command reads (a global gitignore hides
      * files from rg), nor the checkout the lenses read, which only ever has
      * its state checked: anything changed there anyway is put back, and if
@@ -1539,7 +1539,6 @@ export class SecurityScanEngine {
      */
     private async runReproduction(
         params: SecurityScanEngineParams,
-        language: string,
         record: NonNullable<ScanFinding['reproduction']>,
     ): Promise<void> {
         const sandbox = params.sandbox;
@@ -1595,7 +1594,9 @@ export class SecurityScanEngine {
         this.reproClone = true;
 
         try {
-            await this.ensureDependencies(sandbox, language, workdir, run);
+            // Execution has no network. Use only what is already available:
+            // an automatic dependency download cannot succeed here and may
+            // consume the slice's remaining time before the test even starts.
             // A file (or link) already there is the repository's own: never
             // written over. The test stays on the issue, not run.
             // Free only on test's own "no" (exit 1): a probe that failed or
@@ -1880,27 +1881,6 @@ export class SecurityScanEngine {
         }
     }
 
-    private readonly installed = new Set<string>();
-
-    /** One dependency install per language per sandbox, best effort. */
-    /** Installed in the reproduction worktree, never in the checkout. */
-    private async ensureDependencies(
-        sandbox: SandboxInstance,
-        language: string,
-        workdir: string,
-        run: (command: string, timeoutMs: number) => Promise<unknown>,
-    ): Promise<void> {
-        if (this.installed.has(language)) {
-            return;
-        }
-        this.installed.add(language);
-        const command = INSTALL_COMMANDS[language];
-        if (!command) {
-            return;
-        }
-        await run(`cd ${shellQuote(workdir)} && (${command})`, 300_000);
-    }
-
     private async testHints(
         sandbox: SandboxInstance,
         language: string,
@@ -1936,15 +1916,6 @@ export class SecurityScanEngine {
         return parts.join('\n\n').slice(0, 6000);
     }
 }
-
-const INSTALL_COMMANDS: Record<string, string> = {
-    typescript:
-        '[ -f pnpm-lock.yaml ] && (corepack enable >/dev/null 2>&1; pnpm install --frozen-lockfile --ignore-scripts) || ([ -f yarn.lock ] && yarn install --frozen-lockfile --ignore-scripts) || npm ci --ignore-scripts || npm install --ignore-scripts',
-    python: '([ -f requirements.txt ] && pip install -q -r requirements.txt); ([ -f pyproject.toml ] && pip install -q -e .); pip install -q pytest',
-    go: 'go mod download',
-    ruby: 'bundle install --quiet',
-    php: 'composer install --no-interaction --quiet',
-};
 
 /** "OWASP A03:2021 / CWE-89" is CWE-89: the number after "CWE", not the first. */
 function normalizeCwe(value?: string): string | undefined {

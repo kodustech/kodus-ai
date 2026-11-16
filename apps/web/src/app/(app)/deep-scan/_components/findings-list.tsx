@@ -42,8 +42,7 @@ export const selectShownFindings = (
         .filter((f) => !severity || f.severity === severity)
         .sort(
             (a, b) =>
-                (SEVERITY_RANK[a.severity] ?? 9) -
-                    (SEVERITY_RANK[b.severity] ?? 9) ||
+                SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
                 new Date(b.createdAt).getTime() -
                     new Date(a.createdAt).getTime(),
         );

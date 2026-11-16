@@ -102,6 +102,14 @@ describe("formatScanOutcome", () => {
 });
 
 describe("reproductionStatus", () => {
+    it("does not infer an execution outcome from missing legacy flags", () => {
+        for (const record of [{}, { reproduced: true }, { executed: true }]) {
+            expect(reproductionStatus(record)).toEqual({
+                label: "Reproduction status not recorded",
+                tone: "neutral",
+            });
+        }
+    });
     it("reads a reproduced test as confirmed", () => {
         expect(
             reproductionStatus({

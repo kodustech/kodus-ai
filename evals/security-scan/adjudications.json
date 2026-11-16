@@ -1346,32 +1346,92 @@
         ],
         "verdict": "real"
       },
-      "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": {
-        "sourceResult": "results/2026-11-16-review/negative.raw.json",
-        "sourceResultSha256": "1f57bcfeebe142daea53f815d3485067bb29ee7687512b1e1de6fc83caaeb16c",
-        "findingSha256": "c20c07d97e42cd6ee1fac5dab25a4c75b05fb2ffe61e27a5ab88b623ef394e53",
+      "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": [
+        {
+          "sourceResult": "results/2026-11-16-review/negative.raw.json",
+          "sourceResultSha256": "1f57bcfeebe142daea53f815d3485067bb29ee7687512b1e1de6fc83caaeb16c",
+          "findingSha256": "c20c07d97e42cd6ee1fac5dab25a4c75b05fb2ffe61e27a5ab88b623ef394e53",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "Normal loads verifies the signature before load_payload. The alleged pre-verification decompression path is loads_unsafe, explicitly documented as unsafe debugging and not exposed by an HTTP caller. No untrusted remote caller is shown bypassing verification.",
+          "sources": [
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L337",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L349",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/url_safe.py#L44",
+              "sha256": "6b3e1ee5f5e2fefb3e61b5a3f186709f8c2254a7de0fef8610a453e547aee0fe"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/docs/serializer.rst#L39",
+              "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
+            }
+          ],
+          "verdict": "false"
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/fresh.cases/itsdangerous-control.json",
+          "sourceResultSha256": "608a93a69173346cffea40d0bb748e08779c4b7ba8e1c0f1e01206a2847aaf9e",
+          "findingSha256": "805ca6638277721e9c160970147b101931fac2f817607a60f9d3323608c93e0d",
+          "verdict": "false",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The normal loads path verifies the signature before load_payload and decompression. The report explicitly relies on loads_unsafe or manual BadSignature payload recovery, APIs documented for debugging untrusted payloads with explicit warnings. The repository ships no remote consumer exposing that debugging operation. Unbounded decompression is real, but the claimed unauthenticated application boundary is invented; a documented deliberate signature bypass does not establish a bug in the supported verification path.",
+          "sources": [
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L327",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L349",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L367",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/url_safe.py#L23",
+              "sha256": "6b3e1ee5f5e2fefb3e61b5a3f186709f8c2254a7de0fef8610a453e547aee0fe"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/docs/serializer.rst#L38",
+              "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
+            }
+          ]
+        }
+      ],
+      "is-control|resource_exhaustion|source/index.ts|getObjectType|184": {
+        "sourceResult": "results/2026-11-16-review/fresh.cases/is-control.json",
+        "sourceResultSha256": "a82d8c492f34360fc32021b96568004c4bacf1594dd508e0a5e61f64ba9e93a3",
+        "findingSha256": "0bcc5d7913327cb90d8c4b3a12eb8f5f28121e1d7baa6ded6bbe8651f811283c",
+        "verdict": "false",
         "judge": "Codex",
         "date": "2026-11-16",
-        "reason": "Normal loads verifies the signature before load_payload. The alleged pre-verification decompression path is loads_unsafe, explicitly documented as unsafe debugging and not exposed by an HTTP caller. No untrusted remote caller is shown bypassing verification.",
+        "reason": "The regex has a real superlinear performance pitfall (bounded primary-pattern timing confirms it), but the reported security path invents an external sandbox/plugin integration. A Symbol.toStringTag object requires caller-supplied JavaScript; JSON inputs cannot carry that symbol. This library also invokes object properties/getters and supplies no restricted execution boundary. No shipped remote or constrained-sandbox caller is shown gaining a capability it lacked, so this does not meet the scan's concrete-boundary criterion.",
         "sources": [
           {
-            "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L337",
-            "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L181",
+            "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
           },
           {
-            "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L349",
-            "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L245",
+            "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
           },
           {
-            "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/url_safe.py#L44",
-            "sha256": "6b3e1ee5f5e2fefb3e61b5a3f186709f8c2254a7de0fef8610a453e547aee0fe"
+            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/source/index.ts#L804",
+            "sha256": "0a52c323413367a0a71c1d45b148b34de8e77173f35e4d273642e5a8e9118cb2"
           },
           {
-            "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/docs/serializer.rst#L39",
-            "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
+            "url": "https://github.com/sindresorhus/is/blob/e9c026c611c1160eaad50da00be4e676b626018f/readme.md#L23",
+            "sha256": "eb5c868dc4995817b9c51e6bc0d1508d9aaa1936feef56cbd373609d6892aab3"
           }
-        ],
-        "verdict": "false"
+        ]
       }
     }
   },
@@ -1435,5 +1495,6 @@
   "weknora-a20541cd|resource_exhaustion|internal/application/service/chat_pipline/search.go|len|154": "false",
   "weknora-a20541cd|authz|internal/application/service/knowledge.go|knowledgeService.validateFAQKnowledgeBase|4069": "real",
   "weknora-a20541cd|injection|internal/application/service/knowledgebase.go||32": "real",
-  "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": "false"
+  "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": "false",
+  "is-control|resource_exhaustion|source/index.ts|getObjectType|184": "false"
 }
