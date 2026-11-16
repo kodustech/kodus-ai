@@ -1,0 +1,112 @@
+{
+  "method": "Twenty smallest SHA-256(seed + NUL + key) off-list findings per language within each group, or all if fewer. Fixed before inspecting descriptions.",
+  "group": "development",
+  "seed": "wellington-review-2451-2026-11-16",
+  "case": "flowise-f0c12941",
+  "language": "typescript",
+  "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+  "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+  "offListPopulation": 36,
+  "selected": [
+    {
+      "index": 30,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization.service.ts|OrganizationService.updateOrganization|94",
+      "hash": "0d8092f51f20c14dbc774cb72aa9f3695b572e57404da0bea95ae008e17fe955"
+    },
+    {
+      "index": 18,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/routes/user.route.ts||7",
+      "hash": "0f5ff55947baec49a2beb3a6a1b3f6a968a1a3c0cc7f5dcf32eb64c69329416a"
+    },
+    {
+      "index": 29,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateSubscriptionPlan|149",
+      "hash": "1356a9e76fd25fbc3cd7e7d7b612e568c0b3287834fe6119fe20e94f3ef3c771"
+    },
+    {
+      "index": 35,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getPlanProration|110",
+      "hash": "1ca70c48d54242f6447a64b6484c823bc669e9654a8001d8aedc5c41d9e01bb5"
+    },
+    {
+      "index": 0,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/refreshToken\")|237",
+      "hash": "20373e6e6848aac874a98c7bce4c7698e781fffb48d6ff88ad8baf0633a23a71"
+    },
+    {
+      "index": 36,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getAdditionalSeatsProration|92",
+      "hash": "251fa1b4d30fdbdda723a3bcd58e3b456f754d7ac5289bafcedc0d694db2a78a"
+    },
+    {
+      "index": 8,
+      "key": "flowise-f0c12941|resource_exhaustion|packages/server/src/enterprise/middleware/passport/index.ts|storeSSOUserPayload|460",
+      "hash": "27a78836918291cca00eb0223361edfb12b97d1ff30d7e058d7eaf5f591c0ba1"
+    },
+    {
+      "index": 3,
+      "key": "flowise-f0c12941|injection|packages/server/src/enterprise/middleware/passport/index.ts|_initializePassportMiddleware|55",
+      "hash": "3284c24cee4e8f2a98c051f1de036aab31806099be35698f3c01fe7e651d8e82"
+    },
+    {
+      "index": 14,
+      "key": "flowise-f0c12941|injection|packages/server/src/routes/oauth2/templates.ts|generateOAuth2ResponsePage|68",
+      "hash": "33025b2afb3f8a7acfc5cb783c70e498d6b0bb91b9ea621fdb76f14da27501bb"
+    },
+    {
+      "index": 19,
+      "key": "flowise-f0c12941|authz|packages/server/src/routes/executions/index.ts||11",
+      "hash": "3ac50ce311edd9092a1157b8e568b0851a7b326754670bec71c630c99df2daf5"
+    },
+    {
+      "index": 23,
+      "key": "flowise-f0c12941|data_exposure|packages/server/src/services/chatflows/index.ts|getChatflowByApiKey|225",
+      "hash": "4072bc7becb9223253c991f4b8049e273c1a89f2070b9b81ae758a5a215583bb"
+    },
+    {
+      "index": 24,
+      "key": "flowise-f0c12941|data_exposure|packages/server/src/services/apikey/index.ts|getAllApiKeys|112",
+      "hash": "47c211da242f7e40ec64255e6e08b880c5f4f97ed6deb0ed055fb32f043b192f"
+    },
+    {
+      "index": 26,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/services/account.service.ts|AccountService.createRegisterAccount|223",
+      "hash": "4dabc47d3a76f16d1af239d2d77bf78a88d3ac40b2bc9be5a2576c6d271abe35"
+    },
+    {
+      "index": 31,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateAdditionalSeats|128",
+      "hash": "5653ae0326ba81f33288b3d0731895eec0903eefeb1d9b354cb880eb16f75405"
+    },
+    {
+      "index": 6,
+      "key": "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/login\")|267",
+      "hash": "6034a93622975e7a90e0c9b88ba35363ab697e5e3c15fe577e1f3ccd1be007ed"
+    },
+    {
+      "index": 34,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization-user.service.ts|OrganizationUserService.createOrganization|245",
+      "hash": "66290e6acb8a459f14b5429080cfbf9121294f2f932f71d993cd7dedd5b9c666"
+    },
+    {
+      "index": 17,
+      "key": "flowise-f0c12941|resource_exhaustion|packages/server/src/routes/oauth2/index.ts|router.post(\"/refresh/:credentialId\")|355",
+      "hash": "7681b75b5ed44168d5b2909956f1615baa7b48f407e33db90698d9ad03bcf1d2"
+    },
+    {
+      "index": 32,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.read|30",
+      "hash": "8c47755f01f247186ca4a8d42d5b0cdb189b94eaff71a4a8a77a009df0f82991"
+    },
+    {
+      "index": 15,
+      "key": "flowise-f0c12941|injection|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|284",
+      "hash": "9633e26a98e36308855babb0b95d411a0c5d188090e4c777069b5bf14ee29031"
+    },
+    {
+      "index": 1,
+      "key": "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|verifyTokenForBullMQDashboard|433",
+      "hash": "99b930f816ef3c268efa743bff7c97a325f4c7561cd741dd81bef9a4dc56442b"
+    }
+  ]
+}
