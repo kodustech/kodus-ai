@@ -26,7 +26,7 @@ const step = (side: 'base' | 'pr', round: number, fields: Record<string, string>
 const rounds = (base: Record<string, string>, pr: Record<string, string>) => [step('base', 1, base), step('base', 2, base), step('pr', 1, pr), step('pr', 2, pr)];
 const gate = (steps: GateStep[]) => decideProbe(steps, { pinnedImageId: IMAGE }) as Extract<GateDecision, { kind: 'verdict' }>;
 
-// kr-nextjs#2 (Run 04b98118): the PR rewords one feature line of the home page.
+// kr-nextjs#2: the PR rewords one feature line of the home page.
 const PAGE = 'examples/with-docker/app/page.tsx';
 const PAGE_PATCH = [
     '@@ -32,7 +32,7 @@ export default function Home() {',

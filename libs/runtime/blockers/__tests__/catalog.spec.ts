@@ -275,7 +275,7 @@ describe('a denied package registry', () => {
         expect(r.signature).not.toContain('external_service:egress:');
     });
     it('names the host denied last, the one the build failed on, and never a host a tool only phones home to', () => {
-        // The calcom build on cell-dev-1: five denials the build did without, then the font it could not fetch.
+        // The calcom build on the dev cell: five denials the build did without, then the font it could not fetch.
         const deniedEgress = [
             { host: '_http._tcp.deb.debian.org', port: 53, at: '2026-11-11T10:45:32Z' },
             { host: 'telemetry.vercel.com', port: 53, at: '2026-11-11T10:45:57Z' },

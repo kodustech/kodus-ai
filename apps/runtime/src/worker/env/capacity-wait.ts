@@ -110,7 +110,7 @@ export async function acquireWaitingForRoom(env: Pick<EnvironmentRuntime, 'acqui
                 unreachable = e;
                 claim = last && !isCellLost(last) ? last : HUB_DROPPED;
             } else {
-                // A hub that restarts while the claim waits for room (cell-dev-1: both waiting Runs
+                // A hub that restarts while the claim waits for room (the dev cell: both waiting Runs
                 // errored on ECONNREFUSED) is a pause, not an end: the claim started nothing, so it
                 // keeps waiting within the same budget. On the first round the error stands
                 // (no cell connected for the org at all).

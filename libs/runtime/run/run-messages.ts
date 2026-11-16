@@ -240,7 +240,7 @@ export const RuntimeRunRequestedSchema = z.strictObject({
     /**
      * The PR side's own download token. Each claim revokes the token it fetched
      * with, so one shared token left the PR with a 401 whenever the base fetched
-     * first (cell-dev-1, once memory admission ran the sides one after the
+     * first (the dev cell, once memory admission ran the sides one after the
      * other). Absent (an older product): both sides use repoToken.
      */
     prRepoToken: sealedToken.optional(),

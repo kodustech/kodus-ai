@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -15,8 +16,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -27,9 +28,13 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/microvm"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/gitsource"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/injector"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/netguard"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerclient"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/tarball"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/testing/hubstub"
@@ -72,7 +77,12 @@ func recommendedHosts(t *testing.T) []string {
 // Opt-in: KODY_E2E_KODUSAI_BASE and _PR are the checkouts of kr-kodus-ai's
 // main and PR, _BASE_SHA and _PR_SHA their commits. KODY_E2E_KODUSAI_MEMORY_MB
 // and _CPUS size each claim (10240 and 2: the dev cell's gVisor claims are
-// 12288 and 2).
+// 12288 and 2). KODY_E2E_KODUSAI_INSPECT=1 runs the cell as a product cell
+// does with the recommended list and its trust files (cmd/cell: InspectEgress
+// and CellTrust): every claim's machines trust the cell CA, the inspected
+// tier's registries go through the injector, and builds use the VM's own
+// builder (microvm/build.go). Without it the claims get no trust and their
+// TLS is spliced.
 func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 	base, pr := os.Getenv("KODY_E2E_KODUSAI_BASE"), os.Getenv("KODY_E2E_KODUSAI_PR")
 	baseSHA, prSHA := os.Getenv("KODY_E2E_KODUSAI_BASE_SHA"), os.Getenv("KODY_E2E_KODUSAI_PR_SHA")
@@ -96,8 +106,57 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 	if err := ca.WriteFiles(tlsDir, "", obsCert); err != nil {
 		t.Fatal(err)
 	}
-	s := open(t, func(f *microvm.Firecracker) { f.ObserverTLSDir, f.MaxMemoryMB, f.MaxCPUs, f.DataGB = tlsDir, memMB, cpus, envInt("KODY_E2E_KODUSAI_DATA_GB", 40) })
-	e := startEgress(t, s.Place.Egress().String())
+	inspect := os.Getenv("KODY_E2E_KODUSAI_INSPECT") == "1"
+	var trust machinetrust.Files
+	var injectorPolicies *policy.Store
+	var injectorAddr string
+	if inspect {
+		cellCA, err := testpki.NewCA("fc-kodusai-cell-ca")
+		if err != nil {
+			t.Fatal(err)
+		}
+		roots, err := os.ReadFile("/etc/ssl/certs/ca-certificates.crt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := t.TempDir()
+		trust = machinetrust.Files{Bundle: filepath.Join(dir, "bundle.pem"), CellCA: filepath.Join(dir, "cell-ca.pem")}
+		if err := os.WriteFile(trust.Bundle, append(append(roots, '\n'), cellCA.PEM...), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(trust.CellCA, cellCA.PEM, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		injectorPolicies = policy.NewStore(time.Now)
+		inj := &injector.Injector{Policies: injectorPolicies, CA: cellCA.Cert, CAKey: cellCA.Key, TrustedProxies: []string{"127.0.0.1"},
+			Log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})).With("component", "injector")}
+		l, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ictx, stop := context.WithCancel(context.Background())
+		t.Cleanup(stop)
+		go func() { _ = inj.Serve(ictx, l) }()
+		injectorAddr = l.Addr().String()
+	}
+	s := open(t, func(f *microvm.Firecracker) {
+		f.ObserverTLSDir, f.MaxMemoryMB, f.MaxCPUs, f.DataGB = tlsDir, memMB, cpus, envInt("KODY_E2E_KODUSAI_DATA_GB", 40)
+		f.Trust = trust
+	})
+	var egressFlags []string
+	if inspect {
+		egressFlags = []string{"-injector-addr", injectorAddr}
+	}
+	e := startEgress(t, s.Place.Egress().String(), egressFlags...)
+	// Without inspection the claims get the recommended hosts as the hub's
+	// allowlist. With it the cell adds them itself (agent.RecommendedOn), as
+	// a product cell does: a host the hub names is a full-access approval,
+	// which the cell never inspects.
+	acquireAllow := hosts
+	egress := agentEgress{e: e, base: hosts}
+	if inspect {
+		egress, acquireAllow = agentEgress{e: e, rules: &agent.EgressRules{Inspect: netguard.RecommendedInspectRules(), Build: agent.BuildPassthroughHosts(true, "")}, injector: injectorPolicies}, nil
+	}
 	stamp := time.Now().Format("150405")
 	orgID, envID := "org-fc", "env-kodusai-"+stamp
 	t.Cleanup(func() {
@@ -167,8 +226,8 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 			return git.URL + "/repos/o/kr-kodus-ai/tarball/" + acq.Sha, nil
 		},
 		Extractor: tarball.InProcessExtractor{}, Revoker: gitsource.GitHub{APIBase: git.URL},
-		OrgKey:  func(org string) (string, error) { return "microvm-" + org, nil },
-		Egress:  agentEgress{e: e, base: hosts},
+		OrgKey: func(org string) (string, error) { return "microvm-" + org, nil },
+		Egress: egress, CellTrust: inspect, InspectEgress: inspect,
 		WorkDir: t.TempDir(), Log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
 	})
 	if err != nil {
@@ -238,7 +297,7 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 				{Service: "webhooks", Port: 3332, Kind: protocol.ExposeKindHTTP},
 			},
 			Recipe:        &protocol.ClaimAcquireBodyRecipe{Path: ".kodus/workspace.runtime.yaml", Content: recipeContent},
-			HardExpiresAt: protocol.FormatTime(time.Now().Add(44 * time.Minute)), EgressAllow: hosts,
+			HardExpiresAt: protocol.FormatTime(time.Now().Add(44 * time.Minute)), EgressAllow: acquireAllow,
 			Size: &protocol.MachineSize{MemoryMb: int64(memMB), Cpus: int64(cpus)},
 		}
 		start := time.Now()
@@ -262,11 +321,14 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 	release := func(claim string) {
 		_ = hub.Send(context.Background(), cellID, claim, &protocol.ClaimReleaseBody{})
 	}
-	call := func(claim, method, path, body string) *protocol.ProbeResultHTTP {
+	// tryCall is call that answers nil while the service does not answer
+	// (a VM still paging its memory in after a restore).
+	var tryCall func(claim, method, path, body string) *protocol.ProbeResultHTTP
+	probeOnce := func(claim, method, path, body string, timeoutMs int64) *protocol.StepResultBody {
 		t.Helper()
 		step := hubclient.NewID()
 		spec := &protocol.HTTPProbe{
-			Target: protocol.ProbeTarget{Service: "api", Port: 3001}, Method: protocol.HTTPMethod(method), Path: path, TimeoutMs: 30_000,
+			Target: protocol.ProbeTarget{Service: "api", Port: 3001}, Method: protocol.HTTPMethod(method), Path: path, TimeoutMs: timeoutMs,
 		}
 		if body != "" {
 			spec.Body = &body
@@ -286,11 +348,22 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r := ev.Body.(*protocol.StepResultBody)
+		return ev.Body.(*protocol.StepResultBody)
+	}
+	call := func(claim, method, path, body string) *protocol.ProbeResultHTTP {
+		t.Helper()
+		r := probeOnce(claim, method, path, body, 30_000)
 		if r.Executor != protocol.ExecutorObserver || r.Probe == nil || r.Probe.HTTP == nil {
 			t.Fatalf("probe %s %s on %s: %+v", method, path, claim, r)
 		}
 		return r.Probe.HTTP
+	}
+	tryCall = func(claim, method, path, body string) *protocol.ProbeResultHTTP {
+		t.Helper()
+		if r := probeOnce(claim, method, path, body, 5_000); r.Probe != nil && r.Probe.HTTP != nil {
+			return r.Probe.HTTP
+		}
+		return nil
 	}
 	step := func(claim string, body any, id string) *protocol.StepResultBody {
 		t.Helper()
@@ -390,6 +463,23 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 		t.Fatalf("round: %+v", round)
 	}
 	lap("PR round snapshot", start)
+	// A VM restored from its round pages its memory in lazily: the first
+	// request after a restore waits for the pages it touches. answered waits
+	// for the API's health, timed apart from the probe that follows.
+	answered := func(what string, since time.Time) {
+		t.Helper()
+		for i := 0; ; i++ {
+			if h := tryCall(prClaim, "GET", "/health/simple", ""); h != nil && h.Status == 200 {
+				lap(what, since)
+				return
+			}
+			if i > 60 {
+				t.Fatalf("%s: the api never answered", what)
+			}
+			time.Sleep(time.Second)
+		}
+	}
+	answered("PR round snapshot to the api's first answer", start)
 	if first := call(prClaim, "POST", "/auth/signUp", validSignup); first.Status != 201 {
 		t.Fatalf("the first signup: %d", first.Status)
 	}
@@ -402,6 +492,8 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 		if r := step(prClaim, &protocol.MachineResetBody{StepID: id, Snapshot: protocol.Snapshot{Kind: protocol.SnapshotKindMemory, Ref: round.Snapshot.ID}}, id); r.Exec != nil {
 			t.Fatalf("memory reset %d: %+v", i, r.Exec)
 		}
+		lap(fmt.Sprintf("PR memory reset %d, the step", i), start)
+		answered(fmt.Sprintf("PR memory reset %d to the api's first answer", i), start)
 		if got := call(prClaim, "POST", "/auth/signUp", validSignup); got.Status != 201 {
 			t.Fatalf("after memory reset %d the signup answered %d: the user from before the reset is still there", i, got.Status)
 		}

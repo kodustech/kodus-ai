@@ -130,7 +130,7 @@ func TestARegistryIsOnTheClaimNetworkBeforeItStarts(t *testing.T) {
 
 // A cold push writes the build's layers through the registry's page cache,
 // charged to its cgroup until written back: a registry with no ceiling of its
-// own gets one a push of hundreds of megabytes fits in (Run ca3f0d11: a
+// own gets one a push of hundreds of megabytes fits in (a
 // 256m registry was killed mid-push and the build read "connection refused").
 func TestARegistryGetsACeilingAColdPushFitsIn(t *testing.T) {
 	var create string

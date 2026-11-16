@@ -202,7 +202,7 @@ func (b *projectBoot) build() error {
 	// again with the images' real names, but a file the cell refuses (a
 	// container_name, an extends, an env file that is not in the checkout)
 	// used to be refused only there, after every image was built: immich on
-	// cell-dev-1 built for 875 s and then was refused.
+	// the dev cell built for 875 s and then was refused.
 	pre := b.opts
 	pre.Built = make(map[string]string, len(builds))
 	for _, bl := range builds {

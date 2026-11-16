@@ -29,7 +29,7 @@ var assertionAllowed = map[string]string{
 // capabilities"): no production file looks for one by asserting a value to
 // an interface of the module, or to an anonymous interface. Such an assertion
 // on a wrapped driver (driver.Observed) used to turn memory admission off
-// without a word on cell-dev-1.
+// without a word on the dev cell.
 func TestNoCapabilityIsDiscoveredByTypeAssertion(t *testing.T) {
 	root := filepath.Join("..", "..")
 	fset := token.NewFileSet()

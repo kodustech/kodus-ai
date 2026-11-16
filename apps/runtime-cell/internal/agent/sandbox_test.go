@@ -286,7 +286,7 @@ func (h *harness) machineOf(claimID string) fake.Machine {
 
 // A sandbox opened with no size reserves the sandbox default, not the Run
 // size. It used to get the cell's default Run size: its machine's memory limit
-// was -gvisor-mem-limit (12 GB on cell-dev-1) while the cell counted 2 GB, and
+// was -gvisor-mem-limit (12 GB on the dev cell) while the cell counted 2 GB, and
 // the hub, told nothing, admitted it at 12 GB.
 func TestASandboxOpenedWithNoSizeReservesTheSandboxDefaultNotTheRunSize(t *testing.T) {
 	h := newHarness(t, withMemory(14_745), withSandboxSize(2_048, 2), withSandboxes(t.TempDir(), 0))

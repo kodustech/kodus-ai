@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v3"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/guest"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
@@ -504,5 +507,252 @@ func TestABootThatFillsItsDataDiskIsDiskCapacity(t *testing.T) {
 	df(20<<30, 10<<20)
 	if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte("services: {app: {image: a}}\n"), ProjectDir: filepath.Join(src, "repo")}); !errors.Is(err, driver.ErrDiskCapacity) || !strings.Contains(err.Error(), "ceiling (-firecracker-data-gb)") {
 		t.Fatalf("a full disk at the ceiling: %v", err)
+	}
+}
+
+// testCellCA is a cell CA as a PEM file holds it.
+const testCellCA = "-----BEGIN CERTIFICATE-----\nTESTCELLCAxyz\n-----END CERTIFICATE-----\n"
+
+// trustingDriver is envDriver with the cell's trust files, a fake buildkitd
+// and buildctl on the VM's PATH (the cell builder's version unless stock),
+// and the VM's data mount on a host directory.
+func trustingDriver(t *testing.T, stock bool) (*Driver, driver.MachineRef, string, string, string) {
+	t.Helper()
+	d, ref, root, bin := envDriver(t)
+	trust := t.TempDir()
+	_ = os.WriteFile(filepath.Join(trust, "b.pem"), []byte("bundle"), 0o644)
+	_ = os.WriteFile(filepath.Join(trust, "c.pem"), []byte(testCellCA), 0o644)
+	d.cfg.Trust = machinetrust.Files{Bundle: filepath.Join(trust, "b.pem"), CellCA: filepath.Join(trust, "c.pem")}
+	d.cfg.vmData = t.TempDir()
+	_ = os.WriteFile(d.vmBuilder().system, []byte("-----BEGIN CERTIFICATE-----\nPUBLICROOT\n-----END CERTIFICATE-----\n"), 0o644)
+	version := "buildkitd github.com/moby/buildkit v0.34.0-kodus.2 f5b59a1f"
+	if stock {
+		version = "buildkitd github.com/moby/buildkit v0.34.0 f5b59a1f"
+	}
+	started := filepath.Join(bin, "buildkitd-started")
+	fakes := map[string]string{
+		// buildkitd answers its version, and records a start.
+		"buildkitd": "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '" + version + "'; exit 0; fi\necho \"SSL_CERT_FILE=$SSL_CERT_FILE $*\" >> " + started + "\n",
+		// buildctl answers once buildkitd started.
+		"buildctl": "#!/bin/sh\ntest -f " + started + "\n",
+		"setsid":   "#!/bin/sh\nexec \"$@\"\n",
+		// docker records what it ran; buildx knows the builder once made.
+		"docker": "#!/bin/sh\necho \"$PWD $*\" >> " + filepath.Join(bin, "ran") + "\n" +
+			"if [ \"$1 $2\" = 'buildx inspect' ]; then test -f " + filepath.Join(bin, "builder") + "; exit; fi\n" +
+			"if [ \"$1 $2\" = 'buildx create' ]; then touch " + filepath.Join(bin, "builder") + "; fi\n",
+	}
+	for name, body := range fakes {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(src, "repo"), 0o755)
+	if err := d.Upload(context.Background(), ref, src, "workspace", nil); err != nil {
+		t.Fatal(err)
+	}
+	return d, ref, root, bin, filepath.Join(src, "repo")
+}
+
+// A claim whose machines trust the cell CA builds with the VM's own builder,
+// the cell builder's buildkitd, whose RUN steps get the bundle: the VM
+// dockerd's stock BuildKit keeps each base image's trust store, so a
+// registry the cell inspects refused every install (bun on kodus-ai). The
+// builder gets the bundle and its configuration, starts once, and compose
+// builds with it before it brings the project up from those images.
+func TestABuildOfAClaimThatTrustsTheCellCAUsesTheVMBuilder(t *testing.T) {
+	d, ref, root, bin, project := trustingDriver(t, false)
+	ctx := context.Background()
+	compose := []byte("services: {app: {build: ., ports: ['3000']}, db: {image: postgres}}\n")
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: compose, ProjectDir: project, CellTrust: true}); err != nil {
+		t.Fatal(err)
+	}
+	b := d.vmBuilder()
+	if got, _ := os.ReadFile(b.bundle()); string(got) != "bundle" {
+		t.Fatalf("the builder's bundle %q", got)
+	}
+	conf, _ := os.ReadFile(b.conf())
+	for _, want := range []string{"execCABundle = " + fmt.Sprintf("%q", b.bundle()), "[worker.containerd]\n  enabled = false", fmt.Sprintf("%q", b.sock())} {
+		if !strings.Contains(string(conf), want) {
+			t.Fatalf("buildkitd.toml lacks %q:\n%s", want, conf)
+		}
+	}
+	started, _ := os.ReadFile(filepath.Join(bin, "buildkitd-started"))
+	if !strings.Contains(string(started), "SSL_CERT_FILE="+b.bundle()+" --config "+b.conf()) {
+		t.Fatalf("buildkitd started as %q", started)
+	}
+	ran, _ := os.ReadFile(filepath.Join(bin, "ran"))
+	p := "compose -p " + projectName(ref) + " -f .kodus-compose.yml "
+	want := []string{
+		"buildx create --name kodus --driver remote " + b.sock(),
+		p + "build --builder kodus",
+		p + "up -d --no-build --wait --wait-timeout 540 --quiet-pull",
+	}
+	at := 0
+	for _, w := range want {
+		i := strings.Index(string(ran)[at:], w)
+		if i < 0 {
+			t.Fatalf("ran %q, want %q in that order", ran, want)
+		}
+		at += i + len(w)
+	}
+	if strings.Contains(string(ran), "up -d --build") {
+		t.Fatalf("compose built with the VM dockerd's BuildKit too: %q", ran)
+	}
+	if _, err := os.Stat(filepath.Join(root, "workspace", "repo", cellFilesDir, vmBuilderConfigFile)); err != nil {
+		t.Fatalf("the builder's configuration is not with the cell's files: %v", err)
+	}
+	// A second Up on the same VM (a restored template's builder runs) starts
+	// no second buildkitd and makes no second builder.
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: compose, ProjectDir: project, CellTrust: true}); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(filepath.Join(bin, "buildkitd-started")); strings.Count(string(again), "--config") != 1 {
+		t.Fatalf("buildkitd started again: %q", again)
+	}
+	if ran, _ := os.ReadFile(filepath.Join(bin, "ran")); strings.Count(string(ran), "buildx create") != 1 {
+		t.Fatalf("the builder was made again: %q", ran)
+	}
+	// The VM's own trust store (its dockerd's pulls, buildx's token fetch)
+	// holds the cell CA once, after the public roots it had.
+	if store, _ := os.ReadFile(b.system); strings.Count(string(store), "TESTCELLCAxyz") != 1 || !strings.HasPrefix(string(store), "-----BEGIN CERTIFICATE-----\nPUBLICROOT") {
+		t.Fatalf("the VM's trust store after two Ups:\n%s", store)
+	}
+}
+
+// A kit whose environment root still has the stock buildkitd cannot build
+// for a claim that trusts the cell CA: the boot fails saying so, before
+// compose builds anything with a builder whose RUN steps would refuse the
+// injector's leaf.
+func TestATrustingBuildOnAKitWithoutTheCellsBuildKitFailsNamingIt(t *testing.T) {
+	d, ref, _, bin, project := trustingDriver(t, true)
+	_, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services: {app: {build: .}}\n"), ProjectDir: project, CellTrust: true})
+	if err == nil || !errors.Is(err, driver.ErrWorkloadBoot) || !strings.Contains(err.Error(), "no Kodus BuildKit") {
+		t.Fatalf("up on a stock kit: %v", err)
+	}
+	if ran, _ := os.ReadFile(filepath.Join(bin, "ran")); strings.Contains(string(ran), "compose") {
+		t.Fatalf("compose ran: %q", ran)
+	}
+}
+
+// A claim without the cell's trust, or a project that builds nothing, keeps
+// the VM dockerd's build: nothing of the VM builder runs.
+func TestAClaimWithoutTrustOrWithoutABuildKeepsTheVMsDockerBuild(t *testing.T) {
+	for name, tc := range map[string]struct {
+		trust   bool
+		compose string
+	}{
+		"no trust": {false, "services: {app: {build: .}}\n"},
+		"no build": {true, "services: {app: {image: a}}\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d, ref, _, bin, project := trustingDriver(t, false)
+			if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte(tc.compose), ProjectDir: project, CellTrust: tc.trust}); err != nil {
+				t.Fatal(err)
+			}
+			ran, _ := os.ReadFile(filepath.Join(bin, "ran"))
+			if strings.Contains(string(ran), "buildx") || !strings.Contains(string(ran), "up -d --build") {
+				t.Fatalf("ran %q", ran)
+			}
+			if _, err := os.Stat(filepath.Join(bin, "buildkitd-started")); err == nil {
+				t.Fatal("the VM builder started")
+			}
+			store, _ := os.ReadFile(d.vmBuilder().system)
+			if got := strings.Contains(string(store), "TESTCELLCAxyz"); got != tc.trust {
+				t.Fatalf("the VM's trust store holds the cell CA: %v, the claim trusts it: %v", got, tc.trust)
+			}
+		})
+	}
+}
+
+// Every build in the VM gets the mirror's build args, the long form made
+// from a context string, the file's own args kept and winning over the
+// mirror's; the cell's file has no mirror args when the cell has none.
+func TestEveryBuildInTheVMGetsTheMirrorsBuildArgs(t *testing.T) {
+	mirror, err := buildmirror.At("http://mirror.cell.internal:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	compose := []byte(`services:
+  short: {build: ./a}
+  mapped: {build: {context: ./b, args: {npm_config_registry: "https://npm.corp.example/", NODE_ENV: production}}}
+  listed: {build: {context: ./c, args: ["GOPROXY=direct", "EMPTY"]}}
+  image: {image: x}
+`)
+	out, builds, err := renderForVM(compose, vmFiles{}, mirror)
+	if err != nil || !builds {
+		t.Fatalf("builds %v err %v", builds, err)
+	}
+	var doc struct {
+		Services map[string]struct {
+			Build *struct {
+				Context string            `yaml:"context"`
+				Args    map[string]string `yaml:"args"`
+			} `yaml:"build"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(out, &doc); err != nil {
+		t.Fatal(err)
+	}
+	s := doc.Services
+	if s["short"].Build == nil || s["short"].Build.Context != "./a" || s["short"].Build.Args["npm_config_registry"] != mirror.NPM || s["short"].Build.Args["GOPROXY"] != mirror.GoProxy {
+		t.Fatalf("short: %+v", s["short"].Build)
+	}
+	if a := s["mapped"].Build.Args; a["npm_config_registry"] != "https://npm.corp.example/" || a["NODE_ENV"] != "production" || a["PIP_INDEX_URL"] != mirror.PyPI {
+		t.Fatalf("mapped: %v", a)
+	}
+	if a := s["listed"].Build.Args; a["GOPROXY"] != "direct" || a["npm_config_registry"] != mirror.NPM {
+		t.Fatalf("listed: %v", a)
+	}
+	if s["image"].Build != nil {
+		t.Fatalf("an image service got a build: %+v", s["image"].Build)
+	}
+	out, _, err = renderForVM([]byte("services: {app: {build: .}}\n"), vmFiles{}, buildmirror.Mirror{})
+	if err != nil || strings.Contains(string(out), "args") {
+		t.Fatalf("no mirror: %s %v", out, err)
+	}
+	if _, builds, _ := renderForVM([]byte("services: {app: {image: a}}\n"), vmFiles{}, mirror); builds {
+		t.Fatal("a project that builds nothing reported a build")
+	}
+}
+
+// The VMs reach the mirror's port on the egress address only when the cell
+// serves one.
+func TestTheVMsReachTheMirrorsPortOnlyWithAMirror(t *testing.T) {
+	if p, err := egressTCPPorts(buildmirror.Mirror{}); err != nil || !slices.Equal(p, []uint16{53, 80, 443}) {
+		t.Fatalf("no mirror: %v %v", p, err)
+	}
+	m, _ := buildmirror.At("http://mirror.cell.internal:8080")
+	if p, err := egressTCPPorts(m); err != nil || !slices.Equal(p, []uint16{53, 80, 443, 8080}) {
+		t.Fatalf("mirror: %v %v", p, err)
+	}
+}
+
+// The agent brings a project up again after a reset with the same file: it
+// comes up from the images its first Up built, and builds nothing (a claim
+// past its install reaches no registry to resolve a build's base images or
+// frontend from). Another file builds again.
+func TestAnUpAgainWithTheSameFileBuildsNothing(t *testing.T) {
+	d, ref, _, bin, project := trustingDriver(t, false)
+	ctx := context.Background()
+	up := func(compose string) string {
+		t.Helper()
+		_ = os.Remove(filepath.Join(bin, "ran"))
+		if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte(compose), ProjectDir: project, CellTrust: true}); err != nil {
+			t.Fatal(err)
+		}
+		ran, _ := os.ReadFile(filepath.Join(bin, "ran"))
+		return string(ran)
+	}
+	file := "services: {app: {build: .}}\n"
+	if first := up(file); !strings.Contains(first, "build --builder kodus") {
+		t.Fatalf("the first Up did not build: %q", first)
+	}
+	again := up(file)
+	if strings.Contains(again, " build") || strings.Contains(again, "--build") || !strings.Contains(again, "up -d --no-build --wait") {
+		t.Fatalf("the Up after a reset built again: %q", again)
+	}
+	if changed := up("services: {app: {build: ., environment: {X: '1'}}}\n"); !strings.Contains(changed, "build --builder kodus") {
+		t.Fatalf("another compose file did not build: %q", changed)
 	}
 }

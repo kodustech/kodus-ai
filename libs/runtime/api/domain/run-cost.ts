@@ -67,7 +67,7 @@ export interface CellHostPrice {
 
 /**
  * On-demand Linux list prices of the hosts a shared cell runs on, by instance
- * type. Same price in us-east-1 and us-east-2 (Ohio, where cell-dev-1 runs).
+ * type. Same price in us-east-1 and us-east-2 (Ohio, where the dev cell runs).
  * Source: AWS EC2 On-Demand pricing (aws.amazon.com/ec2/pricing/on-demand),
  * checked 2026-11-07 (instances.vantage.sh/aws/ec2/t4g.xlarge: US$ 0.1344/h,
  * 4 vCPU, 16 GiB). A cell named in RUNTIME_CELL_PRICES with only its

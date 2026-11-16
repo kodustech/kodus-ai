@@ -9,7 +9,7 @@ signed with cosign, whose only content is `/kit`:
 | `bin/firecracker`, `bin/jailer` | the VMM and its jailer, the same release | Firecracker v1.18.0 release tarball, by sha256 per arch |
 | `kernel/vmlinux`, `kernel/config` | the guest kernel and its config | Linux 6.1.188 from kernel.org, by sha256, built with Firecracker's `microvm-kernel-ci-*-6.1.config` (v1.18.0), unmodified |
 | `rootfs/sandbox.ext4` | a code sandbox's root, read-only in the VM | the sandbox tool image (`sandbox-image/`), plus the guest agent as init |
-| `rootfs/environment.ext4` | an environment's root | `environment.Dockerfile`: Ubuntu 24.04, docker.io 29.1.3, Compose, BuildKit v0.34.0, plus the guest agent |
+| `rootfs/environment.ext4` | an environment's root | `environment.Dockerfile`: Ubuntu 24.04, docker.io 29.1.3, Compose, buildx, the cell builder's buildkitd (BuildKit v0.34.0 with `builder-image/`'s patches) and the release's buildctl, plus the guest agent |
 | `manifest.json` | every file above by path, size and sha256 | `kody-kit manifest` |
 | `DIGEST` | `sha256:` of `manifest.json` | the value the cell pins |
 | `LICENSES/` | Firecracker's LICENSE, NOTICE, THIRD-PARTY; the kernel's COPYING | the release tarball and the kernel tree |
@@ -63,7 +63,7 @@ on btrfs (machine roots are copy-on-write clones of the kit's images).
 |---|---|---|
 | Firecracker, jailer | Apache-2.0 | release binaries, unmodified, with their NOTICE and THIRD-PARTY |
 | Linux kernel | GPL-2.0-only | a separate binary (`kernel/vmlinux`), never linked with anything else in the kit |
-| BuildKit (buildkitd, buildctl) | Apache-2.0 | release binaries in the environment base |
+| BuildKit (buildkitd, buildctl) | Apache-2.0 | buildkitd built by `builder-image/` (the release commit plus its two patches), buildctl from the release, in the environment base |
 | Docker, containerd, runc, Compose | Apache-2.0 | Ubuntu packages in the environment base |
 | The guest agent and kody-kit | the Kodus repository's | built from this repository |
 | The rest of each base image's userland (Ubuntu 24.04 and Debian packages: bash, coreutils, iptables, git, e2fsprogs, glibc and others) | their own: GPL-2.0, GPL-3.0, LGPL among them | unmodified distribution packages; their sources are in the Ubuntu and Debian archives at the versions the image lists (`dpkg -l` inside it) |

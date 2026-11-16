@@ -1,0 +1,68 @@
+# apps/runtime/src/worker/setup
+
+The environment setup: boot the default-branch head the product resolved with the recipe the product read (or one Kody writes), check that the exposed app answers, bake the image Runs boot from, fill the warm pool, release, and record every step and blocker for Environment Health. It runs in the runtime-worker as the body of the `runtimeEnvironmentSetup` DBOS workflow (`worker/dbos/run-engine.service.ts` `startSetup`, queue `runtime-setups`); see [environment-setup.md](../../../../../docs/runtime/environment-setup.md) and architecture.md "An environment setup".
+
+## Owns
+- The workflow body: `environment-setup.service.ts` `EnvironmentSetupService.run` (load, checks before boot, commit, recipe, boots and repairs, settle, learn). A command delivered twice answers the first record.
+- The phases, each a function over the setup's scope (`setup-scope.ts` `SetupScope`, `SetupRun`, `openSetup`, `atCommit`, `envFor`, `settle`): `resolve-ref.ts` (`refusedBeforeBoot`, `resolveRef`), `resolve-recipe.ts` (`resolveRecipe`: the product's recipe, Kodus's inferred one, the last authored recipe kept or reused, or Kody's author), `boot-once.ts` (`bootOnce`: acquire with capacity wait, progress, ready check, `bake`, `fillPool`, failure bundle and diagnostic hold), `author-repair.ts` (`authorRepair`: Kody rewrites a recipe that failed on its own account, up to `SETUP_AUTHOR_REPAIRS_DEFAULT`).
+- What a setup learns: `learn-from-failure.ts` `learnFromSetup` (a clean boot after a blocked setup becomes a lesson) and `learn-loop.ts` `SetupLearnLoop` (one typed recipe change per hypothesis, booted on its own clean claim, at most `MAX_HYPOTHESES_PER_BLOCKER` per blocker signature).
+- The record's journal: `setup-journal.ts` `SetupJournal` (every clock read `clock:<n>` and save `record:<n>` is a step), `countSetupOutcome`.
+- Fresh download tokens for later boots: `setup-tokens.ts` (`askTokens`, `learnTokens`; the cell revokes a token after its first download).
+- Reading failures: `recipe-failure.ts` (`recipeFailureOf`, `repairFailureOf`, `lastAuthoredRecipe`), `boot-phases.ts` (`setupBootPhases`, `recipeBoundTimeout`), `blocker-message.ts` (`blockerMessage`, `causeLine`).
+- Store ports: `environment-setup.store.ts` `EnvironmentSetupStore`, `lesson.store.ts` `LessonStore`; `testing.ts` holds the in-memory doubles.
+
+## Does not own
+- The Pg stores: `libs/runtime/run/adapters/pg-environment-setup.store.ts`, `libs/runtime/blockers/pg-lesson.store.ts`. The record's shape: `libs/runtime/run`. Blocker catalog and hypotheses: `libs/runtime/blockers`.
+- Requesting a setup and reading its recipe at the commit: the API (`libs/runtime/api/application/runtime-setup-requester.service.ts`). Kody's recipe author itself: `libs/runtime/api/application/recipe-author/`, reached through `worker/agent` `HttpRecipeAuthorClient`.
+- The acquire, ready check and lease renewal: `worker/env`. The bake and pool on the cell: `apps/runtime-cell`.
+
+## Rules and limits
+- Deterministic workflow code: every I/O, clock read and save is a `step`, ids derive from the command key ([apps/runtime/AGENTS.md](../../../AGENTS.md) "Workflow code (DBOS)"). The step ids and their order are the durable contract (`environment-setup.step-ids.spec.ts`); changing them needs a new `RUNTIME_RELEASE_VERSION`.
+- S-52: the bake is asked only for the default-branch head the product checked (never the dev override `RUNTIME_SETUP_DEV_SHA`), only from the setup claim that booted it; the pool is filled only from that bake.
+- The setup's repo token is sealed to the command `key` and opened only in the acquire ([README "Sealed tokens"](../../../README.md#sealed-tokens)).
+- A restored claim is renewed before health or bake work; a renewal failure blocks the setup without paid recipe retries (`checkClaimLease`).
+- No repair and no extra download under a diagnostic hold; a cancelled setup neither settles nor learns, and provisioning already sent to a hub is not aborted.
+- The learn loop never changes the default-branch recipe and never fails the setup; it runs only with the product's gateway (`RUNTIME_LLM_GATEWAY_URL`).
+- Gap: `learn-loop.ts` declares its own `SetupStepRunner` type, a copy of the one in `setup-scope.ts`.
+
+## Where new code goes
+- A new step or phase: its own function over `SetupRun`, called from `run` or `bootOnce`, the new ids in `environment-setup.step-ids.spec.ts`, and a new release version.
+- A new blocker the setup records: its kind and card in `libs/runtime/blockers/catalog.ts`; the message through `blockerMessage`.
+- A new setup setting: `shared/config.ts` `loadSetupConfig`, `setupOptionsFrom`, and the README table.
+
+## Tests
+- `API_NODE_ENV=test npx jest apps/runtime/src/worker/setup` (in-memory stores, fake environment, recorded gateway).
+- The real workflow on Postgres: `worker/dbos/setup-workflow.integration.spec.ts` (`RUNTIME_IT_DATABASE_URL`, `--runInBand`).
+
+<!-- module-map:start (generated by scripts/runtime/module-docs.mjs; do not edit) -->
+
+## Module map
+
+Files (16, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `testing.ts`
+
+Imports these Runtime modules:
+
+- [`apps/runtime/src/shared`](../../shared/AGENTS.md)
+- [`apps/runtime/src/shared/admission`](../../shared/admission/AGENTS.md)
+- [`apps/runtime/src/worker`](../AGENTS.md)
+- [`apps/runtime/src/worker/agent`](../agent/AGENTS.md)
+- [`apps/runtime/src/worker/env`](../env/AGENTS.md)
+- [`apps/runtime/src/worker/run`](../run/AGENTS.md)
+- [`libs/runtime/api/domain`](../../../../../libs/runtime/api/domain/AGENTS.md)
+- [`libs/runtime/blockers`](../../../../../libs/runtime/blockers/AGENTS.md)
+- [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
+- [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
+- [`libs/runtime/gate`](../../../../../libs/runtime/gate/AGENTS.md)
+- [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
+- [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
+- [`libs/runtime/run/adapters`](../../../../../libs/runtime/run/adapters/AGENTS.md)
+- [`libs/runtime/telemetry`](../../../../../libs/runtime/telemetry/AGENTS.md)
+
+Imported by:
+
+- [`apps/runtime/src/testing`](../../testing/AGENTS.md)
+- [`apps/runtime/src/worker`](../AGENTS.md)
+- [`apps/runtime/src/worker/commands`](../commands/AGENTS.md)
+- [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
+
+<!-- module-map:end -->

@@ -158,7 +158,7 @@ services:
 
 func TestLoadReadsKodysFilesFromTheCheckoutWhateverTheRepositorysDo(t *testing.T) {
 	kody := "services:\n  app:\n    build: { context: ., dockerfile: .kodus/Dockerfile }\n    env_file: [.kodus/app.env]\n    volumes: [\"./seed:/seed\"]\n"
-	// Kody's file alone: the recipe of a repository with no compose file (directus on cell-dev-1).
+	// Kody's file alone: the recipe of a repository with no compose file (directus on the dev cell).
 	dir := writeFiles(t, map[string]string{".kodus/compose.yaml": kody})
 	p, err := Load(dir, []string{".kodus/compose.yaml"})
 	if err != nil {

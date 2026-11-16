@@ -13,7 +13,7 @@ import (
 )
 
 // budgetDriver is the fake driver with a memory budget: every claim boots
-// at 12 GB and is ready at 2 GB, the cell-dev-1 numbers.
+// at 12 GB and is ready at 2 GB, the dev cell numbers.
 type budgetDriver struct{ *fake.Driver }
 
 func (budgetDriver) ClaimMemory(size driver.ClaimSize) driver.ClaimMemory {

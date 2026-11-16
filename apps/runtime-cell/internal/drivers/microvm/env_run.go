@@ -16,6 +16,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/composecmd"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -95,18 +96,26 @@ func (d *Driver) filesFor(req driver.UpRequest) (vmFiles, error) {
 // renderForVM is the cell's compose file as the claim's VM runs it: every
 // container port a service lists without a host port published on the VM
 // at the same number (the observer finds it there after every up, reset
-// and restore; ports the file maps stay as they are), and the cell's files
-// bound read-only into every service with their env over the file's.
-func renderForVM(composeFile []byte, f vmFiles) ([]byte, error) {
+// and restore; ports the file maps stay as they are), the cell's files
+// bound read-only into every service with their env over the file's, and
+// the mirror's build args added to every build (the project's own win).
+// builds reports whether any service builds an image.
+func renderForVM(composeFile []byte, f vmFiles, mirror buildmirror.Mirror) (out []byte, builds bool, err error) {
 	var doc map[string]any
 	if err := yaml.Unmarshal(composeFile, &doc); err != nil {
-		return nil, fmt.Errorf("microvm: compose file: %w", err)
+		return nil, false, fmt.Errorf("microvm: compose file: %w", err)
 	}
 	services, _ := doc["services"].(map[string]any)
 	for _, raw := range services {
 		svc, ok := raw.(map[string]any)
 		if !ok {
 			continue
+		}
+		if b, ok := svc["build"]; ok && b != nil {
+			builds = true
+			if svc["build"], err = withMirrorArgs(b, mirror); err != nil {
+				return nil, false, err
+			}
 		}
 		ports, _ := svc["ports"].([]any)
 		for i, p := range ports {
@@ -152,7 +161,56 @@ func renderForVM(composeFile []byte, f vmFiles) ([]byte, error) {
 			svc["environment"] = env
 		}
 	}
-	return yaml.Marshal(doc)
+	out, err = yaml.Marshal(doc)
+	return out, builds, err
+}
+
+// withMirrorArgs is a service's build section with the mirror's build args
+// (buildmirror.Mirror.Args): a context given as a string becomes the long
+// form, and args given as a list or a map keep every value of the file's.
+// With no mirror the section stays as the file wrote it.
+func withMirrorArgs(build any, mirror buildmirror.Mirror) (any, error) {
+	if mirror == (buildmirror.Mirror{}) {
+		return build, nil
+	}
+	var b map[string]any
+	switch v := build.(type) {
+	case string:
+		b = map[string]any{"context": v}
+	case map[string]any:
+		b = v
+	default:
+		return nil, fmt.Errorf("microvm: a build section is neither a context nor a map")
+	}
+	own := map[string]string{}
+	switch a := b["args"].(type) {
+	case nil:
+	case map[string]any:
+		for k, v := range a {
+			if v == nil {
+				own[k] = ""
+				continue
+			}
+			own[k] = fmt.Sprint(v)
+		}
+	case []any:
+		for _, kv := range a {
+			k, v, _ := strings.Cut(fmt.Sprint(kv), "=")
+			own[k] = v
+		}
+	default:
+		return nil, fmt.Errorf("microvm: a build's args are neither a list nor a map")
+	}
+	args := mirror.Args(own)
+	if len(args) == 0 {
+		return b, nil
+	}
+	out := make(map[string]any, len(args))
+	for k, v := range args {
+		out[k] = v
+	}
+	b["args"] = out
+	return b, nil
 }
 
 // Targets points each exposed port at the workload VM's address on that

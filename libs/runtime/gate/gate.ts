@@ -201,7 +201,7 @@ export function decideProbe(steps: GateStep[], opts: GateOptions): GateDecision 
     // already differs from the base on every PR round: the verdict rests on
     // that field, never on the masked ones. With an equal status nothing is
     // masked, so a PR-only value that changes per round still reads as
-    // disagreement (Run fb8e4e71, kr-kodus-ai#1).
+    // disagreement (kr-kodus-ai#1).
     const stablyDiffers = (f: string) => !masked.includes(f) && pr.every((s) => s.fields[f] === pr[0].fields[f]) && pr[0].fields[f] !== base[0].fields[f];
     const decisiveChange = [...fields].some((f) => isDecisive(f) && !isVersion(f) && stablyDiffers(f));
     const prOnlyVarying = decisiveChange

@@ -95,7 +95,7 @@ const unresolvedImage = (c: Claim): boolean => !c.manifest.imageId?.trim() || c.
  * the Run holds no bake of the environment (a new or reinstalled cell, or a
  * setup that ran on another one). Nothing pins the two sides to one image, so
  * the Run does not test; it says what is missing and what to do, the setup
- * again, instead of "could not finish, run again" (kr-shop #2 on cell-dev-1).
+ * again, instead of "could not finish, run again" (kr-shop #2 on the dev cell).
  * One side without an image while the other has one is a fault, not this.
  */
 export const ENVIRONMENT_NOT_PREPARED = {
@@ -268,8 +268,8 @@ export const BASE_FIRST_POLL_MS = 1_000;
 /**
  * The base's claim is admitted before the PR's (review P5). A cell's memory
  * admission counts a booting claim at its whole size (the setup's, 12 GB on
- * cell-dev-1), so two sides sent at once race for it: when the PR wins, the
- * base waits for the PR's whole build (kr-shop #6, Run d04c9ed1: 33 s), and
+ * the dev cell), so two sides sent at once race for it: when the PR wins, the
+ * base waits for the PR's whole build (kr-shop #6: 33 s), and
  * the plan, which starts from the base, cannot overlap that build. A base
  * from the bake is ready in seconds, so with the base first the PR waits
  * those seconds and the plan runs beside its build; with room for both the
@@ -851,7 +851,7 @@ async function bootSides(run: RunScope, planEarly: boolean): Promise<BootedSides
     const announced = await mainUp;
     if (!isBlocked(base) && !announced) await progress(deps, req, startedAt.at, 'applying', { bootMs: baseMs, ...(estimates ? { estimates } : {}) });
     // "Booted in" on the comment only when both sides booted: a side the cell answered as blocked (a boot_timeout
-    // after 30 min of a cold build, kr-calcom#2 Run b8efd73b) never booted, whatever time it took to say so.
+    // after 30 min of a cold build, kr-calcom#2) never booted, whatever time it took to say so.
     if (!isBlocked(base) && !isBlocked(pr)) ctx.bootMs = bootMs;
     // The environment's time to ready (Environment Health p50/p90) counts only boots that finished.
     // Each side's boot phases as its cell measured them (claim.ready.timing), for the Run page.
@@ -1090,7 +1090,7 @@ const baseImagePinned = (requested: string, base: Claim) => {
 /**
  * The PR comment moves to "Started main" when main is up, not when both sides
  * are: a PR that builds for minutes left "Starting main and this pull request
- * … usually ~2 min" on the PR all that time (kr-kodus-ai#1, Run 5f89c3ec).
+ * … usually ~2 min" on the PR all that time (kr-kodus-ai#1).
  * Started in the same tick as the two first acquires (bootBoth's onFirst), so
  * the step has a fixed place; true when it published.
  */

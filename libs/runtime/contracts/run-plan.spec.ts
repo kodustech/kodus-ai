@@ -68,7 +68,7 @@ describe('planned HTTP request and assertion contract', () => {
 });
 
 
-// kr-remix#2 (2026-11-13/14, Runs 6ffa2b34, f5147f8d, 89d380fc): the planner wrote a compare field outside the closed
+// kr-remix#2 (2026-11-13/14): the planner wrote a compare field outside the closed
 // list for an HTTP probe of an HTML page ("compare.1: Invalid option"), the whole probe was refused, the round's tokens
 // ran out before a fix and the Run ended partly tested with no probe. What an HTTP probe compares is its floor (status,
 // the JSON body field by field, an HTML page's visible text and markup), so a word outside the list adds nothing.

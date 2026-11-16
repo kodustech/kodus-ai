@@ -321,6 +321,12 @@ func (p *preparation) compose() error {
 	// A project that builds fetches during Up (the builder sits at an
 	// address of the claim network's own Sources): its policy is in
 	// place before, and pushed again by egress with the containers' addresses.
+	// Whether the boot gives the machines the cell CA is settled first, so
+	// that policy already counts them as inspect sources: on a microVM cell
+	// the build leaves from the workload VM itself, and its TLS to an
+	// inspected registry must reach the injector, not be spliced (where a
+	// hello with ECH, bun's, is refused).
+	a.cellTrustFor(p.c, a.cfg.CellTrust)
 	if a.cfg.Egress != nil {
 		if err := a.pushEgressBeforeUp(p.ctx, p.c); err != nil {
 			return blockerErr(protocol.BlockerKindPlatform, "egress_policy", err)

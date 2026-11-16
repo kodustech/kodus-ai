@@ -8,7 +8,7 @@ import { inMemoryRunDeps } from './testing';
 import { RUN_TIMEOUT_MS, runRuntimeRun } from './run-orchestrator';
 
 // A Run whose claims find no room on a cell waits for it (ADR-070): the
-// incident on cell-dev-1 was two PR builds admitted at once, one dying of
+// incident on the dev cell was two PR builds admitted at once, one dying of
 // memory. Now the second waits, queued for capacity, and then runs.
 
 const noRoom = (ahead = 0): Blocked => ({

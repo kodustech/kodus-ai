@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/composecmd"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
@@ -774,10 +775,7 @@ var mirrorHostPort = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?:[
 // buildkitdMirrorConfig makes BuildKit pull docker.io through the mirror, over
 // plain HTTP (the mirror is on the claim network, answered by the resolver).
 func buildkitdMirrorConfig(hostPort string) ([]byte, error) {
-	if !mirrorHostPort.MatchString(hostPort) {
-		return nil, fmt.Errorf("dockercli: registry mirror %q is not host:port", hostPort)
-	}
-	return []byte(fmt.Sprintf("[registry.\"docker.io\"]\n  mirrors = [%q]\n\n[registry.%q]\n  http = true\n", hostPort, hostPort)), nil
+	return buildmirror.RegistryConfig(hostPort)
 }
 
 // buildSecretEnv is the builder's variable that holds the i-th build secret.

@@ -2,10 +2,15 @@ package microvm
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/netip"
 	"path/filepath"
+	"slices"
+	"strconv"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation/firecracker"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kit"
@@ -45,9 +50,33 @@ type Firecracker struct {
 	Trust machinetrust.Files
 	// Log is Config.Log.
 	Log *slog.Logger
+	// Mirror is the cell's mirror as the VMs name it (Config.Mirror); its
+	// port joins what a machine may reach of the egress address.
+	Mirror buildmirror.Mirror
 	// Checks and Runner replace the host probes and commands (tests).
 	Checks *firecracker.Checks
 	Runner hostnet.Runner
+}
+
+// egressTCPPorts are the egress's ports a machine reaches: the resolver and
+// the proxy, and the mirror's when the cell serves one.
+func egressTCPPorts(m buildmirror.Mirror) ([]uint16, error) {
+	ports := []uint16{53, 80, 443}
+	if m.Registry == "" {
+		return ports, nil
+	}
+	_, p, err := net.SplitHostPort(m.Registry)
+	if err != nil {
+		return nil, fmt.Errorf("microvm: mirror %q: %w", m.Registry, err)
+	}
+	n, err := strconv.ParseUint(p, 10, 16)
+	if err != nil || n == 0 {
+		return nil, fmt.Errorf("microvm: mirror port %q", p)
+	}
+	if !slices.Contains(ports, uint16(n)) {
+		ports = append(ports, uint16(n))
+	}
+	return ports, nil
 }
 
 // Stack is an opened microvm cell: the driver and the two ports under it.
@@ -71,7 +100,11 @@ func Open(ctx context.Context, f Firecracker) (Stack, error) {
 	if missing := firecracker.Missing(bcfg, false); len(missing) > 0 {
 		return Stack{}, firecracker.Unavailable(missing)
 	}
-	place, err := hostnet.New(ctx, hostnet.Config{StateDir: filepath.Join(f.StateDir, "net"), Pool: f.Pool, Egress: f.Egress, Runner: f.Runner})
+	tcp, err := egressTCPPorts(f.Mirror)
+	if err != nil {
+		return Stack{}, err
+	}
+	place, err := hostnet.New(ctx, hostnet.Config{StateDir: filepath.Join(f.StateDir, "net"), Pool: f.Pool, Egress: f.Egress, TCPPorts: tcp, Runner: f.Runner})
 	if err != nil {
 		return Stack{}, err
 	}
@@ -84,6 +117,7 @@ func Open(ctx context.Context, f Firecracker) (Stack, error) {
 		CellID: f.CellID, Backend: backend, Place: place, Egress: !f.NoEgress,
 		MemoryMB: f.MemoryMB, CPUs: f.CPUs, MaxMemoryMB: f.MaxMemoryMB, MaxCPUs: f.MaxCPUs, ObserverTLSDir: f.ObserverTLSDir, Trust: f.Trust, Log: f.Log,
 		DataCeilingGB: bcfgDataGB(f.DataGB), NeedsFile: filepath.Join(f.StateDir, "environment-disks.json"),
+		Mirror: f.Mirror,
 	})
 	if err != nil {
 		return Stack{}, err

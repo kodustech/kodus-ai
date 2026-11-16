@@ -548,7 +548,7 @@ export class ClaimService {
      * The memory the claim is admitted at: its size's; for a code sandbox that
      * asks none, the cell's sandbox size (hello capabilities.sandboxSize), else
      * the hub's (RUNTIME_SANDBOX_MEMORY_MB), never the cell's default Run size
-     * (cell-dev-1 admitted a sandbox at 12288 MB while its blank commits 2048).
+     * (the dev cell admitted a sandbox at 12288 MB while its blank commits 2048).
      * Undefined: the cell's default.
      */
     private sizeMbOf(session: CellSession, req: AcquireInput): number | undefined {

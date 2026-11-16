@@ -57,7 +57,7 @@ function setup() {
     return { hub, store, connect, sandbox };
 }
 
-// cell-dev-1 (2026-11-12): 14735 MB allocatable, a Run claim at -gvisor-mem-limit 12g, ready at 2g.
+// the dev cell (2026-11-12): 14735 MB allocatable, a Run claim at -gvisor-mem-limit 12g, ready at 2g.
 const devCellMemory = (committedMb: number) => ({ allocatableMb: 14_735, committedMb, bootMb: 12_288, readyMb: 2_048 });
 const gvisorCapabilities = { backends: ['gvisor'], snapshotMemory: false, nestedDocker: true, kvm: false, arch: 'arm64' };
 
@@ -65,7 +65,7 @@ describe('code sandbox on the hub', () => {
     it('a sandbox opened with no size reserves the sandbox default, not the Run size', async () => {
         const ctx = setup();
         const c = await ctx.connect(['sandbox'], { capabilities: { ...gvisorCapabilities, sandboxSize: { memoryMb: 2_048, cpus: 2 } } });
-        // The open that cell-dev-1 refused: 10639 MB free right after a release, the claim asked 12288.
+        // The open that the dev cell refused: 10639 MB free right after a release, the claim asked 12288.
         await c.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, memory: devCellMemory(4_096) }));
         const { claim } = await ctx.sandbox(c, 'sandbox:s1');
         expect(claim).toMatchObject({ claimId: claimIdFor('org-a', 'sandbox:s1'), cellId: 'cell-a' });

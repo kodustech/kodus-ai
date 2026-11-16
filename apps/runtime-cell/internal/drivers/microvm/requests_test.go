@@ -28,8 +28,18 @@ func TestTheMicroVMDriverHonorsItsRequests(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(trust, "c.pem"), []byte("cellca"), 0o644)
 		d.cfg.Trust = machinetrust.Files{Bundle: filepath.Join(trust, "b.pem"), CellCA: filepath.Join(trust, "c.pem")}
 		bin := t.TempDir()
-		if err := os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\necho \"compose: $*\" >&2\n"), 0o755); err != nil {
-			t.Fatal(err)
+		d.cfg.vmData = t.TempDir()
+		// docker prints; the kit's buildkitd is the cell builder's and
+		// answers once started (a claim that trusts the cell CA builds with
+		// it, build.go).
+		for name, body := range map[string]string{
+			"docker":    "#!/bin/sh\necho \"compose: $*\" >&2\n",
+			"buildkitd": "#!/bin/sh\n[ \"$1\" = --version ] && echo 'buildkitd v0.34.0-kodus.2'\n",
+			"buildctl":  "#!/bin/sh\ntrue\n",
+		} {
+			if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
+				t.Fatal(err)
+			}
 		}
 		roots := map[string]string{} // machine -> its VM directory
 		n := 0

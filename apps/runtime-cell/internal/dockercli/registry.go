@@ -121,7 +121,7 @@ type RegistrySpec struct {
 // cgroup is the host page cache of the blobs a push writes, charged to it
 // until written back. At 256m a cold push of a Next.js image's layers was
 // killed by the kernel mid-push (dev cell, 2026-11-13 13:45:15: file 239 MB of
-// a 256 MiB limit, Run ca3f0d11), and the build failed on "connection
+// a 256 MiB limit), and the build failed on "connection
 // refused". Page cache is reclaimable once written: a higher ceiling costs the
 // host no memory it could not take back.
 const DefaultRegistryMemory = "1g"

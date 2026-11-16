@@ -2,6 +2,8 @@
 
 Read `README.md` first for how the hub and the worker fit together.
 
+Each module (a directory with source files) has its own `AGENTS.md`: what it owns, what it does not, its rules, where new code goes, and a generated map of what it imports and what imports it ([module-docs.md](../../docs/runtime/module-docs.md)). The system map, with where new code goes across the Runtime, is [architecture.md](../../docs/runtime/architecture.md). After adding, moving or re-importing a module, run `node scripts/runtime/module-docs.mjs --write`.
+
 ## Layering
 
 - `src/shared/` is what both apps use, by concern: `admission/` (memory admission stores and contract), `evidence/` (evidence stores, S3 client), `persistence/` (locks, schema and migrations, command and stream stores, cell directory), `observability/` (logger, tracing, OTel), `identity/` (TLS identity, the internal auth guard); `config.ts`, `errors.ts` and `claim-id.ts` stay at its root. A new shared file goes into the folder of its concern, never loose at the root. It imports only `libs/*` and itself. Never `hub/` or `worker/`.

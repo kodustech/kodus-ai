@@ -19,7 +19,7 @@ const maxReportedMemoryMB = protocol.MaxCellMemoryMB
 // machine or boots a bake this cell made for its environment, since its
 // images are built already; every other claim at its build size. Counting a
 // bake-booted base at build size made it wait the whole PR build on
-// cell-dev-1 (its build took 0.7 s from the bake's cache).
+// the dev cell (its build took 0.7 s from the bake's cache).
 func (a *Agent) claimMemoryNeed(acq protocol.ClaimAcquireBody, pooled bool) int {
 	if acq.Consumer == protocol.ConsumerSandbox {
 		// A sandbox at its own size (sandboxMemoryMB). One that takes a

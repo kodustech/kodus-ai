@@ -50,7 +50,7 @@ func (budget) ClaimMemory(driver.ClaimSize) driver.ClaimMemory {
 
 // The cell wraps its driver in Observed before admission reads the budget: a
 // wrapped driver still gives its budget, so admission stays on (a bare type
-// assertion on the wrapper turned it off on cell-dev-1).
+// assertion on the wrapper turned it off on the dev cell).
 func TestAWrappedDriverStillGivesAdmissionItsMemoryBudget(t *testing.T) {
 	cfg := agent.Config{Driver: fake.New(), Parts: driver.Parts{Memory: budget{}}, RequireMemoryAdmission: true}
 	st := settings{MemoryAdmission: true, MemoryAllocatableMB: 8192}

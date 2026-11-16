@@ -3,7 +3,7 @@ import { isMeasureField } from './gate';
 import { HTML_TEXT_FIELD } from './html-fields';
 
 // A difference the PR's own diff spells out is the change the PR means, not a
-// regression (planner-eval.md, kr-nextjs#2 Run 04b98118). The gate reads it
+// regression (planner-eval.md, kr-nextjs#2). The gate reads it
 // from the diff's text alone, never from the agent or the PR's description:
 // every field that differs must be a literal a changed block of the diff
 // removes (main's value) with its counterpart added in the same block (the

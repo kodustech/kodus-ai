@@ -363,7 +363,27 @@ func startEgress(t *testing.T, addr string, extra ...string) pushedEgress {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait(); _ = logf.Close() })
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		_ = logf.Close()
+		// A failed test shows what the egress refused, the first thing to read.
+		if t.Failed() {
+			if b, err := os.ReadFile(filepath.Join(dir, "egress.log")); err == nil {
+				lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+				var refused []string
+				for _, l := range lines {
+					if strings.Contains(l, "egress.blocked") || strings.Contains(l, "level=ERROR") {
+						refused = append(refused, l)
+					}
+				}
+				if len(refused) > 40 {
+					refused = refused[len(refused)-40:]
+				}
+				t.Logf("egress refusals and errors (%d lines of log):\n%s", len(lines), strings.Join(refused, "\n"))
+			}
+		}
+	})
 	tr := &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{agent}, RootCAs: ca.Pool(), ServerName: "kodus-egress", MinVersion: tls.VersionTLS13}}
 	push := control.Pusher{Endpoints: []control.Endpoint{{Name: control.EndpointEgress, URL: "https://127.0.0.1:19443"}}, HTTP: &http.Client{Transport: tr, Timeout: 10 * time.Second}, Key: priv}
 	deadline := time.Now().Add(10 * time.Second)

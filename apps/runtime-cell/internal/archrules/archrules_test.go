@@ -127,7 +127,7 @@ var rules = []rule{
 	},
 	{
 		name: "a pure rule package holds no claim state and reaches no backend",
-		from: []string{"internal/buildfingerprint", "internal/bakecatalog", "internal/agent/checkout", "internal/agent/admission", "internal/agent/provenance", "internal/recipe", "internal/netguard", "internal/machinetrust"},
+		from: []string{"internal/buildfingerprint", "internal/bakecatalog", "internal/agent/checkout", "internal/agent/admission", "internal/agent/provenance", "internal/recipe", "internal/netguard", "internal/machinetrust", "internal/buildmirror"},
 		to:   []string{"internal/agent/claims", "internal/agent/outbox", "internal/driver", "internal/drivers", "internal/dockercli", "internal/hubclient", "internal/transport", "internal/lease"},
 	},
 	{

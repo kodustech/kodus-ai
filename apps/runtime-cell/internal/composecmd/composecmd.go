@@ -48,6 +48,19 @@ func (p Project) UpBuild(waitTimeoutSec int) []string {
 	return p.with("up", "-d", "--build", "--wait", "--wait-timeout", strconv.Itoa(waitTimeoutSec), "--quiet-pull")
 }
 
+// BuildWith builds the project's images with the buildx builder named
+// builder, each loaded into the daemon (microvm: the VM's own BuildKit,
+// whose RUN steps trust the cell CA).
+func (p Project) BuildWith(builder string) []string {
+	return p.with("build", "--builder", builder)
+}
+
+// UpBuilt brings the project up from the images BuildWith just built,
+// waiting at most waitTimeoutSec for healthchecks: it builds nothing.
+func (p Project) UpBuilt(waitTimeoutSec int) []string {
+	return p.with("up", "-d", "--no-build", "--wait", "--wait-timeout", strconv.Itoa(waitTimeoutSec), "--quiet-pull")
+}
+
 // Exec runs cmd in service with no TTY.
 func (p Project) Exec(service string, cmd ...string) []string {
 	return append(p.with("exec", "-T", service), cmd...)

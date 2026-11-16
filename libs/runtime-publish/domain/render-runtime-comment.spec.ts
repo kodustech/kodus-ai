@@ -279,7 +279,7 @@ describe('renderReportComment (screen 7)', () => {
         expect(body).not.toContain('unmapped:');
     });
 
-    // kr-calcom#2 (Run b8efd73b): the PR side built cold for 30 min because the cell had evicted the environment's
+    // kr-calcom#2: the PR side built cold for 30 min because the cell had evicted the environment's
     // build state, and the comment said "the machine ran out of resources" with nothing about a setup.
     it('a boot that outlived its wait says so, and one that built cold on an evicted cache says a new setup restores it', () => {
         const timedOut = renderReportComment(
@@ -448,7 +448,7 @@ describe('renderReportComment (screen 7)', () => {
 });
 
 describe('browser probe paths (ADR-071)', () => {
-    // Wellington01/kr-shop#1: the orders list renders without "keyboard" on the PR, and the screen changed.
+    // kr-shop#1: the orders list renders without "keyboard" on the PR, and the screen changed.
     const failingStep: ReportPath = {
         entryPoint: 'GET /',
         via: 'public/app.js',
@@ -670,7 +670,7 @@ describe('renderCheckOutput (screen 9: the check is never mute)', () => {
     });
 });
 
-describe('routes the PR adds (Run 371c8255, kr-shop#4)', () => {
+describe('routes the PR adds (kr-shop#4)', () => {
     // POST /orders/preview does not exist on main: two probes, 404 on main, 200 and 400 on the PR.
     const preview = (probeId: string, prStatus: number, over: Partial<ReportPath> = {}): ReportPath => ({
         entryPoint: 'POST /orders/preview',
@@ -979,7 +979,7 @@ describe('two probes of one route', () => {
         expect(body).toContain('| `GET /health` | 200 | 200 |');
     });
 
-    // Run 5f89c3ec: both findings read "Regression `POST /auth/signUp` …: 400 on main, 201 on this PR".
+    // A Run: both findings read "Regression `POST /auth/signUp` …: 400 on main, 201 on this PR".
     it('name their case in the findings too', () => {
         const signUp = (probeId: string) => ({ entryPoint: 'POST /auth/signUp', probeId, verdict: 'finding' as const, findingKind: 'behavior_change' as const, intent: 'unintended' as const, base: { status: 400 }, pr: { status: 201 } });
         const body = renderReportComment(report({ paths: [signUp('signup-invalid-email'), signUp('signup-password-no-symbol')], uncovered: [] }), links);

@@ -67,7 +67,7 @@ describe('the base side is admitted before the PR side', () => {
     });
 });
 
-// kr-kodus-ai#1, Run 5f89c3ec: main was up at 21:02 and the PR built until
+// kr-kodus-ai#1: main was up at 21:02 and the PR built until
 // 21:13; the PR comment said "Starting main and this pull request … usually
 // ~2 min" for 13 minutes, because the phase moved only once both were up.
 describe('the PR comment while the PR still builds', () => {

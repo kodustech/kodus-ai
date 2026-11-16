@@ -326,7 +326,7 @@ func TestARefusedHAREntryNamesItsURLScheme(t *testing.T) {
 }
 
 // kr-nextjs#2: the Kody-written recipe ran `pnpm dev`, whose page opened the
-// Next dev server's WebSocket, and every browser round of Runs 97c3963d,
+// Next dev server's WebSocket, and every browser round of the Runs,
 // c301e03d, c3133e37, a82244e6 and 828e0dab was lost on its HAR entry. A
 // WebSocket to the app's own origin is allowed: the round's network is the
 // page's requests without it, the HAR keeps its handshake without query or

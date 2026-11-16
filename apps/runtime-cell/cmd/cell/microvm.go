@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerclient"
@@ -30,6 +31,7 @@ import (
 // state lives, and the egress address on the host.
 type microvmSettings struct {
 	Kit, KitDigest, StateDir, Egress     string
+	Mirror                               string
 	ObserverTLS                          string
 	MemoryMB, CPUs, MaxMemoryMB, MaxCPUs int
 	DataGB                               int
@@ -52,6 +54,7 @@ func (s *microvmSettings) register(fs *flag.FlagSet) {
 	fs.IntVar(&s.DiskIOPS, "sandbox-disk-iops-per-cpu", 0, "firecracker and docker-gvisor (with -gvisor-io-limits): a sandbox's disk operations per second per vCPU (0: 2500, up to 12000 a machine; -1: none)")
 	fs.IntVar(&s.NetMbps, "sandbox-net-mbps-per-cpu", 0, "firecracker and docker-gvisor (with -gvisor-io-limits): a sandbox's network bandwidth each way per vCPU, Mbit/s (0: 250, up to 2000 a machine; -1: none). Firecracker: the NIC's token buckets; docker-gvisor: tc on its host-side veth")
 	fs.BoolVar(&s.GVisorIOLimits, "gvisor-io-limits", false, "docker-gvisor: bound each workload container's disk and network by the -sandbox-*-per-cpu rates (off until proven on the production hosts: a container whose veth cannot be shaped is refused)")
+	fs.StringVar(&s.Mirror, "firecracker-mirror", "", "firecracker: the cell's mirror as the VMs name it (http://mirror.cell.internal:8080, the egress's -mirror-listen port on -firecracker-egress-address): every build gets its npm, PyPI and Go build args, the VM's own builder pulls docker.io through it, and the VMs may reach its port. Empty: no mirror")
 	fs.IntVar(&s.DataGB, "firecracker-data-gb", 40, "firecracker: an environment's data disk (Docker's images, volumes and build cache), GiB; the state disk admits an environment only with room for its disks at this size next to the others'")
 }
 
@@ -60,6 +63,7 @@ func (s *microvmSettings) register(fs *flag.FlagSet) {
 // and the backend.
 func openMicroVM(ctx context.Context, st settings, cellID string, trust machinetrust.Files, log *slog.Logger) (*microvm.Driver, error) {
 	m := st.MicroVM
+	var err error
 	f := microvm.Firecracker{
 		CellID: cellID, KitDir: m.Kit, KitDigest: m.KitDigest, StateDir: m.StateDir, Host: isolation.ProbeHost(),
 		MemoryMB: m.MemoryMB, CPUs: m.CPUs, MaxMemoryMB: m.MaxMemoryMB, MaxCPUs: m.MaxCPUs, ObserverTLSDir: m.ObserverTLS, Trust: trust, Log: log, DataGB: m.DataGB,
@@ -72,11 +76,14 @@ func openMicroVM(ctx context.Context, st settings, cellID string, trust machinet
 	if m.Egress == "off" {
 		f.NoEgress = true
 	} else {
-		a, err := netip.ParseAddr(m.Egress)
-		if err != nil {
-			return nil, fmt.Errorf("firecracker-egress-address: %w", err)
+		a, perr := netip.ParseAddr(m.Egress)
+		if perr != nil {
+			return nil, fmt.Errorf("firecracker-egress-address: %w", perr)
 		}
 		f.Egress = a
+	}
+	if f.Mirror, err = buildmirror.At(m.Mirror); err != nil {
+		return nil, fmt.Errorf("firecracker-mirror: %w", err)
 	}
 	s, err := microvm.Open(ctx, f)
 	return s.Driver, err

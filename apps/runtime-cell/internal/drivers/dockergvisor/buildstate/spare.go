@@ -9,7 +9,7 @@ import (
 
 // A spare view is a build's view of an environment's state made ahead of the
 // build that takes it. Cloning a large state is a walk of every entry (49.6 s
-// for kr-twenty's, Run 95c0f2f1), and it ran on the pull request's path, after
+// for a large TypeScript monorepo's), and it ran on the pull request's path, after
 // the claim was already waiting on its build. A spare is made off that path,
 // after the build that last used the state (a seed or a view), and the next
 // build takes it with one rename.

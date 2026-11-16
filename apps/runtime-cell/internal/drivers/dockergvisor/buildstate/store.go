@@ -311,8 +311,8 @@ func (s *Store) Release(st State) {
 
 // removeView takes a released view out of the tree and deletes it after,
 // off the build's path: a clone of a large state holds hundreds of thousands
-// of entries, and deleting them took about 25 s of a PR side's boot (Run
-// 95c0f2f1, kr-twenty). Nothing reads it any more (it is unmounted, and a
+// of entries, and deleting them took about 25 s of a PR side's boot on a
+// large TypeScript monorepo. Nothing reads it any more (it is unmounted, and a
 // clone shares no file with the state), so only its bytes wait. What a
 // restart interrupts stays in the trash, which Evict empties.
 func (s *Store) removeView(st State) {

@@ -228,7 +228,7 @@ export class CellMemoryBook {
         const waiter = s.waiters.get(c.claimId);
         const firstAt = waiter?.firstAt ?? now;
         // A Run that already holds memory here goes before every Run that holds none: making it wait
-        // behind one deadlocks the cell (cell-dev-1: Run 1's base was ready and its PR fit, but Run 2,
+        // behind one deadlocks the cell (the dev cell: Run 1's base was ready and its PR fit, but Run 2,
         // which needed Run 1 to finish, asked first after the cell refused Run 1's PR once).
         // A preview ranks below every other claim (docs/runtime/preview-urls.md §5.2): it waits behind every
         // waiter that is not a preview, whenever that one asked, and is never ahead of one.

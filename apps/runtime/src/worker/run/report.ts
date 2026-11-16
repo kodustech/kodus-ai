@@ -211,7 +211,7 @@ export function bootBlockerOf(blockers: BlockerInput[], buildStateEvictedAt?: st
     const c = classifyBlocker({ kind: first.kind, signature: first.signature, message: first.message, ...(first.bundle ? { bundle: first.bundle } : {}) });
     const kind: BlockerKind = (BLOCKER_KINDS as readonly string[]).includes(c.kind) ? (c.kind as BlockerKind) : 'unknown';
     const name = kind === 'missing_env' ? c.signature.replace(/^missing_env:/, '') : undefined;
-    // A boot that outlived its wait is no machine out of resources (kr-calcom#2 Run b8efd73b said so); one whose build
+    // A boot that outlived its wait is no machine out of resources (kr-calcom#2 said so); one whose build
     // ran cold because the cell had evicted the environment's build state says that instead.
     const timedOut = first.signature === 'boot_timeout';
     const cause: BootBlockerCause | undefined = timedOut ? (buildStateEvictedAt ? 'build_state_evicted' : 'boot_timeout') : undefined;

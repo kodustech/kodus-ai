@@ -5,7 +5,7 @@ import type { RoundOut } from './replay';
 
 // The agent plans from the diff and the base machine only (it explores the
 // base, never the PR). On a heavy stack the base comes from the bake in
-// seconds while the PR side builds for minutes (kr-twenty, Run 95c0f2f1: base
+// seconds while the PR side builds for minutes (kr-twenty: base
 // ready at 38 s, PR at 394 s, then 165 s of planning before the first probe).
 // So the plan starts once the base is ready and the PR's build has started,
 // and the PR's boot and the plan overlap.

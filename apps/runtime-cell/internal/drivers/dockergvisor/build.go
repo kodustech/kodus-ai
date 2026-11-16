@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"net/netip"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildfingerprint"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildprogress"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
@@ -219,56 +219,10 @@ func (d *Driver) hasBuilt(machine, service, fp string) bool {
 }
 
 // mirrorBuildArgs are the build's args with the cell mirror's addresses
-// added (GOPROXY; npm, pnpm and Yarn Berry's registry; pip and uv's index,
-// with HTTP allowed for the mirror's host), under the names the shared list
-// gives (netguard.MirrorBuildArgNames): a build reaches registries only
-// through the read-only mirror (G1). The project's own value of each wins,
-// and an index it set itself keeps its own trusted host.
+// added (buildmirror.Mirror.Args): a build reaches registries only through
+// the read-only mirror (G1), and the project's own value of each wins.
 func mirrorBuildArgs(project map[string]string, cfg Config) map[string]string {
-	args := maps.Clone(project)
-	set := func(k, v string) {
-		if v == "" {
-			return
-		}
-		if args == nil {
-			args = map[string]string{}
-		}
-		if _, ok := args[k]; !ok {
-			args[k] = v
-		}
-	}
-	set("GOPROXY", cfg.MirrorGoProxy)
-	if cfg.MirrorNPM != "" {
-		host := hostOf(cfg.MirrorNPM)
-		_, own := args["YARN_NPM_REGISTRY_SERVER"]
-		set("npm_config_registry", cfg.MirrorNPM)
-		set("pnpm_config_registry", cfg.MirrorNPM)
-		set("YARN_NPM_REGISTRY_SERVER", strings.TrimSuffix(cfg.MirrorNPM, "/"))
-		if !own {
-			set("YARN_UNSAFE_HTTP_WHITELIST", host)
-		}
-	}
-	if cfg.MirrorPyPI != "" {
-		host := hostOf(cfg.MirrorPyPI)
-		_, ownPip := args["PIP_INDEX_URL"]
-		_, ownUV := args["UV_DEFAULT_INDEX"]
-		set("PIP_INDEX_URL", cfg.MirrorPyPI)
-		set("UV_DEFAULT_INDEX", cfg.MirrorPyPI)
-		if !ownPip {
-			set("PIP_TRUSTED_HOST", host)
-		}
-		if !ownUV {
-			set("UV_INSECURE_HOST", host)
-		}
-	}
-	return args
-}
-
-func hostOf(raw string) string {
-	if u, err := url.Parse(raw); err == nil {
-		return u.Hostname()
-	}
-	return ""
+	return buildmirror.Mirror{GoProxy: cfg.MirrorGoProxy, NPM: cfg.MirrorNPM, PyPI: cfg.MirrorPyPI}.Args(project)
 }
 
 // builderTrusted reports whether the builds' RUN steps trust the cell CA:

@@ -36,20 +36,41 @@ import (
 )
 
 // agentEgress pushes the agent's claim policies to the cell's egress, as
-// cmd/cell's policyPusher does.
+// cmd/cell's policyPusher does. With rules, the policy is the cell's own
+// (agent.EgressRules: the recommended list's inspected tier and build
+// passthrough), and injector, when set, gets it too, as the injector's
+// control endpoint does.
 type agentEgress struct {
-	e    pushedEgress
-	base []string
+	e        pushedEgress
+	base     []string
+	rules    *agent.EgressRules
+	injector *policy.Store
 }
 
 func (a agentEgress) Apply(ctx context.Context, c agent.ClaimInfo) error {
-	spec, err := agent.PolicySpec(c, a.base, time.Now())
-	if err != nil {
-		return err
+	var pol policy.ClaimPolicy
+	if a.rules != nil {
+		var err error
+		if pol, _, err = a.rules.ClaimPolicy(c, time.Now()); err != nil {
+			return err
+		}
+	} else {
+		spec, err := agent.PolicySpec(c, a.base, time.Now())
+		if err != nil {
+			return err
+		}
+		if pol, _, err = policy.Build(spec, nil); err != nil {
+			return err
+		}
 	}
-	pol, _, err := policy.Build(spec, nil)
-	if err != nil {
-		return err
+	if a.injector != nil {
+		if err := a.injector.Put(pol); err != nil {
+			return err
+		}
+	}
+	if a.rules != nil {
+		slog.Info("fc.egress.policy", "claim", c.ClaimID, "cellTrusted", c.CellTrusted, "workload", c.Workload.PrivateAddress,
+			"sources", pol.Sources, "inspectSources", pol.InspectSources, "inspected", len(pol.Inspected))
 	}
 	return a.e.push.Push(ctx, pol)
 }

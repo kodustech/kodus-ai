@@ -108,7 +108,7 @@ describe('decideProbe (ADR-050)', () => {
         expect(decide(steps)).toMatchObject({ verdict: 'inconclusive' });
     });
 
-    // Run fb8e4e71 (kr-kodus-ai#1): signup with an invalid email, main 400 on
+    // kr-kodus-ai#1: signup with an invalid email, main 400 on
     // every round, the PR 201 on every round. Each PR round created a user, so
     // its id and dates differed; the base never had those fields, so nothing
     // masked them and four PR rounds "kept disagreeing" into inconclusive.
@@ -333,7 +333,7 @@ describe('injection in app output', () => {
 });
 
 describe('decideNewEndpoint', () => {
-    // Shapes of Run 371c8255 (Wellington01/kr-shop#4, our test repo): POST /orders/preview
+    // Shapes of kr-shop#4, our test repo: POST /orders/preview
     // does not exist on main, so Express answers its HTML 404; the PR answers JSON.
     const ready = { readyStatus: 200 };
     const mainAbsent = (round: number, over: Partial<GateStep> = ready) =>
@@ -349,7 +349,7 @@ describe('decideNewEndpoint', () => {
         expect(d).not.toHaveProperty('findingKind');
     });
 
-    it('Run 371c8255: base 404 and PR 200 or 400 on POST /orders/preview are two new-endpoint outcomes, no regression', () => {
+    it('base 404 and PR 200 or 400 on POST /orders/preview are two new-endpoint outcomes, no regression', () => {
         const total = { status: '200', 'json.total': '20' };
         const missingItems = { status: '400', 'json.error': '"items are required"' };
         for (const fields of [total, missingItems]) {

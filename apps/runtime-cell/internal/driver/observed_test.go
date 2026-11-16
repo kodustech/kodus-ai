@@ -109,7 +109,7 @@ type everyPart struct {
 
 // The cell wraps its driver before the agent reads its parts: every part the
 // driver has must come back out of the wrapper, or a capability (memory
-// admission on cell-dev-1) turns off without a word.
+// admission on the dev cell) turns off without a word.
 func TestObservedHandsBackEveryPart(t *testing.T) {
 	var in driver.Parts
 	v := reflect.ValueOf(&in).Elem()

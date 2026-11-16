@@ -27,7 +27,7 @@ export const STABLE_ERROR_WINDOW_MS = (STABLE_ERROR_TRIES - 1) * HEALTH_RETRY_IN
 /**
  * Between two tries after a reset in a Run. The whole wait is one durable step,
  * so a try costs one observer probe and no checkpoint; kr-twenty's app takes
- * about 80 s to listen again after each reset (Run 95c0f2f1), and a 5 s
+ * about 80 s to listen again after each reset, and a 5 s
  * cadence left it answering for 2.5 s on average before the round went on.
  */
 export const RUN_READY_INTERVAL_MS = 1_000;
@@ -39,7 +39,7 @@ export const DEFAULT_RESET_TIMEOUT_MS = 120_000;
  * and brings it up again: the containers, the recipe's steps and the
  * dependencies' health checks, the same start a setup waits health_timeout for.
  * A fixed 120 s cut kodus-ai's reset (99–114 s, then 120 s) and left a probe
- * inconclusive (Run 89254b3e). Never under the default, never past the
+ * inconclusive. Never under the default, never past the
  * recipe's ceiling.
  */
 export function resetTimeoutMs(ready: Pick<ReadyTarget, 'waitSeconds'> | undefined): number {

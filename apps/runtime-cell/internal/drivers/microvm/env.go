@@ -4,7 +4,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +21,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/composecmd"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/guest"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/guestinit"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
@@ -280,11 +283,21 @@ const composeFileName = ".kodus-compose.yml"
 // upTimeout bounds one compose up with its build (the guest agent's most).
 const upTimeout = 600_000
 
-// ComposeUpCommand is what Up runs in the VM: the project built by the VM's
-// dockerd and brought up under the claim's project name, waiting for its
-// healthchecks.
+// ComposeUpCommand is what Up runs in the VM for a claim whose machines do
+// not trust the cell CA: the project built by the VM's dockerd and brought
+// up under the claim's project name, waiting for its healthchecks. One that
+// trusts it builds with the VM's own builder first (vmBuilder, build.go).
 func ComposeUpCommand(project string) string {
-	return composecmd.DockerLine(composecmd.Project{Name: project, File: composeFileName}.UpBuild(540))
+	return vmBuilder{}.upCommand(project, false, false, false)
+}
+
+// vmBuilder is the VM builder under the VM's data mount (the tests' guest
+// agent runs on a host directory: Config.vmData).
+func (d *Driver) vmBuilder() vmBuilder {
+	if d.cfg.vmData != "" {
+		return vmBuilder{data: d.cfg.vmData, system: d.cfg.vmData + "/system-ca-certificates.crt"}
+	}
+	return vmBuilder{data: guestinit.DataMount}
 }
 
 // Up brings the claim's compose project up in its environment VM: the
@@ -331,9 +344,32 @@ func (d *Driver) Up(ctx context.Context, req driver.UpRequest) ([]string, error)
 			return nil, fmt.Errorf("microvm: taint %s: %w", ref.MachineID, err)
 		}
 	}
-	pinned, err := renderForVM(composeFile, files)
+	pinned, builds, err := renderForVM(composeFile, files, d.cfg.Mirror)
 	if err != nil {
 		return nil, err
+	}
+	// A claim whose machines trust the cell CA builds with the VM's own
+	// builder, whose RUN steps trust it too (build.go).
+	_, trusted := files.files["ca-bundle.pem"]
+	// An Up again with the file the project was built from (the agent's,
+	// after a reset took the project down) builds nothing: the images are
+	// there, and a claim past its install no longer reaches the registries
+	// a build resolves its base images and frontend from.
+	sum := sha256.Sum256(composeFile)
+	digest := hex.EncodeToString(sum[:])
+	d.mu.Lock()
+	prebuilt := builds && d.built[ref.MachineID] == digest
+	d.mu.Unlock()
+	withBuilder := builds && trusted && !prebuilt
+	if withBuilder {
+		// Written with the cell's files; the up command copies both to the
+		// builder's own directory (the guest agent writes under the
+		// workspace only).
+		conf, err := d.vmBuilder().config(d.cfg.Mirror)
+		if err != nil {
+			return nil, err
+		}
+		files.files[vmBuilderConfigFile] = conf
 	}
 	d.mu.Lock()
 	d.initdb[ref.MachineID] = initdbBinds(composeFile)
@@ -350,7 +386,7 @@ func (d *Driver) Up(ctx context.Context, req driver.UpRequest) ([]string, error)
 	if r, err := c.Do(ctx, guest.NewID(), protocol.SandboxOp{Op: protocol.SandboxOpKindWrite, Path: &file, Content: &content}); err != nil || !r.Ok {
 		return nil, errors.Join(err, fmt.Errorf("microvm: compose file in %s: %s", ref.MachineID, opError(r)))
 	}
-	r, err := d.Exec(ctx, ref, kodyexec.Request{Command: ComposeUpCommand(projectName(ref)), Cwd: dir, TimeoutMs: upTimeout})
+	r, err := d.Exec(ctx, ref, kodyexec.Request{Command: d.vmBuilder().upCommand(projectName(ref), trusted, withBuilder, prebuilt), Cwd: dir, TimeoutMs: upTimeout})
 	if err != nil {
 		return nil, err
 	}
@@ -363,6 +399,11 @@ func (d *Driver) Up(ctx context.Context, req driver.UpRequest) ([]string, error)
 			tail = tail[len(tail)-2000:]
 		}
 		return nil, d.diskFull(ctx, ref, fmt.Errorf("%w: compose up in %s exited %d: %s", driver.ErrWorkloadBoot, ref.MachineID, r.ExitCode, tail))
+	}
+	if builds {
+		d.mu.Lock()
+		d.built[ref.MachineID] = digest
+		d.mu.Unlock()
 	}
 	if ref.PrivateAddress == "" {
 		return nil, nil

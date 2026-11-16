@@ -285,3 +285,52 @@ func TestASandboxFromADriverWithoutSandboxTrustIsNotCountedTrusted(t *testing.T)
 		t.Fatal("a sandbox without the cell CA is counted trusted")
 	}
 }
+
+// policyAtUp is a composer that reads, when Up starts, the last policy the
+// agent pushed for the claim: the one a build inside Up runs under.
+type policyAtUp struct {
+	egress *recEgress
+	mu     sync.Mutex
+	seen   []ClaimInfo
+}
+
+func (p *policyAtUp) Up(_ context.Context, req driver.UpRequest) ([]string, error) {
+	p.egress.mu.Lock()
+	last := p.egress.applied[len(p.egress.applied)-1]
+	p.egress.mu.Unlock()
+	p.mu.Lock()
+	p.seen = append(p.seen, last)
+	p.mu.Unlock()
+	return []string{"172.30.0.2"}, nil
+}
+
+// A build inside Up runs under the policy pushed before it, so that policy
+// must already count the claim's machines as trusting the cell CA. On a
+// microVM cell the build leaves from the workload VM itself (no builder of
+// its own): with the workload not yet an inspect source, the inspected
+// registries were spliced, and bun's ECH was refused there (kodus-ai's
+// `bun install -g`, while pnpm, which sends no ECH, got through).
+func TestThePolicyABuildRunsUnderCountsTheClaimsTrust(t *testing.T) {
+	var cp *policyAtUp
+	h := newHarness(t, func(c *Config) {
+		cp = &policyAtUp{egress: c.Egress.(*recEgress)}
+		c.Parts.Composer, c.CellTrust, c.InspectEgress = cp, true, true
+	})
+	h.composeWith("claim-1", nil)
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	if len(cp.seen) != 1 {
+		t.Fatalf("Up ran %d times", len(cp.seen))
+	}
+	before := cp.seen[0]
+	if !before.CellTrusted {
+		t.Fatal("the policy a build runs under does not count the claim's machines as trusting the cell CA")
+	}
+	spec, err := PolicySpec(before, nil, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(spec.InspectSources, before.Workload.PrivateAddress) {
+		t.Fatalf("inspect sources %v lack the workload %s during its build", spec.InspectSources, before.Workload.PrivateAddress)
+	}
+}

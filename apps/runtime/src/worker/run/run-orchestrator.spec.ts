@@ -98,7 +98,7 @@ describe('Run image pin from acquired manifests (#2505)', () => {
         expect(h.resets.mock.calls.every(([, image]) => image === concrete)).toBe(true);
     });
 
-    // kr-shop #2 on cell-dev-1: the cell had been reinstalled, both sides came up from source, and the Run said "could not finish, run again".
+    // kr-shop #2 on the dev cell: the cell had been reinstalled, both sides came up from source, and the Run said "could not finish, run again".
     it('says the environment has to be set up again when the cell holds no bake of it, and tests nothing', async () => {
         const h = fixture();
         const acquire = h.acquired.getMockImplementation()!;
@@ -1071,7 +1071,7 @@ it('passes the active durable-step cancellation signal to the planner', async ()
     expect(signal.aborted).toBe(true);
 });
 
-describe('a route the PR adds (Run 371c8255, kr-shop#4)', () => {
+describe('a route the PR adds (kr-shop#4)', () => {
     // kr-shop is our own test repository. PR #4 adds POST /orders/preview to server.js: main has no
     // such route (Express answers its HTML 404), the PR answers 200 with a total or 400 without items.
     const SERVER = [
@@ -1170,7 +1170,7 @@ describe('a route the PR adds (Run 371c8255, kr-shop#4)', () => {
     });
 });
 
-describe("a difference the PR's diff spells out (Run 04b98118, kr-nextjs#2)", () => {
+describe("a difference the PR's diff spells out (kr-nextjs#2)", () => {
     // The PR rewords the empty-cart message on purpose: main answers "cart is empty", the PR "your
     // cart is empty", and the diff's changed line says exactly that. A finding, intended, never a regression.
     const CONTROLLER = [

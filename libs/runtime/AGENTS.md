@@ -2,6 +2,8 @@
 
 Read [README.md](./README.md) first for what each sub-library owns. The root `AGENTS.md` still applies (issues, PRs, eval evidence for the review pipeline).
 
+Each module (a directory with source files) has its own `AGENTS.md`: what it owns, what it does not, its rules, where new code goes, and a generated map of what it imports and what imports it ([module-docs.md](../../docs/runtime/module-docs.md)). The system map, with where new code goes across the Runtime, is [architecture.md](../../docs/runtime/architecture.md). After adding, moving or re-importing a module, run `node scripts/runtime/module-docs.mjs --write`.
+
 ## Dependency direction
 
 - `contracts`, `gate`, `probe`, `entry-points`, `redaction`, `api/domain` and the schemas and state of `run`/`protocol` are pure. They may import zod, `crypto` and each other. They may not import Nest, Mongo, TypeORM, `pg`, `fs` or anything under `infrastructure/` or `adapters/`.

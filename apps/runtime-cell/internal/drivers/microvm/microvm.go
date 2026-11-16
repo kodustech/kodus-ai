@@ -6,10 +6,11 @@
 // rules on top: claim checks, tags and ceilings, ownership, the claim's own
 // network, the sweep.
 //
-// What it runs today is the code sandbox (driver.Sandboxer) and bare
-// environment machines. An environment's compose boot inside its VM (the
-// project's Docker next to the guest agent) is not wired yet: the driver is
-// no ComposeBooter, and it says NestedContainers false until it is.
+// It runs code sandboxes (driver.Sandboxer) and environments: an
+// environment VM runs the claim's compose project on its own dockerd
+// (env.go, build.go), its observer is a VM of its own reached over vsock
+// (env_run.go), and a setup's VM becomes the environment's template when
+// the backend keeps memory (Parts: Baker, Snapshots, Sessions).
 package microvm
 
 import (
@@ -24,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation/vmsnap"
@@ -80,6 +82,14 @@ type Config struct {
 	// environment's measured need (empty: in memory only).
 	DataCeilingGB int
 	NeedsFile     string
+	// Mirror is the cell's mirror as the VMs reach it (buildmirror.At of
+	// -firecracker-mirror): every build gets its build args, and the VM's
+	// own builder pulls docker.io through it. Zero: no mirror.
+	Mirror buildmirror.Mirror
+	// vmData replaces the VM's data mount in the paths the cell's commands
+	// name in the VM (guestinit.DataMount when empty): the tests' guest
+	// agent runs on a host directory.
+	vmData string
 }
 
 // Driver runs claims' machines as microVMs.
@@ -95,6 +105,10 @@ type Driver struct {
 	// initdb are the sql files each machine's compose file binds into
 	// postgres's initdb (a seed that runs with the database's first start).
 	initdb map[string]map[string]bool
+	// built is the compose file each machine's project was last built and
+	// brought up from (a digest of it): an Up again with the same file, the
+	// one after a reset, brings it up from those images and builds nothing.
+	built map[string]string
 	// pinned are setup machines a bake takes (PinBakeSource); pendingNets
 	// the networks of their claims released before the bake was done.
 	pinned      map[string]bool
@@ -136,7 +150,7 @@ func New(cfg Config) (*Driver, error) {
 	if cfg.DataCeilingGB == 0 {
 		cfg.DataCeilingGB = 40
 	}
-	d := &Driver{cfg: cfg, expires: map[string]time.Time{}, uploads: map[string]upload{}, initdb: map[string]map[string]bool{}, pinned: map[string]bool{}, pendingNets: map[string]driver.ClaimNetwork{}}
+	d := &Driver{cfg: cfg, expires: map[string]time.Time{}, uploads: map[string]upload{}, initdb: map[string]map[string]bool{}, built: map[string]string{}, pinned: map[string]bool{}, pendingNets: map[string]driver.ClaimNetwork{}}
 	if err := d.loadNeeds(); err != nil {
 		return nil, err
 	}
@@ -565,6 +579,7 @@ func (d *Driver) Destroy(ctx context.Context, ref driver.MachineRef) error {
 	d.mu.Lock()
 	delete(d.expires, ref.MachineID)
 	delete(d.uploads, ref.MachineID)
+	delete(d.built, ref.MachineID)
 	d.mu.Unlock()
 	return nil
 }

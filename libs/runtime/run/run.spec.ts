@@ -133,7 +133,7 @@ describe('decideRunVerdict and checkConclusionFor', () => {
         expect(v.forcedNeutral).toContain('diff too large to test whole');
     });
 
-    // Run 371c8255 (kr-shop#4): two probes of POST /orders/preview, 404 on main (no such route), 200 and 400 on the PR.
+    // kr-shop#4: two probes of POST /orders/preview, 404 on main (no such route), 200 and 400 on the PR.
     const newEndpoint = (probeId: string) => ({ probeId, entryPoint: 'POST /orders/preview', verdict: 'new_endpoint' as const, reason: 'main has no such route (404)' });
 
     it('a route the PR adds is reported as a new endpoint, not a regression', () => {

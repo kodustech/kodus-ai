@@ -1,6 +1,6 @@
 import { CellMemoryBook, siblingKeysOf, WAITER_TTL_MS } from './cell-memory';
 
-// cell-dev-1 (ADR-070): 15 GB less the reserve, claims at -gvisor-mem-limit 12g, ready at 2g.
+// the dev cell (ADR-070): 15 GB less the reserve, claims at -gvisor-mem-limit 12g, ready at 2g.
 const report = (committedMb: number) => ({ allocatableMb: 14_745, committedMb, bootMb: 12_288, readyMb: 2_048 });
 const claim = (run: string, side: 'base' | 'pr') => ({ claimId: `${run}:${side}`, runId: run, side, consumer: 'runtime' as const });
 
@@ -116,7 +116,7 @@ describe('CellMemoryBook', () => {
         it('a sandbox refused for capacity does not block the next sandbox open', () => {
             const book = new CellMemoryBook();
             book.report('cell', report(13_000), ['other'], 0);
-            // cell-dev-1: the refused claim stayed in the line for WAITER_TTL_MS, and every open in that
+            // the dev cell: the refused claim stayed in the line for WAITER_TTL_MS, and every open in that
             // minute was refused behind it ("1 claim(s) asked this cell first and still wait").
             expect(book.admit('cell', sandbox('sbx-1'), 1)).toEqual({ kind: 'wait', needMb: 2_048, freeMb: 1_745, allocatableMb: 14_745, ahead: 0 });
             expect(book.view('cell')).toMatchObject({ waiting: 0 });

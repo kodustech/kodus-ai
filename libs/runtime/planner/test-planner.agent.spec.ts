@@ -463,7 +463,7 @@ describe('browser probes in the plan (ADR-071)', () => {
         expect(testPlannerSystemPrompt(['server.js'])).not.toContain('{"screenshot":"name"}');
     });
 
-    it("tells a browser probe never to assert the text a removed line holds (kr-nextjs#2, Run 04b98118)", () => {
+    it("tells a browser probe never to assert the text a removed line holds (kr-nextjs#2)", () => {
         const prompt = testPlannerSystemPrompt(['app/page.tsx']);
         expect(prompt).not.toContain('text base shows"]');
         expect(prompt).toContain('never the text a removed line holds');

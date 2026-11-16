@@ -102,7 +102,7 @@ describe('the boot timing of a Run', () => {
         });
         expect(JSON.stringify(logged)).not.toContain('go build');
     });
-    // kr-calcom#2, Run b8efd73b: the PR's build ran cold for 30 min and the cell answered boot_timeout;
+    // kr-calcom#2: the PR's build ran cold for 30 min and the cell answered boot_timeout;
     // the comment said "Booted in 30m" above "the machine ran out of resources".
     it.each(['pr', 'base'] as const)('a Run whose %s side never booted publishes no boot time', async (side) => {
         const env = new FakeEnvironmentRuntime(SCENARIOS, () => new Date());

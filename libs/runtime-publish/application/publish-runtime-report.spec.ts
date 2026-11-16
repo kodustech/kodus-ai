@@ -320,7 +320,7 @@ describe('Check from the report (screen 9)', () => {
         );
     });
 
-    // kr-shop #2 on cell-dev-1: both sides booted, the cell held no bake of the environment.
+    // kr-shop #2 on the dev cell: both sides booted, the cell held no bake of the environment.
     it('says to set the environment up again when the cell had no prepared image, never that main fails', async () => {
         const t = await setup();
         await t.useCase.execute({
