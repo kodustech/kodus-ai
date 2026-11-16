@@ -1326,7 +1326,11 @@ const keepSchema = z.object({ keep: z.boolean() });
 /** Feed one raw text back on the reroute path and run the parse layer. */
 const parseReroute = <S extends z.ZodType>(schema: S, text: string) => {
     mockGenerate.mockResolvedValueOnce({ text, usage: {} });
-    return runStructuredReviewCall({ ...base, schema, byokConfig: zooKimiSlot });
+    return runStructuredReviewCall({
+        ...base,
+        schema,
+        byokConfig: zooKimiSlot,
+    });
 };
 
 describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo in scope)', () => {
@@ -1402,7 +1406,9 @@ describe('reroute-json — a 429 is re-issued once, then handed to the fallback'
     it('429 twice → throws the second 429 marked exhausted', async () => {
         const second = rateLimited('Usage limit reached for 5 hour.');
         mockGenerate
-            .mockRejectedValueOnce(rateLimited('Usage limit reached for 5 hour.'))
+            .mockRejectedValueOnce(
+                rateLimited('Usage limit reached for 5 hour.'),
+            )
             .mockRejectedValueOnce(second);
 
         const thrown = await runStructuredReviewCall({
@@ -1470,7 +1476,10 @@ describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL
     } as any);
 
     it('renamed keys are REJECTED (ensureValidatingSchema compiled an ajv validator) → SIGNALS', async () => {
-        mockGenerate.mockResolvedValueOnce({ text: '{"kept":true}', usage: {} });
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"kept":true}',
+            usage: {},
+        });
         await expect(
             runStructuredReviewCall({
                 ...base,
@@ -1498,3 +1507,212 @@ describe('MATRIX D — input variants (request assembly threading, happy LLM.run
     });
 });
 
+describe('promptCache — a one-shot call that shares a prefix with sibling calls', () => {
+    const claude = {
+        provider: 'anthropic',
+        apiKey: 'enc',
+        model: 'claude-sonnet-5-5',
+    } as any;
+    const claudeOnBedrock = {
+        provider: 'amazon_bedrock',
+        model: 'eu.anthropic.claude-sonnet-5-5',
+    } as any;
+    const gpt = {
+        provider: 'openai',
+        apiKey: 'enc',
+        model: 'gpt-6.1-sol',
+    } as any;
+    const gemini = {
+        provider: 'google_gemini',
+        apiKey: 'enc',
+        model: 'gemini-3.8-flash',
+    } as any;
+    const head = '<Rules>\n[1] no console\n</Rules>\n';
+    const user = `${head}<File path="a.ts">\n+console.log(1)\n</File>`;
+    const sent = (i = 0) => mockGenerate.mock.calls[i][0];
+    // Structured answer for both channels: Output.object and the reroute-json
+    // text path Claude 5.5 takes (always thinking, no forced tool_choice).
+    const answer = {
+        experimental_output: { ok: true },
+        text: '{"ok":true}',
+        usage: {},
+    };
+    const spanAttrs = (i = 0) =>
+        observabilityService.runAiSdkLLMInSpan.mock.calls[i][0].attrs;
+
+    it('sends today’s request when the call declares nothing', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({ ...base, user, byokConfig: claude });
+        expect(sent().prompt).toBe(user);
+        expect(sent().messages).toBeUndefined();
+        expect(typeof sent().system).toBe('string');
+        expect(spanAttrs().promptCacheMarked).toBeUndefined();
+    });
+
+    it('marks the shared head of the user turn on native Claude', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt).toBeUndefined();
+        expect(sent().messages).toEqual([
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: head,
+                        providerOptions: {
+                            anthropic: { cacheControl: { type: 'ephemeral' } },
+                        },
+                    },
+                    { type: 'text', text: user.slice(head.length) },
+                ],
+            },
+        ]);
+        expect(spanAttrs().promptCacheMarked).toBe('userPrefix');
+    });
+
+    it('marks it with a cachePoint on Claude on Bedrock', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claudeOnBedrock,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].providerOptions).toEqual({
+            bedrock: { cachePoint: { type: 'default' } },
+        });
+    });
+
+    it('marks it on OpenAI gpt-5.6+ and puts the request in explicit mode', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: gpt,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].providerOptions).toEqual({
+            openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        });
+        expect(sent().providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+            openai: { promptCacheOptions: { mode: 'explicit' } },
+        });
+    });
+
+    it('leaves a provider that takes no marker on today’s request', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: gemini,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(sent().messages).toBeUndefined();
+    });
+
+    it('marks the system prompt when the call declares it shared', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { system: true },
+        });
+        expect(sent().system).toEqual({
+            role: 'system',
+            content: expect.stringMatching(/^sys/),
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        expect(sent().prompt).toBe(user);
+    });
+
+    it('keeps the head marked when the route appends a JSON hint to the user turn', async () => {
+        const glm = {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.3',
+            apiKey: 'enc',
+        } as any;
+        mockGenerate.mockResolvedValueOnce(answer);
+        // open_router takes no marker: the split must not happen, and the hint must survive.
+        await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ ok: z.boolean() }),
+            user,
+            byokConfig: glm,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt.startsWith(user)).toBe(true);
+        expect(sent().prompt.toLowerCase()).toContain('json');
+    });
+
+    it('keeps the marker on a re-issue after a rate limit', async () => {
+        const rateLimited = Object.assign(new Error('429 Too Many Requests'), {
+            statusCode: 429,
+        });
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited)
+            .mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(sent(1).messages[0].content[0].text).toBe(head);
+    });
+
+    it('drops an automatic Anthropic cacheControl from caller options on a marked call', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+            providerOptions: {
+                anthropic: {
+                    cacheControl: { type: 'ephemeral' },
+                    effort: 'low',
+                },
+            },
+        });
+        expect(sent().providerOptions).toEqual({
+            anthropic: { effort: 'low' },
+        });
+        expect(spanAttrs().promptCacheAutoDropped).toBe(true);
+    });
+
+    it('records a declared head the turn does not start with', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: 'something else' },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(spanAttrs().promptCacheSkipped).toBe('prefix-mismatch');
+    });
+
+    it('applies to plain-text calls too', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'ok', usage: {} });
+        await runTextReviewCall({
+            system: 'sys',
+            user,
+            runName: 'text.run',
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].text).toBe(head);
+    });
+});
