@@ -732,6 +732,23 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
 });
 
 describe('single issue status transition', () => {
+    it('records when a single issue is resolved', async () => {
+        const findByIdAndUpdate = jest.fn(async () => null);
+        const repository = new IssuesRepository({ findByIdAndUpdate } as any);
+
+        await repository.updateStatus('issue-1', IssueStatus.RESOLVED);
+
+        const [id, update, options] = findByIdAndUpdate.mock.calls[0] as unknown as [string, any, any];
+        expect(id).toBe('issue-1');
+        expect(update.$set).toEqual({
+            status: IssueStatus.RESOLVED,
+            resolvedAt: expect.any(String),
+        });
+        expect(Number.isFinite(Date.parse(update.$set.resolvedAt))).toBe(true);
+        expect(update.$unset).toBeUndefined();
+        expect(options).toEqual({ new: true });
+    });
+
     it.each([IssueStatus.OPEN, IssueStatus.DISMISSED])('clears resolvedAt when moving a single resolved issue to %s', async status => {
         const findByIdAndUpdate = jest.fn(async () => null);
         const repository = new IssuesRepository({findByIdAndUpdate} as any);
