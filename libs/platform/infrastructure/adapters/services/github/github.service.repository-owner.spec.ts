@@ -20,14 +20,20 @@ jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
  * does not carry one.
  */
 describe('GithubService addresses a repository by its own owner', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const orgRepository = {
         id: '1460230740',
         name: 'qa2004-empty',
         fullName: 'Novaorg01/qa2004-empty',
     };
 
-    const makeService = (octokit: Record<string, any>, org = 'Wellington01') => {
+    const makeService = (
+        octokit: Record<string, any>,
+        org = 'Wellington01',
+    ) => {
         const service = new GithubService(
             {} as any,
             {} as any,
@@ -40,7 +46,9 @@ describe('GithubService addresses a repository by its own owner', () => {
             authMode: 'token',
             accountType: 'user',
         });
-        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue(octokit);
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue(
+            octokit,
+        );
         return service;
     };
 
@@ -55,7 +63,10 @@ describe('GithubService addresses a repository by its own owner', () => {
         });
 
         expect(get).toHaveBeenCalledWith(
-            expect.objectContaining({ owner: 'Novaorg01', repo: 'qa2004-empty' }),
+            expect.objectContaining({
+                owner: 'Novaorg01',
+                repo: 'qa2004-empty',
+            }),
         );
     });
 
@@ -82,7 +93,9 @@ describe('GithubService addresses a repository by its own owner', () => {
 
     it('reacts on the repository owner', async () => {
         const createForIssue = jest.fn().mockResolvedValue({ data: {} });
-        const service = makeService({ rest: { reactions: { createForIssue } } });
+        const service = makeService({
+            rest: { reactions: { createForIssue } },
+        });
 
         await service.addReactionToPR({
             organizationAndTeamData,
@@ -135,5 +148,57 @@ describe('GithubService addresses a repository by its own owner', () => {
         const body: string = createReview.mock.calls[0][0].body;
         expect(body).toContain('/Novaorg01/qa2004-empty/pull/1');
         expect(body).not.toContain('/Wellington01/');
+    });
+    it('reads the review status from the repository owner', async () => {
+        let args: any;
+        const service = makeService({
+            rest: { pulls: { listReviews: jest.fn() } },
+            paginate: jest.fn(async (_fn: any, a: any) => {
+                args = a;
+                return [];
+            }),
+        });
+        jest.spyOn(service as any, 'getViewer').mockResolvedValue({
+            login: 'kody',
+            id: 1,
+        });
+
+        await service.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository: orgRepository,
+            prNumber: 1,
+        } as any);
+
+        expect(args).toEqual(expect.objectContaining({ owner: 'Novaorg01' }));
+    });
+
+    it('dismisses its own reviews on the repository owner', async () => {
+        let args: any;
+        const service = makeService({
+            rest: {
+                pulls: { listReviews: jest.fn(), dismissReview: jest.fn() },
+            },
+            paginate: jest.fn(async (_fn: any, a: any) => {
+                args = a;
+                return [];
+            }),
+        });
+        jest.spyOn(service as any, 'getViewer').mockResolvedValue({
+            login: 'kody',
+            id: 1,
+        });
+
+        await service.dismissOwnPullRequestChangeRequests?.({
+            organizationAndTeamData,
+            repository: orgRepository,
+            prNumber: 1,
+        } as any);
+        await (service as any).dismissOwnReviews?.({
+            organizationAndTeamData,
+            repository: orgRepository,
+            prNumber: 1,
+        });
+
+        expect(args).toEqual(expect.objectContaining({ owner: 'Novaorg01' }));
     });
 });
