@@ -30,22 +30,36 @@ describe('GithubService addresses a repository by its own owner', () => {
         fullName: 'Novaorg01/qa2004-empty',
     };
 
+    // The saved selection: what the integration connected.
+    const connectedRepositories = [
+        {
+            id: '1460230740',
+            name: 'qa2004-empty',
+            full_name: 'Novaorg01/qa2004-empty',
+            http_url: 'https://github.com/Novaorg01/qa2004-empty',
+        },
+    ];
+
     const makeService = (
         octokit: Record<string, any>,
         org = 'Wellington01',
+        authMode = 'token',
     ) => {
         const service = new GithubService(
-            {} as any,
+            {
+                getPlatformAuthDetails: jest
+                    .fn()
+                    .mockResolvedValue({ org, authMode, accountType: 'user' }),
+            } as any,
             {} as any,
             {} as any,
             {} as any,
             { get: jest.fn() } as unknown as ConfigService,
         );
-        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
-            org,
-            authMode: 'token',
-            accountType: 'user',
-        });
+        jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockResolvedValue(connectedRepositories);
         jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue(
             octokit,
         );
@@ -107,6 +121,49 @@ describe('GithubService addresses a repository by its own owner', () => {
         expect(createForIssue).toHaveBeenCalledWith(
             expect.objectContaining({ owner: 'Novaorg01' }),
         );
+    });
+
+    it('ignores an owner no connected repository has, as a forged payload would carry', async () => {
+        const get = jest.fn().mockResolvedValue({ data: null });
+        const service = makeService({ pulls: { get } });
+
+        await service.getPullRequest({
+            organizationAndTeamData,
+            repository: {
+                id: '1460230740',
+                name: 'qa2004-empty',
+                fullName: 'SomeoneElse/qa2004-empty',
+            },
+            prNumber: 1,
+        });
+
+        expect(get).toHaveBeenCalledWith(
+            expect.objectContaining({ owner: 'Wellington01' }),
+        );
+    });
+
+    it('keeps an App installation on its own account', async () => {
+        const get = jest.fn().mockResolvedValue({ data: null });
+        const service = makeService({ pulls: { get } }, 'Novaorg01', 'oauth');
+        const readSelection = jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        );
+
+        await service.getPullRequest({
+            organizationAndTeamData,
+            repository: {
+                id: '1',
+                name: 'api',
+                fullName: 'SomeoneElse/api',
+            },
+            prNumber: 1,
+        });
+
+        expect(get).toHaveBeenCalledWith(
+            expect.objectContaining({ owner: 'Novaorg01' }),
+        );
+        expect(readSelection).not.toHaveBeenCalled();
     });
 
     it('falls back to the recorded account when the full name holds no real owner', async () => {

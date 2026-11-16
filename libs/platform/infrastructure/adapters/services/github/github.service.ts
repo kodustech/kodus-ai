@@ -1944,13 +1944,6 @@ export class GithubService
     }
 
     /**
-     * The account GitHub addresses a repository under. A token integration
-     * records one account as `org` (for a fine-grained token or a personal
-     * account, the user's login), while its repositories can belong to an
-     * organization, so the repository's own owner wins and the recorded
-     * account is only the fallback for a repository that carries no owner.
-     */
-    /**
      * The owner a repository record names: its full name's owner, then its
      * organization. Undefined when the record carries none.
      */
@@ -1990,13 +1983,35 @@ export class GithubService
         );
     }
 
+    /**
+     * Owners of the repositories connected to a token integration, read from
+     * the saved selection when its auth details are loaded. Keyed by the auth
+     * details object, so a copy of it falls back to the recorded account.
+     */
+    private readonly connectedOwners = new WeakMap<object, Set<string>>();
+
+    /**
+     * The account GitHub addresses a repository under. A token integration
+     * records one account as `org` (for a fine-grained token or a personal
+     * account, the user's login), while its repositories can belong to an
+     * organization. The repository's owner is used only when it is the
+     * recorded account or the owner of a connected repository: the owner can
+     * come from a webhook payload, and must not steer the token anywhere the
+     * saved selection does not reach. Anything else gets the recorded account.
+     */
     private ownerOf(
         repository: Parameters<typeof GithubService.recordedOwnerOf>[0],
         githubAuthDetail: { org?: string } | null | undefined,
     ): string {
-        return (
-            GithubService.recordedOwnerOf(repository) || githubAuthDetail?.org
-        );
+        const org = githubAuthDetail?.org;
+        const owner = GithubService.recordedOwnerOf(repository);
+        if (!owner || owner.toLowerCase() === org?.toLowerCase()) {
+            return owner || org;
+        }
+        const connected = githubAuthDetail
+            ? this.connectedOwners.get(githubAuthDetail)
+            : undefined;
+        return connected?.has(owner.toLowerCase()) ? owner : org;
     }
 
     /**
@@ -2014,10 +2029,50 @@ export class GithubService
                 PlatformType.GITHUB,
             );
 
-        return {
+        const authDetail = {
             ...githubAuthDetail,
             authMode: githubAuthDetail?.authMode || AuthMode.OAUTH,
         };
+
+        // An App installation only reaches its own account's repositories,
+        // so only a token can need another owner.
+        if (authDetail.authMode === AuthMode.TOKEN) {
+            this.connectedOwners.set(
+                authDetail,
+                await this.readConnectedOwners(organizationAndTeamData),
+            );
+        }
+
+        return authDetail;
+    }
+
+    private async readConnectedOwners(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Set<string>> {
+        try {
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+            return new Set(
+                (Array.isArray(repositories) ? repositories : [])
+                    .map((repository) =>
+                        GithubService.recordedOwnerOf(repository),
+                    )
+                    .filter(Boolean)
+                    .map((owner) => owner.toLowerCase()),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the connected repositories; GitHub calls use the recorded account',
+                context: GithubService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return new Set();
+        }
     }
 
     /**
