@@ -130,6 +130,17 @@ export interface PublicationStore {
     ): Promise<void>;
     /** The check run recorded under `key` (a pre-verdict phase of the same Run), or null. */
     findCheckRunId(key: string): Promise<string | number | null>;
+    /** Whether the check under `key` is on the PR with its completed status (see hasVerdict). */
+    hasPublishedVerdict(key: string): Promise<boolean>;
+}
+
+/** The rule of PublicationStore.hasPublishedVerdict: a check published with its completed status. */
+export function hasVerdict(row: RuntimePublication | undefined): boolean {
+    return (
+        row?.kind === 'check' &&
+        row.status === 'published' &&
+        (row.checkRank ?? 0) >= CHECK_STATUS_RANK.completed
+    );
 }
 
 /** Read side for the dashboard: what the product published for one Run. */

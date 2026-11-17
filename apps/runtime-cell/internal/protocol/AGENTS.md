@@ -41,6 +41,7 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/cmd/cell`](../../cmd/cell/AGENTS.md)
+- [`apps/runtime-cell/cmd/release-sign`](../../cmd/release-sign/AGENTS.md)
 - [`apps/runtime-cell/internal/agent`](../agent/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/checkout`](../agent/checkout/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/claims`](../agent/claims/AGENTS.md)

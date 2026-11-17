@@ -4,7 +4,7 @@ The publisher's rules, ports and wording: where a Run publishes, when a delivery
 
 ## Owns
 - The Run target: `run-target.ts` `RunTarget`, `runTargetOf` (from the `RuntimeRunRequested` the product enqueues), `sameRunTarget`, `RunTargetConflictError`, the `RunTargetStore` port.
-- Publications and their claims: `runtime-publication.ts` `RuntimePublication`, `canClaim`, `refusalState`, `CHECK_STATUS_RANK`, `PUBLICATION_LEASE_MS`, the `PublicationStore`, `PublicationReader` and `PublicationRedriveStore` ports.
+- Publications and their claims: `runtime-publication.ts` `RuntimePublication`, `canClaim`, `refusalState`, `hasVerdict`, `CHECK_STATUS_RANK`, `PUBLICATION_LEASE_MS`, the `PublicationStore`, `PublicationReader` and `PublicationRedriveStore` ports.
 - One comment per PR and environment: `pull-request-comment-slot.ts` `PullRequestCommentSlotStore`, `COMMENT_SLOT_LEASE_MS`; `publish-environment.ts` `publishEnvironmentOf`, `checkNameOf`, `commentMarkerOf`.
 - The redrive policy: `publication-redrive.ts` `isFinalPublication`, `storableRequestOf` (256 KiB, check summary dropped first), `nextRedriveStep`, `hasFallback`, `REDRIVE_AFTER_MS`, `MAX_REDRIVE_ATTEMPTS`, `REDRIVE_BATCH`; `runtime-publication.ts` `isStaleForRedrive`.
 - What reaches the PR: `render-runtime-comment.ts` (`renderProgressComment`, `renderReportComment`, `renderCheckOutput`, `renderBareCheckOutput`, `renderSuggestionReply`, `renderUndeliveredReportComment`, `renderUndeliveredCheckOutput`, `partlyTestedReasons`, `code`, `runtimeLinks`, `RUNTIME_COMMENT_MARKER`); `render-skipped-trigger.ts` `renderSkippedTriggerReply`, `skippedTriggerReplyKey`, `skippedTriggerMarker`.

@@ -10,10 +10,12 @@ import { PUBLISH_LOG_CONTEXT } from './comment-publisher';
 import { PublicationFailedError, type PublishOptions, type PublishOutcome, type PublishTarget } from './publication-outcome';
 
 /**
- * Deliveries whose create answers no check run (or no commit status) before
- * the check is given up as unavailable (no checks:write, a token without
- * commit status write). The adapters answer the same for a transient error,
- * so one miss is not enough to give up.
+ * Deliveries whose create answers no check run (or a commit status that
+ * failed for a reason that can pass) before the check is given up as
+ * unavailable. A check run create answers null for no checks:write and for a
+ * transient error alike, so one miss is not enough to give up. A commit
+ * status the token may not write is skipped at once instead
+ * (`status_permission_missing`).
  */
 export const MAX_CHECK_CREATE_ATTEMPTS = 3;
 
@@ -92,6 +94,23 @@ export class CheckPublisher {
             return { outcome: 'skipped', key: msg.key, reason: 'checks_unavailable' };
         }
 
+        // The final verdict moves the check run the awaiting_approval phase
+        // opened, recorded under that phase's own key.
+        const finalKey = msg.key === publishKey(msg.runId, msg.attempt, 'check');
+
+        // A phase under its own key (awaiting_approval) delivered after the
+        // verdict would put the check back to waiting: a commit status is
+        // append-only per context, and a check run would be moved back. The
+        // phases under the final key never get here: canClaim refuses a lower
+        // rank.
+        if (!finalKey && (await this.publications.hasPublishedVerdict(publishKey(msg.runId, msg.attempt, 'check')))) {
+            await this.publications.complete(msg.key, {
+                status: 'skipped',
+                reason: 'superseded_by_final',
+            });
+            return { outcome: 'skipped', key: msg.key, reason: 'superseded_by_final' };
+        }
+
         const adapter = this.checks.getAdapter(platformType);
         // One check per environment the PR runs in, named with the environment: a later success elsewhere never hides a failure here.
         const checkName = checkNameOf(publishEnvironmentOf({ repositoryId: scope.repositoryId, workspace: target.workspace }));
@@ -104,7 +123,7 @@ export class CheckPublisher {
             adapter.isChecksApiAvailable &&
             !(await adapter.isChecksApiAvailable(organizationAndTeamData))
         ) {
-            const posted = await adapter.createCommitStatus({
+            const result = await adapter.createCommitStatus({
                 organizationAndTeamData,
                 repository: repo,
                 sha: scope.headSha,
@@ -114,7 +133,21 @@ export class CheckPublisher {
                 description: output.title,
                 targetUrl: links.run,
             });
-            if (!posted) {
+            if (result === 'permission_missing') {
+                // Only the customer can fix it: no retry, and the Run page
+                // says which permission the token needs.
+                this.logger.warn({
+                    message: 'Runtime check skipped: the token connected to Kodus cannot write commit statuses',
+                    context: PUBLISH_LOG_CONTEXT,
+                    metadata: { key: msg.key, organizationId: target.scope.organizationId },
+                });
+                await this.publications.complete(msg.key, {
+                    status: 'skipped',
+                    reason: 'status_permission_missing',
+                });
+                return { outcome: 'skipped', key: msg.key, reason: 'status_permission_missing' };
+            }
+            if (result !== 'posted') {
                 return this.createFailed(msg, target, publication, 'the platform did not create the commit status');
             }
             await this.publications.complete(msg.key, {
@@ -126,9 +159,6 @@ export class CheckPublisher {
             return { outcome: 'published', key: msg.key, action: 'created' };
         }
 
-        // The final verdict moves the check run the awaiting_approval phase
-        // opened, recorded under that phase's own key.
-        const finalKey = msg.key === publishKey(msg.runId, msg.attempt, 'check');
         let checkRunId =
             publication.checkRunId ??
             (finalKey

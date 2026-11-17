@@ -34,7 +34,7 @@ export type PublishOutcome =
     | {
           outcome: 'skipped';
           key: string;
-          reason: 'checks_unavailable' | 'stale_comment';
+          reason: 'checks_unavailable' | 'status_permission_missing' | 'superseded_by_final' | 'stale_comment';
       };
 
 /**

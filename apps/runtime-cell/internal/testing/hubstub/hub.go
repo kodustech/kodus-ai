@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"math/big"
 	"net/http"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,7 +58,9 @@ type claimRecord struct {
 type Hub struct {
 	Log *slog.Logger
 	// HelloAck, when set before cells connect, replaces the hello ack
-	// (default: {"version": protocol.ProtocolVersion}).
+	// (default: {"version": protocol.ProtocolVersion}, and to a cell that
+	// names cellProtocols the range a hub of this protocol accepts, as the
+	// hub does).
 	HelloAck func() *protocol.AckBody
 
 	mu       sync.Mutex
@@ -192,6 +195,9 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.mu.Unlock()
 			v := int64(protocol.ProtocolVersion)
 			ack := &protocol.AckBody{Version: &v}
+			if slices.Contains(b.Features, protocol.FeatureCellProtocols) {
+				ack.CellProtocols = &protocol.AckBodyCellProtocols{Min: protocol.SupportedVersions()[0], Max: v}
+			}
 			if helloAck != nil {
 				ack = helloAck()
 			}

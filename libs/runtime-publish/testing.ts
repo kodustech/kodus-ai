@@ -12,6 +12,7 @@ import {
     canClaim,
     type ClaimRequest,
     type ClaimResult,
+    hasVerdict,
     isStaleForRedrive,
     PUBLICATION_LEASE_MS,
     type PublicationReader,
@@ -111,6 +112,10 @@ export class InMemoryPublicationStore
 
     async findCheckRunId(key: string) {
         return this.rows.get(key)?.checkRunId ?? null;
+    }
+
+    async hasPublishedVerdict(key: string) {
+        return hasVerdict(this.rows.get(key));
     }
 
     async listForRun(organizationId: string, runId: string) {

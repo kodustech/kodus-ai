@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubprotocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lease"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	buildversion "github.com/kodustech/kodus-ai/apps/runtime-cell/internal/version"
@@ -162,6 +163,7 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 		return err // Run logs it as hub.disconnected
 	}
 	accepts := protocol.Accepted(ack)
+	a.recordHubProtocol(version, ack.CellProtocols)
 	a.mu.Lock()
 	a.conn, a.version, a.accepts = conn, version, accepts
 	a.mu.Unlock()
@@ -243,6 +245,22 @@ func chosenVersion(ack *protocol.AckBody) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("agent: hub chose protocol v%d; this cell speaks %v", *ack.Version, protocol.SupportedVersions())
+}
+
+// recordHubProtocol keeps what the hub's hello ack said for `cell update`
+// (Config.HubProtocolState). A failed write is logged, never the session's
+// end: the hub accepted the cell, and the update reads an older state or none.
+func (a *Agent) recordHubProtocol(version int64, accepts *protocol.AckBodyCellProtocols) {
+	if a.cfg.HubProtocolState == "" {
+		return
+	}
+	s := hubprotocol.State{Version: version, At: time.Now().UTC()}
+	if accepts != nil {
+		s.Accepts = &hubprotocol.Range{Min: accepts.Min, Max: accepts.Max}
+	}
+	if err := hubprotocol.Save(a.cfg.HubProtocolState, s); err != nil {
+		a.log.Warn("hub.protocol_state_failed", "err", err, "path", a.cfg.HubProtocolState)
+	}
 }
 
 // versionRefusedError is a hello the hub refused for the cell's protocol

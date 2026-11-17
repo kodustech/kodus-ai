@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/k8ssandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/enrollment"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/gitsource"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubprotocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/injector"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lifecycle"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/metrics"
@@ -56,7 +58,7 @@ func main() {
 		os.Exit(runEnroll(os.Args[1], os.Args[2:], os.Stdout, os.Stderr))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "update" {
-		os.Exit(cellupdate.Run(os.Args[2:], os.Stdout, os.Stderr))
+		os.Exit(cellupdate.Run(os.Args[2:], os.Stdout, os.Stderr, cellStateDir))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "preflight" {
 		os.Exit(runPreflight(os.Args[2:], os.Stdout, os.Stderr, hostPreflightProbes()))
@@ -175,6 +177,8 @@ func run(log *slog.Logger, args []string) error {
 		Log:     log,
 		Metrics: reg,
 	}
+	// cell update reads it to refuse a release this hub would refuse (cellStateDir).
+	cfg.HubProtocolState = filepath.Join(st.StateDir, hubprotocol.StateName)
 	// The trust files a claim with org secrets mounts (trust.go), built
 	// once, before any driver boots a machine.
 	trust, rootsFrom, err := st.Trust.write(st.WorkDir)

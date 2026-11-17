@@ -3,7 +3,7 @@
 The cell agent: the application of the cell process ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It holds the outbound session to the runtime-hub, turns each hub frame into work on the driver, the transport, the observer and the egress control it is given (`Config`), and keeps the leases and the dead-man switch. It is a router over its parts (`agent/claims`, `outbox`, `pool`, `admission`, `provenance`, `evidence`, `checkout`); it decides nothing about the PR.
 
 ## Owns
-- The hub session: `session.go` `Agent.Run`, `session` (hello, version choice, housekeeping, heartbeat); a hello refused for the cell's version (`cell_too_new`, `cell_too_old`, an older hub's `unsupported_version`: `asVersionRefusal`) is logged `hub.refused_version` at error and retried only after `RunConfig.RefusedBackoff` (5 min); `handle.go` `Agent.Handle` (one frame to one handler, ack or nack at once).
+- The hub session: `session.go` `Agent.Run`, `session` (hello, version choice, housekeeping, heartbeat); a hello refused for the cell's version (`cell_too_new`, `cell_too_old`, an older hub's `unsupported_version`: `asVersionRefusal`) is logged `hub.refused_version` at error and retried only after `RunConfig.RefusedBackoff` (5 min); after an accepted hello, `recordHubProtocol` writes the chosen version and the ack's `cellProtocols` to `Config.HubProtocolState` (`internal/hubprotocol`) for `cell update`, and the hello names `cellProtocols` only when that path is set; `handle.go` `Agent.Handle` (one frame to one handler, ack or nack at once).
 - A claim's life: `acquire.go` `acquire` (admission, ceiling per consumer `hardCeiling`, `rejoin`), `prepare.go` `prepare` (the steps on one `preparation`: network, machines, code, upload, compose, egress, recipeSteps, observerSQL, running), `settle.go` `bringUp` (`claim.ready` or `claim.failed`), `release.go` `release`, `cleanup`, `ReapDeadClaims`.
 - Steps on a ready claim: `steps.go` `admitStep` (dedup by `stepId`, the claim's step limit), `runProbe`, `runExec`; `browser.go`, `browser_explore.go`; `snapshots.go` (memory snapshots, `machine.reset` to a round); `observer_sql.go`.
 - Uploads into the checkout: `upload.go` (`checkUpload` before admission: paths out of the checkout, in `.git` or over the cell's `.kodus*`/`.kody*` files, grants that are not plain http(s), modes past 0777; `runUpload` GETs every file's read grant over `EvidenceHTTP`, at most `MaxUploadFileBytes` 4 MiB a file and `MaxUploadBytes` 16 MiB a step, digest-checked when `sha256` is set, then writes each through `Transport.Exec` as base64 env chunks into a staging file renamed over the path; `uploadCanon` leaves the grant URL out). No error, log or result names a grant.
@@ -59,6 +59,7 @@ Imports these Runtime modules:
 - [`apps/runtime-cell/internal/eventlog`](../eventlog/AGENTS.md)
 - [`apps/runtime-cell/internal/guest`](../guest/AGENTS.md)
 - [`apps/runtime-cell/internal/hubclient`](../hubclient/AGENTS.md)
+- [`apps/runtime-cell/internal/hubprotocol`](../hubprotocol/AGENTS.md)
 - [`apps/runtime-cell/internal/isolation`](../isolation/AGENTS.md)
 - [`apps/runtime-cell/internal/isolation/vmsnap`](../isolation/vmsnap/AGENTS.md)
 - [`apps/runtime-cell/internal/kodyexec`](../kodyexec/AGENTS.md)

@@ -28,7 +28,8 @@ export type HelloVersionRefusalCode = (typeof HELLO_VERSION_REFUSALS)[keyof type
 
 /** The cell protocol versions a hub accepts at hello: this hub's by default. */
 export type CellProtocolRange = { min: number; max: number };
-const HUB_CELL_PROTOCOLS: CellProtocolRange = { min: MIN_CELL_PROTOCOL_VERSION, max: PROTOCOL_VERSION };
+/** This hub's range: what helloVersionRefusal applies, and what the hello ack's cellProtocols tells a cell that names the feature. */
+export const HUB_CELL_PROTOCOLS: CellProtocolRange = { min: MIN_CELL_PROTOCOL_VERSION, max: PROTOCOL_VERSION };
 
 /** The protocol a hello's cell speaks: the highest version it offers (it frames in that one). */
 export function cellProtocolOf(versions: readonly number[]): number {

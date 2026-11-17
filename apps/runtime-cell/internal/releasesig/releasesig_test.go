@@ -141,7 +141,7 @@ func TestTheToolGeneratesAKeyAndSignsWhatItChecked(t *testing.T) {
 	dir := t.TempDir()
 	priv, pub := filepath.Join(dir, "release.key"), filepath.Join(dir, "release.pub")
 	var out, errOut bytes.Buffer
-	if code := RunTool([]string{"generate", "-private", priv, "-public", pub}, &out, &errOut); code != 0 {
+	if code := RunTool([]string{"generate", "-private", priv, "-public", pub}, Protocol{}, &out, &errOut); code != 0 {
 		t.Fatalf("generate: %d %s", code, errOut.String())
 	}
 	if fi, err := os.Stat(priv); err != nil || fi.Mode().Perm() != 0o600 {
@@ -156,7 +156,7 @@ func TestTheToolGeneratesAKeyAndSignsWhatItChecked(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(rel, "cell-linux-arm64"), []byte("cell"), 0o644)
 	sum := sha256.Sum256([]byte("cell"))
 	_ = os.WriteFile(filepath.Join(rel, ManifestName), []byte(hex.EncodeToString(sum[:])+"  cell-linux-arm64\n"), 0o644)
-	if code := RunTool([]string{"sign", "-key", priv, "-release", "v3.0.0", "-dir", rel}, &out, &errOut); code != 0 {
+	if code := RunTool([]string{"sign", "-key", priv, "-release", "v3.0.0", "-dir", rel}, Protocol{}, &out, &errOut); code != 0 {
 		t.Fatalf("sign: %d %s", code, errOut.String())
 	}
 	if _, err := Verify(rel, "v3.0.0", keys); err != nil {
@@ -166,7 +166,7 @@ func TestTheToolGeneratesAKeyAndSignsWhatItChecked(t *testing.T) {
 	bad := t.TempDir()
 	_ = os.WriteFile(filepath.Join(bad, "cell-linux-arm64"), []byte("other"), 0o644)
 	_ = os.WriteFile(filepath.Join(bad, ManifestName), []byte(hex.EncodeToString(sum[:])+"  cell-linux-arm64\n"), 0o644)
-	if code := RunTool([]string{"sign", "-key", priv, "-release", "v3.0.0", "-dir", bad}, &out, &errOut); code != 1 {
+	if code := RunTool([]string{"sign", "-key", priv, "-release", "v3.0.0", "-dir", bad}, Protocol{}, &out, &errOut); code != 1 {
 		t.Fatalf("signed a manifest that does not match its file: %d", code)
 	}
 	if _, err := os.Stat(filepath.Join(bad, SignatureName)); err == nil {

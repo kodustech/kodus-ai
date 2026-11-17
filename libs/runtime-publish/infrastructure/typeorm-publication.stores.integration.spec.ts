@@ -97,6 +97,21 @@ const schema = `runtime_publications_it_${process.pid}`;
         expect(await store.findCheckRunId(`${runId}:1:comment`)).toBeNull();
     });
 
+    it('a check has its verdict on the PR only once its completed status is published', async () => {
+        const runId = randomUUID();
+        const key = `${runId}:1:check`;
+        const check = (rank: number) => claim({ runId, key, kind: 'check', checkRank: rank });
+        expect(await store.hasPublishedVerdict(key)).toBe(false);
+        await store.claim(check(2), NOW);
+        await store.complete(key, { status: 'published', checkRank: 2, commitStatus: true });
+        expect(await store.hasPublishedVerdict(key)).toBe(false);
+        await store.claim(check(3), plus(1_000));
+        expect(await store.hasPublishedVerdict(key)).toBe(false);
+        await store.complete(key, { status: 'published', checkRank: 3, commitStatus: true });
+        expect(await store.hasPublishedVerdict(key)).toBe(true);
+        expect(await store.hasPublishedVerdict(`${runId}:1:comment`)).toBe(false);
+    });
+
     it('the redrive sweeper finds stale final publications oldest first, takes each once, and a given-up row stays failed', async () => {
         const LATER = '2099-01-01T00:00:00.000Z';
         const finalAt = (min: number) => ({ r: claim({ request: { runId: 'r', marker: min } as never }), at: new Date(Date.UTC(2026, 10, 12, 11, min)) });

@@ -9,7 +9,7 @@ import { runtimeTriggerOutboxMessage, RuntimeRunCancelRequestedSchema, RuntimeRu
 
 import { RuntimeRunRequestBuilder } from '../application/run-request-builder.service';
 import { RuntimeRunEnqueuer } from '../application/runtime-run-enqueuer.service';
-import { RuntimePullRequestTriggerUseCase } from '../application/use-cases/pull-request-trigger.use-case';
+import { RuntimePullRequestTriggerUseCase, UNREADABLE_REPOSITORY_WARNING_WINDOW_MS } from '../application/use-cases/pull-request-trigger.use-case';
 import { ASKED_RUNS_REACHED_DETAIL } from '../application/asked-runs';
 import { COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY } from '../domain/trigger-rules';
 import type { PullRequestHead, RuntimeGitPort, RuntimeRepoTokenIssuer, RuntimeRepositorySettingsRecord } from '../domain/ports';
@@ -69,8 +69,8 @@ async function setup(opts: {
         }),
         userCanWrite: async () => opts.canWrite,
         isOrganizationMember: async () => opts.member,
-        repositoryReadAccess: async () => opts.readAccess ?? 'ok',
-    } as unknown as RuntimeGitPort;
+        repositoryReadAccess: jest.fn(async () => opts.readAccess ?? 'ok'),
+    } as unknown as RuntimeGitPort & { repositoryReadAccess: jest.Mock };
     const outbox = new FakeOutbox();
     const targets = new InMemoryRunTargetStore();
     const platform = opts.platform ?? fakePlatform();
@@ -105,7 +105,7 @@ async function setup(opts: {
     );
     const requested = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.requested').map((r) => RuntimeRunRequestedSchema.parse(stripType(r.payload.payload)));
     const cancels = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.cancel_requested').map((r) => RuntimeRunCancelRequestedSchema.parse(stripType(r.payload.payload)));
-    return { useCase, outbox, targets, requested, cancels, pool, platform, publications };
+    return { useCase, outbox, targets, requested, cancels, pool, platform, publications, git };
 }
 
 /** The account the integration's token belongs to: who Kody posts as. */
@@ -548,6 +548,57 @@ describe('Runtime PR trigger (PR 2)', () => {
             });
             // Nothing the platform said reaches the log.
             expect(JSON.stringify(warn.mock.calls[0][0])).not.toContain('Not Found');
+        });
+    });
+
+    // A push on a repository the Git connection can no longer read ended as a
+    // silent pr_not_found: nobody could see that the org's App lost access.
+    describe('a PR event on a repository the Git connection cannot read warns once per window', () => {
+        const unreadable = (warn: jest.SpyInstance) => warn.mock.calls.filter(([entry]) => String(entry?.message).includes('cannot read this repository'));
+
+        afterEach(() => jest.restoreAllMocks());
+
+        it('an empty PR read on a connection that is denied logs one warning with the ids and the reason, and stays pr_not_found', async () => {
+            const s = await setup({ head: null, readAccess: 'denied' });
+            const warn = jest.spyOn((s.useCase as any).logger, 'warn').mockImplementation(() => undefined);
+            await expect(s.useCase.execute(event({ event: 'synchronize' }))).resolves.toEqual({ action: 'skipped', reason: 'pr_not_found' });
+            expect(unreadable(warn)).toHaveLength(1);
+            expect(unreadable(warn)[0][0]).toMatchObject({
+                metadata: { organizationId: ORG, repositoryId: REPO, prNumber: 7, reason: 'repository_unreachable' },
+            });
+            expect(s.platform.comments).toEqual([]);
+        });
+
+        it('more pushes on the same repository within the window ask the platform nothing more and log nothing more; after it, it asks again', async () => {
+            const now = jest.spyOn(Date, 'now').mockReturnValue(NOW.getTime());
+            const s = await setup({ head: null, readAccess: 'denied' });
+            const warn = jest.spyOn((s.useCase as any).logger, 'warn').mockImplementation(() => undefined);
+            await s.useCase.execute(event());
+            await s.useCase.execute(event({ event: 'synchronize', prNumber: 8 }));
+            now.mockReturnValue(NOW.getTime() + UNREADABLE_REPOSITORY_WARNING_WINDOW_MS - 1);
+            await s.useCase.execute(event({ event: 'synchronize' }));
+            expect(s.git.repositoryReadAccess).toHaveBeenCalledTimes(1);
+            expect(unreadable(warn)).toHaveLength(1);
+
+            now.mockReturnValue(NOW.getTime() + UNREADABLE_REPOSITORY_WARNING_WINDOW_MS);
+            await s.useCase.execute(event({ event: 'synchronize' }));
+            expect(s.git.repositoryReadAccess).toHaveBeenCalledTimes(2);
+            expect(unreadable(warn)).toHaveLength(2);
+        });
+
+        it.each(['ok', 'unknown'] as const)('a connection that reads the repository (%s) logs no warning', async (readAccess) => {
+            const s = await setup({ head: null, readAccess });
+            const warn = jest.spyOn((s.useCase as any).logger, 'warn').mockImplementation(() => undefined);
+            await expect(s.useCase.execute(event())).resolves.toEqual({ action: 'skipped', reason: 'pr_not_found' });
+            expect(s.git.repositoryReadAccess).toHaveBeenCalledTimes(1);
+            expect(unreadable(warn)).toEqual([]);
+        });
+
+        it('a PR read that answers never asks the platform for a diagnosis', async () => {
+            const s = await setup({ readAccess: 'denied' });
+            await s.useCase.execute(event());
+            await s.useCase.execute(event({ event: 'closed' }));
+            expect(s.git.repositoryReadAccess).not.toHaveBeenCalled();
         });
     });
 });

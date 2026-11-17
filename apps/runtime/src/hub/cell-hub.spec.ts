@@ -1481,6 +1481,14 @@ describe('CellHub', () => {
             expect(ctx.logs.filter((l) => l.msg.startsWith('cell.host')).at(-1)).toMatchObject({ level: 'info', msg: 'cell.host', policy: 'shared' });
         });
 
+        it('a cell that names cellProtocols hears in the hello ack the cell protocols this hub accepts, so cell update can refuse a release the hub would refuse', async () => {
+            const ctx = setup();
+            const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'cellProtocols'] });
+            expect(c.sock.last('ack').body).toEqual({ version: PROTOCOL_VERSION, cellProtocols: { min: MIN_CELL_PROTOCOL_VERSION, max: PROTOCOL_VERSION } });
+            // The ack decodes as a cell decodes it (a strict decoder, the shared schema).
+            expect(decodeFrame(JSON.stringify(c.sock.last('ack')))).toMatchObject({ ok: true });
+        });
+
         it('a cell that does not name it gets the ack it always got, without accepts', async () => {
             const ctx = setup();
             const old = await ctx.connect('cell-a', 'kodus', CURRENT_CELL);

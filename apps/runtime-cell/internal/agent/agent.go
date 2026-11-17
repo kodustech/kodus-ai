@@ -291,6 +291,9 @@ func (a *Agent) Hello() *protocol.HelloBody {
 		if feature == protocol.FeatureHostHardening && a.cfg.Host == nil {
 			continue
 		}
+		if feature == protocol.FeatureCellProtocols && a.cfg.HubProtocolState == "" {
+			continue // the range is kept only for cell update, on a host that keeps it
+		}
 		if feature == protocol.FeatureSandbox && a.cfg.Parts.Sandboxes == nil {
 			continue
 		}

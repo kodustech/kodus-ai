@@ -34,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubprotocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/releasesig"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/version"
 )
@@ -73,6 +74,18 @@ type Options struct {
 	// after every file matched and before the swap; an error refuses the
 	// swap. Nil: no check. Not run with VerifyOnly.
 	Preflight func(cell string) error
+	// HubState is the cell's hub-protocol.state (internal/hubprotocol): what
+	// the hub said at the cell's last accepted hello. A release that hub
+	// would refuse is refused (protocol.go). Empty, or no file: not checked.
+	HubState string
+	// SkipProtocolCheck installs without checking the release's protocol
+	// against HubState: the operator's explicit choice.
+	SkipProtocolCheck bool
+	// RequireProtocol refuses a release that does not say which protocol it
+	// speaks (no PROTOCOL in its SHA256SUMS); otherwise it installs unchecked.
+	RequireProtocol bool
+	// Notes gets what the update could not check and why; nil discards it.
+	Notes io.Writer
 }
 
 // Install verifies the release in o.From and makes it current, keeping the
@@ -112,6 +125,10 @@ func Install(o Options) (string, error) {
 	}
 	files, err := commandsOf(manifest, o.Arch, filepath.Join(o.From, releasesig.ManifestName))
 	if err != nil {
+		return "", err
+	}
+	// Before anything changes: a release the hub would refuse never becomes current.
+	if err := checkProtocol(o, manifest, o.Notes); err != nil {
 		return "", err
 	}
 	if o.VerifyOnly {
@@ -252,7 +269,10 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 // Run is `cell update`: exit 0 installed (or verified), 1 refused, 2 usage.
-func Run(args []string, stdout, stderr io.Writer) int {
+// stateDirOf is the cell's -state-dir under its config file ("" for none),
+// as the cell itself resolves it (cmd/cell): where the agent keeps
+// hub-protocol.state.
+func Run(args []string, stdout, stderr io.Writer, stateDirOf func(config string) (string, error)) int {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", "/opt/kodus-cell", "the installer's directory: releases/, current, previous")
@@ -265,6 +285,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	allowDowngrade := fs.Bool("allow-downgrade", false, "install a release older than the one running this command (a dev build over a release included)")
 	preflightConfig := fs.String("preflight-config", os.Getenv("KODUS_CELL_CONFIG"), "the cell's -config file: before the swap the staged release runs `cell preflight -config` with it, and a failed check keeps the installed release (default $KODUS_CELL_CONFIG)")
 	skipPreflight := fs.Bool("skip-preflight", false, "swap without the staged release's host preflight")
+	stateDir := fs.String("state-dir", "", "the cell's -state-dir, where its agent keeps "+hubprotocol.StateName+" (what the hub accepted at the last hello); default: the one -preflight-config gives the cell")
+	skipProtocol := fs.Bool("skip-protocol-check", false, "install without checking the release's protocol against what the hub last accepted")
+	requireProtocol := fs.Bool("require-protocol", false, "refuse a release that does not say which protocol it speaks (no "+releasesig.ProtocolName+" in its "+releasesig.ManifestName+")")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -277,7 +300,20 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "cell update:", err)
 		return 1
 	}
-	o := Options{Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir}
+	o := Options{Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir,
+		SkipProtocolCheck: *skipProtocol, RequireProtocol: *requireProtocol, Notes: stderr}
+	if !*skipProtocol {
+		dir := *stateDir
+		if dir == "" && stateDirOf != nil {
+			if dir, err = stateDirOf(*preflightConfig); err != nil {
+				_, _ = fmt.Fprintf(stderr, "cell update: the cell's state dir under config %q: %v; give -state-dir, or -skip-protocol-check\n", *preflightConfig, err)
+				return 1
+			}
+		}
+		if dir != "" {
+			o.HubState = filepath.Join(dir, hubprotocol.StateName)
+		}
+	}
 	switch {
 	case *skipPreflight || *verifyOnly:
 	case *preflightConfig == "":

@@ -95,6 +95,7 @@ type world struct {
 	appPort  int
 	revoked  atomic.Int32
 	machines string
+	hubState string // the agent's hub-protocol.state
 	cancel   context.CancelFunc
 	done     chan struct{}
 }
@@ -124,7 +125,7 @@ func cellTLS(t *testing.T, ca *testpki.CA, cn string) *tls.Config {
 func newWorld(t *testing.T, setup ...func(*hubstub.Hub)) *world {
 	t.Helper()
 	w := &world{
-		hub: hubstub.New(), drv: fake.New(), machines: t.TempDir(), done: make(chan struct{}),
+		hub: hubstub.New(), drv: fake.New(), machines: t.TempDir(), hubState: filepath.Join(t.TempDir(), "hub-protocol.state"), done: make(chan struct{}),
 		egress: &recEgress{applied: make(chan agent.ClaimInfo, 64), removed: make(chan string, 64)}, logs: &syncBuf{},
 	}
 	// The world stands for a production cell: VM isolation.
@@ -192,7 +193,9 @@ func newWorld(t *testing.T, setup ...func(*hubstub.Hub)) *world {
 		DeniedEgress: w.egress,
 		Parts:        w.drv.Parts(),
 		WorkDir:      t.TempDir(),
-		Log:          slog.New(slog.NewTextHandler(w.logs, nil)),
+		// What cell update reads (update_protocol_test.go).
+		HubProtocolState: w.hubState,
+		Log:              slog.New(slog.NewTextHandler(w.logs, nil)),
 		// Resends of claim.ready / claim.failed, fast for the tests.
 		SettleBackoff: 20 * time.Millisecond,
 	})

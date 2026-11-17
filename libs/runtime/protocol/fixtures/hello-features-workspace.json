@@ -46,7 +46,8 @@
         "snapshotForget",
         "hostHardening",
         "buildStateRebuildCost",
-        "runIdentity"
+        "runIdentity",
+        "cellProtocols"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

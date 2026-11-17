@@ -54,6 +54,17 @@ export type TriggerOutcome =
 
 type EnvironmentOutcome = Exclude<TriggerOutcome, { action: 'per_environment' } | { action: 'cancelled' }>;
 
+/**
+ * How often a PR event on a repository whose PR read came back empty may ask
+ * the provider whether the connection still reads it, and so how often the
+ * warning that it does not is logged, per organization and repository and per
+ * process.
+ */
+export const UNREADABLE_REPOSITORY_WARNING_WINDOW_MS = 30 * 60_000;
+
+/** At most this many remembered repositories: past it, the ones whose window ended, then the oldest, are forgotten. */
+const UNREADABLE_REPOSITORY_KEYS_MAX = 1_000;
+
 type Repo = { repositoryId: string; repositoryName: string };
 type OrgTeam = { organizationId: string; teamId: string };
 
@@ -82,11 +93,15 @@ interface DecisionFacts {
  * and only to someone who may ask (render-skipped-trigger.ts). A Git
  * connection that cannot serve the repository (RepositoryAccessProblem) is a
  * decision, not a failure: answered when the connection can still post, else
- * logged once, and never retried.
+ * logged once, and never retried. A PR event is never answered, so a PR read
+ * that came back empty on a connection that no longer reads the repository is
+ * logged, at most once per window per repository (warnIfUnreadable).
  */
 @Injectable()
 export class RuntimePullRequestTriggerUseCase {
     private readonly logger = createLogger(RuntimePullRequestTriggerUseCase.name);
+    /** When each organization's repository last asked for its read diagnosis after an empty PR read on a PR event. */
+    private readonly unreadableAsked = new Map<string, number>();
 
     constructor(
         @Inject(RUNTIME_SETTINGS_STORE)
@@ -146,6 +161,9 @@ export class RuntimePullRequestTriggerUseCase {
                 });
             }
             throw error;
+        }
+        if (ev.event !== 'comment' && ev.event !== 'closed' && hasSkipReason(outcome, 'pr_not_found')) {
+            await this.warnIfUnreadable(ev, facts);
         }
         const metadata = { organizationId: ev.organizationId, repositoryId: ev.repository.id, prNumber: ev.prNumber, event: ev.event, ...outcome };
         let reply: SkippedTriggerReplyOutcome['outcome'] | 'not_posted' | undefined;
@@ -223,6 +241,38 @@ export class RuntimePullRequestTriggerUseCase {
             },
         });
         return 'not_posted';
+    }
+
+    /**
+     * A PR event whose PR read came back empty: when the connection no longer
+     * reads the repository, an operator must see it, since nothing is answered
+     * on a PR event. The provider is asked at most once per window per
+     * repository, and the warning carries ids and the reason only.
+     */
+    private async warnIfUnreadable(ev: RuntimePullRequestObserved, facts: DecisionFacts): Promise<void> {
+        if (facts.head !== null || !facts.orgTeam || !facts.repo) return;
+        const key = `${ev.organizationId}:${ev.repository.id}`;
+        const now = Date.now();
+        const asked = this.unreadableAsked.get(key);
+        if (asked !== undefined && now - asked < UNREADABLE_REPOSITORY_WARNING_WINDOW_MS) return;
+        if (this.unreadableAsked.size >= UNREADABLE_REPOSITORY_KEYS_MAX) {
+            for (const [k, at] of this.unreadableAsked) if (now - at >= UNREADABLE_REPOSITORY_WARNING_WINDOW_MS) this.unreadableAsked.delete(k);
+            // Still full inside the window: the oldest one is forgotten, at worst asked once more.
+            if (this.unreadableAsked.size >= UNREADABLE_REPOSITORY_KEYS_MAX) this.unreadableAsked.delete(this.unreadableAsked.keys().next().value as string);
+        }
+        this.unreadableAsked.set(key, now);
+        if ((await this.readAccessOf(facts.orgTeam, facts.repo)) !== 'denied') return;
+        this.logger.warn({
+            message: 'Runtime trigger: the Git connection cannot read this repository; its PR events end as pr_not_found until an admin fixes the connection',
+            context: RuntimePullRequestTriggerUseCase.name,
+            metadata: {
+                organizationId: ev.organizationId,
+                repositoryId: ev.repository.id,
+                prNumber: ev.prNumber,
+                event: ev.event,
+                reason: 'repository_unreachable' satisfies RepositoryAccessProblem,
+            },
+        });
     }
 
     private async decide(ev: RuntimePullRequestObserved, facts: DecisionFacts): Promise<TriggerOutcome> {
@@ -432,6 +482,12 @@ const ACCESS_PROBLEMS: ReadonlySet<string> = new Set<RepositoryAccessProblem>(['
 
 /** Whether a skip reason is the Git connection itself, which no retry fixes. */
 const isAccessProblem = (reason: string) => ACCESS_PROBLEMS.has(reason);
+
+/** Whether the outcome, or any environment's, is skipped for that reason. */
+function hasSkipReason(outcome: TriggerOutcome, reason: string): boolean {
+    if (outcome.action === 'skipped') return outcome.reason === reason;
+    return outcome.action === 'per_environment' && outcome.outcomes.some((o) => o.action === 'skipped' && o.reason === reason);
+}
 
 /** The skip a comment is answered with: the only environment's, or the first answered one when no environment started a Run. */
 function answeredSkipOf(outcome: TriggerOutcome): SkippedOutcome | undefined {

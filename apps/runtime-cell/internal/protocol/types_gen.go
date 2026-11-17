@@ -1233,9 +1233,15 @@ type CellRevokedBody struct {
 	Reason string `json:"reason"`
 }
 
+type AckBodyCellProtocols struct {
+	Min int64 `json:"min"`
+	Max int64 `json:"max"`
+}
+
 type AckBody struct {
-	Version *int64   `json:"version,omitempty"`
-	Accepts []string `json:"accepts,omitempty"`
+	Version       *int64                `json:"version,omitempty"`
+	Accepts       []string              `json:"accepts,omitempty"`
+	CellProtocols *AckBodyCellProtocols `json:"cellProtocols,omitempty"`
 }
 
 type NackBody struct {

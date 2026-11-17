@@ -1,6 +1,6 @@
 # apps/runtime-cell/internal/testing/hubstub
 
-Test code: a minimal runtime-hub for the cell's end-to-end tests, never linked into a cell binary. It keeps the hub's side of the rules the cell relies on: mTLS with the cell CA and a certificate CN equal to the cell id, revocation, acks within 5 s, `step.result` accepted only for a step it sent on that connection (S-15, S-30), the chosen protocol version in the hello ack, and `claim.ready` or `claim.failed` only for a claim it asked that cell to acquire.
+Test code: a minimal runtime-hub for the cell's end-to-end tests, never linked into a cell binary. It keeps the hub's side of the rules the cell relies on: mTLS with the cell CA and a certificate CN equal to the cell id, revocation, acks within 5 s, `step.result` accepted only for a step it sent on that connection (S-15, S-30), the chosen protocol version in the hello ack (with `cellProtocols` for a cell that names it, as the hub sends it), and `claim.ready` or `claim.failed` only for a claim it asked that cell to acquire.
 
 ## Owns
 - `hub.go` `Hub` (`New`, `TLSConfig`, `ServeHTTP`, `Revoke`, `Disconnect`), sending (`Send`, `SendUntracked`, `SendRaw`, `SendEgressPolicy`, `Forget`) and waiting (`Events`, `Hellos`, `WaitFor`, `WaitReady`, `WaitSettled`, `ClaimState`), `Event`.

@@ -128,7 +128,7 @@
           ]
         },
         "features": {
-          "maxItems": 32,
+          "maxItems": 64,
           "type": "array",
           "items": {
             "type": "string",
@@ -4316,12 +4316,32 @@
           "maximum": 9007199254740991
         },
         "accepts": {
-          "maxItems": 32,
+          "maxItems": 64,
           "type": "array",
           "items": {
             "type": "string",
             "pattern": "^[a-z][A-Za-z0-9]{0,63}$"
           }
+        },
+        "cellProtocols": {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "min",
+            "max"
+          ],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

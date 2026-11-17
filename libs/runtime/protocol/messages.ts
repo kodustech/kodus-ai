@@ -295,6 +295,12 @@ export function claimSecretsError(secrets: readonly { id: string; name: string }
  *     how long the build that made each evicted state from none took (the
  *     cost of the next build that finds it gone with no cache). Cell to hub:
  *     sent only to a hub whose hello ack accepts it.
+ *   - cellProtocols: hello ack cellProtocols, the cell protocol versions the
+ *     hub accepts at hello (MIN_CELL_PROTOCOL_VERSION to PROTOCOL_VERSION,
+ *     the skew policy in envelope.ts). The cell keeps it on its host, so
+ *     `cell update` refuses a release this hub would refuse at hello
+ *     (docs/runtime/cell-distribution.md). A cell without it gets the ack
+ *     it always got.
  */
 export const CELL_FEATURES = [
     'seedsCache',
@@ -336,6 +342,7 @@ export const CELL_FEATURES = [
     'hostHardening',
     'buildStateRebuildCost',
     'runIdentity',
+    'cellProtocols',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -641,7 +648,9 @@ export const MessageBodySchemas = {
         // breaks an older cell's strict decoder. Absent: none. Plain names,
         // not an enum, so a newer cell's feature an older hub does not know
         // is ignored by that hub instead of refusing the hello.
-        features: z.array(CellFeatureNameSchema).max(32).optional(),
+        // 64, not 32: CELL_FEATURES reached 32, and a hub must accept a longer
+        // list before any cell sends one (the skew policy: hub first).
+        features: z.array(CellFeatureNameSchema).max(64).optional(),
         // The largest size the cell grants one claim (its driver's maximum,
         // clamped to MACHINE_SIZE_LIMITS: no claim asks more). Absent: it
         // grants none, and the hub sends it no sized claim.
@@ -1013,7 +1022,13 @@ export const MessageBodySchemas = {
     // version is set only on the ack of hello: the version the hub chose (§1b).
     // accepts too, and only with names the cell's hello named
     // (HUB_ACCEPTED_FEATURES): the optional fields the cell may send this hub.
-    'ack': z.strictObject({ version: z.number().int().min(1).optional(), accepts: z.array(CellFeatureNameSchema).max(32).optional() }),
+    // cellProtocols too, and only to a cell that named the feature: the cell
+    // protocol versions this hub accepts at hello.
+    'ack': z.strictObject({
+        version: z.number().int().min(1).optional(),
+        accepts: z.array(CellFeatureNameSchema).max(64).optional(),
+        cellProtocols: z.strictObject({ min: z.number().int().min(1), max: z.number().int().min(1) }).optional(),
+    }),
     'nack': z.strictObject({
         code: z.string().min(1).max(64),
         message: z.string().max(1_024),

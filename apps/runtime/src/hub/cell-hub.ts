@@ -1,7 +1,7 @@
 import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import type { BakeOutcome, BakeRequest, Blocked, Claim, Consumer, EnvError, ExecRequest, LeaseRenewal, ProbeOutcome, StepResult } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, helloVersionRefusal, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
+import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, helloVersionRefusal, HUB_CELL_PROTOCOLS, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
 import type { RunStreamEvent, RunStreamStore } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -408,7 +408,9 @@ export class CellHub {
         });
         // The optional fields this cell may send us; only names it offered, so an older cell never sees accepts.
         const accepts = hubAccepts(body.features);
-        this.connections.ack(conn, msg.id, { version, ...(accepts.length ? { accepts } : {}) });
+        // cellProtocols only to a cell that named it: an older cell's strict decoder refuses the field.
+        const cellProtocols = body.features?.includes('cellProtocols') ? { cellProtocols: { ...HUB_CELL_PROTOCOLS } } : {};
+        this.connections.ack(conn, msg.id, { version, ...(accepts.length ? { accepts } : {}), ...cellProtocols });
     }
 
     /**

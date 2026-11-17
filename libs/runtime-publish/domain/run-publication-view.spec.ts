@@ -83,6 +83,19 @@ describe('runPublicationViewOf', () => {
         expect(out.comment).toEqual({ status: 'skipped', at: AT });
     });
 
+    it('a check the token may not post as a commit status shows that reason', () => {
+        const out = view([row(CHECK, { status: 'skipped', reason: 'status_permission_missing' })]);
+        expect(out.check).toEqual({ status: 'skipped', at: AT, reason: 'status_permission_missing' });
+    });
+
+    it('a late waiting phase skipped behind the verdict leaves the verdict shown', () => {
+        const out = view([
+            row(CHECK, { checkRank: 3 }),
+            row(publishKey(RUN_ID, 1, 'check', 'awaiting_approval'), { status: 'skipped', reason: 'superseded_by_final' }),
+        ]);
+        expect(out.check).toEqual({ status: 'published', at: AT });
+    });
+
     it('a fork waiting shows its check; superseded and cancelled Runs expect no comment', () => {
         const waiting = view([row(publishKey(RUN_ID, 1, 'check', 'awaiting_approval'), { checkRank: 3 })], { state: 'awaiting_approval' });
         expect(waiting.check.status).toBe('published');

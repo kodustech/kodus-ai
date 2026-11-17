@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -495,4 +496,22 @@ func readAuthFile(path string) (string, error) {
 	}
 	line, _, _ := strings.Cut(string(b), "\n")
 	return strings.TrimSpace(line), nil
+}
+
+// cellStateDir is the -state-dir the cell runs with under config (none: its
+// default), resolved by the cell's own settings: where the agent keeps
+// hub-protocol.state, which `cell update` reads (internal/cellupdate). A
+// config the cell refuses is an error, not a default.
+func cellStateDir(config string) (string, error) {
+	fs := flag.NewFlagSet("cell", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var args []string
+	if config != "" {
+		args = []string{"-config", config}
+	}
+	st, err := parseSettings(fs, args)
+	if err != nil {
+		return "", err
+	}
+	return st.StateDir, nil
 }

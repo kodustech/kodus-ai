@@ -3,6 +3,7 @@ import { DocumentTable, jsonb } from '@libs/runtime/run/adapters/pg-document';
 
 import { definedOnly } from '../domain/pull-request-comment-slot';
 import {
+    CHECK_STATUS_RANK,
     PUBLICATION_LEASE_MS,
     refusalState,
     type ClaimRequest,
@@ -163,6 +164,12 @@ export class TypeOrmPublicationStore implements PublicationStore, PublicationRed
     async findCheckRunId(key: string) {
         const row = (await this.sql.query(`SELECT detail->'checkRunId' AS id FROM ${RUNTIME_PUBLICATIONS_TABLE} WHERE key = $1 AND kind = 'check' AND detail ? 'checkRunId'`, [key])).rows[0];
         return (row?.id as string | number | null | undefined) ?? null;
+    }
+
+    /** Same rule as hasVerdict(). */
+    async hasPublishedVerdict(key: string) {
+        const rows = (await this.sql.query(`SELECT 1 FROM ${RUNTIME_PUBLICATIONS_TABLE} WHERE key = $1 AND kind = 'check' AND status = 'published' AND check_rank >= $2`, [key, CHECK_STATUS_RANK.completed])).rows;
+        return rows.length > 0;
     }
 }
 

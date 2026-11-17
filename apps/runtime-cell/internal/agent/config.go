@@ -233,6 +233,12 @@ type Config struct {
 	// Required aggregate resource enforcement enables this explicitly.
 	RequireMemoryAdmission bool
 
+	// HubProtocolState is where the agent keeps, after every hello the hub
+	// accepts, the protocol the hub chose and the cell protocols it accepts
+	// (internal/hubprotocol), for `cell update` to refuse a release that hub
+	// would refuse. cmd/cell: <state-dir>/hub-protocol.state. Empty: not kept.
+	HubProtocolState string
+
 	WorkDir      string
 	InitialLease time.Duration // until the first claim.renew
 	WorkloadSize driver.MachineSize

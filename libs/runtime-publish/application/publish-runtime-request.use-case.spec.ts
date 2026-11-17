@@ -223,20 +223,23 @@ class FakeChecks implements IChecksAdapter {
     checksApi = true;
     /** The commit statuses on the platform, in the order they were posted. */
     readonly statuses: CommitStatusParams[] = [];
-    /** The next commit statuses the platform refuses. */
+    /** The next commit statuses the platform refuses for a reason that can pass (a 5xx, a rate limit). */
     refusedStatuses = 0;
+    /** The token may not write commit statuses (a fine-grained token without "Commit statuses: write"). */
+    statusPermissionMissing = false;
 
     async isChecksApiAvailable() {
         return this.checksApi;
     }
 
     async createCommitStatus(p: CommitStatusParams) {
+        if (this.statusPermissionMissing) return 'permission_missing' as const;
         if (this.refusedStatuses > 0) {
             this.refusedStatuses--;
-            return false;
+            return 'failed' as const;
         }
         this.statuses.push(p);
-        return true;
+        return 'posted' as const;
     }
 
     async createCheckRun(p: Parameters<IChecksAdapter['createCheckRun']>[0]) {
@@ -621,6 +624,15 @@ describe('PublishRuntimeRequestUseCase', () => {
             await t.useCase.execute(onTheWire(finalCheck()));
             expect([...t.checks.runs.values()]).toEqual([expect.objectContaining({ conclusion: CheckConclusion.SUCCESS })]);
         });
+
+        // Behavior: a waiting phase delivered after the verdict leaves the verdict on the check run; the late phase is skipped.
+        it('a late awaiting phase never moves the closed check run back', async () => {
+            const t = await setup();
+            await t.useCase.execute(onTheWire(finalCheck()));
+            expect(await t.useCase.execute(onTheWire(awaitingCheck()))).toMatchObject({ outcome: 'skipped', reason: 'superseded_by_final' });
+            expect([...t.checks.runs.values()]).toEqual([expect.objectContaining({ status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS })]);
+            expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'check', 'awaiting_approval'))).toMatchObject({ status: 'skipped', reason: 'superseded_by_final' });
+        });
     });
 
     describe('a connection without check runs: the verdict as a commit status', () => {
@@ -679,6 +691,40 @@ describe('PublishRuntimeRequestUseCase', () => {
             }
             expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'skipped', reason: 'checks_unavailable' });
             expect(t.checks.statuses).toEqual([]);
+        });
+
+        // Behavior: a token that may not write commit statuses is skipped at once, with a reason the Run page turns into the permission to give.
+        it('skips at once when the token may not write commit statuses, and says so', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+            t.checks.statusPermissionMissing = true;
+
+            expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'skipped', reason: 'status_permission_missing' });
+            expect(t.publications.rows.get(`${RUN_ID}:1:check`)).toMatchObject({ status: 'skipped', reason: 'status_permission_missing' });
+            expect(t.checks.statuses).toEqual([]);
+        });
+
+        // Behavior: commit statuses are append-only per context, so a waiting phase delivered after the verdict is not posted: the verdict stays the latest status.
+        it('a late awaiting phase never turns the posted verdict back to pending', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+
+            await t.useCase.execute(onTheWire(finalCheck()));
+            expect(await t.useCase.execute(onTheWire(awaitingCheck()))).toMatchObject({ outcome: 'skipped', reason: 'superseded_by_final' });
+
+            expect(t.checks.statuses.map((s) => [s.status, s.conclusion])).toEqual([[CheckStatus.COMPLETED, CheckConclusion.SUCCESS]]);
+            expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'check', 'awaiting_approval'))).toMatchObject({ status: 'skipped', reason: 'superseded_by_final' });
+        });
+
+        // Behavior: a verdict not posted yet (its delivery failed) does not stop the waiting phase.
+        it('a waiting phase still posts while the verdict is not on the PR', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+            t.checks.refusedStatuses = 1;
+
+            await expect(t.useCase.execute(onTheWire(finalCheck()))).rejects.toBeInstanceOf(PublicationFailedError);
+            expect(await t.useCase.execute(onTheWire(awaitingCheck()))).toMatchObject({ outcome: 'published' });
+            expect(t.checks.statuses.map((s) => s.conclusion)).toEqual([CheckConclusion.ACTION_REQUIRED]);
         });
 
         // Behavior: the sweeper's fallback reaches a token connection too, as the neutral short notice.

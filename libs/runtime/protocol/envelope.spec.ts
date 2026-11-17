@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { decodeFrame, HELLO_VERSION_REFUSALS, helloVersionRefusal, MAX_FRAME_BYTES, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, protocolJsonSchemas } from './envelope';
 
 const STEP = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
@@ -91,6 +93,24 @@ describe('decodeFrame', () => {
 
     it('refuses trailing data after the object', () => {
         expect(decodeFrame(frame() + '{}')).toMatchObject({ ok: false, code: 'invalid_json' });
+    });
+});
+
+describe('hello features', () => {
+    const hello = (features: string[]) => {
+        const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'hello-features-workspace.json'), 'utf8'));
+        const frameObj = raw.frame ?? raw.message ?? raw;
+        frameObj.body.features = features;
+        return JSON.stringify(frameObj);
+    };
+    const names = (n: number) => Array.from({ length: n }, (_, i) => `feature${i}`);
+
+    it('accepts a hello naming more than 32 features, up to 64 (CELL_FEATURES reached 32)', () => {
+        expect(decodeFrame(hello(names(64)))).toMatchObject({ ok: true });
+    });
+
+    it('refuses a hello naming more than 64 features', () => {
+        expect(decodeFrame(hello(names(65)))).toMatchObject({ ok: false, code: 'invalid_body' });
     });
 });
 

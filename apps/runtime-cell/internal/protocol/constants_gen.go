@@ -36,6 +36,7 @@ const (
 	FeatureHostHardening         = "hostHardening"
 	FeatureBuildStateRebuildCost = "buildStateRebuildCost"
 	FeatureRunIdentity           = "runIdentity"
+	FeatureCellProtocols         = "cellProtocols"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -71,6 +72,7 @@ var CellFeatures = []string{
 	FeatureHostHardening,
 	FeatureBuildStateRebuildCost,
 	FeatureRunIdentity,
+	FeatureCellProtocols,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):

@@ -16,7 +16,7 @@ import { CHECK_STATUS_RANK, type RuntimePublication } from './runtime-publicatio
 
 /**
  * - published: on the PR (for a comment, maybe the short fallback notice);
- * - skipped: not posted on purpose (no checks API, a newer Run owns the comment);
+ * - skipped: not posted on purpose (no checks API, a token that may not write commit statuses, a newer Run owns the comment);
  * - failed: the product gave up; the PR does not show it;
  * - pending: not on the PR yet (being published, or a failed delivery Kodus retries);
  * - not_expected: this Run does not publish it (a simulation, a fork waiting, a superseded Run's comment).
@@ -29,7 +29,7 @@ export type PublicationViewStatus =
     | 'not_expected';
 
 /** Skip reasons a reader may see; anything else (and every failure message) stays in the row. */
-const SHOWN_SKIP_REASONS = ['checks_unavailable', 'stale_comment'] as const;
+const SHOWN_SKIP_REASONS = ['checks_unavailable', 'status_permission_missing', 'stale_comment'] as const;
 export type ShownSkipReason = (typeof SHOWN_SKIP_REASONS)[number];
 
 export interface PublicationKindView {

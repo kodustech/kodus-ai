@@ -355,7 +355,8 @@ git tag runtime-cell/v1.2.3 <commit> && git push origin runtime-cell/v1.2.3
 
 It builds the eight binaries for linux/arm64 and linux/amd64
 (`CGO_ENABLED=0 -trimpath -buildvcs=true`, version and commit stamped into
-`internal/version`) with `SHA256SUMS`, an SPDX SBOM and a build-provenance
+`internal/version`) and `PROTOCOL` (the hub protocol versions the cell speaks)
+with `SHA256SUMS`, an SPDX SBOM and a build-provenance
 attestation (workflow artifact `runtime-cell-<version>`); and one multi-arch
 image from `Dockerfile` (base images pinned by digest) with a BuildKit SBOM and
 max-mode provenance, built once and pushed under the same digest to AWS ECR
@@ -367,7 +368,9 @@ Only a tag push signs `SHA256SUMS` (job `sign`, GitHub environment
 required reviewers and admits only `runtime-cell/v*` tags). A
 `workflow_dispatch` build is never signed, so `cell update` refuses it; `cell
 update` also refuses a lower version than the running cell's without
-`-allow-downgrade`.
+`-allow-downgrade`, and a release whose `PROTOCOL` the hub the cell last reached
+would refuse at hello (`hub-protocol.state` under `-state-dir`) without
+`-skip-protocol-check`: upgrade the hub first.
 The run fails first unless the repository variables `RUNTIME_CELL_AWS_ROLE_ARN`,
 `RUNTIME_CELL_AWS_REGION` and `RUNTIME_CELL_ECR_REPOSITORY` are set; GHCR uses
 the job's `GITHUB_TOKEN`. Who pulls from where, and what a self-hosted install

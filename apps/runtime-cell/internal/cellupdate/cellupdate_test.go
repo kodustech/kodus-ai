@@ -41,8 +41,22 @@ func (s signer) release(t *testing.T, name string) string {
 // when not empty.
 func (s signer) releaseWith(t *testing.T, name, cellBody string) string {
 	t.Helper()
+	return s.releaseFiles(t, name, cellBody, nil)
+}
+
+// releaseFiles is releaseWith plus extra files (name to content), each
+// listed in SHA256SUMS like the commands.
+func (s signer) releaseFiles(t *testing.T, name, cellBody string, extra map[string]string) string {
+	t.Helper()
 	dir := t.TempDir()
 	var manifest strings.Builder
+	for file, body := range extra {
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256([]byte(body))
+		manifest.WriteString(hex.EncodeToString(sum[:]) + "  " + file + "\n")
+	}
 	for _, c := range append([]string{"resolver"}, Required...) {
 		file, body := c+"-linux-amd64", c+" "+name
 		if c == "cell" && cellBody != "" {
@@ -236,17 +250,17 @@ func TestTheCommandRefusesNamingTheFile(t *testing.T) {
 	bin := filepath.Join(from, "cell-linux-amd64")
 	_ = os.WriteFile(bin, []byte("evil"), 0o755)
 	var out, errOut bytes.Buffer
-	if code := Run([]string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), bin) {
+	if code := Run([]string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), bin) {
 		t.Fatalf("exit %d, stderr %q: want 1 naming %s", code, errOut.String(), bin)
 	}
 	good := s.release(t, "v1.0.0")
-	if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut); code != 0 {
+	if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut, nil); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
 	pinned, _ := releasesig.Pinned()
 	if len(pinned) == 0 {
 		errOut.Reset()
-		if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64"}, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "no release key is pinned") {
+		if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64"}, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), "no release key is pinned") {
 			t.Fatalf("with no key pinned: exit %d, %q", code, errOut.String())
 		}
 	}
@@ -312,10 +326,10 @@ func TestTheCommandRefusesADowngradeWithoutTheFlag(t *testing.T) {
 	from := s.release(t, "v1.0.0")
 	args := []string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}
 	var out, errOut bytes.Buffer
-	if code := Run(args, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "older than the installed v1.1.0") {
+	if code := Run(args, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), "older than the installed v1.1.0") {
 		t.Fatalf("exit %d, stderr %q: want 1 and a downgrade refusal", code, errOut.String())
 	}
-	if code := Run(append(args, "-allow-downgrade"), &out, &errOut); code != 0 {
+	if code := Run(append(args, "-allow-downgrade"), &out, &errOut, nil); code != 0 {
 		t.Fatalf("with -allow-downgrade: exit %d: %s", code, errOut.String())
 	}
 }
@@ -331,7 +345,7 @@ func TestAnUpdateWhosePreflightFailsKeepsTheCurrentRelease(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "args")
 	base := []string{"-root", root, "-arch", "amd64", "-keys", keyFile, "-preflight-config", cfg}
 	var out, errOut bytes.Buffer
-	if code := Run(append(base, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-skip-preflight"), &out, &errOut); code != 0 {
+	if code := Run(append(base, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-skip-preflight"), &out, &errOut, nil); code != 0 {
 		t.Fatalf("first install: exit %d, %s", code, errOut.String())
 	}
 	before := stateOf(t, root)
@@ -339,7 +353,7 @@ func TestAnUpdateWhosePreflightFailsKeepsTheCurrentRelease(t *testing.T) {
 	failing := "#!/bin/sh\necho \"$@\" > " + marker + "\necho 'fail runsc: Docker has no runtime named runsc'\nexit 1\n"
 	out.Reset()
 	errOut.Reset()
-	if code := Run(append(base, "-from", s.releaseWith(t, "v1.1.0", failing), "-release", "v1.1.0"), &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "preflight") {
+	if code := Run(append(base, "-from", s.releaseWith(t, "v1.1.0", failing), "-release", "v1.1.0"), &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), "preflight") {
 		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 	if got := stateOf(t, root); got.current != before.current || got.previous != before.previous {
@@ -353,7 +367,7 @@ func TestAnUpdateWhosePreflightFailsKeepsTheCurrentRelease(t *testing.T) {
 	}
 
 	passing := "#!/bin/sh\nexit 0\n"
-	if code := Run(append(base, "-from", s.releaseWith(t, "v1.2.0", passing), "-release", "v1.2.0"), &out, &errOut); code != 0 {
+	if code := Run(append(base, "-from", s.releaseWith(t, "v1.2.0", passing), "-release", "v1.2.0"), &out, &errOut, nil); code != 0 {
 		t.Fatalf("passing preflight: exit %d, %s", code, errOut.String())
 	}
 	if got := stateOf(t, root); got.current == before.current || got.previous != before.current {
@@ -369,7 +383,7 @@ func TestAnUpdateWithoutTheCellsConfigSaysItRanNoPreflight(t *testing.T) {
 	keyFile := filepath.Join(t.TempDir(), "keys.pub")
 	_ = os.WriteFile(keyFile, []byte(releasesig.FormatPublicKey(s.keys[0].Key)), 0o644)
 	var out, errOut bytes.Buffer
-	if code := Run([]string{"-root", root, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut); code != 0 || !strings.Contains(errOut.String(), "preflight does not run") {
+	if code := Run([]string{"-root", root, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut, nil); code != 0 || !strings.Contains(errOut.String(), "preflight does not run") {
 		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 }

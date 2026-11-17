@@ -13,11 +13,12 @@ import (
 	"time"
 )
 
-// RunTool is cmd/release-sign: generate a key pair, or sign a release
-// directory's SHA256SUMS into SHA256SUMS.sig. Exit 0 done, 1 failed, 2 usage.
-func RunTool(args []string, stdout, stderr io.Writer) int {
+// RunTool is cmd/release-sign: generate a key pair, write the release
+// directory's PROTOCOL (speaks: what the build's cell speaks), or sign its
+// SHA256SUMS into SHA256SUMS.sig. Exit 0 done, 1 failed, 2 usage.
+func RunTool(args []string, speaks Protocol, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: release-sign generate -private FILE -public FILE | sign -key FILE -release NAME -dir DIR | index -key FILE -latest NAME -minimum NAME [-valid-days 90] [-revoke ID,ID] -dir DIR")
+		_, _ = fmt.Fprintln(stderr, "usage: release-sign generate -private FILE -public FILE | protocol -dir DIR | sign -key FILE -release NAME -dir DIR | index -key FILE -latest NAME -minimum NAME [-valid-days 90] [-revoke ID,ID] -dir DIR")
 		return 2
 	}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
@@ -33,6 +34,14 @@ func RunTool(args []string, stdout, stderr io.Writer) int {
 		var id string
 		if id, err = generate(*private, *public); err == nil {
 			_, _ = fmt.Fprintf(stdout, "key %s: pin %s, keep %s secret\n", id, *public, *private)
+		}
+	case "protocol":
+		dir := fs.String("dir", "", "the release directory, before SHA256SUMS is made over it")
+		if fs.Parse(args[1:]) != nil || *dir == "" {
+			return 2
+		}
+		if err = writeProtocol(*dir, speaks); err == nil {
+			_, _ = fmt.Fprintf(stdout, "wrote %s: protocol v%d to v%d\n", filepath.Join(*dir, ProtocolName), speaks.Min, speaks.Max)
 		}
 	case "sign":
 		key := fs.String("key", "", "the private key file")

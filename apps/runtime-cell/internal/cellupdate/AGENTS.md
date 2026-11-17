@@ -7,6 +7,7 @@
 - `Run`: the command's flags and exit codes (0 installed or verified, 1 refused, 2 usage).
 - `preflight.go` `StagedPreflight`: before the swap, the staged release's `cell preflight -config <-preflight-config>` (default `$KODUS_CELL_CONFIG`); a non-zero exit keeps the installed release current and leaves the staged one for the next try. `-skip-preflight` swaps without it; with no config the update says it ran none.
 - `index_state.go`: the release index gate. A release installs only under a current signed index (`releasesig.VerifyIndex`, `-index`, default `-from`) that allows it (`allowedByIndex`: between `minimum` and `latest`, or exactly `latest` when not semver), signed by a key no index ever revoked. `<root>/release-index.state` keeps the latest `issued` and every revoked key the host saw: an older index is refused, a revocation is never forgotten, an unreadable state is refused rather than read as empty.
+- `protocol.go` `checkProtocol`: the hub's skew policy before the swap. The release's signed `PROTOCOL` (`releasesig.ReadProtocol`) against the cell's `hub-protocol.state` (`internal/hubprotocol`, `Options.HubState`): a highest protocol above the hub's highest (`cell_too_new`) or below its lowest (`cell_too_old`) is refused, naming both and the fix. `Run` finds the state under the cell's `-state-dir`, given or resolved from `-preflight-config` by the cell's own settings (`stateDirOf`, `cmd/cell` `cellStateDir`). No `PROTOCOL` (an older release) or no state (never connected): installed with a note on stderr; `-require-protocol` refuses the first, `-skip-protocol-check` skips the check.
 - `order.go` `checkOrder`: downgrade protection. Release names are ordered as semver; a lower release, or one that cannot be ordered against the installed one, is refused unless `-allow-downgrade`.
 
 ## Does not own
@@ -19,7 +20,8 @@
 - Nothing under the root changes until every file was copied and matched; a refusal names the file.
 - A release installed before is reused only when it still matches the manifest.
 - A dev build (`v0.0.0-dev+<sha>`) sorts below every release; an installed binary that is not semver (a local build) refuses nothing.
-- It does not check a release against the hub's version skew policy (a cell no newer than its hub): it never dials the hub, and neither `SHA256SUMS` nor `RELEASE-INDEX` says which protocol a release speaks. The hub refuses a too-new cell at hello; the rollback is `cell-host.sh rollback` ([cell-distribution.md](../../../../docs/runtime/cell-distribution.md) "Not covered").
+- It never dials the hub: the skew check reads what the hub said at the cell's last accepted hello. A state that does not read is refused, never taken for none; a hub upgraded while the cell was down is seen only after the cell reconnects ([cell-distribution.md](../../../../docs/runtime/cell-distribution.md), "Keeping hub, worker, API and cell compatible").
+- The protocol check runs before anything under the root changes, `-verify-only` included.
 
 ## Where new code goes
 - A new command shipped with the cell: `Required`, and the release workflow's assets.
@@ -31,10 +33,11 @@
 
 ## Module map
 
-Files (4, tests apart): `cellupdate.go`, `index_state.go`, `order.go`, `preflight.go`
+Files (5, tests apart): `cellupdate.go`, `index_state.go`, `order.go`, `preflight.go`, `protocol.go`
 
 Imports these Runtime modules:
 
+- [`apps/runtime-cell/internal/hubprotocol`](../hubprotocol/AGENTS.md)
 - [`apps/runtime-cell/internal/releasesig`](../releasesig/AGENTS.md)
 - [`apps/runtime-cell/internal/version`](../version/AGENTS.md)
 
