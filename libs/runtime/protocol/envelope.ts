@@ -7,6 +7,50 @@ import { parseStrictJson, StrictJsonError } from './strict-json';
 
 export const PROTOCOL_VERSION = 1;
 export const SUPPORTED_VERSIONS = [PROTOCOL_VERSION - 1, PROTOCOL_VERSION].filter((v) => v > 0);
+
+/**
+ * The version skew policy, as Kubernetes has it for the kubelet: a cell is
+ * never newer than the hub it dials, and never older than the oldest
+ * protocol the hub still speaks. A hub of protocol H accepts a cell whose
+ * hello offers at most H and at least MIN_CELL_PROTOCOL_VERSION (H - 1),
+ * chooses the cell's highest version, and frames that session in it.
+ * So the hub is upgraded first, then its cells, one protocol at a time.
+ *
+ * Raising PROTOCOL_VERSION keeps the version before it served only while
+ * the hub still sends that version's bodies to a session that chose it;
+ * a hub that cannot raises MIN_CELL_PROTOCOL_VERSION with it.
+ */
+export const MIN_CELL_PROTOCOL_VERSION = SUPPORTED_VERSIONS[0];
+
+/** The nack codes of a hello refused for its protocol version (an older hub sent unsupported_version for both). */
+export const HELLO_VERSION_REFUSALS = { cellTooOld: 'cell_too_old', cellTooNew: 'cell_too_new' } as const;
+export type HelloVersionRefusalCode = (typeof HELLO_VERSION_REFUSALS)[keyof typeof HELLO_VERSION_REFUSALS];
+
+/** The cell protocol versions a hub accepts at hello: this hub's by default. */
+export type CellProtocolRange = { min: number; max: number };
+const HUB_CELL_PROTOCOLS: CellProtocolRange = { min: MIN_CELL_PROTOCOL_VERSION, max: PROTOCOL_VERSION };
+
+/** The protocol a hello's cell speaks: the highest version it offers (it frames in that one). */
+export function cellProtocolOf(versions: readonly number[]): number {
+    return Math.max(...versions);
+}
+
+/**
+ * Why a hub refuses a hello for its versions, or null when it accepts it.
+ * The message is for the operator who reads the cell's log: what each side
+ * speaks, what the hub accepts, and which side to upgrade.
+ */
+export function helloVersionRefusal(versions: readonly number[], range: CellProtocolRange = HUB_CELL_PROTOCOLS): { code: HelloVersionRefusalCode; message: string } | null {
+    const cell = cellProtocolOf(versions);
+    const accepts = `this hub (protocol v${range.max}) accepts cells of protocol v${range.min} to v${range.max}`;
+    if (cell > range.max) {
+        return { code: HELLO_VERSION_REFUSALS.cellTooNew, message: `cell speaks protocol v${cell}; ${accepts}: a cell is never newer than its hub, so upgrade the hub first or install a cell release of protocol v${range.max}` };
+    }
+    if (cell < range.min) {
+        return { code: HELLO_VERSION_REFUSALS.cellTooOld, message: `cell speaks protocol v${cell}; ${accepts}: upgrade the cell` };
+    }
+    return null;
+}
 export const MAX_FRAME_BYTES = 1 << 20;
 export const MAX_DEPTH = 32;
 
@@ -108,7 +152,10 @@ export function decodeFrame(raw: string | Buffer): DecodeResult {
     if (!envelope.success) {
         return { ok: false, code: 'invalid_envelope', message: envelope.error.message };
     }
-    if (!SUPPORTED_VERSIONS.includes(envelope.data.v)) {
+    // A hello is decoded whatever its version: its envelope and body are what
+    // every protocol version keeps, so a hub can tell a cell of any version
+    // why it refuses it (helloVersionRefusal) instead of leaving it unanswered.
+    if (envelope.data.type !== 'hello' && !SUPPORTED_VERSIONS.includes(envelope.data.v)) {
         return { ok: false, code: 'unsupported_version', message: `v${envelope.data.v}` };
     }
     const missing = missingEnvelopeField(envelope.data.type, envelope.data);

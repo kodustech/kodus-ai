@@ -5,6 +5,7 @@ import { BadGatewayException, ServiceUnavailableException } from '@nestjs/common
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { RepositoryDownloadTokenError } from '@libs/platform/infrastructure/adapters/services/github/repository-download-token';
 
+import { repositoryAccessProblemOf } from '../domain/ports';
 import { CodeManagementRepoTokenIssuer } from '../infrastructure/repo-token-issuer.adapter';
 
 const input = { organizationId: 'org-a', teamId: 'team-a', repositoryId: '123', repositoryName: 'acme/shop' };
@@ -36,5 +37,20 @@ describe('CodeManagementRepoTokenIssuer', () => {
         await expect(wide.issuer.issue(input)).rejects.toBeInstanceOf(BadGatewayException);
         const boom = setup(PlatformType.GITHUB, jest.fn().mockRejectedValue(new Error('secret request detail')));
         await expect(boom.issuer.issue(input)).rejects.toThrow('GitHub did not issue the repository download token');
+    });
+
+    // The trigger answers these on the PR instead of retrying: no retry changes them, an admin does.
+    it('a PAT connection and a missing installation name the access problem an admin must fix, still as 503', async () => {
+        for (const [reason, problem] of [
+            ['unsupported_auth', 'pat_connection'],
+            ['no_installation', 'repository_unreachable'],
+        ] as const) {
+            const t = setup(PlatformType.GITHUB, jest.fn().mockRejectedValue(new RepositoryDownloadTokenError(reason, 'x')));
+            const error = await t.issuer.issue(input).catch((e: unknown) => e);
+            expect(error).toBeInstanceOf(ServiceUnavailableException);
+            expect(repositoryAccessProblemOf(error)).toBe(problem);
+        }
+        const boom = setup(PlatformType.GITHUB, jest.fn().mockRejectedValue(new Error('timeout')));
+        expect(repositoryAccessProblemOf(await boom.issuer.issue(input).catch((e: unknown) => e))).toBeUndefined();
     });
 });

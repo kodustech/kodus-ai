@@ -5,7 +5,10 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { GithubService } from '@libs/platform/infrastructure/adapters/services/github/github.service';
 import { RepositoryDownloadTokenError } from '@libs/platform/infrastructure/adapters/services/github/repository-download-token';
 
-import type { OrgTeam, RuntimeRepoTokenIssuer } from '../domain/ports';
+import { RepositoryAccessRefusedError, type OrgTeam, type RuntimeRepoTokenIssuer } from '../domain/ports';
+
+/** The refusals an admin fixes on the Git connection, and the problem each names. */
+const ACCESS_PROBLEM = { unsupported_auth: 'pat_connection', no_installation: 'repository_unreachable' } as const;
 
 /**
  * The cell's download token (ADR-002, ADR-052): one repo, contents:read, 1 h,
@@ -41,7 +44,9 @@ export class CodeManagementRepoTokenIssuer implements RuntimeRepoTokenIssuer {
                 if (error.reason === 'unexpected_scope') {
                     throw new BadGatewayException('GitHub answered a repository download token wider than asked');
                 }
-                throw new ServiceUnavailableException(error.message);
+                // Still a 503 for the routes; the cause tells the PR trigger to answer it instead of retrying.
+                const problem = ACCESS_PROBLEM[error.reason as keyof typeof ACCESS_PROBLEM];
+                throw new ServiceUnavailableException(error.message, problem ? { cause: new RepositoryAccessRefusedError(problem, error.message) } : undefined);
             }
             // Never forward the platform error: it may carry request details.
             throw new BadGatewayException('GitHub did not issue the repository download token');

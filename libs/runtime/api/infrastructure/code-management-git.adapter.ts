@@ -304,6 +304,18 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         return files.map((f) => f?.path).filter((p): p is string => typeof p === 'string' && p.length > 0);
     }
 
+    /** The provider's own read diagnosis of the repository (never throws); unknown when it cannot be asked. */
+    async repositoryReadAccess(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<'ok' | 'denied' | 'unknown'> {
+        const { name } = splitFullName(input.repositoryName);
+        const diagnosis = await this.codeManagement
+            .diagnoseRepositoryAccess({
+                organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId },
+                repository: { id: input.repositoryId, name, ...(input.repositoryName.includes('/') ? { fullName: input.repositoryName } : {}) },
+            })
+            .catch(() => null);
+        return diagnosis?.read ?? 'unknown';
+    }
+
     async userCanWrite(input: OrgTeam & { repositoryId: string; repositoryName: string; identity: GitIdentity }) {
         return this.codeManagement.userCanWrite({
             organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId },

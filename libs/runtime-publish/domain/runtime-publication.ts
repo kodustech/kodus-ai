@@ -52,8 +52,10 @@ export interface RuntimePublication extends PublicationScope {
     /** For `check`: the last status published under this key. */
     checkRank?: number;
     checkRunId?: string | number;
-    /** For `check`: deliveries whose create answered no check run; a few are retried, then the check is skipped. */
+    /** For `check`: deliveries whose create answered no check run (or no commit status); a few are retried, then the check is skipped. */
     checkCreateFailures?: number;
+    /** For `check`: posted as a commit status, because the connection cannot create check runs (a GitHub personal access token). */
+    commitStatus?: boolean;
     /** For `comment`: the PR comment this publication created or edited. */
     comment?: PublishedCommentRef;
     reason?: string;
@@ -103,7 +105,7 @@ export type PublicationResult = Pick<RuntimePublication, 'status'> &
     Partial<
         Pick<
             RuntimePublication,
-            'checkRank' | 'checkRunId' | 'comment' | 'reason' | 'fallback'
+            'checkRank' | 'checkRunId' | 'commitStatus' | 'comment' | 'reason' | 'fallback'
         >
     >;
 

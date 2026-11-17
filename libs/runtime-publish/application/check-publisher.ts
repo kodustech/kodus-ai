@@ -10,9 +10,10 @@ import { PUBLISH_LOG_CONTEXT } from './comment-publisher';
 import { PublicationFailedError, type PublishOptions, type PublishOutcome, type PublishTarget } from './publication-outcome';
 
 /**
- * Deliveries whose check create answers no check run before the check is
- * given up as unavailable (PAT auth, no checks:write). The adapters answer
- * null for a transient error too, so one null is not enough to give up.
+ * Deliveries whose create answers no check run (or no commit status) before
+ * the check is given up as unavailable (no checks:write, a token without
+ * commit status write). The adapters answer the same for a transient error,
+ * so one miss is not enough to give up.
  */
 export const MAX_CHECK_CREATE_ATTEMPTS = 3;
 
@@ -96,6 +97,35 @@ export class CheckPublisher {
         const checkName = checkNameOf(publishEnvironmentOf({ repositoryId: scope.repositoryId, workspace: target.workspace }));
         const repo = { owner: repository.owner, name: repository.name };
 
+        // A connection that cannot create check runs (a GitHub personal
+        // access token) gets the same check as a commit status.
+        if (
+            adapter.createCommitStatus &&
+            adapter.isChecksApiAvailable &&
+            !(await adapter.isChecksApiAvailable(organizationAndTeamData))
+        ) {
+            const posted = await adapter.createCommitStatus({
+                organizationAndTeamData,
+                repository: repo,
+                sha: scope.headSha,
+                context: checkName,
+                status,
+                conclusion,
+                description: output.title,
+                targetUrl: links.run,
+            });
+            if (!posted) {
+                return this.createFailed(msg, target, publication, 'the platform did not create the commit status');
+            }
+            await this.publications.complete(msg.key, {
+                status: 'published',
+                checkRank,
+                commitStatus: true,
+                ...done,
+            });
+            return { outcome: 'published', key: msg.key, action: 'created' };
+        }
+
         // The final verdict moves the check run the awaiting_approval phase
         // opened, recorded under that phase's own key.
         const finalKey = msg.key === publishKey(msg.runId, msg.attempt, 'check');
@@ -130,31 +160,9 @@ export class CheckPublisher {
             });
             action = 'created';
             if (!checkRunId) {
-                // Null is both "this org cannot have checks" (PAT, no
-                // checks:write) and a transient platform error: retry a few
-                // deliveries, then let the comment carry the result.
-                const failures = (publication.checkCreateFailures ?? 0) + 1;
-                if (failures < MAX_CHECK_CREATE_ATTEMPTS) {
-                    throw new PublicationFailedError(
-                        msg.key,
-                        'the platform did not create the check',
-                        { checkCreateFailures: failures },
-                    );
-                }
-                this.logger.warn({
-                    message: 'Runtime check skipped: the platform created no check run after every attempt',
-                    context: PUBLISH_LOG_CONTEXT,
-                    metadata: { key: msg.key, attempts: failures, organizationId: scope.organizationId },
-                });
-                await this.publications.complete(msg.key, {
-                    status: 'skipped',
-                    reason: 'checks_unavailable',
-                });
-                return {
-                    outcome: 'skipped',
-                    key: msg.key,
-                    reason: 'checks_unavailable',
-                };
+                // Null is both "this org cannot have checks" (no checks:write)
+                // and a transient platform error.
+                return this.createFailed(msg, target, publication, 'the platform did not create the check');
             }
             if (status !== CheckStatus.COMPLETED) {
                 await this.publications.complete(msg.key, {
@@ -189,5 +197,33 @@ export class CheckPublisher {
             ...done,
         });
         return { outcome: 'published', key: msg.key, action };
+    }
+
+    /**
+     * A create that put nothing on the PR: retry a few deliveries, since it
+     * can be transient, then skip and let the comment carry the result.
+     */
+    private async createFailed(
+        msg: RuntimePublishRequested,
+        target: PublishTarget,
+        publication: RuntimePublication,
+        reason: string,
+    ): Promise<PublishOutcome> {
+        const failures = (publication.checkCreateFailures ?? 0) + 1;
+        if (failures < MAX_CHECK_CREATE_ATTEMPTS) {
+            throw new PublicationFailedError(msg.key, reason, {
+                checkCreateFailures: failures,
+            });
+        }
+        this.logger.warn({
+            message: 'Runtime check skipped: the platform created no check run or commit status after every attempt',
+            context: PUBLISH_LOG_CONTEXT,
+            metadata: { key: msg.key, attempts: failures, organizationId: target.scope.organizationId },
+        });
+        await this.publications.complete(msg.key, {
+            status: 'skipped',
+            reason: 'checks_unavailable',
+        });
+        return { outcome: 'skipped', key: msg.key, reason: 'checks_unavailable' };
     }
 }

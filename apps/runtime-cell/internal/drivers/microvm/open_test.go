@@ -47,3 +47,28 @@ func TestACellAskedForFirecrackerOnAHostThatCannotRunItRefusesNamingWhy(t *testi
 		t.Fatalf("%d host network commands ran on a host that was refused", r.n)
 	}
 }
+
+// cell preflight reads what Open would refuse, the same lines, without
+// opening the host's network.
+func TestPrerequisitesAreWhatOpenRefusesWith(t *testing.T) {
+	r := &countingRunner{}
+	f := Firecracker{
+		CellID: "cell-1", KitDir: t.TempDir(), KitDigest: "sha256:" + strings.Repeat("0", 64), StateDir: t.TempDir(),
+		Host: isolation.Host{KVM: false, Arch: "x86_64"}, Runner: r,
+		Checks: &firecracker.Checks{
+			EUID: func() int { return 1000 }, LookPath: func(b string) (string, error) { return "/usr/sbin/" + b, nil },
+			Stat:     func(string) (os.FileInfo, error) { return nil, fs.ErrNotExist },
+			ReadFile: func(string) ([]byte, error) { return []byte("cpu memory pids"), nil },
+			Reflink:  func(string, string) error { return nil }, Chown: func(string, int, int) error { return nil },
+		},
+	}
+	missing := Prerequisites(f)
+	_, err := Open(context.Background(), f)
+	var u *isolation.UnavailableError
+	if !errors.As(err, &u) || len(missing) < 3 || u.Reason != strings.Join(missing, "; ") {
+		t.Fatalf("prerequisites %q, open %v", missing, err)
+	}
+	if r.n != 0 {
+		t.Fatalf("%d host network commands ran", r.n)
+	}
+}

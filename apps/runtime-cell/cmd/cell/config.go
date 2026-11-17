@@ -51,8 +51,9 @@ const defaultRegistryImage = "docker.io/library/registry:3@sha256:82f6ff4a7f9829
 // the tls and observer sections) are still read, as their flags (oldFileKeys),
 // an empty string among them meaning unset as it did.
 
-// fileOnlyByFlag are the flags the file never sets.
-var fileOnlyByFlag = map[string]bool{"config": true, "dev-insecure-local-docker": true}
+// fileOnlyByFlag are the flags the file never sets (json is cell
+// preflight's own).
+var fileOnlyByFlag = map[string]bool{"config": true, "dev-insecure-local-docker": true, "json": true}
 
 // oldFileKeys are the first format's keys and the flag each one sets.
 var oldFileKeys = map[string]string{
@@ -402,7 +403,7 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.StringVar(&s.EgressBuildHosts, "egress-build-passthrough", "", "comma-separated hosts an image build may reach uninspected over TLS, on top of the recommended list's read-only CDNs and the owners' full-access approvals: the operator's own decision (a build's RUN steps cannot be inspected; every other host is refused to it)")
 	fs.BoolVar(&s.EgressRecommended, "egress-recommended", true, "apply the Kodus recommended list (docs/runtime/egress-allowlist.md §7) to every claim of an org that keeps it on: its hosts join the allowlist on the inspected tier (GET and HEAD under their paths only; over plain HTTP from every machine, over TLS through the injector from the machines the cell gave its CA, which needs -cell-ca-cert). Needs an egress, resolver and injector of this release or later")
 	fs.BoolVar(&s.AutoRenew, "auto-renew", true, "renew the client certificate over mTLS (POST /cells/renew) when a third of its validity is left")
-	fs.BoolVar(&s.Dev, "dev", false, "local development: allow extraction without a network namespace, and the fake driver")
+	fs.BoolVar(&s.Dev, "dev", false, "local development: allow extraction without a network namespace, the fake driver, and a personal access token as the download token (kept, not revoked)")
 	// 9466: the Runtime's metrics ports on one host are hub 9464, worker
 	// 9465, cell 9466 (docker-compose.dev.yml publishes the first two).
 	fs.StringVar(&s.MetricsAddr, "metrics-addr", "127.0.0.1:9466", "address of /metrics (Prometheus text format); off disables it")

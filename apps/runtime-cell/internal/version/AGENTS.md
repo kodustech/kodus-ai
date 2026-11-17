@@ -1,6 +1,6 @@
 # apps/runtime-cell/internal/version
 
-The build identity every cell binary logs at startup and prints for `-version`. A leaf: `cmd/cell`, `cmd/egress`, `cmd/resolver`, `cmd/injector` and `cmd/observer` log it; `internal/cellupdate` reads `Version` as the installed release.
+The build identity every cell binary logs at startup and prints for `-version`. A leaf: `cmd/cell`, `cmd/egress`, `cmd/resolver`, `cmd/injector` and `cmd/observer` log it; `internal/cellupdate` reads `Version` as the installed release; `internal/agent` logs it with a hub's version refusal.
 
 ## Owns
 - `version.go` `Version` and `Commit` (set by the linker with `-X`, in `.github/workflows/runtime-cell-release.yml`), `Info`, `Get`, `Info.String`.
@@ -29,6 +29,7 @@ Imported by:
 - [`apps/runtime-cell/cmd/injector`](../../cmd/injector/AGENTS.md)
 - [`apps/runtime-cell/cmd/observer`](../../cmd/observer/AGENTS.md)
 - [`apps/runtime-cell/cmd/resolver`](../../cmd/resolver/AGENTS.md)
+- [`apps/runtime-cell/internal/agent`](../agent/AGENTS.md)
 - [`apps/runtime-cell/internal/cellupdate`](../cellupdate/AGENTS.md)
 
 <!-- module-map:end -->

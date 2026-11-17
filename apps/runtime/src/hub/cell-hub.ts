@@ -1,7 +1,7 @@
 import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import type { BakeOutcome, BakeRequest, Blocked, Claim, Consumer, EnvError, ExecRequest, LeaseRenewal, ProbeOutcome, StepResult } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import { decodeFrame, Envelope, type EvidenceRequest, hubAccepts, type MachineSize, MessageBody, MessageType, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
+import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, helloVersionRefusal, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
 import type { RunStreamEvent, RunStreamStore } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -345,7 +345,16 @@ export class CellHub {
     private async acceptHello(conn: CellConnection, msg: Envelope<'hello'>) {
         if (conn.helloDone) return this.connections.nack(conn, msg.id, 'hello_repeated', 'hello was already done on this connection');
         const body = msg.body;
-        if (!body.versions.includes(PROTOCOL_VERSION)) return this.connections.nack(conn, msg.id, 'unsupported_version', `hub speaks v${PROTOCOL_VERSION}`);
+        // The skew policy (envelope.ts): a cell never newer than this hub, never older than MIN_CELL_PROTOCOL_VERSION.
+        const refused = helloVersionRefusal(body.versions);
+        if (refused) {
+            this.log('warn', 'cell.refused_version', { cellId: conn.cred.cellId, code: refused.code, cellProtocol: cellProtocolOf(body.versions), hubProtocol: PROTOCOL_VERSION, minCellProtocol: MIN_CELL_PROTOCOL_VERSION });
+            // In the hello's own version: the one a cell of any version reads.
+            return this.connections.nack(conn, msg.id, refused.code, refused.message, msg.v);
+        }
+        const version = cellProtocolOf(body.versions);
+        // A hello framed in a version other than one this hub decodes (its versions say otherwise): refused as any such frame.
+        if (!SUPPORTED_VERSIONS.includes(msg.v)) return this.connections.nack(conn, msg.id, 'unsupported_version', `hello framed in v${msg.v}; this hub decodes ${SUPPORTED_VERSIONS.map((v) => `v${v}`).join(', ')}`, msg.v);
         if (body.owner !== conn.cred.owner) return this.connections.nack(conn, msg.id, 'wrong_owner', 'owner differs from the registration');
         if (body.isolation === 'none') {
             if (!this.opts.allowInsecureCells) return this.connections.nack(conn, msg.id, 'insecure_isolation', "isolation 'none' needs RUNTIME_DEV_ALLOW_INSECURE_CELLS=1 on the hub");
@@ -370,6 +379,7 @@ export class CellHub {
         });
         if (conn.closed || !this.connections.isCurrent(conn)) return;
         conn.helloDone = true;
+        conn.version = version;
         conn.isolation = body.isolation;
         conn.driver = body.driver;
         conn.features = caps.features;
@@ -379,6 +389,7 @@ export class CellHub {
         this.log('info', 'cell.hello', {
             cellId: conn.cred.cellId,
             owner: conn.cred.owner,
+            protocol: version,
             driver: body.driver,
             isolation: body.isolation,
             features: caps.features.join(','),
@@ -397,7 +408,7 @@ export class CellHub {
         });
         // The optional fields this cell may send us; only names it offered, so an older cell never sees accepts.
         const accepts = hubAccepts(body.features);
-        this.connections.ack(conn, msg.id, { version: PROTOCOL_VERSION, ...(accepts.length ? { accepts } : {}) });
+        this.connections.ack(conn, msg.id, { version, ...(accepts.length ? { accepts } : {}) });
     }
 
     /**

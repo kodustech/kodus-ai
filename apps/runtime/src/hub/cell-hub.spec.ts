@@ -3,7 +3,7 @@ import { toGateStep } from '../worker/run/probe-fields';
 import type { Probe, ProbeResult } from '@libs/runtime/probe';
 import { generateKeyPairSync, randomUUID, X509Certificate } from 'crypto';
 
-import { decodeFrame, PROTOCOL_VERSION } from '@libs/runtime/protocol';
+import { decodeFrame, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION } from '@libs/runtime/protocol';
 import { InMemoryRunStreamStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -253,6 +253,59 @@ describe('CellHub', () => {
         await h.onMessage(frame('cell-a', 'exec', { stepId: randomUUID(), command: 'id', timeoutMs: 10 }, { claimId: 'claim-x' }));
         expect(sock.last().body.code).toBe('wrong_direction');
         expect(violations).toEqual(['hello_first', 'wrong_cell', 'duplicate_key', 'wrong_direction']);
+    });
+
+    // Version skew (docs/runtime/cell-distribution.md): a cell is never newer
+    // than the hub it dials, and never older than MIN_CELL_PROTOCOL_VERSION.
+    describe('version skew at hello', () => {
+        /** Keeps the raw frames: a refusal goes out in the cell's version, which this hub's own decoder may not read. */
+        class RawSocket {
+            sent: any[] = [];
+            send(d: string) {
+                this.sent.push(JSON.parse(d));
+            }
+            close() {}
+        }
+        const helloAt = (v: number, versions: number[], id = randomUUID()) =>
+            JSON.stringify({ v, id, cellId: 'cell-a', type: 'hello', body: { versions, driver: 'fake', isolation: 'vm', regions: ['local'], owner: 'kodus' } });
+
+        it('accepts a cell of the hub protocol and frames the session in the version it chose', async () => {
+            const { hub } = setup();
+            const sock = new RawSocket();
+            const h = hub.attach(sock, CRED['cell-a']);
+            await h.onMessage(helloAt(PROTOCOL_VERSION, [MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION].filter((v, i, a) => a.indexOf(v) === i)));
+            expect(sock.sent.at(-1)).toMatchObject({ v: PROTOCOL_VERSION, type: 'ack', body: { version: PROTOCOL_VERSION } });
+        });
+
+        it('refuses a cell newer than the hub with cell_too_new, in its own version, and keeps no session', async () => {
+            const { hub, store, violations, logs } = setup();
+            const sock = new RawSocket();
+            const h = hub.attach(sock, CRED['cell-a']);
+            const id = randomUUID();
+            const newer = PROTOCOL_VERSION + 1;
+            await h.onMessage(helloAt(newer, [PROTOCOL_VERSION, newer], id));
+            const refusal = sock.sent.at(-1);
+            expect(refusal).toMatchObject({ v: newer, re: id, type: 'nack', body: { code: 'cell_too_new' } });
+            expect(refusal.body.message).toContain(`cell speaks protocol v${newer}`);
+            expect(refusal.body.message).toContain(`accepts cells of protocol v${MIN_CELL_PROTOCOL_VERSION} to v${PROTOCOL_VERSION}`);
+            expect(refusal.body.message).toContain('upgrade the hub first');
+            expect(await store.session('cell-a')).toBeFalsy();
+            expect(violations).toEqual(['cell_too_new']);
+            expect(logs).toContainEqual(expect.objectContaining({ level: 'warn', msg: 'cell.refused_version', cellId: 'cell-a', code: 'cell_too_new', cellProtocol: newer, hubProtocol: PROTOCOL_VERSION, minCellProtocol: MIN_CELL_PROTOCOL_VERSION }));
+            // Not a session: what it sends next is refused as before a hello.
+            await h.onMessage(JSON.stringify({ v: PROTOCOL_VERSION, id: randomUUID(), cellId: 'cell-a', type: 'heartbeat', body: { claims: [], freeSlots: 1 } }));
+            expect(sock.sent.at(-1).body.code).toBe('hello_first');
+        });
+
+        it('a refused cell that upgrades or downgrades to the hub protocol is accepted on the same connection', async () => {
+            const { hub, store } = setup();
+            const sock = new RawSocket();
+            const h = hub.attach(sock, CRED['cell-a']);
+            await h.onMessage(helloAt(PROTOCOL_VERSION + 1, [PROTOCOL_VERSION + 1]));
+            await h.onMessage(helloAt(PROTOCOL_VERSION, [PROTOCOL_VERSION]));
+            expect(sock.sent.at(-1)).toMatchObject({ type: 'ack', body: { version: PROTOCOL_VERSION } });
+            expect(await store.session('cell-a')).toBeTruthy();
+        });
     });
 
     it('binds a claim, routes a probe and accepts only the result of a step it sent', async () => {

@@ -176,3 +176,20 @@ describe('CodeManagementRuntimeGitAdapter: open pull requests (the lost-webhook 
         expect(asked[0]).toMatchObject({ organizationAndTeamData: { organizationId: 'o', teamId: 't' }, repository: { id: '42', name: 'acme/shop' }, filters: { state: PullRequestState.OPENED } });
     });
 });
+
+// Asked only when a PR read came back empty: whether the integration's own
+// credential still reads the repository, as the provider's diagnosis says.
+describe('CodeManagementRuntimeGitAdapter: repository read access', () => {
+    it("answers the provider's read diagnosis for owner/repo, and unknown when it cannot be asked", async () => {
+        const diagnoseRepositoryAccess = jest.fn().mockResolvedValue({ read: 'denied', write: 'unknown', hook: 'unknown' });
+        const adapter = new CodeManagementRuntimeGitAdapter({ diagnoseRepositoryAccess } as any);
+        const input = { organizationId: 'o', teamId: 't', repositoryId: '42', repositoryName: 'acme/shop' };
+        await expect(adapter.repositoryReadAccess(input)).resolves.toBe('denied');
+        expect(diagnoseRepositoryAccess).toHaveBeenCalledWith({
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            repository: { id: '42', name: 'shop', fullName: 'acme/shop' },
+        });
+        diagnoseRepositoryAccess.mockRejectedValueOnce(new Error('db down'));
+        await expect(adapter.repositoryReadAccess(input)).resolves.toBe('unknown');
+    });
+});

@@ -55,5 +55,6 @@ Imported by:
 - [`apps/runtime-cell/internal/drivers/localdocker`](../drivers/localdocker/AGENTS.md)
 - [`apps/runtime-cell/internal/isolation/gvisor`](../isolation/gvisor/AGENTS.md)
 - [`apps/runtime-cell/internal/placement/docker`](../placement/docker/AGENTS.md)
+- [`apps/runtime-cell/internal/preflight`](../preflight/AGENTS.md)
 
 <!-- module-map:end -->

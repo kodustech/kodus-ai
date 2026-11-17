@@ -54,6 +54,8 @@ flowchart LR
 | Egress, injector | `cmd/egress`, `cmd/injector`, `internal/egress`, `internal/injector` | the internet, by the claim's signed policy | let a secret's value into a machine; trust a machine's word about a host |
 | Inside a machine | `cmd/kody-guest`, `internal/guest`, `internal/guestinit`, `cmd/observer` | the cell over vsock or mTLS only | reach the cell's control side |
 
+The hub and its cells may run different releases. At hello the hub accepts a cell of a protocol no newer than its own and at most one older (`helloVersionRefusal`, `libs/runtime/protocol/envelope.ts`); it refuses the rest with `cell_too_new` or `cell_too_old`, and the cell waits its refused backoff before dialing again. So the hub is upgraded first. The rule and its gaps: [cell-distribution.md](cell-distribution.md) "Keeping hub, worker, API and cell compatible".
+
 ## Flows
 
 - **A Run** (PR event or `@kody runtime` → verdict → check and comment): the sequence in [`apps/runtime/README.md`](../../apps/runtime/README.md) "A Run, end to end", the decisions in [`libs/runtime/README.md`](../../libs/runtime/README.md) "Flow of one Run". The workflow is `apps/runtime/src/worker/run/` (`run-orchestrator.ts`), the verdict `libs/runtime/gate` and `libs/runtime/run`.

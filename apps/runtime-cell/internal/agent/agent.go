@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/admission"
@@ -38,16 +39,19 @@ import (
 )
 
 type Agent struct {
-	cfg     Config
-	clock   clock.Clock
-	log     *slog.Logger
-	leases  *lease.Manager
-	deadman *lease.DeadMan
-	steps   *dedup.Store
-	claims  *claims.Registry
-	outbox  *outbox.Outbox
-	m       agentMetrics
-	wg      sync.WaitGroup
+	// established counts the sessions the hub accepted (Run resets its
+	// reconnect backoff when one did).
+	established atomic.Int64
+	cfg         Config
+	clock       clock.Clock
+	log         *slog.Logger
+	leases      *lease.Manager
+	deadman     *lease.DeadMan
+	steps       *dedup.Store
+	claims      *claims.Registry
+	outbox      *outbox.Outbox
+	m           agentMetrics
+	wg          sync.WaitGroup
 
 	// mu guards the hub session only: conn, version, accepts and runCtx.
 	// Every other part keeps its own state behind its own lock.

@@ -93,6 +93,12 @@ var HubAcceptedFeatures = []string{
 	FeatureBuildStateRebuildCost,
 }
 
+// HelloRefusedCellTooOld is HELLO_VERSION_REFUSALS.cellTooOld (libs/runtime/protocol/envelope.ts): the nack code of a hello whose cell is older than the oldest protocol the hub speaks.
+const HelloRefusedCellTooOld = "cell_too_old"
+
+// HelloRefusedCellTooNew is HELLO_VERSION_REFUSALS.cellTooNew (libs/runtime/protocol/envelope.ts): the nack code of a hello whose cell is newer than the hub.
+const HelloRefusedCellTooNew = "cell_too_new"
+
 // RunIdentityHostnameEnv is RUN_IDENTITY_ENV.hostname (libs/runtime/protocol/messages.ts): the env var a Run's drawn hostname is set in.
 const RunIdentityHostnameEnv = "KODUS_RUN_HOSTNAME"
 

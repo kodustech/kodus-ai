@@ -32,4 +32,15 @@ describe('the answer to a skipped @kody runtime', () => {
         expect(renderSkippedTriggerReply('environment_not_ready', 'blocked', links)).toContain('(https://app.test/runtime/environments)');
         expect(renderSkippedTriggerReply('off')).toBe(SKIPPED_TRIGGER_REPLIES.off);
     });
+
+    // The admin who must fix a broken Git connection is sent to the Git settings, not told the Runtime is off.
+    it('links the broken Git connection answers to the Git settings, with no internal detail', () => {
+        const links = { git: 'https://app.test/settings/git' };
+        for (const reason of ['repository_unreachable', 'pat_connection']) {
+            const line = renderSkippedTriggerReply(reason, undefined, links)!;
+            expect(line).toContain('(https://app.test/settings/git)');
+            expect(line.split(/(?<=[.;])\s+/)).toHaveLength(2);
+            expect(line).not.toMatch(/token:|ghs_|installation id|\b404\b/i);
+        }
+    });
 });

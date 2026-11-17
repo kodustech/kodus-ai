@@ -1,4 +1,4 @@
-import { decodeFrame, MAX_FRAME_BYTES, protocolJsonSchemas } from './envelope';
+import { decodeFrame, HELLO_VERSION_REFUSALS, helloVersionRefusal, MAX_FRAME_BYTES, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, protocolJsonSchemas } from './envelope';
 
 const STEP = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
 const MSG = '0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d';
@@ -59,6 +59,11 @@ describe('decodeFrame', () => {
             ok: false,
             code: 'unsupported_version',
         });
+    });
+
+    it('decodes a hello of a version it does not speak, so the hub can say why it refuses that cell', () => {
+        const hello = { versions: [8, 9], driver: 'docker-gvisor', isolation: 'sandboxed-container', regions: [], owner: 'customer' };
+        expect(decodeFrame(frame({ v: 9, type: 'hello', claimId: undefined, body: hello }))).toMatchObject({ ok: true, message: { type: 'hello', v: 9 } });
     });
 
     it('refuses a probe.run carrying a browser evaluate step', () => {
@@ -138,5 +143,35 @@ describe('decodeFrame refuses what a strict decoder must refuse', () => {
         const fixture = require('./fixtures/claim-acquire-diagnostic-hold.json');
         const body = { ...fixture.message.body, consumer: 'runtime' };
         expect(decodeFrame(JSON.stringify({ ...fixture.message, body }))).toMatchObject({ ok: false, code: 'invalid_body' });
+    });
+});
+
+// The skew policy (Kubernetes' kubelet rule): a cell is never newer than the
+// hub it dials, and never older than the oldest protocol the hub still speaks.
+describe('helloVersionRefusal', () => {
+    const range = { min: 2, max: 3 };
+
+    it('accepts a cell at the hub protocol or at one the hub still speaks', () => {
+        expect(helloVersionRefusal([2, 3], range)).toBeNull();
+        expect(helloVersionRefusal([1, 2], range)).toBeNull();
+    });
+
+    it('refuses a cell newer than the hub, and says to upgrade the hub first', () => {
+        const r = helloVersionRefusal([3, 4], range);
+        expect(r).toEqual({ code: HELLO_VERSION_REFUSALS.cellTooNew, message: expect.stringContaining('cell speaks protocol v4') });
+        expect(r!.message).toContain('accepts cells of protocol v2 to v3');
+        expect(r!.message).toContain('upgrade the hub first');
+    });
+
+    it('refuses a cell older than the oldest protocol the hub speaks, and says to upgrade the cell', () => {
+        const r = helloVersionRefusal([1], range);
+        expect(r).toEqual({ code: HELLO_VERSION_REFUSALS.cellTooOld, message: expect.stringContaining('cell speaks protocol v1') });
+        expect(r!.message).toContain('upgrade the cell');
+    });
+
+    it("by default reads this hub's range: the protocol it speaks and the one before it", () => {
+        expect(MIN_CELL_PROTOCOL_VERSION).toBe(Math.max(1, PROTOCOL_VERSION - 1));
+        expect(helloVersionRefusal([PROTOCOL_VERSION])).toBeNull();
+        expect(helloVersionRefusal([PROTOCOL_VERSION + 1])?.code).toBe('cell_too_new');
     });
 });

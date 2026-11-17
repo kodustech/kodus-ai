@@ -28,5 +28,6 @@ Imported by:
 
 - [`apps/runtime-cell/cmd/cell`](../../cmd/cell/AGENTS.md)
 - [`apps/runtime-cell/internal/isolation/firecracker`](../isolation/firecracker/AGENTS.md)
+- [`apps/runtime-cell/internal/preflight`](../preflight/AGENTS.md)
 
 <!-- module-map:end -->

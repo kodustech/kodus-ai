@@ -1,6 +1,6 @@
 # apps/runtime-cell/cmd/cell
 
-The cell binary: the composition root of the cell agent ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It parses the settings, picks and opens one driver, builds `agent.Config` from its parts and runs the agent, the driver's sweep and the side loops until SIGTERM. It also carries the host's one-shot subcommands (`register`, `renew`, `update`, `local-pki`, `issue-cert`, `template`, `probe`, and `extract`, the no-network tarball child).
+The cell binary: the composition root of the cell agent ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It parses the settings, picks and opens one driver, builds `agent.Config` from its parts and runs the agent, the driver's sweep and the side loops until SIGTERM. It also carries the host's one-shot subcommands (`register`, `renew`, `update`, `preflight`, `local-pki`, `issue-cert`, `template`, `probe`, and `extract`, the no-network tarball child).
 
 ## Owns
 - Settings: `config.go` `settings.register`, `parseSettings`; the config file (`-config`, YAML or JSON) sets any registered flag by name (`applyFile`, `loadFile`), and a flag wins over the file.
@@ -9,6 +9,7 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 - What the agent gets beside the driver: `main.go` `buildAgent` (observers, preview tunnel, egress control with `policyPusher`, alert feeds, denied and outbound readers), `memory.go` `observeDriver` (memory admission budget), `disk.go` `diskWatch`.
 - Trust: `roots.go` `loadRoots` (hub CA, cell-local CA, injector CA; refuses two that share a key), `trust.go` `trustSettings.write` (the files a claim with org secrets mounts), `main.go` `resolveCellID` (the id is the certificate's CN).
 - Shutdown order: `serve.go` `serveCell` (agent and loops stop, `sweepExpired` ends, then the driver closes, all within `shutdownGrace`).
+- Host preflight: `preflight.go` `runPreflight` parses the cell's own flags and `-config` (`parseSettings`, `selectDriver`), then runs `internal/preflight`'s checks for the driver they resolve to, with the host's probes (`hostPreflightProbes`) and the drivers' own rules (`dockergvisor.ValidateClaimLimitDaemon`, `microvm.Prerequisites` on `microvmConfig`, the settings `openMicroVM` opens with).
 - Enrollment commands: `register.go` `runEnroll`; host PKI: `localpki.go`; template export and import: `template.go` `runTemplate`.
 
 ## Does not own
@@ -20,6 +21,7 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 - A refused setting is `lifecycle.Usage` (exit 2), returned before keys, Docker or the hub are touched (`run`).
 - A driver flag set for another driver is refused, from the command line or the file (`checkFlagOwners`).
 - `-cell-id`, when given, must equal the certificate's CN, or every frame would be refused (`resolveCellID`).
+- A requirement the cell checks at start is checked by `cell preflight` too: its check in `internal/preflight`, called from `preflight.go`, from the same function the start calls, not a copy of its rule.
 - Without `-local-ca` the hub and the enforcers share one pool: allowed only with `-dev` (`loadRoots`, `trust.shared_pool` alarm).
 
 ## Where new code goes
@@ -34,7 +36,7 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 
 ## Module map
 
-Files (16, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `k8s.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
+Files (17, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `k8s.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `preflight.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
 
 Imports these Runtime modules:
 
@@ -66,6 +68,7 @@ Imports these Runtime modules:
 - [`apps/runtime-cell/internal/observerclient`](../../internal/observerclient/AGENTS.md)
 - [`apps/runtime-cell/internal/policy`](../../internal/policy/AGENTS.md)
 - [`apps/runtime-cell/internal/policy/control`](../../internal/policy/control/AGENTS.md)
+- [`apps/runtime-cell/internal/preflight`](../../internal/preflight/AGENTS.md)
 - [`apps/runtime-cell/internal/preview`](../../internal/preview/AGENTS.md)
 - [`apps/runtime-cell/internal/protocol`](../../internal/protocol/AGENTS.md)
 - [`apps/runtime-cell/internal/tarball`](../../internal/tarball/AGENTS.md)

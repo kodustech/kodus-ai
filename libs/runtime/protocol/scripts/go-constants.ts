@@ -45,6 +45,7 @@ import {
     SANDBOX_PATH_MAX,
 } from '../sandbox';
 import { RUN_IDENTITY_ENV } from '../messages';
+import { HELLO_VERSION_REFUSALS } from '../envelope';
 import { RESERVED_JSON_KEYS } from '../strict-json';
 
 /** One Go declaration: a const (number or string), a pattern (a string const for regexp.MustCompile) or a []string. */
@@ -82,6 +83,8 @@ const SECRETS = 'libs/runtime/api/domain/secrets.ts';
 /** Everything constants_gen.go declares besides the hello features, in file order. */
 export function goConstants(): GoConstant[] {
     return [
+        { go: 'HelloRefusedCellTooOld', from: 'HELLO_VERSION_REFUSALS.cellTooOld (libs/runtime/protocol/envelope.ts)', doc: 'the nack code of a hello whose cell is older than the oldest protocol the hub speaks', value: HELLO_VERSION_REFUSALS.cellTooOld },
+        { go: 'HelloRefusedCellTooNew', from: 'HELLO_VERSION_REFUSALS.cellTooNew (libs/runtime/protocol/envelope.ts)', doc: 'the nack code of a hello whose cell is newer than the hub', value: HELLO_VERSION_REFUSALS.cellTooNew },
         { go: 'RunIdentityHostnameEnv', from: 'RUN_IDENTITY_ENV.hostname (libs/runtime/protocol/messages.ts)', doc: "the env var a Run's drawn hostname is set in", value: RUN_IDENTITY_ENV.hostname },
         { go: 'RunIdentityUserEnv', from: 'RUN_IDENTITY_ENV.user (libs/runtime/protocol/messages.ts)', doc: "the env var a Run's drawn seed user is set in", value: RUN_IDENTITY_ENV.user },
         { go: 'RunIdentityDomainEnv', from: 'RUN_IDENTITY_ENV.domain (libs/runtime/protocol/messages.ts)', doc: "the env var a Run's drawn seed domain is set in", value: RUN_IDENTITY_ENV.domain },

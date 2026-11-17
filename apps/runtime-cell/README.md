@@ -8,7 +8,7 @@ The cell is Go (`go.mod` here); the hub and the gate are TypeScript (`apps/runti
 
 | Binary | Runs where | What it does |
 |---|---|---|
-| `cell` | the cell host | The agent: holds the outbound WebSocket to the hub, prepares and releases claims, keeps leases and the dead-man switch. Subcommands: `cell register` and `cell renew` (enrollment), `cell extract` (the tarball extraction child, no network), and `cell update` (installs the next release once its signature verifies against a pinned key, S-17). |
+| `cell` | the cell host | The agent: holds the outbound WebSocket to the hub, prepares and releases claims, keeps leases and the dead-man switch. Subcommands: `cell register` and `cell renew` (enrollment), `cell extract` (the tarball extraction child, no network), `cell preflight` (checks the host against what the configured driver needs, before an install; `docs/runtime/self-hosted.md`, "Host preflight"), and `cell update` (installs the next release once its signature verifies against a pinned key, S-17, after the new release's preflight passes on the host). |
 | `kody-exec` | inside the workload VM | Reads one JSON request on stdin, runs it with `sh -c`, prints the result. Enforces the timeout on the whole process tree. Its output is evidence, never a verdict. |
 | `observer` | the claim's observer machine | Runs typed HTTP and read-only SQL probes against the claim's exposed ports, outside the VM, and keeps the request log the gate uses for coverage. |
 | `egress` | the egress host | Transparent proxy: the claim's only way out (ports 80/443 redirected by nftables). Reads SNI or Host, never terminates TLS, holds no credential. With `-dns-listen` it also runs the resolver. |

@@ -33,5 +33,6 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/cmd/cell`](../../cmd/cell/AGENTS.md)
+- [`apps/runtime-cell/internal/preflight`](../preflight/AGENTS.md)
 
 <!-- module-map:end -->

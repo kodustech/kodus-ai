@@ -86,10 +86,16 @@ type Stack struct {
 	Backend *firecracker.Backend
 }
 
-// Open loads and verifies the kit, checks every prerequisite of the host
-// and refuses with all the missing ones named, before anything touches the
-// host's network; then it makes the placement, the backend and the driver.
-func Open(ctx context.Context, f Firecracker) (Stack, error) {
+// Prerequisites are what Open refuses the cell with on this host, all of
+// them (firecracker.Missing after the kit is loaded and verified), read
+// before anything touches the host's network: `cell preflight` reports
+// them. Like Open, it makes the state directory to test that it reflinks.
+func Prerequisites(f Firecracker) []string {
+	_, missing := prerequisites(f)
+	return missing
+}
+
+func prerequisites(f Firecracker) (firecracker.Config, []string) {
 	bcfg := firecracker.Config{StateDir: filepath.Join(f.StateDir, "vm"), Host: f.Host, Checks: f.Checks, MemoryMB: f.MemoryMB, CPUs: f.CPUs, DataGB: f.DataGB, Limits: f.Limits, HostPolicy: f.HostPolicy}
 	k, err := kit.Load(f.KitDir, f.KitDigest, f.Host.Arch)
 	if err != nil {
@@ -97,7 +103,15 @@ func Open(ctx context.Context, f Firecracker) (Stack, error) {
 	} else {
 		bcfg.Kit = k
 	}
-	if missing := firecracker.Missing(bcfg, false); len(missing) > 0 {
+	return bcfg, firecracker.Missing(bcfg, false)
+}
+
+// Open loads and verifies the kit, checks every prerequisite of the host
+// and refuses with all the missing ones named, before anything touches the
+// host's network; then it makes the placement, the backend and the driver.
+func Open(ctx context.Context, f Firecracker) (Stack, error) {
+	bcfg, missing := prerequisites(f)
+	if len(missing) > 0 {
 		return Stack{}, firecracker.Unavailable(missing)
 	}
 	tcp, err := egressTCPPorts(f.Mirror)

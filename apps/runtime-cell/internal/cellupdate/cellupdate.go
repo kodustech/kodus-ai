@@ -15,7 +15,10 @@
 // file was copied and matched the signed manifest; a refusal names the file.
 // A release lower than the installed one is refused unless the operator says
 // -allow-downgrade (order.go): a signature binds a release to its name, so an
-// older, vulnerable release verifies as well as the newest.
+// older, vulnerable release verifies as well as the newest. Before the swap,
+// the staged release's own `cell preflight` checks the host with the cell's
+// config (preflight.go): a host the new release would refuse keeps the one
+// it runs.
 package cellupdate
 
 import (
@@ -66,6 +69,10 @@ type Options struct {
 	Index string
 	// Now is the clock the index's expiry is read against; time.Now when nil.
 	Now func() time.Time
+	// Preflight checks this host with the staged release's cell (its path),
+	// after every file matched and before the swap; an error refuses the
+	// swap. Nil: no check. Not run with VerifyOnly.
+	Preflight func(cell string) error
 }
 
 // Install verifies the release in o.From and makes it current, keeping the
@@ -131,6 +138,12 @@ func Install(o Options) (string, error) {
 	dest := filepath.Join(releases, strings.ReplaceAll(o.Release, "/", "_")+"-"+files["cell"].sha[:12])
 	if err := stage(dest, releases, o.From, files); err != nil {
 		return "", err
+	}
+	if o.Preflight != nil {
+		// The new release judges the host: its requirements may be new.
+		if err := o.Preflight(filepath.Join(dest, "bin", "cell")); err != nil {
+			return "", fmt.Errorf("the host preflight of %s failed (%w): the installed release stays current, and %s is kept for the next try", o.Release, err, dest)
+		}
 	}
 	return dest, swap(o.Root, dest)
 }
@@ -250,6 +263,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	verifyOnly := fs.Bool("verify-only", false, "check the signature and every file, install nothing")
 	indexDir := fs.String("index", "", "the directory of the signed release index (RELEASE-INDEX, RELEASE-INDEX.sig); default: -from")
 	allowDowngrade := fs.Bool("allow-downgrade", false, "install a release older than the one running this command (a dev build over a release included)")
+	preflightConfig := fs.String("preflight-config", os.Getenv("KODUS_CELL_CONFIG"), "the cell's -config file: before the swap the staged release runs `cell preflight -config` with it, and a failed check keeps the installed release (default $KODUS_CELL_CONFIG)")
+	skipPreflight := fs.Bool("skip-preflight", false, "swap without the staged release's host preflight")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -262,7 +277,15 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "cell update:", err)
 		return 1
 	}
-	dest, err := Install(Options{Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir})
+	o := Options{Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir}
+	switch {
+	case *skipPreflight || *verifyOnly:
+	case *preflightConfig == "":
+		_, _ = fmt.Fprintln(stderr, "cell update: no -preflight-config (or KODUS_CELL_CONFIG): the staged release's host preflight does not run")
+	default:
+		o.Preflight = StagedPreflight(*preflightConfig, stdout, stderr)
+	}
+	dest, err := Install(o)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "cell update:", err)
 		return 1

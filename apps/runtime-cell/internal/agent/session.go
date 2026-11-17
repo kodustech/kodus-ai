@@ -10,6 +10,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lease"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	buildversion "github.com/kodustech/kodus-ai/apps/runtime-cell/internal/version"
 )
 
 type RunConfig struct {
@@ -21,6 +22,11 @@ type RunConfig struct {
 	// Backoff between reconnects; doubles up to MaxBackoff.
 	Backoff    time.Duration
 	MaxBackoff time.Duration
+	// RefusedBackoff is the least wait after a hub refused the hello for
+	// the cell's protocol version (default 5 min): that refusal holds until
+	// an operator upgrades the hub or the cell, so dialing at the reconnect
+	// pace only repeats it.
+	RefusedBackoff time.Duration
 	// AckTimeout is how long a frame waits for its ack (default 5 s).
 	AckTimeout time.Duration
 	// MissedHeartbeats is how many heartbeats in a row the hub may leave
@@ -68,6 +74,9 @@ func (a *Agent) Run(ctx context.Context, rc RunConfig) error {
 	if rc.MaxBackoff == 0 {
 		rc.MaxBackoff = 30 * time.Second
 	}
+	if rc.RefusedBackoff == 0 {
+		rc.RefusedBackoff = 5 * time.Minute
+	}
 	if rc.MissedHeartbeats <= 0 {
 		rc.MissedHeartbeats = 3
 	}
@@ -92,13 +101,28 @@ func (a *Agent) Run(ctx context.Context, rc RunConfig) error {
 			<-ctx.Done()
 			break
 		}
+		reached := a.established.Load()
 		err := a.session(ctx, rc)
 		if ctx.Err() != nil {
 			break
 		}
-		a.log.Warn("hub.disconnected", "err", err, "retryIn", backoff)
+		// A session that reached the hub starts the pace over: the failures
+		// before it say nothing about this drop.
+		if a.established.Load() != reached {
+			backoff = rc.Backoff
+		}
+		wait := backoff
+		var refused *versionRefusedError
+		if errors.As(err, &refused) {
+			wait = max(backoff, rc.RefusedBackoff)
+			a.log.Error("hub.refused_version", "code", refused.Code, "reason", refused.Message,
+				"cellProtocol", protocol.ProtocolVersion, "cellVersions", protocol.SupportedVersions(), "cellRelease", buildversion.Version,
+				"fix", "a cell is never newer than its hub nor older than the oldest protocol it speaks: upgrade the side the reason names", "retryIn", wait)
+		} else {
+			a.log.Warn("hub.disconnected", "err", err, "retryIn", backoff)
+		}
 		select {
-		case <-time.After(backoff):
+		case <-time.After(wait):
 		case <-ctx.Done():
 		}
 		if backoff *= 2; backoff > rc.MaxBackoff {
@@ -131,7 +155,7 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 	}()
 	ack, err := conn.RequestAck(sctx, protocol.Header{ID: a.cfg.NewID()}, a.Hello())
 	if err != nil {
-		return err
+		return asVersionRefusal(err)
 	}
 	version, err := chosenVersion(ack)
 	if err != nil {
@@ -149,6 +173,7 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 		a.mu.Unlock()
 	}()
 	a.deadman.Contact()
+	a.established.Add(1)
 	a.log.Info("hub.connected", "version", version, "accepts", len(accepts))
 	t := time.NewTicker(rc.HeartbeatEvery)
 	defer t.Stop()
@@ -218,4 +243,26 @@ func chosenVersion(ack *protocol.AckBody) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("agent: hub chose protocol v%d; this cell speaks %v", *ack.Version, protocol.SupportedVersions())
+}
+
+// versionRefusedError is a hello the hub refused for the cell's protocol
+// version (the skew policy, libs/runtime/protocol/envelope.ts): the cell is
+// newer than the hub, or older than the oldest protocol the hub speaks.
+type versionRefusedError struct{ *hubclient.NackError }
+
+func (e *versionRefusedError) Unwrap() error { return e.NackError }
+
+// asVersionRefusal marks a hello nack that refuses the cell's version: the
+// codes of the skew policy, and unsupported_version, what a hub before it
+// sent a cell older than itself.
+func asVersionRefusal(err error) error {
+	var nack *hubclient.NackError
+	if !errors.As(err, &nack) {
+		return err
+	}
+	switch nack.Code {
+	case protocol.HelloRefusedCellTooOld, protocol.HelloRefusedCellTooNew, string(protocol.CodeUnsupportedVersion):
+		return &versionRefusedError{nack}
+	}
+	return err
 }

@@ -39,6 +39,8 @@ export class CellConnection {
     isolation?: string;
     driver?: string;
     features: readonly string[] = [];
+    /** The protocol version the hello ack chose: every frame of this session is sent in it. */
+    version?: number;
     /** Free slots from the last heartbeat; absent before the first one. */
     freeSlots?: number;
     /** The evictedBuildStates last written for this session (its rows as one key): a heartbeat that says the same writes nothing. */
@@ -64,9 +66,15 @@ export class CellConnectionRegistry {
         return { v: PROTOCOL_VERSION, id: randomUUID(), cellId, type, body, ...extra } as Envelope<T>;
     }
 
+    /** A frame goes out in its session's chosen version (the hub's own before hello). */
+    private framed(conn: CellConnection, env: Envelope): Envelope {
+        return conn.version !== undefined && env.v !== conn.version ? { ...env, v: conn.version } : env;
+    }
+
     /** An overloaded connection becomes lost; frames are never silently dropped or resent. */
     send(conn: CellConnection, env: Envelope): boolean {
         if (conn.closed) return false;
+        env = this.framed(conn, env);
         // A claim's frame carries the span that sends it (feature traceContext): the cell's spans join the Run's trace.
         if (env.claimId && !env.traceparent && conn.features.includes('traceContext')) {
             const traceparent = activeTraceparent();
@@ -98,14 +106,18 @@ export class CellConnectionRegistry {
         }
     }
 
-    /** Refuses a frame. A frame that did not decode has no id to answer: it is counted and logged, not answered. */
-    nack(conn: CellConnection, re: string | undefined, code: string, message: string) {
+    /**
+     * Refuses a frame. A frame that did not decode has no id to answer: it is counted and logged, not answered.
+     * v sends the nack in a version other than the session's: a hello refused for its version is answered in its own.
+     */
+    nack(conn: CellConnection, re: string | undefined, code: string, message: string, v?: number) {
         this.metrics.recordProtocolViolation({ cellId: conn.cred.cellId, code });
         if (!re) {
             this.log('warn', 'cell.frame_refused', { cellId: conn.cred.cellId, code, detail: message.slice(0, 200) });
             return;
         }
-        this.send(conn, this.envelope(conn.cred.cellId, 'nack', { code, message: message.slice(0, 1_024) }, { re }));
+        const env = this.envelope(conn.cred.cellId, 'nack', { code, message: message.slice(0, 1_024) }, { re });
+        this.send(conn, v === undefined ? env : { ...env, v });
     }
 
     ack(conn: CellConnection, re: string, body: MessageBody<'ack'> = {}) {

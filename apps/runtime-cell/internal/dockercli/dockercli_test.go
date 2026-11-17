@@ -63,6 +63,29 @@ func TestInspectReadsLabelsAsAMap(t *testing.T) {
 	}
 }
 
+// The reaper failed a whole pass when a claim was cleaned up between its
+// listing and its inspect (the second container was gone).
+func TestListToleratesAContainerRemovedBeforeTheInspect(t *testing.T) {
+	listed := 0
+	run := func(_ context.Context, _ []byte, _ string, args ...string) ([]byte, error) {
+		if args[0] == "inspect" {
+			if slices.Contains(args, "gone") {
+				return []byte(`[{"Id":"c1"}]`), &ExitError{Command: "docker inspect", Code: 1, Stderr: "Error response from daemon: No such container: gone"}
+			}
+			return []byte(`[{"Id":"c1"}]`), nil
+		}
+		listed++
+		if listed == 1 {
+			return []byte("c1\ngone\n"), nil
+		}
+		return []byte("c1\n"), nil
+	}
+	cs, err := CLI{Run: run}.List(context.Background(), map[string]string{"kodus.cell": "cell-1"})
+	if err != nil || len(cs) != 1 || cs[0].ID != "c1" {
+		t.Fatal(cs, err)
+	}
+}
+
 // A copy of an org's data under docker-gvisor reads it under gVisor with no
 // network; the plain CopyVolume keeps Docker's default runtime.
 func TestCopyVolumeInRunsTheHelperUnderTheRuntime(t *testing.T) {

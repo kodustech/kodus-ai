@@ -3,7 +3,7 @@
 The runtime-hub's live connections: one WebSocket per cell on this replica, and the request/answer plumbing on it. Every part of the hub that sends a frame to a cell (`hub/claims`, `CellHub`) goes through it; the WebSocket upgrade itself is `hub/cell-gateway.service.ts`.
 
 ## Owns
-- `cell-connections.ts` `CellConnection`: one socket's state (`sessionEpoch`, `helloDone`, features, pending acks, steps, readiness waits, `lastFrameAt`).
+- `cell-connections.ts` `CellConnection`: one socket's state (`sessionEpoch`, `helloDone`, `version`, features, pending acks, steps, readiness waits, `lastFrameAt`).
 - `cell-connections.ts` `CellConnectionRegistry`: `add` (a new connection replaces the old one), `send` (backpressure), `request` (ack, nack or blocked within `ACK_TIMEOUT_MS`), `answer`, `ack`, `nack`, `drop`, `closed` (ends the session row only if still ours), `evict` (revocation), `silentSince`, `views` (capacity gauges).
 - `CELL_CONNECTION_LIMITS`: 4 MiB buffered, 128 pending requests, 256 in-flight steps; frames over `MAX_FRAME_BYTES` are never written.
 - `peer-cert.ts` `peerCert`: the verified client certificate of a TLS socket as the hub reads it.
@@ -17,6 +17,7 @@ The runtime-hub's live connections: one WebSocket per cell on this replica, and 
 - A dropped connection resolves every wait on it: acks reject with `CellUnavailableError`, readiness waits end `lost`, steps end `lost`. Nothing is resent on another connection.
 - Crossing a ceiling closes that connection and counts `runtime.hub.connection_overload{reason}`; a frame is never silently discarded.
 - `get` and `require` return only a connection whose hello is done.
+- Every frame goes out in its session's chosen version (`framed`, in `send`); before hello, the hub's own. `nack` takes a version for the one frame that needs another: a hello refused for its version is answered in that hello's `v`.
 - These are protective ceilings, not measured capacity; incoming queues are not bounded here ([README](../../../README.md) "Outgoing backpressure").
 
 ## Where new code goes

@@ -110,7 +110,9 @@ func Decode(frame []byte) (*Message, error) {
 	if err := json.Unmarshal(frame, &env); err != nil {
 		return nil, &DecodeError{CodeInvalidEnvelope, err.Error()}
 	}
-	supported := false
+	// A hello is decoded whatever its version, as in envelope.ts decodeFrame:
+	// it is how two versions meet, so a refusal can say why.
+	supported := env.Type == MessageTypeHello
 	for _, v := range SupportedVersions() {
 		if env.V == v {
 			supported = true

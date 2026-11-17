@@ -104,6 +104,15 @@ const finalCheck = (overrides: Partial<RuntimePublishRequested> = {}): RuntimePu
     ...overrides,
 });
 
+const openCheck = (status: 'queued' | 'in_progress'): RuntimePublishRequested => ({
+    runId: RUN_ID,
+    attempt: 1,
+    kind: 'check',
+    key: publishKey(RUN_ID, 1, 'check'),
+    correlationId: 'corr-1',
+    check: { status, title: 'ignored', summary: 'ignored' },
+});
+
 const awaitingCheck = (): RuntimePublishRequested => ({
     runId: RUN_ID,
     attempt: 1,
@@ -200,6 +209,8 @@ class FakePullRequest implements CodeManagementPort {
     }
 }
 
+type CommitStatusParams = Parameters<NonNullable<IChecksAdapter['createCommitStatus']>>[0];
+
 /** The check runs on the platform, by id: where they point, their state and what they show. */
 class FakeChecks implements IChecksAdapter {
     readonly runs = new Map<number, { headSha: string; name: string; repository: { owner: string; name: string }; status: CheckStatus; conclusion?: CheckConclusion; output: { title: string; summary: string; text?: string } }>();
@@ -208,8 +219,28 @@ class FakeChecks implements IChecksAdapter {
     noRunOnCreate = 0;
     /** The next closes the platform refuses. */
     refusedUpdates = 0;
+    /** False: the connection cannot create check runs (a GitHub personal access token). */
+    checksApi = true;
+    /** The commit statuses on the platform, in the order they were posted. */
+    readonly statuses: CommitStatusParams[] = [];
+    /** The next commit statuses the platform refuses. */
+    refusedStatuses = 0;
+
+    async isChecksApiAvailable() {
+        return this.checksApi;
+    }
+
+    async createCommitStatus(p: CommitStatusParams) {
+        if (this.refusedStatuses > 0) {
+            this.refusedStatuses--;
+            return false;
+        }
+        this.statuses.push(p);
+        return true;
+    }
 
     async createCheckRun(p: Parameters<IChecksAdapter['createCheckRun']>[0]) {
+        if (!this.checksApi) return null;
         if (this.noRunOnCreate > 0) {
             this.noRunOnCreate--;
             return null;
@@ -542,6 +573,7 @@ describe('PublishRuntimeRequestUseCase', () => {
             expect([...t.checks.runs.values()]).toEqual([
                 expect.objectContaining({ headSha: HEAD, repository: { owner: 'acme', name: 'widgets' }, status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS }),
             ]);
+            expect(t.checks.statuses).toEqual([]);
         });
 
         // Behavior: a platform that creates no check run is retried delivery by delivery and skipped only after every attempt.
@@ -588,6 +620,74 @@ describe('PublishRuntimeRequestUseCase', () => {
             await t.useCase.execute(onTheWire(awaitingCheck()));
             await t.useCase.execute(onTheWire(finalCheck()));
             expect([...t.checks.runs.values()]).toEqual([expect.objectContaining({ conclusion: CheckConclusion.SUCCESS })]);
+        });
+    });
+
+    describe('a connection without check runs: the verdict as a commit status', () => {
+        // Behavior: an org whose GitHub connection is a personal access token gets the verdict as a commit status named like the check, on the PR head, and the publication is published.
+        it('posts the verdict as a commit status on the head and records it as published', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+
+            expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'published', key: `${RUN_ID}:1:check` });
+
+            expect(t.checks.runs.size).toBe(0);
+            expect(t.checks.statuses).toEqual([
+                expect.objectContaining({
+                    repository: { owner: 'acme', name: 'widgets' },
+                    sha: HEAD,
+                    context: 'Kody Runtime',
+                    status: CheckStatus.COMPLETED,
+                    conclusion: CheckConclusion.SUCCESS,
+                    description: 'No regressions in what was tested',
+                    targetUrl: `${DASHBOARD}/runtime/runs/${RUN_ID}`,
+                }),
+            ]);
+            const row = t.publications.rows.get(`${RUN_ID}:1:check`);
+            expect(row).toMatchObject({ status: 'published', commitStatus: true });
+            expect(row?.checkCreateFailures).toBeUndefined();
+        });
+
+        // Behavior: every phase moves the same status: open while the Run waits or runs, the verdict at the end.
+        it('moves one status through the phases, the awaiting maintainer included, to the verdict', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+
+            await t.useCase.execute(onTheWire(awaitingCheck()));
+            await t.useCase.execute(onTheWire(openCheck('queued')));
+            await t.useCase.execute(onTheWire(openCheck('in_progress')));
+            await t.useCase.execute(onTheWire(finalCheck({ report: report({ state: 'regression', verdictState: 'regression', paths: [{ entryPoint: 'GET /orders', probeId: 'list', verdict: 'finding', base: { status: 200 }, pr: { status: 500 } }] }) })));
+
+            expect(t.checks.statuses.map((s) => [s.context, s.status, s.conclusion, s.description])).toEqual([
+                ['Kody Runtime', CheckStatus.COMPLETED, CheckConclusion.ACTION_REQUIRED, 'Waiting for a maintainer'],
+                ['Kody Runtime', CheckStatus.QUEUED, undefined, 'Queued'],
+                ['Kody Runtime', CheckStatus.IN_PROGRESS, undefined, 'Running'],
+                ['Kody Runtime', CheckStatus.COMPLETED, CheckConclusion.FAILURE, '1 regression'],
+            ]);
+            expect(t.checks.runs.size).toBe(0);
+        });
+
+        // Behavior: a status the platform refuses is retried delivery by delivery, then skipped so the comment carries the result.
+        it('retries a refused status, and skips only after every attempt', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+            t.checks.refusedStatuses = MAX_CHECK_CREATE_ATTEMPTS;
+
+            for (let i = 1; i < MAX_CHECK_CREATE_ATTEMPTS; i++) {
+                await expect(t.useCase.execute(onTheWire(finalCheck()))).rejects.toBeInstanceOf(PublicationFailedError);
+                expect(t.publications.rows.get(`${RUN_ID}:1:check`)).toMatchObject({ status: 'failed', checkCreateFailures: i });
+            }
+            expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'skipped', reason: 'checks_unavailable' });
+            expect(t.checks.statuses).toEqual([]);
+        });
+
+        // Behavior: the sweeper's fallback reaches a token connection too, as the neutral short notice.
+        it('the fallback posts the short notice as a neutral status', async () => {
+            const t = await setup();
+            t.checks.checksApi = false;
+            expect(await t.useCase.execute(finalCheck(), { fallback: true })).toMatchObject({ outcome: 'published' });
+            expect(t.checks.statuses).toEqual([expect.objectContaining({ status: CheckStatus.COMPLETED, conclusion: CheckConclusion.NEUTRAL, description: 'Result not posted' })]);
+            expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'check'))).toMatchObject({ status: 'published', fallback: true, commitStatus: true });
         });
     });
 

@@ -293,6 +293,45 @@ export interface RuntimeGitPort {
             files: { path: string; content: string }[];
         },
     ): Promise<{ number: number; url: string } | null>;
+    /**
+     * Whether the integration's own credential reads the repository at all, as
+     * the provider answers it: `denied` when it refused (a removed or suspended
+     * GitHub App, a revoked token, a repository the connection no longer
+     * reaches), `unknown` when it cannot say. Asked only when a PR read came
+     * back empty, to tell a broken connection from a PR that is not there.
+     */
+    repositoryReadAccess?(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<'ok' | 'denied' | 'unknown'>;
+}
+
+/**
+ * Why the product's Git connection cannot serve the Runtime a repository. No
+ * retry changes it; an admin does. `repository_unreachable`: the connection
+ * cannot reach the repository (on GitHub, the App was removed, suspended or
+ * never installed). `pat_connection`: the organization connects with a
+ * personal access token, which cannot be narrowed to one repository (ADR-052).
+ */
+export type RepositoryAccessProblem = 'repository_unreachable' | 'pat_connection';
+
+/** A repository the Git connection cannot serve the Runtime; carried as the cause of the issuer's HTTP error. */
+export class RepositoryAccessRefusedError extends Error {
+    override readonly name = 'RepositoryAccessRefusedError';
+
+    constructor(
+        readonly problem: RepositoryAccessProblem,
+        message: string,
+    ) {
+        super(message);
+    }
+}
+
+/** The access problem an error carries, itself or as a cause, or undefined when it carries none. */
+export function repositoryAccessProblemOf(error: unknown): RepositoryAccessProblem | undefined {
+    let current: unknown = error;
+    for (let depth = 0; current && depth < 3; depth++) {
+        if (current instanceof RepositoryAccessRefusedError) return current.problem;
+        current = (current as { cause?: unknown }).cause;
+    }
+    return undefined;
 }
 
 export type DefaultBranchHead =

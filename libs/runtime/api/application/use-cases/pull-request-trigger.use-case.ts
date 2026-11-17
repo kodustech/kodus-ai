@@ -21,9 +21,11 @@ import {
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
     RUNTIME_RUN_PROJECTION_STORE,
     RUNTIME_SETTINGS_STORE,
+    repositoryAccessProblemOf,
     type ProductEnvironmentStore,
     type PullRequestDiff,
     type PullRequestHead,
+    type RepositoryAccessProblem,
     type RunProjectionReader,
     type RuntimeEnvironmentSetupReader,
     type RuntimeGitPort,
@@ -77,7 +79,10 @@ interface DecisionFacts {
  * asks again with `@kody runtime`. The runId is derived from what the Run is
  * for, so a redelivered event enqueues the same Run. A `@kody runtime` that
  * starts nothing is answered on the PR with why, once per PR, head and reason,
- * and only to someone who may ask (render-skipped-trigger.ts).
+ * and only to someone who may ask (render-skipped-trigger.ts). A Git
+ * connection that cannot serve the repository (RepositoryAccessProblem) is a
+ * decision, not a failure: answered when the connection can still post, else
+ * logged once, and never retried.
  */
 @Injectable()
 export class RuntimePullRequestTriggerUseCase {
@@ -91,7 +96,7 @@ export class RuntimePullRequestTriggerUseCase {
         @Inject(RUNTIME_RUN_PROJECTION_STORE)
         private readonly runs: Pick<RunProjectionReader, 'findLive' | 'list'>,
         @Inject(RUNTIME_GIT_PORT)
-        private readonly git: Pick<RuntimeGitPort, 'getPullRequestHead' | 'getPullRequestDiff' | 'userCanWrite' | 'isOrganizationMember'>,
+        private readonly git: Pick<RuntimeGitPort, 'getPullRequestHead' | 'getPullRequestDiff' | 'userCanWrite' | 'isOrganizationMember' | 'repositoryReadAccess'>,
         private readonly requests: RuntimeRunRequestBuilder,
         private readonly enqueuer: RuntimeRunEnqueuer,
         @Inject(RUNTIME_ENVIRONMENT_SETUP_READER)
@@ -143,7 +148,7 @@ export class RuntimePullRequestTriggerUseCase {
             throw error;
         }
         const metadata = { organizationId: ev.organizationId, repositoryId: ev.repository.id, prNumber: ev.prNumber, event: ev.event, ...outcome };
-        let reply: SkippedTriggerReplyOutcome['outcome'] | undefined;
+        let reply: SkippedTriggerReplyOutcome['outcome'] | 'not_posted' | undefined;
         try {
             reply = ev.event === 'comment' ? await this.answerSkipped(ev, outcome, facts) : undefined;
         } catch (error) {
@@ -172,16 +177,20 @@ export class RuntimePullRequestTriggerUseCase {
      * of the only environment, or the first answered one when every environment
      * skipped. Only someone who may ask hears why; a stranger gets silence.
      */
-    private async answerSkipped(ev: RuntimePullRequestObserved, outcome: TriggerOutcome, facts: DecisionFacts): Promise<SkippedTriggerReplyOutcome['outcome'] | undefined> {
+    private async answerSkipped(ev: RuntimePullRequestObserved, outcome: TriggerOutcome, facts: DecisionFacts): Promise<SkippedTriggerReplyOutcome['outcome'] | 'not_posted' | undefined> {
         if (!this.skipReplies) return undefined;
         const skipped = answeredSkipOf(outcome);
         if (!skipped) return 'silent';
         const orgTeam = facts.orgTeam ?? { organizationId: ev.organizationId, teamId: ev.teamId };
         const repo = facts.repo ?? { repositoryId: ev.repository.id, repositoryName: ev.repository.name };
         const settings = facts.settingsRead ? facts.repoSettings : (await this.settings.listRepositories(ev.organizationId)).find((r) => r.repositoryId === ev.repository.id);
-        const allowed = facts.commenterAllowed ?? (await this.mayAsk(settings, ev, orgTeam, repo));
-        if (!allowed) return 'silent';
-        const answered = await this.skipReplies.answer({
+        const allowed = facts.commenterAllowed ?? (await this.askPermission(settings, ev, orgTeam, repo));
+        // The connection is broken: when it cannot even tell who asked, or cannot post, nothing reaches the PR.
+        // One warning, and the event is done: a retry meets the same connection.
+        const broken = isAccessProblem(skipped.reason);
+        if (broken && allowed === undefined) return this.notPosted(ev, skipped.reason, 'commenter_permission');
+        if (allowed !== true) return 'silent';
+        const request = {
             organizationId: ev.organizationId,
             teamId: orgTeam.teamId,
             repositoryId: ev.repository.id,
@@ -189,8 +198,31 @@ export class RuntimePullRequestTriggerUseCase {
             headSha: facts.head?.headSha ?? ev.headSha,
             reason: skipped.reason,
             ...(skipped.setup ? { setup: skipped.setup } : {}),
+        };
+        try {
+            return (await this.skipReplies.answer(request)).outcome;
+        } catch (error) {
+            // Any other answer is retried by the broker (execute); a broken connection's is not.
+            if (!broken) throw error;
+            return this.notPosted(ev, skipped.reason, 'post', error);
+        }
+    }
+
+    /** The one log of an answer the broken Git connection could not carry; never the platform's message. */
+    private notPosted(ev: RuntimePullRequestObserved, reason: string, step: 'commenter_permission' | 'post', error?: unknown): 'not_posted' {
+        this.logger.warn({
+            message: 'Runtime trigger: the Git connection cannot serve this repository and the comment is not answered; an admin must fix the connection',
+            context: RuntimePullRequestTriggerUseCase.name,
+            metadata: {
+                organizationId: ev.organizationId,
+                repositoryId: ev.repository.id,
+                prNumber: ev.prNumber,
+                reason,
+                step,
+                ...(error !== undefined ? { errorName: error instanceof Error ? error.name : 'error' } : {}),
+            },
         });
-        return answered.outcome;
+        return 'not_posted';
     }
 
     private async decide(ev: RuntimePullRequestObserved, facts: DecisionFacts): Promise<TriggerOutcome> {
@@ -202,6 +234,11 @@ export class RuntimePullRequestTriggerUseCase {
         const repo: Repo | undefined = first ? { repositoryId: ev.repository.id, repositoryName: first.member.repositoryName } : undefined;
         const head = orgTeam && repo ? await this.git.getPullRequestHead({ ...orgTeam, ...repo, prNumber: ev.prNumber }) : null;
         Object.assign(facts, { orgTeam, repo, head });
+        // Someone asked and the PR read came back empty: a connection that cannot read the repository at all
+        // is what the admin must fix, before anything the settings or the environment would say.
+        if (!head && ev.event === 'comment' && orgTeam && repo && (await this.readAccessOf(orgTeam, repo)) === 'denied') {
+            return { action: 'skipped', reason: 'repository_unreachable' satisfies RepositoryAccessProblem };
+        }
 
         // Cancellation does not depend on the mode: a Run asked by hand stops with its PR too.
         // The PR's state and head come from the Git API, never from the event.
@@ -300,7 +337,7 @@ export class RuntimePullRequestTriggerUseCase {
 
         let diff: PullRequestDiff | undefined;
         if (ev.event === 'comment') {
-            const allowed = await this.mayAsk(envSettings, ev, orgTeam, repo);
+            const allowed = (await this.askPermission(envSettings, ev, orgTeam, repo)) === true;
             facts.commenterAllowed ??= allowed;
             if (!allowed) return { action: 'skipped', reason: 'commenter_not_allowed' };
             // One count with the Runs asked from Kodus (Run again, Run on this PR).
@@ -348,6 +385,9 @@ export class RuntimePullRequestTriggerUseCase {
         } catch (e) {
             // A repository of the environment Kodus cannot pin never becomes valid on a retry of this event.
             if (e instanceof ConflictException) return { action: 'skipped', reason: 'workspace_unresolved', detail: e.message };
+            // Nor does a Git connection that cannot give the Runtime its download token (a PAT, no App installation).
+            const problem = repositoryAccessProblemOf(e);
+            if (problem) return { action: 'skipped', reason: problem };
             throw e;
         }
         await this.enqueuer.enqueue(request);
@@ -357,9 +397,10 @@ export class RuntimePullRequestTriggerUseCase {
     /**
      * `@kody runtime`: who may ask (screen 2). Writers and maintainers are
      * checked on the Git API; "anyone in the org" is checked as membership of
-     * the integration's org. An unknown answer, or a failed call, denies.
+     * the integration's org. undefined when the platform could not say (an
+     * unknown answer, or a failed call), which denies.
      */
-    private async mayAsk(settings: RuntimeRepositorySettingsRecord | undefined, ev: RuntimePullRequestObserved, orgTeam: OrgTeam, repo: Repo): Promise<boolean> {
+    private async askPermission(settings: RuntimeRepositorySettingsRecord | undefined, ev: RuntimePullRequestObserved, orgTeam: OrgTeam, repo: Repo): Promise<boolean | undefined> {
         const who = settings?.whoCanAsk ?? 'writers';
         if (!ev.commenter?.id && !ev.commenter?.login) return false;
         const identity = { id: ev.commenter.id, login: ev.commenter.login };
@@ -373,13 +414,24 @@ export class RuntimePullRequestTriggerUseCase {
             return undefined;
         };
         if (who === 'anyone_in_org') {
-            return (await this.git.isOrganizationMember({ ...orgTeam, identity }).catch(failed('organization_member'))) === true;
+            return this.git.isOrganizationMember({ ...orgTeam, identity }).catch(failed('organization_member'));
         }
-        return (await this.git.userCanWrite({ ...orgTeam, ...repo, identity }).catch(failed('can_write'))) === true;
+        return this.git.userCanWrite({ ...orgTeam, ...repo, identity }).catch(failed('can_write'));
+    }
+
+    /** What the integration's own credential can do on the repository; unknown when the port cannot say or fails. */
+    private async readAccessOf(orgTeam: OrgTeam, repo: Repo): Promise<'ok' | 'denied' | 'unknown'> {
+        if (!this.git.repositoryReadAccess) return 'unknown';
+        return this.git.repositoryReadAccess({ ...orgTeam, ...repo }).catch(() => 'unknown' as const);
     }
 }
 
 type SkippedOutcome = Extract<TriggerOutcome, { action: 'skipped' }>;
+
+const ACCESS_PROBLEMS: ReadonlySet<string> = new Set<RepositoryAccessProblem>(['repository_unreachable', 'pat_connection']);
+
+/** Whether a skip reason is the Git connection itself, which no retry fixes. */
+const isAccessProblem = (reason: string) => ACCESS_PROBLEMS.has(reason);
 
 /** The skip a comment is answered with: the only environment's, or the first answered one when no environment started a Run. */
 function answeredSkipOf(outcome: TriggerOutcome): SkippedOutcome | undefined {

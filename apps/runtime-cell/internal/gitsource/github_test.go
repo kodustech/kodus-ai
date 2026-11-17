@@ -2,6 +2,7 @@ package gitsource
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -58,5 +59,25 @@ func TestRevokeDeletesTheInstallationToken(t *testing.T) {
 	}
 	if got != "DELETE /installation/token Bearer ghs_x" {
 		t.Fatal(got)
+	}
+}
+
+func TestRevokeNeverSendsAPersonalTokenToGitHub(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+	for _, tok := range []string{"ghp_x", "github_pat_x"} {
+		if err := (GitHub{APIBase: srv.URL, KeepPersonalTokens: true}).Revoke(context.Background(), tok); err != nil {
+			t.Fatalf("dev cell, %s: %v", tok, err)
+		}
+		if err := (GitHub{APIBase: srv.URL}).Revoke(context.Background(), tok); !errors.Is(err, ErrPersonalToken) {
+			t.Fatalf("production cell, %s: %v", tok, err)
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("a personal token reached GitHub %d times", calls)
 	}
 }

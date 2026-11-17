@@ -29,6 +29,18 @@ var (
 type GitHub struct {
 	APIBase string
 	Client  *http.Client
+	// KeepPersonalTokens is for a dev cell (-dev) whose product stack is
+	// connected with a personal access token (RUNTIME_DEV_ALLOW_PAT_DOWNLOAD):
+	// Revoke leaves such a token alone instead of refusing it. Never set in
+	// production, where a personal token reaching the cell is refused.
+	KeepPersonalTokens bool
+}
+
+// personalToken is a GitHub personal access token (classic or fine-grained):
+// DELETE /installation/token cannot revoke it, and revoking it any other way
+// would revoke the user's own credential.
+func personalToken(token string) bool {
+	return strings.HasPrefix(token, "ghp_") || strings.HasPrefix(token, "github_pat_")
 }
 
 func (g GitHub) base() (*url.URL, error) {
@@ -67,9 +79,20 @@ func plainSegment(s string) bool {
 	return nameSegment.MatchString(s) && s != "." && s != ".."
 }
 
+// ErrPersonalToken is Revoke's answer for a personal access token on a cell
+// that does not keep them: the token stays valid, so the claim fails (S-05).
+var ErrPersonalToken = errors.New("gitsource: the download token is a personal access token: it cannot be revoked, and only a dev cell accepts one")
+
 // Revoke calls DELETE /installation/token with the token itself (the token
-// revokes itself; a 401 means it is already gone).
+// revokes itself; a 401 means it is already gone). A personal access token
+// is never sent there: a dev cell keeps it, any other cell refuses it.
 func (g GitHub) Revoke(ctx context.Context, token string) error {
+	if personalToken(token) {
+		if g.KeepPersonalTokens {
+			return nil
+		}
+		return ErrPersonalToken
+	}
 	base, err := g.base()
 	if err != nil {
 		return err

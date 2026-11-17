@@ -9,7 +9,7 @@ The cell's driver for Firecracker microVMs (`-isolation-backend firecracker`): a
 - The observer VM and its targets (`env_run.go` `DialObserver`, `Targets`), recipe steps (`RunRecipe`), resets (`Reset`, `ResetToSnapshot`).
 - Templates and snapshots: `env_run.go` `PinBakeSource`, `Bake`; `microvm.go` `SnapshotMachine`, `CreateFrom`; taints that keep a machine out of a snapshot (`Taint`).
 - An environment's data disk sized from its setup's peak (`disk_need.go`), memory accounting (`memory.go`), the sweep and the reaper's view (`reaper.go`), diagnosis (`diagnose.go`, `health.go`, `service_logs.go`).
-- Opening the stack from the cell's flags: `open.go` `Open` (kit verified, host checked, egress ports).
+- Opening the stack from the cell's flags: `open.go` `Open` (kit verified, host checked, egress ports); `Prerequisites` is the same refusal's lines, read without touching the host's network, for `cell preflight`.
 
 ## Does not own
 - The VMM, jailer, disks, snapshots on disk: `internal/isolation/firecracker`.

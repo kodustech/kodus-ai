@@ -543,7 +543,13 @@ func (c CLI) Inspect(ctx context.Context, ids ...string) ([]Container, error) {
 	return cs, nil
 }
 
-// List is every container carrying all of labels, inspected.
+// listTries is how many times List lists again when a container it listed
+// is gone by the time it inspects it (a claim cleaned up in between).
+const listTries = 3
+
+// List is every container carrying all of labels, inspected. A container
+// removed between the listing and the inspect is not an error: List lists
+// again, and the removed one is no longer there.
 func (c CLI) List(ctx context.Context, labels map[string]string) ([]Container, error) {
 	f := Filters{}
 	for _, k := range sortedKeys(labels) {
@@ -553,11 +559,18 @@ func (c CLI) List(ctx context.Context, labels map[string]string) ([]Container, e
 			f["label"] = append(f["label"], k+"="+labels[k])
 		}
 	}
-	ids, err := c.IDs(ctx, f)
-	if err != nil {
-		return nil, err
+	var err error
+	for i := 0; i < listTries; i++ {
+		var ids []string
+		if ids, err = c.IDs(ctx, f); err != nil {
+			return nil, err
+		}
+		var cs []Container
+		if cs, err = c.Inspect(ctx, ids...); err == nil || !NoSuchContainer(err) {
+			return cs, err
+		}
 	}
-	return c.Inspect(ctx, ids...)
+	return nil, err
 }
 
 // ComposeProject is a compose project as a command names it.

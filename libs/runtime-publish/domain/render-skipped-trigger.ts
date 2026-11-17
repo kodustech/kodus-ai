@@ -33,6 +33,9 @@ export const SKIPPED_TRIGGER_REPLIES = {
     fork_pull_requests_skipped: `Kody Runtime did not run because this environment does not run pull requests from forks. A maintainer can allow them in the environment's settings in Kodus.`,
     comment_runs_per_day_reached: ASKED_RUNS_REACHED_DETAIL,
     already_running: 'Kody Runtime is already running on this commit. Follow it in the Kody Runtime comment on this pull request.',
+    // The Git connection itself (libs/runtime/api/domain/ports.ts RepositoryAccessProblem): only an admin fixes it.
+    repository_unreachable: `Kody Runtime did not run because Kodus cannot reach this repository on the Git provider. An admin must reconnect it in the Git settings in Kodus, or reinstall the Kodus GitHub App if it was removed, then ${AGAIN}.`,
+    pat_connection: `Kody Runtime did not run because this organization connects to GitHub with a personal access token, which Kody Runtime cannot use. An admin must connect GitHub with the Kodus GitHub App in the Git settings in Kodus, then ${AGAIN}.`,
     workspace_unresolved: `Kody Runtime did not run because Kodus could not pin every repository of this environment to a commit. Check the environment's repositories in Kodus, then ${AGAIN}.`,
     // Not reachable from a comment today (a comment runs on a draft and on a head that already ran); worded for when it is.
     draft: `Kody Runtime did not run because this pull request is a draft. Mark it ready for review, then ${AGAIN}.`,
@@ -60,6 +63,8 @@ export interface SkippedTriggerLinks {
     settings?: string;
     /** The organization's environments list. */
     environments?: string;
+    /** The organization's Git integration settings. */
+    git?: string;
 }
 
 /** The words of each answer that name the place in Kodus, and which link they become. */
@@ -69,6 +74,8 @@ const LINKED_PHRASE: Partial<Record<string, readonly [phrase: string, link: keyo
     no_environment: ['Create one in Kodus', 'environments'],
     environment_off: ['Kody Runtime settings', 'environments'],
     environment_not_ready: ['in Kodus', 'environments'],
+    repository_unreachable: ['the Git settings in Kodus', 'git'],
+    pat_connection: ['the Git settings in Kodus', 'git'],
 };
 
 export function renderSkippedTriggerReply(reason: string, setup?: SkippedSetupState, links: SkippedTriggerLinks = {}): string | null {

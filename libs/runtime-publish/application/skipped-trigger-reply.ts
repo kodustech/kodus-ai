@@ -58,7 +58,8 @@ export class SkippedTriggerReplyPublisher {
     private linksFor(repositoryId: string): SkippedTriggerLinks {
         const { settings } = runtimeLinks(this.dashboardUrl, { runId: '', repositoryId });
         if (!settings) return {};
-        return { settings, environments: `${settings.slice(0, settings.indexOf('/settings/code-review/'))}/runtime/environments` };
+        const base = settings.slice(0, settings.indexOf('/settings/code-review/'));
+        return { settings, environments: `${base}/runtime/environments`, git: `${base}/settings/git` };
     }
 
     async answer(req: SkippedTriggerReplyRequest): Promise<SkippedTriggerReplyOutcome> {

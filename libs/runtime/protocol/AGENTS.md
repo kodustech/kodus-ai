@@ -3,7 +3,8 @@
 The single source of the hub↔cell protocol (docs §1b, ADR-051) and of the recipe (`.kodus/workspace.yaml`): zod schemas from which the JSON Schema and the Go cell's types and constants are generated. The hub decodes every cell frame with it (`apps/runtime/src/hub/cell-hub.ts`); the worker, the API and the blocker catalog read its recipe and sandbox schemas. See [`libs/runtime/README.md`](../README.md) "protocol".
 
 ## Owns
-- Decoding: `strict-json.ts` `parseStrictJson` (no duplicate keys, depth 32, no trailing data, no `__proto__`), then `envelope.ts` `decodeFrame` (1 MiB, envelope, `SUPPORTED_VERSIONS`, the body schema of its type; each refusal a code the hub sends back as a nack). `protocolJsonSchemas` feeds the dump.
+- Decoding: `strict-json.ts` `parseStrictJson` (no duplicate keys, depth 32, no trailing data, no `__proto__`), then `envelope.ts` `decodeFrame` (1 MiB, envelope, `SUPPORTED_VERSIONS` except for a `hello`, the body schema of its type; each refusal a code the hub sends back as a nack).
+- The version skew policy: `envelope.ts` `MIN_CELL_PROTOCOL_VERSION`, `helloVersionRefusal` (a cell no newer than the hub and at most one protocol older; `cell_too_new`, `cell_too_old` in `HELLO_VERSION_REFUSALS`), `cellProtocolOf`. The rule: [cell-distribution.md](../../../docs/runtime/cell-distribution.md) "Keeping hub, worker, API and cell compatible". `protocolJsonSchemas` feeds the dump.
 - Message bodies: `messages.ts` (claim, step, probe, exec, sandbox, preview, egress, heartbeat, hello), the hello features `CELL_FEATURES`, `HUB_ACCEPTED_FEATURES`, and `evidenceRequestFor`, which trims what the hub asks to what the cell named.
 - The recipe: `recipe.ts` `RecipeSchema`, `parseRecipe` (schema then `recipeRules`), `recipeJsonSchema` (checked in as `recipe.schema.json`); `recipe-features.ts` `requiredRecipeFeatures`; `recipe-fakes.ts`; `recipe-control-env.json`, the env names and prefixes that change what runs rather than how the app is configured.
 - Sandbox operations: `sandbox.ts` (one shape from the worker to the guest agent).
@@ -21,6 +22,7 @@ The single source of the hub↔cell protocol (docs §1b, ADR-051) and of the rec
 - A constant the cell needs comes from `scripts/go-constants.ts`, never a literal copied into Go.
 - `egress-lists.json` is byte-identical to `apps/runtime-cell/internal/netguard/egress-lists.json`, and `recipe-control-env.json` to `apps/runtime-cell/internal/recipe/recipe-control-env.json`; change both copies in one PR.
 - Every YAML load of repository or model text uses `UNTRUSTED_YAML`.
+- The `hello` envelope and body, and the `nack` body, are how two protocol versions meet: never change them in a way an older peer's strict decoder refuses. Raising `PROTOCOL_VERSION` keeps `MIN_CELL_PROTOCOL_VERSION` at the old version only while the hub still sends that version's bodies to a session that chose it.
 
 ## Where new code goes
 - A field or message between the hub and the cell: `messages.ts`, a hello feature in `CELL_FEATURES` when an older peer may lack it, a fixture, the regenerated Go files.

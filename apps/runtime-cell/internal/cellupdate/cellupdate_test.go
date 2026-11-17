@@ -34,10 +34,20 @@ func newSigner(t *testing.T) signer {
 // amd64 with body "<command> <release>", signed for name.
 func (s signer) release(t *testing.T, name string) string {
 	t.Helper()
+	return s.releaseWith(t, name, "")
+}
+
+// releaseWith is release with cellBody as the cell command (a script),
+// when not empty.
+func (s signer) releaseWith(t *testing.T, name, cellBody string) string {
+	t.Helper()
 	dir := t.TempDir()
 	var manifest strings.Builder
 	for _, c := range append([]string{"resolver"}, Required...) {
 		file, body := c+"-linux-amd64", c+" "+name
+		if c == "cell" && cellBody != "" {
+			body = cellBody
+		}
 		if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -307,5 +317,59 @@ func TestTheCommandRefusesADowngradeWithoutTheFlag(t *testing.T) {
 	}
 	if code := Run(append(args, "-allow-downgrade"), &out, &errOut); code != 0 {
 		t.Fatalf("with -allow-downgrade: exit %d: %s", code, errOut.String())
+	}
+}
+
+// cell update runs the staged release's `cell preflight` with the cell's
+// config before the swap: a host the new release would refuse keeps the
+// release it runs, and the staged one is left for the next try.
+func TestAnUpdateWhosePreflightFailsKeepsTheCurrentRelease(t *testing.T) {
+	s, root := newSigner(t), t.TempDir()
+	keyFile := filepath.Join(t.TempDir(), "keys.pub")
+	_ = os.WriteFile(keyFile, []byte(releasesig.FormatPublicKey(s.keys[0].Key)), 0o644)
+	cfg := filepath.Join(t.TempDir(), "cell.yaml")
+	marker := filepath.Join(t.TempDir(), "args")
+	base := []string{"-root", root, "-arch", "amd64", "-keys", keyFile, "-preflight-config", cfg}
+	var out, errOut bytes.Buffer
+	if code := Run(append(base, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-skip-preflight"), &out, &errOut); code != 0 {
+		t.Fatalf("first install: exit %d, %s", code, errOut.String())
+	}
+	before := stateOf(t, root)
+
+	failing := "#!/bin/sh\necho \"$@\" > " + marker + "\necho 'fail runsc: Docker has no runtime named runsc'\nexit 1\n"
+	out.Reset()
+	errOut.Reset()
+	if code := Run(append(base, "-from", s.releaseWith(t, "v1.1.0", failing), "-release", "v1.1.0"), &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "preflight") {
+		t.Fatalf("exit %d, stderr %q", code, errOut.String())
+	}
+	if got := stateOf(t, root); got.current != before.current || got.previous != before.previous {
+		t.Fatalf("the swap happened: %+v, was %+v", got, before)
+	}
+	if b, err := os.ReadFile(marker); err != nil || strings.TrimSpace(string(b)) != "preflight -config "+cfg {
+		t.Fatalf("the staged cell ran with %q (%v)", b, err)
+	}
+	if !strings.Contains(out.String(), "fail runsc") {
+		t.Fatalf("the preflight's report is not shown: %q", out.String())
+	}
+
+	passing := "#!/bin/sh\nexit 0\n"
+	if code := Run(append(base, "-from", s.releaseWith(t, "v1.2.0", passing), "-release", "v1.2.0"), &out, &errOut); code != 0 {
+		t.Fatalf("passing preflight: exit %d, %s", code, errOut.String())
+	}
+	if got := stateOf(t, root); got.current == before.current || got.previous != before.current {
+		t.Fatalf("no swap after a passing preflight: %+v", got)
+	}
+}
+
+// Without the cell's config there is nothing to check the host against:
+// the update says so and installs as before.
+func TestAnUpdateWithoutTheCellsConfigSaysItRanNoPreflight(t *testing.T) {
+	t.Setenv("KODUS_CELL_CONFIG", "")
+	s, root := newSigner(t), t.TempDir()
+	keyFile := filepath.Join(t.TempDir(), "keys.pub")
+	_ = os.WriteFile(keyFile, []byte(releasesig.FormatPublicKey(s.keys[0].Key)), 0o644)
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"-root", root, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut); code != 0 || !strings.Contains(errOut.String(), "preflight does not run") {
+		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 }

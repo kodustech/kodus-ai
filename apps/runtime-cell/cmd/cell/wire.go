@@ -3,12 +3,10 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -53,12 +51,8 @@ type opened struct {
 }
 
 func wireAWS(ctx context.Context, w wiring, cfg *agent.Config) (opened, error) {
-	var ac awsConfig
-	b, err := os.ReadFile(w.st.AWSConfig)
+	ac, err := readAWSConfig(w.st.AWSConfig)
 	if err != nil {
-		return opened{}, fmt.Errorf("aws config: %w", err)
-	}
-	if err := json.Unmarshal(b, &ac); err != nil {
 		return opened{}, fmt.Errorf("aws config: %w", err)
 	}
 	sdk, err := config.LoadDefaultConfig(ctx)

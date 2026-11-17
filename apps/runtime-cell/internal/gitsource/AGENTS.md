@@ -4,7 +4,7 @@ Where the cell gets a claim's code from: the forge API that serves the tarball a
 
 ## Owns
 - `github.go` `GitHub.TarballURL`: `GET /repos/{owner}/{repo}/tarball/{sha}`, refused unless the claim names this API base, an owner/repo of plain segments and a full commit SHA.
-- `GitHub.Revoke`: `DELETE /installation/token` with the token itself; a 401 means it is already gone.
+- `GitHub.Revoke`: `DELETE /installation/token` with the token itself; a 401 means it is already gone. A personal access token (`ghp_`, `github_pat_`) is never sent: a `-dev` cell keeps it (`KeepPersonalTokens`), any other cell refuses it (`ErrPersonalToken`), so the claim fails.
 
 ## Does not own
 - Downloading and extracting the tarball, and revoking on every path: `internal/tarball` and `internal/agent`.

@@ -62,6 +62,17 @@ func (s *microvmSettings) register(fs *flag.FlagSet) {
 // prerequisites checked (all the missing ones named), then the placement
 // and the backend.
 func openMicroVM(ctx context.Context, st settings, cellID string, trust machinetrust.Files, log *slog.Logger) (*microvm.Driver, error) {
+	f, err := microvmConfig(st, cellID, trust, log)
+	if err != nil {
+		return nil, err
+	}
+	s, err := microvm.Open(ctx, f)
+	return s.Driver, err
+}
+
+// microvmConfig is what openMicroVM opens, and what cell preflight checks
+// the host against (microvm.Prerequisites).
+func microvmConfig(st settings, cellID string, trust machinetrust.Files, log *slog.Logger) (microvm.Firecracker, error) {
 	m := st.MicroVM
 	var err error
 	f := microvm.Firecracker{
@@ -78,15 +89,14 @@ func openMicroVM(ctx context.Context, st settings, cellID string, trust machinet
 	} else {
 		a, perr := netip.ParseAddr(m.Egress)
 		if perr != nil {
-			return nil, fmt.Errorf("firecracker-egress-address: %w", perr)
+			return f, fmt.Errorf("firecracker-egress-address: %w", perr)
 		}
 		f.Egress = a
 	}
 	if f.Mirror, err = buildmirror.At(m.Mirror); err != nil {
-		return nil, fmt.Errorf("firecracker-mirror: %w", err)
+		return f, fmt.Errorf("firecracker-mirror: %w", err)
 	}
-	s, err := microvm.Open(ctx, f)
-	return s.Driver, err
+	return f, nil
 }
 
 // hostReport is heartbeat host of what the cell found of its host.

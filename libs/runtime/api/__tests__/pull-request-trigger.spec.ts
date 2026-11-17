@@ -1,4 +1,8 @@
+// The real download-token issuer pulls in the GitHub service, which reads the (untracked) EE environment.
+jest.mock('../../../ee/configs/environment/environment', () => ({ environment: {} }), { virtual: true });
+
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { RepositoryDownloadTokenError } from '@libs/platform/infrastructure/adapters/services/github/repository-download-token';
 import { SkippedTriggerReplyPublisher } from '@libs/runtime-publish/application/skipped-trigger-reply';
 import type { CodeManagementPort } from '@libs/runtime-publish/domain/runtime-publish.ports';
 import { runtimeTriggerOutboxMessage, RuntimeRunCancelRequestedSchema, RuntimeRunRequestedSchema, type RuntimePullRequestObserved } from '@libs/runtime/run';
@@ -8,7 +12,8 @@ import { RuntimeRunEnqueuer } from '../application/runtime-run-enqueuer.service'
 import { RuntimePullRequestTriggerUseCase } from '../application/use-cases/pull-request-trigger.use-case';
 import { ASKED_RUNS_REACHED_DETAIL } from '../application/asked-runs';
 import { COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY } from '../domain/trigger-rules';
-import type { PullRequestHead, RuntimeGitPort, RuntimeRepositorySettingsRecord } from '../domain/ports';
+import type { PullRequestHead, RuntimeGitPort, RuntimeRepoTokenIssuer, RuntimeRepositorySettingsRecord } from '../domain/ports';
+import { CodeManagementRepoTokenIssuer } from '../infrastructure/repo-token-issuer.adapter';
 import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, REPO, run, SECRET, SHA, storeWith, TEAM } from './fixtures';
 import { InMemoryPublicationStore, InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 
@@ -51,6 +56,9 @@ async function setup(opts: {
     /** The PR's comments, shared across setups to replay a redelivery on the same platform and store. */
     platform?: ReturnType<typeof fakePlatform>;
     publications?: InMemoryPublicationStore;
+    /** What the integration's own credential can do on the repository, as the provider answers it. */
+    readAccess?: 'ok' | 'denied' | 'unknown';
+    issuer?: RuntimeRepoTokenIssuer;
 } = {}) {
     const head = opts.head === undefined ? { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'open' as const } : opts.head;
     const git = {
@@ -61,6 +69,7 @@ async function setup(opts: {
         }),
         userCanWrite: async () => opts.canWrite,
         isOrganizationMember: async () => opts.member,
+        repositoryReadAccess: async () => opts.readAccess ?? 'ok',
     } as unknown as RuntimeGitPort;
     const outbox = new FakeOutbox();
     const targets = new InMemoryRunTargetStore();
@@ -70,7 +79,7 @@ async function setup(opts: {
     const env = { environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop', state: 'active', createdAt: '', updatedAt: '', ...(opts.forkPullRequests !== undefined ? { forkPullRequests: opts.forkPullRequests } : {}) };
     const builder = new RuntimeRunRequestBuilder(
         git,
-        { issue: async () => 'repo-token' },
+        opts.issuer ?? { issue: async () => 'repo-token' },
         { get: async () => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, imageId: 'img-1', expose: [] }) },
         config({ runTokenSecret: SECRET }),
         clock,
@@ -105,10 +114,11 @@ const KODY_ACCOUNT = 'kody-bot';
 /** The PR's comments as the Git platform keeps them; `loseNextAnswer` posts the comment, then fails the call. */
 function fakePlatform() {
     const comments: Array<{ id: number; body: string; user: { id: string } }> = [];
-    const state = { loseNextAnswer: false };
+    const state = { loseNextAnswer: false, refuseComments: false };
     const port: CodeManagementPort = {
         getTypeIntegration: async () => PlatformType.GITHUB,
         createIssueComment: async ({ body }) => {
+            if (state.refuseComments) throw new Error('Not Found');
             const comment = { id: comments.length + 1, body, user: { id: KODY_ACCOUNT } };
             comments.push(comment);
             if (state.loseNextAnswer) {
@@ -479,6 +489,65 @@ describe('Runtime PR trigger (PR 2)', () => {
             await s.useCase.execute(comment());
             const [{ body }] = s.platform.comments;
             for (const id of [ORG, TEAM, REPO, SHA, 'env-1', 'c-1']) expect(body).not.toContain(id);
+        });
+    });
+    // A `@kody runtime` on a repository the product's own Git connection cannot
+    // serve was silent: an empty PR read became `pr_not_found`, answered only to
+    // a commenter the dead connection could not check, and a PAT connection's
+    // refused download token failed the event until it dead-lettered.
+    describe('a @kody runtime the Git connection cannot serve is answered with what the admin must fix', () => {
+        const comment = (patch: Partial<RuntimePullRequestObserved> = {}) => event({ event: 'comment', commenter: { id: '42', login: 'maria' }, commentId: 'c-1', ...patch });
+        const patIssuer = () =>
+            new CodeManagementRepoTokenIssuer({ getTypeIntegration: async () => PlatformType.GITHUB } as any, {
+                issueRepositoryDownloadToken: async () => {
+                    throw new RepositoryDownloadTokenError('unsupported_auth', 'A repository download token needs a GitHub App installation');
+                },
+            });
+
+        it('a repository Kodus can no longer read (the GitHub App removed) answers that an admin must reconnect it', async () => {
+            const s = await setup({ head: null, readAccess: 'denied', canWrite: true });
+            expect(await s.useCase.execute(comment())).toEqual({ action: 'skipped', reason: 'repository_unreachable' });
+            expect(s.platform.comments).toHaveLength(1);
+            const [line] = s.platform.comments[0].body.split('\n');
+            expect(line).toContain('Kodus cannot reach this repository');
+            expect(line).toContain('reinstall the Kodus GitHub App');
+            for (const id of [ORG, TEAM, REPO, SHA, 'env-1', 'c-1']) expect(s.platform.comments[0].body).not.toContain(id);
+        });
+
+        it('a PR Kodus could not read on a connection that still reads the repository keeps the not-found answer', async () => {
+            const s = await setup({ head: null, readAccess: 'unknown', canWrite: true });
+            expect(await s.useCase.execute(comment())).toEqual({ action: 'skipped', reason: 'pr_not_found' });
+        });
+
+        it('an organization connected with a personal access token is told Kody Runtime cannot use it, and its PR pushes stop retrying', async () => {
+            const s = await setup({ canWrite: true, issuer: patIssuer(), settings: [rules({ mode: 'on_request' })] });
+            expect(await s.useCase.execute(comment())).toEqual({ action: 'skipped', reason: 'pat_connection' });
+            expect(s.platform.comments).toHaveLength(1);
+            expect(s.platform.comments[0].body.split('\n')[0]).toContain('personal access token, which Kody Runtime cannot use');
+            expect(s.requested()).toEqual([]);
+
+            // A push on the same connection decides the same refusal: dropped, never failed into the broker's retries.
+            const push = await setup({ issuer: patIssuer() });
+            await expect(push.useCase.execute(event())).resolves.toEqual({ action: 'skipped', reason: 'pat_connection' });
+            expect(push.platform.comments).toEqual([]);
+        });
+
+        it.each([
+            ['the connection cannot say who commented', { canWrite: undefined }, false],
+            ['the platform refuses the post', { canWrite: true }, true],
+        ] as const)('when %s, it logs one warning and stops: no comment, no retry', async (_label, opts, refuse) => {
+            const s = await setup({ head: null, readAccess: 'denied', ...opts });
+            s.platform.state.refuseComments = refuse;
+            const warn = jest.spyOn((s.useCase as any).logger, 'warn').mockImplementation(() => undefined);
+            await expect(s.useCase.execute(comment())).resolves.toEqual({ action: 'skipped', reason: 'repository_unreachable' });
+            expect(s.platform.comments).toEqual([]);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.mock.calls[0][0]).toMatchObject({
+                message: expect.stringContaining('the comment is not answered'),
+                metadata: { organizationId: ORG, repositoryId: REPO, prNumber: 7, reason: 'repository_unreachable' },
+            });
+            // Nothing the platform said reaches the log.
+            expect(JSON.stringify(warn.mock.calls[0][0])).not.toContain('Not Found');
         });
     });
 });

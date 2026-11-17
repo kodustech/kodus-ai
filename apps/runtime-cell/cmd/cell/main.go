@@ -58,6 +58,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "update" {
 		os.Exit(cellupdate.Run(os.Args[2:], os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "preflight" {
+		os.Exit(runPreflight(os.Args[2:], os.Stdout, os.Stderr, hostPreflightProbes()))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "local-pki" {
 		os.Exit(runLocalPKI(os.Args[2:], os.Stdout, os.Stderr))
 	}
@@ -158,7 +161,7 @@ func run(log *slog.Logger, args []string) error {
 		return fmt.Errorf("executable: %w", err)
 	}
 
-	git := gitsource.GitHub{APIBase: st.GitAPI}
+	git := gitsource.GitHub{APIBase: st.GitAPI, KeepPersonalTokens: st.Dev}
 	cfg := agent.Config{
 		MaxClaimSteps: st.MaxClaimSteps,
 		Owner:         protocol.CellOwner(st.Owner),
