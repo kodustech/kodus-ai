@@ -62,13 +62,14 @@ export function createRipgrep(files: Record<string, string>): {
     delete env.RIPGREP_CONFIG_PATH;
     const grep: GrepFn = (pattern, path, glob, options) =>
         new Promise((resolve) => {
+            // The order the sandboxes use: the include first, the excludes after it.
             const args = [
                 '--no-heading',
                 '-n',
                 '--no-follow',
+                ...(glob ? ['--glob', glob] : []),
                 ...repositoryGrepArgs(options),
             ];
-            if (glob) args.push('--glob', glob);
             args.push('-e', pattern, '--', path);
             execFile(
                 'rg',

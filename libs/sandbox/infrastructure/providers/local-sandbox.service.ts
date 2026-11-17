@@ -484,8 +484,10 @@ export class LocalSandboxService implements ISandboxProvider {
                     '--no-heading',
                     '-n',
                     '--no-follow',
-                    ...repositoryGrepArgs(options),
+                    // rg lets the later glob win: the language include goes
+                    // first, so the scan's excludes still apply to it.
                     ...(glob ? ['--glob', glob] : []),
+                    ...repositoryGrepArgs(options),
                     '-e',
                     pattern,
                     '--',
