@@ -336,9 +336,10 @@ export type RunJudge = (args: {
     ruleUuids: string[];
     /**
      * The head of `user` this shard shares with at least one other shard of
-     * the review (same rules, references and intent). Set only when another
-     * shard shares it, so the runner can mark it for the provider's prompt
-     * cache without paying a cache write nobody reads.
+     * the review (same rules, references and intent), for the runner to mark
+     * for the provider's prompt cache. Set on the group's first shard and on
+     * shards started after it returned; a shard sent while the first is still
+     * running could read nothing and would only pay the cache write again.
      */
     cachePrefix?: string;
 }) => Promise<RawShardViolation[]>;
@@ -460,7 +461,7 @@ export interface ShardPromptCacheStats {
     fileShards: number;
     /** Distinct heads. */
     groups: number;
-    /** Heads shared by two or more shards (their shards carry a cachePrefix). */
+    /** Heads shared by two or more shards. */
     sharedGroups: number;
     /** Shards that are not the first of their shared group. */
     siblings: number;
@@ -1041,12 +1042,14 @@ const isPrLevel = (r: Partial<IKodyRule>) =>
  * A free worker takes, in order: a sibling whose leader has returned, then a
  * group's leader (largest group first), then — rather than sit idle — a
  * sibling whose leader is still running. Never waiting is what keeps the
- * stage's latency where it was.
+ * stage's latency where it was. `fn` learns whether the job can use the
+ * cache: a leader writes it, a sibling after its leader reads it, an early
+ * sibling can do neither.
  */
 async function runLeaderFirst<T, R>(
     groups: T[][],
     limit: number,
-    fn: (item: T) => Promise<R>,
+    fn: (item: T, cacheable: boolean) => Promise<R>,
 ): Promise<{
     results: Map<T, R>;
     siblingsAfterLeader: number;
@@ -1066,7 +1069,12 @@ async function runLeaderFirst<T, R>(
     let siblingsEarly = 0;
 
     const pick = ():
-        | { item: T; group: (typeof ordered)[number]; leader: boolean }
+        | {
+              item: T;
+              group: (typeof ordered)[number];
+              leader: boolean;
+              cacheable: boolean;
+          }
         | undefined => {
         const ready = ordered.find(
             (g) => g.leaderDone && g.next < g.items.length,
@@ -1077,12 +1085,18 @@ async function runLeaderFirst<T, R>(
                 item: ready.items[ready.next++],
                 group: ready,
                 leader: false,
+                cacheable: true,
             };
         }
         const leader = ordered.find((g) => !g.leaderStarted);
         if (leader) {
             leader.leaderStarted = true;
-            return { item: leader.items[0], group: leader, leader: true };
+            return {
+                item: leader.items[0],
+                group: leader,
+                leader: true,
+                cacheable: true,
+            };
         }
         const waiting = ordered.find((g) => g.next < g.items.length);
         if (waiting) {
@@ -1091,6 +1105,7 @@ async function runLeaderFirst<T, R>(
                 item: waiting.items[waiting.next++],
                 group: waiting,
                 leader: false,
+                cacheable: false,
             };
         }
         return undefined;
@@ -1103,7 +1118,10 @@ async function runLeaderFirst<T, R>(
             async () => {
                 for (let job = pick(); job; job = pick()) {
                     try {
-                        results.set(job.item, await fn(job.item));
+                        results.set(
+                            job.item,
+                            await fn(job.item, job.cacheable),
+                        );
                     } finally {
                         if (job.leader) job.group.leaderDone = true;
                     }
@@ -1394,7 +1412,7 @@ export async function judgeKodyRulesSharded(
     const scheduled = await runLeaderFirst(
         groups,
         concurrency,
-        async (shard) => {
+        async (shard, cacheable) => {
             const { file, applicable } = shard;
             shardsRun++;
             // Index-aligned with the rules `ruleBlock` presents (a ruleId of N
@@ -1407,7 +1425,9 @@ export async function judgeKodyRulesSharded(
                     user: shard.user,
                     filename: file.filename,
                     ruleUuids,
-                    ...(shared.has(shard) ? { cachePrefix: shard.head } : {}),
+                    ...(cacheable && shared.has(shard)
+                        ? { cachePrefix: shard.head }
+                        : {}),
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file

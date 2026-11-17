@@ -95,6 +95,7 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             runJudge: run,
             prTitle: 'Add things',
             prBody: 'Why we add things',
+            concurrency: 1,
         } as any);
         const prefixes = calls.map((c) => c.cachePrefix);
         expect(new Set(prefixes).size).toBe(1);
@@ -150,6 +151,7 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             ],
             rules: RULES,
             runJudge: run,
+            concurrency: 1,
         } as any);
         expect(callFor(calls, 'a.ts').cachePrefix).toBe(
             callFor(calls, 'b.ts').cachePrefix,
@@ -242,6 +244,40 @@ describe('judgeKodyRulesSharded — leader-first scheduling that never idles', (
         const res = await done;
         expect(res.promptCacheStats.siblingsEarly).toBe(1);
         expect(res.promptCacheStats.siblingsAfterLeader).toBe(1);
+    });
+
+    it('marks the head on a leader and on siblings after it, not on a sibling sent alongside it', async () => {
+        const j = controlledJudge();
+        const done = judgeKodyRulesSharded({
+            changedFiles: [file('a.ts'), file('b.ts'), file('c.ts')],
+            rules: RULES,
+            runJudge: j.run,
+            concurrency: 2,
+        } as any);
+        await j.finish('a.ts');
+        await j.finishAll();
+        await done;
+        expect(j.started).toEqual(['a.ts', 'b.ts', 'c.ts']);
+        const head = callFor(j.calls, 'a.ts').cachePrefix;
+        expect(head).toBeDefined();
+        // b.ts left while a.ts was running: nothing to read yet, so no write premium
+        expect(callFor(j.calls, 'b.ts').cachePrefix).toBeUndefined();
+        // c.ts left after a.ts returned: it reads the head a.ts wrote
+        expect(callFor(j.calls, 'c.ts').cachePrefix).toBe(head);
+    });
+
+    it('marks the siblings of a leader that failed, so one of them writes the head', async () => {
+        const j = controlledJudge();
+        const done = judgeKodyRulesSharded({
+            changedFiles: [file('a.ts'), file('b.ts')],
+            rules: RULES,
+            runJudge: j.run,
+            concurrency: 1,
+        } as any);
+        await j.fail('a.ts');
+        await j.finishAll();
+        await done;
+        expect(callFor(j.calls, 'b.ts').cachePrefix).toBeDefined();
     });
 
     it('never runs more shards at once than the concurrency limit', async () => {
