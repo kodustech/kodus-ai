@@ -286,6 +286,46 @@ function fakeJudge(
 }
 
 describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () => {
+    it('keeps repository evidence instructions on semantic and PR shards', async () => {
+        const runJudge = jest.fn(async (_shard: Parameters<RunJudge>[0]) => []);
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file('src/a.ts', '1 +console.log(1);'),
+                file('test/b.spec.ts', '1 +assert(result);'),
+            ],
+            rules: [
+                {
+                    uuid: 'detector',
+                    path: 'src/**',
+                    detector: { pattern: 'console' },
+                },
+                {
+                    uuid: 'semantic',
+                    path: 'test/**',
+                    rule: 'Assert the output.',
+                },
+                {
+                    uuid: 'pr',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                    rule: 'Check the intent.',
+                },
+            ],
+            detectorHits: new Map([['detector', new Map([['src/a.ts', [1]]])]]),
+            runJudge,
+        });
+        expect(runJudge.mock.calls).toHaveLength(3);
+        for (const [shard] of runJudge.mock.calls) {
+            const verifyRepositoryFacts = shard.filename !== 'src/a.ts';
+            expect(shard.verifyRepositoryFacts).toBe(verifyRepositoryFacts);
+            expect(shard.system.includes('needsRepositoryEvidence')).toBe(
+                verifyRepositoryFacts,
+            );
+            expect(shard.user.includes('needsRepositoryEvidence')).toBe(
+                verifyRepositoryFacts,
+            );
+        }
+    });
+
     it('issues one shard per changed file that has applicable rules', async () => {
         const { run, calls } = fakeJudge({});
         const res = await judgeKodyRulesSharded({

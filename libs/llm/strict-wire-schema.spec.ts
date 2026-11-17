@@ -8,7 +8,10 @@ import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRu
 import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import { kodyRuleEvidenceVerdictSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence';
 import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
-import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import {
+    buildShardViolationsWireSchema,
+    shardViolationsWireSchema,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import { approvalRiskOutputSchema } from '@libs/code-review/domain/approval/assess-approval-risk';
 import { prRiskOutputSchema } from '@libs/code-review/domain/risk/assess-pr-risk';
@@ -293,6 +296,10 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         [
             'shardViolationsWireSchema (sharded kody-rules judge)',
             shardViolationsWireSchema,
+        ],
+        [
+            'shardViolationsWireSchema (detector-only shard)',
+            buildShardViolationsWireSchema(undefined, false),
         ],
         [
             'REPEAT_CHECK_SCHEMA (repeat check, via jsonSchema())',
