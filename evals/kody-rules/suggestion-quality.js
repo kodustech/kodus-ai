@@ -124,7 +124,8 @@ async function grade(route, s, rule, fileContent) {
         schema: VERDICT,
         runName: 'eval-kody-rules-quality-judge',
     });
-    return scoreVerdict(s, VERDICT.parse(verdict));
+    const parsed = VERDICT.parse(verdict);
+    return { score: scoreVerdict(s, parsed), verdict: parsed };
 }
 
 module.exports = {

@@ -119,12 +119,27 @@ function tokensSince(snap) {
 const landsOnSite = (s, sites) =>
     sites.some((g) => normalizePath(s.relevantFile) === g.file && Math.abs(s.relevantLinesStart - g.line) <= LINE_TOL);
 
-async function gradeFindings(judge, findings, rule, fileContents) {
+// Every graded finding with the judge's verdict and reasons, for reading a low score.
+const qualityDetails = [];
+
+async function gradeFindings(judge, findings, rule, fileContents, caseLabel) {
     const q = quality.emptyQuality();
     for (const s of findings) {
         const before = snapshotTokens();
         try {
-            quality.addQuality(q, await quality.grade(judge, s, rule, fileContents?.[s.relevantFile]));
+            const { score, verdict } = await quality.grade(judge, s, rule, fileContents?.[s.relevantFile]);
+            quality.addQuality(q, score);
+            qualityDetails.push({
+                case: caseLabel,
+                at: `${s.relevantFile}:${s.relevantLinesStart}`,
+                title: s.oneSentenceSummary,
+                existingCode: s.existingCode,
+                improvedCode: s.improvedCode ?? null,
+                ...score,
+                fix: verdict.fix,
+                fixReason: verdict.fixReason,
+                titleReason: verdict.titleReason,
+            });
         } catch (e) {
             q.judgeErrors++;
             console.error(`  quality judge failed on ${s.relevantFile}:${s.relevantLinesStart}: ${String(e.message).slice(0, 160)}`);
@@ -297,7 +312,7 @@ async function main() {
                     flagsN += flags.length; lineNoise += flags.length - onTarget;
                     if (judge && !errored) {
                         const rule = (c.rules || []).find((x) => x.uuid === t.uuid);
-                        if (rule) runQuality.push(await gradeFindings(judge, tSugg.filter((s) => landsOnSite(s, t.sites)), rule, fileContents));
+                        if (rule) runQuality.push(await gradeFindings(judge, tSugg.filter((s) => landsOnSite(s, t.sites)), rule, fileContents, caseLabel));
                     }
                 }
                 perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0, siteOk, quality: judge ? sumQuality(runQuality) : null });
@@ -323,7 +338,7 @@ async function main() {
             const siteOk = sites.map((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL));
             const coveredSites = siteOk.filter(Boolean).length;
             const onTargetFlags = flags.filter((x) => sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
-            const runQuality = judge && !errored && c.rule ? await gradeFindings(judge, sugg.filter((s) => landsOnSite(s, sites)), c.rule, fileContents) : null;
+            const runQuality = judge && !errored && c.rule ? await gradeFindings(judge, sugg.filter((s) => landsOnSite(s, sites)), c.rule, fileContents, caseLabel) : null;
             perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags, siteOk, quality: runQuality });
         }
         // v2 denominators span all (file,rule) pairs; v1 keeps the single rule.
@@ -398,7 +413,7 @@ async function main() {
                 stageMsP95: latency.stageMsP95,
                 ...(q ? { titleQuality: ratio(q.titleOk, q.graded), fixQuality: ratio(q.fixPass, q.fixGraded) } : {}),
             },
-            ...(q ? { quality: { judge: JUDGE, ...q } } : {}),
+            ...(q ? { quality: { judge: JUDGE, ...q, details: qualityDetails } } : {}),
             latency,
             tokensByRun,
             counts: { sites: occTotal, caught: occCaught, flagged: flaggedTotal, offSite: lineNoiseTotal, cleanFiles, falseAlarmFiles },
