@@ -112,15 +112,33 @@ export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
         // deleted (still referenced, CLI reviews) and grows with the backlog.
         let after: string | undefined;
 
+        let referenceRaces = 0;
+
         while (now() < deadline && !this.runGate.stopping) {
-            const batch = await this.jobRepository.deleteFinishedOlderThan({
-                olderThan: params.olderThan,
-                batchSize: WORKFLOW_JOB_RETENTION_BATCH_SIZE,
-                after,
-                // try.kodus.io share links (/r/<jobId>) read the CLI review
-                // job row, and a shared link must not die.
-                keepWorkflowTypes: [WorkflowType.CLI_CODE_REVIEW],
-            });
+            let batch: { deleted: number; lastUpdatedAt?: string };
+            try {
+                batch = await this.jobRepository.deleteFinishedOlderThan({
+                    olderThan: params.olderThan,
+                    batchSize: WORKFLOW_JOB_RETENTION_BATCH_SIZE,
+                    after,
+                    // try.kodus.io share links (/r/<jobId>) read the CLI
+                    // review job row, and a shared link must not die.
+                    keepWorkflowTypes: [WorkflowType.CLI_CODE_REVIEW],
+                });
+            } catch (error) {
+                // A message inserted for a doomed job after the batch read
+                // its candidates fails the whole statement on the FK. Run the
+                // batch again: its new read sees the message and keeps the job.
+                if (
+                    isForeignKeyViolation(error) &&
+                    referenceRaces < MAX_REFERENCE_RACES
+                ) {
+                    referenceRaces += 1;
+                    continue;
+                }
+                throw error;
+            }
+            referenceRaces = 0;
             deleted += batch.deleted;
             batches += 1;
             after = batch.lastUpdatedAt ?? after;
@@ -150,4 +168,12 @@ export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
             return null;
         }
     }
+}
+
+/** Same batch retried at most this many times in a row on an FK race. */
+const MAX_REFERENCE_RACES = 3;
+
+function isForeignKeyViolation(error: unknown): boolean {
+    const e = error as { code?: unknown; driverError?: { code?: unknown } };
+    return (e?.driverError?.code ?? e?.code) === '23503';
 }

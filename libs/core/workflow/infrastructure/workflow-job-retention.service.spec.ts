@@ -82,4 +82,54 @@ describe('WorkflowJobRetentionService.run', () => {
             '2026-01-01 00:00:02',
         ]);
     });
+
+    describe('when a message lands on a doomed job mid-batch', () => {
+        const fkViolation = () =>
+            Object.assign(new Error('violates foreign key constraint'), {
+                driverError: { code: '23503' },
+            });
+
+        it('runs the same batch again instead of ending the run', async () => {
+            const deleteFinishedOlderThan = jest
+                .fn()
+                .mockRejectedValueOnce(fkViolation())
+                .mockResolvedValueOnce({ deleted: 7, lastUpdatedAt: 't1' });
+            const service = new WorkflowJobRetentionService(
+                { deleteFinishedOlderThan } as any,
+                {} as any,
+            );
+
+            await expect(
+                service.run({
+                    olderThan: new Date(),
+                    budgetMs: 60_000,
+                    pauseMs: 0,
+                    sleep: async () => undefined,
+                }),
+            ).resolves.toEqual({ deleted: 7, batches: 1, finished: true });
+            expect(
+                deleteFinishedOlderThan.mock.calls.map(([p]: any) => p.after),
+            ).toEqual([undefined, undefined]);
+        });
+
+        it('gives up on a race that keeps coming back, and on any other error', async () => {
+            const racing = jest.fn().mockRejectedValue(fkViolation());
+            const broken = jest.fn().mockRejectedValue(new Error('boom'));
+            const run = (deleteFinishedOlderThan: jest.Mock) =>
+                new WorkflowJobRetentionService(
+                    { deleteFinishedOlderThan } as any,
+                    {} as any,
+                ).run({
+                    olderThan: new Date(),
+                    budgetMs: 60_000,
+                    pauseMs: 0,
+                    sleep: async () => undefined,
+                });
+
+            await expect(run(racing)).rejects.toThrow('foreign key');
+            expect(racing).toHaveBeenCalledTimes(4);
+            await expect(run(broken)).rejects.toThrow('boom');
+            expect(broken).toHaveBeenCalledTimes(1);
+        });
+    });
 });
