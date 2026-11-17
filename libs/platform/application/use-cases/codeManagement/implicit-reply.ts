@@ -35,6 +35,7 @@ export type ImplicitReplySilence =
     | 'kody_author'
     | 'bot_cap'
     | 'thread_cap'
+    | 'disabled'
     | 'plan_blocked'
     | 'classified_no'
     | 'classifier_error';

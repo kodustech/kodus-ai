@@ -139,6 +139,18 @@
             ],
             "additionalProperties": false
         },
+        "conversation": {
+            "type": "object",
+            "description": "How Kody takes part in the conversation on a pull request.",
+            "properties": {
+                "implicitReplies": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Answer replies in Kody's own review threads even when they do not mention @kody. Off: only an explicit mention is answered."
+                }
+            },
+            "additionalProperties": false
+        },
         "suggestionControl": {
             "type": "object",
             "properties": {

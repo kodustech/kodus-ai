@@ -47,6 +47,10 @@ import {
     IMessageClaimService,
     MESSAGE_CLAIM_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/message-claim.service.contract';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    type ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 
 import { PlatformResponsePolicyFactory } from './policies/platform-response.policy';
@@ -262,6 +266,12 @@ export class ChatWithKodyFromGitUseCase {
         private readonly businessLogicReplies?: BusinessLogicReplies,
         @Optional()
         private readonly webhookContextService?: WebhookContextService,
+
+        // Reads `conversation.implicitReplies` from the config cascade.
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService?: ICodeBaseConfigService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -1221,7 +1231,14 @@ export class ChatWithKodyFromGitUseCase {
                 normalizedComments,
                 params.platformType,
             );
-            const silence = implicitReplyGate(replyThread);
+            const silence =
+                implicitReplyGate(replyThread) ??
+                ((await this.implicitRepliesDisabled(
+                    organizationAndTeamData,
+                    repository,
+                ))
+                    ? 'disabled'
+                    : undefined);
             if (silence) {
                 this.logImplicitReplySilence(silence, silenceContext);
                 return;
@@ -2268,6 +2285,51 @@ export class ChatWithKodyFromGitUseCase {
             metadata: { implicitReplySilence: reason, ...silenceContext },
             error: error instanceof Error ? error : undefined,
         });
+    }
+
+    /**
+     * `conversation.implicitReplies` for the PR's repository (#2576). Off means
+     * Kody answers an unmentioned reply in its own review thread only when
+     * someone writes `@kody`.
+     *
+     * Read through the config cascade, so an organization that turned it off
+     * can be overridden per repository or per directory. It is read after the
+     * free gate, never before: the gate silences most replies at no cost, and
+     * the read only happens for a reply that would otherwise reach the
+     * classifier, which costs a model call.
+     *
+     * A config that cannot be read keeps today's behaviour: the classifier
+     * decides, as it did before this setting existed.
+     */
+    private async implicitRepliesDisabled(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Repository,
+    ): Promise<boolean> {
+        if (!this.codeBaseConfigService) {
+            return false;
+        }
+
+        try {
+            const config = await this.codeBaseConfigService.getSimpleConfig(
+                organizationAndTeamData,
+                { repositoryId: repository.id },
+            );
+
+            return config?.conversation?.implicitReplies === false;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the conversation settings: implicit replies stay as they were',
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repository: repository.name,
+                },
+            });
+
+            return false;
+        }
     }
 
     /**
