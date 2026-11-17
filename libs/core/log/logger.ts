@@ -495,12 +495,11 @@ function sanitizeString(value: string): string {
 
 /**
  * MongoDB E11000 messages carry the colliding value ("dup key: { email:
- * "..." }"), in the message and again in the stack. Everything from the
- * opening brace to the last one before the stack frames goes: a value may
- * itself hold a brace or a newline, so stopping at the first brace or at the
- * end of the line leaked the rest. Without a closing brace, everything up to
- * the frames goes. The fields stay visible on `keyPattern`. Same policy as
- * SQL bound values.
+ * "..." }"), in the message and again in the stack. The block is the last
+ * thing in the message, so everything from the marker to the stack frames
+ * (or the end) goes. Looking for the closing brace leaked: a value may hold
+ * a brace or a newline, and a truncated message has no closing brace. The
+ * fields stay visible on `keyPattern`. Same policy as SQL bound values.
  *
  * Plain index scans rather than a regex: a pattern like /dup key: \{.*\}/ is
  * quadratic on a string that repeats the marker with no closing brace
@@ -518,10 +517,8 @@ function redactDuplicateKeyValues(value: string): string {
     let cursor = 0;
     while (start !== -1) {
         const frames = value.indexOf(STACK_FRAME, start);
-        const limit = frames === -1 ? value.length : frames;
-        const close = value.lastIndexOf('}', limit - 1);
         result += value.slice(cursor, start) + 'dup key: { [REDACTED] }';
-        cursor = close > start ? close + 1 : limit;
+        cursor = frames === -1 ? value.length : frames;
         start = value.indexOf(DUP_KEY_MARKER, cursor);
     }
     return result + value.slice(cursor);

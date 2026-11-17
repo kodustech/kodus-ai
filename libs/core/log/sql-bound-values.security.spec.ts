@@ -100,6 +100,15 @@ describe('logger err serializer — MongoDB duplicate key values', () => {
         expect(line).toContain('email_1');
     });
 
+    it('redacts a truncated message whose value holds a brace', () => {
+        const line = serialized(
+            new Error(`E11000 index: email_1 dup key: { email: "a}${SECRET}"`),
+        );
+
+        expect(line).not.toContain(SECRET);
+        expect(line).toContain('email_1');
+    });
+
     it('redacts a message that never closes its brace', () => {
         const line = serialized(
             new Error(`E11000 index: email_1 dup key: { email: "${SECRET}`),
