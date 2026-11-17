@@ -1,6 +1,0 @@
-
-Test Suites: 6 passed, 6 total
-Tests:       204 passed, 204 total
-Snapshots:   0 total
-Time:        2.683 s
-Ran all test suites within paths "libs/security-scan/application/start-security-scan.use-case.spec.ts", "libs/core/infrastructure/config/loaders/workflow-queue.loader.spec.ts", "libs/security-scan/application/security-scan-engine.spec.ts", "libs/security-scan/application/security-scan-job.processor.spec.ts", "libs/issues/infrastructure/adapters/repositories/issues-scan-findings.repository.spec.ts", "apps/web/src/app/(app)/issues/_components/security-scan/format.spec.ts".

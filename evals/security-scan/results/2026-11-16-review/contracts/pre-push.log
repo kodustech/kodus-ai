@@ -1,8 +1,0 @@
-Test Suites: 21 skipped, 812 passed, 812 of 833 total
-Tests:       199 skipped, 13038 passed, 13237 total
-Snapshots:   8 passed, 8 total
-Time:        360.244 s, estimated 363 s
-Ran all test suites related to changed files.
-[pre-push] Tests finished successfully in 362.4s. Proceeding with push.
-To github.com:kodustech/kodus-ai.git
-   110f7358d..e64b84cb0  HEAD -> feat/2451-deep-scan

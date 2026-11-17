@@ -1,8 +1,0 @@
-{
-  "preparedAt": "2026-11-17T11:09:29.608Z",
-  "sourceCommit": "50721715a554bcb15203ecea0e410c2fd06f8682",
-  "worktree": "/home/ubuntu/security-scan-resolution-5072",
-  "scope": "Resolution lifecycle after a real fix: vulnerable scan, clean fix, two complete misses, resolved. Real API, outbox, RabbitMQ, dedicated worker, GitHub clone, BYOK model, E2B, Mongo.",
-  "functionalScanUsdCap": 0.5,
-  "maxScans": 3
-}

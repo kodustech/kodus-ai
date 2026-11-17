@@ -1,8 +1,0 @@
-{
-  "kind": "publication-check",
-  "file": "vm-continuation.raw.json",
-  "sha256": "730ed34514826aad47772bae1ef2ae20915fd76deb03120a45f87e241d9aaaa0",
-  "runtimeCredentialValuesChecked": 30,
-  "runtimeCredentialValuesFound": 0,
-  "modelCalls": 0
-}

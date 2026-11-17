@@ -1,8 +1,0 @@
-{
-  "expectedExitCode": 1,
-  "red": true,
-  "modelCalls": 1,
-  "completedLensUnits": 0,
-  "injectedFailures": 11,
-  "reason": "Unavailable lenses are rejected even though the map reached the model."
-}

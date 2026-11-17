@@ -1,7 +1,0 @@
-Already up to date
-Done in 173ms using pnpm v11.9.0
-Test Suites: 1 passed, 1 total
-Tests:       42 passed, 42 total
-Snapshots:   0 total
-Time:        1.047 s
-Ran all test suites matching libs/security-scan/application/security-scan-job.processor.spec.ts.

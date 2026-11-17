@@ -1,4 +1,0 @@
-✅ security-scan       4s  model calls=100
-✅ pr paths filter   287 repo files loaded, all covered
-
-Every eval still drives the engine.

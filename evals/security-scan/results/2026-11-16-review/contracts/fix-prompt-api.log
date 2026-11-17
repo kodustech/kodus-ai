@@ -1,5 +1,0 @@
-Test Suites: 1 passed, 1 total
-Tests:       2 passed, 2 total
-Snapshots:   0 total
-Time:        1.305 s
-Ran all test suites matching apps/api/src/controllers/__tests__/issues.controller.fix-prompt.spec.ts.

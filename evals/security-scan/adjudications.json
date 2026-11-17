@@ -7,11 +7,11 @@
     "reason": "Legacy verdicts have no start line, source run, judge or date. Their source findings could not be recovered; none is reused by guessing. New verdicts must record source result hash, judge and date here.",
     "judge": "Codex (source inspection; no independent human adjudication)",
     "date": "2026-11-16",
-    "sampling": "results/2026-11-16-review/sampling.json",
+    "sampling": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/sampling.json",
     "findingHashEncoding": "SHA-256 of JSON.stringify({class,file,lines,symbol,title,description}) with normalized path; see scoring.js judgmentDigest.",
     "judgments": {
       "flowise-f0c12941|authz|packages/server/src/enterprise/routes/role.route.ts||8": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "2f3c06be968c704e053d473f82fd113065db9aaea08e5ef2af8de7da856faf96",
         "judge": "Codex",
@@ -34,7 +34,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/utils/tempTokenUtils.ts|encryptToken|33": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "badd099d62c84474bbb3d430bb4fb0618dde3ca4d11378fb8152652509a33041",
         "judge": "Codex",
@@ -57,7 +57,7 @@
         "verdict": "false"
       },
       "flowise-f0c12941|ssrf|packages/server/src/enterprise/sso/Auth0SSO.ts|Auth0SSO.testSetup|117": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "c19ae5fbf3fb042b44fd1f443c7321d2ff97336d60ffd85c3a0d7755d465eda9",
         "judge": "Codex",
@@ -76,7 +76,7 @@
         "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/services/evaluations/index.ts|deleteEvaluation|431": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "5c9014f3445b482b7c09acd07695998cdde62010eba41cfc01d8d6cd04f10e60",
         "judge": "Codex",
@@ -95,7 +95,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/refreshToken\")|260": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "bb3b0c537c4ce851037f6b2883f44b10f6b145184575f6dc4312062c1ef9fa77",
         "judge": "Codex",
@@ -122,7 +122,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|183": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "0c7249ef6c2b64994e4b0da0ad95151d089dda64c786cec7f7f7251ec4b11c18",
         "judge": "Codex",
@@ -149,7 +149,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/middleware/passport/index.ts||38": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "bc4910417a7dab56973634818a9df8b30d782005961c895012cd6c6e46376b6d",
         "judge": "Codex",
@@ -164,7 +164,7 @@
         "verdict": "false"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/index.ts|App.config|203": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "eb66c0d18552502d0b7926faabb2885db60c74a2ae2bbb932a77e3fbf9037d39",
         "judge": "Codex",
@@ -183,7 +183,7 @@
         "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getCustomerWithDefaultSource|84": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "cc7c8c1c36e6b1fb02815bb9d3f674590906c9d165fb60730bf8cd701400f4c7",
         "judge": "Codex",
@@ -206,7 +206,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getPlanProration|120": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "103d2e4e3f20d8edee4bca20aa1bb61238e9e62cc082735f40accb3b83f090c2",
         "judge": "Codex",
@@ -229,7 +229,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/services/documentstore/index.ts|deleteDocumentStoreFileChunk|375": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "76ec0c91c3a924e7ee23f984b02bd1ef57036ee8187bf07a82f46e5aadad3110",
         "judge": "Codex",
@@ -248,7 +248,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|resource_exhaustion|packages/components/nodes/textsplitters/RecursiveCharacterTextSplitter/RecursiveCharacterTextSplitter.ts|RecursiveCharacterTextSplitter_TextSplitters.init|62": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "831e458772fddb8c1487ab0a36b07e9c5fdff2ac959fd39065bdcc639d346c78",
         "judge": "Codex",
@@ -275,7 +275,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/services/evaluations/index.ts|patchDeleteEvaluations|619": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "dd2abe8af402ac137d182ac6aae87fb6ed01bec42a1fa2d4f2393c43d3e9560d",
         "judge": "Codex",
@@ -298,7 +298,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|resource_exhaustion|packages/server/src/services/evaluations/index.ts|createEvaluation|125": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "fcb04eabfd14e1ba32937b0e7b9586c8c1b1536101ab62bbacf915c7dae5d5f7",
         "judge": "Codex",
@@ -317,7 +317,7 @@
         "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/workspace-user.controller.ts|WorkspaceUserController.read|36": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "111f8c01304e5eb4dc7215eddbb07cb8da215487f2c065e575efdd6f98e0fcfa",
         "judge": "Codex",
@@ -337,7 +337,7 @@
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateSubscriptionPlan|149": [
         {
-          "sourceResult": "results/2026-11-16-review/positive.raw.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
           "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
           "findingSha256": "5c907e78363952607cd33fc34ae7c673f8247d90fa23a5d217165f352b9ab1d7",
           "judge": "Codex",
@@ -360,7 +360,7 @@
           "verdict": "real"
         },
         {
-          "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
           "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
           "findingSha256": "ff9af5fb405312db790a9222b9ecbda61f0b90d2dc733bcb5a203432efdf1138",
           "verdict": "real",
@@ -388,7 +388,7 @@
         }
       ],
       "flowise-f0c12941|ssrf|packages/components/src/httpSecurity.ts|resolveAndValidate|188": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "89dbf0a5776cd310d7912845de6c76ecc043b902e3a2754d0fcbc872b1d52462",
         "judge": "Codex",
@@ -403,7 +403,7 @@
         "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/services/assistants/index.ts|generateAssistantInstruction|512": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "69f84512912be6fa9fe3c7f5bc2645bdfa793e39fab5b4337b7350b66b00d47f",
         "judge": "Codex",
@@ -426,7 +426,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/routes/organization-user.route.ts||9": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "3a533d551e3abd44190c461dd05e6db39f0e6368779872df6a84b506959cc152",
         "judge": "Codex",
@@ -449,7 +449,7 @@
         "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/services/user.service.ts|UserService.updateUser|178": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "74ba75507baf59edda0c7a580bffbe15bc8b9d9910ef2caf8836eeaf246e6123",
         "judge": "Codex",
@@ -473,7 +473,7 @@
       },
       "langflow-73c1f203|data_exposure|src/backend/base/langflow/api/v1/voice_mode.py|ElevenLabsClientManager.get_client|177": [
         {
-          "sourceResult": "results/2026-11-16-review/positive.raw.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
           "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
           "findingSha256": "308ce5cd83b8f09a51d9a38cb03301d7b56ee68c9a58912f85a97b8c51ed9b82",
           "judge": "Codex",
@@ -496,7 +496,7 @@
           "verdict": "real"
         },
         {
-          "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
           "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
           "findingSha256": "474201691d32543c6dcc2ae4dbfa16d5701c572bba96ded4c71640ed74a1a9a0",
           "verdict": "real",
@@ -516,7 +516,7 @@
         }
       ],
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/voice_mode.py|get_tts_config|255": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "b79d4080acbdd27cfac9bc7debfec01aa7272992a35a2aa3e5174f722e928953",
         "judge": "Codex",
@@ -535,7 +535,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|create_class|194": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "57a2e88f6a432ce445aadea3e23488a12079f245daaf29806bf74460e5a44ff9",
         "judge": "Codex",
@@ -562,7 +562,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|data_exposure|src/backend/base/langflow/api/v1/chat.py|get_build_events|210": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "a2e842a56674802d7ca8b7da737d0751092b2e20aea1fbe33b4b2a3cd77feb02",
         "judge": "Codex",
@@ -585,7 +585,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/services/settings/auth.py||46": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "50abe44aa19923d2a82914dee6b8b5eb21e290b9258dc8fc078f98b5985900b4",
         "judge": "Codex",
@@ -608,7 +608,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/monitor.py|update_session_id|139": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "a36caf7a3d1e5b8156d1825e8b03084301a98507707ff38c3ec7301dd53a1a96",
         "judge": "Codex",
@@ -631,7 +631,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_image|122": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "b5f61dc0eaaace67bc894131c05afd332ebad3eb2a37a26bfe7882ae5bccbc54",
         "judge": "Codex",
@@ -654,7 +654,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_profile_picture|140": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "8a81810b42ea269687d958e8749f29bdbba16ef916023fe7d6c708ef2da45aa9",
         "judge": "Codex",
@@ -673,7 +673,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/files.py|download_image|122": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "4aa0b7a60646979f44b5dc263d7c5c2dcc324f16451c126e26c15400f4242727",
         "judge": "Codex",
@@ -696,7 +696,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|secret_identity|src/backend/base/langflow/services/settings/auth.py|AuthSettings.validate_superuser|71": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "fbb1c8e4cc4a0c599c0d01ef42efce98f5e46e4e4acf5e56b230d961050e5110",
         "judge": "Codex",
@@ -715,7 +715,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|secret_identity|src/backend/base/langflow/services/auth/utils.py|ensure_valid_key|429": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "12e4cecf5020de6464505b3fb9e2cee41cb515fc943fedc8f49acba2fe367f93",
         "judge": "Codex",
@@ -734,7 +734,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/flows.py|_verify_fs_path|46": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "e1ffe1ac846515034ed022b9d2d0a67726f9a639273caa96b3b65beef1f4fd82",
         "judge": "Codex",
@@ -761,7 +761,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/flows.py|download_multiple_file|519": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "e47fc5fa430e691aaa280c45116020fb4958da1653baf7e9d115bf257f153fa8",
         "judge": "Codex",
@@ -780,7 +780,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/store.py|get_components|102": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "13681f8b1a6684d85aeb44b0d18692b4e0b5586b0f9b251bf95bd0eb3181f167",
         "judge": "Codex",
@@ -799,7 +799,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/helpers/flow.py|get_flow_by_id_or_endpoint_name|282": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "fb06092a71cf9ad3af2a858d8fedbd2035eb3f222af0f3ff59b5dd457fafc6ff",
         "judge": "Codex",
@@ -826,7 +826,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/api/v1/projects.py|download_file|283": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "0840d08871eac6a96e2da6775979bd64ae96e8a49254c80a33f389aa74527716",
         "judge": "Codex",
@@ -853,7 +853,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/base/mcp/util.py|MCPStdioClient._connect_to_server|571": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "bc84b997dd987e1907d05467e8e6b3db1f165d6f0c15e9b26152dc5b14b68567",
         "judge": "Codex",
@@ -880,7 +880,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/services/auth/utils.py|authenticate_user|407": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "b031ba9f5ae9065b41f7259476aebe071a9df21d74a4f5284e85be6c6bc11c05",
         "judge": "Codex",
@@ -899,7 +899,7 @@
         "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/mcp.py|handle_read_resource|155": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "49fc8c773d4309a6ce434ccb5b53334dc80f7f48d7f0c991e1e21a48a7c64043",
         "judge": "Codex",
@@ -922,7 +922,7 @@
         "verdict": "real"
       },
       "langflow-73c1f203|ssrf|src/backend/base/langflow/components/ollama/ollama_embeddings.py|OllamaEmbeddingsComponent.get_model|81": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "4dda0bd8ddda223dac6b74e7e275964cbab0e63564b5182023dec15ddfc1f4da",
         "judge": "Codex",
@@ -945,7 +945,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.GetTenant|106": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "2b8d46fc9b874cf16815ba08b47bccc61c4cdba02793868c8f12f4d555879a2d",
         "judge": "Codex",
@@ -968,7 +968,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.UpdateTenant|147": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "73a1b4b76e2e3e8766d1e990174a64196bad06db49e2aeee1d6387560c1263f8",
         "judge": "Codex",
@@ -991,7 +991,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/user.go|userService.Login|160": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "8cb0efabff3f35dbdb0518be04cd6115a3d66f393857a8081393398ea7d8510f",
         "judge": "Codex",
@@ -1011,7 +1011,7 @@
       },
       "weknora-a20541cd|secret_identity|internal/application/service/user.go|userService.ChangePassword|228": [
         {
-          "sourceResult": "results/2026-11-16-review/positive.raw.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
           "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
           "findingSha256": "ca9ad1b2c0a84821c7a8d6cf506c9ef6d81041f616549c0497fead3c250240ba",
           "judge": "Codex",
@@ -1038,7 +1038,7 @@
           "verdict": "real"
         },
         {
-          "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
           "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
           "findingSha256": "4cc0aecbcce433ed9985adeca99bd020209d187c78834eec2f8a5435442b5bfb",
           "verdict": "real",
@@ -1066,7 +1066,7 @@
         }
       ],
       "weknora-a20541cd|misconfiguration|.env.example||67": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "a11ac9990b625bf3ef8a14e335be8f8721e37c5330552a79373705f06acaf441",
         "judge": "Codex",
@@ -1089,7 +1089,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/user.go|userService.Register|88": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "dd5629f777e182a9cb80364f58878abb53dedfc3f5c824f446f7aae5bd6b3365",
         "judge": "Codex",
@@ -1108,7 +1108,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|misconfiguration|internal/router/router.go|NewRouter|78": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "76ee8086be192191c9b89d8263cb0dc14c221bd56124ec60c0283120f7e0c550",
         "judge": "Codex",
@@ -1123,7 +1123,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithTimeout|463": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "d423f5dc9d7de7cff975b173f3e66680c15ac698bea93f77392fe91431f18b20",
         "judge": "Codex",
@@ -1146,7 +1146,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|resource_exhaustion|internal/handler/initialization.go|InitializationHandler.DownloadOllamaModel|994": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "19f0fa12759705a73d54cd61405152f2bb4611ec02c25ac6724ab25adfbfb7ce",
         "judge": "Codex",
@@ -1173,7 +1173,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|docreader/splitter/splitter.py|TextSplitter.__init__|70": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "0f41e0bc4d722de72fdaba5598926b6ce9b3774853fbb13cf418c21430b9ec2f",
         "judge": "Codex",
@@ -1196,7 +1196,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|docreader/splitter/splitter.py|TextSplitter._merge|249": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "44743ed5fde3f8aeecf6914e2a5030a410e7d9415e32561451083fc0bde53a00",
         "judge": "Codex",
@@ -1223,7 +1223,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.GetKBCloneProgress|436": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "46c80fb666c1e2c69b755651c36103866ace9e194fa374e170feb1e9ffe2c9cd",
         "judge": "Codex",
@@ -1242,7 +1242,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|injection|internal/handler/knowledgebase.go||1": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "d1d0cba67c36f110cde984738de39c725dd0de7f37527b14027458cd5e2a2f0a",
         "judge": "Codex",
@@ -1265,7 +1265,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|injection|internal/mcp/client.go|NewMCPClient|113": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "8010f818774a1470693df867b0937d132ad6c53965485ff253cb09ac6a1919e2",
         "judge": "Codex",
@@ -1288,7 +1288,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|authz|internal/application/service/session.go|sessionService.buildSearchTargets|754": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "585cd90545a6be3c07dbc4d660349bceed7dc1a16c70a3eeb6f7048de83080d9",
         "judge": "Codex",
@@ -1315,7 +1315,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.injectTenantConditions|746": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "234c0cc0cb199d072e7e2485fd0d6fb96f9130c02f5d3a0eb561d58501811386",
         "judge": "Codex",
@@ -1338,7 +1338,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/chat_pipline/search.go|PluginSearch.searchByTargets|323": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "f09117774319990c10d55817aa9b56b88c7719b1eb0d42b7948cb9aa8e249a69",
         "judge": "Codex",
@@ -1357,7 +1357,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/chat_pipline/search.go|len|154": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "661d793629cee2e609cb4c244187cf0d7eddd8235f326bf33dc37a9da6ecb3fb",
         "judge": "Codex",
@@ -1380,7 +1380,7 @@
         "verdict": "false"
       },
       "weknora-a20541cd|authz|internal/application/service/knowledge.go|knowledgeService.validateFAQKnowledgeBase|4069": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "515da6e607c94b616511dadbb5523d5a9c67e3df5ed295da977a63ec02e785c3",
         "judge": "Codex",
@@ -1407,7 +1407,7 @@
         "verdict": "real"
       },
       "weknora-a20541cd|injection|internal/application/service/knowledgebase.go||32": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
         "findingSha256": "e4b881fd08bf4c09a5e838a10cc8c4bda3b3d8fe89ca63c4258fe300f5d475c9",
         "judge": "Codex",
@@ -1427,7 +1427,7 @@
       },
       "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": [
         {
-          "sourceResult": "results/2026-11-16-review/negative.raw.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/negative.raw.json",
           "sourceResultSha256": "1f57bcfeebe142daea53f815d3485067bb29ee7687512b1e1de6fc83caaeb16c",
           "findingSha256": "c20c07d97e42cd6ee1fac5dab25a4c75b05fb2ffe61e27a5ab88b623ef394e53",
           "judge": "Codex",
@@ -1454,7 +1454,7 @@
           "verdict": "false"
         },
         {
-          "sourceResult": "results/2026-11-16-review/fresh.cases/itsdangerous-control.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/fresh.cases/itsdangerous-control.json",
           "sourceResultSha256": "608a93a69173346cffea40d0bb748e08779c4b7ba8e1c0f1e01206a2847aaf9e",
           "findingSha256": "805ca6638277721e9c160970147b101931fac2f817607a60f9d3323608c93e0d",
           "verdict": "false",
@@ -1485,7 +1485,7 @@
           ]
         },
         {
-          "sourceResult": "results/2026-11-16-review/library-candidate.cases/itsdangerous-control.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/library-candidate.cases/itsdangerous-control.json",
           "sourceResultSha256": "e53eabda29484f1149fcdd8aa677dcd5b93aab822daf055e337390cb657a6b13",
           "findingSha256": "cc04cbb4ed7004e3aba7b15d22377e291e3b1b270c0deb78f86d411e59b0629a",
           "verdict": "false",
@@ -1520,7 +1520,7 @@
           ]
         },
         {
-          "sourceResult": "results/2026-11-16-review/revised-candidate.cases/itsdangerous-control.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/revised-candidate.cases/itsdangerous-control.json",
           "sourceResultSha256": "fc2c30a60497722eb1ae8b99c4e2cafd7333d710b7ad4299ea9b36b02f3ce541",
           "findingSha256": "a38a81098895b3b958e969f22e2ffc7af98b61e1c71fe975579fe79527981bd3",
           "verdict": "false",
@@ -1553,7 +1553,7 @@
       ],
       "is-control|resource_exhaustion|source/index.ts|getObjectType|184": [
         {
-          "sourceResult": "results/2026-11-16-review/fresh.cases/is-control.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/fresh.cases/is-control.json",
           "sourceResultSha256": "a82d8c492f34360fc32021b96568004c4bacf1594dd508e0a5e61f64ba9e93a3",
           "findingSha256": "0bcc5d7913327cb90d8c4b3a12eb8f5f28121e1d7baa6ded6bbe8651f811283c",
           "verdict": "false",
@@ -1580,7 +1580,7 @@
           ]
         },
         {
-          "sourceResult": "results/2026-11-16-review/revised-candidate.cases/is-control.json",
+          "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/revised-candidate.cases/is-control.json",
           "sourceResultSha256": "5ab676ea3396d70d91b8914af6faeabbd1c46e8a472dc6c155673c7177c037c8",
           "findingSha256": "067dfb0b96d70e9966fa885b89dba7f41df300953c9ca2c59535c40703665dd1",
           "verdict": "false",
@@ -1612,7 +1612,7 @@
         }
       ],
       "uuid-control|misconfiguration|version1.go|NewUUID|36": {
-        "sourceResult": "results/2026-11-16-review/fresh.cases/uuid-control.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/fresh.cases/uuid-control.json",
         "sourceResultSha256": "aafb7cea62885bdbb53de7d9ac9a5013d973b6e7f5f6eb404cb06dc2eae3f770",
         "findingSha256": "31501538b6e711ea7d19a4705a316374adacd987410cbd9d2da576cc75b94ba1",
         "verdict": "false",
@@ -1643,7 +1643,7 @@
         ]
       },
       "uuid-control|secret_identity|time.go|getTime|51": {
-        "sourceResult": "results/2026-11-16-review/fresh.cases/uuid-control.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/fresh.cases/uuid-control.json",
         "sourceResultSha256": "aafb7cea62885bdbb53de7d9ac9a5013d973b6e7f5f6eb404cb06dc2eae3f770",
         "findingSha256": "8b522d698bffce133c188cfb7be8a2c0fed0b6d7f1a3da138b9cfa6b6a90b116",
         "verdict": "real",
@@ -1678,7 +1678,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/voice_mode.py|flow_as_tool_websocket|735": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "221732fe33302f552be9f94c423d9c7ddeb43f8e94c6ed8704af00e73a7a9906",
         "verdict": "real",
@@ -1705,7 +1705,7 @@
         ]
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|validate_code|57": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "8066e028e161ad4ac01cdbe99ad36bd15360d9a1432d0d2fb1c2ac8e636bc412",
         "verdict": "false",
@@ -1740,7 +1740,7 @@
         ]
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/api/v1/validate.py|post_validate_prompt|26": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "93fbc525f0bd6f72555e71175a0f6e0822befc25f9274006bcded1e83c340483",
         "verdict": "false",
@@ -1763,7 +1763,7 @@
         ]
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|prepare_global_scope|293": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "d671ca5bb4b7182e0465a085b72a647600b1633ba51ddbdf5a228623c26274d5",
         "verdict": "false",
@@ -1790,7 +1790,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/endpoints.py|simplified_run_flow|269": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "1a303e29cdafbb879e55a97906248069c9d3679523fccfa58cab44c174f17f4c",
         "verdict": "real",
@@ -1813,7 +1813,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/chat.py|retrieve_vertices_order|103": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "ecd6c75f32d001984186bc7bfba45b165d951896287ccf5094e1091cc1b26689",
         "verdict": "real",
@@ -1840,7 +1840,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_file|74": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "df6450fb5236ab9e43815c908df0e355b8cf6f27fe6637218aab17183c9ee747",
         "verdict": "real",
@@ -1867,7 +1867,7 @@
         ]
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/chat.py|retrieve_vertices_order|103": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "6dd7d39301f035f39c8030ef2960589e8a5f24976aa97f2c3881c6c7d0d14346",
         "verdict": "real",
@@ -1894,7 +1894,7 @@
         ]
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v2/files.py|upload_user_file|131": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "369e985678582dd38b88165e0233b1f45c48b08bbdedc9b7c8ba7604718e74cf",
         "verdict": "real",
@@ -1917,7 +1917,7 @@
         ]
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/files.py|download_image|118": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "897cce183aaad2b0cb2485d233d6bd9dc8a02669f87e3d67cbf4a8d8db9fc176",
         "verdict": "real",
@@ -1940,7 +1940,7 @@
         ]
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/services/settings/auth.py||40": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "0681807efbdfe14af48191dce4e943ec943f05b44775a20facddeb3c1f1732ed",
         "verdict": "real",
@@ -1963,7 +1963,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_profile_picture|128": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "13afddf9b1d5d29df0bd9d9f4193e46c31cf0817f9d88a2c3fa272f51e9b1de4",
         "verdict": "real",
@@ -1982,7 +1982,7 @@
         ]
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/main.py|check_boundary|322": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "f4a1eb5ab5cd0c49486f9a5af5973a59ec36ca43620f64d1abaae1bf101e6fbe",
         "verdict": "real",
@@ -2013,7 +2013,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/chat.py|build_vertex|301": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "249d023384641b64e1aa908e61000621536d76373680c331c0dfdc4ebbdaae89",
         "verdict": "real",
@@ -2040,7 +2040,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v2/files.py|save_file_routine|70": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "906e4f45ab70e85292757abbb4fee2e1d7b20979755d3eb130deab9eb88363f8",
         "verdict": "real",
@@ -2063,7 +2063,7 @@
         ]
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/voice_mode.py|add_message_to_db|274": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "249a0f06ddac73be71c3ff1bc333bff7f93e1dae0cde4f06d2a5023dfa38f164",
         "verdict": "real",
@@ -2090,7 +2090,7 @@
         ]
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/base/prompts/api_utils.py|_fix_variable|69": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "6f80201f989458fc1160d97780798d74d23462da2c3e33cf120c567e84a81d6c",
         "verdict": "real",
@@ -2117,7 +2117,7 @@
         ]
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/voice_mode.py|get_voice_config|207": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "075dad09110a1b3b4c2d8d536d2cdae77486529c2d71ffe0781b6c3b125fc180",
         "verdict": "real",
@@ -2144,7 +2144,7 @@
         ]
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/main.py|create_app|292": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
         "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
         "findingSha256": "7651fd4994d1f4b3891f1930251461df89b324ffd7726ed8b2e48f7c04335329",
         "verdict": "real",
@@ -2167,7 +2167,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization.service.ts|OrganizationService.updateOrganization|94": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "066b6ccee53f9fe0db24c877f187d80bb84b10313e16e986b1407c744139c261",
         "verdict": "real",
@@ -2190,7 +2190,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/routes/user.route.ts||7": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "611122151ebb660f0bb22f6c2faf55fc8f4f6aab81a49c7e79119c2fa8c744dd",
         "verdict": "real",
@@ -2217,7 +2217,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getPlanProration|110": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "8a95fbdc8d9fe339aebc5e5b05fc6ffe26d86b2f0174321a8751a1265caaca8c",
         "verdict": "real",
@@ -2244,7 +2244,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/refreshToken\")|237": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "8437bc9f524cea33005d82e33b9a0a4bb6e8064466a459d31a53f8ae1df7d681",
         "verdict": "real",
@@ -2279,7 +2279,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getAdditionalSeatsProration|92": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "86dcfa912dca5422f7265317c96cefa859ba918647df7e6bf12a473ec9ed3402",
         "verdict": "real",
@@ -2306,7 +2306,7 @@
         ]
       },
       "flowise-f0c12941|resource_exhaustion|packages/server/src/enterprise/middleware/passport/index.ts|storeSSOUserPayload|460": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "55d865ae21a7e64389e7704820f006b60864cc301adb03fd02415b2d19428510",
         "verdict": "real",
@@ -2333,7 +2333,7 @@
         ]
       },
       "flowise-f0c12941|injection|packages/server/src/enterprise/middleware/passport/index.ts|_initializePassportMiddleware|55": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "a5c34bbc71dee6bf3ec7394484e618913a270369237aea3f95443172589338fc",
         "verdict": "false",
@@ -2356,7 +2356,7 @@
         ]
       },
       "flowise-f0c12941|injection|packages/server/src/routes/oauth2/templates.ts|generateOAuth2ResponsePage|68": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "3b03493d06584f5582170aa93ddf66c02f78d68fc64943487a50e7956c3dc589",
         "verdict": "false",
@@ -2383,7 +2383,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/routes/executions/index.ts||11": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "eba2106be03f248650efc9cf0c1efa74298cd6578cf7955134dc72478530c49e",
         "verdict": "real",
@@ -2410,7 +2410,7 @@
         ]
       },
       "flowise-f0c12941|data_exposure|packages/server/src/services/chatflows/index.ts|getChatflowByApiKey|225": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "0814303e02a62d5f2750a844c15e567d484a2dfcfd9bcec53fef6933ae73286c",
         "verdict": "real",
@@ -2437,7 +2437,7 @@
         ]
       },
       "flowise-f0c12941|data_exposure|packages/server/src/services/apikey/index.ts|getAllApiKeys|112": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "ffc60ba2b4f50c19268dad8bcf2aee0760e494276efa07ec1918dd1082a64b9d",
         "verdict": "false",
@@ -2460,7 +2460,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/services/account.service.ts|AccountService.createRegisterAccount|223": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "17ba0dc5d8559e71bd2f05b552a3bef01412a20bbae01f9c3151f6c7b2bc92f8",
         "verdict": "real",
@@ -2495,7 +2495,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateAdditionalSeats|128": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "ce7c83f9718cd4069831213fe71a8de641a3c695c624c720be04b4e05115a855",
         "verdict": "real",
@@ -2522,7 +2522,7 @@
         ]
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/login\")|267": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "ec644d2feb08c7099ec1acc50622f2cc049414193ce697c6a54af9f0b6d6d272",
         "verdict": "real",
@@ -2553,7 +2553,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization-user.service.ts|OrganizationUserService.createOrganization|245": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "015c28cbbdd100d8fd44fd3dcc2e81c19c3eaa4bd4fefe323db0a8be93e1eb3e",
         "verdict": "real",
@@ -2584,7 +2584,7 @@
         ]
       },
       "flowise-f0c12941|resource_exhaustion|packages/server/src/routes/oauth2/index.ts|router.post(\"/refresh/:credentialId\")|355": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "65ce1477aba7a21a70d6c4df26b1832ec14cd8e16eb6980794187780c58a0438",
         "verdict": "false",
@@ -2611,7 +2611,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.read|30": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "fb98246f3812a66384e0563512ec0c1b8c01399b635e72466c7a0e1301b69870",
         "verdict": "real",
@@ -2638,7 +2638,7 @@
         ]
       },
       "flowise-f0c12941|injection|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|284": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "c7c5ab14d514bb8450ecaaf0fd4e770c1204b026931a554f42d00f2978bde4f1",
         "verdict": "real",
@@ -2665,7 +2665,7 @@
         ]
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|verifyTokenForBullMQDashboard|433": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
         "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
         "findingSha256": "25ae6bbcbf4bcaf8027faac97ee82ad425ee1116ddce528f287e8960068edb5e",
         "verdict": "real",
@@ -2692,7 +2692,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/application/service/user.go|userService.RevokeToken|408": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "e22f8421a1944473ad8501e77356f8a8c4dfcb265d70f30c124172d2ec055020",
         "verdict": "real",
@@ -2723,7 +2723,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/application/service/user.go|userService.ValidateToken|342": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "5ce628058c23ae5d4f77e8f9a83073900b2ab5c04a569fc34ee4458f1f82b193",
         "verdict": "real",
@@ -2750,7 +2750,7 @@
         ]
       },
       "weknora-a20541cd|injection|internal/agent/tools/database_query.go|NewSQLSecurityValidator|32": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "f53d4640ae5899c7547d2811fbc049a54ab4242cbdb42a64c59eb9ded1ef85ca",
         "verdict": "real",
@@ -2777,7 +2777,7 @@
         ]
       },
       "weknora-a20541cd|resource_exhaustion|internal/middleware/logger.go|loggerResponseBodyWriter.Write|29": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "2d67aa788f262655e092b665d4a2621c0859449928669863c0212053caeae6cf",
         "verdict": "false",
@@ -2804,7 +2804,7 @@
         ]
       },
       "weknora-a20541cd|injection|internal/application/service/knowledge.go|knowledgeService.CreateKnowledgeFromURL|370": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "bdaf16df5409968d992c9567cf7a4e53be3c8f6d67926ddc65b8b0fd93eed250",
         "verdict": "false",
@@ -2835,7 +2835,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.CopyKnowledgeBase|371": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "8cc6537029778e580123f8125eb09143b6ed3506c64ff073f0b10b2d767cabc4",
         "verdict": "real",
@@ -2866,7 +2866,7 @@
         ]
       },
       "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.validateNode|529": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "2cc894aebca7b26e7290d0619ae6250cfdb979e33da9a08d50278c92920f72ad",
         "verdict": "real",
@@ -2897,7 +2897,7 @@
         ]
       },
       "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithTimeout|449": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "36fb15c5f76b16c26e3c2e0d88775d16af2b828a21b92f631443841876c860dc",
         "verdict": "false",
@@ -2932,7 +2932,7 @@
         ]
       },
       "weknora-a20541cd|injection|docreader/parser/caption.py|Caption._call_openai_api|327": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "9e8f074491e6f7c4bf2aed19f006d1e3df0aa1e35e5b4b8177fc7d5eee445906",
         "verdict": "false",
@@ -2963,7 +2963,7 @@
         ]
       },
       "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.injectTenantConditions|756": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "b2c40b9f85f065550ebf0e825db36b8ca188d2d296aaf296516a0729733f6c3f",
         "verdict": "real",
@@ -2990,7 +2990,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.GetTenant|116": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "c7f39d2d1cd057d735910505cd0b5e2d84c9ca92276a0fddf05945c708732e74",
         "verdict": "real",
@@ -3021,7 +3021,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.UpdateTenant|159": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "9ea19f1c94e58648fb10f99945df1f7ae6faac47dfba5db0451b011c62afa868",
         "verdict": "real",
@@ -3052,7 +3052,7 @@
         ]
       },
       "weknora-a20541cd|data_exposure|internal/handler/auth.go|AuthHandler.Register|77": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "35e8402fb097f468ac80d689010c3b0cac00c381d71159cd9681e20ec3fecbc7",
         "verdict": "false",
@@ -3079,7 +3079,7 @@
         ]
       },
       "weknora-a20541cd|injection|internal/agent/tools/database_query.go|NewSQLSecurityValidator|26": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "4e6305e37e6e918d53ff20f512bbf9199aa7eb690029fe2a088d319812af639f",
         "verdict": "real",
@@ -3106,7 +3106,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.HybridSearch|77": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "d495115757d9f3cd1951f7c236da70e342084f64813235d1e03cd9d509b69041",
         "verdict": "real",
@@ -3141,7 +3141,7 @@
         ]
       },
       "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithChromedp|414": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "4a022a788292d4d37728e635679558c16ab809bac2e991c1b71c1bc5bbb18b45",
         "verdict": "false",
@@ -3176,7 +3176,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.DeleteTenant|210": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "f6cb6dfa0388f762603ed161b9f97340f3cd5ffe857d6935e2f0483a3c7b3afb",
         "verdict": "real",
@@ -3207,7 +3207,7 @@
         ]
       },
       "weknora-a20541cd|authz|internal/handler/auth.go|AuthHandler.Logout|183": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "0ea0a0e75ac629c2cd4a87246bfb2d0d34a60fb1bf965c28dc3ae44a4e1ea4df",
         "verdict": "false",
@@ -3238,7 +3238,7 @@
         ]
       },
       "weknora-a20541cd|authz|docreader/parser/base_parser.py||708": {
-        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
         "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
         "findingSha256": "f298414ff52663cf93ced26b2b9005e646eac411e56c29528468fc45835c80be",
         "verdict": "real",
@@ -3273,7 +3273,7 @@
         ]
       },
       "uuid-control|secret_identity|node.go|setNodeInterface|50": {
-        "sourceResult": "results/2026-11-16-review/library-candidate.cases/uuid-control.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/library-candidate.cases/uuid-control.json",
         "sourceResultSha256": "c6c8f35227c82a6cbc8e7baf6b11049d118ee55805725b8071cf3e7a5419aee9",
         "findingSha256": "a2356d5b67620e440fe7ca356cbef5f1f8823ed70a617aad43a8d4bc6ddaebe8",
         "verdict": "false",
@@ -3308,7 +3308,7 @@
         ]
       },
       "uuid-control|data_exposure|version6.go|NewV6WithTime|39": {
-        "sourceResult": "results/2026-11-16-review/library-candidate.cases/uuid-control.json",
+        "sourceResult": "https://github.com/kodustech/kodus-ai/blob/baf5c5ba06dab359da74fca8ed67efbeaddd1cce/evals/security-scan/results/2026-11-16-review/library-candidate.cases/uuid-control.json",
         "sourceResultSha256": "c6c8f35227c82a6cbc8e7baf6b11049d118ee55805725b8071cf3e7a5419aee9",
         "findingSha256": "0ecffb4bfc54f21153a7fcbae302bbee8ba6d608a31e2700e06b3f4e5d3f9aa0",
         "verdict": "real",

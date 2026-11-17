@@ -1,6 +1,0 @@
-
-Test Suites: 3 passed, 3 total
-Tests:       90 passed, 90 total
-Snapshots:   0 total
-Time:        4.236 s
-Ran all test suites within paths "test/unit/platform/services/default-branch-strict.spec.ts", "libs/security-scan/domain/surface/collect-surface.spec.ts", "libs/issues/domain/scan-fingerprint.spec.ts".
