@@ -1,11 +1,12 @@
 import {
     cweUrl,
-    parseScanLimit,
+    formatOwner,
     formatScanCoverage,
     formatScanOutcome,
     formatScanSpend,
     formatSymbolLines,
     isNoKnownPriceMessage,
+    parseScanLimit,
     reproductionStatus,
 } from "./format";
 
@@ -21,7 +22,12 @@ describe("formatScanSpend", () => {
         expect(
             formatScanSpend({
                 budget: {},
-                spend: { usd: 0, inputTokens: 1_000_000, outputTokens: 200_000, requests: 40 },
+                spend: {
+                    usd: 0,
+                    inputTokens: 1_000_000,
+                    outputTokens: 200_000,
+                    requests: 40,
+                },
             }),
         ).toBe("1.2M tokens");
     });
@@ -179,16 +185,52 @@ describe("isNoKnownPriceMessage", () => {
     });
 });
 
-describe('scan limit input', () => {
-    it.each(['20usd', '1e', 'Infinity', '-1', '0'])('refuses %s instead of starting an uncapped scan', raw => {
-        expect(parseScanLimit(raw, 'usd').error).toBeTruthy();
-        expect(parseScanLimit(raw, 'tokens').error).toBeTruthy();
+describe("scan limit input", () => {
+    it.each(["20usd", "1e", "Infinity", "-1", "0"])(
+        "refuses %s instead of starting an uncapped scan",
+        (raw) => {
+            expect(parseScanLimit(raw, "usd").error).toBeTruthy();
+            expect(parseScanLimit(raw, "tokens").error).toBeTruthy();
+        },
+    );
+    it("allows only an intentionally empty limit or valid numbers", () => {
+        expect(parseScanLimit("", "usd")).toEqual({});
+        expect(parseScanLimit("20", "usd")).toEqual({ value: 20 });
+        expect(parseScanLimit("12.50", "usd")).toEqual({ value: 12.5 });
+        expect(parseScanLimit("1000", "tokens")).toEqual({ value: 1000 });
+        expect(parseScanLimit("1.5", "tokens").error).toBeTruthy();
     });
-    it('allows only an intentionally empty limit or valid numbers', () => {
-        expect(parseScanLimit('', 'usd')).toEqual({});
-        expect(parseScanLimit('20', 'usd')).toEqual({value: 20});
-        expect(parseScanLimit('12.50', 'usd')).toEqual({value: 12.5});
-        expect(parseScanLimit('1000', 'tokens')).toEqual({value: 1000});
-        expect(parseScanLimit('1.5', 'tokens').error).toBeTruthy();
+});
+
+describe("formatOwner", () => {
+    it("shows a handle with one at sign, however it was stored", () => {
+        expect(
+            formatOwner({ gitId: "", username: "@jane", origin: "codeowners" }),
+        ).toBe("@jane");
+        expect(
+            formatOwner({ gitId: "1", username: "jane", origin: "pr_author" }),
+        ).toBe("@jane");
+    });
+
+    it("shows an email CODEOWNERS entry as the email, not its local part as a handle", () => {
+        expect(
+            formatOwner({
+                gitId: "",
+                username: "jane",
+                email: "jane@acme.io",
+                origin: "codeowners",
+            }),
+        ).toBe("jane@acme.io");
+    });
+
+    it("shows a last author by name, without an at sign", () => {
+        expect(
+            formatOwner({
+                gitId: "",
+                username: "Jane Doe",
+                email: "jane@acme.io",
+                origin: "last_author",
+            }),
+        ).toBe("Jane Doe");
     });
 });

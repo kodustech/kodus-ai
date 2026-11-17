@@ -20,6 +20,7 @@ import { cn } from "src/core/utils/components";
 
 import {
     cweUrl,
+    formatOwner,
     formatSymbolLines,
     OWNER_ORIGIN_NOTE,
     reproductionStatus,
@@ -86,7 +87,7 @@ export const IssueSecurityFacts = ({
                 <div className="flex gap-3">
                     <UserIcon className="text-secondary-light size-4.5 shrink-0" />
                     <span className="text-text-secondary">
-                        @{owner.username.replace(/^@/, "")}
+                        {formatOwner(owner)}
                         {ownerNote && (
                             <span className="text-text-tertiary">
                                 {" "}

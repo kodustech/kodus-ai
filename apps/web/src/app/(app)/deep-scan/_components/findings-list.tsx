@@ -9,6 +9,7 @@ import { SeverityLevel } from "src/core/types";
 import { cn } from "src/core/utils/components";
 
 import { CopyFixPromptButton } from "../../issues/_components/copy-fix-prompt-button";
+import { formatOwner } from "../../issues/_components/security-scan/format";
 import { StatusBadge } from "../../issues/_components/status-badge";
 
 const SEVERITY_RANK: Record<SeverityLevel, number> = {
@@ -163,7 +164,7 @@ const FindingRow = ({
     onOpen: () => void;
 }) => {
     const where = [finding.filePath, finding.cwe].filter(Boolean).join(" · ");
-    const owner = finding.owner?.username;
+    const owner = finding.owner && formatOwner(finding.owner);
 
     return (
         <li data-peek={active ? "" : undefined}>

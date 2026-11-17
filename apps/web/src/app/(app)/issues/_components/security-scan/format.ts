@@ -119,6 +119,16 @@ export const OWNER_ORIGIN_NOTE = {
     last_author: "last author",
 } as const satisfies Record<NonNullable<IssueOwner["origin"]>, string>;
 
+/**
+ * How an owner reads: a handle with one "@", an email CODEOWNERS entry as the
+ * email, and a last author by the name git records, which is not a handle.
+ */
+export const formatOwner = (owner: IssueOwner): string => {
+    if (owner.origin === "last_author") return owner.username;
+    if (owner.origin === "codeowners" && owner.email) return owner.email;
+    return `@${owner.username.replace(/^@/, "")}`;
+};
+
 /** "CWE-89" → its MITRE page. Anything else has no link. */
 export const cweUrl = (cwe: string): string | undefined => {
     const id = /^CWE-(\d+)$/i.exec(cwe.trim())?.[1];
