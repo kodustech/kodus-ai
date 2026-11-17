@@ -174,6 +174,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     checkoutSha: cloneInfo.checkoutSha,
                     unifiedDiff: cliContext?.cliRawDiff,
                     sandboxMetadata: { stage: 'review' },
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
                 },
                 // A review waits for capacity as long as its job lives
                 { signal: context.parentSignal },

@@ -27,6 +27,12 @@ export interface CreateSandboxParams {
     unifiedDiff?: string;
     /** Arbitrary key-value tags forwarded to the sandbox provider (e.g. E2B metadata for filtering/monitoring). */
     sandboxMetadata?: Record<string, string>;
+    /**
+     * The organization (and team) the sandbox works for. Only used to record
+     * egress-probe results per org; never sent to the sandbox provider.
+     */
+    organizationId?: string;
+    teamId?: string;
 }
 
 export interface SandboxRunOptions {

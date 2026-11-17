@@ -1213,3 +1213,113 @@ describe('E2BSandboxService.installDependencies', () => {
         );
     });
 });
+
+// ---------------------------------------------------------------------------
+// Egress probe hand-off
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService egress probe', () => {
+    const { PRIVILEGES_DROPPED_MARKER } = jest.requireActual(
+        './review-user-privileges',
+    );
+    const ORG = '11111111-1111-4111-8111-111111111111';
+
+    const fakeSandbox = () => ({
+        sandboxId: 'sbx-1',
+        commands: {
+            run: jest.fn(async (cmd: string) => ({
+                stdout: cmd.includes('gpasswd')
+                    ? `${PRIVILEGES_DROPPED_MARKER}\n`
+                    : '',
+                stderr: '',
+                exitCode: 0,
+            })),
+        },
+        kill: jest.fn(),
+        files: { read: jest.fn(), write: jest.fn() },
+    });
+
+    const create = async (opts: {
+        proxy: boolean;
+        stage?: string;
+        probe: { probe: jest.Mock };
+    }) => {
+        const sbx = fakeSandbox();
+        (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
+        const config = {
+            get: (key: string) =>
+                ({
+                    API_E2B_KEY: 'key',
+                    API_E2B_TEMPLATE_ID: 'tpl',
+                    API_NODE_ENV: 'test',
+                    ...(opts.proxy && {
+                        E2B_PROXY_HOST: '192.0.2.1',
+                        E2B_PROXY_PASSWORD: 'FAKE_PROXY_PASSWORD',
+                    }),
+                })[key],
+        };
+        const service = new E2BSandboxService(config as any, opts.probe);
+        const instance = await service.createSandboxWithRepo({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'tok',
+            branch: 'feature',
+            prNumber: 1,
+            platform: PlatformType.GITHUB,
+            sandboxMetadata: { stage: opts.stage ?? 'review' },
+            organizationId: ORG,
+            teamId: 'team-1',
+        });
+        return { instance, sbx };
+    };
+
+    it('asks for a probe of the review repository when the review goes through the egress proxy', async () => {
+        const probe = { probe: jest.fn().mockResolvedValue(undefined) };
+        await create({ proxy: true, probe });
+        expect(probe.probe).toHaveBeenCalledWith({
+            organizationId: ORG,
+            teamId: 'team-1',
+            platform: PlatformType.GITHUB,
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'tok',
+            authUsername: undefined,
+        });
+    });
+
+    it('does not probe where there is no egress proxy to compare against', async () => {
+        const probe = { probe: jest.fn().mockResolvedValue(undefined) };
+        await create({ proxy: false, probe });
+        expect(probe.probe).not.toHaveBeenCalled();
+    });
+
+    it('does not probe sandboxes that are not a review (graph, conversation)', async () => {
+        const probe = { probe: jest.fn().mockResolvedValue(undefined) };
+        await create({ proxy: true, stage: 'graph-build', probe });
+        expect(probe.probe).not.toHaveBeenCalled();
+    });
+
+    it('still delivers the review sandbox when the probe fails', async () => {
+        const rejecting = {
+            probe: jest.fn().mockRejectedValue(new Error('x')),
+        };
+        const { instance, sbx } = await create({
+            proxy: true,
+            probe: rejecting,
+        });
+        expect(instance.sandboxId).toBe('sbx-1');
+        expect(sbx.kill).not.toHaveBeenCalled();
+
+        const throwing = {
+            probe: jest.fn(() => {
+                throw new Error('sync');
+            }),
+        };
+        const second = await create({ proxy: true, probe: throwing });
+        expect(second.instance.sandboxId).toBe('sbx-1');
+    });
+
+    it('never tells the sandbox provider which organization it serves', async () => {
+        const probe = { probe: jest.fn().mockResolvedValue(undefined) };
+        await create({ proxy: true, probe });
+        const metadata = (Sandbox as any).create.mock.calls[0][1].metadata;
+        expect(JSON.stringify(metadata)).not.toContain(ORG);
+    });
+});

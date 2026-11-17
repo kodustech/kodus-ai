@@ -21,6 +21,7 @@ import {
 } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import type { SandboxEgressProbeService } from '../services/egress-probe/sandbox-egress-probe.service';
 import { hasParentDirSegment } from './path-segments';
 import { readWithinRootCommand } from './read-within-root';
 import {
@@ -643,7 +644,10 @@ export async function dropE2BReviewUserPrivileges(
 export class E2BSandboxService implements ISandboxProvider {
     private readonly logger = createLogger(E2BSandboxService.name);
 
-    constructor(private readonly configService: ConfigService) {}
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly egressProbe?: Pick<SandboxEgressProbeService, 'probe'>,
+    ) {}
 
     isAvailable(): boolean {
         return !!this.configService.get<string>('API_E2B_KEY');
@@ -710,6 +714,10 @@ export class E2BSandboxService implements ISandboxProvider {
                 await this.dropReviewUserPrivileges(sandbox);
 
             await this.cloneRepository(sandbox, params);
+
+            // The clone above went through the egress proxy and worked. Find
+            // out, off the review's path, whether it would have worked without.
+            this.startEgressProbe(params);
 
             // CLI mode: when the user's branch isn't pushed (or there are
             // uncommitted changes), the regular fetch above fails — we
@@ -854,6 +862,36 @@ export class E2BSandboxService implements ISandboxProvider {
                 stderr: installResult.stderr?.slice(0, 300),
             },
         });
+    }
+
+    /**
+     * Fire-and-forget: only for a review's own sandbox, only where the egress
+     * proxy is in use, and nothing it does can reach the review.
+     */
+    private startEgressProbe(params: CreateSandboxParams): void {
+        if (
+            !this.egressProbe ||
+            !this.isProxyConfigured() ||
+            params.sandboxMetadata?.stage !== 'review' ||
+            !params.organizationId ||
+            !params.authToken
+        ) {
+            return;
+        }
+        try {
+            void this.egressProbe
+                .probe({
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                    platform: params.platform,
+                    cloneUrl: params.cloneUrl,
+                    authToken: params.authToken,
+                    authUsername: params.authUsername,
+                })
+                .catch(() => undefined);
+        } catch {
+            // A probe that cannot even start is not the review's problem.
+        }
     }
 
     private dropReviewUserPrivileges(sandbox: Sandbox): Promise<boolean> {
