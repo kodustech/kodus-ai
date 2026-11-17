@@ -149,6 +149,32 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         );
     });
 
+    it('lets a server error on a later file page through instead of a partial listing', async () => {
+        repoGetPullRequestFiles
+            .mockResolvedValueOnce({
+                data: Array.from({ length: 50 }, (_, i) => ({
+                    filename: `src/f${i}.ts`,
+                    status: 'modified',
+                })),
+            })
+            .mockResolvedValueOnce(httpError(502));
+        const { service } = makeService();
+
+        await expect(list(service)).rejects.toMatchObject({ status: 502 });
+    });
+
+    it('warns and lists without patches when the diff answers another error', async () => {
+        repoDownloadPullDiffOrPatch.mockResolvedValue(httpError(404));
+        const { service, logger } = makeService();
+
+        const files = await list(service);
+
+        expect(files?.map((f) => [f.filename, f.patch])).toEqual([
+            ['src/a.ts', ''],
+        ]);
+        expect(logger.warn).toHaveBeenCalled();
+    });
+
     it('lets a transport failure on the listing through', async () => {
         repoGetPullRequestFiles.mockRejectedValue(new Error('socket hang up'));
         const { service } = makeService();

@@ -209,6 +209,10 @@ function throwIfForgejoFailed(result: {
     );
 }
 
+function isForgejoServerError(error: unknown): boolean {
+    const status = (error as { status?: unknown } | null)?.status;
+    return typeof status === 'number' && status >= 500;
+}
 
 const FORGEJO_REACTIONS_CONCURRENCY = 5;
 
@@ -2246,8 +2250,8 @@ export class ForgejoService implements Omit<
                         query: { page, limit },
                     });
                     // The client answers an HTTP error instead of throwing
-                    // it: a 429 page would end the listing early
-                    if (is429Error(result)) throw result;
+                    // it: read as an empty page, it would end the listing early
+                    throwIfForgejoFailed(result);
                     return result.data ?? [];
                 }),
                 repoDownloadPullDiffOrPatch({
@@ -2260,7 +2264,7 @@ export class ForgejoService implements Omit<
                     },
                 })
                     .then((result) => {
-                        if (is429Error(result)) throw result;
+                        throwIfForgejoFailed(result);
                         return result;
                     })
                     .catch((error) => {
@@ -2305,9 +2309,15 @@ export class ForgejoService implements Omit<
                 previous_filename: f.previous_filename,
             }));
         } catch (error) {
-            // Let the job retry instead of reviewing a fileless PR
-            // A transport failure is not an empty listing either: let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
+            // A rate limit, a network blip or a server error is not a
+            // fileless PR: let the job retry
+            if (
+                is429Error(error) ||
+                isTransientFetchError(error) ||
+                isForgejoServerError(error)
+            ) {
+                throw error;
+            }
             this.logger.error({
                 message: 'Error getting files by PR ID',
                 context: ForgejoService.name,
