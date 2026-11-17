@@ -160,6 +160,7 @@ const GITLAB_MAX_PER_PAGE = 100;
 const PULL_REQUEST_AUTHORS_WINDOW_DAYS = 60;
 
 const GITLAB_USER_LOOKUP_CONCURRENCY = 5;
+const GITLAB_AUTHOR_SEARCH_MAX_PAGES = 20;
 
 /**
  * The auth mode of a GitLab record whose `authMode` predates the field: an
@@ -388,15 +389,11 @@ export class GitlabService implements Omit<
             );
             const results = await Promise.all(
                 batch.map(async (id) => {
-                    const mergeRequests = await gitlabAPI.MergeRequests.all({
-                        authorId: Number(id),
-                        scope: 'all',
-                        createdAfter: since.toISOString(),
-                        perPage: 100,
-                    });
-
-                    const match = mergeRequests.find((mr) =>
-                        projectIds.has(String(mr.project_id)),
+                    const match = await this.findMergeRequestOnProjects(
+                        gitlabAPI,
+                        Number(id),
+                        since,
+                        projectIds,
                     );
 
                     if (!match) return null;
@@ -427,6 +424,41 @@ export class GitlabService implements Omit<
         });
 
         return found;
+    }
+
+    /**
+     * Pages through the author's merge requests and stops at the first one on
+     * a configured project. Too many pages rejects rather than answering "not
+     * found" from a partial scan.
+     */
+    private async findMergeRequestOnProjects(
+        gitlabAPI: ReturnType<GitlabService['instanceGitlabApi']>,
+        authorId: number,
+        since: Date,
+        projectIds: Set<string>,
+    ) {
+        for (let page = 1; page <= GITLAB_AUTHOR_SEARCH_MAX_PAGES; page++) {
+            const mergeRequests = await gitlabAPI.MergeRequests.all({
+                authorId,
+                scope: 'all',
+                createdAfter: since.toISOString(),
+                perPage: GITLAB_MAX_PER_PAGE,
+                page,
+                maxPages: 1,
+            });
+
+            const match = mergeRequests.find((mr) =>
+                projectIds.has(String(mr.project_id)),
+            );
+
+            if (match || mergeRequests.length < GITLAB_MAX_PER_PAGE) {
+                return match ?? null;
+            }
+        }
+
+        throw new Error(
+            `GitLab author ${authorId} has more than ${GITLAB_AUTHOR_SEARCH_MAX_PAGES} pages of recent merge requests`,
+        );
     }
 
     /**

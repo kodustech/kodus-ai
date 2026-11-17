@@ -363,6 +363,39 @@ describe('GitlabService member and author lists', () => {
             expect(authors).toEqual([{ id: '7', name: 'Bob', type: 'user' }]);
         });
 
+        it('pages on until it finds a merge request on a configured project', async () => {
+            const elsewhere = Array.from({ length: 100 }, () => ({
+                project_id: 99,
+            }));
+            gitlabAPI.MergeRequests.all.mockImplementation(
+                async ({ page }: { page: number }) =>
+                    page === 1
+                        ? elsewhere
+                        : [{ project_id: 10, author: { name: 'Bob' } }],
+            );
+
+            const authors = await service.findRecentPullRequestAuthors({
+                organizationAndTeamData,
+                authorIds: ['7'],
+            });
+
+            expect(gitlabAPI.MergeRequests.all).toHaveBeenCalledTimes(2);
+            expect(authors).toEqual([{ id: '7', name: 'Bob', type: 'user' }]);
+        });
+
+        it('rejects instead of answering "not found" when the pages run past the cap', async () => {
+            gitlabAPI.MergeRequests.all.mockResolvedValue(
+                Array.from({ length: 100 }, () => ({ project_id: 99 })),
+            );
+
+            await expect(
+                service.findRecentPullRequestAuthors({
+                    organizationAndTeamData,
+                    authorIds: ['7'],
+                }),
+            ).rejects.toThrow('more than 20 pages');
+        });
+
         it('rejects when a search is rate limited', async () => {
             gitlabAPI.MergeRequests.all.mockRejectedValue(httpError(429));
 
