@@ -1,4 +1,4 @@
-import { hasRuleEvidence } from './kody-rule-evidence';
+import { hasRuleEvidence, hasSourceRefutation } from './kody-rule-evidence';
 
 const read = {
     path: 'src/controller.ts',
@@ -15,6 +15,34 @@ const violation = {
 };
 
 describe('Kody Rule evidence', () => {
+    it('accepts a refutation only when it cites a decisive line that was read', () => {
+        const protectedRoute = {
+            path: read.path,
+            content: '18: @requirePolicy(Access.ExportReports)',
+        };
+        const refutation = {
+            keep: false,
+            confidence: 'high' as const,
+            rationale: 'The guard is applied at src/controller.ts:18.',
+        };
+        expect(hasSourceRefutation(refutation, [protectedRoute])).toBe(true);
+        expect(hasSourceRefutation(refutation, [])).toBe(false);
+        expect(
+            hasSourceRefutation(
+                {
+                    ...refutation,
+                    rationale: 'The guard is at src/controller.ts:29.',
+                },
+                [protectedRoute],
+            ),
+        ).toBe(false);
+        expect(
+            hasSourceRefutation({ ...refutation, confidence: 'low' }, [
+                protectedRoute,
+            ]),
+        ).toBe(false);
+    });
+
     it('rejects a contrast-case complaint when the verifier found an existing test that pins the fix', () => {
         const spec = {
             path: 'record.spec.ts',
