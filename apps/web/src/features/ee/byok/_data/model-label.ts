@@ -8,6 +8,7 @@
  *
  *   formatModelLabel('kimi-k2.6')                   → 'Kimi K2.6'
  *   formatModelLabel('deepseek/deepseek-v4-pro')    → 'Deepseek V4 Pro'
+ *   formatModelLabel('claude-sonnet-4-6')           → 'Claude Sonnet 4.6'
  *   formatModelLabel('gpt-5.4')                      → 'GPT 5.4'
  *   formatModelLabel('accounts/fireworks/models/glm-5p3-flash') → 'GLM 5.3 Flash'
  *   formatModelLabel('.../deepseek-v4-flash-0731')  → 'Deepseek V4 Flash'
@@ -24,11 +25,36 @@ export function formatModelLabel(id: string): string {
     // last segment; the path prefix is routing, not identity.
     const last = id.slice(id.lastIndexOf("/") + 1);
     const tokens = last.split("-").filter(Boolean);
+    // A trailing -YYYY-MM-DD snapshot date (`gpt-4o-2024-08-06`) is a pin too;
+    // drop it before the version join so month and day don't fuse into "08.06".
+    if (
+        tokens.length > 3 &&
+        /^(19|20)\d{2}$/.test(tokens[tokens.length - 3]) &&
+        /^(0[1-9]|1[0-2])$/.test(tokens[tokens.length - 2]) &&
+        /^(0[1-9]|[12]\d|3[01])$/.test(tokens[tokens.length - 1])
+    ) {
+        tokens.splice(-3);
+    }
     // A trailing MMDD snapshot date is a pin, not a name (`-0731`, `-0813`).
     if (tokens.length > 1 && /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(tokens[tokens.length - 1])) {
         tokens.pop();
     }
-    return tokens
+    // Anthropic spells a version with hyphens (`claude-sonnet-4-6`): two bare
+    // numbers side by side are one dotted version, "4.6", not two words.
+    const words = tokens.reduce<string[]>((acc, tok) => {
+        const prev = acc[acc.length - 1];
+        if (
+            prev !== undefined &&
+            /^\d{1,2}$/.test(prev) &&
+            /^\d{1,2}$/.test(tok)
+        ) {
+            acc[acc.length - 1] = `${prev}.${tok}`;
+        } else {
+            acc.push(tok);
+        }
+        return acc;
+    }, []);
+    return words
         .map((tok) => tok.replace(/^([kv]?\d+)p(\d+)$/i, "$1.$2"))
         .map((tok) =>
             ACRONYMS.has(tok.toLowerCase())
