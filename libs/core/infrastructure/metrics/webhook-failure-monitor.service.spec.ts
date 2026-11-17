@@ -18,7 +18,15 @@ describe('WebhookFailureMonitorService', () => {
             andWhere: () => queryBuilder,
             getRawOne: () =>
                 Promise.reject(
-                    new Error('canceling statement due to statement timeout'),
+                    Object.assign(
+                        new Error(
+                            'connect failed for postgres://kodus:not-a-real-password@db:5432',
+                        ),
+                        {
+                            name: 'QueryFailedError',
+                            driverError: { code: '57014' },
+                        },
+                    ),
                 ),
         };
         const incidentManager = {
@@ -39,7 +47,7 @@ describe('WebhookFailureMonitorService', () => {
         expect(incidentManager.pingHeartbeat).not.toHaveBeenCalled();
         expect(incidentManager.failHeartbeat).toHaveBeenCalledWith(
             'API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL',
-            expect.stringContaining('statement timeout'),
+            'Webhook failure monitor could not run: QueryFailedError (57014)',
         );
     });
 });

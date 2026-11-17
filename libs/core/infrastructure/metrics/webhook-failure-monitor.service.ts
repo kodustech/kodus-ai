@@ -112,13 +112,13 @@ export class WebhookFailureMonitorService {
             });
 
             // A monitor that cannot run must not look healthy: without this
-            // the heartbeat only went quiet (issue #2582).
+            // the heartbeat only went quiet (issue #2582). The report leaves
+            // the machine, so it names the error and its code, never the
+            // driver's free-form message; that stays in the log above.
             await this.incidentManager
                 .failHeartbeat(
                     'API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL',
-                    `Webhook failure monitor could not run: ${
-                        error instanceof Error ? error.message : String(error)
-                    }`,
+                    `Webhook failure monitor could not run: ${describeError(error)}`,
                 )
                 .catch(() => undefined);
         } finally {
@@ -229,4 +229,16 @@ export class WebhookFailureMonitorService {
             extra,
         );
     }
+}
+
+function describeError(error: unknown): string {
+    if (!(error instanceof Error)) {
+        return 'unknown error';
+    }
+    const code =
+        (error as { code?: unknown; driverError?: { code?: unknown } })
+            .driverError?.code ?? (error as { code?: unknown }).code;
+    return typeof code === 'string' || typeof code === 'number'
+        ? `${error.name} (${code})`
+        : error.name;
 }
