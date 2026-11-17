@@ -12,6 +12,7 @@ import { carryOver } from '@libs/agents/business-validation/carry-over';
 import {
     BUSINESS_LOGIC_COMMENT_MARKER,
     type RenderContext,
+    signatureText,
 } from '@libs/agents/business-validation/render';
 import {
     buildRun,
@@ -98,48 +99,21 @@ export interface PublishPreview {
 }
 
 /**
- * What a re-check compares: everything the outcome says except the clock each
- * run stamps on it (`readAt`, `updatedAt`). Hashing the whole outcome keeps
- * every rendered field in the comparison - summaries, titles, thin tasks,
- * scope, messages - so only a run that says the same thing matches.
+ * The hash a re-check stores on the comment it wrote, so the next one can tell
+ * whether the text it would write is the same. The input is the comment itself
+ * (`signatureText`), not the outcome it came from: a field that never reaches
+ * the page is not a change the reader can see, and a field the page adds
+ * (`history`, the commit, the read time) is one.
  */
-export function outcomeSignature(
-    outcome: BusinessValidationOutcome,
-    headSha?: string,
-    trigger?: string,
-): string {
-    return createHash('sha256')
-        .update(
-            JSON.stringify({
-                outcome: withoutClock(outcome),
-                // The comment names the commit it read and how the read was
-                // started, so the same verdict at a new head is a new comment.
-                headSha: headSha ?? null,
-                trigger: trigger ?? null,
-            }),
-        )
-        .digest('hex');
-}
-
-function withoutClock(value: unknown): unknown {
-    if (Array.isArray(value)) {
-        return value.map(withoutClock);
-    }
-    if (value && typeof value === 'object') {
-        return Object.fromEntries(
-            Object.entries(value as Record<string, unknown>)
-                .filter(([key]) => key !== 'readAt' && key !== 'updatedAt')
-                .map(([key, entry]) => [key, withoutClock(entry)]),
-        );
-    }
-    return value;
+export function commentSignature(text: string): string {
+    return createHash('sha256').update(text).digest('hex');
 }
 
 export interface PublishResult {
     outcome: BusinessValidationOutcome;
     runId?: string;
     comment: 'created' | 'updated' | 'none';
-    /** A re-check: whether its text differs from the comment it edited. Unset when the earlier text could not be read. */
+    /** A re-check: whether the text it wrote differs from the comment it edited. Unset when that comment carried no signature. */
     changed?: boolean;
 }
 
@@ -165,6 +139,9 @@ export class BusinessLogicPublisher {
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService?: IPullRequestsService,
     ) {}
+
+    /** The PRs with a publish in flight, so two re-checks of one PR cannot interleave. */
+    private readonly queue = new Map<string, Promise<unknown>>();
 
     /** The Business Logic settings, for a door outside the review pipeline. */
     async settingsFor(
@@ -366,7 +343,35 @@ export class BusinessLogicPublisher {
         return { scope, outcome, previousComment, history };
     }
 
-    async publish(input: PublishInput): Promise<PublishResult> {
+    /**
+     * Publish, one run at a time per PR. Two overlapping re-checks (`@kody` and
+     * a push, or two mentions) would otherwise both compare against the same
+     * earlier signature and both report against it, so one of the two replies
+     * describes a change the other one made. Serializing keeps the second run
+     * reading what the first wrote. It is per process: two instances can still
+     * interleave, and even then `changed` only decides a sentence, never the
+     * verdict.
+     */
+    publish(input: PublishInput): Promise<PublishResult> {
+        const key = turnKey(input);
+        if (!key) {
+            return this.publishOne(input);
+        }
+        const earlier = this.queue.get(key) ?? Promise.resolve();
+        const mine = earlier.then(
+            () => this.publishOne(input),
+            () => this.publishOne(input),
+        );
+        const settled = mine.catch(() => undefined);
+        this.queue.set(key, settled);
+        return mine.finally(() => {
+            if (this.queue.get(key) === settled) {
+                this.queue.delete(key);
+            }
+        });
+    }
+
+    private async publishOne(input: PublishInput): Promise<PublishResult> {
         const { request } = input;
         const settings = input.settings ?? DEFAULT_BUSINESS_LOGIC_SETTINGS;
         const { scope, outcome, previousComment, history } =
@@ -381,26 +386,22 @@ export class BusinessLogicPublisher {
             !input.dryRun &&
             this.shouldComment(outcome, settings, previousComment)
         ) {
+            const context: RenderContext = {
+                headSha: input.headSha,
+                history,
+                trigger: input.trigger === 'auto' ? undefined : input.trigger,
+            };
             const body = await this.businessValidationService.commentFor(
                 outcome,
                 request,
-                {
-                    headSha: input.headSha,
-                    history,
-                    trigger:
-                        input.trigger === 'auto' ? undefined : input.trigger,
-                },
+                context,
             );
             if (body) {
                 ({ comment, action, changed } = await this.writeComment(
                     request,
                     body,
                     previousComment,
-                    outcomeSignature(
-                        outcome,
-                        input.headSha,
-                        input.trigger === 'auto' ? undefined : input.trigger,
-                    ),
+                    commentSignature(signatureText(outcome, context)),
                 ));
                 if (action === 'created' && comment) {
                     await this.recordSuggestion(
@@ -495,9 +496,9 @@ export class BusinessLogicPublisher {
                 previous?.comment ??
                 (await this.findByMarker(target, platform));
             if (existing) {
-                // Only a run that recorded its verdict can say whether this
-                // one differs; an older run's text is not comparable to a new
-                // render (it embeds the clock), so the reply stays neutral.
+                // Only a run that recorded a signature says whether this text
+                // differs from the one it wrote; a comment from before that
+                // (or one someone else posted) stays neutral.
                 const changed =
                     typeof previous?.comment?.signature === 'string'
                         ? previous.comment.signature !== signature
@@ -643,6 +644,19 @@ export class BusinessLogicPublisher {
               }
             : undefined;
     }
+}
+
+/** The PR a run publishes to, when it has one to serialize on. */
+function turnKey(input: PublishInput): string | undefined {
+    const { organizationAndTeamData, repository, pullRequest } = input.request;
+    if (!repository?.id || !pullRequest?.number) {
+        return undefined;
+    }
+    return [
+        organizationAndTeamData.organizationId,
+        repository.id,
+        pullRequest.number,
+    ].join(':');
 }
 
 function commentIds(

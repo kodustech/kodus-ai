@@ -2,9 +2,11 @@ import type { BusinessValidationOutcome } from '@libs/agents/business-validation
 import { DEFAULT_BUSINESS_LOGIC_SETTINGS } from '@libs/agents/business-validation/settings';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
+import { signatureText } from '@libs/agents/business-validation/render';
+
 import {
     BusinessLogicPublisher,
-    outcomeSignature,
+    commentSignature,
 } from './business-logic-publisher.service';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
@@ -247,7 +249,9 @@ describe('BusinessLogicPublisher', () => {
             comment: {
                 comment: {
                     id: 77,
-                    signature: outcomeSignature(validated('missing')),
+                    signature: commentSignature(
+                        signatureText(validated('missing')),
+                    ),
                 },
             },
         });
@@ -260,7 +264,9 @@ describe('BusinessLogicPublisher', () => {
             comment: {
                 comment: {
                     id: 77,
-                    signature: outcomeSignature(validated('met')),
+                    signature: commentSignature(
+                        signatureText(validated('met')),
+                    ),
                 },
             },
         });
@@ -268,27 +274,47 @@ describe('BusinessLogicPublisher', () => {
         expect(changed.changed).toBe(true);
     });
 
-    it('compares the verdict, not the render: the run clock does not count as a change', () => {
+    it('compares the comment text, not the clock it was written at', () => {
         const first = validated('missing');
         first.checks[0].readAt = '2026-11-11T10:00:00.000Z';
         const second = validated('missing');
         second.checks[0].readAt = '2026-11-11T12:00:00.000Z';
 
-        expect(outcomeSignature(first)).toBe(outcomeSignature(second));
-
-        second.checks[0].verdict.requirements![0].state = 'met';
-        expect(outcomeSignature(first)).not.toBe(outcomeSignature(second));
-
-        // The comment names the commit it read: a new head is a new comment.
-        expect(outcomeSignature(validated('missing'), 'aaa1111')).not.toBe(
-            outcomeSignature(validated('missing'), 'bbb2222'),
+        expect(commentSignature(signatureText(first))).toBe(
+            commentSignature(signatureText(second)),
         );
 
-        // Every rendered field counts, not only the requirement states.
+        second.checks[0].verdict.requirements![0].state = 'met';
+        expect(commentSignature(signatureText(first))).not.toBe(
+            commentSignature(signatureText(second)),
+        );
+
+        // The comment names the commit it read: a new head is a new comment.
+        expect(
+            commentSignature(
+                signatureText(validated('missing'), { headSha: 'aaa1111' }),
+            ),
+        ).not.toBe(
+            commentSignature(
+                signatureText(validated('missing'), { headSha: 'bbb2222' }),
+            ),
+        );
+
+        // A field the comment does not show is not a change the reader can see:
+        // with the requirements listed as rows, the prose summary never reaches
+        // it, which is why the comparison is the text and not the outcome.
         const reworded = validated('missing');
         reworded.checks[0].verdict.summary = 'different words';
-        expect(outcomeSignature(reworded)).not.toBe(
-            outcomeSignature(validated('missing')),
+        expect(commentSignature(signatureText(reworded))).toBe(
+            commentSignature(signatureText(validated('missing'))),
+        );
+
+        // A field it does show is.
+        const renamed = validated('missing');
+        renamed.checks[0].verdict.requirements![0].requirement =
+            'Order survives a restart';
+        expect(commentSignature(signatureText(renamed))).not.toBe(
+            commentSignature(signatureText(validated('missing'))),
         );
     });
 

@@ -420,6 +420,92 @@ describe('BusinessLogicReplies', () => {
         expect(unchanged.reply).not.toContain('is updated');
     });
 
+    it('does not point at a comment a re-check never wrote', async () => {
+        // `shouldComment` can say no (settings off, dry run), so the run wrote
+        // no comment: the reply must not send the author to read one.
+        const { replies, publisher } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: ['useDrag.ts'],
+                claim: 'covered in useDrag.ts',
+            },
+            {
+                outcome: {
+                    kind: 'task_missing',
+                    references: [],
+                    tracker: 'Linear',
+                    message:
+                        'I could not read SAA-96: the task does not exist.',
+                },
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+        );
+        publisher.publish.mockResolvedValueOnce({
+            outcome: {
+                kind: 'task_missing',
+                references: [],
+                tracker: 'Linear',
+                message: 'I could not read SAA-96: the task does not exist.',
+            },
+            comment: 'none',
+        });
+
+        const unanswered = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+
+        expect(unanswered.reply).toBe('I re-checked.');
+        expect(unanswered.reply).not.toContain('comment');
+    });
+
+    it('says the comment was written when the re-check is the first one', async () => {
+        const { replies, publisher } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: ['useDrag.ts'],
+                claim: 'covered in useDrag.ts',
+            },
+            {
+                outcome: {
+                    kind: 'task_missing',
+                    references: [],
+                    tracker: 'Linear',
+                    message:
+                        'I could not read SAA-96: the task does not exist.',
+                },
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+        );
+        publisher.publish.mockResolvedValueOnce({
+            outcome: {
+                kind: 'task_missing',
+                references: [],
+                tracker: 'Linear',
+                message: 'I could not read SAA-96: the task does not exist.',
+            },
+            comment: 'created',
+        });
+
+        const first = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+
+        expect(first.reply).toBe(
+            'I re-checked. I wrote the Kody · Business Logic comment on this pull request.',
+        );
+        expect(first.reply).not.toContain('is updated');
+    });
+
     it('re-checks a dispute with what the author pointed at and says whether it changed (UC-38)', async () => {
         const revalidated = {
             outcome: {
