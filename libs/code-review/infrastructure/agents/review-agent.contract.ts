@@ -709,11 +709,11 @@ export interface AgentLoopOutput {
     coverage: CoverageSummary;
     verification?: VerificationTraceSummary | null;
     anomalies: AgentAnomalySummary;
+    /** How each heavy-mode lens ended. Absent when no lens ran. */
+    heavyLensOutcomes?: HeavyLensOutcome[];
     /** New findings each finder pass contributed (base, synthesis-rescue).
      *  Attribution the merged total hides: a pass costing a full run and
      *  adding nothing looks identical otherwise. */
-    /** How each heavy-mode lens ended. Absent when no lens ran. */
-    heavyLensOutcomes?: HeavyLensOutcome[];
     recallPasses?: Array<{
         label: string;
         added: number;
