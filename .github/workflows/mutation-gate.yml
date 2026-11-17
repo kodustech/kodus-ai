@@ -13,6 +13,8 @@ name: "Backend: Mutation Gate"
 
 on:
     pull_request:
+        branches:
+            - main
         paths:
             - "libs/**/*.ts"
             - "apps/**/*.ts"
