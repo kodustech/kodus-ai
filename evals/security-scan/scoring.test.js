@@ -11,6 +11,14 @@ test('duplicate reports cannot inflate listed precision', () => {
     const { assignments } = assignAdvisories([finding, {...finding}], [advisory('a')]);
     assert.equal(assignments.filter(Boolean).length, 1);
 });
+test('how many advisories are found does not depend on finding order', () => {
+    const at = (id, line) => ({ id, class: 'authz', locations: [{ file: 'routes.ts', line: String(line) }] });
+    const wide = { ...finding, startLine: 25, endLine: 25 }; // reaches lines 10 and 40
+    const narrow = { ...finding, startLine: 5, endLine: 5 }; // reaches line 10 only
+    for (const order of [[wide, narrow], [narrow, wide]]) {
+        assert.equal(assignAdvisories(order, [at('a', 10), at('b', 40)]).consumed.size, 2);
+    }
+});
 test('another class at the same location is not a listed hit', () => {
     assert.equal(assignAdvisories([{...finding, vulnerabilityClass: 'ssrf'}], [advisory('a')]).consumed.size, 0);
 });

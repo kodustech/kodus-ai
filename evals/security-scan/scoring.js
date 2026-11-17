@@ -1,5 +1,5 @@
 const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
-const SCORING_VERSION = 4;
+const SCORING_VERSION = 5;
 
 function findingKey(caseId, f) {
     return `${caseId}|${f.vulnerabilityClass}|${norm(f.filePath)}|${f.symbol || ''}|${f.startLine}`;
@@ -21,15 +21,28 @@ function matches(finding, advisory) {
     });
 }
 
-/** Each finding consumes at most one advisory, and each advisory only once. */
+/**
+ * Each finding consumes at most one advisory, and each advisory only once.
+ * A maximum matching (augmenting paths), so how many advisories are found
+ * does not depend on the order the findings come back in.
+ */
 function assignAdvisories(findings, advisories) {
-    const consumed = new Set();
-    const assignments = findings.map(f => {
-        const advisory = advisories.find(a => !consumed.has(a) && matches(f, a));
-        if (advisory) consumed.add(advisory);
-        return advisory;
-    });
-    return { assignments, consumed };
+    const holder = new Map(); // advisory -> index of the finding holding it
+    const claim = (i, seen) => {
+        for (const a of advisories) {
+            if (seen.has(a) || !matches(findings[i], a)) continue;
+            seen.add(a);
+            if (!holder.has(a) || claim(holder.get(a), seen)) {
+                holder.set(a, i);
+                return true;
+            }
+        }
+        return false;
+    };
+    findings.forEach((_, i) => claim(i, new Set()));
+    const assignments = findings.map(() => undefined);
+    for (const [a, i] of holder) assignments[i] = a;
+    return { assignments, consumed: new Set(holder.keys()) };
 }
 
 /** A verdict certifies this exact claim, not every future claim at its location. */
