@@ -40,8 +40,9 @@ const batchOf = (e: SpecialistAgentEntry) => e.batchIndex ?? 1;
 
 /**
  * The row for the lenses as they stand. `stoppedBatches` are the batches whose
- * generalist failed, which stops that batch's lenses: their entries leave the
- * count, and the row reads stopped only when no batch is left.
+ * generalist failed, which stops that batch's lenses: their entries stay
+ * listed as stopped but leave the count, and the row reads stopped only when
+ * no batch is left.
  */
 export function summarizeSpecialists(
     entries: SpecialistAgentEntry[],
@@ -49,6 +50,12 @@ export function summarizeSpecialists(
 ): SpecialistsRow {
     const title = 'Specialist Agents';
     const live = entries.filter((e) => !stoppedBatches.has(batchOf(e)));
+    // A stopped batch's lenses stay listed, as stopped, out of the counts.
+    const listed = entries.map((e) =>
+        stoppedBatches.has(batchOf(e)) && e.status === 'running'
+            ? { ...e, status: 'stopped' as const }
+            : e,
+    );
     const lenses = new Map<string, SpecialistAgentEntry[]>();
     for (const e of live) {
         lenses.set(e.label, [...(lenses.get(e.label) ?? []), e]);
@@ -59,21 +66,21 @@ export function summarizeSpecialists(
         return {
             status: AutomationStatus.SKIPPED,
             label: `${title} — stopped because the Generalist Agent failed`,
-            specialists: live,
+            specialists: listed,
         };
     }
     if (total === 0) {
         return {
             status: AutomationStatus.SKIPPED,
             label: `${title} — no agent reported`,
-            specialists: live,
+            specialists: listed,
         };
     }
     if (live.some((e) => e.status === 'running')) {
         return {
             status: AutomationStatus.IN_PROGRESS,
             label: `${title} — running ${total} agents`,
-            specialists: live,
+            specialists: listed,
         };
     }
 
@@ -96,7 +103,7 @@ export function summarizeSpecialists(
     return {
         status,
         label: `${title} — ${ranText} · ${findings} ${findings === 1 ? 'finding' : 'findings'}${stoppedText}`,
-        specialists: live,
+        specialists: listed,
     };
 }
 

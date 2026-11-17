@@ -137,7 +137,9 @@ export interface AgentProgressEvent {
 export interface SpecialistAgentEntry {
     /** `lens-<id>`. */
     label: string;
-    status: 'running' | 'success' | 'failed' | 'no-result';
+    /** `stopped`: the generalist of its batch failed, which stops the
+     *  lenses before they finish. */
+    status: 'running' | 'success' | 'failed' | 'no-result' | 'stopped';
     batchIndex?: number;
     /** Findings it returned, before verify. */
     found?: number;

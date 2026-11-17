@@ -94,6 +94,23 @@ describe('summarizeSpecialists', () => {
         expect(row.label).toBe(
             'Specialist Agents — stopped because the Generalist Agent failed',
         );
+        expect(row.specialists).toEqual([
+            expect.objectContaining({ label: 'lens-a', status: 'stopped' }),
+        ]);
+    });
+
+    it("lists a stopped batch's lenses without counting them", () => {
+        const row = summarizeSpecialists(
+            [done('lens-a', 'running', 0, 1), done('lens-a', 'success', 2, 2)],
+            new Set([1]),
+        );
+        expect(row.label).toBe(
+            'Specialist Agents — 1 ran · 2 findings · 1 batch stopped because the Generalist Agent failed',
+        );
+        expect(row.specialists.map((e) => e.status)).toEqual([
+            'stopped',
+            'success',
+        ]);
     });
 
     it('never reads an entry with no lens as a success', () => {

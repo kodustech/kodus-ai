@@ -3,7 +3,7 @@ import { cn } from "src/core/utils/components";
 /** One heavy-mode lens on the "Specialist Agents" timeline entry, per batch. */
 interface SpecialistEntry {
     label: string;
-    status: "running" | "success" | "failed" | "no-result";
+    status: "running" | "success" | "failed" | "no-result" | "stopped";
     batchIndex?: number;
     found?: number;
     kept?: number;
@@ -45,6 +45,8 @@ const STATUS_RANK: Record<SpecialistEntry["status"], number> = {
     "failed": 2,
     "no-result": 1,
     "success": 0,
+    // Stopped with its batch's generalist: shown only when no batch ran it.
+    "stopped": -1,
 };
 
 const sum = (values: Array<number | undefined>) =>
@@ -69,14 +71,14 @@ export const getSpecialists = (metadata?: unknown): SpecialistRow[] | null => {
         const status = entries.reduce<SpecialistEntry["status"]>(
             (worst, e) =>
                 STATUS_RANK[e.status] > STATUS_RANK[worst] ? e.status : worst,
-            "success",
+            entries[0].status,
         );
         return {
             label,
             name: nameOf(label),
             status,
             kept:
-                status === "running"
+                status === "running" || status === "stopped"
                     ? undefined
                     : sum(entries.map((e) => e.kept)),
             durationMs: sum(entries.map((e) => e.durationMs)),
@@ -99,6 +101,7 @@ const DOT: Record<SpecialistEntry["status"], string> = {
     "failed": "bg-danger",
     "no-result": "bg-danger",
     "running": "bg-info",
+    "stopped": "bg-text-tertiary",
 };
 
 export const SpecialistAgentsTable = ({ rows }: { rows: SpecialistRow[] }) => {
@@ -143,6 +146,11 @@ export const SpecialistAgentsTable = ({ rows }: { rows: SpecialistRow[] }) => {
                                         />
                                         {r.name}
                                     </span>
+                                    {r.status === "stopped" && !r.error && (
+                                        <span className="block pl-3.5">
+                                            Stopped
+                                        </span>
+                                    )}
                                     {r.error && (
                                         <span className="text-danger block pl-3.5">
                                             {r.error}
