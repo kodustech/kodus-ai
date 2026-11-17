@@ -1658,7 +1658,7 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId: headSha,
                             changeType: change.changeType,
-                            rethrowRateLimit: true,
+                            rethrowRetryable: true,
                         }),
                     ),
                 ),
@@ -1860,8 +1860,8 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
-                    // A rate-limited file is not an unchanged one
-                    rethrowRateLimit: true,
+                    // A rate-limited or unreachable file is not an unchanged one
+                    rethrowRetryable: true,
                 });
 
                 if (fileDiff) {
@@ -4304,19 +4304,22 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
-                            rethrowRateLimit: true,
+                            rethrowRetryable: true,
                         }),
                     ),
                 ),
             );
 
-            // A rate-limited file is not a missing one: the whole listing
-            // fails so the job retries instead of reviewing part of the PR.
-            const rateLimited = settled.find(
+            // A rate-limited or unreachable file is not a missing one: the
+            // whole listing fails so the job retries instead of reviewing
+            // part of the PR.
+            const retryable = settled.find(
                 (result): result is PromiseRejectedResult =>
-                    result.status === 'rejected' && is429Error(result.reason),
+                    result.status === 'rejected' &&
+                    (is429Error(result.reason) ||
+                        isTransientFetchError(result.reason)),
             );
-            if (rateLimited) throw rateLimited.reason;
+            if (retryable) throw retryable.reason;
 
             const successfulFiles: Array<
                 NonNullable<
@@ -4422,7 +4425,7 @@ export class AzureReposService implements Omit<
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
         /** Let a rate limit through instead of answering null. */
-        rethrowRateLimit?: boolean;
+        rethrowRetryable?: boolean;
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4570,7 +4573,12 @@ export class AzureReposService implements Omit<
                 content: modifiedFileContent, // Added content
             };
         } catch (error: any) {
-            if (params.rethrowRateLimit && is429Error(error)) throw error;
+            if (
+                params.rethrowRetryable &&
+                (is429Error(error) || isTransientFetchError(error))
+            ) {
+                throw error;
+            }
             this.logger.error({
                 message: `Error generating diff for file "${filePath}" between commits "${baseCommitId}" and "${targetCommitId}"`,
                 context: this._generateFileDiffForAzure.name,

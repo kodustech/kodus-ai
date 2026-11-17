@@ -87,7 +87,7 @@ describe('AzureReposService listings under a rate limit', () => {
             } as any),
         ).rejects.toMatchObject({ response: { status: 429 } });
         expect(generate).toHaveBeenCalledWith(
-            expect.objectContaining({ rethrowRateLimit: true }),
+            expect.objectContaining({ rethrowRetryable: true }),
         );
     });
 
@@ -103,7 +103,7 @@ describe('AzureReposService listings under a rate limit', () => {
             } as any),
         ).rejects.toMatchObject({ response: { status: 429 } });
         expect(generate).toHaveBeenCalledWith(
-            expect.objectContaining({ rethrowRateLimit: true }),
+            expect.objectContaining({ rethrowRetryable: true }),
         );
     });
 
@@ -151,6 +151,25 @@ describe('AzureReposService listings under a rate limit', () => {
         );
         await expect(
             full.getFilesByPullRequestId({
+                organizationAndTeamData: org,
+                repository,
+                prNumber: 7,
+            } as any),
+        ).rejects.toThrow('fetch failed');
+    });
+
+    it('getFilesByPullRequestId lets a transport failure on one file through the real diff builder', async () => {
+        const { service, generate } = makeService('none');
+        generate.mockRestore();
+        const helper = (service as any).azureReposRequestHelper;
+        helper.mapAzureStatusToFileChangeStatus = () => 'modified';
+        helper.getFileContent = jest.fn(async (p: any) => {
+            if (p.filePath === '/b.ts') throw new TypeError('fetch failed');
+            return { content: p.commitId === 'head' ? 'b' : 'a' };
+        });
+
+        await expect(
+            service.getFilesByPullRequestId({
                 organizationAndTeamData: org,
                 repository,
                 prNumber: 7,
