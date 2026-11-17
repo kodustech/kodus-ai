@@ -1,0 +1,18 @@
+# The automatic rollback of `cell update` (internal/cellupdate watch.go).
+# While a new release is on probation (`cell update` wrote
+# /opt/kodus-cell/update-pending.json right before its swap), the release
+# before it looks once a minute: a hello accepted by the hub after the swap
+# keeps the new release; none within the window (-rollback-window, 10
+# minutes by default) puts current back on the release before, with its own
+# cell.env and units, and restarts kodus-cell.target. It runs from
+# previous/bin/cell, never from the release on probation, so a new cell that
+# crashes at start cannot keep itself installed. It reads local files only.
+[Unit]
+Description=Kody Runtime cell update watch (rolls back a release that never reached the hub)
+ConditionPathExists=/opt/kodus-cell/update-pending.json
+
+[Service]
+Type=oneshot
+ExecStart=/opt/kodus-cell/previous/bin/cell update-watch -root /opt/kodus-cell -env-file /etc/kodus/cell/cell.env -units-dir /etc/systemd/system
+# A rollback restarts the cell, whose stop may take TimeoutStopSec=120.
+TimeoutStartSec=10min

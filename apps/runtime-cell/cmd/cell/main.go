@@ -60,6 +60,11 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "update" {
 		os.Exit(cellupdate.Run(os.Args[2:], os.Stdout, os.Stderr, cellStateDir))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "update-watch" {
+		// Run by the host's kodus-cell-update-watch.timer from the release
+		// before an update, never by the one on probation.
+		os.Exit(cellupdate.RunWatch(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "preflight" {
 		os.Exit(runPreflight(os.Args[2:], os.Stdout, os.Stderr, hostPreflightProbes()))
 	}

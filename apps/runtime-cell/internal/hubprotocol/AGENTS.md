@@ -1,6 +1,6 @@
 # apps/runtime-cell/internal/hubprotocol
 
-What a cell host keeps of the hub its cell last reached, for `cell update` to refuse a release that hub would refuse at hello (the skew policy, [cell-distribution.md](../../../../docs/runtime/cell-distribution.md) "Keeping hub, worker, API and cell compatible"). The agent writes it after every accepted hello (`internal/agent` `recordHubProtocol`); `internal/cellupdate` reads it.
+What a cell host keeps of the hub its cell last reached, for `cell update` to refuse a release that hub would refuse at hello (the skew policy, [cell-distribution.md](../../../../docs/runtime/cell-distribution.md) "Keeping hub, worker, API and cell compatible"). The agent writes it after every accepted hello (`internal/agent` `recordHubProtocol`); `internal/cellupdate` reads it, for the skew check and as the health signal of the automatic rollback (`at` after the swap, `watch.go`).
 
 ## Owns
 - `state.go` `StateName` (`hub-protocol.state`, under the cell's `-state-dir`), `State` (the version the hub chose, the ack's `cellProtocols` as `Accepts`, when), `Range`, `Save` (atomic rename, `0600`), `Load`, `State.Accepted`.
@@ -12,6 +12,7 @@ What a cell host keeps of the hub its cell last reached, for `cell update` to re
 ## Rules and limits
 - A leaf: imports no other package of the cell.
 - No secret goes in the file: two numbers and a time.
+- `at` is the cell host's clock (`time.Now`), the same clock `cell update` stamps its swap with. A new field makes an older cell's `Load` refuse the file, so the rollback watch takes a state it cannot read by its modification time.
 - `Load` refuses a file that does not read as a state (unknown field, no version, an inverted range) naming it, and never takes it for none; no file is not an error.
 - A hub that names no range predates the field and speaks protocol 1: `Accepted` takes it at the version it chose, one protocol older at most.
 

@@ -9,6 +9,8 @@
 //	<root>/releases/<release>-<id>/bin/<command>
 //	<root>/current   -> the release the units run
 //	<root>/previous  -> the one before, for `cell-host.sh rollback`
+//	<root>/update-pending.json  the release on probation (watch.go)
+//	<root>/rolled-back.json     what the watch rolled back, refused again
 //
 // It is run by the release already installed, not by the one it installs:
 // a binary never vouches for itself. Nothing in <root> changes until every
@@ -18,7 +20,9 @@
 // older, vulnerable release verifies as well as the newest. Before the swap,
 // the staged release's own `cell preflight` checks the host with the cell's
 // config (preflight.go): a host the new release would refuse keeps the one
-// it runs.
+// it runs. After the swap the new release has a window to complete an
+// accepted hello with the hub, or `cell update-watch`, run by the release
+// before, puts that one back (watch.go).
 package cellupdate
 
 import (
@@ -86,6 +90,21 @@ type Options struct {
 	RequireProtocol bool
 	// Notes gets what the update could not check and why; nil discards it.
 	Notes io.Writer
+	// RollbackWindow is how long the new release has, after the swap, to
+	// complete an accepted hello with the hub before `cell update-watch`
+	// returns the host to the release before (watch.go). Zero: no watch.
+	RollbackWindow time.Duration
+	// HelloState is the cell's hub-protocol.state, which its agent writes
+	// after every accepted hello: the watch's health signal. Required with
+	// a RollbackWindow.
+	HelloState string
+	// RetryRolledBack installs a release the watch rolled back on this
+	// host: the operator's explicit choice, never a default.
+	RetryRolledBack bool
+	// Updater is the cell binary running the update, symlinks resolved.
+	// When set, the watch is armed only if it is the installed release's
+	// own: the watch runs previous/bin/cell, which must know update-watch.
+	Updater string
 }
 
 // Install verifies the release in o.From and makes it current, keeping the
@@ -100,6 +119,9 @@ func Install(o Options) (string, error) {
 	}
 	if o.Now == nil {
 		o.Now = time.Now
+	}
+	if o.RollbackWindow > 0 && o.HelloState == "" && !o.VerifyOnly {
+		return "", errors.New("a rollback window needs the cell's " + hubprotocol.StateName + " to watch the new release's hello in")
 	}
 	seen, err := loadIndexState(o.Root)
 	if err != nil {
@@ -143,16 +165,19 @@ func Install(o Options) (string, error) {
 	if err := checkOrder(o.Installed, o.Release, o.AllowDowngrade); err != nil {
 		return "", err
 	}
+	releases := filepath.Join(o.Root, "releases")
+	dest := filepath.Join(releases, strings.ReplaceAll(o.Release, "/", "_")+"-"+files["cell"].sha[:12])
+	if err := checkProbation(o, dest); err != nil {
+		return "", err
+	}
 	// What this host saw only grows: written before the swap, so a release
 	// that verified under this index never makes the host forget a revocation.
 	if err := saveIndexState(o.Root, indexState{Issued: maxTime(seen.Issued, ix.Issued), RevokedKeys: revoked}); err != nil {
 		return "", err
 	}
-	releases := filepath.Join(o.Root, "releases")
 	if err := os.MkdirAll(releases, 0o755); err != nil { //nolint:gosec // G301: binaries the units run, read by their users
 		return "", err
 	}
-	dest := filepath.Join(releases, strings.ReplaceAll(o.Release, "/", "_")+"-"+files["cell"].sha[:12])
 	if err := stage(dest, releases, o.From, files); err != nil {
 		return "", err
 	}
@@ -162,7 +187,66 @@ func Install(o Options) (string, error) {
 			return "", fmt.Errorf("the host preflight of %s failed (%w): the installed release stays current, and %s is kept for the next try", o.Release, err, dest)
 		}
 	}
+	if err := armWatch(o, dest); err != nil {
+		return "", err
+	}
 	return dest, swap(o.Root, dest)
+}
+
+// checkProbation refuses, before anything changes, a release the watch
+// rolled back on this host (unless RetryRolledBack), and any other release
+// while the one current has not connected since its swap: the update would
+// make an unproven release the one a rollback returns to.
+func checkProbation(o Options, dest string) error {
+	if !o.RetryRolledBack {
+		r, listed, err := rolledBackEntry(o.Root, dest)
+		if err != nil {
+			return err
+		}
+		if listed {
+			return refuseOrder("release %s (%s) was rolled back on this host at %s: %s; -retry-rolled-back installs it again", o.Release, filepath.Base(dest), r.At.UTC().Format(time.RFC3339), r.Reason)
+		}
+	}
+	p, waiting, err := unconfirmed(o.Root)
+	if err != nil {
+		return err
+	}
+	if waiting && p.Dir != dest {
+		return refuseOrder("release %s, swapped in at %s, has not completed an accepted hello with the hub yet: wait for it (until %s, after which the host returns to %s by itself), or roll back by hand first", p.Release, p.SwappedAt.UTC().Format(time.RFC3339), p.Deadline.UTC().Format(time.RFC3339), releaseNameOf(p.Previous))
+	}
+	return nil
+}
+
+// armWatch writes the watch's marker right before the swap, when there is
+// a release to return to: a stop after it and before the swap leaves a
+// marker whose release is not current, which the watch drops.
+func armWatch(o Options, dest string) error {
+	cur, err := os.Readlink(filepath.Join(o.Root, "current"))
+	if errors.Is(err, os.ErrNotExist) || cur == dest {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// The marker of the update before this one is done with: its release
+	// connected (checkProbation refuses otherwise) and is about to be previous.
+	if err := removePending(o.Root); err != nil {
+		return err
+	}
+	if o.RollbackWindow <= 0 {
+		return nil
+	}
+	if o.Updater != "" {
+		installed, err := filepath.EvalSymlinks(releasePath(o.Root, cur))
+		if err != nil || !strings.HasPrefix(o.Updater, installed+string(filepath.Separator)) {
+			note(o.Notes, "the automatic rollback is not armed: this cell update runs from %s, not from the installed release %s, whose cell would run the watch; run it as %s", o.Updater, cur, filepath.Join(cur, "bin", "cell"))
+			return nil
+		}
+	}
+	now := o.Now().UTC()
+	return writeJSON(filepath.Join(o.Root, PendingName), pending{
+		Release: o.Release, Dir: dest, Previous: cur, SwappedAt: now, Deadline: now.Add(o.RollbackWindow), HelloState: o.HelloState,
+	})
 }
 
 type signedFile struct{ name, sha string }
@@ -288,11 +372,23 @@ func Run(args []string, stdout, stderr io.Writer, stateDirOf func(config string)
 	stateDir := fs.String("state-dir", "", "the cell's -state-dir, where its agent keeps "+hubprotocol.StateName+" (what the hub accepted at the last hello); default: the one -preflight-config gives the cell")
 	skipProtocol := fs.Bool("skip-protocol-check", false, "install without checking the release's protocol against what the hub last accepted")
 	requireProtocol := fs.Bool("require-protocol", false, "refuse a release that does not say which protocol it speaks (no "+releasesig.ProtocolName+" in its "+releasesig.ManifestName+")")
+	window := fs.Duration("rollback-window", DefaultRollbackWindow, "how long the new release has, after the swap, to complete an accepted hello with the hub before kodus-cell-update-watch.timer (`cell update-watch`) returns the host to the release before; 0: no watch")
+	retryRolledBack := fs.Bool("retry-rolled-back", false, "install a release this host rolled back by itself ("+RolledBackName+")")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if *from == "" || *release == "" {
 		_, _ = fmt.Fprintln(stderr, "cell update: -from and -release are required")
+		return 2
+	}
+	// The host preflight is not optional by omission: an update with no
+	// config to judge the host by is refused, and skipping it is said.
+	if !*verifyOnly && !*skipPreflight && *preflightConfig == "" {
+		_, _ = fmt.Fprintln(stderr, "cell update: refused: no -preflight-config and no $KODUS_CELL_CONFIG, so the staged release's host preflight cannot run: give the cell's -config file with -preflight-config (or set KODUS_CELL_CONFIG), or pass -skip-preflight to install without it")
+		return 2
+	}
+	if *window < 0 {
+		_, _ = fmt.Fprintln(stderr, "cell update: -rollback-window must not be negative")
 		return 2
 	}
 	keys, err := loadKeys(*keysFile)
@@ -301,23 +397,36 @@ func Run(args []string, stdout, stderr io.Writer, stateDirOf func(config string)
 		return 1
 	}
 	o := Options{Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir,
-		SkipProtocolCheck: *skipProtocol, RequireProtocol: *requireProtocol, Notes: stderr}
-	if !*skipProtocol {
+		SkipProtocolCheck: *skipProtocol, RequireProtocol: *requireProtocol, Notes: stderr, RetryRolledBack: *retryRolledBack}
+	watch := *window > 0 && !*verifyOnly
+	if !*skipProtocol || watch {
 		dir := *stateDir
 		if dir == "" && stateDirOf != nil {
 			if dir, err = stateDirOf(*preflightConfig); err != nil {
-				_, _ = fmt.Fprintf(stderr, "cell update: the cell's state dir under config %q: %v; give -state-dir, or -skip-protocol-check\n", *preflightConfig, err)
+				_, _ = fmt.Fprintf(stderr, "cell update: the cell's state dir under config %q: %v; give -state-dir (or -skip-protocol-check with -rollback-window 0)\n", *preflightConfig, err)
 				return 1
 			}
 		}
 		if dir != "" {
-			o.HubState = filepath.Join(dir, hubprotocol.StateName)
+			if !*skipProtocol {
+				o.HubState = filepath.Join(dir, hubprotocol.StateName)
+			}
+			if watch {
+				o.HelloState, o.RollbackWindow = filepath.Join(dir, hubprotocol.StateName), *window
+				if o.Updater, err = runningCell(); err != nil {
+					_, _ = fmt.Fprintln(stderr, "cell update: which binary runs this update:", err)
+					return 1
+				}
+			}
+		} else if watch {
+			_, _ = fmt.Fprintln(stderr, "cell update: no state dir to watch the new release's first hello in: give -state-dir, or -rollback-window 0")
+			return 2
 		}
 	}
 	switch {
-	case *skipPreflight || *verifyOnly:
-	case *preflightConfig == "":
-		_, _ = fmt.Fprintln(stderr, "cell update: no -preflight-config (or KODUS_CELL_CONFIG): the staged release's host preflight does not run")
+	case *verifyOnly:
+	case *skipPreflight:
+		_, _ = fmt.Fprintln(stderr, "cell update: note: -skip-preflight: the staged release's host preflight does not run")
 	default:
 		o.Preflight = StagedPreflight(*preflightConfig, stdout, stderr)
 	}
@@ -328,10 +437,23 @@ func Run(args []string, stdout, stderr io.Writer, stateDirOf func(config string)
 	}
 	if *verifyOnly {
 		_, _ = fmt.Fprintf(stdout, "release %s verified\n", *release)
-	} else {
-		_, _ = fmt.Fprintf(stdout, "release %s installed at %s; restart kodus-cell.target to run it\n", *release, dest)
+		return 0
+	}
+	_, _ = fmt.Fprintf(stdout, "release %s installed at %s; restart kodus-cell.target to run it\n", *release, dest)
+	if p, ok, err := loadPending(*root); err == nil && ok && p.Dir == dest {
+		_, _ = fmt.Fprintf(stdout, "release %s has %s (until %s) to complete an accepted hello with the hub; otherwise kodus-cell-update-watch.timer returns this host to %s by itself\n",
+			*release, p.Deadline.Sub(p.SwappedAt), p.Deadline.Format(time.RFC3339), releaseNameOf(p.Previous))
 	}
 	return 0
+}
+
+// runningCell is the binary running `cell update`, symlinks resolved.
+var runningCell = func() (string, error) {
+	p, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(p)
 }
 
 // installedVersion is the release running `cell update`: the installed one.

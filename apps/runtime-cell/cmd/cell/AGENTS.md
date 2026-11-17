@@ -1,6 +1,6 @@
 # apps/runtime-cell/cmd/cell
 
-The cell binary: the composition root of the cell agent ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It parses the settings, picks and opens one driver, builds `agent.Config` from its parts and runs the agent, the driver's sweep and the side loops until SIGTERM. It also carries the host's one-shot subcommands (`register`, `renew`, `update`, `preflight`, `local-pki`, `issue-cert`, `template`, `probe`, and `extract`, the no-network tarball child).
+The cell binary: the composition root of the cell agent ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It parses the settings, picks and opens one driver, builds `agent.Config` from its parts and runs the agent, the driver's sweep and the side loops until SIGTERM. It also carries the host's one-shot subcommands (`register`, `renew`, `update`, `update-watch`, `preflight`, `local-pki`, `issue-cert`, `template`, `probe`, and `extract`, the no-network tarball child).
 
 ## Owns
 - Settings: `config.go` `settings.register`, `parseSettings`; the config file (`-config`, YAML or JSON) sets any registered flag by name (`applyFile`, `loadFile`), and a flag wins over the file.
@@ -9,7 +9,7 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 - What the agent gets beside the driver: `main.go` `buildAgent` (observers, preview tunnel, egress control with `policyPusher`, alert feeds, denied and outbound readers), `memory.go` `observeDriver` (memory admission budget), `disk.go` `diskWatch`.
 - Trust: `roots.go` `loadRoots` (hub CA, cell-local CA, injector CA; refuses two that share a key), `trust.go` `trustSettings.write` (the files a claim with org secrets mounts), `main.go` `resolveCellID` (the id is the certificate's CN).
 - Shutdown order: `serve.go` `serveCell` (agent and loops stop, `sweepExpired` ends, then the driver closes, all within `shutdownGrace`).
-- `cell update`'s state dir: `config.go` `cellStateDir` (the `-state-dir` the cell runs with under a config file, by `parseSettings`), and `agent.Config.HubProtocolState` at `<state-dir>/hub-protocol.state` (`main.go`).
+- `cell update`'s state dir: `config.go` `cellStateDir` (the `-state-dir` the cell runs with under a config file, by `parseSettings`), and `agent.Config.HubProtocolState` at `<state-dir>/hub-protocol.state` (`main.go`): the skew check reads it, and `cell update-watch` (`cellupdate.RunWatch`, run by the host's timer from the release before an update) takes its `at` after the swap as the new release's health signal.
 - Host preflight: `preflight.go` `runPreflight` parses the cell's own flags and `-config` (`parseSettings`, `selectDriver`), then runs `internal/preflight`'s checks for the driver they resolve to, with the host's probes (`hostPreflightProbes`) and the drivers' own rules (`dockergvisor.ValidateClaimLimitDaemon`, `microvm.Prerequisites` on `microvmConfig`, the settings `openMicroVM` opens with).
 - Enrollment commands: `register.go` `runEnroll`; host PKI: `localpki.go`; template export and import: `template.go` `runTemplate`.
 

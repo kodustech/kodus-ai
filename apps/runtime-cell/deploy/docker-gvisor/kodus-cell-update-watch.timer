@@ -1,0 +1,12 @@
+# Wall-clock minutes, not OnUnitActiveSec: the service is skipped by its
+# condition whenever no update is on probation, and a calendar timer fires
+# regardless of how the last run ended.
+[Unit]
+Description=Look every minute at a cell release on probation after cell update
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

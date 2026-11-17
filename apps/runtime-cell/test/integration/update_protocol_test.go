@@ -100,3 +100,60 @@ func TestCellUpdateRefusesAReleaseTheHubTheCellReachedWouldRefuse(t *testing.T) 
 		t.Fatalf("a release the hub accepts was refused: %v", err)
 	}
 }
+
+// The automatic rollback's health signal is the agent's own write: after
+// `cell update` swaps with a rollback window, a hello the agent made before
+// the swap does not keep the new release (the watch rolls it back once the
+// window is over), and the agent's next accepted hello after the swap does.
+func TestTheWatchReadsTheAgentsHelloAfterTheSwap(t *testing.T) {
+	w := newWorld(t)
+	waitState := func(after time.Time) hubprotocol.State {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			s, ok, err := hubprotocol.Load(w.hubState)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok && s.At.After(after) {
+				return s
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no hello after %s in %s:\n%s", after, w.hubState, w.logs.String())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitState(time.Time{})
+	pv := int64(protocol.ProtocolVersion)
+	install := func(root, name string, window time.Duration) {
+		t.Helper()
+		from, keys := signedRelease(t, name, releasesig.Protocol{Min: pv, Max: pv})
+		if _, err := cellupdate.Install(cellupdate.Options{Root: root, From: from, Release: name, Arch: "amd64", Keys: keys,
+			HubState: w.hubState, HelloState: w.hubState, RollbackWindow: window}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The only hello on record is from before the swap: rolled back once the window ends.
+	stale := t.TempDir()
+	install(stale, "v9.0.0", 0)
+	install(stale, "v9.1.0", time.Minute)
+	got, err := cellupdate.Watch(cellupdate.WatchOptions{Root: stale, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }})
+	if err != nil || got != cellupdate.RolledBack {
+		t.Fatalf("a hello from before the swap kept the release: %s %v", got, err)
+	}
+
+	root := t.TempDir()
+	install(root, "v9.0.0", 0)
+	swapped := time.Now()
+	install(root, "v9.1.0", time.Minute)
+	if got, err := cellupdate.Watch(cellupdate.WatchOptions{Root: root}); err != nil || got != cellupdate.Waiting {
+		t.Fatalf("before the next hello: %s %v", got, err)
+	}
+	w.hub.Disconnect("cell-1")
+	waitState(swapped)
+	if got, err := cellupdate.Watch(cellupdate.WatchOptions{Root: root, Now: func() time.Time { return time.Now().Add(time.Hour) }}); err != nil || got != cellupdate.Kept {
+		t.Fatalf("after the agent's hello: %s %v", got, err)
+	}
+}

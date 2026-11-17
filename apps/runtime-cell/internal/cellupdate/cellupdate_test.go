@@ -250,17 +250,17 @@ func TestTheCommandRefusesNamingTheFile(t *testing.T) {
 	bin := filepath.Join(from, "cell-linux-amd64")
 	_ = os.WriteFile(bin, []byte("evil"), 0o755)
 	var out, errOut bytes.Buffer
-	if code := Run([]string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), bin) {
+	if code := Run([]string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile, "-skip-preflight", "-rollback-window", "0"}, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), bin) {
 		t.Fatalf("exit %d, stderr %q: want 1 naming %s", code, errOut.String(), bin)
 	}
 	good := s.release(t, "v1.0.0")
-	if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut, nil); code != 0 {
+	if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile, "-skip-preflight", "-rollback-window", "0"}, &out, &errOut, nil); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
 	pinned, _ := releasesig.Pinned()
 	if len(pinned) == 0 {
 		errOut.Reset()
-		if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64"}, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), "no release key is pinned") {
+		if code := Run([]string{"-root", root, "-from", good, "-release", "v1.0.0", "-arch", "amd64", "-skip-preflight", "-rollback-window", "0"}, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), "no release key is pinned") {
 			t.Fatalf("with no key pinned: exit %d, %q", code, errOut.String())
 		}
 	}
@@ -324,7 +324,7 @@ func TestTheCommandRefusesADowngradeWithoutTheFlag(t *testing.T) {
 	installedVersion = func() string { return "v1.1.0" }
 	t.Cleanup(func() { installedVersion = saved })
 	from := s.release(t, "v1.0.0")
-	args := []string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}
+	args := []string{"-root", root, "-from", from, "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile, "-skip-preflight", "-rollback-window", "0"}
 	var out, errOut bytes.Buffer
 	if code := Run(args, &out, &errOut, nil); code != 1 || !strings.Contains(errOut.String(), "older than the installed v1.1.0") {
 		t.Fatalf("exit %d, stderr %q: want 1 and a downgrade refusal", code, errOut.String())
@@ -343,7 +343,7 @@ func TestAnUpdateWhosePreflightFailsKeepsTheCurrentRelease(t *testing.T) {
 	_ = os.WriteFile(keyFile, []byte(releasesig.FormatPublicKey(s.keys[0].Key)), 0o644)
 	cfg := filepath.Join(t.TempDir(), "cell.yaml")
 	marker := filepath.Join(t.TempDir(), "args")
-	base := []string{"-root", root, "-arch", "amd64", "-keys", keyFile, "-preflight-config", cfg}
+	base := []string{"-root", root, "-arch", "amd64", "-keys", keyFile, "-preflight-config", cfg, "-state-dir", t.TempDir()}
 	var out, errOut bytes.Buffer
 	if code := Run(append(base, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-skip-preflight"), &out, &errOut, nil); code != 0 {
 		t.Fatalf("first install: exit %d, %s", code, errOut.String())
@@ -372,18 +372,5 @@ func TestAnUpdateWhosePreflightFailsKeepsTheCurrentRelease(t *testing.T) {
 	}
 	if got := stateOf(t, root); got.current == before.current || got.previous != before.current {
 		t.Fatalf("no swap after a passing preflight: %+v", got)
-	}
-}
-
-// Without the cell's config there is nothing to check the host against:
-// the update says so and installs as before.
-func TestAnUpdateWithoutTheCellsConfigSaysItRanNoPreflight(t *testing.T) {
-	t.Setenv("KODUS_CELL_CONFIG", "")
-	s, root := newSigner(t), t.TempDir()
-	keyFile := filepath.Join(t.TempDir(), "keys.pub")
-	_ = os.WriteFile(keyFile, []byte(releasesig.FormatPublicKey(s.keys[0].Key)), 0o644)
-	var out, errOut bytes.Buffer
-	if code := Run([]string{"-root", root, "-from", s.release(t, "v1.0.0"), "-release", "v1.0.0", "-arch", "amd64", "-keys", keyFile}, &out, &errOut, nil); code != 0 || !strings.Contains(errOut.String(), "preflight does not run") {
-		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 }

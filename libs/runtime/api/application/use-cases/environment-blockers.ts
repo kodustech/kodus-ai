@@ -1,4 +1,5 @@
 import { type BlockerFixView, classifyBlocker, KODY_FIX_PREFIX } from '@libs/runtime/blockers/catalog';
+import { BLOCKER_KINDS } from '@libs/runtime/contracts/enums';
 import { type Lesson, lessonsFor } from '@libs/runtime/blockers/lessons';
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
@@ -22,6 +23,25 @@ export function fixView(fix: BlockerFixView, recipe?: { text?: string; path?: st
     const edit = applyRecipeChange(recipe.text, recipeChange, recipe.path);
     if ('error' in edit) return { ...rest, who: 'dev', detail: `${rest.detail ?? ''} Not offered as a PR: ${edit.error}.`.trim() };
     return { ...rest, recipeDiff: edit.diff };
+}
+
+/** The verdicts of a Run whose machines booted (could_not_boot is the one that did not). */
+const BOOTED_STATES: ReadonlySet<string> = new Set(['no_regressions', 'regression', 'partly_tested', 'nothing_to_test']);
+
+const KINDS: ReadonlySet<string> = new Set(BLOCKER_KINDS);
+
+/**
+ * The blockers a could_not_boot Run's reason names: the orchestrator writes
+ * them as `kind:signature`, joined by ", ". A reason that names no known kind
+ * is one blocker of its own, as before.
+ */
+export function runReasonBlockers(reason: string | undefined): Array<{ kind: string; signature: string; message: string }> {
+    const text = (reason ?? 'could_not_boot').slice(0, 500);
+    const parts = text.split(', ').map((p) => {
+        const i = p.indexOf(':');
+        return i > 0 && KINDS.has(p.slice(0, i)) && p.length > i + 1 ? { kind: p.slice(0, i), signature: p.slice(i + 1), message: text } : undefined;
+    });
+    return parts.every((p) => p) ? (parts as Array<{ kind: string; signature: string; message: string }>) : [{ kind: 'unknown', signature: text, message: text }];
 }
 
 /**
@@ -69,9 +89,23 @@ export function blockerGroups(setup: EnvironmentSetupRecord | null, runs: Runtim
         target.fixes = [fixView(fix, recipe), ...target.fixes];
         target.recipeChanges.set(fix.id, proven.change);
     }
+    // A Run that booted afterwards on this environment shows that a failure
+    // on Kodus's side (kind platform) is behind it; such a blocker stays in
+    // its Run, not here. A failure of the repository or of one PR is kept: a
+    // later boot of another PR says nothing about it.
+    // Ordered by when each Run was asked for.
+    const bootedAt = runs
+        .filter((x) => BOOTED_STATES.has(x.state))
+        .map((x) => x.requestedAt)
+        .filter((at): at is string => !!at)
+        .sort()
+        .at(-1);
     for (const r of runs.filter((x) => x.state === 'could_not_boot')) {
-        const reason = (r.reason ?? 'could_not_boot').slice(0, 500);
-        add({ kind: 'unknown', signature: reason, message: reason }, r.finishedAt ?? r.updatedAt, r.prNumber);
+        const behind = !!bootedAt && !!r.requestedAt && r.requestedAt < bootedAt;
+        for (const input of runReasonBlockers(r.reason)) {
+            if (behind && input.kind === 'platform') continue;
+            add(input, r.finishedAt ?? r.updatedAt, r.prNumber);
+        }
     }
     // What worked before comes first (ADR-018); the catalog's order stays among the rest.
     if (memory?.lessons.length) {
