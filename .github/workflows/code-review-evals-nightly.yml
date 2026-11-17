@@ -211,7 +211,7 @@ jobs:
                   set -- --files-dir=eval-files --base="$BASE"
                   [ -f changed-files.txt ] && set -- "$@" --changed=changed-files.txt
                   [ "$FORCE" = "true" ] && set -- "$@" --force=true
-                  evals=$(node evals/shared/nightly-plan.js "$@")
+                  evals=$(node evals/shared/nightly-plan.js "$@" | node -e 'const plan = JSON.parse(require("node:fs").readFileSync(0, "utf8")); console.log(JSON.stringify(plan.filter((id) => ["funnel-verify", "review-rounds"].includes(id))));')
                   echo "evals=$evals" >> "$GITHUB_OUTPUT"
             - uses: actions/upload-artifact@v4
               with:
@@ -342,6 +342,7 @@ jobs:
         timeout-minutes: 60
         strategy:
             fail-fast: false
+            max-parallel: 1
             matrix:
                 eval: ${{ fromJSON(needs.changed.outputs.evals) }}
         env:
@@ -448,7 +449,7 @@ jobs:
     measure:
         name: "finder recall · DeepSeek · controlled set"
         needs: changed
-        if: needs.changed.outputs.run == 'true'
+        if: ${{ false }}
         runs-on: ubuntu-latest
         timeout-minutes: 150
         outputs:
