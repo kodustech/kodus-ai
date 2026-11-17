@@ -95,7 +95,11 @@ const autoCacheLoggedAt = new Map<string, number>();
 /** A slot whose custom provider options turn on Anthropic's automatic cache
  *  makes every call write its whole prompt; a call carrying its own marker
  *  drops it. Logged once an hour per org and run, not once per call. */
-function logAutomaticCacheDropped(runName: string, organizationId?: string) {
+function logAutomaticCacheDropped(
+    runName: string,
+    organizationId: string | undefined,
+    callerContext: Record<string, unknown>,
+) {
     const key = `${organizationId ?? '-'}:${runName}`;
     const now = Date.now();
     const last = autoCacheLoggedAt.get(key);
@@ -104,7 +108,7 @@ function logAutomaticCacheDropped(runName: string, organizationId?: string) {
     logger.log({
         message: `[prompt-cache] dropped an automatic cacheControl from the provider options of ${runName}; the call carries its own breakpoint`,
         context: 'runReviewCall',
-        metadata: { runName, organizationId },
+        metadata: { ...callerContext, runName, organizationId },
     });
 }
 
@@ -539,7 +543,7 @@ async function runReviewCall<T>(
             providerOptions: providerOptionsOverride ?? providerOptions,
         });
         if (cached.droppedAutoCache) {
-            logAutomaticCacheDropped(runName, organizationId);
+            logAutomaticCacheDropped(runName, organizationId, attrs ?? {});
         }
         const cacheAttrs = {
             ...(cached.marked.length

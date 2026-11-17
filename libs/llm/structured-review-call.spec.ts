@@ -5,6 +5,17 @@ import { z } from 'zod';
 // carrier's `.main` slot at its boundary, so the fallback slot is never handed
 // to the builder — tests assert the single `main` model is used everywhere and
 // that a 2nd (fallback) slot is NEVER built.
+const mockLoggerLog = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    ...jest.requireActual('@libs/core/log/logger'),
+    createLogger: () => ({
+        log: (...args: unknown[]) => mockLoggerLog(...args),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+    }),
+}));
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
@@ -1636,7 +1647,36 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
         expect(sent().prompt).toBe(user);
     });
 
-    it('keeps the head marked when the route appends a JSON hint to the user turn', async () => {
+    it('marks the head and keeps the JSON hint in the tail when the re-ask appends it', async () => {
+        const parseFail = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response',
+            text: 'not json at all',
+            cause: new JSONParseError({ text: 'not json at all', cause: null }),
+            usage: undefined,
+            finishReason: 'stop',
+            response: undefined,
+        } as any);
+        mockGenerate
+            .mockRejectedValueOnce(parseFail)
+            .mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ ok: z.boolean() }),
+            user,
+            byokConfig: gpt,
+            promptCache: { userPrefix: head },
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const [headPart, tailPart] = sent(1).messages[0].content;
+        expect(headPart.text).toBe(head);
+        expect(headPart.providerOptions).toEqual({
+            openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        });
+        expect(tailPart.text.startsWith(user.slice(head.length))).toBe(true);
+        expect(tailPart.text.toLowerCase()).toContain('json');
+    });
+
+    it('leaves the turn whole, JSON hint included, on a provider that takes no marker', async () => {
         const glm = {
             provider: 'open_router',
             model: 'z-ai/glm-5.3',
@@ -1690,6 +1730,33 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             anthropic: { effort: 'low' },
         });
         expect(spanAttrs().promptCacheAutoDropped).toBe(true);
+    });
+
+    it('logs the dropped automatic cacheControl with the caller’s PR context', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            runName: 'drop-log-context-run',
+            organizationId: 'org-log-context',
+            attrs: { prNumber: 42, teamId: 'team-1' },
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        const logged = mockLoggerLog.mock.calls
+            .map(([entry]) => entry)
+            .find((e: any) =>
+                String(e?.message).includes('drop-log-context-run'),
+            );
+        expect(logged?.metadata).toMatchObject({
+            runName: 'drop-log-context-run',
+            organizationId: 'org-log-context',
+            prNumber: 42,
+            teamId: 'team-1',
+        });
     });
 
     it('records a declared head the turn does not start with', async () => {

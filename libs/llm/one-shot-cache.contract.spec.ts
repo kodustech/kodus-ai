@@ -131,23 +131,52 @@ describe('OpenAI gpt-5.6+: the shared head gets an explicit breakpoint', () => {
         usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
     };
 
-    it('marks the head input_text and puts the request in explicit mode', async () => {
+    it.each(['gpt-5.6', 'gpt-6.1-sol'])(
+        'marks the head input_text and puts the request in explicit mode on %s',
+        async (modelId) => {
+            const captured: Captured = { body: undefined };
+            const openai = createOpenAI({
+                apiKey: 'test-key',
+                fetch: stubFetch(captured, { ...responsesOk, model: modelId }),
+            });
+            await send(openai(modelId), 'openai', modelId, {
+                userPrefix: HEAD,
+            });
+            const user = captured.body.input.find(
+                (m: any) => m.role === 'user',
+            );
+            expect(user.content).toEqual([
+                {
+                    type: 'input_text',
+                    text: HEAD,
+                    prompt_cache_breakpoint: { mode: 'explicit' },
+                },
+                { type: 'input_text', text: TAIL },
+            ]);
+            expect(captured.body.prompt_cache_options).toEqual({
+                mode: 'explicit',
+            });
+        },
+    );
+
+    it('marks the system prompt when it is the shared part, so explicit mode still has a breakpoint', async () => {
         const captured: Captured = { body: undefined };
         const openai = createOpenAI({
             apiKey: 'test-key',
             fetch: stubFetch(captured, responsesOk),
         });
         await send(openai('gpt-6.1-sol'), 'openai', 'gpt-6.1-sol', {
-            userPrefix: HEAD,
+            system: true,
         });
-        const user = captured.body.input.find((m: any) => m.role === 'user');
-        expect(user.content).toEqual([
+        const system = captured.body.input.find(
+            (m: any) => m.role === 'system' || m.role === 'developer',
+        );
+        expect(system.content).toEqual([
             {
                 type: 'input_text',
-                text: HEAD,
+                text: SYSTEM,
                 prompt_cache_breakpoint: { mode: 'explicit' },
             },
-            { type: 'input_text', text: TAIL },
         ]);
         expect(captured.body.prompt_cache_options).toEqual({
             mode: 'explicit',

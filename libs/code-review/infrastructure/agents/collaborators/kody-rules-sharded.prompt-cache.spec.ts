@@ -202,14 +202,22 @@ describe('judgeKodyRulesSharded — leader-first scheduling that never idles', (
 
     it('starts each shared group’s leader first, largest group first', async () => {
         const j = controlledJudge();
+        // Smallest group first in file order, so only the size sort puts a.ts first.
         const done = judgeKodyRulesSharded({
-            changedFiles: files,
+            changedFiles: [
+                file('z.py'),
+                file('x.md'),
+                file('a.ts'),
+                file('y.md'),
+                file('b.ts'),
+                file('c.ts'),
+            ],
             rules: RULES,
             runJudge: j.run,
             concurrency: 2,
         } as any);
-        await j.finish('a.ts').catch(() => undefined);
-        expect(j.started.slice(0, 2)).toEqual(['a.ts', 'x.md']);
+        await new Promise((r) => setImmediate(r));
+        expect(j.started).toEqual(['a.ts', 'x.md']);
         await j.finishAll();
         await done;
     });
