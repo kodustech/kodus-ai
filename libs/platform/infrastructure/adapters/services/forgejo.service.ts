@@ -2268,9 +2268,13 @@ export class ForgejoService implements Omit<
                         return result;
                     })
                     .catch((error) => {
-                        // A rate limit or a network blip is not a PR
-                        // without patches: let the job retry
-                        if (is429Error(error) || isTransientFetchError(error)) {
+                        // A rate limit, a network blip or a server error is
+                        // not a PR without patches: let the job retry
+                        if (
+                            is429Error(error) ||
+                            isTransientFetchError(error) ||
+                            isForgejoServerError(error)
+                        ) {
                             throw error;
                         }
                         this.logger.warn({

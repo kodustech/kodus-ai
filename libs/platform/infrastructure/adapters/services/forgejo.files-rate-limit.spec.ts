@@ -128,7 +128,7 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
 
     it('still lists the files without patches when the diff fails otherwise', async () => {
         repoDownloadPullDiffOrPatch.mockRejectedValue(
-            new Error('Request failed with status code 500'),
+            new Error('unexpected payload'),
         );
         const { service, logger } = makeService();
 
@@ -161,6 +161,13 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         const { service } = makeService();
 
         await expect(list(service)).rejects.toMatchObject({ status: 502 });
+    });
+
+    it('lets a server error on the diff through instead of empty patches', async () => {
+        repoDownloadPullDiffOrPatch.mockResolvedValue(httpError(503));
+        const { service } = makeService();
+
+        await expect(list(service)).rejects.toMatchObject({ status: 503 });
     });
 
     it('warns and lists without patches when the diff answers another error', async () => {
