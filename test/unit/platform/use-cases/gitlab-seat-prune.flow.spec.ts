@@ -233,4 +233,34 @@ describe('GitLab seat prune, adapter to revocation', () => {
         expect(pruned.status).toBe('members_unavailable');
         expect(licenseService.unassignLicenses).not.toHaveBeenCalled();
     });
+
+    it.each([
+        ['the first seat read comes back empty', []],
+        [
+            'a seat is assigned after the first read',
+            [
+                { git_id: '1' },
+                { git_id: '3' },
+                { git_id: '66' },
+                { git_id: '77' },
+            ],
+        ],
+    ])(
+        'never revokes a seat GitLab was not asked about when %s',
+        async (_case, firstRead) => {
+            gitlabAPI.MergeRequests.all.mockResolvedValue([]);
+            const allSeats = await licenseService.getAllUsersWithLicense();
+            licenseService.getAllUsersWithLicense
+                .mockReset()
+                .mockResolvedValueOnce(firstRead)
+                .mockResolvedValue(allSeats);
+
+            const pruned = await prune.execute({ organizationAndTeamData });
+
+            expect(licenseService.getAllUsersWithLicense).toHaveBeenCalledTimes(
+                1,
+            );
+            expect(pruned.revoked).not.toContain('88');
+        },
+    );
 });

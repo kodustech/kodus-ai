@@ -75,7 +75,13 @@ export class OrganizationMemberListService {
      */
     public async fetch(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean; requireAuthors?: boolean } = {},
+        options: {
+            skipCache?: boolean;
+            requireAuthors?: boolean;
+            // The seats the caller will act on. A caller that revokes passes
+            // them so the ids checked here are the ids it revokes from.
+            seatHolderIds?: string[];
+        } = {},
     ): Promise<OrganizationMemberListResult> {
         const [memberResult, authorResult] = await Promise.allSettled([
             this.codeManagementService.getListMembers({
@@ -154,6 +160,7 @@ export class OrganizationMemberListService {
         const confirmed = await this.confirmUnlistedSeatHolders(
             organizationAndTeamData,
             normalized,
+            options.seatHolderIds,
         );
 
         if (confirmed === null) {
@@ -179,6 +186,7 @@ export class OrganizationMemberListService {
     private async confirmUnlistedSeatHolders(
         organizationAndTeamData: OrganizationAndTeamData,
         members: OrganizationMemberSummary[],
+        seatHolderIds?: string[],
     ): Promise<RawMember[] | null> {
         const listedIds = new Set(members.map((member) => String(member.id)));
 
@@ -191,12 +199,16 @@ export class OrganizationMemberListService {
                 return [];
             }
 
-            const seats = await this.licenseService.getAllUsersWithLicense(
-                organizationAndTeamData,
-            );
+            const seatIds =
+                seatHolderIds ??
+                (
+                    (await this.licenseService.getAllUsersWithLicense(
+                        organizationAndTeamData,
+                    )) ?? []
+                ).map((seat) => String(seat.git_id));
 
-            const unlistedIds = (seats ?? [])
-                .map((seat) => String(seat.git_id))
+            const unlistedIds = seatIds
+                .map(String)
                 .filter((gitId) => gitId && !listedIds.has(gitId));
 
             if (unlistedIds.length === 0) {

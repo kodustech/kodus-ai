@@ -50,9 +50,17 @@ export class PruneRemovedLicenseSeatsUseCase {
     ): Promise<PruneRemovedLicenseSeatsResult> {
         const { organizationAndTeamData, dryRun, gitIds } = params;
 
+        // Read once: the seats checked with the provider below must be the
+        // seats revoked from, or a seat assigned (or read back empty) between
+        // two reads would be revoked unchecked.
+        const activeSeats = await this.licenseService.getAllUsersWithLicense(
+            organizationAndTeamData,
+        );
+        const seatIds = (activeSeats ?? []).map((seat) => String(seat.git_id));
+
         const memberList = await this.organizationMemberListService.fetch(
             organizationAndTeamData,
-            { requireAuthors: true, skipCache: true },
+            { requireAuthors: true, skipCache: true, seatHolderIds: seatIds },
         );
 
         // Revoking against an unconfirmed member list would strip every seat in
@@ -77,10 +85,6 @@ export class PruneRemovedLicenseSeatsUseCase {
             memberList.members.map((member) => String(member.id)),
         );
 
-        const activeSeats = await this.licenseService.getAllUsersWithLicense(
-            organizationAndTeamData,
-        );
-
         const requested = gitIds?.length ? new Set(gitIds.map(String)) : null;
 
         // No provider enumerates apps in its member listing, and the pull
@@ -94,8 +98,7 @@ export class PruneRemovedLicenseSeatsUseCase {
             memberList.members,
         );
 
-        const candidates = activeSeats
-            .map((seat) => String(seat.git_id))
+        const candidates = seatIds
             .filter((gitId) => !memberIds.has(gitId))
             .filter((gitId) => !protectedIds.has(gitId))
             .filter((gitId) => !requested || requested.has(gitId));
