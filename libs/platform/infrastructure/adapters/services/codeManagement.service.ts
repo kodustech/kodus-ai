@@ -649,6 +649,50 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getPullRequestAuthors(params);
     }
 
+    async canFindRecentPullRequestAuthors(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const type = await this.getTypeIntegration(organizationAndTeamData);
+
+        if (!type) {
+            return false;
+        }
+
+        return (
+            typeof this.platformIntegrationFactory.getCodeManagementService(
+                type,
+            ).findRecentPullRequestAuthors === 'function'
+        );
+    }
+
+    /** `null` when the connected provider cannot answer this. */
+    async findRecentPullRequestAuthors(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            authorIds: string[];
+        },
+        type?: PlatformType,
+    ): Promise<PullRequestAuthor[] | null> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return null;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (!codeManagementService.findRecentPullRequestAuthors) {
+            return null;
+        }
+
+        return codeManagementService.findRecentPullRequestAuthors(params);
+    }
+
     async getOrganizations(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;

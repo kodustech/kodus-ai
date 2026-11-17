@@ -333,4 +333,45 @@ describe('GitlabService member and author lists', () => {
             );
         });
     });
+
+    describe('findRecentPullRequestAuthors', () => {
+        it('answers the ids that opened a merge request on a configured project', async () => {
+            gitlabAPI.MergeRequests.all.mockImplementation(
+                async ({ authorId }: { authorId: number }) =>
+                    ({
+                        7: [
+                            { project_id: 99 },
+                            { project_id: 20, author: { name: 'Bob' } },
+                        ],
+                        8: [{ project_id: 99 }],
+                    })[authorId] ?? [],
+            );
+
+            const authors = await service.findRecentPullRequestAuthors({
+                organizationAndTeamData,
+                authorIds: ['7', '8', '9', '7', 'abc'],
+            });
+
+            expect(gitlabAPI.MergeRequests.all).toHaveBeenCalledTimes(3);
+            expect(gitlabAPI.MergeRequests.all).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    authorId: 7,
+                    scope: 'all',
+                    createdAfter: expect.any(String),
+                }),
+            );
+            expect(authors).toEqual([{ id: '7', name: 'Bob', type: 'user' }]);
+        });
+
+        it('rejects when a search is rate limited', async () => {
+            gitlabAPI.MergeRequests.all.mockRejectedValue(httpError(429));
+
+            await expect(
+                service.findRecentPullRequestAuthors({
+                    organizationAndTeamData,
+                    authorIds: ['7'],
+                }),
+            ).rejects.toThrow('HTTP 429');
+        });
+    });
 });

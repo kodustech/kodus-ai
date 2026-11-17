@@ -337,6 +337,99 @@ export class GitlabService implements Omit<
     }
 
     /**
+     * The PR backfill stores only the most recent merge requests of each
+     * project, so a missing stored author is not proof of absence. This asks
+     * GitLab directly, one search per id. Any failure rejects.
+     */
+    async findRecentPullRequestAuthors(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        authorIds: string[];
+    }): Promise<PullRequestAuthor[]> {
+        const { organizationAndTeamData } = params;
+        const authorIds = [
+            ...new Set((params.authorIds ?? []).map((id) => String(id).trim())),
+        ].filter((id) => /^\d+$/.test(id));
+
+        if (authorIds.length === 0) {
+            return [];
+        }
+
+        const gitlabAuthDetail = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+        const repositories = <Repositories[] | null>(
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+        );
+
+        if (!gitlabAuthDetail || !repositories?.length) {
+            throw new Error('GitLab integration is not configured');
+        }
+
+        const projectIds = new Set(
+            repositories.map((repo) => String(repo?.id)),
+        );
+        const since = new Date();
+        since.setDate(since.getDate() - PULL_REQUEST_AUTHORS_WINDOW_DAYS);
+
+        const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+        const found: PullRequestAuthor[] = [];
+
+        for (
+            let i = 0;
+            i < authorIds.length;
+            i += GITLAB_USER_LOOKUP_CONCURRENCY
+        ) {
+            const batch = authorIds.slice(
+                i,
+                i + GITLAB_USER_LOOKUP_CONCURRENCY,
+            );
+            const results = await Promise.all(
+                batch.map(async (id) => {
+                    const mergeRequests = await gitlabAPI.MergeRequests.all({
+                        authorId: Number(id),
+                        scope: 'all',
+                        createdAfter: since.toISOString(),
+                        perPage: 100,
+                    });
+
+                    const match = mergeRequests.find((mr) =>
+                        projectIds.has(String(mr.project_id)),
+                    );
+
+                    if (!match) return null;
+
+                    const author = match.author as
+                        { name?: string; username?: string } | undefined;
+
+                    return {
+                        id,
+                        name: author?.name || author?.username || id,
+                        type: 'user' as const,
+                    };
+                }),
+            );
+
+            found.push(...results.filter(Boolean));
+        }
+
+        this.logger.log({
+            message: 'Confirmed recent GitLab merge request authors',
+            context: GitlabService.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                checkedCount: authorIds.length,
+                foundCount: found.length,
+            },
+        });
+
+        return found;
+    }
+
+    /**
      * One lookup per distinct id. A 404 keeps the id as an unclassified user:
      * a deleted account still authors stored PRs, and a token without
      * visibility gets 404 for a live one. Any other failure (429, 5xx,
