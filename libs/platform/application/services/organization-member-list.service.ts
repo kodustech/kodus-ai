@@ -160,7 +160,11 @@ export class OrganizationMemberListService {
         // v2: entries written before the adapters read strictly may be partial.
         const cacheKey = `org_member_pr_authors_v2_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
 
-        if (!options.skipCache) {
+        if (options.skipCache) {
+            // A refresh that fails must not leave the previous authors for
+            // the next read to report as a complete list.
+            await this.cacheService.removeFromCache(cacheKey).catch(() => {});
+        } else {
             try {
                 const cached =
                     await this.cacheService.getFromCache<RawMember[]>(cacheKey);

@@ -385,9 +385,49 @@ describe('OrganizationMemberListService', () => {
             await service.fetch(organizationAndTeamData, { skipCache: true });
 
             expect(mockCacheService.getFromCache).not.toHaveBeenCalled();
+            expect(mockCacheService.removeFromCache).toHaveBeenCalledWith(
+                expect.stringContaining('org_member_pr_authors_v2_'),
+            );
             expect(
                 mockCodeManagementService.getPullRequestAuthors,
             ).toHaveBeenCalled();
+        });
+
+        it('does not answer the read after a failed refresh from the authors cached before it', async () => {
+            const cache = new Map<string, unknown>();
+            mockCacheService.getFromCache.mockImplementation(async (key) =>
+                cache.get(key),
+            );
+            mockCacheService.addToCache.mockImplementation(
+                async (key, value) => {
+                    cache.set(key, value);
+                },
+            );
+            mockCacheService.removeFromCache.mockImplementation(async (key) => {
+                cache.delete(key);
+            });
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValueOnce(
+                [{ id: 2, name: 'Bob' }],
+            );
+            await service.fetch(organizationAndTeamData);
+
+            mockCodeManagementService.getPullRequestAuthors.mockRejectedValue(
+                new Error('HTTP 429'),
+            );
+            const refreshed = await service.fetch(organizationAndTeamData, {
+                skipCache: true,
+            });
+            const reread = await service.fetch(organizationAndTeamData);
+
+            expect(refreshed).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+            expect(reread).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
         });
 
         // An empty author scan is indistinguishable from a transient one: the
