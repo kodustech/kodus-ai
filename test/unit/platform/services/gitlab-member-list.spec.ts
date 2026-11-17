@@ -380,6 +380,16 @@ describe('GitlabService member and author lists', () => {
             });
 
             expect(gitlabAPI.MergeRequests.all).toHaveBeenCalledTimes(2);
+            for (const page of [1, 2]) {
+                expect(gitlabAPI.MergeRequests.all).toHaveBeenNthCalledWith(
+                    page,
+                    expect.objectContaining({
+                        page,
+                        perPage: 100,
+                        maxPages: 1,
+                    }),
+                );
+            }
             expect(authors).toEqual([{ id: '7', name: 'Bob', type: 'user' }]);
         });
 
