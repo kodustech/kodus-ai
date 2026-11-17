@@ -1,9 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# Resolve the Shadowsocks server hostname from config.json to get current NLB IPs.
+# Resolve the Shadowsocks server hostname from the proxy config to get current NLB IPs.
 # This must run BEFORE iptables redirect is active (otherwise DNS itself gets redirected).
-SS_HOST=$(grep -oP '"server"\s*:\s*"\K[^"]+' config.json)
+# The template keeps the config root-only in /etc/kodus/proxy.json (template.ts);
+# config.json in the working directory is where templates built before that kept it.
+CONFIG=/etc/kodus/proxy.json
+[ -f "$CONFIG" ] || CONFIG=config.json
+SS_HOST=$(grep -oP '"server"\s*:\s*"\K[^"]+' "$CONFIG")
 NLB_IPS=$(getent ahosts "$SS_HOST" 2>/dev/null | awk '{print $1}' | grep -v ':' | sort -u)
 
 if [ -z "$NLB_IPS" ]; then
