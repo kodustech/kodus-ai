@@ -5,7 +5,6 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { z } from 'zod';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import {
     DocumentationItem,
@@ -52,13 +51,6 @@ type ResultLike = {
  */
 const EXA_CONCURRENCY = 5;
 const exaCallLimiter = pLimit(EXA_CONCURRENCY);
-
-// Minimal `{ markdown }` envelope for the Exa formatter's single-document
-// structured output. Hoisted to module scope so the strict-wire governance
-// suite can assert it stays OpenAI-strict compatible.
-export const documentationSearchExaFormatSchema = z.object({
-    markdown: z.string(),
-});
 
 @Injectable()
 export class DocumentationSearchExaService {
@@ -439,16 +431,12 @@ export class DocumentationSearchExaService {
         try {
             const runName = 'documentationSearchExaFormat';
 
-            // The formatter returns a single markdown document. runStructuredReviewCall
-            // is structured-output only (Output.object), so the markdown is carried in a
-            // minimal `{ markdown }` envelope and unwrapped below. Under this call the
-            // BYOK org runs on its own model unchanged; a non-BYOK org consolidates to
-            // the managed default instead of the pinned GEMINI_3_FLASH_PREVIEW (accepted,
-            // RESEARCH Pattern 1). The outer runLLMInSpan wrapper is dropped — the span
-            // is emitted once inside runStructuredReviewCall (Q4).
+            // The answer IS the markdown document, so it is asked for as plain
+            // text: a `{ markdown }` JSON envelope fails on models without
+            // native structured output. A BYOK org runs on its own model;
+            // others on the managed default.
             const response = await LLM.run({
                 byokConfig: params.byokConfig,
-                schema: documentationSearchExaFormatSchema,
                 organizationId: params.organizationAndTeamData?.organizationId,
                 runName: `${DocumentationSearchExaService.name}::${runName}`,
                 attrs: {
@@ -465,7 +453,7 @@ export class DocumentationSearchExaService {
                 }),
             });
 
-            return (response?.markdown ?? '').trim();
+            return (response ?? '').trim();
         } catch (error) {
             this.logger.warn({
                 message:
