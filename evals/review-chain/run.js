@@ -76,7 +76,7 @@ const BOUNDARIES = [
             'libs/code-review/infrastructure/agents/engine/repeat-check.ts',
         ],
         requires: ['schema', 'shape'],
-        note: 'off-schema output recovered by normalizeEnvelope; a failed call posts the findings it had to judge (#2097)',
+        note: 'off-schema output recovered by normalizeEnvelope; unresolved findings retry in smaller batches and plausible reposts without a verdict are withheld',
     },
     {
         phase: 'enrich-content',
@@ -93,6 +93,14 @@ const BOUNDARIES = [
         ],
         requires: ['schema', 'recover'],
         note: 'bare-array recovery (#1786) — floor includes recoverEnvelopeShape',
+    },
+    {
+        phase: 'kody-rule-evidence',
+        files: [
+            'libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence.ts',
+        ],
+        requires: ['schema'],
+        note: 'structured applicability and factual verdict; confirmation requires a citation to source actually read',
     },
     {
         phase: 'kody-rules-compiler',

@@ -439,7 +439,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(res.violations[0].relevantFile).toBeUndefined();
     });
 
-    it('sends the FULL diff of every changed file to the PR-scope shard', async () => {
+    it('sends selected patches to the PR-scope shard and labels an incremental round', async () => {
         // Regression guard: the sharded refactor originally sent only file
         // NAMES to the PR shard, blinding content-dependent PR-scope rules
         // (the migration-safety rule missed 100% across every model — it
@@ -451,6 +451,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             return [];
         };
         await judgeKodyRulesSharded({
+            incrementalDiff: true,
             changedFiles: [
                 file(
                     'db/migrate/add_index.rb',
@@ -470,6 +471,8 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         });
         expect(prUser).toContain('add_index :cases');
         expect(prUser).toContain('belongs_to :provider');
+        expect(prUser).toContain('Incremental round');
+        expect(prUser).not.toMatch(/full diff of every/i);
     });
 
     it('degrades an over-budget file to a name-only marker in the PR shard (never silently)', async () => {

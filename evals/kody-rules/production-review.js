@@ -47,6 +47,16 @@ class InMemoryKodyRulesRepository {
         return organizationId === this.doc.organizationId ? this.entity() : null;
     }
 
+    async existsForOrganization(organizationId) {
+        return organizationId === this.doc.organizationId;
+    }
+
+    async updateRuleFieldsByOrganization(organizationId, ruleId, fields) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const updated = await this.updateRule(this.doc.uuid, ruleId, fields);
+        return updated?.rules.find((rule) => rule.uuid === ruleId) ?? null;
+    }
+
     // The repository's per-field $set: an undefined field is left alone.
     async updateRule(uuid, ruleId, updateData) {
         if (uuid !== this.doc.uuid) return null;

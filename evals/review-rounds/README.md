@@ -47,6 +47,19 @@ seen in production:
 - `none` runs with no sandbox at all, through the self-contained prompts the
   stage uses when no sandbox exists.
 
+`--set=hallucinations-2528` runs four pairs from the failure shapes in #2528.
+Each pair checks that a refuted claim stays off the PR and that the corresponding
+real violation is delivered. H1 uses three commits (base, previously reviewed,
+head); `FetchChangedFilesStage` gets the incremental patches, and the sandbox
+still exposes the head, including files added before the last review.
+`ruleVerificationEvidence` and `ruleEvidenceDecisions` record tool locations and
+the decision on the evidence without changing what the model sees. The
+repeat-check stage contract forces a timeout and checks
+that only the plausible repost is withheld, including when both findings cite the
+same rule.
+
+`node evals/review-rounds/run.js --set=hallucinations-2528 --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=2 --output=/tmp/hallucinations-2528.json`
+
 Each delivered finding is matched to the case's claims by the recall judge
 (`evals/investigation/recall-judge.js`). `JUDGE_MODEL` defaults here to the
 nightly's judge, `gpt-5.6-luna` at `low` effort.

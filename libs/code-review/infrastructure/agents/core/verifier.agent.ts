@@ -100,7 +100,36 @@ export function buildVerifierAgentSpec(
     // run prompt), so we build it once with a placeholder bundle.
     const system = params.systemPrompt ?? buildVerifierPrompt('', 0).system;
     const tools = new InMemoryToolRegistry([
-        ...params.tools.list(),
+        ...params.tools.list().map((tool) => {
+            if (tool.name !== 'readFile') return tool;
+            return {
+                ...tool,
+                name: tool.name,
+                description: tool.description,
+                inputSchema: tool.inputSchema,
+                // A targeted range alone can start in the middle of a guard.
+                // Include its surroundings even when the model asks for the
+                // lines the finder cited exactly.
+                execute: (input: unknown, ctx: ToolContext) => {
+                    const args = input as Record<string, unknown> | undefined;
+                    const start = Number(args?.startLine ?? args?.start_line);
+                    const end = Number(args?.endLine ?? args?.end_line);
+                    return tool.execute(
+                        Number.isSafeInteger(start) &&
+                            start > 0 &&
+                            Number.isSafeInteger(end) &&
+                            end >= start
+                            ? {
+                                  ...args,
+                                  startLine: Math.max(1, start - 20),
+                                  endLine: end + 10,
+                              }
+                            : input,
+                        ctx,
+                    );
+                },
+            };
+        }),
         // Strict/structured done-tool for strict-capable models (Gemini
         // VALIDATED mode) so the verdict can't be omitted or emitted as prose.
         {

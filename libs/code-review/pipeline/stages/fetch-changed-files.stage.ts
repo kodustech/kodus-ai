@@ -24,6 +24,7 @@ import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pi
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { IStageValidationResult } from '@libs/core/infrastructure/pipeline/interfaces/stage-result.interface';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 @Injectable()
@@ -192,6 +193,34 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
 
         const stats = this.getStatsForPR(filesWithLineNumbers);
 
+        // PR-level rules can need a file changed in an earlier round. Fetch
+        // names from the platform's full PR listing, inside its existing cache.
+        // Only the selected round's patches and file contents are analyzed.
+        let prFilePaths: string[] | undefined;
+        if (
+            baseCommit &&
+            context.codeReviewConfig.kodyRules?.some(
+                (rule) => rule.scope === KodyRulesScope.PULL_REQUEST,
+            )
+        ) {
+            try {
+                const full =
+                    await this.pullRequestHandlerService.getChangedFilesMetadata(
+                        context.organizationAndTeamData,
+                        context.repository,
+                        context.pullRequest,
+                    );
+                prFilePaths = full.map((file) => file.filename);
+            } catch (error) {
+                this.logger.warn({
+                    message: 'Could not list the full PR for PR-level rules',
+                    context: this.stageName,
+                    error,
+                    metadata: { prNumber: context.pullRequest.number },
+                });
+            }
+        }
+
         const ignoredFileChanges = await this.withContentForCustomAgents(
             context,
             ignoredList?.filter((f) => f.status !== 'removed') || [],
@@ -213,6 +242,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
 
         return this.updateContext(context, (draft) => {
             draft.changedFiles = filesWithLineNumbers;
+            draft.prFilePaths = prFilePaths;
             draft.pullRequest.stats = stats;
             if (cutAtLineLimit.length > 0) {
                 draft.reviewWarnings = [

@@ -275,6 +275,31 @@ function instrumentVerifier() {
         });
         return verdict;
     };
+    const { AiSdkAgentRunner } = require('../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
+    const { extractVerdict } = require('../../libs/code-review/infrastructure/agents/core/verifier.agent.ts');
+    const run = AiSdkAgentRunner.prototype.run;
+    AiSdkAgentRunner.prototype.run = async function (...args) {
+        const state = await run.apply(this, args);
+        if (args[0].runName === 'code-review-kody-rule-verify') {
+            const { keep, rationale, parseMode, toolCalls } = extractVerdict(state);
+            const { claim, location } = JSON.parse(args[1].prompt);
+            (currentPhase().ruleVerdicts ||= []).push({
+                claim, location, keep, rationale, parseMode,
+                tools: toolCalls?.map(({ name, args }) => ({ name, args })),
+                readPaths: args[2].services?.readEvidence?.map(({ path }) => path),
+            });
+        }
+        return state;
+    };
+    const { LLM } = require('../../libs/llm/llm.ts');
+    const call = LLM.run;
+    LLM.run = async function (request) {
+        const result = await call.call(this, request);
+        if (request.runName === 'code-review-kody-rule-evidence-verdict') {
+            (currentPhase().ruleEvidenceDecisions ||= []).push(result);
+        }
+        return result;
+    };
 }
 
 // The repeat check's own verdict, read where the stage calls it: a check whose
@@ -335,6 +360,8 @@ async function once(c, judgeKey) {
     const phase = currentPhase();
     phase.verify = false;
     phase.verdicts = [];
+    phase.ruleVerdicts = [];
+    phase.ruleEvidenceDecisions = [];
     const counter = { calls: 0, failed: 0 };
     const t0 = Date.now();
     const { route, permissionService } = orgRoute();
@@ -417,6 +444,7 @@ async function once(c, judgeKey) {
         let match = null;
         for (const d of delivered) {
             if (taken.has(d)) continue;
+            if (claim.ruleId && !d.brokenKodyRulesIds?.includes(claim.ruleId)) continue;
             // `at` pins a claim to a region when two claims read alike. The
             // two lines of slack around it never reach into another claim's
             // region: a comment on the next function answers that one.
@@ -479,6 +507,8 @@ async function once(c, judgeKey) {
             (d) => !d.alsoFoundIn && INDEX_REF.test(d.text),
         ).length,
         verificationEvidence: phase.verdicts,
+        ruleVerificationEvidence: phase.ruleVerdicts,
+        ruleEvidenceDecisions: phase.ruleEvidenceDecisions,
         // What the repeat drop kept off the PR.
         alreadyPosted: repeats.map((r) => ({
             file: r.relevantFile,

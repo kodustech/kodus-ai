@@ -96,6 +96,34 @@ const inertParams = () => ({
     tools: new InMemoryToolRegistry([]),
 });
 
+it('reads the preceding branch when the requested range starts inside a condition', async () => {
+    const lines = Array.from({ length: 52 }, (_, i) => `line ${i + 1}`);
+    lines[28] = '    previous.status === "FAILED" ||';
+    lines[29] = '    previous.status === "PAUSED";';
+    const execute = jest.fn(async ({ startLine, endLine }) => ({
+        output: lines.slice(startLine - 1, endLine).join('\n'),
+    }));
+    const spec = buildVerifierAgentSpec({
+        ...inertParams(),
+        tools: new InMemoryToolRegistry([
+            {
+                name: 'readFile',
+                description: 'read source',
+                inputSchema: {},
+                execute,
+            },
+        ]),
+    });
+    const result = await spec.tools
+        .get('readFile')!
+        .execute(
+            { path: 'resume.ts', startLine: 30, endLine: 31 },
+            { runId: 'verify' },
+        );
+    expect(result.output).toContain('previous.status === "FAILED"');
+    expect(result.output).toContain('previous.status === "PAUSED"');
+});
+
 // =========================================================================
 // LAYER 1 — HAPPY PATH: correct schema shape → exact Verdict
 // =========================================================================

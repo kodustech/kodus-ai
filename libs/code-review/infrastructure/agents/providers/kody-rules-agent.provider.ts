@@ -36,6 +36,10 @@ import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/a
 import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
+import {
+    kodyRuleEvidenceVerifier,
+    ruleForCandidate,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence';
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import {
     needOf,
@@ -292,7 +296,15 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // See runStructuredReviewCall for the model policy. runAiSdkLLMInSpan
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.
-            const runJudge: RunJudge = async ({ system, user, filename }) => {
+            const verifyEvidence = kodyRuleEvidenceVerifier(
+                input,
+                byokConfig ?? undefined,
+                lookup.available,
+            );
+            let evidenceChecks = 0;
+            let evidenceFailures = 0;
+            const runJudge: RunJudge = async (shard) => {
+                const { system, user, filename } = shard;
                 // The validate step recovers or rejects an off-shape reply but
                 // has no org or PR; this call logs what it did, with them.
                 const reshapes: ShardReplyReshape[] = [];
@@ -326,8 +338,57 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             ...(filename ? { file: filename } : {}),
                         },
                     });
-                    return ((parsed as any)?.violations ??
-                        []) as RawShardViolation[];
+                    const candidates = parsed?.violations ?? [];
+                    const supported: RawShardViolation[] = [];
+                    for (const candidate of candidates) {
+                        const rule = ruleForCandidate(candidate, shard);
+                        if (
+                            filename !== null &&
+                            !candidate.needsRepositoryEvidence &&
+                            (!rule ||
+                                rule.detector ||
+                                !lookup.available ||
+                                !input.remoteCommands)
+                        ) {
+                            supported.push(candidate);
+                            continue;
+                        }
+                        evidenceChecks++;
+                        try {
+                            if (await verifyEvidence(candidate, shard)) {
+                                supported.push({
+                                    ...candidate,
+                                    evidenceVerified: true,
+                                });
+                                continue;
+                            }
+                        } catch (error) {
+                            evidenceFailures++;
+                            this.shardLogger.warn({
+                                message: 'Kody Rule evidence check failed',
+                                context: this.getIdentity().name,
+                                error,
+                                metadata: {
+                                    prNumber: input.prNumber,
+                                    filename,
+                                    ruleId: candidate.ruleId,
+                                },
+                            });
+                        }
+                        this.shardLogger.log({
+                            message:
+                                'Kody Rule candidate withheld without verified evidence',
+                            context: this.getIdentity().name,
+                            metadata: {
+                                organizationAndTeamData:
+                                    input.organizationAndTeamData,
+                                prNumber: input.prNumber,
+                                filename,
+                                ruleId: candidate.ruleId,
+                            },
+                        });
+                    }
+                    return supported;
                 } finally {
                     if (reshapes.length > 0) {
                         this.shardLogger.warn({
@@ -643,6 +704,8 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 () =>
                     judgeKodyRulesSharded({
                         changedFiles: input.changedFiles,
+                        incrementalDiff: input.incrementalDiff,
+                        prFilePaths: input.prFilePaths,
                         rules: rulesForJudge,
                         runJudge,
                         prTitle: input.prTitle,
@@ -665,6 +728,16 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
+            if (evidenceFailures) {
+                contextWarnings.push(
+                    buildKodyRulesPartialWarning({
+                        failed: evidenceFailures,
+                        total: evidenceChecks,
+                        modelName: main.modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+            }
 
             const { referenceStats } = result;
             if (referenceStats?.shards > 0) {

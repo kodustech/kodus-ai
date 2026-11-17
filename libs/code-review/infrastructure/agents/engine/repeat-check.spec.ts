@@ -352,6 +352,7 @@ describe('checkRepeats', () => {
                     verdict: 'same_occurrence',
                     earlierId: 'bug-old',
                 },
+                { finding: 1, verdict: 'new_place', earlierId: 'bug-old' },
             ],
         });
 
@@ -558,7 +559,7 @@ describe('checkRepeats', () => {
         expect(result.repeats).toHaveLength(1);
     });
 
-    it('fails open: a model error posts the findings it had to judge, code matches still hold', async () => {
+    it('a model failure preserves code matches and posts findings without a plausible repeat', async () => {
         const byCode = {
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-no-console'],
@@ -577,6 +578,77 @@ describe('checkRepeats', () => {
         expect(result.model).toBe('failed');
         expect(result.kept).toEqual([toJudge]);
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
+    });
+
+    it('withholds a plausible PR-level repost after two timeouts and keeps a new violation of that rule', async () => {
+        const old = earlier({
+            suggestionId: 'pr-comment-old',
+            relevantFile: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['policy'],
+            suggestionContent:
+                'The report export endpoint lacks the report export permission. Add the correct policy to its controller.',
+        });
+        const repeat = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['policy'],
+            suggestionContent:
+                'The report export controller lacks the permission policy for the report export endpoint.',
+        };
+        const different = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['policy'],
+            suggestionContent:
+                'Protect deleting a saved dashboard with the ManageDashboards permission.',
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([repeat, different], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy.mock.calls.map(([call]) => call.timeoutMs)).toEqual([
+            120_000, 25_000,
+        ]);
+        expect(result.withheld).toEqual([repeat]);
+        expect(result.kept).toEqual([different]);
+        expect(result.repeats).toEqual([]);
+    });
+
+    it('retries only missing verdicts and lets an explicit new-place verdict through', async () => {
+        const first = {
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+            suggestionContent: 'first',
+        };
+        const second = {
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+            suggestionContent: 'second',
+        };
+        runSpy
+            .mockResolvedValueOnce({
+                verdicts: [
+                    {
+                        finding: 0,
+                        verdict: 'same_occurrence',
+                        earlierId: 'bug-old',
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                verdicts: [
+                    { finding: 0, verdict: 'new_place', earlierId: 'bug-old' },
+                ],
+            });
+        const result = await checkRepeats([first, second], [bugComment], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy.mock.calls[1][0].user).toContain('Finding: second');
+        expect(runSpy.mock.calls[1][0].user).not.toContain('Finding: first');
+        expect(result.kept).toEqual([second]);
+        expect(result.repeats.map(({ finding }) => finding)).toEqual([first]);
+        expect(result.model).toBe('ok');
     });
 
     it('without a model, posts what it could not match by code', async () => {
@@ -615,7 +687,15 @@ describe('checkRepeats', () => {
             relevantFile: 'src/retry.ts',
             suggestionContent: `finding ${i}`,
         }));
-        runSpy.mockResolvedValue({ verdicts: [] });
+        runSpy.mockImplementation(async ({ user }) => ({
+            verdicts: [...user.matchAll(/<Finding n="(\d+)">/g)].map(
+                ([, n]) => ({
+                    finding: Number(n),
+                    verdict: 'different_problem',
+                    earlierId: null,
+                }),
+            ),
+        }));
 
         const result = await checkRepeats(findings, [bugComment], {
             organizationId: 'org-1',

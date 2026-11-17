@@ -131,6 +131,9 @@ export interface AgentProgressEvent {
 export interface PrReviewContext {
     organizationAndTeamData: OrganizationAndTeamData;
     changedFiles: FileChange[];
+    /** Diffs were requested relative to the last reviewed commit. */
+    incrementalDiff?: boolean;
+    prFilePaths?: string[];
     prNumber: number;
     repositoryId?: string;
     repositoryFullName: string;

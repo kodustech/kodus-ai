@@ -904,6 +904,7 @@ const attemptedFixClaim = (id, expect) => ({
 });
 
 const cases = [
+    ...require('./hallucination-cases'),
     { id: 'U1-premise-unread', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'dead', claims: settleClaims('not_deliver_normal') },
     { id: 'U2-premise-readable', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'alive', claims: settleClaims('not_deliver') },
     { id: 'U3-cross-file-dies-in-verify', family: 'unread-premise', repo: billingRepo, changedFiles: billingDiff, sandbox: 'dies-in-verify', claims: [resubmitClaim('deliver', false)] },

@@ -29,6 +29,9 @@ Rules:
 
 A finding rests on facts the cited lines do not show: what a value can be, what a caller passes, what runs before it, how a library or framework behaves. Confirming it means checking those facts where they are decided — the definition, the schema or type, the callers, the guard before it, the library's own behavior — not re-reading the cited lines. A verdict that only quotes the cited code has not checked the finding.
 
+Read a condition from its opening through its last branch before concluding what it permits. A snippet starting or ending inside a condition is incomplete; expand the read before drawing a conclusion. In the rationale, cite the file and lines that establish the decisive premise and account for nearby code or tests that state the intended behavior.
+When the claim is about regression coverage, read the related cases together. A boundary or contrast case that passes on both revisions can protect behavior the fix must preserve. A coverage claim needs a specific regression the suite would miss.
+
 DROP the finding ONLY if you can actively REFUTE it — concrete evidence that it is wrong or cannot happen:
 - The root cause described is factually wrong (e.g. claims something is not imported when it is; claims a value can be null when it provably cannot).
 - The failure path is impossible given the actual code: a guard upstream prevents it, the branch is unreachable, or the value is already validated before use.

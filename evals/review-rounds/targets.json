@@ -14,6 +14,7 @@
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
     ],
     "sets": {
+        "hallucinations-2528": ["H1", "H2", "H3", "H4"],
         "nightly": [
             "K4",
             "R1",
