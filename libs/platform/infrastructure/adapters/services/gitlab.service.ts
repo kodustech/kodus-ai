@@ -14,6 +14,11 @@ import {
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import axios from 'axios';
 import pLimit from 'p-limit';
 import { v4 as uuidv4 } from 'uuid';
@@ -152,6 +157,10 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
+const PULL_REQUEST_AUTHORS_WINDOW_DAYS = 60;
+
+const GITLAB_USER_LOOKUP_CONCURRENCY = 5;
+
 /**
  * The auth mode of a GitLab record whose `authMode` predates the field: an
  * OAuth record carries a refresh token and a PAT never does.
@@ -203,103 +212,172 @@ export class GitlabService implements Omit<
         private readonly configService: ConfigService,
         private readonly cacheService: CacheService,
         private readonly mcpManagerService?: MCPManagerService,
+        private readonly moduleRef?: ModuleRef,
     ) {}
 
+    /**
+     * Read from the stored pull requests, as Bitbucket Cloud does: scanning
+     * merge requests through the API cost one request per configured
+     * repository plus one user lookup per merge request, which is what hit
+     * GitLab's rate limit on large installs.
+     */
     async getPullRequestAuthors(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         determineBots?: boolean;
+        requireLoaded?: boolean;
     }): Promise<PullRequestAuthor[]> {
         try {
-            if (!params?.organizationAndTeamData.organizationId) {
-                return [];
-            }
-
-            const gitlabAuthDetail = await this.getAuthDetails(
-                params.organizationAndTeamData,
-            );
-            const repositories = <Repositories[]>(
-                await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                    params?.organizationAndTeamData,
-                    IntegrationConfigKey.REPOSITORIES,
-                )
-            );
-
-            if (!gitlabAuthDetail || !repositories) {
-                return [];
-            }
-
-            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-            const since = new Date();
-            since.setDate(since.getDate() - 60);
-
-            const authorsSet = new Set<string>();
-            const authorsData = new Map<string, PullRequestAuthor>();
-
-            // Busca paralela otimizada
-            const repoPromises = repositories.map(async (repo) => {
-                try {
-                    const mergeRequests = await gitlabAPI.MergeRequests.all({
-                        projectId: repo.id,
-                        createdAfter: since.toISOString(),
-                        perPage: 100,
-                        orderBy: 'created_at',
-                        sort: 'desc',
-                    });
-
-                    // Para na primeira contribuição de cada usuário
-                    for (const mr of mergeRequests) {
-                        if (mr.author?.id) {
-                            const userId = mr.author.id.toString();
-
-                            let type = 'user';
-                            if (params.determineBots) {
-                                const userInfo = await gitlabAPI.Users.show(
-                                    mr.author.id,
-                                );
-
-                                type = userInfo?.bot ? 'bot' : 'user';
-                            }
-
-                            if (!authorsSet.has(userId)) {
-                                authorsSet.add(userId);
-                                authorsData.set(userId, {
-                                    id: mr.author.id.toString(),
-                                    name: mr.author.name || mr.author.username,
-                                    type,
-                                });
-                            }
-                        }
-                    }
-                } catch (error) {
-                    this.logger.error({
-                        message: 'Error in getPullRequestAuthors',
-                        context: GitlabService.name,
-                        error: error,
-                        metadata: {
-                            organizationAndTeamData:
-                                params?.organizationAndTeamData,
-                            repositoryId: repo.id,
-                        },
-                    });
-                }
-            });
-
-            await Promise.all(repoPromises);
-
-            return Array.from(authorsData.values()).sort((a, b) =>
-                a.name.localeCompare(b.name),
-            );
+            return await this.readStoredPullRequestAuthors(params);
         } catch (err) {
             this.logger.error({
                 message: 'Error in getPullRequestAuthors',
                 context: GitlabService.name,
                 error: err,
                 metadata: {
-                    organizationAndTeamData: params?.organizationAndTeamData,
+                    organizationId:
+                        params?.organizationAndTeamData?.organizationId,
+                    teamId: params?.organizationAndTeamData?.teamId,
                 },
             });
+
+            if (params?.requireLoaded) {
+                throw err;
+            }
+
             return [];
         }
+    }
+
+    private async readStoredPullRequestAuthors(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        determineBots?: boolean;
+        requireLoaded?: boolean;
+    }): Promise<PullRequestAuthor[]> {
+        const organizationAndTeamData = params?.organizationAndTeamData;
+
+        if (!organizationAndTeamData?.organizationId) {
+            return [];
+        }
+
+        const gitlabAuthDetail = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+        const repositories = <Repositories[] | null>(
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+        );
+
+        if (!gitlabAuthDetail || !repositories) {
+            return [];
+        }
+
+        if (!this.moduleRef) {
+            throw new Error('Pull request store is not available');
+        }
+
+        const pullRequestsService = this.moduleRef.get<IPullRequestsService>(
+            PULL_REQUESTS_SERVICE_TOKEN,
+            { strict: false },
+        );
+
+        // Stored PRs carry the project id as a string; the config may not.
+        const repositoryIds = repositories
+            .map((repo) => repo?.id)
+            .filter((id) => id !== undefined && id !== null && id !== '')
+            .map(String);
+
+        const since = new Date();
+        since.setDate(since.getDate() - PULL_REQUEST_AUTHORS_WINDOW_DAYS);
+
+        const rows =
+            await pullRequestsService.findPullRequestAuthorsOpenedSince(
+                since.toISOString(),
+                organizationAndTeamData.organizationId,
+                repositoryIds,
+            );
+
+        // No recent author is a real answer only once PRs have been stored
+        // for these repositories; before that it means "not loaded yet".
+        if (
+            params.requireLoaded &&
+            rows.length === 0 &&
+            repositoryIds.length > 0 &&
+            !(await pullRequestsService.hasStoredPullRequests(
+                organizationAndTeamData.organizationId,
+                repositoryIds,
+            ))
+        ) {
+            throw new Error(
+                'No pull requests stored yet for the configured GitLab repositories',
+            );
+        }
+
+        const types = params.determineBots
+            ? await this.classifyGitlabUsers(
+                  this.instanceGitlabApi(gitlabAuthDetail),
+                  rows.map((row) => row.id),
+              )
+            : undefined;
+
+        const authors = new Map<string, PullRequestAuthor>();
+        for (const row of rows) {
+            if (!row.id || authors.has(row.id)) continue;
+            authors.set(row.id, {
+                id: row.id,
+                name: row.name || row.username || row.id,
+                type: types?.get(row.id) ?? 'user',
+            });
+        }
+
+        return [...authors.values()].sort((a, b) =>
+            a.name.localeCompare(b.name),
+        );
+    }
+
+    /**
+     * One lookup per distinct id. A 404 keeps the id as an unclassified user:
+     * a deleted account still authors stored PRs, and a token without
+     * visibility gets 404 for a live one. Any other failure (429, 5xx,
+     * timeout) rejects, so a caller never reads absence from a partial list.
+     */
+    private async classifyGitlabUsers(
+        gitlabAPI: ReturnType<GitlabService['instanceGitlabApi']>,
+        ids: Array<string | number>,
+    ): Promise<Map<string, 'user' | 'bot'>> {
+        const types = new Map<string, 'user' | 'bot'>();
+        const uniqueIds = [...new Set(ids.map(String))];
+
+        for (
+            let i = 0;
+            i < uniqueIds.length;
+            i += GITLAB_USER_LOOKUP_CONCURRENCY
+        ) {
+            const batch = uniqueIds.slice(
+                i,
+                i + GITLAB_USER_LOOKUP_CONCURRENCY,
+            );
+            const results = await Promise.all(
+                batch.map(async (id) => {
+                    try {
+                        const userInfo = await gitlabAPI.Users.show(Number(id));
+                        return [id, userInfo?.bot ? 'bot' : 'user'] as const;
+                    } catch (error) {
+                        if (this.isGitlabNotFoundError(error)) {
+                            return [id, 'user'] as const;
+                        }
+                        throw error;
+                    }
+                }),
+            );
+
+            for (const [id, type] of results) {
+                types.set(id, type);
+            }
+        }
+
+        return types;
     }
 
     async getPullRequestByNumber(params: {
@@ -1860,28 +1938,45 @@ export class GitlabService implements Omit<
                         message: 'Failed to fetch users for repository',
                         context: GitlabService.name,
                         error: result.reason,
-                        metadata: { repositoryId: batch[index].id },
+                        metadata: {
+                            organizationId:
+                                params.organizationAndTeamData?.organizationId,
+                            teamId: params.organizationAndTeamData?.teamId,
+                            repositoryId: batch[index].id,
+                        },
                     });
                 }
             });
+
+            // A caller that revokes access on absence cannot read a repository
+            // it failed to list as "nobody has access there".
+            const failed = results.find(
+                (result): result is PromiseRejectedResult =>
+                    result.status === 'rejected',
+            );
+            if (params.requireComplete && failed) {
+                throw failed.reason;
+            }
         }
 
-        // Removing duplicates based on a unique identifier, such as 'id'
         const uniqueUsersMap = new Map();
         for (const user of users) {
             if (!uniqueUsersMap.has(user.id)) {
-                let type = 'user';
-                if (params.determineBots) {
-                    const userInfo = await gitlabAPI.Users.show(user.id);
-
-                    type = userInfo?.bot ? 'bot' : 'user';
-                }
-
-                uniqueUsersMap.set(user.id, {
-                    ...user,
-                    type,
-                });
+                uniqueUsersMap.set(user.id, user);
             }
+        }
+
+        const types = params.determineBots
+            ? await this.classifyGitlabUsers(gitlabAPI, [
+                  ...uniqueUsersMap.keys(),
+              ])
+            : undefined;
+
+        for (const [id, user] of uniqueUsersMap) {
+            uniqueUsersMap.set(id, {
+                ...user,
+                type: types?.get(String(id)) ?? 'user',
+            });
         }
 
         const uniqueUsers = Array.from(uniqueUsersMap.values());
