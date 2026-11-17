@@ -5,12 +5,11 @@ const read = {
     content: '18: @route("/export")\n19: exportReports() { return report; }',
 };
 
-const confirmed = {
+const violation = {
     rationale: 'The route lacks the required check.',
     existingRegressionPath: '',
     existingRegressionLine: 0,
-    applies: true,
-    confirmed: true,
+    verdict: 'violated' as const,
     path: 'src/controller.ts',
     line: 18,
 };
@@ -23,7 +22,7 @@ describe('Kody Rule evidence', () => {
                 '4: expect(run(timedOut)).toBe(false);\n7: expect(run(success)).toBe(true);',
         };
         const verdict = {
-            ...confirmed,
+            ...violation,
             path: spec.path,
             line: 7,
             existingRegressionPath: spec.path,
@@ -36,23 +35,26 @@ describe('Kody Rule evidence', () => {
             ]),
         ).toBe(true);
     });
-    it('requires both an applicable rule and a citation to code actually read', () => {
-        expect(hasRuleEvidence(confirmed, false, [read])).toBe(true);
+    it.each(['satisfied', 'not_applicable', 'insufficient_evidence'] as const)(
+        'withholds a %s candidate even when the cited location was read',
+        (verdict) => {
+            expect(
+                hasRuleEvidence({ ...violation, verdict }, false, [read]),
+            ).toBe(false);
+        },
+    );
+
+    it('requires a violation and a citation to code actually read', () => {
+        expect(hasRuleEvidence(violation, false, [read])).toBe(true);
+        expect(hasRuleEvidence(violation, false, [])).toBe(false);
         expect(
-            hasRuleEvidence({ ...confirmed, applies: false }, false, [read]),
+            hasRuleEvidence({ ...violation, path: 'unread.ts' }, false, [read]),
         ).toBe(false);
-        expect(
-            hasRuleEvidence({ ...confirmed, confirmed: false }, false, [read]),
-        ).toBe(false);
-        expect(hasRuleEvidence(confirmed, false, [])).toBe(false);
-        expect(
-            hasRuleEvidence({ ...confirmed, path: 'unread.ts' }, false, [read]),
-        ).toBe(false);
-        expect(hasRuleEvidence({ ...confirmed, line: 17 }, false, [read])).toBe(
+        expect(hasRuleEvidence({ ...violation, line: 17 }, false, [read])).toBe(
             false,
         );
         expect(
-            hasRuleEvidence(confirmed, false, [
+            hasRuleEvidence(violation, false, [
                 { ...read, content: 'Error reading file' },
             ]),
         ).toBe(false);
@@ -60,7 +62,7 @@ describe('Kody Rule evidence', () => {
 
     it('allows PR metadata for a metadata-only claim, never in place of repository evidence', () => {
         const metadata = {
-            ...confirmed,
+            ...violation,
             path: 'PR title',
             line: 0,
         };
