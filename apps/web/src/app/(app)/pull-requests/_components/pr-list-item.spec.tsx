@@ -223,6 +223,22 @@ describe("PrListItem — review mode", () => {
         expect(screen.getByText("Heavy")).toBeInTheDocument();
     });
 
+    it("shows the newest reviewing run's mode over an older one", () => {
+        multiRow([
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "balanced",
+            }),
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "heavy",
+            }),
+        ]);
+
+        expect(screen.getByText("Balanced")).toBeInTheDocument();
+        expect(screen.queryByText("Heavy")).not.toBeInTheDocument();
+    });
+
     it("tags a balanced review as Balanced", () => {
         renderRow(
             execution({

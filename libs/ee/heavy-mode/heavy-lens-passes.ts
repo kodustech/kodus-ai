@@ -147,62 +147,70 @@ export async function runHeavyLensPasses(
     ctx: ToolContext,
 ): Promise<HeavyLensRunResult> {
     const t0 = Date.now();
+    // Each lens's own time, kept apart so a lens that threw reports it too.
+    const startedAt: number[] = [];
+    const endedAt: number[] = [];
     const settled = await Promise.allSettled(
-        passes.map(async (pass) => {
+        passes.map(async (pass, i) => {
             const passT0 = Date.now();
-            const state = await params.runner.run(
-                pass.spec,
-                {
-                    prompt: pass.prompt,
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(
-                            `${params.agentName ?? 'finder'}-${pass.label}`,
-                            params.telemetryMetadata,
-                        ),
-                    ),
-                },
-                ctx,
-            );
-            const extracted = await extractFindingsWithRecovery(
-                state,
-                params.recoverProse,
-                { ...params.telemetryMetadata, modelId: params.modelId },
-            );
-            const returned = (extracted.suggestions ?? []).filter(Boolean);
-            if (
-                pass.maxFindings !== undefined &&
-                returned.length > pass.maxFindings
-            ) {
-                finderLogger.warn({
-                    message: `Heavy lens ${pass.label} returned ${returned.length} findings; kept its first ${pass.maxFindings}`,
-                    context: 'finder',
-                    metadata: {
-                        organizationId:
-                            params.telemetryMetadata?.organizationId,
-                        teamId: params.telemetryMetadata?.teamId,
-                        pullRequestId: params.telemetryMetadata?.pullRequestId,
-                        lens: pass.label,
-                        returned: returned.length,
-                        kept: pass.maxFindings,
-                    },
-                });
+            startedAt[i] = passT0;
+            try {
+                return await runLensPass(pass, passT0);
+            } finally {
+                endedAt[i] = Date.now();
             }
-            const suggestions = returned
-                .slice(0, pass.maxFindings)
-                .map((s) => ({
-                    ...s,
-                    label: pass.findingLabel,
-                    producedBy: pass.label,
-                }));
-            return {
-                pass,
-                state,
-                suggestions,
-                ms: Date.now() - passT0,
-                passT0,
-            };
         }),
     );
+    async function runLensPass(pass: HeavyLensPass, passT0: number) {
+        const state = await params.runner.run(
+            pass.spec,
+            {
+                prompt: pass.prompt,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        `${params.agentName ?? 'finder'}-${pass.label}`,
+                        params.telemetryMetadata,
+                    ),
+                ),
+            },
+            ctx,
+        );
+        const extracted = await extractFindingsWithRecovery(
+            state,
+            params.recoverProse,
+            { ...params.telemetryMetadata, modelId: params.modelId },
+        );
+        const returned = (extracted.suggestions ?? []).filter(Boolean);
+        if (
+            pass.maxFindings !== undefined &&
+            returned.length > pass.maxFindings
+        ) {
+            finderLogger.warn({
+                message: `Heavy lens ${pass.label} returned ${returned.length} findings; kept its first ${pass.maxFindings}`,
+                context: 'finder',
+                metadata: {
+                    organizationId: params.telemetryMetadata?.organizationId,
+                    teamId: params.telemetryMetadata?.teamId,
+                    pullRequestId: params.telemetryMetadata?.pullRequestId,
+                    lens: pass.label,
+                    returned: returned.length,
+                    kept: pass.maxFindings,
+                },
+            });
+        }
+        const suggestions = returned.slice(0, pass.maxFindings).map((s) => ({
+            ...s,
+            label: pass.findingLabel,
+            producedBy: pass.label,
+        }));
+        return {
+            pass,
+            state,
+            suggestions,
+            ms: Date.now() - passT0,
+            passT0,
+        };
+    }
 
     const suggestions: FinderSuggestion[] = [];
     const passStats: RecallPassStat[] = [];
@@ -220,7 +228,7 @@ export async function runHeavyLensPasses(
                 label: passes[i].label,
                 status: 'failed',
                 found: 0,
-                ms: Date.now() - t0,
+                ms: (endedAt[i] ?? Date.now()) - (startedAt[i] ?? t0),
                 steps: 0,
                 toolCalls: 0,
                 error: { message: reason.message, name: reason.name },

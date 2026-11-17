@@ -53,11 +53,9 @@ function lensErrorText(o: HeavyLensOutcome, provider?: string): string {
         errorStatus: o.error?.status,
         errorResponseBody: o.error?.responseBody,
     });
-    return (
-        classifyLLMError(error, provider).friendlyMessage ||
-        o.error?.message ||
-        'Failed'
-    );
+    // Only the classified sentence: the provider's raw text can carry anything
+    // it echoed back, and this lands in the dashboard.
+    return classifyLLMError(error, provider).friendlyMessage || 'Failed';
 }
 
 /** Findings the lenses kept, to take out of the generalist's own count. */

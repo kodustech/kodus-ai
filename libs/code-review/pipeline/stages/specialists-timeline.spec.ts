@@ -93,6 +93,12 @@ describe('summarizeSpecialists', () => {
         );
     });
 
+    it('never reads an entry with no lens as a success', () => {
+        expect(summarizeSpecialists([], false).status).toBe(
+            AutomationStatus.SKIPPED,
+        );
+    });
+
     it('counts a lens of a chunked review as ran only when every batch of it ran', () => {
         const row = summarizeSpecialists(
             [

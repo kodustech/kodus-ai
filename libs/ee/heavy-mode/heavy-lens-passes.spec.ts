@@ -246,6 +246,24 @@ describe('runFinderWithVerify in heavy mode', () => {
         expect(lensSignal?.aborted).toBe(true);
     });
 
+    it('times a lens that threw by its own run, not the whole block', async () => {
+        markLensStarted();
+        const real = new AiSdkAgentRunner(undefined);
+        const runner = {
+            run: async (spec: any, input: any, c: ToolContext) => {
+                if (spec.systemPrompt === HEAVY_LENS_SYSTEM_PROMPT) {
+                    throw new Error('lens down');
+                }
+                await new Promise((r) => setTimeout(r, 80));
+                return real.run(spec, input, c);
+            },
+        } as unknown as AiSdkAgentRunner;
+
+        const r = await run(runner);
+
+        expect(r.lensOutcomes?.[0].ms).toBeLessThan(50);
+    });
+
     it('goes on without a lens that fails', async () => {
         markLensStarted();
         const real = new AiSdkAgentRunner(undefined);

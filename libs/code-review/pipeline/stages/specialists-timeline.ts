@@ -55,6 +55,13 @@ export function summarizeSpecialists(
             specialists: entries,
         };
     }
+    if (total === 0) {
+        return {
+            status: AutomationStatus.SKIPPED,
+            label: `${title} — no agent reported`,
+            specialists: entries,
+        };
+    }
     if (entries.some((e) => e.status === 'running')) {
         return {
             status: AutomationStatus.IN_PROGRESS,
