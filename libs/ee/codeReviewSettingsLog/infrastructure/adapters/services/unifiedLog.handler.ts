@@ -43,6 +43,9 @@ export interface UnifiedLogParams extends BaseLogParams {
 export class UnifiedLogHandler {
     private readonly logger = createLogger(UnifiedLogHandler.name);
 
+    /** The repository lookups in flight, so a burst of records shares one. */
+    private readonly repositoryNames = new Map<string, Promise<string>>();
+
     constructor(
         @Inject(CODE_REVIEW_SETTINGS_LOG_REPOSITORY_TOKEN)
         private readonly codeReviewSettingsLogRepository: ICodeReviewSettingsLogRepository,
@@ -381,11 +384,53 @@ export class UnifiedLogHandler {
             return '';
         }
 
-        const repositoryName = !repositoryNameParam
-            ? await this.getRepositoryName(repositoryId, organizationId)
-            : repositoryNameParam;
+        const repositoryName = repositoryNameParam
+            ? repositoryNameParam
+            : await this.repositoryNameFor(organizationId, repositoryId);
 
         return repositoryName;
+    }
+
+    /**
+     * The repository name, looked up once for a burst of records (#2581). A
+     * bulk write logs dozens of records in the same second, each one asking for
+     * the same name: the failing lookup used to run per record, so a repository
+     * absent from the integration config produced one error per record. The
+     * entry is dropped as soon as the lookup settles, so a repository that is
+     * added later resolves on the next record instead of staying unknown.
+     */
+    private repositoryNameFor(
+        organizationId: string,
+        repositoryId: string,
+    ): Promise<string> {
+        const key = `${organizationId}:${repositoryId}`;
+        const inFlight = this.repositoryNames.get(key);
+
+        if (inFlight) {
+            return inFlight;
+        }
+
+        const mine = this.getRepositoryName(repositoryId, organizationId)
+            .catch((error) => {
+                // The name is a label on a settings log line: a repository the
+                // integration config cannot resolve is named as unknown, and
+                // the failure is reported once for the whole burst.
+                this.logger.error({
+                    message: 'Error getting repository additional info',
+                    context: UnifiedLogHandler.name,
+                    error: error,
+                });
+                return 'Unknown';
+            })
+            .finally(() => {
+                if (this.repositoryNames.get(key) === mine) {
+                    this.repositoryNames.delete(key);
+                }
+            });
+
+        this.repositoryNames.set(key, mine);
+
+        return mine;
     }
 
     private async getDirectoryPath(
