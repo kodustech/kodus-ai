@@ -16,6 +16,7 @@ import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { OutboxRelayService } from '@libs/core/workflow/infrastructure/outbox-relay.service';
+import { WorkflowJobRetentionService } from '@libs/core/workflow/infrastructure/workflow-job-retention.service';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
@@ -107,6 +108,7 @@ export class WorkerModule {
                     ErrorRateMonitorService,
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
+                    WorkflowJobRetentionService,
                     SelfHostedBeaconCron,
                     {
                         provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,

@@ -318,6 +318,70 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
+    /**
+     * Deletes one batch of finished jobs last touched before `olderThan`,
+     * oldest first, and returns how many went plus the `updatedAt` of the
+     * newest one deleted. Pass that back as `after` so the next batch starts
+     * there instead of re-walking rows it can never delete.
+     *
+     * Jobs an inbox or outbox row still references are kept (both FKs are
+     * ON DELETE NO ACTION; the outbox relay deletes processed messages after
+     * 7 days, so what remains is a failed message someone may still inspect),
+     * and so are the `keepWorkflowTypes` the caller names.
+     *
+     * Served by idx_workflow_jobs_updated_at and the job_id indexes on
+     * inbox/outbox (migration WorkflowJobsRetentionIndexes); without the
+     * job_id indexes every deleted row pays a sequential scan in the FK check.
+     * `updatedAt` travels as text: the column is timestamp without time zone,
+     * and a JS Date would shift it by the process time zone and drop the
+     * microseconds.
+     */
+    async deleteFinishedOlderThan(params: {
+        olderThan: Date;
+        batchSize: number;
+        after?: string;
+        keepWorkflowTypes?: WorkflowType[];
+    }): Promise<{ deleted: number; lastUpdatedAt?: string }> {
+        const raw = await this.repository.query(
+            `WITH doomed AS (
+                    SELECT j."uuid", j."updatedAt"
+                      FROM "kodus_workflow"."workflow_jobs" j
+                     WHERE j."updatedAt" < $1
+                       AND ($6::timestamp IS NULL OR j."updatedAt" >= $6::timestamp)
+                       AND j."status" IN ($2, $3, $4)
+                       AND j."workflowType"::text <> ALL($7::text[])
+                       AND NOT EXISTS (SELECT 1 FROM "kodus_workflow"."inbox_messages" i WHERE i."job_id" = j."uuid")
+                       AND NOT EXISTS (SELECT 1 FROM "kodus_workflow"."outbox_messages" o WHERE o."job_id" = j."uuid")
+                     ORDER BY j."updatedAt"
+                     LIMIT $5
+             )
+             DELETE FROM "kodus_workflow"."workflow_jobs" w
+              USING doomed d
+              WHERE w."uuid" = d."uuid"
+          RETURNING d."updatedAt"::text AS "updatedAt"`,
+            [
+                params.olderThan,
+                JobStatus.COMPLETED,
+                JobStatus.FAILED,
+                JobStatus.CANCELLED,
+                params.batchSize,
+                params.after ?? null,
+                params.keepWorkflowTypes ?? [],
+            ],
+        );
+
+        // The Postgres driver answers DELETE ... RETURNING with [rows, count].
+        const rows = (
+            Array.isArray(raw) && Array.isArray(raw[0]) ? raw[0] : raw
+        ) as Array<{ updatedAt: string }>;
+        const lastUpdatedAt = rows.reduce<string | undefined>(
+            (max, row) => (!max || row.updatedAt > max ? row.updatedAt : max),
+            undefined,
+        );
+
+        return { deleted: rows.length, lastUpdatedAt };
+    }
+
     async getExecutionHistory(_jobId: string): Promise<IJobExecutionHistory[]> {
         // TODO: Implement execution history tracking if needed
         // For now, return empty array as we don't have a separate execution_history table

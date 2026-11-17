@@ -24,6 +24,17 @@ export interface IWorkflowJobRepository {
         lastError: string;
         errorClassification: unknown;
     }): Promise<StaleWorkflowJobReapResult[]>;
+    /**
+     * Deletes one batch of finished jobs last updated before `olderThan`
+     * that no inbox/outbox message references, except `keepWorkflowTypes`.
+     * Returns how many went and where the next batch should resume.
+     */
+    deleteFinishedOlderThan?(params: {
+        olderThan: Date;
+        batchSize: number;
+        after?: string;
+        keepWorkflowTypes?: string[];
+    }): Promise<{ deleted: number; lastUpdatedAt?: string }>;
 }
 
 export const WORKFLOW_JOB_REPOSITORY_TOKEN = Symbol.for(

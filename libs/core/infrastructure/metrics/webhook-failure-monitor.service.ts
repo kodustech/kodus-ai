@@ -110,6 +110,17 @@ export class WebhookFailureMonitorService {
                     thresholdPercent: this.thresholdPercent,
                 },
             });
+
+            // A monitor that cannot run must not look healthy: without this
+            // the heartbeat only went quiet (issue #2582).
+            await this.incidentManager
+                .failHeartbeat(
+                    'API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL',
+                    `Webhook failure monitor could not run: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`,
+                )
+                .catch(() => undefined);
         } finally {
             await this.releaseCronLock(lock);
         }
