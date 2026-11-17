@@ -727,13 +727,6 @@ export async function repairAndValidate<T = unknown>(
     const validate =
         typeof schema.validate === 'function' ? schema.validate : null;
     const candidate = extractJsonFromText(rawText);
-    // The fallback walks FORWARD from the primary candidate (review
-    // 5939864639): only objects that start after its SPAN compete. The span
-    // comes from primarySpanEnd — pre-normalisation, because an indexOf of
-    // the normalised candidate (`{,}` → `{}`) can land INSIDE the real
-    // answer and exclude it. No primary candidate, or a span that cannot be
-    // established, → no floor — conservative, more candidates never fewer.
-    const primaryEnd = candidate != null ? primarySpanEnd(stripped) : null;
     if (candidate != null) {
         const value = parseLenient(candidate);
         if (value !== undefined) {
@@ -746,7 +739,19 @@ export async function repairAndValidate<T = unknown>(
             }
         }
     }
-    return firstValidatingObjectAfter<T>(stripped, validate, primaryEnd);
+    // The fallback walks FORWARD from the primary candidate (review
+    // 5939864639): only objects that start after its SPAN compete. The span
+    // comes from primarySpanEnd — pre-normalisation, because an indexOf of
+    // the normalised candidate (`{,}` → `{}`) can land INSIDE the real
+    // answer and exclude it — and it is computed only now that the primary
+    // has FAILED: the success path, the common case, never pays the span
+    // scan. No primary candidate, or a span that cannot be established,
+    // → no floor — conservative, more candidates never fewer.
+    return firstValidatingObjectAfter<T>(
+        stripped,
+        validate,
+        candidate != null ? primarySpanEnd(stripped) : null,
+    );
 }
 
 /**
