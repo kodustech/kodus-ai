@@ -338,7 +338,8 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             ...(filename ? { file: filename } : {}),
                         },
                     });
-                    const candidates = parsed?.violations ?? [];
+                    const candidates = (parsed?.violations ??
+                        []) as RawShardViolation[];
                     const supported: RawShardViolation[] = [];
                     for (const candidate of candidates) {
                         const rule = ruleForCandidate(candidate, shard);
