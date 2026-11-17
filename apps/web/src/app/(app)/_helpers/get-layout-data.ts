@@ -96,11 +96,18 @@ export const getLayoutData = cache(async (teamId: string) => {
 });
 
 /**
- * Whether the organization is in the deep scan's private alpha. The same env
- * allow-list the API's gate reads (`*` or comma-separated organization ids)
- * opens it first, on dev VMs and previews, so the page and the API agree.
+ * Whether the organization is in the deep scan's private alpha. Like the
+ * API's gate, closed outside cloud mode before anything else; then the same
+ * env allow-list (`*` or comma-separated organization ids) opens it, on dev
+ * VMs and previews, so the page and the API agree.
  */
 export const isDeepScanEnabled = cache(async () => {
+    // The API reads cloud mode the same way: on unless set to anything but "true".
+    const cloudMode =
+        (process.env.API_CLOUD_MODE || "true").toLowerCase() === "true";
+    if (!cloudMode || process.env.WEB_NODE_ENV === "self-hosted") {
+        return false;
+    }
     const allow = process.env.API_DEEP_SCAN_ALPHA_ORGS;
     if (
         allow?.trim() &&
