@@ -250,8 +250,11 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            // Test connection by fetching projects (lightweight endpoint)
-            const testResponse = await axiosClient.get('/projects?limit=1');
+            // Test the connection with the endpoint the setup reads next: a
+            // token that may list repositories is what Kodus needs, and asking
+            // /projects first refused tokens that can read repos but not
+            // administer projects.
+            const testResponse = await axiosClient.get('/repos?limit=1');
 
             if (testResponse.status !== 200) {
                 throw new Error(

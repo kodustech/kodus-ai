@@ -1,0 +1,185 @@
+import { BadRequestException } from '@nestjs/common';
+
+import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+
+import { BitbucketService } from '../bitbucket.service';
+import { BitbucketCloudService } from '../bitbucket/bitbucket-cloud.service';
+
+const ORG = { organizationId: 'org-1', teamId: 't1' };
+const HOST = 'https://bitbucket.example.test';
+
+/** The facade, with its two implementations and the stored-auth lookup stubbed. */
+const facade = (storedAuth: any, storedAuthThrows = false) => {
+    const svc: any = Object.create(BitbucketService.prototype);
+    svc.bitbucketCloudService = {
+        createAuthIntegration: jest.fn(async () => ({
+            success: true,
+            impl: 'cloud',
+        })),
+    };
+    svc.bitbucketDataCenterService = {
+        createAuthIntegration: jest.fn(async () => ({
+            success: true,
+            impl: 'data-center',
+        })),
+    };
+    svc.integrationService = {
+        getPlatformAuthDetails: jest.fn(async () => {
+            if (storedAuthThrows) throw new Error('no integration');
+            return storedAuth;
+        }),
+    };
+    return svc;
+};
+
+describe('BitbucketService.createAuthIntegration', () => {
+    it('runs a first-time Data Center setup on the Data Center implementation', async () => {
+        // The reported case: nothing is stored yet, and the request carries the
+        // host the user typed into the setup form.
+        const svc = facade(undefined);
+
+        const result = await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.BASIC,
+            token: 'app-password',
+            username: 'acme',
+            host: HOST,
+        });
+
+        expect(
+            svc.bitbucketDataCenterService.createAuthIntegration,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ host: HOST, authMode: AuthMode.BASIC }),
+        );
+        expect(
+            svc.bitbucketCloudService.createAuthIntegration,
+        ).not.toHaveBeenCalled();
+        expect(result).toEqual({ success: true, impl: 'data-center' });
+    });
+
+    it('does not need the stored-auth lookup when the request names a host', async () => {
+        const svc = facade(undefined);
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.BASIC,
+            token: 'app-password',
+            host: HOST,
+        });
+
+        expect(
+            svc.integrationService.getPlatformAuthDetails,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('keeps a Cloud setup on Cloud', async () => {
+        const svc = facade({ host: '' });
+
+        const result = await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.TOKEN,
+            token: 'pat',
+            email: 'acme@example.test',
+        });
+
+        expect(
+            svc.bitbucketCloudService.createAuthIntegration,
+        ).toHaveBeenCalled();
+        expect(
+            svc.bitbucketDataCenterService.createAuthIntegration,
+        ).not.toHaveBeenCalled();
+        expect(result).toEqual({ success: true, impl: 'cloud' });
+    });
+
+    it('keeps an already connected Data Center host on Data Center', async () => {
+        const svc = facade({ host: HOST });
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.TOKEN,
+            token: 'pat',
+        });
+
+        expect(
+            svc.bitbucketDataCenterService.createAuthIntegration,
+        ).toHaveBeenCalled();
+        expect(
+            svc.bitbucketCloudService.createAuthIntegration,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('leaves a failing stored-auth lookup on Cloud, as before', async () => {
+        const svc = facade(undefined, true);
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.TOKEN,
+            token: 'pat',
+        });
+
+        expect(
+            svc.bitbucketCloudService.createAuthIntegration,
+        ).toHaveBeenCalled();
+        expect(
+            svc.bitbucketDataCenterService.createAuthIntegration,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('ignores a blank host and stays on Cloud', async () => {
+        const svc = facade(undefined);
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.TOKEN,
+            token: 'pat',
+            host: '   ',
+        });
+
+        expect(
+            svc.bitbucketCloudService.createAuthIntegration,
+        ).toHaveBeenCalled();
+    });
+});
+
+describe('BitbucketCloudService.createAuthIntegration', () => {
+    const cloud = () => {
+        const svc: any = Object.create(BitbucketCloudService.prototype);
+        svc.logger = {
+            error: jest.fn(),
+            warn: jest.fn(),
+            log: jest.fn(),
+            debug: jest.fn(),
+        };
+        svc.authenticateWithToken = jest.fn(async () => ({ success: true }));
+        svc.mcpManagerService = { createKodusMCPIntegration: jest.fn() };
+        return svc;
+    };
+
+    it('refuses a Basic request instead of reporting success', async () => {
+        const svc = cloud();
+
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                authMode: AuthMode.BASIC,
+                token: 'app-password',
+                username: 'acme',
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(svc.authenticateWithToken).not.toHaveBeenCalled();
+    });
+
+    it('still authenticates a token request', async () => {
+        const svc = cloud();
+
+        const result = await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.TOKEN,
+            token: 'pat',
+        });
+
+        expect(svc.authenticateWithToken).toHaveBeenCalled();
+        expect(result).toEqual({ success: true });
+    });
+});
