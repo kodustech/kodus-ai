@@ -338,6 +338,20 @@ export class AuthService implements IAuthService {
                 ...tokenEntity,
             });
         } catch (error) {
+            // Two refreshes of the same token within one second sign the same
+            // JWT (no jti, iat in seconds), so the twin request already stored
+            // this exact token. Nothing is lost. The error is not logged: its
+            // bind parameters and detail carry the token itself.
+            if (isRefreshTokenAlreadyStored(error)) {
+                this.logger.warn({
+                    message:
+                        'Refresh token already stored by a concurrent refresh of the same token',
+                    context: AuthService.name,
+                    metadata: { userUuid: userEntity?.uuid, authProvider },
+                });
+                return;
+            }
+
             // Do NOT rethrow: the caller already holds valid tokens and login
             // should still succeed. But this MUST be visible — a failed
             // persist means the refresh token was never stored, so the user's
@@ -667,4 +681,20 @@ export class AuthService implements IAuthService {
             refreshTokenExpiresAt: data.expires_at,
         };
     }
+}
+
+/** Unique constraint on auth."refreshToken" (baseline migration). */
+const REFRESH_TOKEN_UNIQUE_CONSTRAINT = 'UQ_5fb5d6abb950a839551fe3c5de9';
+
+function isRefreshTokenAlreadyStored(error: unknown): boolean {
+    const candidate = error as {
+        code?: string;
+        constraint?: string;
+        driverError?: { code?: string; constraint?: string };
+    };
+    const source = candidate?.driverError ?? candidate;
+    return (
+        source?.code === '23505' &&
+        source?.constraint === REFRESH_TOKEN_UNIQUE_CONSTRAINT
+    );
 }
