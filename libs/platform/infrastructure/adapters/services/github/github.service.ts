@@ -2717,24 +2717,44 @@ export class GithubService
             );
             const since = new Date();
             since.setDate(since.getDate() - 60);
+            const sinceTime = since.getTime();
 
             const authorsSet = new Set<string>();
             const authorsData = new Map<string, PullRequestAuthor>();
 
-            // Busca paralela otimizada
             const repoPromises = allRepositories.map(async (repo) => {
                 try {
-                    const { data } = await octokit.rest.pulls.list({
-                        owner: this.ownerOf(repo, githubAuthDetail),
-                        repo: repo.name,
-                        state: 'all',
-                        since: since.toISOString(),
-                        per_page: 100,
-                        sort: 'created',
-                        direction: 'desc',
-                    });
+                    // "List pull requests" has no `since` filter, so the
+                    // 60-day window is walked page by page: newest first,
+                    // stopping at the first PR created before it. One page
+                    // of 100 left out anyone, a bot included, whose last PR
+                    // was not among the newest 100.
+                    const data = await octokit.paginate(
+                        octokit.rest.pulls.list,
+                        {
+                            owner: this.ownerOf(repo, githubAuthDetail),
+                            repo: repo.name,
+                            state: 'all',
+                            per_page: 100,
+                            sort: 'created',
+                            direction: 'desc',
+                        },
+                        (response, done) => {
+                            const inWindow: typeof response.data = [];
+                            for (const pr of response.data) {
+                                if (
+                                    new Date(pr.created_at).getTime() <
+                                    sinceTime
+                                ) {
+                                    done();
+                                    break;
+                                }
+                                inWindow.push(pr);
+                            }
+                            return inWindow;
+                        },
+                    );
 
-                    // Para na primeira contribuição de cada usuário
                     for (const pr of data) {
                         if (pr.user?.id) {
                             const userId = pr.user.id.toString();
