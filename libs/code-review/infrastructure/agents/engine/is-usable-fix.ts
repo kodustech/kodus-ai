@@ -335,10 +335,11 @@ function isStructurallyBroken(
     // A `/*` that survives comment stripping never closed: applied, it would
     // comment out the rest of the file. Equal bracket signatures must not
     // excuse it, unless the replaced lines already carried the same dangling
-    // opener.
+    // opener. Only comment positions count, so globs such as dir/* survive.
+    const opensBlockComment = (text: string) => /(^|\s)\/\*/m.test(text);
     if (
-        nonLiteral.includes('/*') &&
-        (reference === undefined || !nonLiteralOf(reference).includes('/*'))
+        opensBlockComment(nonLiteral) &&
+        (reference === undefined || !opensBlockComment(nonLiteralOf(reference)))
     ) {
         return true;
     }

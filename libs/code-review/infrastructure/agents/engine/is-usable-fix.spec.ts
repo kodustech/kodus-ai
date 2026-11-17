@@ -103,6 +103,22 @@ describe('checkFix', () => {
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 
+        it.each([
+            ['dockerfile', 'COPY app/main /app/', 'COPY app/* /app/'],
+            ['makefile', 'SRC = src/main.c', 'SRC = src/*.c'],
+            [
+                'bash',
+                'for f in src/main; do echo $f; done',
+                'for f in src/*; do echo $f; done',
+            ],
+            ['typescript', 'p => /src/.test(p)', 'p => /src\\/*/.test(p)'],
+        ])(
+            'accepts a %s glob without treating it as a block comment',
+            (language, existing, improved) => {
+                expect(checkFix(existing, improved, language)).toBeNull();
+            },
+        );
+
         it('flags a fix cut inside an unterminated block comment', () => {
             const existingCode = 'if (a) {\n  run();';
             const improvedCode = 'if (a) {\n  run();\n  /* retry the call';
