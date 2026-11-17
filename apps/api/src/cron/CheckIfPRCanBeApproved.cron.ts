@@ -2,7 +2,13 @@ import { calculateBackoffIntervalExact } from '@libs/common/utils/polling/expone
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { CronRunGate } from '@libs/core/infrastructure/services/cron-run-gate';
+import {
+    BeforeApplicationShutdown,
+    Inject,
+    Injectable,
+    Optional,
+} from '@nestjs/common';
 import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
     IOrganizationParametersService,
@@ -163,7 +169,7 @@ const SHARED_RISK_STALE_REASON =
     'The risk assessment does not match the current PR or risk settings. Run a new review before automatic approval.';
 
 @Injectable()
-export class CheckIfPRCanBeApprovedCronProvider {
+export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShutdown {
     private readonly directoryFilesByReviewedHead = new Map<
         string,
         { files: Array<Pick<FileChange, 'filename'>>; fetchedAt: number }
@@ -176,6 +182,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
         IPullRequestMessages | null
     >();
     private reasonWriteDeadline = Number.POSITIVE_INFINITY;
+    // Shutdown closes the database while a run is still going: see CronRunGate.
+    private readonly runGate = new CronRunGate();
 
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
@@ -265,6 +273,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
         waitForCompletion: true,
     })
     async handleCron() {
+        await this.runGate.run(() => this.runCron());
+    }
+
+    beforeApplicationShutdown(): Promise<void> {
+        return this.runGate.stop();
+    }
+
+    private async runCron() {
         const lockKey = 'CRON:CHECK_IF_PR_SHOULD_BE_APPROVED';
 
         let lock: DistributedLock;
@@ -421,6 +437,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             await Promise.allSettled(
                 teams.map((team) =>
                     teamLimit(async () => {
+                        if (this.runGate.stopping) return;
                         const organizationId = team.organization?.uuid;
                         const teamId = team.uuid;
 
@@ -552,6 +569,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         await Promise.allSettled(
                             eligibleOpenPullRequests.map((pr) =>
                                 prLimit(async () => {
+                                    if (this.runGate.stopping) return;
                                     const repository = pr?.repository;
 
                                     const codeReviewConfigFromRepo =
@@ -889,7 +907,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
             // runs after them. Every PR that carries the request is judged
             // here on its own terms: it must stop blocking the merge once
             // the findings behind it are resolved, approved by Kody or not.
-            if (this.ownChangeRequest) {
+            // Skipped whole, never cut short: it reads a missing organization
+            // as one with no change request. The next run does it.
+            if (this.ownChangeRequest && !this.runGate.stopping) {
                 await this.withdrawResolvedChangeRequests(
                     teams,
                     parametersByTeam,

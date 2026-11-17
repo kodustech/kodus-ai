@@ -1,5 +1,6 @@
+import { CronRunGate } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { BeforeApplicationShutdown, Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
 import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
@@ -42,8 +43,10 @@ const CRON_KODY_LEARNING = process.env.API_CRON_KODY_LEARNING;
 export const BACKFILL_LOCK_CHUNK_SIZE = 5;
 
 @Injectable()
-export class KodyLearningCronProvider {
+export class KodyLearningCronProvider implements BeforeApplicationShutdown {
     private readonly logger = createLogger(KodyLearningCronProvider.name);
+    // Shutdown closes the database while a run is still going: see CronRunGate.
+    private readonly runGate = new CronRunGate();
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService: ITeamService,
@@ -59,6 +62,14 @@ export class KodyLearningCronProvider {
         timeZone: 'America/Sao_Paulo',
     })
     async handleCron() {
+        await this.runGate.run(() => this.runCron());
+    }
+
+    beforeApplicationShutdown(): Promise<void> {
+        return this.runGate.stop();
+    }
+
+    private async runCron() {
         // We run many app instances; the @Cron fires on every one. Acquire a
         // distributed lock so only a single instance runs the sweep.
         const lockKey = 'CRON:KODY_LEARNING';
@@ -117,6 +128,7 @@ export class KodyLearningCronProvider {
             }
 
             for (const team of teams) {
+                if (this.runGate.stopping) break;
                 const organizationId = team.organization?.uuid;
                 const teamId = team.uuid;
 
