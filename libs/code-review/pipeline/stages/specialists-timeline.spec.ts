@@ -59,34 +59,37 @@ function fakeWriter(createDelayMs = 0) {
 
 describe('summarizeSpecialists', () => {
     it('counts each lens that ran and the findings the lenses kept', () => {
-        const row = summarizeSpecialists(
-            [done('lens-a', 'success', 1), done('lens-b', 'success', 2)],
-            false,
-        );
+        const row = summarizeSpecialists([
+            done('lens-a', 'success', 1),
+            done('lens-b', 'success', 2),
+        ]);
         expect(row.status).toBe(AutomationStatus.SUCCESS);
         expect(row.label).toBe('Specialist Agents — 2 ran · 3 findings');
     });
 
     it('is a partial error when some lenses failed and an error when none ran', () => {
         expect(
-            summarizeSpecialists(
-                [done('lens-a', 'success', 1), done('lens-b', 'failed')],
-                false,
-            ),
+            summarizeSpecialists([
+                done('lens-a', 'success', 1),
+                done('lens-b', 'failed'),
+            ]),
         ).toMatchObject({
             status: AutomationStatus.PARTIAL_ERROR,
             label: 'Specialist Agents — 1 of 2 ran · 1 finding',
         });
         expect(
-            summarizeSpecialists(
-                [done('lens-a', 'no-result'), done('lens-b', 'failed')],
-                false,
-            ).status,
+            summarizeSpecialists([
+                done('lens-a', 'no-result'),
+                done('lens-b', 'failed'),
+            ]).status,
         ).toBe(AutomationStatus.ERROR);
     });
 
     it('is skipped, not failed, when the generalist stopped the lenses', () => {
-        const row = summarizeSpecialists([done('lens-a', 'running')], true);
+        const row = summarizeSpecialists(
+            [done('lens-a', 'running')],
+            new Set([1]),
+        );
         expect(row.status).toBe(AutomationStatus.SKIPPED);
         expect(row.label).toBe(
             'Specialist Agents — stopped because the Generalist Agent failed',
@@ -94,21 +97,16 @@ describe('summarizeSpecialists', () => {
     });
 
     it('never reads an entry with no lens as a success', () => {
-        expect(summarizeSpecialists([], false).status).toBe(
-            AutomationStatus.SKIPPED,
-        );
+        expect(summarizeSpecialists([]).status).toBe(AutomationStatus.SKIPPED);
     });
 
     it('counts a lens of a chunked review as ran only when every batch of it ran', () => {
-        const row = summarizeSpecialists(
-            [
-                done('lens-a', 'success', 1, 1),
-                done('lens-a', 'failed', 0, 2),
-                done('lens-b', 'success', 0, 1),
-                done('lens-b', 'success', 1, 2),
-            ],
-            false,
-        );
+        const row = summarizeSpecialists([
+            done('lens-a', 'success', 1, 1),
+            done('lens-a', 'failed', 0, 2),
+            done('lens-b', 'success', 0, 1),
+            done('lens-b', 'success', 1, 2),
+        ]);
         expect(row.label).toBe('Specialist Agents — 1 of 2 ran · 2 findings');
     });
 });
@@ -184,6 +182,38 @@ describe('SpecialistsTimeline', () => {
         expect(calls[calls.length - 1]).toMatchObject({
             status: AutomationStatus.SUCCESS,
             label: 'Specialist Agents — 1 ran · 2 findings',
+        });
+    });
+
+    it('keeps the batches that ran when the generalist failed on another', async () => {
+        const { writer, calls } = fakeWriter();
+        const t = new SpecialistsTimeline(writer);
+
+        await t.record(
+            event('started', {
+                specialists: [done('lens-a', 'running', 0, 1)],
+            }),
+        );
+        await t.record(
+            event('error', {
+                batchIndex: 1,
+                specialistsStoppedByGeneralist: true,
+            }),
+        );
+        await t.record(
+            event('started', {
+                specialists: [done('lens-a', 'running', 0, 2)],
+            }),
+        );
+        await t.record(
+            event('completed', {
+                specialists: [done('lens-a', 'success', 2, 2)],
+            }),
+        );
+
+        expect(calls[calls.length - 1]).toMatchObject({
+            status: AutomationStatus.SUCCESS,
+            label: 'Specialist Agents — 1 ran · 2 findings · 1 batch stopped because the Generalist Agent failed',
         });
     });
 

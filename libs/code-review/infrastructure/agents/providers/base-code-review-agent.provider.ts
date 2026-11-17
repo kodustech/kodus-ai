@@ -1020,7 +1020,7 @@ export abstract class BaseCodeReviewAgentProvider {
 
             progress.send({
                 status: hitHardLimit ? 'error' : 'completed',
-                findings: suggestions.length - lensKept,
+                findings: mapped.ownSuggestions.length,
                 durationMs,
                 totalTokens: agentResult.usage.totalTokens,
                 step: agentResult.steps,
@@ -1029,14 +1029,16 @@ export abstract class BaseCodeReviewAgentProvider {
                 coverage: agentResult.coverage,
                 verification: agentResult.verification,
                 anomalies: agentResult.anomalies,
-                suggestionsPreview: suggestions.slice(0, 10).map((s) => ({
-                    relevantFile: s.relevantFile,
-                    relevantLinesStart: s.relevantLinesStart,
-                    relevantLinesEnd: s.relevantLinesEnd,
-                    oneSentenceSummary: s.oneSentenceSummary,
-                    label: s.label,
-                    severity: s.severity,
-                })),
+                suggestionsPreview: mapped.ownSuggestions
+                    .slice(0, 10)
+                    .map((s) => ({
+                        relevantFile: s.relevantFile,
+                        relevantLinesStart: s.relevantLinesStart,
+                        relevantLinesEnd: s.relevantLinesEnd,
+                        oneSentenceSummary: s.oneSentenceSummary,
+                        label: s.label,
+                        severity: s.severity,
+                    })),
                 toolCalls: agentResult.toolCalls.map((tc) => ({
                     tool: tc.toolName || tc.tool,
                     args: JSON.stringify(tc.args).substring(0, 100),
@@ -1092,6 +1094,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 agentReplicaTotal: input.agentReplicaTotal,
                 turnsUsed: agentResult.steps,
                 durationMs,
+                ...(lensKept > 0 && { specialistFindings: lensKept }),
                 // Merge agent-loop-emitted warnings (currently none — the
                 // loop's warnings: [] is the PR1 placeholder) with the
                 // strategy warnings emitted in this provider above.

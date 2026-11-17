@@ -177,6 +177,8 @@ export interface MappedFindings {
     droppedForPath: number;
     /** Mapped findings per heavy-mode lens, by `producedBy`. */
     keptByLens: Record<string, number>;
+    /** `suggestions` without the ones a heavy-mode lens produced. */
+    ownSuggestions: Partial<CodeSuggestion>[];
 }
 
 /**
@@ -438,5 +440,8 @@ export function mapAgentFindings(
         discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
         droppedForPath,
         keptByLens,
+        ownSuggestions: suggestions.filter(
+            (_, i) => !rawSuggestions[i].producedBy?.startsWith('lens-'),
+        ),
     };
 }

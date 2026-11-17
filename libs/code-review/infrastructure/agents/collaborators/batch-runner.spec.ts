@@ -105,3 +105,48 @@ describe('runChunkedReview — #2171', () => {
         ).toEqual(['src/a.ts', 'src/b.ts']);
     });
 });
+
+describe('runChunkedReview — heavy mode lenses (#2578)', () => {
+    it('counts only the agent’s own findings, per batch and in total', async () => {
+        const events: Array<{ status: string; findings?: number }> = [];
+        const queue = [
+            batchResult({
+                suggestions: [{}, {}, {}],
+                specialistFindings: 2,
+            }),
+            batchResult({ suggestions: [{}, {}], specialistFindings: 1 }),
+        ];
+        const out = await runChunkedReview(
+            {
+                ...makeInput(),
+                onAgentProgress: (e) =>
+                    events.push({ status: e.status, findings: e.findings }),
+            },
+            {
+                identity: {
+                    name: 'agent',
+                    description: 'd',
+                    goal: 'g',
+                    expertise: [],
+                },
+                agentCategory: 'bug',
+                startTime: Date.now(),
+                diffBudget: 3_000,
+                runBatch: async () => queue.shift() ?? batchResult(),
+                logger: { log: jest.fn(), error: jest.fn() },
+            },
+        );
+
+        expect(
+            events
+                .filter((e) => e.status === 'batch_completed')
+                .map((e) => e.findings),
+        ).toEqual([1, 1]);
+        expect(events[events.length - 1]).toEqual({
+            status: 'completed',
+            findings: 2,
+        });
+        expect(out.suggestions).toHaveLength(5);
+        expect(out.specialistFindings).toBe(3);
+    });
+});

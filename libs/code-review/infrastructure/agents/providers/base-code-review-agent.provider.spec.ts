@@ -996,6 +996,7 @@ describe('heavy mode lenses on the timeline (#2578)', () => {
                 e.agentCategory !== 'specialists' && e.status === 'completed',
         );
         expect(generalist?.findings).toBe(1);
+        expect(generalist?.suggestionsPreview).toHaveLength(1);
     });
 
     it('reports the lenses as stopped when the generalist fails', async () => {

@@ -421,6 +421,9 @@ export interface ReviewAgentOutput {
     agentReplicaTotal?: number;
     turnsUsed: number;
     durationMs: number;
+    /** Of `suggestions`, how many heavy mode's lenses produced. The agent's
+     *  own count leaves them out. */
+    specialistFindings?: number;
     /** Fidelity warnings emitted by this agent's loop (small context window
      *  forced compact prompt, dropped callGraph, etc). Empty when no
      *  adaptive strategy fired. */

@@ -36,44 +36,51 @@ export interface SpecialistsRow {
     specialists: SpecialistAgentEntry[];
 }
 
-/** The row for the lenses as they stand. */
+const batchOf = (e: SpecialistAgentEntry) => e.batchIndex ?? 1;
+
+/**
+ * The row for the lenses as they stand. `stoppedBatches` are the batches whose
+ * generalist failed, which stops that batch's lenses: their entries leave the
+ * count, and the row reads stopped only when no batch is left.
+ */
 export function summarizeSpecialists(
     entries: SpecialistAgentEntry[],
-    stoppedByGeneralist: boolean,
+    stoppedBatches: ReadonlySet<number> = new Set(),
 ): SpecialistsRow {
     const title = 'Specialist Agents';
+    const live = entries.filter((e) => !stoppedBatches.has(batchOf(e)));
     const lenses = new Map<string, SpecialistAgentEntry[]>();
-    for (const e of entries) {
+    for (const e of live) {
         lenses.set(e.label, [...(lenses.get(e.label) ?? []), e]);
     }
     const total = lenses.size;
 
-    if (stoppedByGeneralist) {
+    if (stoppedBatches.size > 0 && total === 0) {
         return {
             status: AutomationStatus.SKIPPED,
             label: `${title} — stopped because the Generalist Agent failed`,
-            specialists: entries,
+            specialists: live,
         };
     }
     if (total === 0) {
         return {
             status: AutomationStatus.SKIPPED,
             label: `${title} — no agent reported`,
-            specialists: entries,
+            specialists: live,
         };
     }
-    if (entries.some((e) => e.status === 'running')) {
+    if (live.some((e) => e.status === 'running')) {
         return {
             status: AutomationStatus.IN_PROGRESS,
             label: `${title} — running ${total} agents`,
-            specialists: entries,
+            specialists: live,
         };
     }
 
     const ran = [...lenses.values()].filter((list) =>
         list.every((e) => e.status === 'success'),
     ).length;
-    const findings = entries.reduce((sum, e) => sum + (e.kept ?? 0), 0);
+    const findings = live.reduce((sum, e) => sum + (e.kept ?? 0), 0);
     const status =
         ran === total
             ? AutomationStatus.SUCCESS
@@ -81,17 +88,22 @@ export function summarizeSpecialists(
               ? AutomationStatus.ERROR
               : AutomationStatus.PARTIAL_ERROR;
     const ranText = ran === total ? `${total} ran` : `${ran} of ${total} ran`;
+    const stopped = stoppedBatches.size;
+    const stoppedText =
+        stopped > 0
+            ? ` · ${stopped} ${stopped === 1 ? 'batch' : 'batches'} stopped because the Generalist Agent failed`
+            : '';
     return {
         status,
-        label: `${title} — ${ranText} · ${findings} ${findings === 1 ? 'finding' : 'findings'}`,
-        specialists: entries,
+        label: `${title} — ${ranText} · ${findings} ${findings === 1 ? 'finding' : 'findings'}${stoppedText}`,
+        specialists: live,
     };
 }
 
 export class SpecialistsTimeline {
     private rowId?: string;
     private readonly entries = new Map<string, SpecialistAgentEntry>();
-    private stoppedByGeneralist = false;
+    private readonly stoppedBatches = new Set<number>();
     private chain: Promise<void> = Promise.resolve();
 
     constructor(private readonly writer: SpecialistsRowWriter) {}
@@ -109,11 +121,11 @@ export class SpecialistsTimeline {
             this.entries.set(`${e.label}#${e.batchIndex ?? 1}`, e);
         }
         if (event.specialistsStoppedByGeneralist) {
-            this.stoppedByGeneralist = true;
+            this.stoppedBatches.add(event.batchIndex ?? 1);
         }
         const row = summarizeSpecialists(
             [...this.entries.values()],
-            this.stoppedByGeneralist,
+            this.stoppedBatches,
         );
         const metadata = {
             visibility: 'secondary',
