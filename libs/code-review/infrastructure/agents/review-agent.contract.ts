@@ -51,6 +51,8 @@ import type { SkillRead } from '@libs/code-review/infrastructure/agents/knowledg
 import type { InstalledCustomAgentCli } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
+import type { HeavyLensOutcome } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
 /**
@@ -123,6 +125,29 @@ export interface AgentProgressEvent {
     coverage?: CoverageSummary;
     verification?: VerificationTraceSummary | null;
     anomalies?: AgentAnomalySummary;
+    /** Heavy mode's specialist agents (the lenses), on the event of the
+     *  `specialists` category: one entry per lens, and per batch when the
+     *  review is chunked. */
+    specialists?: SpecialistAgentEntry[];
+    /** The lenses were stopped because the generalist failed the review. */
+    specialistsStoppedByGeneralist?: boolean;
+}
+
+/** One specialist agent (heavy-mode lens) as the PR timeline shows it. */
+export interface SpecialistAgentEntry {
+    /** `lens-<id>`. */
+    label: string;
+    status: 'running' | 'success' | 'failed' | 'no-result';
+    batchIndex?: number;
+    /** Findings it returned, before verify. */
+    found?: number;
+    /** Its findings kept after verify, before the review's dedup. */
+    kept?: number;
+    durationMs?: number;
+    steps?: number;
+    toolCalls?: number;
+    /** Readable failure reason. */
+    error?: string;
 }
 
 // ─── ReviewAgentInput, composed from cohesive slices (ISP) ───────────────────
@@ -469,6 +494,8 @@ export interface AgentLoopInput {
     /** Heavy mode on a chunked review: the batch this run covers, so the
      *  lenses are not told one batch is the whole pull request. */
     lensBatch?: { index: number; total: number };
+    /** Called once, with the lens labels, when heavy mode's lenses start. */
+    onHeavyLensesStarted?: (labels: string[]) => void;
     /** Gated A/B knob (default off): wrap readFile so a range-less read of a
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */
@@ -682,6 +709,8 @@ export interface AgentLoopOutput {
     /** New findings each finder pass contributed (base, synthesis-rescue).
      *  Attribution the merged total hides: a pass costing a full run and
      *  adding nothing looks identical otherwise. */
+    /** How each heavy-mode lens ended. Absent when no lens ran. */
+    heavyLensOutcomes?: HeavyLensOutcome[];
     recallPasses?: Array<{
         label: string;
         added: number;

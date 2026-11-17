@@ -186,6 +186,9 @@ describe('runFinderWithVerify in heavy mode', () => {
             ['generalist-base', 1],
             ['lens-data-exposure', 1],
         ]);
+        expect(
+            r.lensOutcomes?.map((o) => [o.label, o.status, o.found]),
+        ).toEqual([['lens-data-exposure', 'success', 1]]);
     });
 
     it('gives a lens no completion gate, which the generalist keeps', () => {
@@ -257,5 +260,79 @@ describe('runFinderWithVerify in heavy mode', () => {
 
         expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
         expect(r.passStats.map((p) => p.label)).toEqual(['generalist-base']);
+        expect(r.lensOutcomes).toEqual([
+            expect.objectContaining({
+                label: 'lens-data-exposure',
+                status: 'failed',
+                found: 0,
+                error: { message: 'lens down', name: 'Error' },
+            }),
+        ]);
+    });
+
+    // The runner does not reject on a provider error: it returns an
+    // error-status state. Such a lens is a failed one, not an empty success.
+    it('reports a lens whose provider call failed as failed', async () => {
+        markLensStarted();
+        const real = new AiSdkAgentRunner(undefined);
+        const runner = {
+            run: (spec: any, input: any, c: ToolContext) =>
+                spec.systemPrompt === HEAVY_LENS_SYSTEM_PROMPT
+                    ? Promise.resolve(
+                          lensState('error', [
+                              {
+                                  at: 0,
+                                  source: 'runner',
+                                  kind: 'error',
+                                  detail: {
+                                      message: 'Too Many Requests',
+                                      name: 'AI_APICallError',
+                                      status: 429,
+                                  },
+                              },
+                          ]),
+                      )
+                    : real.run(spec, input, c),
+        } as unknown as AiSdkAgentRunner;
+
+        const r = await run(runner);
+
+        expect(r.lensOutcomes).toEqual([
+            expect.objectContaining({
+                label: 'lens-data-exposure',
+                status: 'failed',
+                error: expect.objectContaining({
+                    message: 'Too Many Requests',
+                    status: 429,
+                }),
+            }),
+        ]);
+    });
+
+    it('reports a lens that stopped without a result and found nothing as no-result', async () => {
+        markLensStarted();
+        const real = new AiSdkAgentRunner(undefined);
+        const runner = {
+            run: (spec: any, input: any, c: ToolContext) =>
+                spec.systemPrompt === HEAVY_LENS_SYSTEM_PROMPT
+                    ? Promise.resolve(lensState('stopped', []))
+                    : real.run(spec, input, c),
+        } as unknown as AiSdkAgentRunner;
+
+        const r = await run(runner);
+
+        expect(r.lensOutcomes?.map((o) => o.status)).toEqual(['no-result']);
     });
 });
+
+function lensState(status: 'error' | 'stopped', trace: unknown[]) {
+    return {
+        runId: 'lens',
+        agentId: 'lens',
+        status,
+        steps: [],
+        artifacts: [],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        trace,
+    };
+}

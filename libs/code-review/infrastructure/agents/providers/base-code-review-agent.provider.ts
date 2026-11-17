@@ -58,6 +58,12 @@ import {
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
+import {
+    SPECIALISTS_CATEGORY,
+    finishedSpecialists,
+    keptByLensTotal,
+    runningSpecialists,
+} from '@libs/code-review/infrastructure/agents/collaborators/specialist-agents';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
@@ -315,6 +321,18 @@ export abstract class BaseCodeReviewAgentProvider {
             agentReplicaIndex: input.agentReplicaIndex,
             agentReplicaTotal: input.agentReplicaTotal,
         });
+        // Heavy mode's lenses report as one "Specialist Agents" entry: once
+        // when they start, once when the agent finishes.
+        const specialistsProgress = new AgentProgressReporter(
+            input.onAgentProgress,
+            {
+                agentName: identity.name,
+                agentCategory: SPECIALISTS_CATEGORY,
+                agentReplicaIndex: input.agentReplicaIndex,
+                agentReplicaTotal: input.agentReplicaTotal,
+            },
+        );
+        let specialistsStarted = false;
 
         this.agentLogger.debug({
             message: `[AGENT] Starting ${identity.name} for PR#${input.prNumber}`,
@@ -807,6 +825,16 @@ export abstract class BaseCodeReviewAgentProvider {
                     // Heavy mode (`--heavy`) — forwarded explicitly: loopParams is
                     // built field-by-field, so without this line the lenses never run.
                     heavy: this.runsHeavyLenses() && input.heavy,
+                    onHeavyLensesStarted: (labels: string[]) => {
+                        specialistsStarted = true;
+                        specialistsProgress.send({
+                            status: 'started',
+                            specialists: runningSpecialists(
+                                labels,
+                                input.batchIndex,
+                            ),
+                        });
+                    },
                     // A chunked review runs the lenses per batch: tell them so.
                     ...(this.runsHeavyLenses() &&
                         input.heavy &&
@@ -969,9 +997,30 @@ export abstract class BaseCodeReviewAgentProvider {
                         ? 'max-steps'
                         : 'stop';
 
+            // Each agent counts its own findings: the lenses' leave the
+            // generalist's count and go on the Specialist Agents entry.
+            const lensKept = keptByLensTotal(mapped.keptByLens);
+            if (agentResult.heavyLensOutcomes?.length) {
+                const specialists = finishedSpecialists(
+                    agentResult.heavyLensOutcomes,
+                    mapped.keptByLens,
+                    input.batchIndex,
+                    typeof byokConfig?.provider === 'string'
+                        ? byokConfig.provider
+                        : undefined,
+                );
+                specialistsProgress.send({
+                    status: specialists.every((e) => e.status !== 'success')
+                        ? 'error'
+                        : 'completed',
+                    findings: lensKept,
+                    specialists,
+                });
+            }
+
             progress.send({
                 status: hitHardLimit ? 'error' : 'completed',
-                findings: suggestions.length,
+                findings: suggestions.length - lensKept,
                 durationMs,
                 totalTokens: agentResult.usage.totalTokens,
                 step: agentResult.steps,
@@ -1073,6 +1122,14 @@ export abstract class BaseCodeReviewAgentProvider {
                 );
             if (error instanceof Error) {
                 attachClassification(error, classification);
+            }
+
+            // The generalist failing stops its lenses (runFinderWithVerify).
+            if (specialistsStarted) {
+                specialistsProgress.send({
+                    status: 'error',
+                    specialistsStoppedByGeneralist: true,
+                });
             }
 
             progress.send({

@@ -134,6 +134,8 @@ export interface RawFinding {
     source?: CodeSuggestion['source'];
     /** On a discarded finding: why the check set it aside. */
     discardReason?: string;
+    /** The heavy-mode lens that found it (`lens-<id>`); unset for the agent's own. */
+    producedBy?: string;
 }
 
 export interface MappableAgentResult {
@@ -173,6 +175,8 @@ export interface MappedFindings {
     discardedByVerifyError: Partial<CodeSuggestion>[];
     /** Findings dropped because the file they named is not in the PR. */
     droppedForPath: number;
+    /** Mapped findings per heavy-mode lens, by `producedBy`. */
+    keptByLens: Record<string, number>;
 }
 
 /**
@@ -347,6 +351,13 @@ export function mapAgentFindings(
         },
     );
 
+    const keptByLens: Record<string, number> = {};
+    for (const s of rawSuggestions) {
+        if (s.producedBy?.startsWith('lens-')) {
+            keptByLens[s.producedBy] = (keptByLens[s.producedBy] ?? 0) + 1;
+        }
+    }
+
     const suggestions = rawSuggestions.map((s) => {
         const matchedRule = s.ruleUuid
             ? kodyRulesByUuid.get(s.ruleUuid)
@@ -426,5 +437,6 @@ export function mapAgentFindings(
         ]),
         discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
         droppedForPath,
+        keptByLens,
     };
 }

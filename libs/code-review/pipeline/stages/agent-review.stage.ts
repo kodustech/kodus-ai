@@ -65,6 +65,11 @@ import {
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
+import {
+    SPECIALISTS_STAGE_NAME,
+    SpecialistsTimeline,
+} from './specialists-timeline';
+import { SPECIALISTS_CATEGORY } from '@libs/code-review/infrastructure/agents/collaborators/specialist-agents';
 import type { KnowledgeCodeManagementPort } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import {
     resolveReviewKnowledge,
@@ -3788,7 +3793,32 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             Array<{ tool: string; args: string }>
         >();
 
+        const filter = executionUuid
+            ? { uuid: executionUuid }
+            : { pullRequestNumber: prNumber, repositoryId };
+        const specialists = new SpecialistsTimeline({
+            create: async (label, metadata) => {
+                const result =
+                    await this.automationExecutionService.updateCodeReview(
+                        filter,
+                        { status: AutomationStatus.IN_PROGRESS },
+                        label,
+                        SPECIALISTS_STAGE_NAME,
+                        metadata,
+                    );
+                return result?.stageLog?.uuid;
+            },
+            update: (uuid, data) =>
+                this.automationExecutionService.updateStageLog(uuid, data),
+        });
+
         return (event: AgentProgressEvent) => {
+            if (event.agentCategory === SPECIALISTS_CATEGORY) {
+                if (executionUuid || prNumber) {
+                    void specialists.record(event);
+                }
+                return;
+            }
             const stageName = this.getAgentStageName(event);
             const label = this.formatAgentLabel(event, customAgentNames);
 

@@ -914,3 +914,121 @@ describe('#2171 incomplete and unverified', () => {
         );
     });
 });
+
+describe('heavy mode lenses on the timeline (#2578)', () => {
+    class LensAgent extends TestReviewAgent {
+        protected runsHeavyLenses(): boolean {
+            return true;
+        }
+    }
+    const generalistFinding = makeHarnessResult().findings.suggestions[0];
+    const lensFinding = {
+        ...generalistFinding,
+        suggestionContent: 'Token logged in plain text',
+        producedBy: 'lens-data-exposure',
+    };
+
+    it('reports the lenses as one specialists entry and counts each agent its own findings', async () => {
+        runLoopMock.mockImplementation(async (params: any) => {
+            params.onHeavyLensesStarted([
+                'lens-data-exposure',
+                'lens-text-that-ships',
+            ]);
+            return makeHarnessResult({
+                findings: {
+                    reasoning: 'r',
+                    suggestions: [generalistFinding, lensFinding],
+                },
+                heavyLensOutcomes: [
+                    {
+                        label: 'lens-data-exposure',
+                        status: 'success',
+                        found: 2,
+                        ms: 900,
+                        steps: 3,
+                        toolCalls: 4,
+                    },
+                    {
+                        label: 'lens-text-that-ships',
+                        status: 'failed',
+                        found: 0,
+                        ms: 300,
+                        steps: 1,
+                        toolCalls: 0,
+                        error: { message: 'Too Many Requests', status: 429 },
+                    },
+                ],
+            });
+        });
+        const events: AgentProgressEvent[] = [];
+
+        await new LensAgent({} as any, {} as any).execute(
+            makeInput({ heavy: true, onAgentProgress: (e) => events.push(e) }),
+        );
+
+        const specialists = events.filter(
+            (e) => e.agentCategory === 'specialists',
+        );
+        expect(specialists.map((e) => e.status)).toEqual([
+            'started',
+            'completed',
+        ]);
+        expect(specialists[0].specialists?.map((s) => s.status)).toEqual([
+            'running',
+            'running',
+        ]);
+        expect(specialists[1].specialists).toEqual([
+            expect.objectContaining({
+                label: 'lens-data-exposure',
+                status: 'success',
+                found: 2,
+                kept: 1,
+            }),
+            expect.objectContaining({
+                label: 'lens-text-that-ships',
+                status: 'failed',
+                kept: 0,
+                error: expect.any(String),
+            }),
+        ]);
+        const generalist = events.find(
+            (e) =>
+                e.agentCategory !== 'specialists' && e.status === 'completed',
+        );
+        expect(generalist?.findings).toBe(1);
+    });
+
+    it('reports the lenses as stopped when the generalist fails', async () => {
+        runLoopMock.mockImplementation(async (params: any) => {
+            params.onHeavyLensesStarted(['lens-data-exposure']);
+            throw new Error('generalist down');
+        });
+        const events: AgentProgressEvent[] = [];
+
+        await expect(
+            new LensAgent({} as any, {} as any).execute(
+                makeInput({
+                    heavy: true,
+                    onAgentProgress: (e) => events.push(e),
+                }),
+            ),
+        ).rejects.toThrow('generalist down');
+
+        expect(
+            events.filter((e) => e.agentCategory === 'specialists').pop(),
+        ).toMatchObject({
+            status: 'error',
+            specialistsStoppedByGeneralist: true,
+        });
+    });
+
+    it('sends no specialists entry for a review without lenses', async () => {
+        const events: AgentProgressEvent[] = [];
+        await newAgent().execute(
+            makeInput({ onAgentProgress: (e) => events.push(e) }),
+        );
+        expect(events.some((e) => e.agentCategory === 'specialists')).toBe(
+            false,
+        );
+    });
+});
