@@ -111,13 +111,31 @@ describe('checkFix', () => {
                 'for f in src/main; do echo $f; done',
                 'for f in src/*; do echo $f; done',
             ],
-            ['typescript', 'p => /src/.test(p)', 'p => /src\\/*/.test(p)'],
+            ['typescript', 'const r = /src/;', 'const r = /src\\/*/;'],
         ])(
             'accepts a %s glob without treating it as a block comment',
             (language, existing, improved) => {
                 expect(checkFix(existing, improved, language)).toBeNull();
             },
         );
+
+        it.each([
+            ['Dockerfile', 'COPY build/ /app/', 'COPY dist/* /app/'],
+            ['Makefile', 'rm -f build/x.o', 'rm -f build/*.o'],
+            ['bash', 'cp build/a out/', 'cp dist/* out/'],
+            ['bash', 'cp build/a out/', 'cp /* out'],
+        ])('accepts the requested %s glob', (language, existing, improved) => {
+            expect(checkFix(existing, improved, language)).toBeNull();
+        });
+
+        it.each([
+            'c', 'c++', 'javascript', 'typescript', 'java', 'go', 'rust',
+            'css', 'php', 'kotlin', 'swift', 'c#', 'sql', ' TypeScript ',
+            undefined,
+        ])('detects an adjacent block comment for %s', (language) => {
+            expect(checkFix('x=a;', 'x=a/* retry', language)).toBe('truncated');
+            expect(checkFix('run(', 'run(/* retry', language)).toBe('truncated');
+        });
 
         it('flags a fix cut inside an unterminated block comment', () => {
             const existingCode = 'if (a) {\n  run();';

@@ -335,11 +335,16 @@ function isStructurallyBroken(
     // A `/*` that survives comment stripping never closed: applied, it would
     // comment out the rest of the file. Equal bracket signatures must not
     // excuse it, unless the replaced lines already carried the same dangling
-    // opener. Only comment positions count, so globs such as dir/* survive.
-    const opensBlockComment = (text: string) => /(^|\s)\/\*/m.test(text);
+    // opener. Without a language, retain the original conservative check.
+    const blockCommentLanguage =
+        !language?.trim() ||
+        /^(?:c|c\+\+|cpp|cxx|objective-c|objective-c\+\+|javascript|javascriptreact|js|jsx|typescript|typescriptreact|ts|tsx|java|go|golang|rust|css|scss|php|kotlin|swift|c#|csharp|sql)$/i.test(
+            language.trim(),
+        );
     if (
-        opensBlockComment(nonLiteral) &&
-        (reference === undefined || !opensBlockComment(nonLiteralOf(reference)))
+        blockCommentLanguage &&
+        nonLiteral.includes('/*') &&
+        (reference === undefined || !nonLiteralOf(reference).includes('/*'))
     ) {
         return true;
     }
@@ -408,9 +413,9 @@ function startsWithListMarker(code: string): boolean {
  * before the more involved structural checks run.
  *
  * `language` (the finding's own `CodeSuggestion.language`) is optional and
- * only changes how a single-quote character is read — everything else is
- * language-agnostic by construction. Omitting it is always safe: it just
- * falls back to the general (non-Rust) reading.
+ * controls Rust single-quote handling and enables the dangling block-comment
+ * check only for languages with block comments. An omitted or blank language
+ * retains that check and the general (non-Rust) quote handling.
  */
 export function checkFix(
     existingCode: string | null | undefined,
