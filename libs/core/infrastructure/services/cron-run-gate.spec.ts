@@ -29,8 +29,27 @@ describe('CronRunGate', () => {
 
         const started = Date.now();
         await gate.stop(50);
+        const elapsed = Date.now() - started;
 
-        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(elapsed).toBeGreaterThanOrEqual(45);
+        expect(elapsed).toBeLessThan(300);
+    });
+
+    it('waits for an older run still going when a newer tick started', async () => {
+        const gate = new CronRunGate();
+        let releaseOlder!: () => void;
+        let stopped = false;
+
+        void gate.run(() => new Promise<void>((r) => (releaseOlder = r)));
+        void gate.run(async () => undefined);
+
+        const stopping = gate.stop(1_000).then(() => (stopped = true));
+        await new Promise((r) => setTimeout(r, 20));
+        expect(stopped).toBe(false);
+
+        releaseOlder();
+        await stopping;
+        expect(stopped).toBe(true);
     });
 
     it('starts no run once shutdown began', async () => {

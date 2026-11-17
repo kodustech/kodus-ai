@@ -15,32 +15,33 @@ export const CRON_SHUTDOWN_BUDGET_MS = 10_000;
 export class CronRunGate {
     /** Set once shutdown began; read it before each unit of work. */
     stopping = false;
-    private current: Promise<unknown> | null = null;
+    // Nest fires a tick even while the previous one still runs, so more
+    // than one run can be in flight at shutdown.
+    private readonly inFlight = new Set<Promise<unknown>>();
 
     async run<T>(work: () => Promise<T>): Promise<T | undefined> {
         if (this.stopping) {
             return undefined;
         }
         const running = work();
-        this.current = running;
+        this.inFlight.add(running);
         try {
             return await running;
         } finally {
-            if (this.current === running) {
-                this.current = null;
-            }
+            this.inFlight.delete(running);
         }
     }
 
-    /** Waits for the run in progress, at most `budgetMs`. */
+    /** Waits for every run in progress, at most `budgetMs` in all. */
     async stop(budgetMs = CRON_SHUTDOWN_BUDGET_MS): Promise<void> {
         this.stopping = true;
-        if (this.current) {
-            await runWithBoundedTimeout(
-                this.current,
-                budgetMs,
-                'cron run at shutdown',
-            ).catch(() => undefined);
+        if (this.inFlight.size === 0) {
+            return;
         }
+        await runWithBoundedTimeout(
+            Promise.allSettled([...this.inFlight]),
+            budgetMs,
+            'cron run at shutdown',
+        ).catch(() => undefined);
     }
 }
