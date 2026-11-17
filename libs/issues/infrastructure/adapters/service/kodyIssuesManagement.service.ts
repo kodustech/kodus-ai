@@ -450,11 +450,33 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
+                    // The id comes back from the model, and updateStatus
+                    // looks it up by _id alone: accept only issues this
+                    // file's prompt showed. A mangled id failed the whole
+                    // batch with a CastError; a made-up valid one would
+                    // resolve an issue that was never checked.
+                    const shownIssueIds = new Set(
+                        openIssues.map((issue) => issue.uuid),
+                    );
                     // Push into the existing `updatePromises` array
                     // instead of awaiting sequentially — the outer
                     // Promise.all below then runs every updateStatus
                     // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
+                        if (!shownIssueIds.has(resolution.issueId)) {
+                            this.logger.warn({
+                                message:
+                                    'Ignoring an issue id the model returned that was not in its prompt',
+                                context: KodyIssuesManagementService.name,
+                                metadata: {
+                                    organizationId:
+                                        context.organizationAndTeamData
+                                            .organizationId,
+                                    filePath: file.path,
+                                },
+                            });
+                            continue;
+                        }
                         if (!resolution.isIssuePresentInCode) {
                             updatePromises.push(
                                 this.issuesService.updateStatus(
