@@ -55,9 +55,12 @@ const MANAGED_CATEGORY_BY_ID: Record<string, string> = Object.fromEntries(
 //   - context7-default: dropped from the catalog on 2026-07-01 (5702c4c26).
 //   - kodus-github-issues-default: replaced by kodus-issues-default on
 //     2026-06-12 (c6bc2dd64); /mcp/github-issues no longer exists.
+//   - kodus-osv-default: mcp-osv.kodus.io answers 404 "Application not
+//     found" (seen 2026-09-30, still on 2026-11-17).
 export const RETIRED_MANAGED_INTEGRATION_IDS = [
     'context7-default',
     'kodus-github-issues-default',
+    'kodus-osv-default',
 ];
 
 // The available-integrations catalog comes from a slow per-provider fetch
