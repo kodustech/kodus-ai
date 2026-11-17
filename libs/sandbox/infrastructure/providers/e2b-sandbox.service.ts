@@ -23,6 +23,11 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { hasParentDirSegment } from './path-segments';
 import { readWithinRootCommand } from './read-within-root';
+import type {
+    EgressRoute,
+    FixedIpReason,
+    ISandboxEgressPolicy,
+} from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
 import {
     fetchSubmodules,
     isContainedRelativePath,
@@ -49,6 +54,34 @@ export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
     return apiNodeEnv || 'unknown';
 }
 const REPO_DIR = '/home/user/repo';
+
+// The template's transparent proxy: OUTPUT jumps to the SHADOWSOCKS chain
+// (e2b-sandbox/iptables-rules.sh). Removing the jump sends traffic direct.
+const EGRESS_JUMP_CHECK =
+    'iptables -t nat -C OUTPUT -p tcp -j SHADOWSOCKS 2>/dev/null';
+const EGRESS_JUMP_DELETE = 'iptables -t nat -D OUTPUT -p tcp -j SHADOWSOCKS';
+// How long a direct sandbox waits for the Git host to accept a connection.
+const EGRESS_REACH_TIMEOUT_S = 10;
+
+/** Why a direct clone failed, read from git's own words. */
+export function fixedIpReasonFrom(error: unknown): FixedIpReason {
+    const text =
+        error instanceof CommandExitError
+            ? `${error.stderr}\n${error.stdout}`
+            : error instanceof Error
+              ? error.message
+              : String(error);
+    if (/IP allow ?list/i.test(text)) return 'ip_allow_list';
+    if (/returned error: 403|\b403 Forbidden/i.test(text)) return 'forbidden';
+    if (
+        /Failed to connect|Connection (refused|timed out)|Could not resolve host|Operation timed out|Network is unreachable/i.test(
+            text,
+        )
+    ) {
+        return 'unreachable';
+    }
+    return 'other';
+}
 
 const TIMEOUTS = {
     // Shallow `git fetch` of the PR head / base branch. Kept at 5 min: the
@@ -643,7 +676,10 @@ export async function dropE2BReviewUserPrivileges(
 export class E2BSandboxService implements ISandboxProvider {
     private readonly logger = createLogger(E2BSandboxService.name);
 
-    constructor(private readonly configService: ConfigService) {}
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly egressPolicy?: ISandboxEgressPolicy,
+    ) {}
 
     isAvailable(): boolean {
         return !!this.configService.get<string>('API_E2B_KEY');
@@ -651,6 +687,171 @@ export class E2BSandboxService implements ISandboxProvider {
 
     isProxyConfigured(): boolean {
         return !!this.configService.get<string>('E2B_PROXY_HOST');
+    }
+
+    /** `fixed_ip` unless the policy says this team may leave direct. */
+    private async resolveEgressRoute(
+        params: CreateSandboxParams,
+    ): Promise<EgressRoute> {
+        const { organizationId, teamId } = params;
+        if (!this.egressPolicy || !organizationId || !teamId) {
+            return 'fixed_ip';
+        }
+        try {
+            return await this.egressPolicy.route({ organizationId, teamId });
+        } catch {
+            return 'fixed_ip';
+        }
+    }
+
+    /**
+     * Takes this sandbox off the egress proxy: removes the jump from OUTPUT
+     * to the template's SHADOWSOCKS chain, so new connections leave direct.
+     * The chain and sslocal stay, for `useFixedIpEgress` to put back.
+     * False (the sandbox stays on the fixed IP) when that cannot be done.
+     */
+    private async useDirectEgress(sandbox: Sandbox): Promise<boolean> {
+        const done = await this.runAsRoot(
+            sandbox,
+            [
+                'command -v iptables >/dev/null 2>&1 || exit 0',
+                `for i in 1 2 3 4 5; do ${EGRESS_JUMP_CHECK} || exit 0; ${EGRESS_JUMP_DELETE} || exit 1; done`,
+                `! ${EGRESS_JUMP_CHECK}`,
+            ].join('; '),
+        );
+        this.logger.log({
+            message: done
+                ? '[egress] route=direct'
+                : '[egress] could not take the sandbox off the egress proxy; route=fixed_ip',
+            context: E2BSandboxService.name,
+            metadata: { sandboxId: sandbox.sandboxId, direct: done },
+        });
+        return done;
+    }
+
+    /** Puts the sandbox back on the egress proxy. */
+    private async useFixedIpEgress(sandbox: Sandbox): Promise<boolean> {
+        const done = await this.runAsRoot(
+            sandbox,
+            `${EGRESS_JUMP_CHECK} || iptables -t nat -A OUTPUT -p tcp -j SHADOWSOCKS`,
+        );
+        if (done) await this.setupProxy(sandbox);
+        return done;
+    }
+
+    private async runAsRoot(sandbox: Sandbox, cmd: string): Promise<boolean> {
+        try {
+            const result = await sandbox.commands.run(cmd, {
+                user: 'root',
+                timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
+            });
+            return result.exitCode === 0;
+        } catch (error) {
+            if (!(error instanceof CommandExitError)) {
+                this.logger.warn({
+                    message: '[egress] root command failed',
+                    context: E2BSandboxService.name,
+                    error,
+                });
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Clones on the route the sandbox is on. A direct clone that cannot
+     * reach the host, or that the host refuses, is put back on the fixed IP
+     * and tried once more; when that works, the team's Git host needs our
+     * IP, and the team is marked so its next sandboxes start on it.
+     */
+    private async cloneWithEgressFallback(
+        sandbox: Sandbox,
+        params: CreateSandboxParams,
+        route: EgressRoute,
+    ): Promise<void> {
+        if (route !== 'direct') {
+            await this.cloneRepository(sandbox, params);
+            return;
+        }
+
+        let reason: FixedIpReason;
+        let directError: unknown;
+        if (await this.canReachGitHost(sandbox, params.cloneUrl)) {
+            try {
+                await this.cloneRepository(sandbox, params);
+                return;
+            } catch (error) {
+                directError = error;
+                reason = fixedIpReasonFrom(error);
+            }
+        } else {
+            reason = 'unreachable';
+        }
+
+        if (!(await this.useFixedIpEgress(sandbox))) {
+            if (directError) throw directError;
+            await this.cloneRepository(sandbox, params);
+            return;
+        }
+
+        // Throws when the clone fails on the fixed IP too: not an egress
+        // problem, and nothing is marked.
+        await this.cloneRepository(sandbox, params);
+
+        this.logger.log({
+            message: `[egress] direct clone failed (${reason}), cloned through the fixed IP`,
+            context: E2BSandboxService.name,
+            metadata: {
+                organizationId: params.organizationId,
+                teamId: params.teamId,
+                platform: params.platform,
+                reason,
+            },
+        });
+        if (this.egressPolicy && params.organizationId && params.teamId) {
+            void this.egressPolicy
+                .markFixedIpRequired(
+                    {
+                        organizationId: params.organizationId,
+                        teamId: params.teamId,
+                    },
+                    reason,
+                )
+                .catch(() => undefined);
+        }
+    }
+
+    /**
+     * A TCP connect to the Git host, bounded: a firewall that drops our
+     * packets would otherwise hold the clone for its whole timeout.
+     * True when the URL cannot be read (the clone then speaks for itself).
+     */
+    private async canReachGitHost(
+        sandbox: Sandbox,
+        cloneUrl: string,
+    ): Promise<boolean> {
+        let host: string;
+        let port: string;
+        try {
+            const url = new URL(cloneUrl);
+            host = url.hostname.replace(/^\[|\]$/g, '');
+            port = url.port || (url.protocol === 'http:' ? '80' : '443');
+        } catch {
+            return true;
+        }
+        if (!host) return true;
+        try {
+            const result = await sandbox.commands.run(
+                `timeout ${EGRESS_REACH_TIMEOUT_S} bash -c 'exec 3<>"/dev/tcp/$EGRESS_HOST/$EGRESS_PORT"'`,
+                {
+                    envs: { EGRESS_HOST: host, EGRESS_PORT: port },
+                    timeoutMs: (EGRESS_REACH_TIMEOUT_S + 5) * 1000,
+                },
+            );
+            return result.exitCode === 0;
+        } catch {
+            return false;
+        }
     }
 
     async createSandboxWithRepo(
@@ -701,15 +902,30 @@ export class E2BSandboxService implements ISandboxProvider {
                 await this.installDependencies(sandbox);
             }
 
-            // Configure Shadowsocks proxy for IP tunneling (clients with restricted git access)
-            await this.setupProxy(sandbox);
+            // The template boots with every outbound TCP connection going
+            // through the egress proxy (fixed IP). Teams whose Git host does
+            // not need that IP leave direct instead; see
+            // SandboxEgressPolicyService for who decides.
+            let egressRoute: EgressRoute = usedTemplate
+                ? await this.resolveEgressRoute(params)
+                : 'fixed_ip';
+            if (
+                egressRoute === 'direct' &&
+                !(await this.useDirectEgress(sandbox))
+            ) {
+                egressRoute = 'fixed_ip';
+            }
+            if (egressRoute === 'fixed_ip') {
+                // Configure Shadowsocks proxy for IP tunneling (clients with restricted git access)
+                await this.setupProxy(sandbox);
+            }
 
             // Before any repository content arrives: from here on nothing
             // running as the review user can become root.
             const privilegesDropped =
                 await this.dropReviewUserPrivileges(sandbox);
 
-            await this.cloneRepository(sandbox, params);
+            await this.cloneWithEgressFallback(sandbox, params, egressRoute);
 
             // CLI mode: when the user's branch isn't pushed (or there are
             // uncommitted changes), the regular fetch above fails — we
