@@ -66,6 +66,12 @@ describe('UnifiedLogHandler repository name lookups', () => {
             contextResolutionService.getRepositoryNameByOrganizationAndRepository,
         ).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledTimes(1);
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationId: ORG,
+                repositoryId: REPO,
+            }),
+        );
         expect(names).toEqual(Array(26).fill('Unknown'));
     });
 
@@ -100,23 +106,56 @@ describe('UnifiedLogHandler repository name lookups', () => {
         expect(logger.error).toHaveBeenCalledTimes(1);
     });
 
-    it('looks the name up again once the burst is over', async () => {
-        // No permanent cache: a repository that is added to the integration
-        // config after a failed burst has to resolve on the next record.
+    it('shares a burst, and drops the share before the next one', async () => {
+        // Two properties in one measurement, and both matter: a burst is one
+        // lookup (the old code did 26), and the entry is gone once it settles
+        // (a cache that never forgot would do 1 for the two bursts together).
         const { contextResolutionService, name } = build();
-        contextResolutionService.getRepositoryNameByOrganizationAndRepository.mockRejectedValueOnce(
-            new Error('not found'),
-        );
-        await name(REPO, ORG);
-
-        contextResolutionService.getRepositoryNameByOrganizationAndRepository.mockResolvedValueOnce(
+        contextResolutionService.getRepositoryNameByOrganizationAndRepository.mockResolvedValue(
             'acme/api',
         );
-        await expect(name(REPO, ORG)).resolves.toBe('acme/api');
+
+        await Promise.all(Array.from({ length: 26 }, () => name(REPO, ORG)));
+        await Promise.all(Array.from({ length: 26 }, () => name(REPO, ORG)));
 
         expect(
             contextResolutionService.getRepositoryNameByOrganizationAndRepository,
         ).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up on a lookup that never answers, once, and stops sharing it', async () => {
+        // A read that hangs must not hold the audit line, and must not hold
+        // every later record of that repository behind the same stuck promise.
+        const { contextResolutionService, logger, name } = build();
+        contextResolutionService.getRepositoryNameByOrganizationAndRepository.mockReturnValue(
+            new Promise(() => {}),
+        );
+
+        jest.useFakeTimers();
+        try {
+            const burst = Promise.all(
+                Array.from({ length: 26 }, () => name(REPO, ORG)),
+            );
+            await jest.advanceTimersByTimeAsync(5000);
+
+            await expect(burst).resolves.toEqual(Array(26).fill('Unknown'));
+            expect(logger.error).toHaveBeenCalledTimes(1);
+            expect(
+                contextResolutionService.getRepositoryNameByOrganizationAndRepository,
+            ).toHaveBeenCalledTimes(1);
+
+            // The entry is gone: the next record tries again instead of
+            // awaiting the promise that never settles.
+            contextResolutionService.getRepositoryNameByOrganizationAndRepository.mockResolvedValue(
+                'acme/api',
+            );
+            await expect(name(REPO, ORG)).resolves.toBe('acme/api');
+            expect(
+                contextResolutionService.getRepositoryNameByOrganizationAndRepository,
+            ).toHaveBeenCalledTimes(2);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('does not look anything up without a repository or an organization', async () => {
