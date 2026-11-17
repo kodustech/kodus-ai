@@ -183,17 +183,24 @@ describe('retrieveForShard — symbol-references (KRC-14)', () => {
         expect(result.unmet).toEqual([]);
     });
 
-    it('reports the rule unmet when the hunk defines no symbol to search on', async () => {
-        const rules = [rule('symbol-references')];
+    it('judges the rule on the diff when the hunk defines no symbol to search on', async () => {
+        // Nothing was asked of the repository, so nothing failed: in prod
+        // (16-17/11) treating this as unmet skipped 3,422 rule judgments in
+        // 51 organisations with a working sandbox.
+        const grep = jest.fn(async () => '');
+        const warn = jest.fn();
 
         const result = await retrieveForShard({
             file: file(),
-            rules,
-            lookup: lookup(),
+            rules: [rule('symbol-references')],
+            lookup: lookup({ grep }),
+            logger: { warn },
         });
 
+        expect(result.unmet).toEqual([]);
         expect(result.slices).toEqual([]);
-        expect(result.unmet).toEqual(rules);
+        expect(grep).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
     });
 
     it('reports the rule unmet when the repository cannot be grepped', async () => {
@@ -292,14 +299,24 @@ describe('retrieveForShard — mixed needs in one shard', () => {
         const symbolRule = rule('symbol-references', { uuid: 'symbol' });
 
         const result = await retrieveForShard({
-            file: file(),
+            file: file({
+                patch: [
+                    '@@ -1,1 +1,2 @@',
+                    '+export function renderInvoice(order) {}',
+                ].join('\n'),
+            }),
             rules: [siblingRule, symbolRule],
-            lookup: lookup({ exists: jest.fn(async () => false) }),
+            lookup: lookup({
+                exists: jest.fn(async () => false),
+                grep: jest.fn(async () => {
+                    throw new Error('grep failed');
+                }),
+            }),
         });
 
-        // The hunk defines no symbol, so only the symbol rule is unmet; the
-        // sibling slice is still built and the shard keeps its widest
-        // satisfiable need.
+        // The grep fails, so only the symbol rule is unmet; the sibling
+        // slice is still built and the shard keeps its widest satisfiable
+        // need.
         expect(result.unmet).toEqual([symbolRule]);
         expect(result.slices.map((s) => s.kind)).toEqual(['sibling-file']);
         expect(resolveShardNeed([siblingRule, symbolRule])).toBe(
@@ -471,8 +488,13 @@ describe('#1826 — a failed retrieval must not take a working rule out of enfor
     });
 
     it('still SKIPS a symbol-references rule — judging it blind is the bug', async () => {
+        // The hunk must define a symbol, or nothing is ever grepped and the
+        // broken lookup is never exercised.
         const res = await retrieveForShard({
-            file,
+            file: {
+                ...file,
+                patch: '@@ -1,2 +1,3 @@\n context\n+export function buildReport(rows) {}\n',
+            },
             rules: [ruleNeeding('symbol-references')],
             lookup: brokenLookup(),
             changedFilenames: [file.filename],
@@ -494,7 +516,10 @@ describe('#1826 — a failed retrieval must not take a working rule out of enfor
 
     it('skips only the rule that reaches outside, not its full-file neighbour', async () => {
         const res = await retrieveForShard({
-            file,
+            file: {
+                ...file,
+                patch: '@@ -1,2 +1,3 @@\n context\n+export function buildReport(rows) {}\n',
+            },
             rules: [ruleNeeding('full-file'), ruleNeeding('symbol-references')],
             lookup: brokenLookup(),
             changedFilenames: [file.filename],

@@ -228,9 +228,10 @@ const diffOf = (file: FileChange): string =>
 /**
  * Repository occurrences of the symbols this hunk defines (KRC-14).
  *
- * A hunk that defines no symbol leaves the need unanswerable: there is no
- * anchor to search on, so the rule is reported unmet rather than judged on the
- * hunk it explicitly said was not enough.
+ * A hunk that defines no symbol has no repository question to ask, so nothing
+ * is retrieved and the rule is judged on the diff. That is not the #1724 case
+ * (a lookup that FAILED and left the model inventing an answer): nothing was
+ * looked up, so nothing is missing.
  */
 async function retrieveSymbolReferences(
     file: FileChange,
@@ -243,9 +244,7 @@ async function retrieveSymbolReferences(
         .slice(0, MAX_SYMBOLS_PER_FILE);
 
     if (symbols.length === 0) {
-        throw new UnmetContextNeedError(
-            'the hunk defines no symbol to search the repository for',
-        );
+        return [];
     }
 
     const slices: RetrievedSlice[] = [];
