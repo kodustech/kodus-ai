@@ -93,6 +93,17 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const delayedExchange = `${baseExchange}.delayed`;
         const dlxExchange = `${baseExchange}.dlx`;
 
+        const metadata = {
+            messageId,
+            routingKey: msg.fields.routingKey,
+            originalError: error?.message,
+            retryCount,
+            dlqRoutingKey: options?.dlqRoutingKey,
+        };
+
+        // Nothing here may throw: the consumer callback does not await this
+        // handler, so a throw only becomes an unhandled rejection. The broker
+        // owns redelivery of any delivery left unacked.
         try {
             if (retryCount < this.maxRetriesConsumer) {
                 await this.retryWithDelay(
@@ -111,33 +122,31 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                     options?.dlqRoutingKey,
                 );
             }
-
-            channel.ack(msg);
         } catch (publishError) {
-            // CRITICAL: If we can't republish or ACK, leave the original
-            // delivery unacked so RabbitMQ can redeliver it when the channel
-            // closes instead of losing the message.
-            // Log as FATAL and throw to make this visible in monitoring
             this.logger.error({
                 message:
-                    'CRITICAL: Failed to republish or acknowledge message after error',
+                    'Could not republish failed message; left unacked for the broker to redeliver',
                 context: RabbitMQErrorHandler.name,
                 error: publishError,
-                metadata: {
-                    messageId,
-                    routingKey: msg.fields.routingKey,
-                    originalError: error?.message,
-                    retryCount,
-                    dlqRoutingKey: options?.dlqRoutingKey,
-                },
+                metadata,
             });
+            return;
+        }
 
-            // Throw to ensure this is visible and potentially crash the process
-            // In production, you may want to implement a fallback (e.g., write to disk/DB)
-            throw new Error(
-                `CRITICAL: Message ${messageId} may be lost - republish failed: ${publishError.message}`,
-                { cause: publishError },
-            );
+        try {
+            channel.ack(msg);
+        } catch (ackError) {
+            // Usually the connection dropped. The retry copy is already
+            // published and the broker redelivers the original, so the
+            // message arrives twice. Workflow jobs dedupe it through the
+            // inbox claim on messageId (workflow-job-consumer.service.ts).
+            this.logger.warn({
+                message:
+                    'Republished failed message but could not ack the original; the broker will redeliver it',
+                context: RabbitMQErrorHandler.name,
+                error: ackError,
+                metadata,
+            });
         }
     }
 
@@ -279,8 +288,14 @@ export const createRabbitMQErrorHandlerWithFallback = (
             });
         }
 
+        // Same rule as handle(): nothing here may throw, and a closed channel
+        // already returns the delivery to the broker.
         if (msg) {
-            channel.nack(msg, false, false);
+            try {
+                channel.nack(msg, false, false);
+            } catch {
+                // channel closed
+            }
         }
     };
 };
