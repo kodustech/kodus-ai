@@ -297,7 +297,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
                 {
                     uuid: 'detector',
                     path: 'src/**',
-                    detector: { pattern: 'console' },
+                    detector: { type: 'regex', pattern: 'console' },
                 },
                 {
                     uuid: 'semantic',

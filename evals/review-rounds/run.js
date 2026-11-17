@@ -302,9 +302,9 @@ function instrumentVerifier() {
     };
 }
 
-// The repeat check's own verdict, read where the stage calls it: a check whose
-// model call failed posts what it had to judge (fail-open), which is not a
-// measurement of the repeat drop.
+// Read the repeat check where the stage calls it. An unresolved comparison
+// exercises the timeout fallback, covered by the stage contract. It does not
+// measure the model's ability to identify a repeat.
 let repeatChecks;
 function observeRepeatCheck() {
     if (repeatChecks) return;
