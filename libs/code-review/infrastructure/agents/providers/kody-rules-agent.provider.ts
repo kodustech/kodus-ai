@@ -315,8 +315,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         // re-derive `required` from the zod input side and
                         // reintroduce the OpenAI-strict 400. See the
                         // shardViolationsWireSchema doc.
-                        schema: buildShardViolationsWireSchema((e) =>
-                            reshapes.push(e),
+                        schema: buildShardViolationsWireSchema(
+                            (e) => reshapes.push(e),
+                            shard.verifyRepositoryFacts,
                         ),
                         // The shard model (managed kimi-k2.7) answers a bare `[]` for
                         // "no violations" or `[{…}]` when it found some, instead of the
@@ -338,8 +339,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             ...(filename ? { file: filename } : {}),
                         },
                     });
-                    const candidates = (parsed?.violations ??
-                        []) as RawShardViolation[];
+                    const candidates = parsed?.violations ?? [];
                     const supported: RawShardViolation[] = [];
                     for (const candidate of candidates) {
                         const rule = ruleForCandidate(candidate, shard);

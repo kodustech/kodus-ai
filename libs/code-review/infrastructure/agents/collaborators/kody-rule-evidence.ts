@@ -97,7 +97,14 @@ export function kodyRuleEvidenceVerifier(
         remoteCommands: repoAvailable ? input.remoteCommands : undefined,
     });
     const organizationId = input.organizationAndTeamData?.organizationId;
-    const runner = new AiSdkAgentRunner(slot, { organizationId });
+    // Source collection can take several tool steps. Save the configured
+    // reasoning budget for the verdict, where all the excerpts are present.
+    const collectionSlot: NormalizedModel | undefined = slot && {
+        ...slot,
+        reasoningEffort: 'none',
+        reasoningConfigOverride: undefined,
+    };
+    const runner = new AiSdkAgentRunner(collectionSlot, { organizationId });
     const spec = buildVerifierAgentSpec({
         modelId: slot?.model ?? 'resolved',
         fallbackModelId: slot?.fallback?.model,

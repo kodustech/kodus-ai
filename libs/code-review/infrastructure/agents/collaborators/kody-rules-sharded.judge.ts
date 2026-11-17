@@ -179,6 +179,16 @@ export const shardViolationsSchema = z.object({
         .default([]),
 });
 
+const detectorShardViolationsSchema = z.object({
+    violations: z
+        .array(
+            shardViolationsSchema.shape.violations.unwrap().element.omit({
+                needsRepositoryEvidence: true,
+            }),
+        )
+        .default([]),
+});
+
 /** What the shard validate step did to an off-shape reply. */
 export type ShardReplyReshape =
     | { kind: 'recovered'; reason: string }
@@ -247,9 +257,13 @@ function reshapeShardReply(
  */
 export function buildShardViolationsWireSchema(
     onReshape?: (event: ShardReplyReshape) => void,
-): Schema<z.infer<typeof shardViolationsSchema>> {
+    verifyRepositoryFacts = true,
+): Schema<{ violations: RawShardViolation[] }> {
+    const replySchema = verifyRepositoryFacts
+        ? shardViolationsSchema
+        : detectorShardViolationsSchema;
     return jsonSchema(
-        z.toJSONSchema(shardViolationsSchema, {
+        z.toJSONSchema(replySchema, {
             target: 'draft-7',
             io: 'output',
         }) as any,
@@ -264,9 +278,15 @@ export function buildShardViolationsWireSchema(
                         ),
                     };
                 }
-                const r = shardViolationsSchema.safeParse(shaped);
+                const r = replySchema.safeParse(shaped);
                 return r.success
-                    ? { success: true, value: r.data }
+                    ? {
+                          success: true,
+                          value: {
+                              violations: r.data
+                                  .violations as RawShardViolation[],
+                          },
+                      }
                     : { success: false, error: r.error };
             },
         },
@@ -341,6 +361,7 @@ export type RunJudge = (args: {
      */
     ruleUuids: string[];
     ruleUnits: Array<Partial<IKodyRule>>;
+    verifyRepositoryFacts: boolean;
 }) => Promise<RawShardViolation[]>;
 
 /**
@@ -461,17 +482,23 @@ export interface ShardedJudgeResult {
 
 // ── prompts (aligned with the validated batched eval prompt) ─────────────────
 
-export const SHARD_SYSTEM_PROMPT = `You check a set of team rules against the diff of a SINGLE file. Report EVERY added line that violates ANY of the listed rules — one entry per (rule, violating line).
+const FILE_EVIDENCE_INSTRUCTIONS = `- Judge the unit the rule is about: a line, a declaration, a behavior with its related tests, or a whole file. Use neighboring code to decide whether a line violates the rule before choosing where to anchor the comment.
+- For a regression-test rule, inspect the enclosing behavior and its cases together. A case that still passes on the old code can be an intentional control for a nearby case that fails there. Report a missing regression only if no case pins the changed behavior, or if the rule explicitly requires that each case independently fails on the old version.
+- A claim about another file or about the absence of code anywhere rests on facts outside the visible input. Set needsRepositoryEvidence to true for those claims, even when claimKind is none. A PR description or code comment is not proof of how another file behaves.
+`;
+
+const fileSystemPrompt = (
+    verifyRepositoryFacts: boolean,
+) => `You check a set of team rules against the diff of a SINGLE file. Report EVERY added line that violates ANY of the listed rules — one entry per (rule, violating line).
 
 Rules of engagement:
 - Only flag lines ADDED in this diff (each line is prefixed with its file line number then '+'). Unchanged context lines are NEVER flagged.
 - One entry PER violating line PER rule; do not collapse repeats. Downstream dedup folds repeats into one comment.
-- Judge the unit the rule is about: a line, a declaration, a behavior with its related tests, or a whole file. Use neighboring code to decide whether a line violates the rule before choosing where to anchor the comment.
-- For a regression-test rule, inspect the enclosing behavior and its cases together. A case that still passes on the old code can be an intentional control for a nearby case that fails there. Report a missing regression only if no case pins the changed behavior, or if the rule explicitly requires that each case independently fails on the old version.
-- A claim about another file or about the absence of code anywhere rests on facts outside the visible input. Set needsRepositoryEvidence to true for those claims, even when claimKind is none. A PR description or code comment is not proof of how another file behaves.
-- Identify the violated rule by its number — the [n] shown before each rule. Put that number in "ruleId". Never invent a number; if a real issue matches no listed rule, DROP it.
+${verifyRepositoryFacts ? FILE_EVIDENCE_INSTRUCTIONS : ''}- Identify the violated rule by its number — the [n] shown before each rule. Put that number in "ruleId". Never invent a number; if a real issue matches no listed rule, DROP it.
 - If nothing violates, return an empty list.
 - If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. Report every violation you see, also one an entry already flagged: a later step compares your findings with those entries and drops what is already on the pull request.`;
+
+export const SHARD_SYSTEM_PROMPT = fileSystemPrompt(true);
 
 export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules using the PR title, description, and the files and patches selected for this review round. This selection can omit files, commits or lines. A file or implementation missing from the input may still exist at the reviewed commit. For a candidate based on a fact outside the supplied patches, name the narrow obligation to check and set needsRepositoryEvidence to true. Do not claim that another independent prerequisite is missing based on the partial patch. Code facts are checked before posting. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations. If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. Report every violation you see, also one an entry already flagged: a later step compares your findings with those entries and drops what is already on the pull request.`;
 
@@ -787,6 +814,7 @@ function contextLines(
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
+    verifyRepositoryFacts: boolean,
     languageLabel?: string | null,
     detectorHits?: DetectorHitIndex,
     prTitle?: string,
@@ -858,7 +886,7 @@ function fileShardUser(
                   `When a finding is a DIFFERENT problem that exists because an entry in <PreviousReviewDecisions> was applied, or reverses or narrows one, put that entry's Id in "revisesSuggestionId" and say why in the finding; otherwise null.`,
               ]
             : []),
-        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>","needsRepositoryEvidence":<true|false>,"revisesSuggestionId":"<Id or null>"}]}`,
+        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>",${verifyRepositoryFacts ? '"needsRepositoryEvidence":<true|false>,' : ''}"revisesSuggestionId":"<Id or null>"}]}`,
     ].join('\n');
 }
 
@@ -1329,15 +1357,17 @@ export async function judgeKodyRulesSharded(
             // the indices don't shift.
             const ruleUuids = applicable.map((r) => r.uuid ?? '');
             const referenceSection = referenceSectionFor(applicable);
+            const verifyRepositoryFacts = applicable.some((r) => !r.detector);
             try {
                 const vs = await runJudge({
                     system: withReferencesLine(
-                        SHARD_SYSTEM_PROMPT,
+                        fileSystemPrompt(verifyRepositoryFacts),
                         referenceSection,
                     ),
                     user: fileShardUser(
                         file,
                         applicable,
+                        verifyRepositoryFacts,
                         languageLabel,
                         detectorHits,
                         prTitle,
@@ -1351,6 +1381,7 @@ export async function judgeKodyRulesSharded(
                     filename: file.filename,
                     ruleUuids,
                     ruleUnits: applicable,
+                    verifyRepositoryFacts,
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
@@ -1427,6 +1458,7 @@ export async function judgeKodyRulesSharded(
                 filename: null,
                 ruleUuids,
                 ruleUnits: prRules,
+                verifyRepositoryFacts: true,
             });
             // PR-level violations carry no relevantFile by design
             for (const v of resolveShardViolations(vs, ruleUuids))
