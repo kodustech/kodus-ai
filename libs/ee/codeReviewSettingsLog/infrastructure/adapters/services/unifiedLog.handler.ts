@@ -2,6 +2,7 @@ import {
     CONTEXT_RESOLUTION_SERVICE_TOKEN,
     IContextResolutionService,
 } from '@libs/core/context-resolution/domain/contracts/context-resolution.service.contract';
+import { RepositoryNotIntegratedError } from '@libs/core/context-resolution/domain/errors/repository-not-integrated.error';
 import {
     ActionType,
     ConfigLevel,
@@ -76,44 +77,12 @@ export class UnifiedLogHandler {
                 userInfo,
             });
 
-        try {
-            if (configLevel === ConfigLevel.REPOSITORY && !repository?.name) {
-                repository.name = await this.getRepositoryAdditionalInfo(
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting repository additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-
-            if (repository) {
-                repository.name = 'Unknown';
-            }
-        }
-
-        try {
-            if (configLevel === ConfigLevel.DIRECTORY && !directory?.path) {
-                directory.path = await this.getDirectoryAdditionalInfo(
-                    directory?.id,
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting directory additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-
-            if (directory) {
-                directory.path = 'Unknown';
-            }
-        }
+        await this.fillLocationNames({
+            organizationId: organizationAndTeamData.organizationId,
+            configLevel,
+            repository,
+            directory,
+        });
 
         await this.codeReviewSettingsLogRepository.create({
             organizationId: organizationAndTeamData.organizationId,
@@ -143,42 +112,12 @@ export class UnifiedLogHandler {
             changedData,
         } = params;
 
-        try {
-            if (configLevel === ConfigLevel.REPOSITORY && !repository?.name) {
-                repository.name = await this.getRepositoryAdditionalInfo(
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting repository additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-            if (repository) {
-                repository.name = 'Unknown';
-            }
-        }
-
-        try {
-            if (configLevel === ConfigLevel.DIRECTORY && !directory?.path) {
-                directory.path = await this.getDirectoryAdditionalInfo(
-                    directory?.id,
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting directory additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-            if (directory) {
-                directory.path = 'Unknown';
-            }
-        }
+        await this.fillLocationNames({
+            organizationId: organizationAndTeamData.organizationId,
+            configLevel,
+            repository,
+            directory,
+        });
 
         await this.codeReviewSettingsLogRepository.create({
             organizationId: organizationAndTeamData.organizationId,
@@ -192,6 +131,68 @@ export class UnifiedLogHandler {
             repository,
             directory,
             changedData,
+        });
+    }
+
+    /**
+     * Fills the repository name or directory path the caller left out. When
+     * the lookup fails the entry is still written, with "Unknown".
+     */
+    private async fillLocationNames(params: {
+        organizationId: string;
+        configLevel?: ConfigLevel;
+        repository?: { id: string; name?: string };
+        directory?: { id?: string; path?: string };
+    }): Promise<void> {
+        const { organizationId, configLevel, repository, directory } = params;
+
+        try {
+            if (configLevel === ConfigLevel.REPOSITORY && !repository?.name) {
+                repository.name = await this.getRepositoryAdditionalInfo(
+                    repository?.id,
+                    organizationId,
+                );
+            }
+        } catch (error) {
+            this.logLookupFailure(
+                'Error getting repository additional info',
+                error,
+            );
+            if (repository) {
+                repository.name = 'Unknown';
+            }
+        }
+
+        try {
+            if (configLevel === ConfigLevel.DIRECTORY && !directory?.path) {
+                directory.path = await this.getDirectoryAdditionalInfo(
+                    directory?.id,
+                    repository?.id,
+                    organizationId,
+                );
+            }
+        } catch (error) {
+            this.logLookupFailure(
+                'Error getting directory additional info',
+                error,
+            );
+            if (directory) {
+                directory.path = 'Unknown';
+            }
+        }
+    }
+
+    private logLookupFailure(message: string, error: Error): void {
+        // A repository removed from the integration still gets entries:
+        // removing its synced Kody Rules writes one per rule (issue #2581).
+        // Nothing is wrong there, and "Unknown" is all that can be said.
+        if (error instanceof RepositoryNotIntegratedError) {
+            return;
+        }
+        this.logger.error({
+            message,
+            context: UnifiedLogHandler.name,
+            error,
         });
     }
 
