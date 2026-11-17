@@ -130,6 +130,8 @@ jest.mock("src/app/(app)/settings/_hooks", () => ({
 jest.mock("src/app/(app)/settings/_components/context", () => ({
     useCodeReviewConfig: () => mockConfig,
     useInitialTeamId: () => "team",
+    // The deep scan's routing row shows only inside its alpha.
+    useFeatureFlags: () => ({ deepScan: false }),
     useCodeReviewModelData: () => ({
         llmConfigStatus: mockStatus,
         hasConnectedProvider: mockStatus.byok.configured,

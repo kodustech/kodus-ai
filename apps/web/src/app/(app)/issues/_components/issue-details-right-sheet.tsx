@@ -43,11 +43,17 @@ import {
     ThumbsUpIcon,
 } from "lucide-react";
 import { useQueryState } from "nuqs";
+import { apiProxyPath } from "src/core/utils/api-proxy";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
 import { cn } from "src/core/utils/components";
-import { apiProxyPath } from "src/core/utils/api-proxy";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 
+import { CopyFixPromptButton } from "./copy-fix-prompt-button";
+import {
+    IssueSecurityEvidence,
+    IssueSecurityFacts,
+} from "./security-scan/issue-security-details";
+import { SecurityScanBadge } from "./security-scan/security-scan-badge";
 import { SeverityLevelSelect } from "./severity-level-select";
 import { StatusSelect } from "./status-select";
 
@@ -70,12 +76,12 @@ export const IssueDetailsRightSheet = ({
 
     const previousIssueId = useMemo<string | undefined>(
         () => issues[currentIssueIndex - 1]?.uuid,
-        [currentIssueIndex],
+        [issues, currentIssueIndex],
     );
 
     const nextIssueId = useMemo<string | undefined>(
         () => issues[currentIssueIndex + 1]?.uuid,
-        [currentIssueIndex],
+        [issues, currentIssueIndex],
     );
 
     useEffect(() => {
@@ -111,6 +117,8 @@ export const IssueDetailsRightSheet = ({
     );
 
     if (!peek || !issue) return null;
+
+    const isSecurityScan = issue.source === "security_scan";
 
     return (
         <Sheet modal={false} open>
@@ -178,6 +186,8 @@ export const IssueDetailsRightSheet = ({
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <CopyFixPromptButton ids={[peek]} />
+
                         <ButtonWithFeedback
                             size="xs"
                             variant="helper"
@@ -214,12 +224,13 @@ export const IssueDetailsRightSheet = ({
 
                     <SheetDescription>Opened {issue.age}</SheetDescription>
 
-                    <div className="mt-4 flex gap-2">
+                    <div className="mt-4 flex items-center gap-2">
                         <SeverityLevelSelect
                             issueId={peek}
                             severity={issue.severity}
                             repoId={issue.repository.id}
                         />
+                        {isSecurityScan && <SecurityScanBadge />}
                     </div>
                 </SheetHeader>
 
@@ -238,23 +249,26 @@ export const IssueDetailsRightSheet = ({
                                 {issue.repositoryLink.label}
                             </Link>
                         </div>
-                        <div className="flex gap-3">
-                            <GitPullRequestArrowIcon className="text-secondary-light size-4.5" />
+                        {/* A scan finds issues on the default branch, with no PR behind them. */}
+                        {issue.prLinks?.length > 0 && (
+                            <div className="flex gap-3">
+                                <GitPullRequestArrowIcon className="text-secondary-light size-4.5" />
 
-                            <div>
-                                {issue.prLinks.map((c, i) => (
-                                    <Fragment key={c.url}>
-                                        {i > 0 ? ", " : ""}
-                                        <Link
-                                            href={c.url}
-                                            target="_blank"
-                                            className="text-text-secondary link-hover:text-primary-light link-focused:text-primary-light underline">
-                                            #{c.label}
-                                        </Link>
-                                    </Fragment>
-                                ))}
+                                <div>
+                                    {issue.prLinks.map((c, i) => (
+                                        <Fragment key={c.url}>
+                                            {i > 0 ? ", " : ""}
+                                            <Link
+                                                href={c.url}
+                                                target="_blank"
+                                                className="text-text-secondary link-hover:text-primary-light link-focused:text-primary-light underline">
+                                                #{c.label}
+                                            </Link>
+                                        </Fragment>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
                         <div className="flex gap-3">
                             <FileIcon className="text-secondary-light size-4.5" />
 
@@ -265,7 +279,11 @@ export const IssueDetailsRightSheet = ({
                                 {issue.fileLink.label}
                             </Link>
                         </div>
+
+                        {isSecurityScan && <IssueSecurityFacts issue={issue} />}
                     </div>
+
+                    {isSecurityScan && <IssueSecurityEvidence issue={issue} />}
 
                     <div className="mt-10 px-6">
                         <Heading variant="h3" className="mb-2">
@@ -273,71 +291,86 @@ export const IssueDetailsRightSheet = ({
                         </Heading>
 
                         <div className="mb-10 flex flex-col gap-4">
-                            {issue.description
-                                // break after `. ` that is not inside double quotes
-                                .split(new RegExp(/(?![^"]*"\B)[.]\s/g))
-                                .map((p, i) => (
-                                    <Markdown
-                                        key={i}
-                                        className="text-text-secondary">
-                                        {/* splitted string cut a `. ` in the end of each part */}
-                                        {p.endsWith("..") || !p.endsWith(".")
-                                            ? `${p}.`
-                                            : p}
-                                    </Markdown>
-                                ))}
+                            {/* A scan's description is structured markdown
+                                (lists, fenced code): splitting it on sentences
+                                would cut through code blocks. */}
+                            {isSecurityScan ? (
+                                <Markdown className="text-text-secondary">
+                                    {issue.description}
+                                </Markdown>
+                            ) : (
+                                issue.description
+                                    // break after `. ` that is not inside double quotes
+                                    .split(new RegExp(/(?![^"]*"\B)[.]\s/g))
+                                    .map((p, i) => (
+                                        <Markdown
+                                            key={i}
+                                            className="text-text-secondary">
+                                            {/* splitted string cut a `. ` in the end of each part */}
+                                            {p.endsWith("..") ||
+                                            !p.endsWith(".")
+                                                ? `${p}.`
+                                                : p}
+                                        </Markdown>
+                                    ))
+                            )}
                         </div>
                     </div>
                 </ScrollArea>
 
-                <Separator />
+                {/* PR reactions: a scan finding has no PR to react on. */}
+                {!isSecurityScan && (
+                    <>
+                        <Separator />
 
-                <SheetFooter className="mt-4">
-                    <Card className="text-sm" color="lv1">
-                        <CardHeader className="flex flex-row items-center justify-between gap-6 py-4">
-                            <p>Team feedback from PR reactions</p>
+                        <SheetFooter className="mt-4">
+                            <Card className="text-sm" color="lv1">
+                                <CardHeader className="flex flex-row items-center justify-between gap-6 py-4">
+                                    <p>Team feedback from PR reactions</p>
 
-                            <div className="flex items-center gap-1">
-                                <Badge
-                                    size="xs"
-                                    variant="helper"
-                                    className="pointer-events-none min-w-16"
-                                    leftIcon={
-                                        <ThumbsUpIcon className="text-success mr-1" />
-                                    }>
-                                    {issue.reactions.thumbsUp}
-                                </Badge>
+                                    <div className="flex items-center gap-1">
+                                        <Badge
+                                            size="xs"
+                                            variant="helper"
+                                            className="pointer-events-none min-w-16"
+                                            leftIcon={
+                                                <ThumbsUpIcon className="text-success mr-1" />
+                                            }>
+                                            {issue.reactions.thumbsUp}
+                                        </Badge>
 
-                                <Badge
-                                    size="xs"
-                                    variant="helper"
-                                    className="pointer-events-none min-w-16"
-                                    leftIcon={
-                                        <ThumbsDownIcon className="text-danger mr-1" />
-                                    }>
-                                    {issue.reactions.thumbsDown}
-                                </Badge>
-                            </div>
-                        </CardHeader>
+                                        <Badge
+                                            size="xs"
+                                            variant="helper"
+                                            className="pointer-events-none min-w-16"
+                                            leftIcon={
+                                                <ThumbsDownIcon className="text-danger mr-1" />
+                                            }>
+                                            {issue.reactions.thumbsDown}
+                                        </Badge>
+                                    </div>
+                                </CardHeader>
 
-                        <Progress
-                            data-value={issue.reactions.thumbsUp}
-                            data-max={
-                                issue.reactions.thumbsUp +
-                                issue.reactions.thumbsDown
-                            }
-                            className={cn(
-                                "h-1",
-                                "[--progress-background:var(--color-danger)]",
-                                "[--progress-foreground:var(--color-success)]",
+                                <Progress
+                                    data-value={issue.reactions.thumbsUp}
+                                    data-max={
+                                        issue.reactions.thumbsUp +
+                                        issue.reactions.thumbsDown
+                                    }
+                                    className={cn(
+                                        "h-1",
+                                        "[--progress-background:var(--color-danger)]",
+                                        "[--progress-foreground:var(--color-success)]",
 
-                                !issue.reactions.thumbsUp &&
-                                    !issue.reactions.thumbsDown &&
-                                    "[--progress-background:var(--color-card-lv3)]",
-                            )}
-                        />
-                    </Card>
-                </SheetFooter>
+                                        !issue.reactions.thumbsUp &&
+                                            !issue.reactions.thumbsDown &&
+                                            "[--progress-background:var(--color-card-lv3)]",
+                                    )}
+                                />
+                            </Card>
+                        </SheetFooter>
+                    </>
+                )}
             </SheetContent>
         </Sheet>
     );

@@ -42,6 +42,10 @@ const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
         queue: 'workflow.jobs.ast_graph_incremental.queue',
         routingKey: 'workflow.jobs.*.AST_GRAPH_INCREMENTAL',
     },
+    {
+        queue: 'workflow.jobs.security_scan.queue',
+        routingKey: 'workflow.jobs.*.SECURITY_SCAN',
+    },
 ];
 
 @Injectable()
