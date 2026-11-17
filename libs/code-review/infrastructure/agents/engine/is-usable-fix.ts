@@ -332,6 +332,17 @@ function isStructurallyBroken(
         }
     }
 
+    // A `/*` that survives comment stripping never closed: applied, it would
+    // comment out the rest of the file. Equal bracket signatures must not
+    // excuse it, unless the replaced lines already carried the same dangling
+    // opener.
+    if (
+        nonLiteral.includes('/*') &&
+        (reference === undefined || !nonLiteralOf(reference).includes('/*'))
+    ) {
+        return true;
+    }
+
     const imbalance = bracketImbalance(nonLiteral);
     if (imbalance.mismatched) {
         return true;

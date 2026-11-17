@@ -103,6 +103,24 @@ describe('checkFix', () => {
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 
+        it('flags a fix cut inside an unterminated block comment', () => {
+            const existingCode = 'if (a) {\n  run();';
+            const improvedCode = 'if (a) {\n  run();\n  /* retry the call';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('accepts a closed block comment in a fix that inherits the imbalance', () => {
+            const existingCode = 'if (a) {\n  run();';
+            const improvedCode = 'if (a) {\n  run();\n  /* retry the call */';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('accepts a dangling block comment opener the replaced lines already had', () => {
+            const existingCode = 'if (a) {\n  /* note';
+            const improvedCode = 'if (a) {\n  /* note\n  run();';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
         it('flags a fix cut inside a block when the original was balanced', () => {
             const existingCode = 'foo();';
             const improvedCode = 'if (a) {\n  foo();';
