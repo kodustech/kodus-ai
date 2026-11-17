@@ -7,14 +7,19 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import type { SuggestionsExplorerItem } from "../../_services/analytics/review/explorer-fetch";
 
-const statusLabel = (status: string | null) => {
-    if (status === "implemented") return "✓ Implemented";
-    if (status === "partially_implemented") return "◐ Partial";
+const isApplied = (status: string | null) =>
+    status === "implemented" || status === "partially_implemented";
+
+const statusLabel = (item: SuggestionsExplorerItem) => {
+    if (item.implementationStatus === "implemented") return "✓ Implemented";
+    if (item.implementationStatus === "partially_implemented")
+        return "◐ Partial";
+    if (item.notMeasured) return "? Not measured";
     return "○ Not implemented";
 };
 
-const statusClass = (status: string | null) =>
-    status === "implemented" || status === "partially_implemented"
+const statusClass = (item: SuggestionsExplorerItem) =>
+    isApplied(item.implementationStatus)
         ? "text-success"
         : "text-text-tertiary";
 
@@ -65,9 +70,9 @@ export const columns: ColumnDef<SuggestionsExplorerItem>[] = [
         cell: ({ row }) => (
             <span
                 className={`text-xs font-semibold whitespace-nowrap ${statusClass(
-                    row.original.implementationStatus,
+                    row.original,
                 )}`}>
-                {statusLabel(row.original.implementationStatus)}
+                {statusLabel(row.original)}
             </span>
         ),
         size: 150,

@@ -8,13 +8,11 @@ describe('AutomationExecutionService', () => {
             existsByAutomationExecutionAndStageStatus: jest.fn(),
             findManyByAutomationExecutionIds: jest.fn(),
         } as any;
-        const cacheService = {} as any;
         const eventEmitter = { emit: jest.fn() } as any;
 
         const service = new AutomationExecutionService(
             automationExecutionRepository,
             codeReviewExecutionService,
-            cacheService,
             eventEmitter,
         );
 

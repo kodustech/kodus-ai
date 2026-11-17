@@ -130,6 +130,22 @@ const STEP_EVALS = {
         },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], embedder: true, question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
+    'implementation-check': {
+        smoke: ['implementation-check'],
+        primary: {
+            id: 'implementation-check',
+            label: 'Verdicts right',
+            run: ['evals/implementation-check/run.js', '--repeats=1'],
+            question: 'After a push, does the check record whether the developer made the change each suggestion asked for?',
+            // Read from the same cases: marking everything applied would raise
+            // recall, so what it marked applied must stay right too.
+            derived: [
+                { id: 'applied-precision', label: 'Applied marks that were right', question: 'Of the suggestions the check marked applied, how many were?', hits: (c) => c.markedAppliedRight, total: (c) => c.markedApplied },
+                { id: 'applied-recall', label: 'Real fixes caught', question: 'Of the suggestions the developer applied, how many did the check mark applied?', hits: (c) => c.truthAppliedFound, total: (c) => c.truthApplied },
+            ],
+        },
+        guards: [],
+    },
     severity: {
         // On demand only, never a PR's check: its files include the review stage,
         // which nearly every engine change touches.

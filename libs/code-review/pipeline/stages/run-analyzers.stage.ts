@@ -21,6 +21,16 @@ import { createLogger } from '@libs/core/log/logger';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
+const withPatches = (
+    files: ChangedFile[],
+    patches: Map<string, string>,
+): ChangedFile[] =>
+    files.map((file) =>
+        !file.patch && patches.has(file.filename)
+            ? { ...file, patch: patches.get(file.filename) }
+            : file,
+    );
+
 /**
  * Runs the deterministic tools that apply to this change.
  *
@@ -62,8 +72,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         const sandbox = context.sandboxHandle;
 
         let reviewedFiles = (context.changedFiles ?? []) as ChangedFile[];
-        let ignoredFiles = (context.ignoredFileChanges ??
-            []) as ChangedFile[];
+        let ignoredFiles = (context.ignoredFileChanges ?? []) as ChangedFile[];
 
         // `ignorePaths` means "do not comment on this file", and that has to
         // hold for the analyzers too. Only a tool that declares
@@ -75,11 +84,6 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             tool.readsIgnoredFiles
                 ? [...reviewedFiles, ...ignoredFiles]
                 : reviewedFiles;
-
-        // Routing still considers everything, so a tool is not recorded as
-        // `no-matching-files` when its only matches are ignored files that it
-        // is allowed to read.
-        let changedFiles = [...reviewedFiles, ...ignoredFiles];
 
         // Before routing, because routing itself calls `selectFiles`: a tool
         // that requires a patch is dropped as `no-matching-files` on the very
@@ -96,15 +100,20 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         );
 
         if (sandbox && anyToolEnabled) {
-            // The context's files are frozen by the pipeline's immutable
-            // state, so recovered hunks go on copies rather than in place.
-            changedFiles = await this.backfillMissingPatches(
-                context,
-                changedFiles,
-            );
-            reviewedFiles = changedFiles.slice(0, reviewedFiles.length);
-            ignoredFiles = changedFiles.slice(reviewedFiles.length);
+            // The context's files are frozen, so the recovered hunks go on
+            // copies that only this stage's tools read.
+            const recovered = await this.recoverMissingPatches(context, [
+                ...reviewedFiles,
+                ...ignoredFiles,
+            ]);
+            reviewedFiles = withPatches(reviewedFiles, recovered);
+            ignoredFiles = withPatches(ignoredFiles, recovered);
         }
+
+        // Routing still considers everything, so a tool is not recorded as
+        // `no-matching-files` when its only matches are ignored files that it
+        // is allowed to read.
+        const changedFiles = [...reviewedFiles, ...ignoredFiles];
 
         const decisions = this.router.route(this.tools, {
             changedFiles,
@@ -249,7 +258,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
     }
 
     /**
-     * Fills in hunks the host withheld.
+     * The hunks the host withheld, by path.
      *
      * GitHub drops `patch` once a file's diff passes a size limit, and a
      * lockfile bump passes it routinely — so the change most likely to
@@ -258,10 +267,10 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
      * recovers every missing hunk at once, so this costs a single call and
      * only when something is actually missing.
      */
-    private async backfillMissingPatches(
+    private async recoverMissingPatches(
         context: CodeReviewPipelineContext,
         files: ChangedFile[],
-    ): Promise<ChangedFile[]> {
+    ): Promise<Map<string, string>> {
         const missing = [
             ...new Set(
                 files
@@ -272,7 +281,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const prNumber = context.pullRequest?.number;
         if (!missing.length || !prNumber || !context.repository?.name) {
-            return files;
+            return new Map();
         }
 
         const recovered = await this.codeManagementService.getFilePatches({
@@ -282,12 +291,11 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             paths: missing,
         });
 
-        const byPath = new Map(recovered.map((r) => [r.path, r.patch]));
-
-        const patched = files.map((file) => {
-            const patch = byPath.get(file.filename);
-            return !file.patch && patch ? { ...file, patch } : file;
-        });
+        const byPath = new Map(
+            recovered
+                .filter((r) => r.patch)
+                .map((r) => [r.path, r.patch] as const),
+        );
 
         this.logger.log({
             message: `Recovered ${byPath.size} of ${missing.length} missing file patch(es)`,
@@ -300,7 +308,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             },
         });
 
-        return patched;
+        return byPath;
     }
 
     private clipToDiff(

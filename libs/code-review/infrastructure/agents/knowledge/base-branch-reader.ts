@@ -365,6 +365,25 @@ export class CodeManagementBaseBranchReader implements BaseBranchReader {
  * The reader a review should use: the sandbox when the review has a real
  * checkout with the base fetched, the provider API otherwise.
  */
+/**
+ * The sandbox's fetched base ref read with git through `sandbox.run`, or
+ * undefined when there is no usable sandbox or the branch name is unusual
+ * (the caller falls back to a reader that takes it as a plain ref).
+ */
+export function sandboxBaseBranchReader(
+    sandbox:
+        Pick<SandboxInstance, 'run' | 'repoDir' | 'type'> | null | undefined,
+    baseBranch: string | undefined,
+): SandboxBaseBranchReader | undefined {
+    if (!sandbox?.run || !sandbox.repoDir || !baseBranch) return undefined;
+    if (sandbox.type === 'null') return undefined;
+    try {
+        return new SandboxBaseBranchReader(sandbox, baseBranch);
+    } catch {
+        return undefined;
+    }
+}
+
 export function createBaseBranchReader(params: {
     sandbox?: Pick<SandboxInstance, 'run' | 'repoDir' | 'type'> | null;
     baseBranch: string;
@@ -372,16 +391,11 @@ export function createBaseBranchReader(params: {
     organizationAndTeamData: OrganizationAndTeamData;
     repository: { id: string; name: string };
 }): BaseBranchReader {
-    if (params.sandbox && params.sandbox.type !== 'null') {
-        try {
-            return new SandboxBaseBranchReader(
-                params.sandbox,
-                params.baseBranch,
-            );
-        } catch {
-            // Unusual branch name: the provider API takes it as a plain ref.
-        }
-    }
+    const fromSandbox = sandboxBaseBranchReader(
+        params.sandbox,
+        params.baseBranch,
+    );
+    if (fromSandbox) return fromSandbox;
     return new CodeManagementBaseBranchReader(params.codeManagement, {
         organizationAndTeamData: params.organizationAndTeamData,
         repository: params.repository,

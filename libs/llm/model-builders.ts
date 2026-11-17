@@ -13,6 +13,7 @@ import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
+import { byokAuthKind } from './slot-auth';
 import { decrypt } from '@libs/common/utils/crypto';
 
 /** Claude model ids (e.g. claude-sonnet-4-6) — speak the Anthropic protocol. */
@@ -137,10 +138,10 @@ export function bedrockModelFromCredentials(
 ): LanguageModel {
     const region = config?.awsRegion?.trim() || 'us-east-1';
 
-    if (config?.awsBearerToken?.trim()) {
+    if (byokAuthKind('amazon_bedrock', config) === 'bedrock-bearer') {
         return createAmazonBedrock({
             region,
-            apiKey: decrypt(config.awsBearerToken),
+            apiKey: decrypt(config!.awsBearerToken!),
         })(modelId);
     }
 

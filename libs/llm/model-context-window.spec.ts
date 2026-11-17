@@ -1,6 +1,7 @@
 import {
     getModelContextWindow,
     resolveContextWindow,
+    resolveContextWindowWithSource,
 } from './model-context-window';
 
 describe('model-context-window', () => {
@@ -31,7 +32,7 @@ describe('model-context-window', () => {
             expect(getModelContextWindow('gpt-5')).toBe(272_000);
         });
 
-        it('a prefix sibling no longer inherits the older model\'s window', () => {
+        it("a prefix sibling no longer inherits the older model's window", () => {
             // THE BUG: 'claudeopus47'.includes('claudeopus4') was true, so
             // claude-opus-4-7 and -4-8 — both live in production, both rated at
             // 1M upstream — were pinned to the 4.x override of 200k. An
@@ -52,14 +53,17 @@ describe('model-context-window', () => {
         it('a model the mirror carries needs no override at all', () => {
             // claude-sonnet-4-5 sits only in the mirror now, so a refresh moves
             // its window on its own — which a duplicated override would have
-            // pinned in place.
-            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(1_000_000);
+            // pinned in place. Upstream moved it from 1,000,000 (the beta
+            // long-context window) to 200,000 on the 2026-11 refresh.
+            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(200_000);
         });
     });
 
     describe('getModelContextWindow — LiteLLM database resolution', () => {
         it('resolves an exact key from the LiteLLM database', () => {
-            expect(getModelContextWindow('ai21.jamba-instruct-v1:0')).toBe(70_000);
+            expect(getModelContextWindow('ai21.jamba-instruct-v1:0')).toBe(
+                70_000,
+            );
         });
 
         it('prefers the exact direct match over the normalized index on collision', () => {
@@ -72,7 +76,9 @@ describe('model-context-window', () => {
         it('resolves via the normalized index when the raw key does not match', () => {
             // Differently-cased/punctuated form: direct MODELS lookup misses,
             // normalized index for 'ai21jambainstructv10' hits -> 70000.
-            expect(getModelContextWindow('AI21_Jamba-Instruct-V1:0')).toBe(70_000);
+            expect(getModelContextWindow('AI21_Jamba-Instruct-V1:0')).toBe(
+                70_000,
+            );
         });
 
         it('resolves via the longest substring match when nothing else hits', () => {
@@ -80,6 +86,29 @@ describe('model-context-window', () => {
             // normalized-index key. Substring match picks the LONGEST key that
             // contains it: 'snowflake/jamba-instruct' -> 256000.
             expect(getModelContextWindow('jamba-instruct')).toBe(256_000);
+        });
+    });
+
+    describe('getModelContextWindow — models.dev rows fill gaps only', () => {
+        it('answers for a model no other step knows', () => {
+            // Only models.dev carries it: 1,048,576 context minus 32,768 output.
+            expect(getModelContextWindow('kimi-for-coding')).toBe(1_015_808);
+        });
+
+        it('never answers ahead of a LiteLLM row, even a substring one', () => {
+            // models.dev reads this one as 104,858 (its smallest host); the
+            // LiteLLM family row holds the real 1,048,576. Ranked ahead of the
+            // substring step, models.dev answered the smaller number.
+            expect(getModelContextWindow('deepseek-v4.1-flash')).toBe(
+                1_048_576,
+            );
+        });
+
+        it('keeps a row LiteLLM dropped instead of falling back to 128k', () => {
+            // LiteLLM deleted every openrouter/* row on 2026-10-09.
+            expect(getModelContextWindow('xiaomi/mimo-v2.6-pro')).toBe(
+                1_048_576,
+            );
         });
     });
 
@@ -98,6 +127,49 @@ describe('model-context-window', () => {
             expect(getModelContextWindow('totally-unknown-xyz-model')).toBe(
                 128_000,
             );
+        });
+    });
+
+    describe('resolveContextWindowWithSource', () => {
+        it.each([
+            ['byok', { byokMaxInputTokens: 999, modelName: 'gpt-5' }, 999],
+            ['litellm (exact)', { modelName: 'gpt-5' }, 272_000],
+            [
+                'litellm-partial (substring)',
+                { modelName: 'jamba-instruct' },
+                256_000,
+            ],
+            ['litellm-partial (qwen)', { modelName: 'qwen' }, 32_768],
+            ['litellm-partial (llama)', { modelName: 'llama3' }, 131_072],
+            [
+                'litellm-partial (deepseek)',
+                { modelName: 'deepseek-chat-v4' },
+                131_072,
+            ],
+            ['override', { modelName: 'glm-4-7' }, 202_752],
+            ['models.dev', { modelName: 'kimi-for-coding' }, 1_015_808],
+            ['default', { modelName: 'totally-unknown-xyz-model' }, 128_000],
+            ['default (routing alias)', { modelName: 'auto' }, 128_000],
+            [
+                'default (prefixed alias)',
+                { modelName: 'openrouter/auto' },
+                128_000,
+            ],
+            ['default (coder alias)', { modelName: 'coder' }, 128_000],
+        ])('names the step that answered: %s', (label, params, tokens) => {
+            expect(resolveContextWindowWithSource(params)).toEqual({
+                tokens,
+                source: label.split(' ')[0],
+            });
+        });
+
+        it('distinguishes normalized model hits from partial family matches', () => {
+            expect(
+                resolveContextWindowWithSource({ modelName: 'GPT_5' }),
+            ).toEqual({ tokens: 272_000, source: 'litellm' });
+            expect(
+                resolveContextWindowWithSource({ modelName: 'qwen' }),
+            ).toEqual({ tokens: 32_768, source: 'litellm-partial' });
         });
     });
 

@@ -17,6 +17,10 @@ import {
     skillFolderName,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
+import {
+    mentionedFilesNotFollowed,
+    type MentionedFile,
+} from "@services/custom-agents/mentioned-files";
 import type {
     CustomAgentResolveReport,
     KnowledgeCandidate,
@@ -585,16 +589,56 @@ export const AgentKnowledgeField = ({
         item: Pick<KnowledgeItem, "path" | "kind" | "repository">,
     ) => reportOf(item)?.description ?? candidateOf(item)?.description;
     const linkedRepositories = resolved?.linkedRepositories ?? [];
-    const mentioned = instructions
-        ? mentionedButNotFollowed(
+    // What the agent follows is what a review here reads: at a directory,
+    // what it inherits too, so a file it already follows from the
+    // repository is not pointed out again.
+    const reviewKnowledge = readKnowledge ?? knowledge;
+    // A file the instructions name comes first: one click follows exactly
+    // it, so its repository's broader "browse" note would say the same twice.
+    const mentionedFiles = instructions
+        ? mentionedFilesNotFollowed(
               instructions,
               linkedRepositories,
-              knowledge,
+              reviewKnowledge,
               agentId,
           )
         : [];
+    const mentioned = (
+        instructions
+            ? mentionedButNotFollowed(
+                  instructions,
+                  linkedRepositories,
+                  reviewKnowledge,
+                  agentId,
+              )
+            : []
+    ).filter(
+        (repository) =>
+            !mentionedFiles.some(
+                (file) => repositoryKey(file) === repository.toLowerCase(),
+            ),
+    );
+    // At a directory, an item written here replaces the inherited one with
+    // its path: the inherited item comes along whole, so the agents and the
+    // main review that follow it keep following it here.
+    const followMentioned = (file: MentionedFile) => {
+        const ref = file.repository
+            ? pinnedRef(reviewKnowledge, file.repository)
+            : undefined;
+        const inherited = knowledge.some((own) => sameKnowledge(own, file))
+            ? undefined
+            : readKnowledge?.find((item) => sameKnowledge(item, file));
+        onChange(
+            setAgentKnowledge(
+                inherited ? [...knowledge, inherited] : knowledge,
+                { ...file, ...(ref && { ref }) },
+                agentId,
+                true,
+            ),
+        );
+    };
     const browse = (repository: string) => {
-        const ref = pinnedRef(readKnowledge ?? knowledge, repository);
+        const ref = pinnedRef(reviewKnowledge, repository);
         setSource({ repository, ...(ref && { ref }) });
         setAdding(true);
     };
@@ -629,6 +673,29 @@ export const AgentKnowledgeField = ({
             {unavailable && (
                 <p className="text-text-secondary text-xs">{unavailable}</p>
             )}
+            {canEdit &&
+                mentionedFiles.map((file) => (
+                    <div
+                        key={knowledgeKey(file)}
+                        role="note"
+                        className="border-primary-light/40 bg-primary-light/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                        <span className="text-text-secondary text-xs">
+                            The instructions name{" "}
+                            <span className="text-text-primary font-mono font-medium">
+                                {file.path}
+                            </span>
+                            {file.repository && <> in {file.repository}</>}, but
+                            this agent does not follow it: it reads the file
+                            only if it decides to, and findings cannot cite it.
+                        </span>
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            onClick={() => followMentioned(file)}>
+                            Follow it
+                        </Button>
+                    </div>
+                ))}
             {canEdit &&
                 mentioned.map((repository) => (
                     <div

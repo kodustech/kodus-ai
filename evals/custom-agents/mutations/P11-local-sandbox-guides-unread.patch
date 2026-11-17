@@ -1,0 +1,31 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+index 6509d9da4..836934752 100644
+--- a/libs/code-review/infrastructure/agents/core/convention-check.ts
++++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
+@@ -623,24 +623,8 @@ export function guideSourcesFor(
+         knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''));
+     // The reviewed repository's guides: the sandbox's target-branch reads,
+     // and the knowledge reader when those come back empty or fail.
+-    const readLocal: GuideFileReader = async (file) => {
+-        try {
+-            const read = await targetBranchReader?.(file);
+-            if (read != null) return read;
+-        } catch {
+-            // A timed-out command or a dead sandbox: same target branch below.
+-        }
+-        return fromKnowledge(file);
+-    };
+-    const listLocal: GuideDirLister = targetBranchLister
+-        ? async (dir) => {
+-              try {
+-                  return await targetBranchLister(dir);
+-              } catch {
+-                  return listFromKnowledge(dir);
+-              }
+-          }
+-        : listFromKnowledge;
++    const readLocal: GuideFileReader = targetBranchReader ?? fromKnowledge;
++    const listLocal: GuideDirLister = targetBranchLister ?? listFromKnowledge;
+     if (!hasOtherRepository) {
+         return { readGuide: readLocal, listGuideDir: listLocal };
+     }

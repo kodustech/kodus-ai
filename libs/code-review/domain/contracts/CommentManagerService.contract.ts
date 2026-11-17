@@ -18,6 +18,17 @@ export const COMMENT_MANAGER_SERVICE_TOKEN = Symbol.for(
     'CommentManagerService',
 );
 
+export interface ApprovalReasonOptions {
+    /** Update Kody's earlier reason note, but never open one. */
+    onlyIfPresent?: boolean;
+    /** Supplied only after this run successfully submitted the approval. */
+    confirmedApproval?: {
+        headSha: string;
+        baseSha: string;
+        occurredAt?: string;
+    };
+}
+
 export interface ICommentManagerService {
     postApprovalReason(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -25,8 +36,7 @@ export interface ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
         kind: 'approve' | 'hold',
-        /** Update Kody's earlier reason note, but never open one. */
-        options?: { onlyIfPresent?: boolean },
+        options?: ApprovalReasonOptions,
     ): Promise<void>;
     createInitialComment(
         organizationAndTeamData: OrganizationAndTeamData,

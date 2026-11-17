@@ -1,0 +1,47 @@
+---
+title: "Risk assessment"
+description: "Assess PR risk independently of automatic approval."
+---
+
+**Code review → Risk assessment** controls the shared risk engine. It can run with automatic approval off, and you can switch it off independently.
+
+When enabled, Kody assesses the complete PR before choosing the review mode or selecting risk-conditioned custom agents. The result is shared across those consumers.
+
+## Optional team criteria
+
+Kody assesses risk without team criteria. Criteria add team context, such as the consequences of changing account permissions or deleting customer data.
+
+A criterion has a name, instructions, a switch and optional included/excluded file patterns. Its file filters scope the guidance; matching a file does not automatically declare the PR risky. Kody still assesses the rest of the change.
+
+The assessment uses the diff and available code/history context. Missing history is unknown information, not evidence of safety.
+
+## Results
+
+- **Risk found:** risk-conditioned agents may run, Routing uses its risk-found mode, and automatic approval is blocked.
+- **No risk found:** Routing uses its no-risk mode. Approval still needs a clean review and a matching policy.
+- **Unavailable:** Routing uses the configured default review mode. Automatic approval is blocked, and agents that require confirmed risk do not run automatically.
+
+With assessment off, Routing uses one configured mode for all PRs. Conditional agents do not run without confirmed risk; explicit manual agent commands bypass that condition.
+
+## Preview on a PR
+
+**Preview on a PR** opens a side panel. Choose a connected repository and PR number to try the current criteria, including unsaved edits. It uses the configured risk-assessment model and does not publish a comment or approve the PR.
+
+## YAML
+
+```yaml
+riskAssessmentActive: true
+riskCriteria:
+  - id: access-control
+    name: Access control
+    enabled: true
+    instructions: 'Check whether permission changes expose data across accounts. Distinguish them from equivalent refactors.'
+    includedFiles:
+      - 'src/access/**'
+    excludedFiles:
+      - '**/*.test.ts'
+```
+
+`riskCriteria: []` keeps Kody's standard assessment. To stop assessment, set `riskAssessmentActive: false`.
+
+Existing configurations preserve their effective legacy assessment state until the independent setting is changed. Changing automatic approval keeps the engine state shown in Risk assessment.

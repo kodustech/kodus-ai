@@ -157,6 +157,15 @@ function resolveDelayMs(
     return Math.floor(Math.random() * expo);
 }
 
+/**
+ * The wait a rate-limited provider asked for, in milliseconds, from a
+ * `Retry-After` header (seconds or HTTP date) or an error that already
+ * carries it. Null when the error says nothing about it.
+ */
+export function retryAfterMsFromError(err: unknown): number | null {
+    return parseRetryAfter(err);
+}
+
 function parseRetryAfter(err: unknown): number | null {
     if (!err || typeof err !== 'object') return null;
     // Errors that already know the wait: GitLab's cooldown error carries

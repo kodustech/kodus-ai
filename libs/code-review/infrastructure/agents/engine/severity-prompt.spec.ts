@@ -4,6 +4,7 @@ import {
     DEFAULT_SEVERITY_FLAGS,
     buildSeverityPrompt,
     hasCustomSeverityFlags,
+    parseSeverityResponse,
 } from './severity-prompt';
 
 const suggestion = {
@@ -50,5 +51,66 @@ describe('hasCustomSeverityFlags', () => {
         expect(hasCustomSeverityFlags({ low: '   ' })).toBe(false);
         expect(hasCustomSeverityFlags({ critical: `  ${V2_DEFAULT_SEVERITY_FLAGS_TEXT.critical.replace(/\n/g, '\n\n')}` })).toBe(false);
         expect(hasCustomSeverityFlags({ medium: 'Our own rule' })).toBe(true);
+    });
+});
+
+describe('parseSeverityResponse', () => {
+    it('reads the answer after reasoning a host returned as content (#2409)', () => {
+        // Together cut the reasoning channel at a quoted `</think>`: the rest of
+        // the reasoning, quoting code and the format example, came before the
+        // answer.
+        const reply = [
+            '. If reasoning quotes , block ends early, rest read as the answer.',
+            "existingCode: `const end = text.indexOf('');` and improvedCode `{ index }`.",
+            'Format: {"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}',
+            'Index 0 high, index 1 medium, index 2 low.',
+            '{"classifications": [{"index": 0, "severity": "high", "reason": "loses every finding"}, {"index": 1, "severity": "medium", "reason": "falls back"}, {"index": 2, "severity": "Low", "reason": "cosmetic"}]}',
+        ].join('\n');
+
+        const { classifications, parseOk } = parseSeverityResponse(reply);
+
+        expect(parseOk).toBe(true);
+        expect([...classifications]).toEqual([
+            [0, 'high'],
+            [1, 'medium'],
+            [2, 'low'],
+        ]);
+    });
+
+    it('does not take the prompt example for the answer', () => {
+        const example =
+            '{"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}';
+        // Copied as the answer by a model cut mid-thought.
+        expect(parseSeverityResponse(example).parseOk).toBe(false);
+        // Quoted in the reasoning, with the real answer cut off after it.
+        const truncated = `Format: ${example}\nIndex 0 high.\n{"classifications": [{"index": 0, "severity": "low", "rea`;
+        expect(parseSeverityResponse(truncated).parseOk).toBe(false);
+    });
+
+    it('keeps the answer when the reply restates the example after it', () => {
+        const reply = `{"classifications": [{"index": 0, "severity": "low", "reason": "cosmetic"}]}\nFormat was: {"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}`;
+
+        const { classifications, parseOk } = parseSeverityResponse(reply);
+
+        expect(parseOk).toBe(true);
+        expect([...classifications]).toEqual([[0, 'low']]);
+    });
+
+    it('recognises the example whatever the order of its fields', () => {
+        const reordered =
+            '{"classifications":[{"reason":"brief reason","severity":"high","index":0}]}';
+        const truncated = `Reasoning quotes { index }. Format: ${reordered}\nNow answer: {"classifications":[{"index":0,"severity":"low","reason":"`;
+        expect(parseSeverityResponse(truncated).parseOk).toBe(false);
+
+        const answered = `{"classifications":[{"index":0,"severity":"low","reason":"cosmetic"}]}\nFormat was: ${reordered}`;
+        const { classifications, parseOk } = parseSeverityResponse(answered);
+        expect(parseOk).toBe(true);
+        expect([...classifications]).toEqual([[0, 'low']]);
+    });
+
+    it('fails when no object carries classifications', () => {
+        expect(parseSeverityResponse('index 0 is high').parseOk).toBe(false);
+        expect(parseSeverityResponse('{"severity": "high"}').parseOk).toBe(false);
+        expect(parseSeverityResponse('{"classifications": {"index": 0}}').parseOk).toBe(false);
     });
 });

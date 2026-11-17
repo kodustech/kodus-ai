@@ -19,6 +19,9 @@ import { cn } from "src/core/utils/components";
 
 import { KnowledgeSourceChip } from "./knowledge-card";
 
+/** Files offered at once: the most cited ones. */
+const MAX_OFFERS = 5;
+
 type Offer = {
     item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">;
     findings: number;
@@ -133,7 +136,9 @@ export const UnfollowedCitations = ({
         });
     }
     if (!offers.length) return null;
+    // The spellings are merged above, so the five rows are five files.
     offers.sort((a, b) => b.findings - a.findings);
+    offers.splice(MAX_OFFERS);
 
     return (
         <section

@@ -41,31 +41,6 @@ describe('SuggestionService — pure logic', () => {
         });
     });
 
-    describe('filterSuggestionProperties', () => {
-        it('projects only the five fields the implemented-analysis needs', () => {
-            const out = svc().filterSuggestionProperties([
-                {
-                    id: 's1',
-                    relevantFile: 'a.ts',
-                    language: 'ts',
-                    improvedCode: 'b',
-                    existingCode: 'a',
-                    severity: 'high', // must be dropped
-                    suggestionContent: 'noise', // must be dropped
-                },
-            ]);
-            expect(out).toEqual([
-                {
-                    id: 's1',
-                    relevantFile: 'a.ts',
-                    language: 'ts',
-                    improvedCode: 'b',
-                    existingCode: 'a',
-                },
-            ]);
-        });
-    });
-
     describe('filterCodeSuggestionsByReviewOptions', () => {
         it('keeps only suggestions whose normalized label is enabled (=== true) in config', () => {
             const config = { security: true, code_style: false };
@@ -203,6 +178,39 @@ describe('SuggestionService — pure logic', () => {
                 'c-b-low',
             ]);
         });
+    });
+});
+
+describe('SuggestionService — which threads get resolved', () => {
+    // Only a suggestion fully implemented closes its thread: a partial still
+    // leaves the developer something to do, and an unreadable status says
+    // nothing about what they did.
+    it('resolves the threads of delivered suggestions marked implemented, and only those', () => {
+        const suggestion = (id: number, implementationStatus: unknown) => ({
+            comment: { id },
+            deliveryStatus: DeliveryStatus.SENT,
+            implementationStatus,
+        });
+        const pr = {
+            files: [
+                {
+                    suggestions: [
+                        suggestion(1, 'implemented'),
+                        suggestion(2, 'partially_implemented'),
+                        suggestion(3, 'not_implemented'),
+                        suggestion(4, 'IMPLEMENTED'),
+                        suggestion(5, null),
+                        suggestion(6, 'The suggestion was applied.'),
+                        {
+                            ...suggestion(7, 'implemented'),
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
+                        },
+                    ],
+                },
+            ],
+        };
+
+        expect(svc().getImplementedSuggestionsCommentIds(pr)).toEqual([1]);
     });
 });
 

@@ -29,13 +29,14 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
+    ChangedFilesSource,
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '../domain/contracts/PullRequestManagerService.contract';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { countByReason } from '@libs/platformData/domain/pullRequests/implementation-status';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
-import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
 @Injectable()
@@ -106,26 +107,17 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                 return;
             }
 
-            // Extract all suggestions that are SENT and NOT IMPLEMENTED
-            const suggestionsToCheck: Partial<CodeSuggestion>[] = (
-                savedPr.files || []
-            )
-                .flatMap((file) => file.suggestions || [])
-                .filter(
-                    (s) =>
-                        s.deliveryStatus === DeliveryStatus.SENT &&
-                        s.implementationStatus !==
-                            ImplementationStatus.IMPLEMENTED,
-                )
-                .map((s) => ({
-                    id: s.id,
-                    relevantFile: s.relevantFile,
-                    language: s.language,
-                    existingCode: s.existingCode,
-                    improvedCode: s.improvedCode,
-                    label: s.label,
-                    severity: s.severity,
-                }));
+            const savedSuggestions = (savedPr.files || []).flatMap(
+                (file) => file.suggestions || [],
+            );
+
+            // Skip the platform calls when nothing delivered is left to check.
+            const suggestionsToCheck = savedSuggestions.filter(
+                (s) =>
+                    s.deliveryStatus === DeliveryStatus.SENT &&
+                    s.implementationStatus !==
+                        ImplementationStatus.IMPLEMENTED,
+            );
 
             if (suggestionsToCheck.length === 0) {
                 await this.markCompleted(jobId, { reason: 'NO_SUGGESTIONS' });
@@ -141,6 +133,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     {
                         name: payload.repository.name,
                         id: payload.repository.id,
+                        fullName: payload.repository.fullName,
                     },
                     payload.pullRequestNumber,
                 ));
@@ -198,63 +191,46 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             platformPr.number = payload.pullRequestNumber;
 
             // 3. Fetch Changed Files (Diff)
+            // Which diff came back: only the changes since the last review
+            // say what the developer did about its suggestions.
+            let diffSource: ChangedFilesSource | undefined;
+            let removedFiles: string[] = [];
             const changedFiles =
                 await this.pullRequestManagerService.getChangedFiles(
                     payload.organizationAndTeamData,
                     {
                         name: payload.repository.name,
                         id: payload.repository.id,
+                        fullName: payload.repository.fullName,
                         project: { id: platformPr.repository?.project?.id },
                     },
                     platformPr,
                     [],
                     lastAnalyzedCommit,
                     lastExecution?.dataExecution?.reviewedBaseBranch,
-                );
-
-            // 4. Construct Code Patch
-            const changedFilenames = new Set(
-                changedFiles.map((f) => f.filename),
-            );
-
-            // Filter suggestions to check ONLY for files that changed
-            const suggestionsToValidate = suggestionsToCheck.filter(
-                (s) => s.relevantFile && changedFilenames.has(s.relevantFile),
-            );
-
-            if (suggestionsToValidate.length === 0) {
-                await this.markCompleted(jobId, {
-                    reason: 'NO_RELEVANT_CHANGES',
-                });
-                return;
-            }
-
-            // Concatenate all patches to form a full diff string
-            const codePatch = changedFiles
-                .filter((f) => f.patch)
-                .map((f) => `File: ${f.filename}\n${f.patch}`)
-                .join('\n\n');
-
-            if (!codePatch) {
-                this.logger.warn({
-                    message: `No code patch found for PR #${payload.pullRequestNumber}`,
-                    context: ImplementationVerificationProcessor.name,
-                    metadata: {
-                        prNumber: payload.pullRequestNumber,
+                    {
+                        onDiffSource: (source) => (diffSource = source),
+                        onRemovedFiles: (filenames) => (removedFiles = filenames),
                     },
+                );
+
+            // 4. Verify Implementation
+            const check =
+                await this.suggestionService.checkImplementedSuggestions({
+                    organizationAndTeamData: payload.organizationAndTeamData,
+                    prNumber: payload.pullRequestNumber,
+                    changedFiles,
+                    savedSuggestions,
+                    diffSource,
+                    removedFiles,
                 });
-                await this.markCompleted(jobId, { reason: 'NO_PATCH' });
+
+            if (check.skipped) {
+                await this.markCompleted(jobId, { reason: check.skipped });
                 return;
             }
 
-            // 5. Verify Implementation
-            const implementedSuggestions =
-                await this.suggestionService.validateImplementedSuggestions(
-                    payload.organizationAndTeamData,
-                    codePatch,
-                    suggestionsToValidate,
-                    payload.pullRequestNumber,
-                );
+            const implementedSuggestions = check.persisted;
 
             await this.suggestionService.resolveImplementedSuggestionsOnPlatform(
                 {
@@ -262,6 +238,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     repository: {
                         id: payload.repository.id,
                         name: payload.repository.name,
+                        fullName: payload.repository.fullName,
                     },
                     prNumber: payload.pullRequestNumber,
                     platformType: payload.platformType,
@@ -303,7 +280,11 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             }
 
             await this.markCompleted(jobId, {
-                checkedCount: suggestionsToCheck.length,
+                checkedCount: check.checked,
+                decided: check.decided,
+                raised: check.persisted.length,
+                unmeasured: countByReason(check.unmeasured),
+                diffSource,
             });
             })(), signal);
         } catch (error) {

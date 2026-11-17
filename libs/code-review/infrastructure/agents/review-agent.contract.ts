@@ -350,6 +350,8 @@ export interface ReviewAgentInput
         ModelConfig,
         FitConfig,
         RuntimeMeta {
+    /** The PR's shared risk result; context, never a replacement for investigation. */
+    riskAssessment?: import('@libs/code-review/domain/risk/risk-assessment').RiskAssessmentResult;
     onAgentProgress?: (event: AgentProgressEvent) => void;
     /** Parent (job-level) AbortSignal. Forwarded to runAgentLoop so the
      *  outer router timeout cancels the LLM call instead of leaving it
@@ -569,6 +571,9 @@ export interface AgentLoopSecrets {
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;
+    /** Repositories the agent's skills and docs come from (`owner/repo`):
+     *  readReference may read them besides the reviewed and linked ones. */
+    referenceRepositories?: string[];
     /**
      * External documentation search adapter (Exa-backed). When provided,
      * registers the `searchDocs` tool on the agent so it can verify

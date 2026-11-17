@@ -1497,12 +1497,19 @@ describe('KodyRulesService update/sync field preservation', () => {
                 Promise.resolve({ rules: [{ ...updateData, uuid: ruleId }] }),
             );
 
+        // Single-rule $set; that it leaves the other fields intact is proven
+        // against Mongo in kody-rules-update-rule-fields.integration.spec.
+        const updateRuleFieldsByOrganization = jest
+            .fn()
+            .mockResolvedValue(existingRule);
+
         const repositoryMock = {
             findByOrganizationId: jest.fn().mockResolvedValue({
                 uuid: 'kr-doc-1',
                 rules: [existingRule],
             }),
             updateRule,
+            updateRuleFieldsByOrganization,
             // validateRulesLimit lives on the validation service, but addRule
             // must exist in case a branch falls through.
             addRule: jest.fn().mockResolvedValue({ rules: [] }),
@@ -1524,7 +1531,7 @@ describe('KodyRulesService update/sync field preservation', () => {
             // kodyRuleSummaryService (optional) omitted → summary path skipped
         );
 
-        return { service, updateRule };
+        return { service, updateRule, updateRuleFieldsByOrganization };
     };
 
     const userInfo = { userId: 'u1', userEmail: 'u1@kodus.io' } as any;
@@ -1632,18 +1639,22 @@ describe('KodyRulesService update/sync field preservation', () => {
         expect(update.contextReferenceId).toBe('ctx-ref-1');
     });
 
-    it('updateRuleReferences sets the contextReferenceId and preserves the rule', async () => {
-        const { service, updateRule } = buildService();
+    it('updateRuleReferences sets the contextReferenceId without rewriting the rest of the rule', async () => {
+        const { service, updateRule, updateRuleFieldsByOrganization } =
+            buildService();
 
         await service.updateRuleReferences('org-1', 'rule-1', {
             contextReferenceId: 'ctx-ref-2',
         });
 
-        const update = capturedUpdate(updateRule);
-        expect(update.contextReferenceId).toBe('ctx-ref-2');
-        expect(update.title).toBe('Original title');
-        expect(update.rule).toBe('original body text');
-        expect(update.severity).toBe('high');
-        expect(update.inheritance).toEqual(existingRule.inheritance);
+        // Only the pointer (and the timestamp) is written: no other field of
+        // the rule is sent, so none can be clobbered by a stale copy.
+        expect(updateRule).not.toHaveBeenCalled();
+        const fields = updateRuleFieldsByOrganization.mock.calls[0][2];
+        expect(Object.keys(fields).sort()).toEqual([
+            'contextReferenceId',
+            'updatedAt',
+        ]);
+        expect(fields.contextReferenceId).toBe('ctx-ref-2');
     });
 });

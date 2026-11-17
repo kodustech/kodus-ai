@@ -111,6 +111,93 @@ describe('buildAgentTools — linked repo param', () => {
         expect(out).toContain('Path traversal');
     });
 
+    it.each(['app/[...slug]/page.tsx', 'app/(..)photo/page.tsx'])(
+        'reads, greps and lists %p in a linked repo',
+        async (routePath) => {
+            const reads: string[] = [];
+            const execCalls: string[] = [];
+            const tools = buildAgentTools(
+                makeRemote({
+                    read: async (p) => {
+                        reads.push(p);
+                        return 'export default function Page() {}';
+                    },
+                    exec: async (cmd) => {
+                        execCalls.push(cmd);
+                        return {
+                            stdout: 'page.tsx:1:hit',
+                            stderr: '',
+                            exitCode: 0,
+                        };
+                    },
+                }),
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                makeLinkedAccess(),
+            );
+
+            const read = await tools.readFile.execute({
+                path: routePath,
+                repo: 'org/backend-api',
+            });
+            expect(read).not.toContain('Path traversal');
+            expect(reads).toEqual([routePath]);
+
+            const dir = routePath.replace(/\/page\.tsx$/, '');
+            const grep = await tools.grep.execute({
+                pattern: 'Page',
+                path: dir,
+                repo: 'org/backend-api',
+            });
+            expect(grep).not.toContain('Path traversal');
+            const list = await tools.listDir.execute({
+                path: dir,
+                repo: 'org/backend-api',
+            });
+            expect(list).not.toContain('Path traversal');
+            expect(execCalls).toHaveLength(2);
+        },
+    );
+
+    it.each(['a/../../etc/passwd', '..\\..\\etc\\passwd'])(
+        'refuses %p in linked-repo reads, greps and listings',
+        async (escapePath) => {
+            const exec = jest.fn();
+            const read = jest.fn();
+            const tools = buildAgentTools(
+                makeRemote({ exec, read }),
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                makeLinkedAccess(),
+            );
+            for (const out of [
+                await tools.readFile.execute({
+                    path: escapePath,
+                    repo: 'org/backend-api',
+                }),
+                await tools.grep.execute({
+                    pattern: 'x',
+                    path: escapePath,
+                    repo: 'org/backend-api',
+                }),
+                await tools.listDir.execute({
+                    path: escapePath,
+                    repo: 'org/backend-api',
+                }),
+            ]) {
+                expect(out).toContain('Path traversal');
+            }
+            expect(exec).not.toHaveBeenCalled();
+            expect(read).not.toHaveBeenCalled();
+        },
+    );
+
     it('returns error for unknown linked repo', async () => {
         const tools = buildAgentTools(
             makeRemote(),

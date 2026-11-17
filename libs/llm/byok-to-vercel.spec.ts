@@ -71,6 +71,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import {
     buildModelFromSlot,
+    getModelId,
     getModelName,
     runWithBYOKLimiter,
     getLimiterForSlot,
@@ -377,6 +378,45 @@ describe('getModelName — resolved slot vs env default', () => {
         expect(getModelName(undefined, 'gemini-2.5-flash')).toBe(
             'gemini-2.5-flash',
         );
+    });
+});
+
+describe('getModelId — the bare id getModelName labels', () => {
+    const prevEnvMode = process.env.API_LLM_PROVIDER_MODEL;
+
+    beforeEach(() => {
+        delete process.env.API_LLM_PROVIDER_MODEL;
+    });
+
+    afterAll(() => {
+        if (prevEnvMode === undefined) delete process.env.API_LLM_PROVIDER_MODEL;
+        else process.env.API_LLM_PROVIDER_MODEL = prevEnvMode;
+    });
+
+    it('is the slot model, without the provider prefix', () => {
+        expect(
+            getModelId({
+                provider: BYOKProvider.OPENAI,
+                apiKey: 'sk-x',
+                model: 'gpt-6.1-sol',
+            } as NormalizedModel),
+        ).toBe('gpt-6.1-sol');
+    });
+
+    it('is the env model, without the provider prefix', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.API_VERTEX_AI_API_KEY = 'sa';
+        try {
+            expect(getModelName(undefined)).toBe('google_vertex:gemini-2.5-pro');
+            expect(getModelId(undefined)).toBe('gemini-2.5-pro');
+        } finally {
+            delete process.env.API_VERTEX_AI_API_KEY;
+        }
+    });
+
+    it('matches getModelName where that already has no prefix', () => {
+        expect(getModelId(undefined)).toBe(getModelName(undefined));
+        expect(getModelId(undefined, 'gemini-2.5-flash')).toBe('gemini-2.5-flash');
     });
 });
 

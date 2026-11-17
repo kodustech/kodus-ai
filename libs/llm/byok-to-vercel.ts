@@ -37,6 +37,7 @@ export {
     // from); re-exported here since `@libs/llm/byok-to-vercel` is its stable
     // import surface.
     getModelName,
+    getModelId,
     type ByokModelOptions,
 } from './managed-slot';
 export {

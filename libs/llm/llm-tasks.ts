@@ -20,6 +20,8 @@
  */
 export const LLM_TASK = {
     codeReview: 'codeReview',
+    /** Shared pre-review PR assessment. Inherits the org default when unset. */
+    riskAssessment: 'riskAssessment',
     /** A heavy review (the generalist plus the M3 lenses), set in General
      *  settings or asked with `--heavy`. `codeReview` stays the Balanced review.
      *  Inherits the org default when unset, like every other task. */

@@ -12,7 +12,7 @@ import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
-import { getModelName } from '@libs/llm/byok-to-vercel';
+import { getModelId, getModelName } from '@libs/llm/byok-to-vercel';
 import { overrideContext } from '@libs/llm/routing-strategy';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
@@ -32,6 +32,8 @@ type ModelInput = Pick<
 export interface AgentModelParams {
     role: 'main';
     modelName: string;
+    /** The bare model id, for lookups keyed by model (the context window). */
+    modelId?: string;
     maxInputTokens?: number;
     reasoningEffort?: ReasoningEffort;
     reasoningConfigOverride?: string;
@@ -94,6 +96,7 @@ export async function resolveReviewAgentModel(
     const main: AgentModelParams = {
         role: 'main',
         modelName: getModelName(slot, input.defaultModelOverride),
+        modelId: getModelId(slot, input.defaultModelOverride),
         maxInputTokens: slot?.maxInputTokens,
         reasoningEffort: slot?.reasoningEffort,
         reasoningConfigOverride: slot?.reasoningConfigOverride,

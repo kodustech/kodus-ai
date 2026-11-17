@@ -1,3 +1,4 @@
+import { hostCommentKey } from '@libs/code-review/domain/approval/own-change-request';
 import { createLogger } from '@libs/core/log/logger';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
@@ -9,7 +10,10 @@ import {
     ICommentManagerService,
 } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
-import { ISuggestionService } from '@libs/code-review/domain/contracts/SuggestionService.contract';
+import {
+    ImplementationCheckResult,
+    ISuggestionService,
+} from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -20,8 +24,8 @@ import {
     CodeReviewVersion,
     CodeSuggestion,
     CommentResult,
+    FileChange,
     GroupingModeSuggestions,
-    ImplementedSuggestionsToAnalyze,
     LimitationType,
     ReviewModeResponse,
     ReviewOptions,
@@ -35,7 +39,40 @@ import {
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    ISuggestion,
+    ISuggestionByPR,
+    UpdateSuggestionOptions,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    groupImplementationStatus,
+    problemWithoutLocations,
+    suggestionLocations,
+    type SuggestionLocation,
+} from '@libs/code-review/infrastructure/agents/engine/suggestion-locations';
+import {
+    countByReason,
+    ImplementationCheckRecord,
+    type ImplementationUnmeasuredReason,
+    normalizeImplementationStatus,
+    raisesImplementationStatus,
+    resolvesSuggestionThread,
+    statusesAtOrAbove,
+} from '@libs/platformData/domain/pullRequests/implementation-status';
+import { resolveContextWindow } from '@libs/llm/model-context-window';
+import {
+    prompt_checkSuggestionImplementation,
+    type ImplementationCheckSuggestion,
+} from '@libs/common/utils/prompts';
+import type { ChangedFilesSource } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import pLimit from 'p-limit';
+
+/** Share of the model's context window one file's prompt may take. */
+const IMPLEMENTATION_CHECK_PROMPT_SHARE = 0.75;
+/** Files of one PR checked at the same time. */
+const IMPLEMENTATION_CHECK_CONCURRENCY = 4;
+/** Suggestion writes of one check in flight at the same time. */
+const IMPLEMENTATION_CHECK_WRITE_CONCURRENCY = 5;
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -53,6 +90,9 @@ import { PullRequestReviewComment } from '@libs/platform/domain/platformIntegrat
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 
+/** MongoDB: an update path runs through a field that is not an object. */
+const MONGO_PATH_NOT_VIABLE = 28;
+
 @Injectable()
 export class SuggestionService implements ISuggestionService {
     private readonly logger = createLogger(SuggestionService.name);
@@ -69,94 +109,533 @@ export class SuggestionService implements ISuggestionService {
     ) {}
 
     /**
-     * Prepares suggestion properties for validation
+     * The implementation check after a push: for each delivered suggestion not
+     * yet implemented whose file changed, asks the model (one call per file,
+     * on that file's patch) whether the push made the change it asked for. A
+     * verdict only ever raises the stored status; a suggestion the check could
+     * not decide is recorded as unmeasured, never as not implemented. The
+     * processor and the implementation-check eval both enter here.
      */
-    public filterSuggestionProperties(
-        suggestions: Partial<CodeSuggestion>[],
-    ): ImplementedSuggestionsToAnalyze[] {
-        return suggestions.map((suggestion) => ({
-            id: suggestion.id,
-            relevantFile: suggestion.relevantFile,
-            language: suggestion.language,
-            improvedCode: suggestion.improvedCode,
-            existingCode: suggestion.existingCode,
-        }));
-    }
+    public async checkImplementedSuggestions({
+        organizationAndTeamData,
+        prNumber,
+        changedFiles,
+        savedSuggestions,
+        diffSource = 'incremental',
+        removedFiles = [],
+    }: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
+        savedSuggestions: Partial<ISuggestion>[];
+        diffSource?: ChangedFilesSource;
+        /** Files the diff deleted: not in `changedFiles`, which leaves them out. */
+        removedFiles?: string[];
+    }): Promise<ImplementationCheckResult> {
+        const candidates = savedSuggestions.filter(
+            (s) =>
+                s.id &&
+                s.deliveryStatus === DeliveryStatus.SENT &&
+                normalizeImplementationStatus(s.implementationStatus) !==
+                    ImplementationStatus.IMPLEMENTED,
+        );
+        const empty = { persisted: [], decided: 0, unmeasured: [] };
 
-    /**
-     * Validates if suggestions have been implemented by analyzing code patches
-     */
-    public async validateImplementedSuggestions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        codePatch: string,
-        savedSuggestions: Partial<CodeSuggestion>[],
-        prNumber?: number,
-    ) {
-        try {
-            const filteredSuggestions =
-                this.filterSuggestionProperties(savedSuggestions);
+        if (!candidates.length) {
+            return { skipped: 'NO_SUGGESTIONS', checked: 0, ...empty };
+        }
 
-            // Routed through the org's own BYOK slot (falls back to the managed
-            // default when the org has none configured for this task) — this used
-            // BYOK, a leftover of the REQ-NOLC-01 migration off LangChain.
+        const patches = new Map(changedFiles.map((f) => [f.filename, f.patch]));
+        const removed = new Set(removedFiles);
+
+        // A suggestion may stand for several locations ("Also found in").
+        // Each one is read on its own file, and the ones an earlier check
+        // found fixed are not read again: this diff no longer shows them.
+        const groups = candidates.map((suggestion) => {
+            // A comment with no file of its own is not checked, as before.
+            const locations = suggestion.relevantFile
+                ? suggestionLocations(suggestion)
+                : [];
+            const fixed = new Set(
+                locations.length > 1
+                    ? (suggestion.implementationCheck?.implementedLocations ??
+                          [])
+                    : [],
+            );
+            // A deleted file takes the problem in it along. Only a group
+            // counts it: a suggestion on one file was never checked that way.
+            const grouped = locations.length > 1;
+            return {
+                suggestion,
+                locations,
+                fixed,
+                changed: locations.filter(
+                    (location) =>
+                        !fixed.has(location.key) &&
+                        (patches.has(location.file) ||
+                            (grouped && removed.has(location.file))),
+                ),
+                // Every location already stored as fixed while the status
+                // stayed below: the write that raises it did not land. It is
+                // decided again from what is stored, with nothing to read.
+                settled:
+                    grouped &&
+                    locations.every((location) => fixed.has(location.key)),
+            };
+        });
+        const groupsOnChangedFiles = groups.filter(
+            (g) => g.changed.length || g.settled,
+        );
+        const onChangedFiles = groupsOnChangedFiles.map((g) => g.suggestion);
+
+        if (!onChangedFiles.length) {
+            return {
+                skipped: 'NO_RELEVANT_CHANGES',
+                checked: candidates.length,
+                ...empty,
+            };
+        }
+
+        type LocationAsk = {
+            group: (typeof groups)[number];
+            location: SuggestionLocation;
+            asked: ImplementationCheckSuggestion;
+        };
+        const unmeasured: ImplementationCheckResult['unmeasured'] = [];
+        const verdicts: { id: string; status: ImplementationStatus }[] = [];
+        // A group is decided when it is written: from the locations stored
+        // by then, not from the ones this check loaded.
+        const groupChecks: {
+            id: string;
+            locations: SuggestionLocation[];
+            fixedBefore: ReadonlySet<string>;
+            fixedNow: string[];
+            partial: boolean;
+            undecided: boolean;
+            reason: ImplementationUnmeasuredReason;
+        }[] = [];
+        const byFile = new Map<string, LocationAsk[]>();
+        // What this check learned about each location, by the id it was asked under.
+        const answers = new Map<
+            string,
+            | { status: ImplementationStatus }
+            | { reason: ImplementationUnmeasuredReason }
+        >();
+        const askIdOf = (
+            group: (typeof groups)[number],
+            location: SuggestionLocation,
+        ) =>
+            location.own
+                ? group.suggestion.id
+                : `${group.suggestion.id}#${group.locations.indexOf(location)}`;
+
+        for (const group of groupsOnChangedFiles) {
+            const s = group.suggestion;
+            for (const location of group.changed) {
+                const askId = askIdOf(group, location);
+                if (removed.has(location.file)) {
+                    answers.set(askId, {
+                        status: ImplementationStatus.IMPLEMENTED,
+                    });
+                    continue;
+                }
+                // Only the changes since the last review say what the developer
+                // did; the whole PR's diff holds the code the suggestion was about.
+                if (
+                    diffSource === 'full' ||
+                    diffSource === 'none' ||
+                    !patches.get(location.file)
+                ) {
+                    answers.set(askId, { reason: 'diff_unavailable' });
+                    continue;
+                }
+                const problem = s.suggestionContent || s.fullExplanation || '';
+                byFile.set(location.file, [
+                    ...(byFile.get(location.file) || []),
+                    {
+                        group,
+                        location,
+                        asked: location.own
+                            ? {
+                                  id: askId,
+                                  relevantLinesStart: s.relevantLinesStart,
+                                  relevantLinesEnd: s.relevantLinesEnd,
+                                  // What the developer read in the comment.
+                                  problem:
+                                      group.locations.length > 1
+                                          ? problemWithoutLocations(problem)
+                                          : problem,
+                                  existingCode: s.existingCode,
+                                  improvedCode: s.improvedCode,
+                              }
+                            : {
+                                  // The code quoted in the comment is the
+                                  // kept location's, not this one's.
+                                  id: askId,
+                                  relevantLinesStart: location.start,
+                                  relevantLinesEnd: location.end,
+                                  problem: problemWithoutLocations(problem),
+                              },
+                    },
+                ]);
+            }
+        }
+
+        if (byFile.size) {
             const byokConfig =
                 await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );
+            const maxPromptTokens = Math.floor(
+                resolveContextWindow({
+                    byokMaxInputTokens: byokConfig?.maxInputTokens,
+                    modelName: byokConfig?.model || '',
+                }) * IMPLEMENTATION_CHECK_PROMPT_SHARE,
+            );
 
-            const implementedSuggestions =
-                await this.aiAnalysisService.validateImplementedSuggestions(
-                    organizationAndTeamData,
-                    prNumber,
-                    byokConfig,
-                    codePatch,
-                    filteredSuggestions,
-                );
+            const requests = [...byFile].map(([filename, asks]) => ({
+                file: { filename, patch: patches.get(filename) },
+                asked: asks.map((ask) => ask.asked),
+            }));
 
-            if (implementedSuggestions && implementedSuggestions?.length > 0) {
-                // Create lookup map for O(1) access instead of O(n) find per iteration
-                const savedSuggestionsMap = new Map(
-                    savedSuggestions?.map((s) => [s.id, s]) ?? [],
-                );
-
-                const persistedSuggestions = [];
-
-                for (const suggestion of implementedSuggestions) {
-                    const savedSuggestion = savedSuggestionsMap.get(
-                        suggestion.id,
-                    );
-
-                    if (savedSuggestion) {
-                        await this.pullRequestService.updateSuggestion(
-                            savedSuggestion.id,
-                            {
-                                implementationStatus:
-                                    suggestion.implementationStatus,
-                                updatedAt: new Date().toISOString(),
-                            },
-                            organizationAndTeamData,
-                        );
-
-                        persistedSuggestions.push(suggestion);
-                    }
+            const files = requests.filter(({ file, asked }) => {
+                const prompt = prompt_checkSuggestionImplementation({
+                    file,
+                    suggestions: asked,
+                });
+                // ~3 characters per token: generous for code, so a prompt that
+                // fits here fits the model.
+                if (Math.ceil(prompt.length / 3) <= maxPromptTokens) {
+                    return true;
                 }
+                for (const { id } of asked) {
+                    answers.set(id, { reason: 'diff_too_large' });
+                }
+                return false;
+            });
 
-                return persistedSuggestions;
-            }
+            const limit = pLimit(IMPLEMENTATION_CHECK_CONCURRENCY);
+            const settled = await Promise.allSettled(
+                files.map(({ file, asked }) =>
+                    limit(() =>
+                        this.aiAnalysisService.checkSuggestionImplementation({
+                            organizationAndTeamData,
+                            prNumber,
+                            byokConfig,
+                            file,
+                            suggestions: asked,
+                        }),
+                    ),
+                ),
+            );
 
-            return [];
-        } catch (error) {
-            this.logger.log({
-                message: `Error when trying to validate implemented suggestions for PR#${prNumber}`,
-                error: error,
-                context: SuggestionService.name,
-                metadata: {
-                    organizationAndTeamData,
-                    prNumber: prNumber,
-                },
+            settled.forEach((outcome, i) => {
+                const {
+                    file: { filename },
+                    asked,
+                } = files[i];
+                if (outcome.status === 'fulfilled') {
+                    for (const { id, status } of outcome.value.verdicts) {
+                        answers.set(id, { status });
+                    }
+                    for (const { id, reason } of outcome.value.unmeasured) {
+                        answers.set(id, { reason });
+                    }
+                    return;
+                }
+                this.logger.error({
+                    message: `Implementation check call failed for a file of PR#${prNumber}`,
+                    context: SuggestionService.name,
+                    error: outcome.reason,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber,
+                        file: filename,
+                        suggestions: asked.length,
+                    },
+                });
+                for (const { id } of asked) {
+                    answers.set(id, { reason: 'llm_error' });
+                }
             });
         }
+
+        // One verdict per suggestion, from what was learned of its locations.
+        for (const group of groupsOnChangedFiles) {
+            const { id } = group.suggestion;
+            const read = group.changed.map((location) => ({
+                location,
+                answer: answers.get(askIdOf(group, location)),
+            }));
+            const undecided = read.find(
+                ({ answer }) => !answer || 'reason' in answer,
+            );
+            const reason =
+                undecided?.answer && 'reason' in undecided.answer
+                    ? undecided.answer.reason
+                    : 'omitted';
+            const statusOf = (answer: (typeof read)[number]['answer']) =>
+                answer && 'status' in answer ? answer.status : undefined;
+
+            if (group.locations.length === 1) {
+                const status = statusOf(read[0]?.answer);
+                if (status) verdicts.push({ id, status });
+                else unmeasured.push({ id, reason });
+                continue;
+            }
+
+            groupChecks.push({
+                id,
+                locations: group.locations,
+                fixedBefore: group.fixed,
+                fixedNow: read
+                    .filter(
+                        ({ answer }) =>
+                            statusOf(answer) ===
+                            ImplementationStatus.IMPLEMENTED,
+                    )
+                    .map(({ location }) => location.key),
+                partial: read.some(
+                    ({ answer }) =>
+                        statusOf(answer) ===
+                        ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                ),
+                undecided: !!undecided,
+                reason,
+            });
+        }
+
+        const byId = new Map(onChangedFiles.map((s) => [s.id, s]));
+        const checkedAt = new Date().toISOString();
+        const persisted: Partial<CodeSuggestion>[] = [];
+        // Only whether a write matched matters here, never the PR document.
+        const write = (
+            id: string,
+            data: Partial<ISuggestion>,
+            options?: Omit<
+                UpdateSuggestionOptions,
+                'returnDocument' | 'projection'
+            >,
+        ) =>
+            this.pullRequestService.updateSuggestion(
+                id,
+                data,
+                organizationAndTeamData,
+                { ...options, returnDocument: false },
+            );
+        // The record field by field: replacing the whole record would drop
+        // the locations another check of the group stored meanwhile.
+        const recordFields = (
+            fields: Partial<ImplementationCheckRecord>,
+        ): Partial<ISuggestion> =>
+            Object.fromEntries(
+                Object.entries(fields).map(([key, value]) => [
+                    `implementationCheck.${key}`,
+                    value,
+                ]),
+            ) as Partial<ISuggestion>;
+        const LOCATIONS_FIELD = 'implementationCheck.implementedLocations';
+        const groupVerdicts: typeof verdicts = [];
+        const groupUnmeasured: typeof unmeasured = [];
+        const writes = pLimit(IMPLEMENTATION_CHECK_WRITE_CONCURRENCY);
+
+        await Promise.all([
+            ...groupChecks.map((group) =>
+                writes(async () => {
+                    try {
+                        // Adds what this check found fixed to what is stored and
+                        // reads it all back, in one write.
+                        const stored =
+                            await this.pullRequestService.updateSuggestion(
+                                group.id,
+                                {},
+                                organizationAndTeamData,
+                                {
+                                    addToSet: {
+                                        [LOCATIONS_FIELD]: group.fixedNow,
+                                    },
+                                    // Only what the group is decided from comes back.
+                                    projection: [
+                                        'files.suggestions.id',
+                                        `files.suggestions.${LOCATIONS_FIELD}`,
+                                    ],
+                                },
+                            );
+                        const storedLocations =
+                            stored?.files
+                                ?.flatMap((file) => file.suggestions ?? [])
+                                .find((s) => s.id === group.id)
+                                ?.implementationCheck?.implementedLocations ??
+                            [];
+                        const known = new Set([
+                            ...group.fixedBefore,
+                            ...group.fixedNow,
+                            ...storedLocations,
+                        ]);
+                        const status = groupImplementationStatus({
+                            locations: group.locations,
+                            fixed: new Set(
+                                group.locations
+                                    .map((location) => location.key)
+                                    .filter((key) => known.has(key)),
+                            ),
+                            partial: group.partial,
+                            undecided: group.undecided,
+                        });
+                        if (!status) {
+                            groupUnmeasured.push({
+                                id: group.id,
+                                reason: group.reason,
+                            });
+                            await write(
+                                group.id,
+                                recordFields({
+                                    checkedAt,
+                                    outcome: 'unmeasured',
+                                    reason: group.reason,
+                                }),
+                            );
+                            return;
+                        }
+                        groupVerdicts.push({ id: group.id, status });
+                        const record = recordFields({
+                            checkedAt,
+                            outcome: 'decided',
+                            verdict: status,
+                        });
+                        const unset = ['implementationCheck.reason'];
+                        if (
+                            raisesImplementationStatus(
+                                byId.get(group.id)?.implementationStatus,
+                                status,
+                            ) &&
+                            (await write(
+                                group.id,
+                                {
+                                    ...record,
+                                    implementationStatus: status,
+                                    updatedAt: checkedAt,
+                                },
+                                {
+                                    implementationStatusNotIn:
+                                        statusesAtOrAbove(status),
+                                    unset,
+                                },
+                            ))
+                        ) {
+                            persisted.push({
+                                id: group.id,
+                                implementationStatus: status,
+                            });
+                            return;
+                        }
+                        await write(group.id, record, { unset });
+                    } catch (error) {
+                        // Only a record the store cannot extend (stored as
+                        // null or a non-object) is left behind, so the other
+                        // suggestions are still written and resolved. Any
+                        // other failure may pass on a retry: it fails the
+                        // check, as it did before groups were checked.
+                        if (
+                            (error as { code?: number })?.code !==
+                            MONGO_PATH_NOT_VIABLE
+                        ) {
+                            throw error;
+                        }
+                        this.logger.error({
+                            message: `Implementation check could not record a grouped suggestion of PR#${prNumber}`,
+                            context: SuggestionService.name,
+                            error,
+                            metadata: {
+                                organizationAndTeamData,
+                                prNumber,
+                                suggestionId: group.id,
+                            },
+                        });
+                    }
+                }),
+            ),
+            ...verdicts.map(({ id, status }) =>
+                writes(async () => {
+                    const record: ImplementationCheckRecord = {
+                        checkedAt,
+                        outcome: 'decided',
+                        verdict: status,
+                    };
+                    if (
+                        raisesImplementationStatus(
+                            byId.get(id)?.implementationStatus,
+                            status,
+                        )
+                    ) {
+                        const raised = await write(
+                            id,
+                            {
+                                implementationStatus: status,
+                                implementationCheck: record,
+                                updatedAt: checkedAt,
+                            },
+                            {
+                                implementationStatusNotIn:
+                                    statusesAtOrAbove(status),
+                            },
+                        );
+                        if (raised) {
+                            persisted.push({
+                                id,
+                                implementationStatus: status,
+                            });
+                            return;
+                        }
+                    }
+                    await write(id, { implementationCheck: record });
+                }),
+            ),
+            ...unmeasured.map(({ id, reason }) =>
+                writes(() => {
+                    const last = byId.get(id)?.implementationCheck?.verdict;
+                    return write(id, {
+                        implementationCheck: {
+                            checkedAt,
+                            outcome: 'unmeasured',
+                            reason,
+                            ...(last ? { verdict: last } : {}),
+                        },
+                    });
+                }),
+            ),
+        ]);
+        verdicts.push(...groupVerdicts);
+        unmeasured.push(...groupUnmeasured);
+
+        const tally = (values: string[]) =>
+            values.reduce<Record<string, number>>(
+                (acc, v) => ({ ...acc, [v]: (acc[v] || 0) + 1 }),
+                {},
+            );
+        this.logger.log({
+            message: `Implementation check for PR#${prNumber}: ${verdicts.length} decided, ${persisted.length} raised, ${unmeasured.length} unmeasured`,
+            context: SuggestionService.name,
+            metadata: {
+                organizationAndTeamData,
+                prNumber,
+                diffSource,
+                candidates: candidates.length,
+                onChangedFiles: onChangedFiles.length,
+                files: byFile.size,
+                decided: tally(verdicts.map((v) => v.status)),
+                raised: persisted.length,
+                unmeasured: countByReason(unmeasured),
+            },
+        });
+
+        return {
+            checked: candidates.length,
+            decided: verdicts.length,
+            persisted,
+            unmeasured,
+        };
     }
 
     /**
@@ -2044,9 +2523,7 @@ export class SuggestionService implements ISuggestionService {
                     .filter((comment) =>
                         this.isActiveReviewComment(comment, platformType),
                     )
-                    .map((comment) =>
-                        this.getReviewCommentMatchId(comment, platformType),
-                    )
+                    .map((comment) => hostCommentKey(comment, platformType))
                     .filter(Boolean),
             );
 
@@ -2248,8 +2725,9 @@ export class SuggestionService implements ISuggestionService {
                     ?.filter(
                         (suggestion) =>
                             suggestion.comment &&
-                            suggestion.implementationStatus !==
-                                ImplementationStatus.NOT_IMPLEMENTED &&
+                            resolvesSuggestionThread(
+                                suggestion.implementationStatus,
+                            ) &&
                             suggestion.deliveryStatus === DeliveryStatus.SENT,
                     )
                     .forEach((filteredSuggestion) => {
@@ -2272,24 +2750,5 @@ export class SuggestionService implements ISuggestionService {
         }
 
         return !comment?.isResolved;
-    }
-
-    private getReviewCommentMatchId(
-        comment: PullRequestReviewComment,
-        platformType: PlatformType,
-    ): string | null {
-        if (platformType === PlatformType.GITHUB) {
-            return comment?.fullDatabaseId != null
-                ? String(comment.fullDatabaseId)
-                : comment?.id != null
-                  ? String(comment.id)
-                  : null;
-        }
-
-        if (platformType === PlatformType.AZURE_REPOS) {
-            return comment?.threadId != null ? String(comment.threadId) : null;
-        }
-
-        return comment?.id != null ? String(comment.id) : null;
     }
 }

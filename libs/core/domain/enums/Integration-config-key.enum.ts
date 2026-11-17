@@ -15,6 +15,8 @@ export enum IntegrationConfigKey {
     CODE_MANAGEMENT_PAT = 'code_management_pat',
     USE_JQL_TO_VIEW_BOARD = 'use_jql_to_view_board',
     WEBHOOK_CREATION_FAILURES = 'webhook_creation_failures',
+    REPOSITORY_SELECTION = 'repository_selection',
+    REPOSITORY_SYNC_STATE = 'repository_sync_state',
 }
 
 export enum IntegrationConfigKeyProjectManagement {

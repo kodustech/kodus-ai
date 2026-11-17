@@ -12,12 +12,17 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 import { getSelectedDateRange } from "src/features/ee/cockpit/_helpers/get-selected-date-range";
 import { validateOrganizationLicense } from "src/features/ee/subscription/_services/billing/fetch";
 
+import { LegacyRoutingRedirect } from "./_components/legacy-routing-redirect";
 import { ByokPageClient } from "./_components/page.client";
 import { isBYOKSubscriptionPlan } from "./_utils";
 
 const COST_SUMMARY_TIMEOUT_MS = 3_000;
 
-export default async function ByokPage() {
+export default async function ByokPage({
+    searchParams,
+}: { searchParams?: Promise<{ tab?: string }> } = {}) {
+    const params = await searchParams;
+    if (params?.tab === "routing") return <LegacyRoutingRedirect />;
     const [byokConfig, llmConfigStatus, teamId, dateRange] = await Promise.all([
         getBYOK().catch(() => null),
         getLLMConfigStatus().catch(() => null),

@@ -936,6 +936,19 @@ describe('BYOK config matrix — config in, wire out', () => {
  * and go red only when a real config becomes unservable.
  */
 describe('production config shapes — invariants', () => {
+    // A `kodus` slot carries no key of its own: its module reads Kodus's
+    // platform key from env at build time. A placeholder stands in for it, as
+    // `apiKey: 'k'` does for every other slot.
+    const PLATFORM_KEY = 'API_KODUS_PROVIDER_FIREWORKS_API_KEY';
+    const previousPlatformKey = process.env[PLATFORM_KEY];
+    beforeAll(() => {
+        process.env[PLATFORM_KEY] ??= 'k';
+    });
+    afterAll(() => {
+        if (previousPlatformKey === undefined) delete process.env[PLATFORM_KEY];
+        else process.env[PLATFORM_KEY] = previousPlatformKey;
+    });
+
     // `google_vertex` is the ONE provider this harness cannot exercise: its build
     // needs a real service-account JSON, and with a placeholder it falls through
     // to a different client entirely, so an assertion here would describe the
@@ -1173,11 +1186,22 @@ describe('production config shapes — invariants', () => {
             }
         }
 
-        // Empty since the providers rename the vendors' wire spellings
-        // (`reasoning_effort`, `output_config.effort`) to their adapters' option
-        // names: the two stored overrides this used to pin now reach the wire.
-        // A new entry is an override going silent again, named here.
-        expect(findings).toEqual([]);
+        // The providers rename the vendors' wire spellings (`reasoning_effort`,
+        // `output_config.effort`) to their adapters' option names, so the two
+        // stored overrides this used to pin now reach the wire. A new entry is
+        // an override going silent again, named here.
+        //
+        // The one entry left is not a provider defect: the slot's own
+        // `maxConcurrentRequests` setting was pasted into the reasoning
+        // override, where it is a request-body key no vendor reads, and the
+        // save-time guard accepts it.
+        expect(findings).toEqual([
+            {
+                provider: 'zai',
+                model: 'glm-5.3-flash',
+                keys: ['maxConcurrentRequests'],
+            },
+        ]);
     }, 180000);
 
     it('pins every slot whose configured reasoning effort reaches nothing', async () => {
@@ -1237,30 +1261,26 @@ describe('production config shapes — invariants', () => {
             // Models that do not reason — dropping is right; telling the user is
             // what was missing.
             'google_gemini | gemini-2.0-flash | medium',
-            'google_gemini | gemini-pro-latest | medium',
-            'novita | deepseek/deepseek-v3-0324 | high',
             'novita | deepseek/deepseek-v4-flash | high',
             'novita | deepseek/deepseek-v4-pro | high',
+            'novita | deepseek/deepseek-v4.1-flash | high',
             'openai | gpt-4o-mini | high',
             // Proxy aliases and custom names: the family resolver cannot name
             // the model, so it withholds rather than guesses.
-            'openai_compatible | MiniMax-M3 | high',
+            'openai_compatible | auto | medium',
+            'openai_compatible | claude-opus-4.8 | high',
+            'openai_compatible | code-review | high',
             // Kimi k3 and k2.7-code think whatever is sent and Moonshot has no
             // effort level, so the effort has nothing to reach. The `thinking`
             // toggle they used to get changed nothing and is not sent.
-            'openai_compatible | accounts/fireworks/models/kimi-k3 | high',
-            'openai_compatible | auto | medium',
-            'openai_compatible | cc/claude-opus-5 | high',
-            'openai_compatible | claude-opus-4.8 | high',
-            'openai_compatible | code-review | high',
             'openai_compatible | k3 | high',
             'openai_compatible | k3-256k | medium',
             'openai_compatible | kimi-k2.7-code | high',
             'openai_compatible | kimi-k2.7-code | medium',
             'openai_compatible | kimi-k3 | high',
+            'openai_compatible | kimi-k3 | medium',
             'openai_compatible | kodus-review | high',
             'openai_compatible | kodus-review-fallback | high',
-            'openai_compatible | mimo-v2.5 | high',
             'openai_compatible | mimo-v2.5-pro | high',
             'openai_compatible | mimo-v2.5-pro | medium',
             'openai_compatible | mistral-large-3:675b | medium',

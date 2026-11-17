@@ -15,7 +15,7 @@ export interface ICodeBaseConfigService {
     getConfig(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
-        preliminaryFiles: FileChange[],
+        preliminaryFiles: Pick<FileChange, 'filename'>[],
     ): Promise<CodeReviewConfig>;
 
     getMergedCodeReviewConfigs(
@@ -23,7 +23,7 @@ export interface ICodeBaseConfigService {
         repository: { name: string; id: string },
         parameter: CodeReviewParameter,
         defaultBranch: string,
-        preliminaryFiles?: FileChange[],
+        preliminaryFiles?: Pick<FileChange, 'filename'>[],
     ): Promise<CodeReviewConfigWithoutLLMProvider>;
 
     getSimpleConfig(

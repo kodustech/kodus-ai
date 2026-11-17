@@ -84,29 +84,36 @@ export function submitResultSchema(item: z.ZodObject): JSONSchema {
     };
 }
 
-/** Prose recovery: the same item, its optional fields nullable. Prose that
+/** Prose recovery: the same item, its other fields optional. Prose that
  *  describes a defect may not name its label or lines, and requiring them made
- *  the WHOLE recovery fail ("response did not match schema", GPT-6.1, 30/09);
- *  OpenAI strict mode needs every field declared, so nullable, not optional.
+ *  the WHOLE recovery fail ("response did not match schema", GPT-6.1, 30/09).
+ *  Optional, not nullable: LLM.run sends every field as required-or-null to a
+ *  strict provider and reads a `null` back as absent before this schema
+ *  parses (strict-wire-schema.ts). A `.nullable()` field required the key, so
+ *  every model that answered `null` failed the whole recovery and paid a
+ *  second call that failed the same way (#2384).
  *  The label is any string: normalizeFinderLabels maps it after anchoring. */
 export const LEAN_RECOVERY = z.object({
     suggestions: z.array(
-        LEAN_FINDING.pick({ relevantFile: true, suggestionContent: true }).extend({
-            label: z.string().nullable(),
-            relevantLinesStart: z.number().nullable(),
-            relevantLinesEnd: z.number().nullable(),
+        LEAN_FINDING.pick({
+            relevantFile: true,
+            suggestionContent: true,
+        }).extend({
+            label: z.string().optional(),
+            relevantLinesStart: z.number().optional(),
+            relevantLinesEnd: z.number().optional(),
         }),
     ),
 });
 
 const FULL_RECOVERY_ITEM = FULL_FINDING.extend({
-    language: z.string().nullable(),
-    label: z.string().nullable(),
-    oneSentenceSummary: z.string().nullable().describe(TITLE_PROMPT_SPEC),
-    relevantLinesStart: z.number().nullable(),
-    relevantLinesEnd: z.number().nullable(),
-    severity: z.string().nullable(),
-    confidence: z.number().nullable(),
+    language: z.string().optional(),
+    label: z.string().optional(),
+    oneSentenceSummary: z.string().optional().describe(TITLE_PROMPT_SPEC),
+    relevantLinesStart: z.number().optional(),
+    relevantLinesEnd: z.number().optional(),
+    severity: z.string().optional(),
+    confidence: z.number().optional(),
 }).shape;
 
 export const FULL_RECOVERY = z.object({

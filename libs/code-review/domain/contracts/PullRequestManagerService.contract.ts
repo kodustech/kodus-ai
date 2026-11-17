@@ -8,20 +8,40 @@ export const PULL_REQUEST_MANAGER_SERVICE_TOKEN = Symbol(
     'PullRequestManagerService',
 );
 
+/**
+ * Which diff `getChangedFiles` returned: the changes since the reviewed commit
+ * (`incremental`), the PR's changes since then rebuilt after a rebase
+ * (`interdiff`), the whole PR because neither could be read (`full`), or the
+ * whole PR because there was no reviewed commit to start from (`none`).
+ */
+export type ChangedFilesSource = 'incremental' | 'interdiff' | 'full' | 'none';
+
+export type ChangedFilesOptions = {
+    onDiffSource?: (source: ChangedFilesSource) => void;
+    /** The files the diff deleted; they are left out of the files returned. */
+    onRemovedFiles?: (filenames: string[]) => void;
+};
+
 export interface IPullRequestManagerService {
     getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         prNumber: number,
     ): Promise<any>;
 
     getChangedFiles(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         ignorePaths: string[],
         lastCommit?: string,
         reviewedBaseBranch?: string,
+        options?: ChangedFilesOptions,
     ): Promise<FileChange[]>;
 
     /**
@@ -30,7 +50,12 @@ export interface IPullRequestManagerService {
      */
     getChangedFilesMetadata(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         lastCommit?: string,
         /** Base branch of the last review; a retargeted PR is read whole. */
@@ -43,7 +68,12 @@ export interface IPullRequestManagerService {
      */
     enrichFilesWithContent(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         files: FileChange[],
     ): Promise<FileChange[]>;
@@ -59,7 +89,12 @@ export interface IPullRequestManagerService {
      */
     getRebaseInterdiff(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         previousHeadSha: string,
     ): Promise<
@@ -72,7 +107,7 @@ export interface IPullRequestManagerService {
 
     getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: string,
     ): Promise<Commit[]>;

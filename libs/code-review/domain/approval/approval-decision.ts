@@ -1,6 +1,7 @@
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import type { ChangeRiskAssessment } from '../risk/assess-change-risk';
 
 export interface ApprovalPolicy {
     /** Any configured label matches. When authors are also set, both groups apply. */
@@ -13,22 +14,38 @@ export interface ApprovalPolicy {
     sensitivePaths?: string[];
 }
 
-export type ApprovalRiskLevel = 'low' | 'medium' | 'high' | 'unknown';
-
-export interface ApprovalRiskAssessment {
-    level: ApprovalRiskLevel;
-    reason: string;
-    reviewedHeadSha: string;
-    areaMapVersion?: string;
-    failure?: { category: string; errorName: string; httpStatus?: number };
-}
+export type ApprovalRiskLevel = ChangeRiskAssessment['level'];
+export type ApprovalRiskAssessment = ChangeRiskAssessment;
 
 export interface ApprovalDecision {
     kind: 'approve' | 'hold' | 'out-of-scope' | 'disabled';
     reason: string;
+    matchedPolicy?: { id: string; name: string };
+    policies?: import('./approval-policies').ApprovalPolicyResult[];
+    reviewedHeadSha?: string;
+    reviewedBaseSha?: string;
+    reviewedMetadataKey?: string;
 }
 
 const normalized = (value: string) => value.trim().toLocaleLowerCase('en-US');
+
+/**
+ * Why a review cannot decide on the PR as the provider now has it. Each reason
+ * names what happened: a push during the review is routine and must not read
+ * like a failure to reach the provider (#2534).
+ */
+export function reviewedSnapshotHoldReason(
+    live: { head?: { sha?: string }; base?: { sha?: string } } | null,
+    reviewed: { headSha?: string; baseSha?: string },
+): string | null {
+    if (!live)
+        return 'Kody could not read the current PR from the Git provider.';
+    if (reviewed.headSha && live.head?.sha !== reviewed.headSha)
+        return 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.';
+    if (reviewed.baseSha && live.base?.sha !== reviewed.baseSha)
+        return 'The target branch changed during the review, so this review cannot approve the PR.';
+    return null;
+}
 
 export function approvalPolicyFromConfig(
     config: CodeReviewConfig,
@@ -36,7 +53,7 @@ export function approvalPolicyFromConfig(
     return {
         labels: config.approvalLabels,
         authors: config.approvalAuthors,
-        assessRisk: config.approvalRiskActive,
+        assessRisk: config.riskAssessmentActive ?? config.approvalRiskActive,
         riskInstructions: config.approvalRiskInstructions,
         sensitivePaths: config.approvalSensitivePaths,
     };
@@ -56,9 +73,10 @@ export function approvalPathsOf(
     return files.flatMap((file) => {
         const path = file.filename ?? file.path;
         const previous = file.previous_filename;
-        return [path, previous && previous !== path ? previous : undefined].filter(
-            (p): p is string => !!p,
-        );
+        return [
+            path,
+            previous && previous !== path ? previous : undefined,
+        ].filter((p): p is string => !!p);
     });
 }
 

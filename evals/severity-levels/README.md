@@ -28,3 +28,18 @@ results page is built by `report.py`).
 Deliberate break: a classifier that answers nothing usable rates everything medium
 (`classify-severity.ts` fallback), which gets 70 of 205 and none of low, high or critical,
 below every floor.
+
+## Set `think-tag-leak` (by hand, not in CI)
+
+`--set=think-tag-leak`: three suggestions whose text quotes `</think>` (`think-tag-leak.json`),
+in one call. Together ends DeepSeek V4.1 Flash's reasoning channel at a `</think>` the model
+writes and returns the rest of the reasoning ahead of the answer (#2409); the parser used to
+take the span from the first `{` to the last `}` and fell back to all-medium. It reproduces on
+Together only, so it is run by hand, ten times, and has no floor:
+
+```bash
+node evals/severity-levels/run.js --model=deepseek-v4.1-flash@together --set=think-tag-leak
+```
+
+2026-11-06, ten runs each: main 1/3 every run, all-medium (`[SEVERITY] No JSON in response`);
+with the last-object parser, no fallback, 28 of 30 at their level.

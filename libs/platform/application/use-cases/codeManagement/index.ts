@@ -22,6 +22,12 @@ import { ReceiveWebhookUseCase } from './receiveWebhook.use-case';
 import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
 import { TriggerBusinessValidationUseCase } from './trigger-business-validation.use-case';
 import { UpdateAutoLicenseAllowedUsersUseCase } from './update-auto-license-allowed-users.use-case';
+import {
+    GetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
+    SetRepositorySelectionUseCase,
+} from './repository-selection.use-cases';
+import { SyncAllRepositoriesUseCase } from './sync-all-repositories.use-case';
 
 export default [
     CarryReviewCheckToMergeQueueUseCase,
@@ -48,4 +54,8 @@ export default [
     UpdateAutoLicenseAllowedUsersUseCase,
     PruneRemovedLicenseSeatsUseCase,
     AutoRevokeRemovedLicenseSeatsUseCase,
+    SyncAllRepositoriesUseCase,
+    GetRepositorySelectionUseCase,
+    SetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
 ];

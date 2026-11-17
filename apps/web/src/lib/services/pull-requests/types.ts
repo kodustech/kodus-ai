@@ -5,26 +5,36 @@ export interface Author {
 }
 
 // Daily digest ("PRs do dia") shown as the summary cards at the top of the list.
+// A count is null when it was not requested (see GET_DAILY_DIGEST's `fields`).
 export interface PullRequestsDailyDigest {
     date: string;
-    reviewedToday: number;
-    needsAttention: number;
-    erroredToday: number;
-    awaitingReview: number;
+    reviewedToday: number | null;
+    needsAttention: number | null;
+    erroredToday: number | null;
+    awaitingReview: number | null;
 }
+
+export type PullRequestsDailyDigestField = Exclude<
+    keyof PullRequestsDailyDigest,
+    "date"
+>;
 
 export interface PullRequestsDailyDigestResponse {
     data: PullRequestsDailyDigest;
 }
 
 // All-time counts per segment tab.
+// `null` = the counter is not known: it was not requested, or the backend
+// could not count it. Render it as unavailable, never as 0.
 export interface PullRequestsFacets {
-    all: number;
-    needsAttention: number;
-    errored: number;
-    awaiting: number;
-    mine: number;
+    all: number | null;
+    needsAttention: number | null;
+    errored: number | null;
+    awaiting: number | null;
+    mine: number | null;
 }
+
+export type PullRequestsFacetName = keyof PullRequestsFacets;
 
 export interface PullRequestsFacetsResponse {
     data: PullRequestsFacets;
@@ -218,12 +228,24 @@ export interface PullRequestExecution {
     reviewWarnings?: ReviewWarning[];
 }
 
-export interface PullRequestExecutionsPagination {
-    totalItems?: number;
+// GET /pull-requests/executions/totals — counted on its own, off the list.
+export interface PullRequestExecutionsTotals {
+    totalItems: number;
     // Distinct PRs matching the DB-level filters — the accurate header count.
-    // Absent when the backend can't compute it (error/empty) or reflects only
-    // DB-level filters (see the use-case), so the client trusts it as exact only
-    // when no Mongo-side suggestion/author filter is active.
+    // Reflects only DB-level filters (see the use-case), so the client trusts
+    // it as exact only when no Mongo-side suggestion/author filter is active.
+    distinctPrTotal: number;
+}
+
+export interface PullRequestExecutionsTotalsResponse {
+    data: PullRequestExecutionsTotals;
+}
+
+export interface PullRequestExecutionsPagination {
+    // The list stopped counting by default; these two are present only from an
+    // API that predates GET /pull-requests/executions/totals, or on an empty
+    // result. Read the totals endpoint instead.
+    totalItems?: number;
     distinctPrTotal?: number;
     // Resume point for the next fetch. Absent once the scan is exhausted —
     // that absence, not a short page, is what ends the infinite list.

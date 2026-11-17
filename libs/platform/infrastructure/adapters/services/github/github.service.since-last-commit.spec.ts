@@ -65,12 +65,13 @@ describe('GithubService.getChangedFilesSinceLastCommit', () => {
         return { service, logger, compareCommitsWithBasehead };
     };
 
-    const read = (service: GithubService) =>
+    const read = (service: GithubService, keepRemovedFiles?: boolean) =>
         service.getChangedFilesSinceLastCommit({
             organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
             repository: { id: '1', name: 'repo' },
             prNumber: 7,
             lastCommit: { sha: 'reviewed-sha' },
+            ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
         });
 
     it('keeps the compare files that belong to the PR', async () => {
@@ -113,5 +114,51 @@ describe('GithubService.getChangedFilesSinceLastCommit', () => {
                 }),
             }),
         );
+    });
+
+    // A file the PR added and a later push deleted: the PR's file list no
+    // longer names it, but the diff since the review shows it removed.
+    describe('a file deleted since the review that the PR no longer lists', () => {
+        const gone = { ...file('src/new-in-pr.ts'), status: 'removed' };
+
+        it('is kept, as removed, when the caller asks for removed files', async () => {
+            const { service } = makeService([gone, file('zz/own.ts')]);
+
+            const files = await read(service, true);
+
+            expect(
+                files.map((f: { filename: string; status: string }) => [
+                    f.filename,
+                    f.status,
+                ]),
+            ).toEqual([
+                ['src/new-in-pr.ts', 'removed'],
+                ['zz/own.ts', 'modified'],
+            ]);
+        });
+
+        it('is left out otherwise, with the other files of a merge', async () => {
+            const { service } = makeService([
+                gone,
+                file('merged/a.ts'),
+                file('zz/own.ts'),
+            ]);
+
+            const files = await read(service);
+
+            expect(files.map((f: { filename: string }) => f.filename)).toEqual([
+                'zz/own.ts',
+            ]);
+        });
+
+        it('keeps only removed files outside the PR, not the other files of a merge', async () => {
+            const { service } = makeService([gone, file('merged/a.ts')]);
+
+            const files = await read(service, true);
+
+            expect(files.map((f: { filename: string }) => f.filename)).toEqual([
+                'src/new-in-pr.ts',
+            ]);
+        });
     });
 });

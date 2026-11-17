@@ -1,8 +1,33 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { ValidationPipe } from '@nestjs/common';
 
 import { CreateOrUpdateCodeReviewParameterDto } from './create-or-update-code-review-parameter.dto';
+
+it.each([
+    [['riskAssessmentActive', 'riskReviewRouting.noRisk'], true],
+    [['__proto__.polluted'], false],
+    [['byokModelId'], false],
+    ['riskAssessmentActive', false],
+])(
+    'validates scoped inheritance paths (%j)',
+    async (inheritFields, accepted) => {
+        const pipe = new ValidationPipe({ transform: true, whitelist: true });
+        const result = pipe.transform(
+            {
+                organizationAndTeamData: { teamId: 'team' },
+                configValue: {},
+                repositoryId: 'repo',
+                inheritFields,
+            },
+            { type: 'body', metatype: CreateOrUpdateCodeReviewParameterDto },
+        );
+        if (accepted)
+            expect((await result).inheritFields).toEqual(inheritFields);
+        else await expect(result).rejects.toThrow();
+    },
+);
 
 /**
  * Phase 4, plan 04-02 — byokModelId (id-based BYOK override) round-trips through
@@ -60,4 +85,98 @@ describe('CreateOrUpdateCodeReviewParameterDto — byokModelId', () => {
         });
         expect(JSON.stringify(errors)).toContain('byokModelId');
     });
+});
+
+describe('independent risk configuration validation', () => {
+    const criterion = {
+        id: 'access',
+        name: 'Access',
+        enabled: true,
+        instructions: 'Check tenant isolation.',
+        includedFiles: ['src/**/*.{ts,tsx}'],
+        excludedFiles: ['**/*.test.ts'],
+    };
+    const errorsFor = async (configValue: Record<string, unknown>) =>
+        validate(
+            plainToInstance(CreateOrUpdateCodeReviewParameterDto, {
+                organizationAndTeamData: { teamId: 'team-1' },
+                configValue,
+            }),
+            { whitelist: true, forbidNonWhitelisted: true },
+        );
+
+    it('preserves risk criteria and policies through the API implicit-conversion pipe', async () => {
+        const configValue = {
+            riskAssessmentActive: true,
+            riskCriteria: [criterion],
+            approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: false }],
+        };
+        const pipe = new ValidationPipe({
+            transform: true,
+            whitelist: true,
+            forbidNonWhitelisted: true,
+            transformOptions: { enableImplicitConversion: true },
+        });
+        const result = await pipe
+            .transform(
+                {
+                    organizationAndTeamData: { teamId: 'team-1' },
+                    configValue,
+                },
+                {
+                    type: 'body',
+                    metatype: CreateOrUpdateCodeReviewParameterDto,
+                },
+            )
+            .catch((error) => {
+                throw new Error(JSON.stringify(error.getResponse()));
+            });
+        expect(result.configValue).toMatchObject(configValue);
+        expect(JSON.parse(JSON.stringify(result.configValue))).toEqual(
+            configValue,
+        );
+    });
+
+    it('allows risk enabled with approval disabled and criteria omitted', async () => {
+        expect(
+            await errorsFor({
+                riskAssessmentActive: true,
+                pullRequestApprovalActive: false,
+            }),
+        ).toEqual([]);
+    });
+    it('round-trips array globs and both review modes without changing brace syntax', async () => {
+        expect(
+            await errorsFor({
+                riskCriteria: [criterion],
+                riskReviewRouting: { noRisk: 'balanced', riskFound: 'heavy' },
+            }),
+        ).toEqual([]);
+    });
+    it('accepts a routing delta without resetting the inherited other result', async () => {
+        expect(
+            await errorsFor({ riskReviewRouting: { noRisk: 'heavy' } }),
+        ).toEqual([]);
+        expect(
+            await errorsFor({ riskReviewRouting: { riskFound: 'balanced' } }),
+        ).toEqual([]);
+    });
+    it.each([
+        { riskCriteria: [{ ...criterion, instructions: 42 }] },
+        { riskCriteria: [criterion, criterion] },
+        { riskCriteria: [{ ...criterion, includedFiles: '**/*.ts' }] },
+        { riskCriteria: [{ ...criterion, includedFiles: ['src/['] }] },
+        { riskCriteria: [{ ...criterion, excludedFiles: ['!src/**'] }] },
+        { riskReviewRouting: { noRisk: 'light', riskFound: 'heavy' } },
+        { riskAssessmentActive: 'true' },
+        { riskAssessmentActive: null },
+        { riskCriteria: null },
+        { riskReviewRouting: null },
+        { approvalPolicies: null },
+    ])(
+        'rejects malformed or ambiguous risk configuration %j',
+        async (config) => {
+            expect((await errorsFor(config)).length).toBeGreaterThan(0);
+        },
+    );
 });

@@ -132,28 +132,75 @@ describe('summarizeUnfollowedCitations', () => {
         ).toBeUndefined();
     });
 
-    it('offers a skill by its SKILL.md and keeps the five most cited', () => {
+    it('offers a skill by its SKILL.md and keeps the twenty most cited', () => {
         const cited = summarizeUnfollowedCitations([
             // The most cited, so the cap keeps it: it must be offered.
             row(
                 'irrigation-rules/skills/pumps/SKILL.md is not a guide linked to this review',
-                7,
+                30,
                 [1],
             ),
-            ...[2, 3, 4, 5, 6].map((n) =>
+            ...Array.from({ length: 21 }, (_, i) => i + 2).map((n) =>
                 row(`docs/g${n}.md is not a guide linked to this review`, n, [
                     n,
                 ]),
             ),
         ]).get('valves');
 
-        expect(cited?.map((c) => c.file)).toEqual([
-            'irrigation-rules/skills/pumps/SKILL.md',
-            'docs/g6.md',
-            'docs/g5.md',
-            'docs/g4.md',
-            'docs/g3.md',
-        ]);
+        expect(cited).toHaveLength(20);
+        expect(cited?.[0].file).toBe('irrigation-rules/skills/pumps/SKILL.md');
+        expect(cited?.map((c) => c.file)).not.toContain('docs/g2.md');
+    });
+
+    // #2384, production shape: one guide cited four ways took the five slots
+    // and hid the other files the agent cited.
+    it('keeps the other files when one guide is cited several ways', () => {
+        const cited = summarizeUnfollowedCitations([
+            row(
+                'global/rules/practices.mdc is not a guide linked to this review',
+                18,
+                [1],
+            ),
+            row(
+                'irrigation-rules/stack/node/rules/practices.mdc is not a guide linked to this review',
+                15,
+                [2],
+            ),
+            row(
+                'irrigation-rules/global/rules/practices.mdc is not a guide linked to this review',
+                8,
+                [3],
+            ),
+            row(
+                'stack/node/rules/practices.mdc is not a guide linked to this review',
+                6,
+                [4],
+            ),
+            row(
+                'greenhouse/irrigation-rules/stack/node/rules/practices.mdc is not a guide linked to this review',
+                1,
+                [5],
+            ),
+            row(
+                'irrigation-rules/stack/node/rules/queries.mdc is not a guide linked to this review',
+                1,
+                [6],
+            ),
+            row('CLAUDE.md is not a guide linked to this review', 2, [7]),
+            row(
+                'irrigation-rules/skills/migrations/SKILL.md is not a guide linked to this review',
+                1,
+                [8],
+            ),
+        ]).get('valves');
+
+        expect(cited?.map((c) => c.file)).toEqual(
+            expect.arrayContaining([
+                'irrigation-rules/stack/node/rules/queries.mdc',
+                'CLAUDE.md',
+                'irrigation-rules/skills/migrations/SKILL.md',
+            ]),
+        );
     });
 });
 

@@ -92,6 +92,21 @@ export class NotificationController {
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
+        // The client may leave at any point from here on, also while the
+        // count below is read; the API ending the stream on shutdown closes
+        // the response. Either way, whatever was opened is released.
+        let heartbeat: NodeJS.Timeout | undefined;
+        let closed = false;
+        const release = () => {
+            closed = true;
+            clearInterval(heartbeat);
+            this.sseService.removeConnection(userId, res);
+        };
+        req.on('close', release);
+        res.on('close', release);
+        // Tracked from here, so a shutdown during the read below ends it too.
+        if (!this.sseService.openConnection(res)) return;
+
         // Send initial unread count, scoped like the list the drawer renders --
         // a badge counting other organizations is the discrepancy users see.
         const organizationId = (req as any).user?.organization?.uuid;
@@ -99,25 +114,23 @@ export class NotificationController {
             userId,
             organizationId,
         );
+        // Ended by the shutdown, its close event may not have fired yet.
+        if (closed || res.writableEnded) return;
         res.write(
             `event: unread-count\ndata: ${JSON.stringify({ count })}\n\n`,
         );
 
-        this.sseService.addConnection(userId, res);
+        if (!this.sseService.addConnection(userId, res)) return;
 
         // Heartbeat every 30s to keep the connection alive
-        const heartbeat = setInterval(() => {
+        heartbeat = setInterval(() => {
+            if (res.writableEnded) return clearInterval(heartbeat);
             try {
                 res.write(': heartbeat\n\n');
             } catch {
                 clearInterval(heartbeat);
             }
         }, 30_000);
-
-        req.on('close', () => {
-            clearInterval(heartbeat);
-            this.sseService.removeConnection(userId, res);
-        });
     }
 
     @Patch(':id/read')

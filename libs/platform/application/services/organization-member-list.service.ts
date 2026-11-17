@@ -65,12 +65,13 @@ export class OrganizationMemberListService {
      */
     public async fetch(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean } = {},
+        options: { skipCache?: boolean; requireAuthors?: boolean } = {},
     ): Promise<OrganizationMemberListResult> {
         const [memberResult, authorResult] = await Promise.allSettled([
             this.codeManagementService.getListMembers({
                 organizationAndTeamData,
                 determineBots: true,
+                requireComplete: options.requireAuthors === true,
             }),
             this.fetchPullRequestAuthors(organizationAndTeamData, options),
         ]);
@@ -92,6 +93,17 @@ export class OrganizationMemberListService {
         if (
             memberResult.status === 'rejected' &&
             authorResult.status === 'rejected'
+        ) {
+            return unavailable();
+        }
+
+        // A caller that revokes access on absence cannot read a missing
+        // author list as "nobody opened a PR", nor a missing member list as
+        // "left the workspace".
+        if (
+            options.requireAuthors &&
+            (authorResult.status === 'rejected' ||
+                memberResult.status === 'rejected')
         ) {
             return unavailable();
         }
@@ -133,7 +145,7 @@ export class OrganizationMemberListService {
      */
     private async fetchPullRequestAuthors(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean },
+        options: { skipCache?: boolean; requireAuthors?: boolean },
     ): Promise<RawMember[]> {
         const cacheKey = `org_member_pr_authors_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
 
@@ -159,6 +171,7 @@ export class OrganizationMemberListService {
         const authors = await this.codeManagementService.getPullRequestAuthors({
             organizationAndTeamData,
             determineBots: true,
+            requireLoaded: options.requireAuthors === true,
         });
 
         if (authors?.length) {

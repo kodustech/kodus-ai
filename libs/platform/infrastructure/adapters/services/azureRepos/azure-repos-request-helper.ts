@@ -1,3 +1,4 @@
+import type { ApprovalTeamMembership } from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import { Injectable } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 
@@ -35,14 +36,74 @@ const DIFF_MAX_PAGES = 50;
 export class AzureReposRequestHelper {
     constructor() {}
 
+    async getApprovalTeamMembership(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        team: string;
+        author: string;
+    }): Promise<ApprovalTeamMembership> {
+        const instance = await this.azureRequest(params);
+        let containsGroups = false;
+        // Native teams can contain groups that this endpoint cannot expand.
+        // A direct match is evidence; a missing user in an unexpanded group is unknown.
+        for (let skip = 0; skip < 10_000; skip += 100) {
+            const { data } = await instance.get(
+                `/_apis/projects/${encodeURIComponent(params.projectId)}/teams/${encodeURIComponent(params.team)}/members`,
+                {
+                    params: {
+                        'api-version': '7.1',
+                        '$top': 100,
+                        '$skip': skip,
+                    },
+                },
+            );
+            if (!Array.isArray(data?.value)) return 'unavailable';
+            for (const member of data.value) {
+                const identity = member?.identity;
+                if (!identity) return 'unavailable';
+                if (
+                    !identity.isContainer &&
+                    identity.uniqueName?.toLowerCase() ===
+                        params.author.toLowerCase()
+                )
+                    return 'member';
+                containsGroups ||= identity.isContainer === true;
+            }
+            if (data.value.length < 100)
+                return containsGroups ? 'unavailable' : 'not-member';
+        }
+        return 'unavailable';
+    }
+
     async getProjects(params: {
         orgName: string;
         token: string;
     }): Promise<AzureReposProject[]> {
         const instance = await this.azureRequest(params);
-        const { data } = await instance.get('/_apis/projects?api-version=7.1');
+        const projects: AzureReposProject[] = [];
+        let continuationToken: string | undefined;
 
-        return data?.value;
+        // The endpoint returns one page (100 projects by default) and a
+        // continuation token header while more remain.
+        do {
+            const query = continuationToken
+                ? `&continuationToken=${encodeURIComponent(continuationToken)}`
+                : '';
+            const response = await instance.get(
+                `/_apis/projects?api-version=7.1&$top=500${query}`,
+            );
+
+            projects.push(...(response?.data?.value ?? []));
+
+            const next = response?.headers?.['x-ms-continuationtoken'];
+            continuationToken =
+                typeof next === 'string' && next && next !== continuationToken
+                    ? next
+                    : undefined;
+        } while (continuationToken);
+
+        return projects;
     }
 
     /**

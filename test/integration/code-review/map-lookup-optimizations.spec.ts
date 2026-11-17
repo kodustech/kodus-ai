@@ -28,7 +28,7 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
 
     // Mock services
     const mockAIAnalysisService = {
-        validateImplementedSuggestions: jest.fn(),
+        checkSuggestionImplementation: jest.fn(),
         severityAnalysisAssignment: jest.fn(),
         filterSuggestionsSafeGuard: jest.fn(),
     };
@@ -92,99 +92,6 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
     });
 
     describe('SuggestionService - Map Lookup Optimizations', () => {
-        describe('validateImplementedSuggestions - savedSuggestionsMap lookup', () => {
-            it('should correctly match implemented suggestions with saved suggestions using Map', async () => {
-                const savedSuggestions = [
-                    { id: 'sug-1', relevantFile: 'file1.ts', severity: 'high' },
-                    {
-                        id: 'sug-2',
-                        relevantFile: 'file2.ts',
-                        severity: 'medium',
-                    },
-                    { id: 'sug-3', relevantFile: 'file3.ts', severity: 'low' },
-                ];
-
-                const implementedSuggestions = [
-                    { id: 'sug-1', implementationStatus: 'IMPLEMENTED' },
-                    { id: 'sug-3', implementationStatus: 'IMPLEMENTED' },
-                ];
-
-                mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValue(
-                    implementedSuggestions,
-                );
-                mockPullRequestService.updateSuggestion.mockResolvedValue({});
-
-                const result =
-                    await suggestionService.validateImplementedSuggestions(
-                        mockOrganizationAndTeamData,
-                        'code patch',
-                        savedSuggestions as any,
-                        123,
-                    );
-
-                // Should have called updateSuggestion for each implemented suggestion found in saved
-                expect(
-                    mockPullRequestService.updateSuggestion,
-                ).toHaveBeenCalledTimes(2);
-
-                // Verify correct IDs were updated. Third arg is the
-                // org/team scope added by the cross-org leak fix in
-                // 57c3de5d1 (mongo writes scoped by organizationId).
-                expect(
-                    mockPullRequestService.updateSuggestion,
-                ).toHaveBeenCalledWith(
-                    'sug-1',
-                    expect.objectContaining({
-                        implementationStatus: 'IMPLEMENTED',
-                    }),
-                    mockOrganizationAndTeamData,
-                );
-                expect(
-                    mockPullRequestService.updateSuggestion,
-                ).toHaveBeenCalledWith(
-                    'sug-3',
-                    expect.objectContaining({
-                        implementationStatus: 'IMPLEMENTED',
-                    }),
-                    mockOrganizationAndTeamData,
-                );
-
-                expect(result).toEqual(implementedSuggestions);
-            });
-
-            it('should handle case where implemented suggestion is not in saved suggestions', async () => {
-                const savedSuggestions = [
-                    { id: 'sug-1', relevantFile: 'file1.ts' },
-                ];
-
-                const implementedSuggestions = [
-                    { id: 'sug-999', implementationStatus: 'IMPLEMENTED' }, // Not in saved
-                ];
-
-                mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValue(
-                    implementedSuggestions,
-                );
-
-                const result =
-                    await suggestionService.validateImplementedSuggestions(
-                        mockOrganizationAndTeamData,
-                        'code patch',
-                        savedSuggestions as any,
-                        123,
-                    );
-
-                // Should not call updateSuggestion since ID not found
-                expect(
-                    mockPullRequestService.updateSuggestion,
-                ).not.toHaveBeenCalled();
-
-                // Only suggestions actually persisted should be returned, so a
-                // no-op verification doesn't trigger a spurious PR execution
-                // broadcast downstream.
-                expect(result).toEqual([]);
-            });
-        });
-
         describe('prioritizeSuggestionsBySeverityLimits - categorization with single loop', () => {
             it('should correctly categorize suggestions by severity using single loop', async () => {
                 const suggestions = [

@@ -146,8 +146,12 @@ const UNFOLLOWED_GUIDE = /^`?(.+?)`? is not a guide linked to this review$/;
 const READS_LIKE_GUIDE =
     /^[^\s]+\.(md|mdc|mdx|markdown|txt|rst|adoc)$|(^|\/)SKILL\.md$/i;
 
-/** How many cited files are offered per agent. */
-const MAX_UNFOLLOWED_CITATIONS = 5;
+/** How many cited files are sent per agent. More than the page shows: a
+ *  model spells one file several ways (`rules-repo/x.mdc`, `x.mdc`,
+ *  `owner/rules-repo/x.mdc`), and the page merges the spellings once it knows
+ *  the linked repositories. Capped at the page's five here, the spellings of
+ *  the most cited file took every slot and hid the other files (#2384). */
+const MAX_UNFOLLOWED_CITATIONS = 20;
 
 export type UnfollowedCitationRow = {
     agentId: string;

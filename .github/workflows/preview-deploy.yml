@@ -1,4 +1,4 @@
-name: "Preview: Deploy"
+name: 'Preview: Deploy'
 
 # =============================================================================
 # One preview environment per pull request AND per shape of the product it
@@ -62,6 +62,36 @@ on:
                 required: false
                 default: false
                 type: boolean
+            risk_routing_smoke:
+                description: Test Risk, Routing and General through the full web app
+                required: false
+                default: false
+                type: boolean
+            risk_ui_seed_run_id:
+                description: Existing real-PR QA run whose connected tenant supplies UI evidence
+                required: false
+                default: ''
+                type: string
+            reuse_preview:
+                description: Run smoke tests against the existing preview without deploying changes
+                required: false
+                default: false
+                type: boolean
+            recover_webhooks:
+                description: Restart an existing preview's webhook service before deployment
+                required: false
+                default: false
+                type: boolean
+            risk_pipeline_smoke:
+                description: Test real GitHub PR webhooks, risk, routing, agents and approvals
+                required: false
+                default: false
+                type: boolean
+            risk_pipeline_inspect:
+                description: 'Read existing QA execution evidence only: organizationId,repositoryId,prNumber,sinceISO'
+                required: false
+                default: ''
+                type: string
             provider_approval_smoke:
                 description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
                 required: false
@@ -110,7 +140,7 @@ jobs:
         concurrency:
             group: preview-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
             cancel-in-progress: true
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: Preview
         # two shapes come up one after the other
         timeout-minutes: 100
@@ -314,7 +344,7 @@ jobs:
                   else
                     echo "::notice::PREVIEW_OPENAI_EMBEDDINGS_KEY is not set — the dedup guard runs without embeddings and vetoes low-overlap merges"
                   fi
-                  if [ "${{ inputs.provider_approval_smoke }}" = 'true' ]; then
+                  if [ "${{ inputs.provider_approval_smoke }}" = 'true' ] || [ "${{ inputs.risk_pipeline_smoke }}" = 'true' ]; then
                     : "${PREVIEW_FIREWORKS_QA_KEY:?BYOK_FIREWORKS_API_KEY is required for managed trial review QA}"
                     grep -v '^API_FIREWORKS_API_KEY=' .env > "$RUNNER_TEMP/env.no-fireworks"
                     {
@@ -330,6 +360,11 @@ jobs:
                     ./scripts/preview/materialize-billing-env.sh \
                       "$RUNNER_TEMP/preview-billing.env" .env .env.billing
                   esac
+                  # Only the opted-in UI fixture enables the keyless Kodus provider.
+                  # It creates temporary model settings, never credit or inference calls.
+                  if [ "${{ inputs.risk_routing_smoke }}" = 'true' ]; then
+                    echo 'API_KODUS_PROVIDER_ALPHA_ORGS=*' >> .env
+                  fi
                   # the seed runs on the VM and reads these from the same file
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"
@@ -350,6 +385,20 @@ jobs:
                   set -euo pipefail
                   : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
                   : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
+                  if [ "${{ inputs.reuse_preview }}" = 'true' ]; then
+                    urls=""
+                    for profile in $PROFILES; do
+                      name=$($RUNO environments | jq -er --arg b "$HEAD_REF" --arg p "$profile" \
+                        '[.[] | select(.repo == "kodus-ai" and .branch == $b and .profile == $p)] | if length == 1 then .[0].envName else error("Expected one matching preview") end')
+                      $RUNO attach "$name"
+                      url=$($RUNO url --branch "$HEAD_REF" --profile "$profile" | head -n 1)
+                      case "$url" in https://*) ;; *) echo '::error::No running preview URL'; exit 1 ;; esac
+                      urls="$urls$profile=$url "
+                    done
+                    echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
+                    echo 'Testing existing preview; application source is unchanged.'
+                    exit 0
+                  fi
                   # Fail fast: a runo without --profile would silently treat both
                   # shapes as the branch's one env — the second `up` would
                   # overwrite the first, and `destroy --profile` would take the
@@ -390,6 +439,45 @@ jobs:
                   done
                   echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
 
+            - name: Recover existing preview webhooks
+              if: steps.up.outcome == 'success' && steps.env.outputs.configured == 'true' && inputs.recover_webhooks
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+              run: |
+                  set -euo pipefail
+                  for profile in $PROFILES; do
+                    name=$($RUNO environments | jq -er --arg b "$HEAD_REF" --arg p "$profile" \
+                      '[.[] | select(.repo == "kodus-ai" and .branch == $b and .profile == $p)] | if length == 1 then .[0].envName else error("Expected one matching preview") end')
+                    $RUNO attach "$name"
+                    url=$($RUNO url --branch "$HEAD_REF" --profile "$profile" | head -n 1)
+                    case "$url" in
+                      https://*.sslip.io) webhook_url="https://webhooks.${url#https://}" ;;
+                      *) echo '::error::Webhook recovery requires an existing sslip.io preview'; exit 1 ;;
+                    esac
+                    # Print state and a known error category, never raw request logs.
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker inspect --format '{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' kodus_webhooks"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker logs --tail 250 kodus_webhooks 2>&1 | grep -q 'heap out of memory' && echo 'webhooks: heap exhaustion detected' || true"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- 'docker restart kodus_webhooks'
+                    recovered=false
+                    for attempt in $(seq 1 60); do
+                      if curl --fail --silent --max-time 3 "$webhook_url/health/ready" >/dev/null; then
+                        recovered=true
+                        break
+                      fi
+                      sleep 5
+                    done
+                    if [ "$recovered" != true ]; then
+                      echo '::error::The preview webhook service did not recover'
+                      exit 1
+                    fi
+                    echo "Webhook readiness restored for $profile"
+                  done
+
             - name: Report container status
               if: always() && steps.env.outputs.configured == 'true'
               env:
@@ -402,11 +490,9 @@ jobs:
                   # token-bearing URLs, and Stripe payloads. Detailed logs are
                   # available through the authenticated Runo exec/logs path.
                   for profile in $PROFILES; do
-                    overlay=docker-compose.preview.cloud.yml
-                    [ "$profile" = self-hosted ] && overlay=docker-compose.preview.selfhosted.yml
                     echo "== $profile"
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
-                      "docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $overlay --profile mcp ps" || true
+                      "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" || true
                   done
 
             - name: Smoke approval and area map on Runo
@@ -429,6 +515,122 @@ jobs:
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "BETA_FEATURES=true node evals/wiring-smoke.js --only=approval-risk"
                   done
+
+            - name: Risk and Routing full-app UI evidence
+              if: steps.up.outcome == 'success' && inputs.risk_routing_smoke == true
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  URLS: ${{ steps.up.outputs.urls }}
+                  TEST_USER_EMAIL: preview@kodus.io
+                  TEST_USER_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  RISK_UI_SEED_RUN_ID: ${{ inputs.risk_ui_seed_run_id }}
+                  OUT_DIR: risk-routing-evidence
+              run: |
+                  set -euo pipefail
+                  if [ -n "${RISK_UI_SEED_RUN_ID:-}" ]; then
+                    case "$RISK_UI_SEED_RUN_ID" in *[!0-9]*) echo '::error::QA run id must contain only digits'; exit 1 ;; esac
+                    export TEST_USER_EMAIL="preview-risk-$RISK_UI_SEED_RUN_ID@kodus.io"
+                  fi
+                  for entry in $URLS; do
+                    case "$entry" in cloud=*) KODUS_WEB_URL="${entry#cloud=}" ;; esac
+                  done
+                  : "${KODUS_WEB_URL:?cloud preview is required}"
+                  export KODUS_WEB_URL
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL node scripts/preview/prepare-risk-routing-qa.cjs"
+                  npm ci --prefix tests/e2e
+                  (cd tests/e2e && npx playwright install --with-deps chromium)
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL PREVIEW_QA_SETTINGS_MODE=snapshot PREVIEW_QA_SNAPSHOT_KEY=${{ github.run_id }}${{ github.run_attempt }} node scripts/preview/prepare-risk-routing-qa.cjs"
+                  restore_ui_settings() {
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL PREVIEW_QA_SETTINGS_MODE=restore PREVIEW_QA_SNAPSHOT_KEY=${{ github.run_id }}${{ github.run_attempt }} node scripts/preview/prepare-risk-routing-qa.cjs"
+                  }
+                  trap 'restore_ui_settings || exit 1' EXIT
+                  PREVIEW_QA_SETTINGS_SNAPSHOT=true node tests/e2e/playwright/risk-routing.mjs
+
+            - name: Upload Risk and Routing UI evidence
+              if: always() && inputs.risk_routing_smoke == true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: preview-risk-routing-ui
+                  path: risk-routing-evidence/
+                  if-no-files-found: warn
+
+            - name: Risk pipeline end-to-end on GitHub
+              if: steps.env.outputs.configured == 'true' && inputs.risk_pipeline_smoke == true && steps.up.outcome == 'success'
+              env:
+                  URLS: ${{ steps.up.outputs.urls }}
+                  CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN_PAID }}
+                  GH_REPO_ADMIN_TOKEN: ${{ secrets.GH_REPO_ADMIN_TOKEN || secrets.GH_INTEGRATION_TOKEN_PAID }}
+                  GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
+                  RISK_INSPECT: ${{ inputs.risk_pipeline_inspect }}
+              run: |
+                  set -euo pipefail
+                  # Test code must match this run even when the app image is reused.
+                  inspector_payload=$(base64 -w0 scripts/preview/inspect-risk-routing-e2e.cjs)
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "printf '%s' '$inspector_payload' | base64 -d > scripts/preview/inspect-risk-routing-e2e.cjs"
+                  if [ -n "${RISK_INSPECT:-}" ]; then
+                    scope=$(node -e 'const p=process.env.RISK_INSPECT.split(",");if(p.length!==4||!/^[a-f0-9-]{36}$/i.test(p[0])||!/^[a-z0-9_-]+$/i.test(p[1])||!/^[1-9][0-9]*$/.test(p[2])||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(p[3])||!Number.isFinite(Date.parse(p[3])))process.exit(1);process.stdout.write(p.join(" "))')
+                    mkdir -p tests/e2e/evidence
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "docker exec -e PREVIEW_RISK_ROUTING_QA=true kodus_api node scripts/preview/inspect-risk-routing-e2e.cjs $scope" \
+                      | tee tests/e2e/evidence/qa-execution-inspection.txt
+                    node --experimental-strip-types scripts/preview/inspect-risk-provider.mjs > tests/e2e/evidence/qa-provider-inspection.json
+                    echo 'Read-only QA inspection complete; no pipeline cases were run.'
+                    exit 0
+                  fi
+                  for entry in $URLS; do
+                    case "$entry" in cloud=*) CLOUD_WEB_BASE_URL="${entry#cloud=}" ;; esac
+                  done
+                  : "${CLOUD_WEB_BASE_URL:?cloud preview is required}"
+                  : "${GH_TEST_TOKEN:?QA PR author credential is required}"
+                  : "${GH_INTEGRATION_TOKEN:?QA integration credential is required}"
+                  export CLOUD_WEB_BASE_URL="${CLOUD_WEB_BASE_URL%/}"
+                  export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
+                  export CLOUD_TENANT_PAID_EMAIL="preview-risk-${{ github.run_id }}@kodus.io"
+                  export CLOUD_RISK_POLICY_TENANT_EMAIL="preview-risk-policies-${{ github.run_id }}@kodus.io"
+                  auth_ready() {
+                    node -e 'fetch(process.env.CLOUD_WEB_BASE_URL+"/api/auth/csrf",{signal:AbortSignal.timeout(10000)}).then(async r=>process.exit(r.ok && typeof (await r.json()).csrfToken === "string" ? 0 : 1)).catch(()=>process.exit(1))'
+                  }
+                  if ! auth_ready; then
+                    echo 'Preview auth route is not ready; restarting only the preview web service.'
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- 'docker restart kodus_web'
+                  fi
+                  for attempt in $(seq 1 24); do
+                    if auth_ready; then break; fi
+                    if [ "$attempt" = 24 ]; then
+                      echo '::error::Preview authentication remains unavailable; no pipeline cases were measured.'
+                      exit 1
+                    fi
+                    sleep 5
+                  done
+                  for seed_email in "$CLOUD_TENANT_PAID_EMAIL" "$CLOUD_RISK_POLICY_TENANT_EMAIL"; do
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_SEED_EMAIL=$seed_email pnpm run seed:preview >/dev/null 2>&1"
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$seed_email node scripts/preview/prepare-risk-routing-qa.cjs"
+                  done
+                  npm ci --prefix tests/e2e
+                  (cd tests/e2e && npx playwright install --with-deps chromium)
+                  (cd tests/e2e && ./node_modules/.bin/tsx cli/run-scenario.ts risk-routing-pipeline --target cloud --provider github --license paid)
+
+            - name: Upload Risk pipeline evidence
+              if: always() && inputs.risk_pipeline_smoke == true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: preview-risk-pipeline-evidence
+                  path: tests/e2e/evidence/
+                  if-no-files-found: warn
 
             - name: Smoke conditional approval on real providers
               if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && steps.up.outcome == 'success'
@@ -489,7 +691,7 @@ jobs:
                   if-no-files-found: warn
 
             - name: Comment the preview link
-              if: always() && steps.env.outputs.configured == 'true'
+              if: always() && steps.env.outputs.configured == 'true' && inputs.reuse_preview != true
               uses: actions/github-script@v9.0.0
               env:
                   PR_NUMBER: ${{ inputs.pr_number }}
