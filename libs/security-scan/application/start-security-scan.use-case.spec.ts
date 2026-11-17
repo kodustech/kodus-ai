@@ -123,6 +123,28 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it('carries a finished unit without what it examined, so it never supplies a miss of the new scan', async () => {
+        const examined = [{ vulnerabilityClass: 'injection', filePaths: ['src/a.ts'] }];
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            progress: [
+                { unitId: 'a', state: 'done', findings: 0, examinedByClass: examined },
+                { unitId: 'b', state: 'failed', findings: 0 },
+            ],
+        });
+
+        await start();
+
+        const created = scans.create.mock.calls[0][0];
+        expect(created.progress).toEqual([{ unitId: 'a', state: 'done', findings: 0 }]);
+        expect(created.coverage.examinedByClass).toEqual([]);
+        expect(created.coverage.inheritedExaminedByClass).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ filePaths: ['src/a.ts'] }),
+            ]),
+        );
+    });
+
     it("looks for the repository's active and last scan by its platform and id", async () => {
         const { scans, start } = useCaseWith(null);
 

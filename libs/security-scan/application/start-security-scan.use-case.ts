@@ -348,7 +348,11 @@ export class StartSecurityScanUseCase {
         }
         return {
             units: last.units,
-            progress,
+            // Done, but not read by this scan: what they examined is
+            // inherited below, never a miss of this scan's own.
+            progress: progress.map(
+                ({ examinedByClass: _carried, ...carried }) => carried,
+            ),
             planCommitSha,
             reported,
             coverage: {
