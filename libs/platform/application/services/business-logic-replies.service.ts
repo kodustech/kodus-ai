@@ -355,7 +355,9 @@ export class BusinessLogicReplies {
                 reply:
                     outcome.kind === 'skipped'
                         ? outcome.message
-                        : `I re-checked. ${recheckNotice(published.changed)}`,
+                        : ['I re-checked.', commentNotice(published)]
+                              .filter(Boolean)
+                              .join(' '),
             };
         }
         const lines = outcome.checks.flatMap((check) =>
@@ -375,14 +377,36 @@ export class BusinessLogicReplies {
                     `I re-checked${intent.files.length ? ` ${intent.files.map((f) => `\`${f}\``).join(', ')}` : ''}:`,
                     ...lines,
                     '',
-                    `${recheckNotice(published.changed)} If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.`,
+                    [
+                        commentNotice(published),
+                        'If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.',
+                    ]
+                        .filter(Boolean)
+                        .join(' '),
                 ].join('\n'),
             ),
         };
     }
 }
 
-/** The findings a reply can act on: open requirements and unaccepted changes, numbered. */
+/**
+ * What a reply says about the comment a re-check wrote. `none` means it wrote
+ * nothing - `shouldComment` said no, or the run was a dry run - so the reply
+ * points at nothing rather than at a comment that does not exist.
+ */
+function commentNotice(published: {
+    comment: 'created' | 'updated' | 'none';
+    changed?: boolean;
+}): string {
+    if (published.comment === 'none') {
+        return '';
+    }
+    if (published.comment === 'created') {
+        return 'I wrote the Kody · Business Logic comment on this pull request.';
+    }
+    return recheckNotice(published.changed);
+}
+
 /**
  * Whether a comment answers the Business Logic comment, before any model is
  * asked: it is posted in that comment's thread, quotes it, or names one of
