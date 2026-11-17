@@ -122,11 +122,14 @@ export const OWNER_ORIGIN_NOTE = {
 /**
  * How an owner reads: a handle with one "@", an email CODEOWNERS entry as the
  * email, and a last author by the name git records, which is not a handle.
+ * An owner stored without an origin reads as stored: nothing says it is a handle.
  */
 export const formatOwner = (owner: IssueOwner): string => {
-    if (owner.origin === "last_author") return owner.username;
     if (owner.origin === "codeowners" && owner.email) return owner.email;
-    return `@${owner.username.replace(/^@/, "")}`;
+    if (owner.origin === "codeowners" || owner.origin === "pr_author") {
+        return `@${owner.username.replace(/^@/, "")}`;
+    }
+    return owner.username;
 };
 
 /** "CWE-89" → its MITRE page. Anything else has no link. */

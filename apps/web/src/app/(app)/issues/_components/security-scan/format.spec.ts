@@ -223,6 +223,12 @@ describe("formatOwner", () => {
         ).toBe("jane@acme.io");
     });
 
+    it("shows an owner stored without an origin as stored", () => {
+        expect(formatOwner({ gitId: "", username: "Jane Doe" })).toBe(
+            "Jane Doe",
+        );
+    });
+
     it("shows a last author by name, without an at sign", () => {
         expect(
             formatOwner({
