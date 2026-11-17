@@ -46,6 +46,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -53,6 +54,11 @@ reviewCadence:
     timeWindow: 15 # minutos
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalLabels: []
+approvalAuthors: []
+approvalRiskActive: false
+approvalRiskInstructions: ''
+approvalSensitivePaths: []
 isRequestChangesActive: false # no disponible en GitLab
 runOnDraft: true
 ignorePaths:
@@ -161,10 +167,30 @@ revisiones en commits posteriores:
   </Tab>
 </Tabs>
 
+### Modo de Revisión
+
+Qué tan a fondo revisa Kody los pull requests (`reviewMode`):
+
+- **Balanced** (predeterminado): la revisión estándar.
+- **Heavy**: nueve revisores especialistas se ejecutan junto al principal, para mayor recall a costa
+  de más llamadas al modelo. Consulta [Heavy mode](/es/how_to_use/code_review/review_directive#heavy-mode).
+
+El modo se aplica a todas las revisiones: las automáticas, `@kody review` y `kodus review`. Una sola
+revisión puede pedir el otro modo con `--heavy` o `--balanced`. Como los demás ajustes de esta
+página, se puede configurar globalmente, por repositorio o por directorio.
+
+Bajo las dos opciones, **Review models** muestra el modelo en el que se ejecuta cada modo, en solo
+lectura. Vienen de **AI providers → Routing** (sigue **View organization routing** para cambiarlos),
+salvo que el repositorio o directorio defina su propio modelo, que entonces ejecuta ambos modos. Con
+un solo modelo conectado la sección solo lo indica; sin modelos propios (gestionado por Kodus) se oculta.
+
 ### Flujo de Trabajo del PR
 
 #### Auto-aprobar PRs
-**Enable Pull Request Approval** — Kody aprueba los PRs cuando no se encuentran problemas.
+**Automatic PR approval** — Kody aprueba un PR después de una revisión limpia, o cuando se
+resuelven todos los comentarios que dejó. Nunca hace merge. **Conditional approval (Beta)** limita
+qué PRs puede aprobar Kody y cuándo debe aprobar una persona en su lugar. Consulta
+[Auto-aprobación](/es/how_to_use/code_review/configs/auto_approve).
 
 **Plataformas:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 

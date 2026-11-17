@@ -3,9 +3,9 @@ import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 /**
  * Deterministic-logic tests for CreateOrUpdateKodyRulesUseCase.
  *
- * The three methods under test are pure and side-effect free, so the class is
+ * The methods under test are pure and side-effect free, so the class is
  * constructed with inert stub dependencies ({} as any) — none of them are
- * touched by getInheritanceOnlyToggledIds / isInternalSyncActor / normalizeError.
+ * touched by getInheritanceOnlyToggledIds / isInternalSyncActor.
  * Private methods are reached via (instance as any).
  */
 function makeUseCase(): CreateOrUpdateKodyRulesUseCase {
@@ -214,48 +214,5 @@ describe('CreateOrUpdateKodyRulesUseCase — isInternalSyncActor', () => {
         expect(call({ userId: 'kody', userEmail: 'someone@kodus.io' })).toBe(
             false,
         );
-    });
-
-    it('is false when both fields differ', () => {
-        expect(call({ userId: 'alice', userEmail: 'alice@kodus.io' })).toBe(
-            false,
-        );
-    });
-});
-
-describe('CreateOrUpdateKodyRulesUseCase — normalizeError', () => {
-    let useCase: CreateOrUpdateKodyRulesUseCase;
-    const call = (error: unknown) =>
-        (useCase as any).normalizeError(error) as Error;
-    beforeEach(() => {
-        useCase = makeUseCase();
-    });
-
-    it('returns the same Error instance untouched', () => {
-        const err = new Error('original');
-        expect(call(err)).toBe(err);
-    });
-
-    it('preserves Error subclass instances by identity', () => {
-        const err = new TypeError('typed');
-        expect(call(err)).toBe(err);
-    });
-
-    it('wraps a string into an Error with that exact message', () => {
-        const result = call('boom');
-        expect(result).toBeInstanceOf(Error);
-        expect(result.message).toBe('boom');
-    });
-
-    it('stringifies a number payload', () => {
-        expect(call(42).message).toBe('42');
-    });
-
-    it('stringifies null as "null"', () => {
-        expect(call(null).message).toBe('null');
-    });
-
-    it('stringifies a plain object as "[object Object]"', () => {
-        expect(call({}).message).toBe('[object Object]');
     });
 });

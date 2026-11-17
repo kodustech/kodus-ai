@@ -1,3 +1,7 @@
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -8,12 +12,14 @@ import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/con
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     ICommit,
     IFile,
     IPullRequests,
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -111,12 +117,64 @@ export class PullRequestsService implements IPullRequestsService {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean> {
         return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
             organizationId,
             repositoryId,
             prNumber,
             failure,
+            guard,
+        );
+    }
+
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.recordKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            request,
+        );
+    }
+
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.clearKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasOpenKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.pullRequestsRepository.findOpenPullRequestsWithKodyChangeRequest(
+            organizationId,
         );
     }
 
@@ -252,6 +310,43 @@ export class PullRequestsService implements IPullRequestsService {
             since,
             organizationId,
             repositoryIds,
+        );
+    }
+
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorsOpenedSince(
+            since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasStoredPullRequests(
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        return this.pullRequestsRepository.findOpenPullRequestKeys(
+            organizationId,
+            repositoryIds,
+            opts,
         );
     }
 
@@ -613,11 +708,13 @@ export class PullRequestsService implements IPullRequestsService {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.updateSuggestion(
             suggestionId,
             updateData,
             organizationAndTeamData,
+            options,
         );
     }
 
@@ -826,6 +923,11 @@ export class PullRequestsService implements IPullRequestsService {
               };
         await this.update(existingPR, {
             ...lifecycle,
+            // Reflect how the last review ran; only overwrite when the caller
+            // passed it (review path) so a plain webhook update doesn't clear it.
+            ...(pullRequest.heavy !== undefined
+                ? { heavy: pullRequest.heavy }
+                : {}),
             updatedAt: new Date().toISOString(),
             user: await this.extractUser(
                 pullRequest.user,
@@ -929,6 +1031,7 @@ export class PullRequestsService implements IPullRequestsService {
                 title: pullRequest.title || '',
                 status: await this.identifyPullRequestStatus(pullRequest),
                 merged: this.extractMergedStatus(pullRequest),
+                heavy: pullRequest.heavy ?? false,
                 number: pullRequest.number,
                 url: pullRequest.url || '',
                 baseBranchRef: this.extractBaseBranchRef(pullRequest),

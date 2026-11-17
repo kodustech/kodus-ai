@@ -63,6 +63,7 @@ import {
     Inject,
     Post,
     Query,
+    ForbiddenException,
     UnauthorizedException,
     UseGuards,
 } from '@nestjs/common';
@@ -100,6 +101,7 @@ import {
     KodyRulesSyncStatusResponseDto,
 } from '../dtos/kody-rules-response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 
 @ApiTags('Kody Rules')
 @ApiStandardResponses()
@@ -140,7 +142,32 @@ export class KodyRulesController {
         private readonly countRulesByRepositoryUseCase: CountRulesByRepositoryUseCase,
         @Inject(REQUEST)
         private readonly request: UserRequest,
+
+        private readonly authorizationService: AuthorizationService,
     ) {}
+
+    /**
+     * Type-level policies only say "may touch Kody Rules". A single
+     * `repositoryId` is checked by KodyRulesTenantGuard; a list of them is
+     * checked here. `global` is the org-level scope every member already
+     * reads.
+     */
+    private async ensureRepositoryAccess(
+        action: Action,
+        repositoryIds: Array<string | undefined>,
+    ): Promise<void> {
+        const repoIds = repositoryIds.filter(
+            (id): id is string => !!id && id !== 'global',
+        );
+        if (!repoIds.length) return;
+
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action,
+            resource: ResourceType.KodyRules,
+            repoIds,
+        });
+    }
 
     @ApiBearerAuth('jwt')
     @Post('/create-or-update')
@@ -477,6 +504,30 @@ export class KodyRulesController {
     public async generateKodyRules(@Body() body: GenerateKodyRulesDTO) {
         if (!this.request.user.organization.uuid) {
             throw new Error('Organization ID not found');
+        }
+
+        // Without a list the use case generates for every repository, so a
+        // repo-scoped member is narrowed to their own.
+        if (body.repositoriesIds?.length) {
+            await this.ensureRepositoryAccess(
+                Action.Create,
+                body.repositoriesIds,
+            );
+        } else {
+            const scope = await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Create,
+                resource: ResourceType.KodyRules,
+            });
+            if (scope !== null) {
+                // An empty list would read as "every repository" below.
+                if (scope.length === 0) {
+                    throw new ForbiddenException(
+                        'No repository in your scope to generate rules for',
+                    );
+                }
+                body = { ...body, repositoriesIds: scope };
+            }
         }
 
         return this.generateKodyRulesUseCase.execute(
@@ -887,6 +938,7 @@ export class KodyRulesController {
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
+
         const teamId = (this.request.user as any).team?.uuid;
 
         return this.manageImportedKodyRulesUseCase.execute({

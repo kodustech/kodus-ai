@@ -9,6 +9,7 @@ import type {
 import {
     CUSTOM_AGENT_LIMITS,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
+    knowledgeSourcePath,
     type KnowledgeItem,
     type KnowledgeLinkTarget,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -64,12 +65,16 @@ export interface ResolvedSkill {
     /** Files under the folder other than SKILL.md, relative to the folder. */
     files: string[];
     compatibility?: string;
+    /** Branch it was read on, when it lives in another repository. */
+    ref?: string;
 }
 
 export interface ResolvedDoc {
     path: string;
     content: string;
     truncated: boolean;
+    /** Branch it was read on, when it lives in another repository. */
+    ref?: string;
 }
 
 export interface ResolvedKnowledge {
@@ -134,6 +139,24 @@ export function locateSkill(path: string): SkillLocation | null {
     };
 }
 
+/**
+ * `locateSkill` for an item whose path may be qualified (`owner/repo:path`):
+ * the skill is located inside its own repository, so a skill at that
+ * repository's root is named after its folder, not `repo:folder`.
+ */
+function locateLinkedSkill(item: KnowledgeItem): SkillLocation | null {
+    const prefix = item.repository ? `${item.repository}:` : '';
+    if (!prefix || !item.path.startsWith(prefix)) return locateSkill(item.path);
+    const location = locateSkill(item.path.slice(prefix.length));
+    return location
+        ? {
+              skillFile: `${prefix}${location.skillFile}`,
+              folder: location.folder ? `${prefix}${location.folder}` : null,
+              expectedName: location.expectedName,
+          }
+        : null;
+}
+
 export class KnowledgeResolver {
     private readonly reads = new Map<string, Promise<BaseBranchReadResult>>();
     private readonly listings = new Map<string, Promise<string[]>>();
@@ -179,9 +202,11 @@ export class KnowledgeResolver {
         target: KnowledgeLinkTarget;
         changedFiles?: string[];
     }): Promise<ResolvedKnowledge> {
-        const linked = (params.items ?? []).filter((item) =>
-            isLinkedTo(item, params.target),
-        );
+        // A skill or doc of another repository is named by its qualified
+        // path (`owner/repo:path`) from here on; the reader routes it.
+        const linked = (params.items ?? [])
+            .filter((item) => isLinkedTo(item, params.target))
+            .map((item) => ({ ...item, path: knowledgeSourcePath(item) }));
         const changed = new Set(
             (params.changedFiles ?? [])
                 .map((f) => normalizeRepoPath(f))
@@ -214,7 +239,7 @@ export class KnowledgeResolver {
         const names = new Set<string>();
 
         for (const item of items) {
-            const location = locateSkill(item.path);
+            const location = locateLinkedSkill(item);
             if (!location) {
                 warnings.push({
                     code: 'SKILL_INVALID',
@@ -232,7 +257,7 @@ export class KnowledgeResolver {
                         ? {
                               code: 'SKILL_NOT_FOUND',
                               path: displayPath,
-                              detail: `no ${location.folder ? 'SKILL.md' : 'skill file'} on ${this.reader.ref}`,
+                              detail: `no ${location.folder ? 'SKILL.md' : 'skill file'} on ${this.refOf(location.skillFile)}`,
                           }
                         : {
                               code: 'SKILL_INVALID',
@@ -286,7 +311,7 @@ export class KnowledgeResolver {
                 warnings.push({
                     code: 'SKILL_CHANGED_IN_PR',
                     path: displayPath,
-                    detail: `this pull request edits the skill; it was reviewed with the ${this.reader.ref} version`,
+                    detail: `this pull request edits the skill; it was reviewed with the ${this.refOf(location.skillFile)} version`,
                 });
             }
             if (parsed.skill.bodyTruncated) {
@@ -309,6 +334,7 @@ export class KnowledgeResolver {
                 path: location.skillFile,
                 folder: location.folder,
                 files,
+                ...this.otherRef(location.skillFile),
             });
         }
         return skills;
@@ -330,8 +356,8 @@ export class KnowledgeResolver {
                     code: 'DOC_NOT_FOUND',
                     path: item.path,
                     detail: GLOB_CHARS.test(item.path)
-                        ? `no file matches on ${this.reader.ref}`
-                        : `not found on ${this.reader.ref}`,
+                        ? `no file matches on ${this.refOf(item.path)}`
+                        : `not found on ${this.refOf(item.path)}`,
                 });
             }
             for (const p of expanded) if (!paths.includes(p)) paths.push(p);
@@ -356,7 +382,7 @@ export class KnowledgeResolver {
                     path,
                     detail:
                         read.status === 'missing'
-                            ? `not found on ${this.reader.ref}`
+                            ? `not found on ${this.refOf(path)}`
                             : read.reason,
                 });
                 continue;
@@ -365,7 +391,7 @@ export class KnowledgeResolver {
                 warnings.push({
                     code: 'SKILL_CHANGED_IN_PR',
                     path,
-                    detail: `this pull request edits the doc; it was reviewed with the ${this.reader.ref} version`,
+                    detail: `this pull request edits the doc; it was reviewed with the ${this.refOf(path)} version`,
                 });
             }
 
@@ -380,7 +406,12 @@ export class KnowledgeResolver {
 
             const tokens = estimateTokens(read.content);
             if (tokens <= remaining) {
-                docs.push({ path, content: read.content, truncated: false });
+                docs.push({
+                    path,
+                    content: read.content,
+                    truncated: false,
+                    ...this.otherRef(path),
+                });
                 remaining -= tokens;
                 continue;
             }
@@ -389,6 +420,7 @@ export class KnowledgeResolver {
                 path,
                 content: `${read.content.slice(0, tokensToChars(remaining))}\n\n${DOCS_TRUNCATED_MARKER(budget)}`,
                 truncated: true,
+                ...this.otherRef(path),
             });
             warnings.push({
                 code: 'KNOWLEDGE_TRUNCATED',
@@ -409,6 +441,20 @@ export class KnowledgeResolver {
         }
         const normalized = normalizeRepoPath(path);
         return normalized ? [normalized] : [];
+    }
+
+    /** Branch `path` is read on (another repository's ref, or the target). */
+    private refOf(path: string): string {
+        return this.reader.refFor?.(path) ?? this.reader.ref;
+    }
+
+    /** `{ ref }` for a file of another repository, nothing otherwise. The
+     *  reader decides: `docs/payments:2024.md` parses like `owner/repo:path`
+     *  but is read from the reviewed repository. */
+    private otherRef(path: string): { ref?: string } {
+        return this.reader.isOtherRepository?.(path)
+            ? { ref: this.refOf(path) }
+            : {};
     }
 
     private read(path: string): Promise<BaseBranchReadResult> {

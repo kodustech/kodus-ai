@@ -86,9 +86,16 @@ export interface LabelPolicy {
     supportsMixed: boolean;
 }
 
-/** Resolve the final label of a suggestion under the agent's label policy.
- *  Single-category agents always return their category; mixed reviewers honor
- *  the LLM-emitted label when it's allowed, else fall back to the first allowed. */
+/** Labels a mixed reviewer cannot claim: `generalist` is the agent's own
+ *  category, and a `kody_rules` finding with no rule behind it would skip the
+ *  parse schema. Both become `bug`. */
+const UNCLAIMABLE_LABELS = new Set<string>(['generalist', 'kody_rules']);
+
+/** Resolve the label of a suggestion under the agent's label policy.
+ *  Single-category agents always return their category. A mixed reviewer's
+ *  label passes through lowercased, a missing or unclaimable one becomes
+ *  `bug`; normalizeFinderLabels, after anchoring, replaces a label off the list
+ *  with `bug` and discards one the team turned off (#1821). */
 export function resolveSuggestionLabel(
     suggestion: { label?: string },
     policy: LabelPolicy,
@@ -96,15 +103,14 @@ export function resolveSuggestionLabel(
     if (!policy.supportsMixed) {
         return policy.categoryLabel;
     }
-    const allowed = new Set<string>(policy.allowedLabels);
     const rawLabel =
         typeof suggestion.label === 'string'
-            ? suggestion.label.toLowerCase()
+            ? suggestion.label.trim().toLowerCase()
             : '';
-    if (allowed.has(rawLabel)) {
-        return rawLabel;
+    if (!rawLabel || UNCLAIMABLE_LABELS.has(rawLabel)) {
+        return 'bug';
     }
-    return policy.allowedLabels[0] || 'bug';
+    return rawLabel;
 }
 
 // ── Finding mapping ──────────────────────────────────────────────────────────
@@ -142,13 +148,21 @@ export interface FindingMapperContext {
     changedFiles: FileChange[];
     kodyRules?: Partial<IKodyRule>[];
     prNumber: number;
+    /** The generalist finder's lean output (#1821): a finding keeps only its
+     *  five fields, the agent prompt copy, its severity and its revision link;
+     *  snippets, fix and title come at enrichment. Kody Rules and custom
+     *  agents keep the full finding. */
+    leanOutput?: boolean;
+    /** The review's org and team, on the mapper's log lines. */
+    organizationId?: string;
+    teamId?: string;
     isKodyRules: boolean;
     /** Name used in warning logs (the agent identity). */
     identityName: string;
     labelPolicy: LabelPolicy;
     /** Injected so the mapper stays free of NestJS; optional for tests.
      *  Typed loosely to accept the app's SimpleLogger.warn shape. */
-    logger?: { warn: (entry: any) => void };
+    logger?: { warn: (entry: any) => void; log?: (entry: any) => void };
 }
 
 export interface MappedFindings {
@@ -187,6 +201,40 @@ export function mapAgentFindings(
     const warn = (message: string, metadata: Record<string, unknown>) =>
         ctx.logger?.warn({ message, context: ctx.identityName, metadata });
     let droppedForPath = 0;
+
+    // The model sometimes cites only the tail of the path (`EventManager.ts`
+    // for `packages/core/EventManager.ts`). Complete it when exactly one
+    // changed file ends with that tail; an ambiguous tail stays unresolved.
+    const resolvedByEmitted = new Map<string, string | undefined>();
+    const resolveChangedFile = (relevantFile?: string): string | undefined => {
+        const emitted = normalizeRepoPath(relevantFile);
+        if (!emitted) {
+            return undefined;
+        }
+        if (resolvedByEmitted.has(emitted)) {
+            return resolvedByEmitted.get(emitted);
+        }
+        let resolved = validFilesByNormalized.get(emitted);
+        if (!resolved) {
+            const tails = [...validFilesByNormalized.keys()].filter((f) =>
+                f.endsWith(`/${emitted}`),
+            );
+            if (tails.length === 1) {
+                resolved = validFilesByNormalized.get(tails[0]);
+                ctx.logger?.log?.({
+                    message: `[AGENT] Completed partial relevantFile "${relevantFile}" → "${resolved}"`,
+                    context: ctx.identityName,
+                    metadata: {
+                        organizationId: ctx.organizationId,
+                        teamId: ctx.teamId,
+                        prNumber: ctx.prNumber,
+                    },
+                });
+            }
+        }
+        resolvedByEmitted.set(emitted, resolved);
+        return resolved;
+    };
 
     const rawSuggestions = (agentResult.findings?.suggestions || []).filter(
         (s) => {
@@ -249,10 +297,7 @@ export function mapAgentFindings(
                 }
                 // PR-level kody_rules omit relevantFile by design.
                 const kodyRulePathMatch =
-                    !s.relevantFile ||
-                    validFilesByNormalized.has(
-                        normalizeRepoPath(s.relevantFile),
-                    );
+                    !s.relevantFile || !!resolveChangedFile(s.relevantFile);
 
                 if (!kodyRulePathMatch) {
                     droppedForPath++;
@@ -276,9 +321,7 @@ export function mapAgentFindings(
                 return kodyRulePathMatch;
             }
 
-            const pathMatch =
-                !!s.relevantFile &&
-                validFilesByNormalized.has(normalizeRepoPath(s.relevantFile));
+            const pathMatch = !!resolveChangedFile(s.relevantFile);
 
             if (!pathMatch && s.relevantFile) {
                 droppedForPath++;
@@ -312,16 +355,33 @@ export function mapAgentFindings(
         // Replace the LLM-emitted relevantFile with the provider's original
         // filename so downstream comment posting uses the exact path shape.
         const canonicalRelevantFile = s.relevantFile
-            ? (validFilesByNormalized.get(normalizeRepoPath(s.relevantFile)) ??
-              s.relevantFile)
+            ? (resolveChangedFile(s.relevantFile) ?? s.relevantFile)
             : s.relevantFile;
+
+        if (ctx.leanOutput) {
+            return {
+                relevantFile: canonicalRelevantFile,
+                suggestionContent: s.suggestionContent,
+                relevantLinesStart: s.relevantLinesStart,
+                relevantLinesEnd: s.relevantLinesEnd,
+                label: resolveSuggestionLabel(s, ctx.labelPolicy),
+                severity: s.severity || 'medium',
+                llmPrompt: s.suggestionContent,
+                ...(s.oneSentenceSummary && {
+                    oneSentenceSummary: s.oneSentenceSummary,
+                }),
+                ...(s.revisesSuggestionId && {
+                    revisesSuggestionId: s.revisesSuggestionId,
+                }),
+            } as Partial<CodeSuggestion>;
+        }
 
         return {
             relevantFile: canonicalRelevantFile,
             language: s.language || '',
             suggestionContent: s.suggestionContent,
-            existingCode: s.existingCode || '',
-            improvedCode: s.improvedCode || '',
+            ...(s.existingCode && { existingCode: s.existingCode }),
+            ...(s.improvedCode && { improvedCode: s.improvedCode }),
             oneSentenceSummary: s.oneSentenceSummary || '',
             relevantLinesStart: s.relevantLinesStart,
             relevantLinesEnd: s.relevantLinesEnd,

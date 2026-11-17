@@ -113,7 +113,14 @@ const parentDirOf = (filePath: string): string => {
     return idx <= 0 ? '.' : filePath.slice(0, idx);
 };
 
-const normalize = (p: string): string => p.replace(/^\.\//, '').trim();
+/**
+ * A path as the sandbox expects it: relative to the repository root. Azure
+ * Repos names changed files with a leading "/" ("/src/x.ts"), and both sandbox
+ * providers reject absolute paths, so every path is made relative before it
+ * reaches one or is compared with a listing.
+ */
+export const toRepoPath = (p: string): string =>
+    p.replace(/^\.\//, '').replace(/^\/+/, '');
 
 /**
  * Build the lookup for one review from the sandbox handle the pipeline already
@@ -180,18 +187,23 @@ export function buildRepoLookup(
 
         async grep(pattern: string, path = '.', glob?: string) {
             guard(`grep ${JSON.stringify(pattern)}`);
-            return tally('grep', () => remote!.grep(pattern, path, glob));
+            return tally('grep', () =>
+                remote!.grep(pattern, toRepoPath(path) || '.', glob),
+            );
         },
 
         async read(path: string, start: number, end: number) {
             guard(`read ${path}`);
-            return tally('read', () => remote!.read(path, start, end));
+            return tally('read', () =>
+                remote!.read(toRepoPath(path), start, end),
+            );
         },
 
         async exists(path: string) {
             guard(`check whether ${path} exists`);
+            const wanted = toRepoPath(path);
             const listing = await tally('exists', () =>
-                remote!.listDir(parentDirOf(path), 1),
+                remote!.listDir(parentDirOf(wanted), 1),
             );
             // A provider reports a broken command as an `Error: ` payload rather
             // than by throwing (the same convention `grep` uses). Parsed as a
@@ -203,11 +215,12 @@ export function buildRepoLookup(
                     listing.slice('Error:'.length).trim(),
                 );
             }
-            const wanted = normalize(path);
+            // Listing lines are compared trimmed, as they always were: `find`
+            // output can carry a trailing `\r` or padding.
             return listing
                 .split('\n')
-                .map(normalize)
-                .some((entry) => entry === wanted);
+                .map((entry) => toRepoPath(entry.trim()))
+                .some((entry) => entry === wanted.trim());
         },
 
         async probe(knownChangedFile: string) {
@@ -216,7 +229,11 @@ export function buildRepoLookup(
             }
             let content: string;
             try {
-                content = await remote!.read(knownChangedFile, 0, 0);
+                content = await remote!.read(
+                    toRepoPath(knownChangedFile),
+                    0,
+                    0,
+                );
             } catch (err) {
                 disable('a read of a known changed file threw', {
                     file: knownChangedFile,

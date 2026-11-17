@@ -11,6 +11,17 @@ export type McpToolAnnotations = {
     [k: string]: unknown;
 };
 
+/**
+ * When an agent should offer the tool's action. Lives in the tool's `_meta`:
+ * the SDK client parses `annotations` with a closed schema and drops any key
+ * the spec does not define.
+ */
+export const PROACTIVE_HINT_META_KEY = 'io.kodus/proactiveHint';
+
+export type McpToolMeta = {
+    [PROACTIVE_HINT_META_KEY]?: string;
+};
+
 export interface McpToolDefinition<
     I extends ZodShape = ZodShape,
     O extends ZodShape = ZodShape,
@@ -20,6 +31,7 @@ export interface McpToolDefinition<
     inputSchema: ZodObjectLike<I>;
     outputSchema?: ZodObjectLike<O>;
     annotations?: McpToolAnnotations;
+    _meta?: McpToolMeta;
 
     execute: (
         args: z.infer<z.ZodObject<I>>,

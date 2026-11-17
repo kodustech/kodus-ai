@@ -1,3 +1,5 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
@@ -158,6 +160,50 @@ import {
 } from '@llamaduck/forgejo-ts';
 import { Client, createClient } from '@llamaduck/forgejo-ts/client';
 import { listingFailed } from './repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from './webhook-setup/webhook-setup';
+import { recordWebhookSetupOutcome } from './webhook-setup/webhook-setup-failures.service';
+
+/**
+ * The Forgejo client returns failures instead of throwing. Turns one into an
+ * error carrying the HTTP status and headers, so it can be classified.
+ */
+function throwIfForgejoFailed(result: {
+    error?: unknown;
+    response?: { status?: number; headers?: unknown };
+}): void {
+    if (!result?.error) {
+        return;
+    }
+
+    const status = result.response?.status;
+    const rawHeaders = result.response?.headers as
+        | { forEach?: (cb: (value: string, key: string) => void) => void }
+        | Record<string, unknown>
+        | undefined;
+    const headers: Record<string, string> = {};
+    if (typeof rawHeaders?.forEach === 'function') {
+        (rawHeaders as Headers).forEach((value, key) => {
+            headers[key.toLowerCase()] = value;
+        });
+    } else if (rawHeaders) {
+        for (const [key, value] of Object.entries(rawHeaders)) {
+            if (value != null) headers[key.toLowerCase()] = String(value);
+        }
+    }
+    const detail =
+        (result.error as { message?: string })?.message ??
+        (typeof result.error === 'string' ? result.error : undefined);
+
+    throw Object.assign(
+        new Error(detail ?? `Forgejo request failed with status ${status}`),
+        { status, response: { status, headers } },
+    );
+}
+
 
 const FORGEJO_REACTIONS_CONCURRENCY = 5;
 
@@ -1271,8 +1317,9 @@ export class ForgejoService implements Omit<
             // in it. The last chunk arrives with the complete selection and
             // runs this once.
             if (!params.deferWebhooks) {
-                this.createPullRequestWebhook({
+                void this.createPullRequestWebhook({
                     organizationAndTeamData: params.organizationAndTeamData,
+                    integrationId: integration?.uuid,
                 });
             }
         } catch (err) {
@@ -1280,15 +1327,36 @@ export class ForgejoService implements Omit<
         }
     }
 
+    /**
+     * The repositories config of `repository` on the instance that sent the
+     * webhook (`host`, or the same `owner/repo` under that id). Forgejo
+     * numbers repositories per instance, so the id alone matches
+     * repositories of other connected instances.
+     */
     async findTeamAndOrganizationIdByConfigKey(params: {
-        configKey: IntegrationConfigKey;
-        configValue: any;
+        repository: { id?: string | number; name?: string };
+        host?: string;
     }): Promise<IntegrationConfigEntity | null> {
         try {
-            return await this.integrationConfigService.findOne({
-                configKey: params.configKey,
-                configValue: params.configValue,
-            });
+            const repositoryId = String(params?.repository?.id ?? '');
+            if (!repositoryId) {
+                return null;
+            }
+
+            const configs =
+                await this.integrationConfigService.findIntegrationConfigWithTeams(
+                    IntegrationConfigKey.REPOSITORIES,
+                    repositoryId,
+                    PlatformType.FORGEJO,
+                );
+
+            return (
+                forgejoConfigsForWebhook(configs, {
+                    host: params.host,
+                    repositoryId,
+                    repositoryFullName: params.repository.name,
+                })[0] ?? null
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error finding team and organization by config key',
@@ -1496,32 +1564,48 @@ export class ForgejoService implements Omit<
             ),
             default_branch: repo.default_branch,
             lastActivityAt: repo.updated_at,
+            archived: Boolean(repo.archived),
+            fork: Boolean(repo.fork),
+            mirror: Boolean(repo.mirror),
         };
     }
 
     async getDefaultBranch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
+        /**
+         * Only the branch the provider confirmed: a failed or empty lookup
+         * throws instead of falling back to a usual name, which a caller
+         * acting on the branch (the security scan) would read as the answer.
+         */
+        strict?: boolean;
     }): Promise<string> {
+        const fallback = (why: string) => {
+            if (params.strict) {
+                throw new Error(`Forgejo default branch not confirmed: ${why}`);
+            }
+            return 'main';
+        };
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return 'main';
+            if (!authDetail) return fallback('no credentials');
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'getDefaultBranch',
             );
-            if (!repoInfo) return 'main';
+            if (!repoInfo) return fallback('unreadable repository name');
 
             const client = this.createForgejoClient(authDetail);
             const result = await repoGet({
                 client,
                 path: { owner: repoInfo.owner, repo: repoInfo.repo },
             });
-            return result.data?.default_branch || 'main';
+            return result.data?.default_branch || fallback('none returned');
         } catch (error) {
+            if (params.strict) throw error;
             this.logger.error({
                 message: 'Error getting default branch',
                 context: ForgejoService.name,
@@ -2563,13 +2647,43 @@ export class ForgejoService implements Omit<
         prNumber: number;
         reason: string;
     }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'APPROVED',
+            'Kody held automatic approval after a new review.',
+        );
+    }
+
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'REQUEST_CHANGES',
+            params.reason,
+        );
+    }
+
+    private async dismissOwnReviews(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        state: 'APPROVED' | 'REQUEST_CHANGES',
+        message: string,
+    ): Promise<number> {
+        const what = state === 'APPROVED' ? 'approval' : 'change request';
         const authDetail = await this.getAuthDetails(
             params.organizationAndTeamData,
         );
         if (!authDetail) throw new Error('No auth details');
         const repoInfo = this.extractRepoInfo(
             params.repository?.name ?? '',
-            'dismissOwnPullRequestApprovals',
+            'dismissOwnReviews',
         );
         if (!repoInfo) throw new Error('Invalid repository name');
         const client = this.createForgejoClient(authDetail);
@@ -2593,7 +2707,7 @@ export class ForgejoService implements Omit<
         if (!me.data?.id) throw new Error('Unable to identify the token user');
         const own = reviews.filter(
             (review) =>
-                review.state === 'APPROVED' &&
+                review.state === state &&
                 !review.dismissed &&
                 review.user?.id === me.data.id &&
                 review.id,
@@ -2602,15 +2716,13 @@ export class ForgejoService implements Omit<
             const result = await repoDismissPullReview({
                 client,
                 path: { ...path, id: review.id! },
-                body: {
-                    message: 'Kody held automatic approval after a new review.',
-                },
+                body: { message },
             });
             if (isAxiosError(result) && result.response?.status === 403) {
                 // Forgejo lets only a repository admin dismiss a review, the
                 // same role it needs to create the webhook automatically.
                 throw new Error(
-                    `Forgejo refused to dismiss Kody's approval on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
+                    `Forgejo refused to dismiss Kody's ${what} on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
                 );
             }
             if (result.error) throw result.error;
@@ -2692,8 +2804,9 @@ export class ForgejoService implements Omit<
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
             const result = await repoCreatePullReview({
                 client,
@@ -3044,13 +3157,21 @@ export class ForgejoService implements Omit<
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return null;
+            if (!authDetail) {
+                throw new Error(
+                    `No Forgejo credentials to update PR #${params.prNumber}`,
+                );
+            }
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'updateDescriptionInPullRequest',
             );
-            if (!repoInfo) return null;
+            if (!repoInfo) {
+                throw new Error(
+                    `No Forgejo repository named "${params.repository.name}" to update PR #${params.prNumber}`,
+                );
+            }
 
             const client = this.createForgejoClient(authDetail);
 
@@ -3071,6 +3192,9 @@ export class ForgejoService implements Omit<
                 body: {
                     body: description,
                 },
+                // The client answers an HTTP error with `{ error }` unless told
+                // to throw, and an unthrown error is a silent success (#2380).
+                throwOnError: true,
             });
 
             return result.data;
@@ -3080,7 +3204,9 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
-            return null;
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
         }
     }
 
@@ -3751,7 +3877,7 @@ export class ForgejoService implements Omit<
                       )
                     : content?.content;
 
-            return {
+            const file = {
                 name: content?.name,
                 path: content?.path,
                 sha: content?.sha,
@@ -3762,6 +3888,8 @@ export class ForgejoService implements Omit<
                 html_url: content?.html_url,
                 download_url: content?.download_url,
             };
+
+            return { data: file };
         } catch (error) {
             if ((error as any)?.status === 404) {
                 return null;
@@ -4244,67 +4372,146 @@ export class ForgejoService implements Omit<
         }
     }
 
+    /**
+     * Makes sure every selected repository has the Kodus hook and records
+     * the repositories that could not get one.
+     */
     async createPullRequestWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
+        integrationId?: string;
     }): Promise<void> {
-        try {
-            const authDetail = await this.getAuthDetails(
-                params.organizationAndTeamData,
-            );
-            if (!authDetail) return;
+        const { organizationAndTeamData } = params;
+        const startedAt = new Date().toISOString();
 
+        try {
             const repositories =
                 await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                    params.organizationAndTeamData,
+                    organizationAndTeamData,
                     IntegrationConfigKey.REPOSITORIES,
                 );
 
-            if (!repositories || repositories.length === 0) return;
-
-            const client = this.createForgejoClient(authDetail);
-            const webhookUrl = this.configService.get<string>(
-                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
-            );
-
-            if (!webhookUrl) {
-                this.logger.warn({
-                    message: 'Forgejo webhook URL not configured',
-                    context: ForgejoService.name,
-                });
+            if (!repositories?.length) {
                 return;
             }
 
-            for (const repo of repositories) {
+            const result = await this.ensureRepositoryWebhooks({
+                organizationAndTeamData,
+                repositories,
+            });
+
+            const integrationId =
+                params.integrationId ??
+                (
+                    await this.integrationService.findOne({
+                        organization: {
+                            uuid: organizationAndTeamData.organizationId,
+                        },
+                        team: { uuid: organizationAndTeamData.teamId },
+                        platform: PlatformType.FORGEJO,
+                    })
+                )?.uuid;
+
+            if (integrationId) {
+                await recordWebhookSetupOutcome(this.integrationConfigService, {
+                    organizationAndTeamData,
+                    integrationId,
+                    startedAt,
+                    result,
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error creating pull request webhooks',
+                context: ForgejoService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+        }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'Forgejo',
+            permissionHint:
+                'Creating a repository webhook needs admin access to the repository and the write:repository scope on the token.',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        const webhookUrl = this.configService.get<string>(
+            'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
+        );
+        let client: ReturnType<ForgejoService['createForgejoClient']>;
+
+        try {
+            if (!webhookUrl) {
+                throw new Error(
+                    'The Forgejo webhook URL is not configured (API_FORGEJO_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            const authDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!authDetail) {
+                throw new Error('No Forgejo credential is stored for this team');
+            }
+
+            client = this.createForgejoClient(authDetail);
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start Forgejo webhook setup',
+                context: ForgejoService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
+
+        const desiredEvents = [
+            'push',
+            'pull_request',
+            'issue_comment',
+            'pull_request_review',
+            'pull_request_review_comment',
+        ];
+
+        const result = await runWebhookSetup(
+            repositories,
+            async (repo) => {
                 const repoInfo = this.extractRepoInfo(
                     repo.name,
-                    'createPullRequestWebhook',
+                    'ensureRepositoryWebhooks',
                 );
-                if (!repoInfo) continue;
-
-                try {
-                    const existingResult = await repoListHooks({
-                        client,
-                        path: { owner: repoInfo.owner, repo: repoInfo.repo },
-                    });
-                    const existingHooks = existingResult.data ?? [];
-                    const existingHook = existingHooks.find(
-                        (hook) => hook.config?.url === webhookUrl,
+                if (!repoInfo) {
+                    throw new Error(
+                        `The repository name "${repo.name}" is not in owner/repo form`,
                     );
-                    const desiredEvents = [
-                        'push',
-                        'pull_request',
-                        'issue_comment',
-                        'pull_request_review',
-                        'pull_request_review_comment',
-                    ];
+                }
+                const path = { owner: repoInfo.owner, repo: repoInfo.repo };
 
-                    if (!existingHook) {
+                const listed = await repoListHooks({ client, path });
+                throwIfForgejoFailed(listed);
+
+                const existingHook = (listed.data ?? []).find(
+                    (hook) => hook.config?.url === webhookUrl,
+                );
+
+                if (!existingHook) {
+                    throwIfForgejoFailed(
                         await repoCreateHook({
                             client,
-                            path: {
-                                owner: repoInfo.owner,
-                                repo: repoInfo.repo,
-                            },
+                            path,
                             body: {
                                 type: 'forgejo',
                                 config: {
@@ -4314,31 +4521,33 @@ export class ForgejoService implements Omit<
                                 events: desiredEvents,
                                 active: true,
                             },
-                        });
-
-                        this.logger.log({
-                            message: `Webhook created for repository ${repo.name}`,
-                            context: ForgejoService.name,
-                        });
-                        continue;
-                    }
-
-                    const existingEvents = new Set(existingHook.events ?? []);
-                    const missingEvents = desiredEvents.filter(
-                        (eventName) => !existingEvents.has(eventName),
+                        }),
                     );
 
-                    if (missingEvents.length === 0) {
-                        continue;
-                    }
+                    this.logger.log({
+                        message: 'Forgejo webhook created',
+                        context: ForgejoService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repo.id,
+                        },
+                    });
+                    return;
+                }
 
+                const existingEvents = new Set(existingHook.events ?? []);
+                const missingEvents = desiredEvents.filter(
+                    (eventName) => !existingEvents.has(eventName),
+                );
+
+                if (missingEvents.length === 0) {
+                    return;
+                }
+
+                throwIfForgejoFailed(
                     await repoEditHook({
                         client,
-                        path: {
-                            owner: repoInfo.owner,
-                            repo: repoInfo.repo,
-                            id: existingHook.id!,
-                        },
+                        path: { ...path, id: existingHook.id! },
                         body: {
                             config: {
                                 url: webhookUrl,
@@ -4347,28 +4556,34 @@ export class ForgejoService implements Omit<
                             events: desiredEvents,
                             active: existingHook.active ?? true,
                         },
-                    });
+                    }),
+                );
 
-                    this.logger.log({
-                        message: `Webhook updated for repository ${repo.name}`,
-                        context: ForgejoService.name,
-                        metadata: { missingEvents },
-                    });
-                } catch (error) {
-                    this.logger.error({
-                        message: `Error creating webhook for repository ${repo.name}`,
-                        context: ForgejoService.name,
-                        error,
-                    });
-                }
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error creating pull request webhooks',
-                context: ForgejoService.name,
-                error,
-            });
-        }
+                this.logger.log({
+                    message: 'Forgejo webhook updated',
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repo.id,
+                        missingEvents,
+                    },
+                });
+            },
+            labels,
+        );
+
+        this.logger.log({
+            message: 'Forgejo webhook setup finished',
+            context: ForgejoService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
     }
 
     async isWebhookActive(params: {

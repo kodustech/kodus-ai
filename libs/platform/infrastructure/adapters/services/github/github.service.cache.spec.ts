@@ -46,7 +46,6 @@ describe('GithubService — cache behavior', () => {
             clearCache: jest.fn(),
             cacheExists: jest.fn(),
             getMultipleFromCache: jest.fn(),
-            deleteByKeyPattern: jest.fn(),
         };
         const integrationService = { findOne: jest.fn() };
         const authIntegrationService = {};

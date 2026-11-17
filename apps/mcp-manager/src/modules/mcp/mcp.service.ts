@@ -8,7 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
-import { MCPIntegrationAuthType } from '../integrations/enums/integration.enum';
+import {
+    MCPIntegrationAuthType,
+    MCPIntegrationOAuthStatus,
+} from '../integrations/enums/integration.enum';
 import { MCPIntegrationInterface } from '../integrations/interfaces/mcp-integration.interface';
 import { IntegrationsService } from '../integrations/integrations.service';
 import {
@@ -582,7 +585,47 @@ export class McpService {
                 integrationId,
             );
 
+        // A lost OAuth grant takes the connection out of the runtime's ACTIVE
+        // list until the user connects again (which sets it back to ACTIVE).
+        if (
+            Object.keys(headers).length === 0 &&
+            (await this.integrationOAuthService.getOAuthStatus(
+                organizationId,
+                integrationId,
+            )) === MCPIntegrationOAuthStatus.INACTIVE
+        ) {
+            await this.expireConnectionOfLostGrant(
+                organizationId,
+                integrationId,
+            );
+        }
+
         return { headers };
+    }
+
+    /**
+     * Expire the connection only while its grant is still INACTIVE, in the same
+     * statement: a reconnect that saved an ACTIVE grant in between must not be
+     * overwritten with EXPIRED.
+     */
+    private async expireConnectionOfLostGrant(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<void> {
+        await this.connectionRepository
+            .createQueryBuilder()
+            .update()
+            .set({ status: MCPConnectionStatus.EXPIRED })
+            .where('"organizationId" = :organizationId', { organizationId })
+            .andWhere('"integrationId" = :integrationId', { integrationId })
+            .andWhere(
+                `EXISTS (SELECT 1 FROM "mcp-manager"."mcp_integration_oauth" o
+                    WHERE o."organizationId" = :organizationId
+                      AND o."integrationId" = :integrationId
+                      AND o."status" = :inactive)`,
+                { inactive: MCPIntegrationOAuthStatus.INACTIVE },
+            )
+            .execute();
     }
 
     /**

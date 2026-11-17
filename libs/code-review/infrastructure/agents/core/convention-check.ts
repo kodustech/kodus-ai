@@ -20,6 +20,9 @@ import type {
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import { isIdeRuleSource } from '@libs/common/utils/kody-rules/file-patterns';
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /** Reads a guide file as it is on the PR's target branch. `null` when the
  *  file does not exist there (or cannot be read). */
@@ -31,6 +34,8 @@ export type GuideDirLister = (dir: string) => Promise<string[]>;
 
 /** Skill files a rule can be quoted from: prose, not scripts or data. */
 const SKILL_TEXT_FILE = /\.(md|mdx|markdown|txt)$/i;
+/** Files a team writes rules in: prose, whatever the location. */
+const DOC_FILE = /\.(md|mdc|mdx|markdown|txt|rst|adoc)$/i;
 /** Files a missing quote is looked up in, per cited skill: one `git show`
  *  each, so a reference-heavy skill cannot turn one finding into hundreds. */
 const MAX_SKILL_FALLBACK_FILES = 40;
@@ -206,6 +211,47 @@ export function isProvenByAstGrep(
     );
 }
 
+/**
+ * The linked guide a citation means, spelled as it was linked. A guide of
+ * another repository is linked as `owner/repo:path`, and models cite it
+ * loosely: `repo/path`, `owner/repo/path` or the bare `path`. Each of those
+ * is accepted when it names exactly one linked guide (or a file inside one
+ * linked skill); an ambiguous or unknown citation is returned unchanged, and
+ * the gate then rejects it as before. Only linked guides are ever produced,
+ * so no other file becomes quotable.
+ */
+export function canonicalGuideCitation(
+    file: string,
+    guideFiles: readonly string[],
+): string {
+    const f = stripLeading(file);
+    if (!f || isLinkedGuide(f, guideFiles)) return f;
+    const matches = new Set<string>();
+    for (const raw of guideFiles) {
+        const g = stripLeading(raw);
+        const at = g.indexOf(':');
+        if (at <= 0) continue;
+        const repository = g.slice(0, at);
+        const inner = g.slice(at + 1);
+        const root = /(^|\/)SKILL\.md$/i.test(inner)
+            ? inner.replace(/\/?SKILL\.md$/i, '')
+            : inner;
+        const repoName = repository.split('/').pop() ?? repository;
+        for (const prefix of ['', `${repoName}/`, `${repository}/`]) {
+            const alias = `${prefix}${root}`;
+            if (f === `${prefix}${inner}` || f === alias) {
+                matches.add(g);
+            } else if (root !== inner && f.startsWith(`${alias}/`)) {
+                // A file beside a linked SKILL.md.
+                matches.add(
+                    `${repository}:${root}/${f.slice(alias.length + 1)}`,
+                );
+            }
+        }
+    }
+    return matches.size === 1 ? [...matches][0] : f;
+}
+
 /** Is `file` one of the linked guides (or inside a linked skill/directory)? */
 export function isLinkedGuide(
     file: string,
@@ -239,7 +285,9 @@ export function isLinkedGuide(
  * it read the rule from. With `listGuideDir`, a quote missing from a cited
  * SKILL.md is looked up in that same skill's text files, and the finding is
  * re-pointed at the file that holds it. Other skills and repository files
- * never count.
+ * never count, except `instructionFiles`: the coding-agent instruction files
+ * (CLAUDE.md, AGENTS.md, ...) the review loaded from the target branch for
+ * this PR, which the agent read as they are here.
  */
 export async function checkConventionQuotes(
     candidates: readonly FinderSuggestion[],
@@ -247,6 +295,7 @@ export async function checkConventionQuotes(
     guideFiles: readonly string[] = [],
     listGuideDir?: GuideDirLister,
     teamInstructions?: string,
+    instructionFiles: ReadonlyArray<{ path: string; content: string }> = [],
 ): Promise<ConventionCheckResult> {
     const passed: ConventionCheckPassed[] = [];
     const rejected: ConventionCheckRejected[] = [];
@@ -262,9 +311,21 @@ export async function checkConventionQuotes(
     };
     const reject = (finding: FinderSuggestion, detail: string) =>
         rejected.push({ finding, reason: QUOTE_NOT_FOUND, detail });
+    const instructionByPath = new Map(
+        instructionFiles.map((f) => [stripLeading(f.path), f]),
+    );
 
-    for (const finding of candidates) {
-        const file = stripLeading(finding.source?.file ?? '');
+    for (const cited of candidates) {
+        const file = canonicalGuideCitation(
+            cited.source?.file ?? '',
+            guideFiles,
+        );
+        // The finding names the guide as it was linked from here on, so the
+        // comment cites the repository the rule came from.
+        const finding =
+            cited.source && file && file !== stripLeading(cited.source.file)
+                ? { ...cited, source: { ...cited.source, file } }
+                : cited;
         const quote = finding.source?.quote ?? '';
         // No source at all from an agent that has instructions: its rules
         // live there, so the verifier judges it against them rather than the
@@ -327,8 +388,26 @@ export async function checkConventionQuotes(
             return true;
         };
         if (!isLinkedGuide(file, guideFiles)) {
-            if (!passFromInstructions()) {
-                reject(finding, `${file} is not a guide linked to this review`);
+            const instruction = instructionByPath.get(file);
+            const instructionSection = instruction
+                ? findQuoteSection(instruction.content, quote)
+                : null;
+            if (instructionSection != null) {
+                // Named as the review loaded it, so the comment cites that file.
+                passed.push({
+                    finding: {
+                        ...finding,
+                        source: { ...finding.source!, file },
+                    },
+                    sectionText: instructionSection,
+                });
+            } else if (!passFromInstructions()) {
+                reject(
+                    finding,
+                    instruction
+                        ? `quote not found in ${file}`
+                        : `${file} is not a guide linked to this review`,
+                );
             }
             continue;
         }
@@ -391,6 +470,114 @@ export function isToolSource(
         !isTeamInstructionsSource(file) &&
         !isLinkedGuide(file, guideFiles) &&
         astGrepRuleIdOf(finding) == null
+    );
+}
+
+/**
+ * A convention finding whose source is a file of the repository's code: the
+ * quote is a line of code shown as the pattern to follow, not a rule the team
+ * wrote, so the quote gate would drop it as "not a guide linked to this
+ * review". It is a finding about the code and is checked as one, by the
+ * verifier. A document (linked or not), an agent or Kody rule file, a linked
+ * guide and the agent's instructions stay on the quote gate; so does a quote
+ * found in the instructions, which the gate re-points at them.
+ */
+export function isCodeFileSource(
+    finding: FinderSuggestion,
+    guideFiles: readonly string[] = [],
+    teamInstructions?: string,
+): boolean {
+    const file = stripLeading((finding.source?.file ?? '').trim());
+    const quote = finding.source?.quote ?? '';
+    return (
+        /^[^\s:]+\.[a-z0-9]{1,10}$/i.test(file) &&
+        !DOC_FILE.test(file) &&
+        !isIdeRuleSource(file) &&
+        !isLinkedGuide(canonicalGuideCitation(file, guideFiles), guideFiles) &&
+        astGrepRuleIdOf(finding) == null &&
+        // The gate re-points a quote the instructions hold, but rejects one
+        // too short to identify a rule before it looks there.
+        !(
+            teamInstructions?.trim() &&
+            normalizeQuoteText(quote).length >= MIN_QUOTE_LENGTH &&
+            findQuoteSection(teamInstructions, quote) != null
+        )
+    );
+}
+
+/**
+ * The code-file citations (`isCodeFileSource`) whose quoted code is in the
+ * cited file on the target branch, read with the reader the quote gate uses
+ * for guides. The verifier compares the finding with that pattern; a quote
+ * the file does not hold (a made-up line, a wrong file) is dropped.
+ */
+export async function checkCodeFileQuotes(
+    findings: readonly FinderSuggestion[],
+    readGuide: GuideFileReader,
+): Promise<{
+    passed: FinderSuggestion[];
+    rejected: ConventionCheckRejected[];
+}> {
+    const passed: FinderSuggestion[] = [];
+    const rejected: ConventionCheckRejected[] = [];
+    for (const finding of findings) {
+        const file = stripLeading((finding.source?.file ?? '').trim());
+        const quote = finding.source?.quote ?? '';
+        // A quote of markdown marks alone normalizes to nothing: no pattern.
+        const needle = normalizeQuoteText(quote);
+        const content = needle ? await readGuide(file).catch(() => null) : null;
+        // Code holds "..." (spread, rest), so the whole quote is looked up
+        // first; a quote the model shortened with "..." still matches by parts.
+        const holds =
+            content != null &&
+            (normalizeQuoteText(content).includes(needle) ||
+                findQuoteSection(content, quote) != null);
+        if (holds) {
+            passed.push(finding);
+        } else {
+            rejected.push({
+                finding,
+                reason: QUOTE_NOT_FOUND,
+                detail: `quoted code not found in ${file} on the target branch`,
+            });
+        }
+    }
+    return { passed, rejected };
+}
+
+/**
+ * A finding resting on a record in one of the team's systems the agent can
+ * read (`Tracker__get_issue` → "Tracker issue IRR-12"). The prompt tells the
+ * agent to cite that record; it quotes no guide, so the quote gate would drop
+ * it as "not a guide linked to this review" (#2384). It is checked as a bug
+ * instead, by the verifier like any other finding. A path or a file name
+ * stays a guide citation.
+ */
+export function isTeamSystemSource(
+    finding: FinderSuggestion,
+    teamSystemTools: readonly string[] = [],
+): boolean {
+    const file = (finding.source?.file ?? '').trim();
+    if (!file || /[\/\\]/.test(file) || /\.[a-z0-9]{1,8}$/i.test(file)) {
+        return false;
+    }
+    // Tool names carry the connection's name sanitized (`Planck_Tracker`,
+    // custom-agent-mcp.tools.ts); the model cites it as it reads
+    // ("Planck Tracker issue IRR-12"). Compared with every separator as a
+    // space on both sides.
+    const words = (value: string) =>
+        value
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+    const systems = new Set(
+        teamSystemTools
+            .map((tool) => words(tool.split('__')[0] ?? ''))
+            .filter((system) => !!system),
+    );
+    const cited = words(file);
+    return [...systems].some(
+        (system) => cited === system || cited.startsWith(`${system} `),
     );
 }
 
@@ -486,6 +673,81 @@ export function makeTargetBranchGuideLister(
             throw new Error(`git ls-tree exited ${r.exitCode}`);
         }
         return r.stdout.split('\0').filter(Boolean);
+    };
+}
+
+/**
+ * Where the quote gate reads guides from. With no guide of another
+ * repository this is exactly the target-branch reader of the sandbox (and
+ * nothing without one: convention findings then take HV2, as before). When a
+ * linked guide lives in another repository (`owner/repo:path`), its reads go
+ * through the knowledge reader, which reads that repository at its
+ * configured ref or default branch; the reviewed repository's guides keep
+ * the sandbox reader, or the knowledge reader when there is no sandbox.
+ * A sandbox whose command channel cannot read the target branch (the local
+ * sandbox refuses git) falls back to the knowledge reader, which reads the
+ * same target branch the guides were loaded from.
+ */
+export function guideSourcesFor(
+    guideFiles: readonly string[],
+    knowledgeReader:
+        Pick<BaseBranchReader, 'readFile' | 'listFiles'> | undefined,
+    targetBranchReader: GuideFileReader | undefined,
+    targetBranchLister: GuideDirLister | undefined,
+): { readGuide: GuideFileReader; listGuideDir?: GuideDirLister } | undefined {
+    const isOther = (path: string) =>
+        parseKnowledgeSourcePath(stripLeading(path)) != null;
+    const hasOtherRepository = guideFiles.some(isOther);
+    if (!knowledgeReader) {
+        if (!targetBranchReader) return undefined;
+        // Nothing can read another repository here: its guides read as
+        // unreadable (their quotes are rejected), never through the target
+        // branch, which would look `owner/repo:path` up in this repository.
+        return {
+            readGuide: hasOtherRepository
+                ? (file) =>
+                      isOther(file)
+                          ? Promise.resolve(null)
+                          : targetBranchReader(file)
+                : targetBranchReader,
+            listGuideDir: targetBranchLister,
+        };
+    }
+    if (!hasOtherRepository && !targetBranchReader) return undefined;
+    const fromKnowledge: GuideFileReader = async (file) => {
+        const read = await knowledgeReader.readFile(stripLeading(file));
+        return read.status === 'ok' ? read.content : null;
+    };
+    const listFromKnowledge: GuideDirLister = (dir) =>
+        knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''));
+    // The reviewed repository's guides: the sandbox's target-branch reads,
+    // and the knowledge reader when those come back empty or fail.
+    const readLocal: GuideFileReader = async (file) => {
+        try {
+            const read = await targetBranchReader?.(file);
+            if (read != null) return read;
+        } catch {
+            // A timed-out command or a dead sandbox: same target branch below.
+        }
+        return fromKnowledge(file);
+    };
+    const listLocal: GuideDirLister = targetBranchLister
+        ? async (dir) => {
+              try {
+                  return await targetBranchLister(dir);
+              } catch {
+                  return listFromKnowledge(dir);
+              }
+          }
+        : listFromKnowledge;
+    if (!hasOtherRepository) {
+        return { readGuide: readLocal, listGuideDir: listLocal };
+    }
+    return {
+        readGuide: (file) =>
+            isOther(file) ? fromKnowledge(file) : readLocal(file),
+        listGuideDir: (dir) =>
+            isOther(dir) ? listFromKnowledge(dir) : listLocal(dir),
     };
 }
 

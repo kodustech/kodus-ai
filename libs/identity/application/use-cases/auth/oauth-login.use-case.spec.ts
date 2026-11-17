@@ -113,4 +113,63 @@ describe('OAuthLoginUseCase — provider token gating', () => {
             expect.objectContaining({ email: 'new@example.com' }),
         );
     });
+
+    describe('first touch', () => {
+        const firstTouch = { utm_source: 'google', gclid: 'TEST' };
+
+        it('passes the attribution to the signup that creates the organization', async () => {
+            const { useCase, authService, signUpUseCase } = makeDeps();
+            authService.verifyOAuthProviderEmail.mockResolvedValue({
+                email: 'new@example.com',
+                name: 'New User',
+            });
+            authService.validateUser.mockResolvedValue(undefined);
+            signUpUseCase.execute.mockResolvedValue({
+                uuid: 'u2',
+                organization: { uuid: 'o2' },
+            });
+            authService.login.mockResolvedValue({
+                accessToken: 'a',
+                refreshToken: 'r',
+            });
+
+            await useCase.execute(
+                'New User',
+                'new@example.com',
+                'valid_token',
+                AuthProvider.GITHUB,
+                firstTouch,
+            );
+
+            expect(signUpUseCase.execute).toHaveBeenCalledWith(
+                expect.objectContaining({ firstTouch }),
+            );
+        });
+
+        it('ignores it on a later login of an existing user', async () => {
+            const { useCase, authService, signUpUseCase } = makeDeps();
+            authService.verifyOAuthProviderEmail.mockResolvedValue({
+                email: 'known@example.com',
+                name: 'Known',
+            });
+            authService.validateUser.mockResolvedValue({
+                uuid: 'u1',
+                organization: { uuid: 'o1' },
+            });
+            authService.login.mockResolvedValue({
+                accessToken: 'a',
+                refreshToken: 'r',
+            });
+
+            await useCase.execute(
+                'Known',
+                'known@example.com',
+                'valid_token',
+                AuthProvider.GITHUB,
+                { utm_source: 'linkedin' },
+            );
+
+            expect(signUpUseCase.execute).not.toHaveBeenCalled();
+        });
+    });
 });

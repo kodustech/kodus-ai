@@ -60,7 +60,16 @@ import {
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import {
+    IPullRequestManagerService,
+    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 const SKIPPED_NO_LICENSE_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24h
 
@@ -78,6 +87,7 @@ const ERROR_TO_MESSAGE_TYPE: Record<
     NoActiveSubscriptionType
 > = {
     [ValidationErrorType.INVALID_LICENSE]: 'general',
+    [ValidationErrorType.LICENSE_UNAVAILABLE]: 'license_unavailable',
     [ValidationErrorType.USER_NOT_LICENSED]: 'user',
     [ValidationErrorType.BYOK_REQUIRED]: 'byok_required',
     [ValidationErrorType.PLAN_LIMIT_EXCEEDED]: 'general',
@@ -115,6 +125,10 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         private readonly usersService: IUsersService,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
+        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
+        private readonly pullRequestManagerService: IPullRequestManagerService,
     ) {
         super();
     }
@@ -323,6 +337,39 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
+        // An automatic trigger on a repository whose effective setting turns
+        // automated review off must not assign a seat: ValidateConfigStage
+        // would skip the review anyway. Explicit commands keep auto-assign.
+        if (
+            validationResult.errorType ===
+                ValidationErrorType.USER_NOT_LICENSED &&
+            !this.isCommandOrigin(context) &&
+            !(await this.isEffectiveAutomatedReviewActive(context))
+        ) {
+            this.logger.log({
+                message:
+                    'Automated review is off for this repository, skipping without license auto-assign',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                    prNumber: pullRequest?.number,
+                    userGitId,
+                    origin: context.origin,
+                },
+            });
+
+            return this.updateContext(context, (draft) => {
+                applyShowStatusFeedbackMetadata(draft);
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.CONFIG.DISABLED,
+                    ),
+                };
+            });
+        }
+
         // If validation failed due to USER_NOT_LICENSED, try auto-assign FIRST
         // (before checking autoReviewEnabled, because auto-assign should work regardless)
         if (
@@ -438,6 +485,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return PipelineReasons.PREREQUISITES.PLAN_LIMIT;
             case ValidationErrorType.CREDITS_EXHAUSTED:
                 return PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED;
+            case ValidationErrorType.LICENSE_UNAVAILABLE:
+                // The license read failed; the org's entitlement is unknown.
+                return PipelineReasons.PREREQUISITES.LICENSE_UNAVAILABLE;
             case ValidationErrorType.USER_NOT_LICENSED:
                 return PipelineReasons.PREREQUISITES.USER_NO_LICENSE;
             case ValidationErrorType.INVALID_LICENSE:
@@ -1019,16 +1069,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
     }
 
     private async creditsExhaustedMessage(): Promise<string> {
-        return (
-            '## Your Kodus credits are used up 💳\n\n' +
-            'This repository reviews with a model routed by Kodus, and your ' +
-            "organization's prepaid credit balance is at zero.\n\n" +
-            '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
-            'and re-run the review (or push a new commit) — or ' +
-            '[connect your own AI key](https://app.kodus.io/byok) to review ' +
-            'on your provider account instead.\n\n' +
-            '<!-- kody-codereview -->'
-        );
+        return KODUS_CREDITS_EXHAUSTED_COMMENT;
     }
 
     private async licenseUnavailableMessage(): Promise<string> {
@@ -1057,6 +1098,53 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).\n\n' +
             '<!-- kody-codereview -->'
         );
+    }
+
+    private isCommandOrigin(context: CodeReviewPipelineContext): boolean {
+        return Boolean(context.origin?.startsWith('command'));
+    }
+
+    /**
+     * The value ValidateConfigStage will act on: global, repository and
+     * directory settings merged with the repository's kodus-config.yml, the
+     * directory picked from the PR's files. Falls back to the repository and
+     * global settings when the PR or the config cannot be read.
+     */
+    private async isEffectiveAutomatedReviewActive(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        try {
+            const files =
+                await this.pullRequestManagerService.getChangedFilesMetadata(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                );
+
+            const config = await this.codeBaseConfigService.getConfig(
+                context.organizationAndTeamData,
+                context.repository,
+                files ?? [],
+            );
+
+            if (typeof config?.automatedReviewActive === 'boolean') {
+                return config.automatedReviewActive;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the effective automatedReviewActive, using repository and global settings',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
+
+        return this.isAutomatedReviewActive(context);
     }
 
     private async isAutomatedReviewActive(

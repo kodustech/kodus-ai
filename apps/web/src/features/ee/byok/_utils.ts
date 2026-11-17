@@ -7,8 +7,8 @@ import {
 } from "@services/permissions/types";
 import { hasPermission } from "src/core/utils/permission-map";
 
-import { isPlatformFundedProvider } from "./_data/platform-funded";
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
+import { isPlatformFundedProvider } from "./_data/platform-funded";
 import type {
     BYOKConfig,
     BYOKCredential,
@@ -23,12 +23,15 @@ import type {
  */
 export const TASK_LABELS: Record<LlmTask, string> = {
     codeReview: "Code Review",
+    riskAssessment: "Risk Assessment",
+    codeReviewHeavy: "Code Review (Heavy)",
     kodyRulesReview: "Kody Rules (review)",
     ruleGeneration: "Kody Rules (generation)",
     businessValidation: "Business Rules",
     prSummary: "PR Summary",
     conversation: "Chat",
     customAgent: "Custom Agents",
+    securityScan: "Deep scan",
 };
 
 /**
@@ -40,6 +43,10 @@ export const TASK_LABELS: Record<LlmTask, string> = {
 export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
     codeReview:
         "Reviews every pull request and posts inline comments. Runs on each PR — highest volume.",
+    riskAssessment:
+        "Assesses PR risk before review. Shared by routing, approval and custom agents.",
+    codeReviewHeavy:
+        "Runs a heavy review: the main reviewer plus nine specialists. Used when the review mode is Heavy or a review asks for --heavy.",
     kodyRulesReview:
         "Checks your custom rules against the changes during a review.",
     ruleGeneration: "Drafts new custom rules from your codebase, on demand.",
@@ -49,6 +56,8 @@ export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
     conversation: "Powers the Kody chat assistant in the dashboard and IDE.",
     customAgent:
         "Runs the review agents your team created. Each one reads the PRs its file patterns match, writes findings and verifies them.",
+    securityScan:
+        "Audits a whole repository for vulnerabilities when someone runs a deep scan. Long runs with tools, on demand.",
 };
 
 /** Resolve a model id to its human label within a pool, falling back to the raw
@@ -156,19 +165,26 @@ export const isEnterprisePlan = (license: OrganizationLicense): boolean => {
  * context) and cockpit analytics.
  */
 export const isTeamsOrEnterprisePlan = (
-    license: OrganizationLicense,
+    license: OrganizationLicense | null | undefined,
+    options: { selfHostedTiers?: readonly ("teams" | "enterprise")[] } = {},
 ): boolean => {
-    if (!license.valid) return false;
-    const plan = license.planType ?? "";
-    const isTeams = plan.startsWith("teams_");
-    const isEnterprise =
-        plan.startsWith("enterprise_") || plan === "enterprise";
+    if (!license?.valid) return false;
+    const rawPlan = "planType" in license ? license.planType : undefined;
+    const plan = typeof rawPlan === "string" ? rawPlan.toLowerCase() : "";
+    const isTier = (tier: "teams" | "enterprise") =>
+        plan === tier || plan.startsWith(`${tier}_`);
+    const isTeams = isTier("teams");
+    const isEnterprise = isTier("enterprise");
+    const selfHostedTiers = options.selfHostedTiers ?? ["enterprise"];
 
     switch (license.subscriptionStatus) {
         case "active":
             return isTeams || isEnterprise;
         case "licensed-self-hosted":
-            return isEnterprise;
+            return (
+                (isTeams && selfHostedTiers.includes("teams")) ||
+                (isEnterprise && selfHostedTiers.includes("enterprise"))
+            );
         case "trial":
             return true;
         default:

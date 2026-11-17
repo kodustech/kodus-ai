@@ -255,6 +255,7 @@
         "@ai-sdk/openai-compatible": "^3.0.39",
         "@casl/ability": "^7.0.1",
         "@fastify/cors": "^11.3.0",
+        "@gitbeaker/requester-utils": "^43.8.0",
         "@gitbeaker/rest": "^43.8.0",
         "@golevelup/nestjs-rabbitmq": "^9.0.2",
         "@google/generative-ai": "^0.24.1",

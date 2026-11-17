@@ -44,8 +44,11 @@ parser cannot read. Production reaches the verdict through `JSON.parse`, which
 accepts only `true`/`false`, so a Python-style `{"keep": False}` correctly
 fail-opens — reading it as a refutation here would score a healthy run as a lost
 verdict. The key, by contrast, IS matched loosely (`normalizeKeyName` lowercases
-it and strips `_-` before production compares it). Such rows are counted and
-printed under the shapes the parser does not read by design, never gated.
+it and strips `_-` before production compares it). A `keep` spelled as a
+string or a number (`"false"`, `"no"`, `0`) IS a delivered verdict for the
+code-review verifier, which reads it (`coerceKeep`); the business-rules harness
+fails open on it by contract, so on those rows the two extractors are expected
+to differ.
 
 Proven both ways: revert the text path and the refutation rows go RED with the
 production rationale `no parseable verdict — kept by default`; restore it and
@@ -71,13 +74,15 @@ the **real** verifier spec step by step, at both depths, and asserts two things:
    most of the fleet. Forcing the tool mid-run contradicts the prompt.
 
 ```
-light (default, confidence >= 5)  maxSteps=5   policies=[budget, force-text-finalize]
+light (every verify)  maxSteps=7   policies=[budget, force-text-finalize]
   step   budget-note  finalize-note  tools-restricted
   1..2   -            -              -
-  3..5   -            yes            -
-full (confidence < 5, evidence gate)  maxSteps=10
-  2, 5   yes          -              -
-  8..10  -            yes            -
+  3..4   yes          -              -
+  5      -            -              -
+  6..7   -            yes            -
+full (the evidence gate re-verify)  maxSteps=10
+  3, 6   yes          -              -
+  9..10  -            yes            -
 ```
 
 Proven in three states on the real spec: with no finalize policy the last steps

@@ -15,6 +15,12 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
  * What is left reads like a normal push: an already reviewed `+` line stays
  * as context, an already reviewed `-` line is left out, and a hunk with
  * nothing new is dropped.
+ *
+ * #2319: a change line of the previous diff that the current diff no longer
+ * carries cannot be represented here. It is either a revert (the push took an
+ * added line away) or a change the base branch absorbed, and the two diffs
+ * look the same. The result names those files in `revertedFiles` so the caller
+ * can review the whole current PR instead of skipping the push.
  */
 export interface RebaseInterdiffResult {
     /** What is left to review: changed files, each with only its new lines. */
@@ -25,6 +31,9 @@ export interface RebaseInterdiffResult {
     partialFiles: string[];
     /** Files too rewritten to compare within the bound; reviewed whole. */
     uncomparedFiles: string[];
+    /** Files carrying a reviewed change the current diff no longer has. Their
+     *  removals cannot be read from an interdiff, so the PR is reviewed whole. */
+    revertedFiles: string[];
     hunksKept: number;
     hunksDropped: number;
 }
@@ -104,10 +113,11 @@ class ScopeStack {
 
 /** Each change line keyed on where it sits: the scope it is in (the nearest
  *  line of the hunk above it that is less indented, else the header's
- *  section, which Git takes from before the hunk), and the context lines
- *  right above and below its run of changes. A change the rebase moved
- *  elsewhere in the file then does not read as reviewed. */
-function changesOf(hunks: Hunk[]): string[] {
+ *  section, which Git takes from before the hunk), and, unless `withContext`
+ *  is off, the context lines right above and below its run of changes. A
+ *  change the rebase moved elsewhere in the file then does not read as
+ *  reviewed. */
+function changesOf(hunks: Hunk[], withContext = true): string[] {
     const changes: string[] = [];
     for (const hunk of hunks) {
         const { lines } = hunk;
@@ -136,7 +146,12 @@ function changesOf(hunks: Hunk[]): string[] {
                 if (!isChange(line)) continue;
                 const side = line.startsWith('+') ? added : removed;
                 const scope = side.enter(line.slice(1));
-                changes.push([scope, above, below, line].join('\u0000'));
+                changes.push(
+                    (withContext
+                        ? [scope, above, below, line]
+                        : [scope, line]
+                    ).join('\u0000'),
+                );
             }
             i = end - 1;
         }
@@ -161,6 +176,29 @@ function reviewedFlags(
         for (let i = 0; i < part.value.length; i++) flags.push(!part.added);
     }
     return flags;
+}
+
+function countsOf(keys: string[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+}
+
+/** How many change lines of `previous` the current diff lost. The scope is
+ *  part of the identity, so a line dropped from one function while an
+ *  identical line appears in another is a removal, and the interdiff cannot
+ *  tell it from a move (#2319). The neighbouring context lines are left out on
+ *  purpose: an edit there moves nothing, and counting it would send every
+ *  touch of the lines around a change to a full review. */
+function missingChangeLines(previous: Hunk[], current: Hunk[]): number {
+    const now = countsOf(changesOf(current, false));
+    let missing = 0;
+    for (const [key, count] of countsOf(changesOf(previous, false))) {
+        const left = now.get(key) ?? 0;
+        if (left >= count) continue;
+        missing += count - left;
+    }
+    return missing;
 }
 
 /** The hunk with reviewed lines turned to context (`+`) or left out (`-`);
@@ -211,10 +249,12 @@ export function rebaseInterdiff(
         unchangedFiles: [],
         partialFiles: [],
         uncomparedFiles: [],
+        revertedFiles: [],
         hunksKept: 0,
         hunksDropped: 0,
     };
     const previousByName = new Map(previous.map((f) => [f.filename, f]));
+    const compared = new Set<string>();
 
     for (const file of current) {
         const before =
@@ -222,16 +262,24 @@ export function rebaseInterdiff(
             (file.previous_filename
                 ? previousByName.get(file.previous_filename)
                 : undefined);
+        if (before) compared.add(before.filename);
         const hunks = file.patch ? splitHunks(file.patch) : [];
-        if (!before?.patch || !hunks.length) {
+        const previousHunks = before?.patch ? splitHunks(before.patch) : [];
+        // #2319: a reviewed change line the current diff no longer carries is
+        // either reverted by the push or absorbed by the base branch, and the
+        // two diffs look alike. An interdiff cannot show the removal, so the
+        // caller has to review the whole current PR instead. This runs before
+        // the early return and before the bounded comparison, so a file whose
+        // patch is empty now, or too big to compare, still reports.
+        if (missingChangeLines(previousHunks, hunks) > 0) {
+            result.revertedFiles.push(file.filename);
+        }
+        if (!previousHunks.length || !hunks.length) {
             result.files.push(file);
             continue;
         }
 
-        const flags = reviewedFlags(
-            changesOf(hunks),
-            changesOf(splitHunks(before.patch)),
-        );
+        const flags = reviewedFlags(changesOf(hunks), changesOf(previousHunks));
         if (!flags) {
             result.uncomparedFiles.push(file.filename);
             result.files.push(file);
@@ -262,5 +310,15 @@ export function rebaseInterdiff(
             });
         }
     }
+
+    // A file the current diff does not list at all: every change it carried is
+    // gone from the PR. Same signal as above, and the same reason it cannot be
+    // read as an interdiff (#2319).
+    for (const before of previous) {
+        if (compared.has(before.filename) || !before.patch) continue;
+        if (!changesOf(splitHunks(before.patch)).length) continue;
+        result.revertedFiles.push(before.filename);
+    }
+
     return result;
 }

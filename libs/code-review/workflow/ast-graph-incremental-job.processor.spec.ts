@@ -149,4 +149,34 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
 
         expect(sandbox.cleanup).toHaveBeenCalledTimes(1);
     });
+
+    // The build runs clone + many /contents reads + indexing, any of which
+    // can stall on a retry-after; without the race the worker slot stayed
+    // held past the router timeout.
+    describe('AbortSignal', () => {
+        it('unblocks when the signal fires mid-work', async () => {
+            repositoryService.findById.mockImplementation(
+                () => new Promise(() => {}),
+            );
+            const controller = new AbortController();
+            const work = processor.process('job-2', controller.signal);
+
+            await new Promise((r) => setTimeout(r, 20));
+            expect(repositoryService.findById).toHaveBeenCalledTimes(1);
+
+            controller.abort();
+
+            await expect(work).resolves.toBeUndefined();
+        });
+
+        it('does not start when the signal is already aborted', async () => {
+            const controller = new AbortController();
+            controller.abort();
+
+            await expect(
+                processor.process('job-2', controller.signal),
+            ).rejects.toThrow(/aborted before start/);
+            expect(repositoryService.findById).not.toHaveBeenCalled();
+        });
+    });
 });

@@ -93,10 +93,6 @@ describe('FindCodeReviewSettingsLogsUseCase', () => {
         mockService = module.get(CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN);
     });
 
-    it('should be defined', () => {
-        expect(useCase).toBeDefined();
-    });
-
     it('should return logs with pagination', async () => {
         const filters: CodeReviewSettingsLogFiltersDto = {
             page: 1,

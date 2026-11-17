@@ -30,6 +30,7 @@ import type {
     LlmTask,
 } from './byok-config';
 import type {
+    ModelOverride,
     ModelRuntimeStats,
     RequestContext,
     RoutingStrategy,
@@ -59,7 +60,8 @@ type CapabilityRequirement = {
 // OR a tool-calling path — is the bar for every structured review-family task.
 const STRUCTURED_OUTPUT_REQUIREMENT: CapabilityRequirement = {
     capability: 'structuredOutput',
-    satisfied: (c) => c.structuredOutput !== 'none' || c.toolCalling === 'native',
+    satisfied: (c) =>
+        c.structuredOutput !== 'none' || c.toolCalling === 'native',
 };
 // A tool-using agent loop (chat + the business-rules validator) needs native
 // tool calling to invoke tools mid-turn.
@@ -70,6 +72,8 @@ const TOOL_CALLING_REQUIREMENT: CapabilityRequirement = {
 
 const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     codeReview: STRUCTURED_OUTPUT_REQUIREMENT,
+    riskAssessment: STRUCTURED_OUTPUT_REQUIREMENT,
+    codeReviewHeavy: STRUCTURED_OUTPUT_REQUIREMENT,
     // Kody-Rules review + rule generation drive structured output (findings /
     // rule objects) via generateObject, like the main review.
     kodyRulesReview: STRUCTURED_OUTPUT_REQUIREMENT,
@@ -80,8 +84,9 @@ const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     conversation: TOOL_CALLING_REQUIREMENT,
     // A custom agent investigates with tools (grep, ast-grep, MCP, CLIs).
     customAgent: TOOL_CALLING_REQUIREMENT,
+    // The deep scan's lenses read the repository with tools.
+    securityScan: TOOL_CALLING_REQUIREMENT,
 };
-
 
 /** One candidate the precedence chain will try, in order. */
 interface Candidate {
@@ -117,7 +122,7 @@ export class StaticTaskStrategy implements RoutingStrategy {
         const fallback = this.buildFallbackCandidate(routing, byId);
         const requirement = TASK_CAPABILITY_REQUIREMENTS[task];
 
-        const skips: string[] = [];
+        const skips = [...this.effectiveOverride(ctx, byId).skips];
         // Dedup exact (id + nameOverride) repeats so a model that is BOTH a higher
         // tier and a lower one (e.g. the folder override id == defaultModelId) is
         // gated once, not twice — no redundant capability lookup, no duplicated
@@ -204,6 +209,27 @@ export class StaticTaskStrategy implements RoutingStrategy {
         return undefined;
     }
 
+    /**
+     * The first override in the chain that can apply: an id that resolves, or a
+     * legacy NAME. An id that no longer resolves (its model was deleted) is
+     * skipped with a reason and the next one down (`then`) is tried.
+     */
+    private effectiveOverride(
+        ctx: RequestContext,
+        byId: Map<string, BYOKModelConfig>,
+    ): { override?: ModelOverride; skips: string[] } {
+        const skips: string[] = [];
+        let override = ctx.override;
+        while (override) {
+            const ref = override.modelId?.trim();
+            if (!ref) return { skips };
+            if (!override.byId || byId.has(ref)) return { override, skips };
+            skips.push(`override "${ref}": no model with this id`);
+            override = override.then;
+        }
+        return { skips };
+    }
+
     /** override (id-THEN-name) > taskOverride > default. */
     private buildPrimaryCandidates(
         task: LlmTask,
@@ -232,15 +258,18 @@ export class StaticTaskStrategy implements RoutingStrategy {
         const routedId = taskOverrideId ?? routing.defaultModelId;
         const routedModel = routedId ? byId.get(routedId) : undefined;
 
-        const overrideRef = ctx.override?.modelId?.trim();
+        const { override } = this.effectiveOverride(ctx, byId);
+        const overrideRef = override?.modelId?.trim();
         if (overrideRef) {
             const byIdMatch = byId.get(overrideRef);
             if (byIdMatch) {
                 // id override → route straight to that model.
                 candidates.push({ model: byIdMatch, tier: 'override' });
-            } else if (routedModel) {
+            } else if (routedModel && !override.byId) {
                 // NAME override (W1): not a models[] id → apply the name onto the
                 // chosen slot's `.model`, mirroring the legacy byokModel behavior.
+                // An id ref is never a name: a deleted model's id sent as a model
+                // name fails every call.
                 candidates.push({
                     model: routedModel,
                     tier: 'override(name)',
@@ -255,7 +284,10 @@ export class StaticTaskStrategy implements RoutingStrategy {
             ? byId.get(taskOverrideId)
             : undefined;
         if (taskOverrideModel) {
-            candidates.push({ model: taskOverrideModel, tier: taskOverrideTier });
+            candidates.push({
+                model: taskOverrideModel,
+                tier: taskOverrideTier,
+            });
         }
 
         const defaultModel = routing.defaultModelId

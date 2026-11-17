@@ -908,6 +908,11 @@ export class KodyRuleSummaryService {
         }
         return rule.atoms.items.map((atom) => ({
             ...rule,
+            // The unit's own identity, kept beside the parent's `uuid` that the
+            // spread carries: every per-unit lookup (detector hits, candidate
+            // lines) keys on this one, or the atoms of a rule merge (#2509).
+            reviewUnitId: atom.id,
+            parentTitle: rule.title,
             title: atom.title,
             rule: atom.spec,
             examples: atom.examples ?? [],

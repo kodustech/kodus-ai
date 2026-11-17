@@ -16,7 +16,11 @@ describe("groupOverrides", () => {
         const repos = groupOverrides(
             result({
                 overrides: [
-                    { scope: "global", model: "m-global", inCurrentProviderCatalog: null },
+                    {
+                        scope: "global",
+                        model: "m-global",
+                        inCurrentProviderCatalog: null,
+                    },
                     {
                         scope: "repository",
                         repositoryId: "r1",
@@ -40,8 +44,16 @@ describe("groupOverrides", () => {
             {
                 id: "r1",
                 name: "acme/api",
+                href: "/settings/code-review/r1/routing",
                 model: "m-repo",
-                folders: [{ id: "d1", name: "payments", model: "m-dir" }],
+                folders: [
+                    {
+                        id: "d1",
+                        name: "payments",
+                        model: "m-dir",
+                        href: "/settings/code-review/r1/routing?directoryId=d1",
+                    },
+                ],
                 agents: [],
             },
         ]);

@@ -2,13 +2,41 @@ import { NotFoundException } from '@nestjs/common';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 
+import {
+    INVITATION_TTL_MS,
+    sealInvitation,
+} from '@libs/identity/domain/user/invitation-token';
+
 import { AcceptUserInvitationUseCase } from './accept-user-invitation.use-case';
 
 describe('AcceptUserInvitationUseCase', () => {
-    const users: Record<string, { uuid: string; status: STATUS }> = {
-        invited: { uuid: 'invited', status: STATUS.PENDING },
-        signup: { uuid: 'signup', status: STATUS.PENDING },
-        active: { uuid: 'active', status: STATUS.ACTIVE },
+    const cryptoKey = process.env.API_CRYPTO_KEY;
+    beforeAll(() => {
+        process.env.API_CRYPTO_KEY = 'cd'.repeat(32);
+    });
+    afterAll(() => {
+        process.env.API_CRYPTO_KEY = cryptoKey;
+    });
+
+    const users: Record<
+        string,
+        { uuid: string; status: STATUS; email: string }
+    > = {
+        invited: {
+            uuid: 'invited',
+            status: STATUS.PENDING,
+            email: 'invited@acme.dev',
+        },
+        signup: {
+            uuid: 'signup',
+            status: STATUS.PENDING,
+            email: 'signup@acme.dev',
+        },
+        active: {
+            uuid: 'active',
+            status: STATUS.ACTIVE,
+            email: 'active@acme.dev',
+        },
     };
     // Self sign-ups get a profile at sign-up; invites only when accepted.
     const profiles = new Set(['signup', 'active']);
@@ -40,9 +68,13 @@ describe('AcceptUserInvitationUseCase', () => {
         profileService as any,
     );
 
-    const accept = (uuid: string) =>
+    /** The link an invitation email carries for `uuid`. */
+    const tokenFor = (uuid: string, email = `${uuid}@acme.dev`) =>
+        sealInvitation({ userId: uuid, email });
+
+    const accept = (uuid: string, token = tokenFor(uuid)) =>
         useCase.execute({
-            uuid,
+            token,
             name: 'Someone',
             password: 'Str0ngP@ssw0rd!',
         } as any);
@@ -57,6 +89,40 @@ describe('AcceptUserInvitationUseCase', () => {
         await expect(accept(uuid)).rejects.toBeInstanceOf(NotFoundException);
         expect(usersService.update).not.toHaveBeenCalled();
         expect(createProfile.execute).not.toHaveBeenCalled();
+    });
+
+    // GHSA-5rf5 #4: the user id is exposed elsewhere, so it must not be the
+    // credential of the invitation.
+    it('does not accept the invited user id instead of the invitation token', async () => {
+        for (const body of [{ uuid: 'invited' }, { token: 'invited' }]) {
+            await expect(
+                useCase.execute({
+                    ...body,
+                    name: 'Someone',
+                    password: 'Str0ngP@ssw0rd!',
+                } as any),
+            ).rejects.toBeInstanceOf(NotFoundException);
+        }
+        expect(usersService.update).not.toHaveBeenCalled();
+    });
+
+    it('does not accept an invitation sent to another email', async () => {
+        await expect(
+            accept('invited', tokenFor('invited', 'someone-else@acme.dev')),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(usersService.update).not.toHaveBeenCalled();
+    });
+
+    it('does not accept an expired invitation', async () => {
+        const expired = sealInvitation(
+            { userId: 'invited', email: 'invited@acme.dev' },
+            Date.now() - INVITATION_TTL_MS - 1,
+        );
+
+        await expect(accept('invited', expired)).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+        expect(usersService.update).not.toHaveBeenCalled();
     });
 
     it('completes an open invitation, guarding the update by status', async () => {
@@ -94,7 +160,7 @@ describe('AcceptUserInvitationUseCase', () => {
 
     it('creates the profile with the submitted name and phone', async () => {
         await useCase.execute({
-            uuid: 'invited',
+            token: tokenFor('invited'),
             name: 'Someone',
             phone: '+55 11 99999-0000',
             password: 'Str0ngP@ssw0rd!',

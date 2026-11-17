@@ -75,6 +75,19 @@ export interface IKodyRulesRepository {
         ruleId: string,
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null>;
+    /**
+     * Field-level `$set` on one rule, addressed by organization and rule id,
+     * returning only that rule (never the whole organization document).
+     * Undefined fields are skipped, `null` is written. Null when no document
+     * of the organization holds the rule.
+     */
+    updateRuleFieldsByOrganization(
+        organizationId: string,
+        ruleId: string,
+        updateData: Partial<IKodyRule>,
+    ): Promise<Partial<IKodyRule> | null>;
+    /** Whether the organization has a Kody Rules document at all. */
+    existsForOrganization(organizationId: string): Promise<boolean>;
     deleteRule(uuid: string, ruleId: string): Promise<boolean>;
     deleteRuleLogically(
         uuid: string,

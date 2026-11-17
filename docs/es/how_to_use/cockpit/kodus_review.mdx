@@ -35,6 +35,7 @@ Reglas de alcance — las mismas en todos los gráficos de implementation rate:
 
 - Solo cuentan las sugerencias **entregadas** (las que realmente se publicaron como comentarios en el PR). Los borradores que Kodus filtró antes de comentar nunca se cuentan.
 - Las sugerencias se atribuyen a la **semana en que se cerró el PR**, porque el estado de implementación solo es definitivo una vez que el PR se fusiona.
+- Una sugerencia que la última verificación de implementación **no pudo decidir** (la llamada al modelo falló, su respuesta no se pudo leer o solo había disponible el diff de todo el PR) queda fuera de la tasa en lugar de contarse como no implementada. El gráfico semanal indica cuántas quedaron fuera, y el explorador las lista con el estado **Not measured**.
 
 ### Semana a semana
 

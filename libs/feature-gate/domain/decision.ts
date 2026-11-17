@@ -20,6 +20,23 @@ import type { FeatureAudience, SnapshotFeature } from './snapshot.types';
  */
 export type GateDecision = 'deny' | 'pass' | 'compat-pass';
 
+/**
+ * Reads the `BETA_FEATURES` env var: the self-hosted opt-in for `beta`-stage
+ * features (cloud uses the per-org release track instead).
+ *
+ * Every reader goes through this one parser - the NestJS service, the Next.js
+ * resolver and `scripts/feature-gate/check-gate.ts` - so the operator-facing
+ * report cannot print a decision the runtime never takes (#2425). `true` is
+ * the documented encoding (`.env.schema`, `release/README.md`) and `1` is
+ * accepted because the checker has always taken it; case and surrounding
+ * whitespace are ignored, the way `libs/ee/configs/environment` parses its
+ * own booleans. Anything else keeps betas off.
+ */
+export function isBetaFeaturesEnabled(value?: string | null): boolean {
+    const normalised = (value ?? '').trim().toLowerCase();
+    return normalised === 'true' || normalised === '1';
+}
+
 export interface GateInputs {
     entry: SnapshotFeature | undefined;
     audience: FeatureAudience;

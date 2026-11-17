@@ -73,15 +73,6 @@ describe('Adaptive-fit compact prompt path', () => {
         expect(compact).toContain('TestAgent');
     });
 
-    it('compact system prompt drops the Workflow walk-through (PHASE 1/2/3)', () => {
-        const full = agent.buildSystemPromptForTest(makeInput());
-        const compact = agent.buildSystemPromptForTest(
-            makeInput({ adaptiveProfile: resolveAdaptiveProfile(16_000) }),
-        );
-        expect(full).toContain('PHASE 1');
-        expect(compact).not.toContain('PHASE 1');
-    });
-
     it('compact user prompt drops <OutputFormat> JSON example', () => {
         const full = agent.buildUserPromptForTest(makeInput());
         const compact = agent.buildUserPromptForTest(

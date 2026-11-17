@@ -215,6 +215,22 @@ describe('reasoning written before the answer', () => {
         expect(extractJsonFromText(`${reasoning}${answer}`)).toBe(answer);
     });
 
+    it('extracts the answer after a <thinking> block too', () => {
+        expect(
+            extractJsonFromText(
+                '<thinking>compare items [0] and [1]</thinking>\n' + answer,
+            ),
+        ).toBe(answer);
+    });
+
+    it('does not end a <thinking> block at a </think> inside it', () => {
+        expect(
+            extractJsonFromText(
+                `<thinking>the tag </think> is quoted [x]</thinking>${answer}`,
+            ),
+        ).toBe(answer);
+    });
+
     it('repairs it too, so a failed structured call is salvaged', () => {
         expect(repairJsonText(`${reasoning}\n\n${answer}`)).toBe(answer);
     });
@@ -405,6 +421,56 @@ describe('repairAndValidate', () => {
         // Kimi returned on PR#152. It must parse, never degrade the shard to error.
         expect(await repairAndValidate(listWire, '{"violations":[]}')).toEqual({
             violations: [],
+        });
+    });
+
+    describe('#2259 an invalid escape inside a string literal', () => {
+        const issuesWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    violations: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: { body: { type: 'string' } },
+                            required: ['body'],
+                            additionalProperties: false,
+                        },
+                    },
+                },
+                required: ['violations'],
+                additionalProperties: false,
+            } as any),
+        );
+
+        it('keeps a violation whose suggested fix carries a raw backslash', async () => {
+            // The model quotes code in its suggestion: Swift interpolation
+            // ("\(title)") or a regex ("\d") arrives with a SINGLE backslash, so
+            // JSON.parse rejects the whole payload and the shard degrades to zero
+            // findings for that file.
+            const raw = '{"violations":[{"body":"Rename to \\(title)"}]}';
+
+            expect(await repairAndValidate(issuesWire, raw)).toEqual({
+                violations: [{ body: 'Rename to \\(title)' }],
+            });
+        });
+
+        it('leaves VALID escapes alone', async () => {
+            const raw =
+                '{"violations":[{"body":"line\\nbreak\\tand \\u0041"}]}';
+
+            expect(await repairAndValidate(issuesWire, raw)).toEqual({
+                violations: [{ body: 'line\nbreak\tand A' }],
+            });
+        });
+
+        it('still rejects a payload that is cut short', async () => {
+            // Escape repair is the ONLY extra step: a truncated payload must keep
+            // failing so the caller escalates instead of judging a partial list.
+            const raw = '{"violations":[{"body":"cut here';
+
+            expect(await repairAndValidate(issuesWire, raw)).toBeUndefined();
         });
     });
 

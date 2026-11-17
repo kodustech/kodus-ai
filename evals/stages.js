@@ -49,6 +49,7 @@ const GROUPS = [
     'On the PR',
     'Where rules and memories come from',
     'Conversation with Kody',
+    'Security scan',
 ];
 
 // The funnel's evals read a production review's frozen output (evals/funnel/snapshot).
@@ -80,9 +81,15 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'Which task a PR names, read through each tracker, scripted MCP servers',
-                specs: ['test/evals/business-rules-validation/task-resolution/task-resolution.eval.spec.ts'],
+                specs: [
+                    'test/evals/business-rules-validation/task-resolution/task-resolution.eval.spec.ts',
+                ],
             },
-            { kind: 'contract', name: 'The stage, its MCP adapter and the Jira MCP, end to end', wiring: ['business-logic', 'business-logic-requirements'] },
+            {
+                kind: 'contract',
+                name: 'The stage, its MCP adapter and the Jira MCP, end to end',
+                wiring: ['business-logic', 'business-logic-requirements'],
+            },
             {
                 kind: 'contract',
                 name: 'Per requirement: done work not called a gap, and gaps caught (evals/business-logic-requirements)',
@@ -141,7 +148,7 @@ const STAGES = [
         name: 'Finder',
         short: 'Finds the bugs in the PR',
         group: 'The agents, side by side',
-        does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds, with its lines and a fix. Verify then checks each one.',
+        does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds: the file, the lines and what is wrong. Its step cap and the synthesis-rescue pass are set per model family. Verify then checks each one.',
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -153,6 +160,8 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.spec.ts',
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.spec.ts',
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.snapshot.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder-model-profile.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/recall-passes.spec.ts',
                 ],
             },
             {
@@ -187,6 +196,43 @@ const STAGES = [
             },
             nightly: 'finder-recall',
             caveat: "Counts the known bugs the review ships. A real bug outside the dataset's list counts against precision, not for recall.",
+        },
+    },
+    {
+        id: 'heavy',
+        name: 'Heavy mode',
+        short: 'Lenses next to the finder',
+        group: 'The agents, side by side',
+        does: "When a review is asked with --heavy, nine lenses run next to the finder, each looking for one kind of defect only (at most 3 steps and 4 findings each); their findings take the lens's label and go through the same verify and every step after it.",
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The lenses, their prompt, and the finder running them next to the generalist',
+                specs: [
+                    'libs/ee/heavy-mode/heavy-lenses.spec.ts',
+                    'libs/ee/heavy-mode/heavy-lens-passes.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.spec.ts',
+                    'libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider.spec.ts',
+                    'libs/common/utils/codeManagement/codeCommentMarkers.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "A scripted model's heavy review of a PR runs the lenses and reaches scoring",
+                wiring: ['heavy-recall'],
+            },
+        ],
+        eval: {
+            path: 'evals/heavy-recall',
+            metric: 'of known bugs found',
+            sets: {
+                controlled:
+                    '15 real PRs whose bugs we know, three per repository, reviewed in heavy mode',
+                full: 'the 30 real PRs of the light set, reviewed in heavy mode',
+            },
+            nightly: 'finder-recall',
+            caveat: "Weekly and on demand, never nightly: every case is a full heavy review. A real bug outside the dataset's list counts against precision, not for recall.",
         },
     },
     {
@@ -226,7 +272,7 @@ const STAGES = [
         name: 'Agent instructions',
         short: "Checks the repo's coding-agent instructions",
         group: 'The agents, side by side',
-        does: "Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.",
+        does: 'Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.',
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -238,17 +284,22 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/finder-with-verify.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "A scripted model reads the CLAUDE.md through the tool and the verifier gets it", wiring: ['repo-instructions'] },
+            {
+                kind: 'contract',
+                name: 'A scripted model reads the CLAUDE.md through the tool and the verifier gets it',
+                wiring: ['repo-instructions'],
+            },
         ],
         eval: {
             path: 'evals/repo-instructions',
             metric: 'of violation lines the review posts',
             sets: {
-                controlled: 'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
+                controlled:
+                    'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
                 full: 'every such PR (14)',
             },
             nightly: 'shared',
-            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the finder rates them low); what the finder reported before the filters is shown beside it.",
+            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the severity step rates them low); what the finder reported before the filters is shown beside it.",
         },
     },
     {
@@ -266,8 +317,14 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
                     'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
                     'libs/llm/structured-output-repair.spec.ts',
-                    'test/unit/code-review/agents/findings-schema-sanitize.spec.ts',
-                    'test/unit/common/prompt-parser-extract-json.spec.ts',
+                ],
+            },
+            {
+                kind: 'unit',
+                name: "The finder's five-field schema and its label normalization, deterministic",
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/parse-finder-schema.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/normalize-finder-label.spec.ts',
                 ],
             },
             {
@@ -278,6 +335,38 @@ const STAGES = [
         ],
         eval: null,
         note: "Tests only for now: they replay recorded model output through production's parse. An eval of this step comes later.",
+    },
+    {
+        id: 'prose-recovery',
+        name: 'Prose recovery',
+        short: 'Recovers findings a run wrote only as prose',
+        group: 'The agents, side by side',
+        does: 'When a finder run ends with no findings, asks the model to turn the prose it wrote into findings: the ones the prose reports, never the hypotheses it dismissed.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The recovery gate and its fallback parse',
+                specs: [
+                    'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Finder prose written for the eval goes through the recovery on the scripted model',
+                wiring: ['prose-recovery'],
+            },
+        ],
+        eval: {
+            path: 'evals/prose-recovery',
+            metric: 'of the checks, findings extracted and dismissed hypotheses left out',
+            sets: {
+                controlled:
+                    'finder prose written for the eval: 18 that dismiss every hypothesis, 8 that report defects, 6 that do both',
+                full: null,
+            },
+            nightly: 'shared',
+        },
     },
     {
         id: 'verify',
@@ -325,7 +414,6 @@ const STAGES = [
                 name: 'The agent, its path match and the rule compiler',
                 specs: [
                     'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.spec.ts',
-                    'test/unit/code-review/agents/kody-rules-agent-path-match.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.prompt.spec.ts',
                 ],
@@ -494,6 +582,7 @@ const STAGES = [
                 specs: [
                     'libs/code-review/infrastructure/agents/engine/classify-severity.spec.ts',
                     'libs/code-review/infrastructure/agents/engine/survives-severity-filter.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/severity-prompt.spec.ts',
                 ],
             },
             {
@@ -507,6 +596,76 @@ const STAGES = [
             metric: 'of known bugs reaching severity kept above the threshold, and of its control checks right',
             sets: FUNNEL_SETS,
             nightly: 'shared',
+        },
+    },
+    {
+        id: 'severity-levels',
+        name: 'Severity levels',
+        short: 'Rates each finding at its defined level',
+        group: 'After the agents',
+        does: 'The rating itself: each suggestion gets critical, high, medium or low from the defined-level prompt, one call per PR. A wrong level moves a real bug under the team threshold or a nit above it.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'contract',
+                name: "Rates a PR's suggestions in one call and maps each level back",
+                wiring: ['severity-levels'],
+            },
+        ],
+        eval: {
+            path: 'evals/severity-levels',
+            metric: 'of the 205 suggestions, rated at their defined level (and per level)',
+            sets: {
+                controlled:
+                    '205 suggestions labeled from their own text: 50 low, 70 medium, 50 high, 35 critical',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: 'A critical rated high counts as wrong.',
+        },
+    },
+    {
+        id: 'enrichment',
+        name: 'Enrichment',
+        short: 'Titles each finding and writes its fix',
+        group: 'After the agents',
+        does: 'Completes each finding the review keeps: the cited code and its language from the file at the PR head, then one model call for a title that names the problem and, when a fix fits exactly the cited lines, the code that replaces them. A finding with no fix that fits ships with no code.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'What the call gets and what the finding keeps',
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/enrich-suggestions.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/enrich-deterministic.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.post-finder.spec.ts',
+                ],
+            },
+            {
+                kind: 'unit',
+                name: 'The publish gate: a fix that does not fit ships as a plain comment, and the title the stage resolves',
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/is-usable-fix.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.bad-fix-gate.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.title.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Enriches each finding in one call and keeps it when the call fails',
+                wiring: ['suggestion-enrichment'],
+            },
+        ],
+        eval: {
+            path: 'evals/suggestion-enrichment',
+            metric: 'of the checks, the right code (a fix the judge passes on the fixable findings, no code on the others) and a title that names the problem in 80 characters',
+            sets: {
+                controlled:
+                    'the 150 confirmed findings of the enrichment dataset, each with its file at the PR head',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: "Graded by the nightly's judge (gpt-5.6-luna) against Astra references: a floor holds only under that judge.",
         },
     },
     {
@@ -614,6 +773,34 @@ const STAGES = [
         note: 'Tests only for now: summaries once died for every client because the step went to a model nobody configured, and these catch that. Whether a summary is a good one is not measured yet.',
     },
     {
+        id: 'risk-assessment',
+        name: 'PR risk',
+        short: 'Shares PR risk with review and approval',
+        group: 'On the PR',
+        does: 'Assesses the complete PR snapshot once, before review mode and custom-agent selection; automatic approval consumes the same result.',
+        pipeline: ['AssessPrRiskStage', 'ResolveRiskRoutingStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Risk contracts, complete snapshots and routing defaults',
+                specs: [
+                    'libs/code-review/domain/risk/risk-assessment.spec.ts',
+                    'libs/code-review/domain/risk/assess-pr-risk.spec.ts',
+                    'libs/code-review/domain/review-mode.spec.ts',
+                    'libs/code-review/pipeline/stages/assess-pr-risk.stage.spec.ts',
+                    'libs/code-review/application/use-cases/risk/preview-pr-risk.use-case.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Shared production assessment and consumers through the configured model',
+                wiring: ['pr-risk', 'approval-risk-shared'],
+            },
+        ],
+        eval: null,
+        note: 'Scripted wiring contract only; routing quality/cost and approval safety require separate adjudicated comparisons, with no established human quality floor yet.',
+    },
+    {
         id: 'approval',
         name: 'Approval',
         short: 'Approves or requests changes',
@@ -644,6 +831,40 @@ const STAGES = [
         note: 'The 200-PR risk quality eval is awaiting independent labels; the controlled pair only checks wiring.',
     },
     {
+        id: 'implementation-check',
+        name: 'Implementation check',
+        short: 'Records whether a suggestion was applied',
+        group: 'On the PR',
+        does: "After a push, decides for each delivered suggestion whether the developer made the change it asked for, records it as implemented, partially implemented or not, and resolves the threads of the applied ones. The Cockpit's implementation rate and the next review read it.",
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The check, the processor and the model call',
+                specs: [
+                    'libs/code-review/infrastructure/adapters/services/suggestion.service.implementation-check.spec.ts',
+                    'libs/code-review/workflow/implementation-verification.processor.spec.ts',
+                    'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Suggestions and a push go through the check and its model call with a scripted model',
+                wiring: ['implementation-check'],
+            },
+        ],
+        eval: {
+            path: 'evals/implementation-check',
+            metric: 'of verdicts right (applied or not)',
+            sets: {
+                controlled:
+                    'suggestions on real public PR files and hand-written follow-up pushes: fixed, fixed another way, untouched, declined, partial',
+                full: null,
+            },
+            nightly: 'shared',
+        },
+    },
+    {
         id: 'rules-learned',
         name: 'Learned from reviews',
         short: 'Writes rules from past reviews',
@@ -656,7 +877,6 @@ const STAGES = [
                 name: 'Which comments it reads, and its cron',
                 specs: [
                     'libs/kodyRules/application/use-cases/generate-kody-rules.use-case.spec.ts',
-                    'test/unit/kodyRules/use-cases/generate-kody-rules.sampling.spec.ts',
                     'apps/api/src/cron/kodyLearning.cron.spec.ts',
                 ],
             },
@@ -677,7 +897,6 @@ const STAGES = [
                 name: 'The sync, the rule-file parser and the file patterns',
                 specs: [
                     'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.spec.ts',
-                    'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.context-reference-pointer.spec.ts',
                     'test/unit/common/kody-rule-file-parser.spec.ts',
                     'test/unit/common/kody-rules-file-patterns.spec.ts',
                     'libs/common/utils/kody-rules/file-patterns.spec.ts',
@@ -692,6 +911,28 @@ const STAGES = [
             },
         ],
         eval: null,
+    },
+    {
+        id: 'rule-references',
+        name: 'Files a rule cites',
+        short: 'Finds the files a rule cites',
+        group: 'Where rules and memories come from',
+        does: 'When a Kody Rule is saved, reads its text for the files it cites (@file:, paths) so the review can load them as the rule\'s context.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The reply parser and its fail-safe',
+                specs: ['libs/ai-engine/infrastructure/adapters/services/reference-detector.service.spec.ts'],
+            },
+            {
+                kind: 'contract',
+                name: "Sends the rule to the org's model and reads its reply, with a scripted model",
+                wiring: ['reference-detection'],
+            },
+        ],
+        eval: null,
+        note: 'evals/reference-detection is run by hand (README): its #2409 cases leak only on Together.',
     },
     {
         id: 'thread-rule',
@@ -725,7 +966,43 @@ const STAGES = [
                 full: null,
             },
             nightly: 'shared',
-            caveat: "Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
+            caveat: 'Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is the thread-rule-offers stage.',
+        },
+    },
+    {
+        id: 'thread-rule-offers',
+        name: 'Rule offer',
+        short: 'Offers a rule when a thread calls for one',
+        group: 'Where rules and memories come from',
+        does: 'In a PR thread that shows a standard the team wants, or a rule that is too broad, offers to create or narrow the Kody Rule, and offers nothing in a thread that calls for nothing.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which actions the agent is told it may offer',
+                specs: [
+                    'libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/conversation-prompt.spec.ts',
+                    'libs/mcp-server/tools/tool-annotations.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's MCP server",
+                wiring: ['thread-rule-offers'],
+            },
+        ],
+        eval: {
+            path: 'evals/thread-actions',
+            catalog: 'evals/thread-actions/catalog.js#ruleOffers',
+            metric: 'of offer checks right',
+            sets: {
+                controlled:
+                    'the threads of thread-rule that do not ask Kody to act',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: 'Judged on the reply by a model: offers the rule when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
     },
     {
@@ -760,7 +1037,43 @@ const STAGES = [
                 full: null,
             },
             nightly: 'shared',
-            caveat: "Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
+            caveat: 'Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is the thread-memory-offers stage.',
+        },
+    },
+    {
+        id: 'thread-memory-offers',
+        name: 'Memory offer',
+        short: 'Offers a memory when a thread calls for one',
+        group: 'Where rules and memories come from',
+        does: 'In a PR thread that shows a team convention, offers to save it as a memory, and offers nothing in a thread that calls for nothing.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which actions the agent is told it may offer',
+                specs: [
+                    'libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/conversation-prompt.spec.ts',
+                    'libs/mcp-server/tools/tool-annotations.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's MCP server",
+                wiring: ['thread-memory-offers'],
+            },
+        ],
+        eval: {
+            path: 'evals/thread-actions',
+            catalog: 'evals/thread-actions/catalog.js#memoryOffers',
+            metric: 'of offer checks right',
+            sets: {
+                controlled:
+                    'the threads of thread-memory that do not ask Kody to act',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: 'Judged on the reply by a model: offers the memory when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
     },
     {
@@ -834,6 +1147,34 @@ const STAGES = [
             nightly: 'shared',
             caveat: 'A judge reads whether the reply asserts what the code shows; offering or taking actions is evals/thread-actions.',
         },
+    },
+    {
+        id: 'security-scan',
+        name: 'Security scan',
+        short: 'Audits a whole repository',
+        group: 'Security scan',
+        does: "Scans a repository's default branch on demand, outside any pull request: maps where outside input enters and where dangerous operations sit, audits each part with five security lenses on the review's own finder and verify, within the team's spend limit, and stores what survives as Kody Issues.",
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The map, the lenses, the spend meter, the owners and the stored issues',
+                specs: [
+                    'libs/security-scan/application/security-scan-engine.spec.ts',
+                    'libs/security-scan/application/security-scan-job.processor.spec.ts',
+                    'libs/security-scan/domain/budget-meter.spec.ts',
+                    'libs/security-scan/domain/surface/collect-surface.spec.ts',
+                    'libs/issues/infrastructure/adapters/repositories/issues-scan-findings.repository.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "A scripted model scans a repository written for it, end to end",
+                wiring: ['security-scan'],
+            },
+        ],
+        eval: null,
+        note: 'Measured on demand, not nightly: every case is a whole-repository scan and precision needs a person to judge the findings the dataset does not list (evals/security-scan).',
     },
 ];
 

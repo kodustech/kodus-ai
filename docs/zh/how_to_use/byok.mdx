@@ -55,7 +55,7 @@ BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加
     - 如果 Kodus 能列出该提供商的模型,您会得到一个下拉菜单。
     - 否则(自定义端点、自托管,或未配置平台密钥时),请输入精确的模型 ID。
 
-    自定义端点(OpenAI-compatible / Anthropic-compatible)还会先要求填写一个 **Base URL**。
+    自定义端点(OpenAI-compatible / Anthropic-compatible)还会先要求填写一个 **Base URL**。**OpenAI** 会显示一个可选的 **Base URL**,用于你自己的代理或网关;留空则直接调用 OpenAI。
   </Step>
 
   <Step title="调整高级设置(可选)">
@@ -105,6 +105,8 @@ BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加
 
   <Step title="按 agent">
     不同的 Kody 任务(代码审查、Kody Rules、聊天、摘要等等)可以各自运行不同的模型 — 用更贵的模型做深度审查,用更便宜的模型做摘要。无法执行某个任务的模型会在那一行被禁用并带有提示,从而在您保存之前就阻止它。
+
+    **Code Review** 每种审查模式各有一个模型:**Model for Balanced** 运行 balanced 审查,**Model for Heavy** 运行 [heavy 审查](/zh/how_to_use/code_review/review_directive#heavy-mode)。在您选择之前,两者都使用默认值。审查模式本身在 **Code review → General → Review mode** 中设置。
   </Step>
 </Steps>
 
@@ -175,6 +177,15 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
     1. 访问 [OpenAI API Keys](https://platform.openai.com/api-keys)
     2. 为 Kodus 创建新密钥
     3. 添加计费信息
+
+    **通过你自己的网关:**如果你的 OpenAI 流量经过一个提供 Responses API 的 OpenAI 协议网关,请在可选的 **Base URL** 中填写其地址,并使用该网关要求的密钥。使用 OpenAI 自己的模型 ID 时,评审的运行方式与直接使用 OpenAI 密钥相同:Responses API、严格的结构化输出,以及你设置的推理级别。
+
+    - 请包含 API 版本,例如 `https://your-gateway.example.com/v1`。Kodus 会调用 `<Base URL>/responses`,并从 `<Base URL>/models` 列出模型。
+    - 如果网关只提供 chat completions,请改用 **OpenAI-compatible** 连接。
+    - 该 URL 必须使用 `https://` 并解析到公网地址,因为 Kodus 会把你的密钥发送到这里。self-hosted 安装中位于私有网络的网关暂不支持([#2381](https://github.com/kodustech/kodus-ai/issues/2381))。
+    - 请求以 `store: false` 发送,因此不会要求网关或 OpenAI 保存它们。
+    - 请使用 OpenAI 自己的模型 ID(例如 `gpt-5.4`)。网关重命名的模型不会被识别为推理模型,因此不会发送其推理级别([#2382](https://github.com/kodustech/kodus-ai/issues/2382))。
+    - 此处不支持:除密钥外还需要自定义请求头的网关(Portkey、Cloudflare AI Gateway),以及 Azure OpenAI(请使用专门的 **Azure OpenAI** 提供商)。
   </Tab>
 
   <Tab title="Google Gemini">
@@ -264,16 +275,16 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
     </Note>
 
     <CardGroup cols={2}>
-      <Card title="Z.ai (GLM) 指南" href="/zh/knowledge_base/how-to-use-z-ai-with-kodus" icon="bolt">
+      <Card title="Z.ai (GLM) 指南" href="/zh/cookbook/z-ai" icon="bolt">
         包含 Coding Plan 细节的完整 Z.ai 设置。
       </Card>
-      <Card title="Moonshot (Kimi) 指南" href="/zh/knowledge_base/how-to-use-moonshot-with-kodus" icon="moon">
+      <Card title="Moonshot (Kimi) 指南" href="/zh/cookbook/moonshot" icon="moon">
         Kimi + Kimi Code Plan 设置。
       </Card>
-      <Card title="Fireworks AI" href="/zh/knowledge_base/how-to-use-fireworks-with-kodus" icon="fire">
+      <Card title="Fireworks AI" href="/zh/cookbook/fireworks" icon="fire">
         Fireworks 专属设置。
       </Card>
-      <Card title="Together AI" href="/zh/knowledge_base/how-to-use-together-ai-with-kodus" icon="handshake">
+      <Card title="Together AI" href="/zh/cookbook/together" icon="handshake">
         Together AI 设置。
       </Card>
     </CardGroup>

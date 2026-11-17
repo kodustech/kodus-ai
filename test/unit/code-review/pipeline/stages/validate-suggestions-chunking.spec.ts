@@ -44,16 +44,23 @@ function generateContent(tokenCount: number, seed = 'file'): string {
     // form padded each line with `'x'.repeat(...)`, and BPE folds a run of
     // identical characters — so content labelled 10_000 tokens measured a small
     // fraction of that, and the budget cases below stopped exercising a budget.
-    const lines: string[] = [];
-    let lineNum = 0;
-    let content = '';
-    while (estimateTokens(content) < tokenCount) {
-        lines.push(
-            `${seed}_L${lineNum++} const value = compute(input, index); // pad`,
-        );
-        content = lines.join('\n');
+    // The smallest line count that reaches `tokenCount` is found by binary
+    // search: growing one line at a time re-tokenized the whole string per line
+    // (quadratic), which made this suite ~10 minutes of CI.
+    const build = (n: number) =>
+        Array.from(
+            { length: n },
+            (_, i) => `${seed}_L${i} const value = compute(input, index); // pad`,
+        ).join('\n');
+    let hi = 1;
+    while (estimateTokens(build(hi)) < tokenCount) hi *= 2;
+    let lo = Math.floor(hi / 2);
+    while (hi - lo > 1) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (estimateTokens(build(mid)) < tokenCount) lo = mid;
+        else hi = mid;
     }
-    return content;
+    return build(hi);
 }
 
 function makeFile(filename: string, fileContent: string): FileChange {

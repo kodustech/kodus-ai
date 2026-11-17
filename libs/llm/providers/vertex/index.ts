@@ -201,6 +201,10 @@ export const vertexModule: ProviderModule = {
             ? '{\n  "thinkingConfig": { "thinkingLevel": "high" }\n}'
             : '{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}',
     modelListing: vertexModelListing,
+    selfHostedEnv: (id) =>
+        id === 'google_vertex'
+            ? { apiKeyVars: ['API_VERTEX_AI_API_KEY'] }
+            : null,
 };
 
 registerProvider(vertexModule);

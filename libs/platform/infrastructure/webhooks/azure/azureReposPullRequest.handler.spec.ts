@@ -70,10 +70,6 @@ describe('AzureReposPullRequestHandler', () => {
         );
     });
 
-    it('should be defined', () => {
-        expect(handler).toBeDefined();
-    });
-
     describe('shouldTriggerCodeReview', () => {
         it('should return true if event is not git.pullrequest.updated', async () => {
             const params = { event: 'git.pullrequest.created' } as any;

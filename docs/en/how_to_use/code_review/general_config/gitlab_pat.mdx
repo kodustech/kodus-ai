@@ -1,11 +1,13 @@
 ---
 title: "GitLab PAT Token"
-description: "Generate the GitLab Personal Access Token Kody needs to read your repositories and post review comments, with the exact scopes required."
+description: "Generate the GitLab personal or group access token Kody needs to read your repositories and post review comments, with the exact scopes required."
 ---
 
 ## Introduction to the PAT
 
 To enable Kody to perform automatic Code Reviews, you need to generate a Personal Access Token (PAT) in GitLab. This token allows Kody to securely access your repositories and conduct code analysis in a controlled way.
+
+Kody posts reviews as the GitLab user the token belongs to. With a personal access token, reviews appear under your own account, as they do when you connect with OAuth. To have them appear under a separate bot user, use a group access token, described below.
 
 ## Generating the PAT (Personal Access Token)
 
@@ -28,15 +30,42 @@ Follow these steps to set up the token correctly:
    - **Token Name**: Choose an easily identifiable name, such as `kody_code_review`.
    - **Expiration Date**: If possible, select a long expiration date, preferably at least 180 days.
    - **Permissions**: Set the following permissions:
-     - **api**: Read access.
-     - **read_api**: Read access.
-     - **read_user**: Read access.
-     - **read_repository**: Read access.
-     - **write_repository**: Read access.
+     - **api**
+     - **read_api**
+     - **read_user**
+     - **read_repository**
+     - **write_repository**
 
 5. **Finalize and save the token**:
    - After configuring the permissions, click `Generate token`.
    - Make sure to copy the generated token and store it securely, as you’ll need it to configure Kody.
+
+## Using a Group Access Token
+
+A group access token posts reviews as a bot user that GitLab creates for the token, named after it. The bot has access to every project in the group and its subgroups.
+
+<Note>
+  On GitLab.com, group access tokens require a Premium or Ultimate subscription and are not available during a trial. On GitLab Self-Managed and GitLab Dedicated, they are available with any license.
+</Note>
+
+1. **Open the group's access tokens**:
+
+   - In GitLab, open the group that contains your repositories and go to `Settings` > `Access tokens`.
+
+2. **Add a new token**:
+
+   - Click on the `Add new token` button.
+
+3. **Set up the new token with the following specifications**:
+
+   - **Token name**: The name Kody's reviews will show, such as `Kody`.
+   - **Expiration date**: If possible, select a long expiration date, preferably at least 180 days.
+   - **Role**: `Maintainer`. Kody needs it to create the webhook on each project.
+   - **Scopes**: `api` and `read_repository`. Kody clones your repositories, and on a group access token `api` does not include Git over HTTPS.
+
+4. **Finalize and save the token**:
+   - Click `Create group access token`.
+   - Copy the token and store it securely. GitLab shows it only once.
 
 ## Adding the Token to Kody
 
@@ -44,3 +73,5 @@ After generating the token, paste it into Kodus:
 
 - **During onboarding**: on **Connect your Git tool**, pick the **Gitlab** tab and click **Connect via token**.
 - **Later**: in the sidebar, open **Repositories**, click **Gitlab** under **Connect a provider**, switch to the **Token** tab, paste the token and click **Validate and save**. For a self-managed GitLab, turn on **Self-hosted** and enter the **Gitlab URL**.
+- **Replacing a token**: on **Repositories**, click **Update token** on the **Gitlab** card, paste the new token and click **Update token**. Webhooks and selected repositories are kept.
+- **Switching from OAuth**: **Update token** is not offered for a connection made with OAuth. Click **Reset**, choose **Just reset the integration**, then connect again with the token as described above and select your repositories.

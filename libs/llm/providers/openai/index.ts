@@ -22,7 +22,7 @@ import {
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
-import { isOpenAiHost } from './endpoint';
+import { OPENAI_API_BASE_URL, isAzureOpenAiHost } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
 import { openAiModelListing } from './listing';
 import type {
@@ -47,6 +47,7 @@ import {
     normalizeSdkUsage,
 } from '../kernel/usage';
 import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
+import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 
 /**
  * Native OpenAI model families that honor strict `response_format: json_schema`
@@ -221,11 +222,11 @@ export const openaiModule: ProviderModule = {
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
                 : {}),
         })(cfg.model);
-        // On OpenAI's own API, nothing is stored (not-stored.ts). Another host on
-        // the native id (a gateway) keeps whatever it does today.
-        return !baseURL || isOpenAiHost(baseURL)
-            ? notStoredByOpenAi(native)
-            : native;
+        // Nothing is stored, on OpenAI's API or behind the org's own gateway
+        // (not-stored.ts). Azure OpenAI reached through this id keeps the SDK
+        // default: its Responses API was not verified with `store: false` and
+        // an encrypted-reasoning loop, and one production credential runs on it.
+        return isAzureOpenAiHost(baseURL) ? native : notStoredByOpenAi(native);
     },
 
     reasoning(
@@ -288,8 +289,15 @@ export const openaiModule: ProviderModule = {
                 // gateway upstream rejects the field (OpenCode Go's glm-5.3-flash,
                 // 2026-09-30: `json: unknown field "thinking"`). OpenCode's own
                 // client sends no reasoning options to GLM-5.3 either.
+                const budget = traits.thinkingCarriesBudget
+                    ? EFFORT_TO_BUDGET[effort as keyof typeof EFFORT_TO_BUDGET]
+                    : undefined;
                 const payload: Record<string, any> = traits.canDisableThinking
-                    ? { thinking: { type: 'enabled' } }
+                    ? {
+                          thinking: budget
+                              ? { type: 'enabled', budget_tokens: budget }
+                              : { type: 'enabled' },
+                      }
                     : {};
                 // Only brands documented to accept the PAIR get an effort.
                 // DeepSeek REQUIRES `thinking` + `reasoning_effort` together and
@@ -387,7 +395,8 @@ export const openaiModule: ProviderModule = {
             type: 'url',
             required: false,
             scope: 'top',
-            placeholder: 'https://api.openai.com/v1',
+            placeholder: OPENAI_API_BASE_URL,
+            offeredInForm: true,
         },
     ],
     providerOptionsNamespace: (id) =>
@@ -404,6 +413,30 @@ export const openaiModule: ProviderModule = {
             ? '{\n  "thinking": { "type": "enabled" }\n}'
             : '{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}',
     modelListing: openAiModelListing,
+    selfHostedEnv: (id) => {
+        if (id === 'openai') {
+            return {
+                apiKeyVars: ['API_OPEN_AI_API_KEY'],
+                baseURL: {
+                    legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                    default: 'https://api.openai.com/v1',
+                    nativeHost: 'api.openai.com',
+                },
+            };
+        }
+        if (id === 'openai_compatible') {
+            // No default: a forgotten base URL would send a third-party key to
+            // api.openai.com.
+            return {
+                apiKeyVars: ['API_OPEN_AI_API_KEY'],
+                baseURL: {
+                    legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                    required: true,
+                },
+            };
+        }
+        return null;
+    },
 };
 
 registerProvider(openaiModule);

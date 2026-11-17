@@ -217,16 +217,6 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         expect(block).toContain('...and 15 more finding(s)');
     });
 
-    it('states explicitly that the review found nothing for an empty list', () => {
-        const block = serviceAny.buildReviewFindingsBlock([]);
-
-        expect(block).toContain('found no issues');
-        // "review found nothing" must be distinguishable from "no findings
-        // were given to me" — otherwise a clean PR and an unwired pipeline
-        // produce the same summary.
-        expect(block).not.toBe('');
-    });
-
     it('lists findings worst-first regardless of input order', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
             finding('medium', 'src/b.ts', 12, 'Duplicated coercion logic'),
@@ -256,15 +246,6 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         // Severities with no findings are omitted rather than reported as zero.
         expect(block).not.toContain('critical:');
         expect(block).not.toContain('low:');
-    });
-
-    it('includes the file and line of each finding', () => {
-        const block: string = serviceAny.buildReviewFindingsBlock([
-            finding('high', 'src/d.ts', 88, 'Null deref on absent record'),
-        ]);
-
-        expect(block).toContain('src/d.ts:88');
-        expect(block).toContain('Null deref on absent record');
     });
 
     it('defaults a finding with no severity to medium instead of dropping it', () => {

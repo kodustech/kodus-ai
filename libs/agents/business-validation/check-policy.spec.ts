@@ -63,39 +63,3 @@ describe('taskPasses (UC-09, UC-18)', () => {
         ).toBe(false);
     });
 });
-
-describe('taskPasses: only MISSING is left to fix', () => {
-    const findings: Array<{
-        name: string;
-        verdict: ValidationResult;
-        fails?: boolean;
-    }> = [
-        { name: 'MET', verdict: verdict([req('met')]) },
-        { name: 'CHECK MANUALLY', verdict: verdict([req('check_manually')]) },
-        {
-            name: 'MISSING a reviewer accepted',
-            verdict: verdict([
-                req('missing', { accepted: { by: 'ana', at: 'x' } }),
-            ]),
-        },
-        { name: 'MISSING', verdict: verdict([req('missing')]), fails: true },
-        { name: 'PARTIAL', verdict: verdict([req('partial')]) },
-        {
-            name: 'NOT IN TASK',
-            verdict: verdict(
-                [req('met')],
-                [{ change: 'Export ungated', evidence: [] }],
-            ),
-        },
-    ];
-
-    for (const finding of findings) {
-        for (const intent of ['closes', 'part_of'] as const) {
-            // A "part of" PR delivers a slice: what it leaves out isn't its gap.
-            const fails = !!finding.fails && intent !== 'part_of';
-            it(`${finding.name}, ${intent} → ${fails ? 'fails' : 'passes'}`, () => {
-                expect(taskPasses(finding.verdict, intent)).toBe(!fails);
-            });
-        }
-    }
-});

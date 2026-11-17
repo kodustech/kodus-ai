@@ -4,13 +4,22 @@ import "@testing-library/jest-dom";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import {
     CommentsAndModel,
     FilesAndKnowledge,
     InstructionsCard,
 } from "./agent-sections";
+
+// The knowledge card lists other repositories through the resolve endpoint.
+jest.mock("@services/custom-agents/hooks", () => ({
+    useResolveCustomAgent: () => ({
+        isLoading: false,
+        isFetching: false,
+        data: undefined,
+    }),
+}));
 
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: jest.fn(),
@@ -40,6 +49,35 @@ const agent: CustomAgent = {
 };
 
 describe("InstructionsCard", () => {
+    it("defaults existing agents to every matching PR and saves only the new run condition", () => {
+        const change = jest.fn();
+        render(<InstructionsCard agent={agent} canEdit onChange={change} />);
+        fireEvent.click(
+            screen.getByRole("button", { name: "When risk is found" }),
+        );
+        expect(change.mock.calls[0][0](agent)).toEqual({
+            ...agent,
+            runWhen: "risk-found",
+        });
+    });
+
+    it("shows the risk requirement and keeps inherited settings read-only", () => {
+        render(
+            <InstructionsCard
+                agent={{ ...agent, runWhen: "risk-found" }}
+                canEdit={false}
+                onChange={jest.fn()}
+            />,
+        );
+        expect(
+            screen.getByText(
+                "Requires confirmed PR risk. Manual commands still run.",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "When risk is found" }),
+        ).toBeDisabled();
+    });
     it("shows a name error inline and marks the field invalid", () => {
         render(
             <InstructionsCard
@@ -77,16 +115,6 @@ const renderFiles = (scope: CustomAgent["scope"]) =>
     );
 
 describe("FilesAndKnowledge", () => {
-    it("names the globs 'Files' and links the skills & docs page", () => {
-        renderFiles({});
-        expect(screen.getByLabelText("Files")).toBeInTheDocument();
-        expect(screen.queryByText("Runs on")).toBeNull();
-        expect(screen.queryByText("Follows")).toBeNull();
-        expect(
-            screen.getByRole("link", { name: "Manage skills & docs" }),
-        ).toHaveAttribute("href", "/settings/code-review/repo-1/skills");
-    });
-
     it("explains that brackets and parentheses also match literally", () => {
         renderFiles({ include: ["src/app/(shop)/[id]/**"] });
         expect(screen.getByRole("note")).toHaveTextContent(

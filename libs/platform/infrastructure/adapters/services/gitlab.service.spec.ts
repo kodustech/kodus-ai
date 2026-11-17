@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { GitlabService } from './gitlab.service';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('axios');
@@ -73,6 +74,35 @@ describe('GitlabService', () => {
                 body: 'Automatic approval held',
             }),
         ).resolves.toBeNull();
+    });
+
+    // A rate-limit error has no `cause`; reading `cause.description` threw a
+    // TypeError, so the comment publisher never saw the 429.
+    it('surfaces a rate-limited inline comment as a 429, not a TypeError', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const rateLimited = Object.assign(
+            new Error('GitLab answered HTTP 429; retry after 30s'),
+            { name: 'GitbeakerRetryError', status: 429, retryAfterMs: 30_000 },
+        );
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequests: {
+                allDiffVersions: jest.fn().mockRejectedValue(rateLimited),
+            },
+        });
+
+        const error = await service
+            .createReviewComment({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                lineComment: { path: 'a.ts', line: 1, body: 'x' },
+            })
+            .catch((e) => e);
+
+        expect(error).not.toBeInstanceOf(TypeError);
+        expect(error.status).toBe(429);
+        expect(error.retryAfterMs).toBe(30_000);
+        expect(error.errorType).toBe('failed');
     });
 
     it('posts status as a plain note and PR-level findings as discussions', async () => {
@@ -235,6 +265,7 @@ describe('GitlabService', () => {
             host: 'https://gitlab.example.com',
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     });
 

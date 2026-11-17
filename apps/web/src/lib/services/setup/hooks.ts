@@ -11,8 +11,11 @@ export function useGetGithubOrganizationName() {
 }
 
 export function useGetGithubIntegrationByInstallId(installId: string) {
-    return useFetch<{ status: InstallationStatus; organizationName: string }>(
-        SETUP_PATHS.GITHUB_INTEGRATION + `?installId=${installId}`,
+    return useFetch<{ status: InstallationStatus }>(
+        SETUP_PATHS.GITHUB_INTEGRATION +
+            `?installId=${encodeURIComponent(installId)}`,
+        undefined,
+        !!installId,
     );
 }
 

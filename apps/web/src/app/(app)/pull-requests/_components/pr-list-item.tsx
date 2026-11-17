@@ -701,7 +701,8 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                 </NextLink>
 
                 {/* The approval notice is separate from review execution status.
-                    Keep it visible even if the PR has since been merged. */}
+                    Keep it visible even if the PR has since been merged.
+                    "Heavy" (review ran in heavy mode) shows in either case. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     {latest.approvalReasonDeliveryFailure && (
                         <Tooltip>
@@ -736,6 +737,11 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                             latest.automationExecution?.status || "pending",
                             latest.automationExecution?.errorMessage,
                         )
+                    )}
+                    {latest.heavy && (
+                        <Badge variant="helper" title="Reviewed in heavy mode">
+                            Heavy
+                        </Badge>
                     )}
                 </div>
             </div>
@@ -1235,7 +1241,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     CALLGRAPH_DROPPED: "Pre-computed call graph omitted",
     HUNK_HEADERS_ONLY:
         "File diffs sent as hunk headers only; agent reads on demand",
-    DIFF_TRUNCATED: "Long file diffs truncated to fit the window",
+    DIFF_TRUNCATED: "Long file diffs truncated",
     LOW_SIGNAL_FILES_DROPPED: "Low-signal files (tests, docs, styles) dropped",
     HEAVY_PASSES_SKIPPED: "Verifier / second-chance / rescue passes skipped",
     // Rendered by ProviderFallbackNotice, not the fidelity list — label kept

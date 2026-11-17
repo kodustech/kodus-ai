@@ -1,6 +1,6 @@
 ---
 name: hunk-review
-description: Interacts with live Hunk diff review sessions via CLI. Inspects review focus, navigates files and hunks, reloads session contents, and adds inline review comments. Use when the user has a Hunk session running or wants to review diffs interactively.
+description: Interacts with live Hunk diff review sessions via CLI. Inspects review focus, navigates files, hunks, and exact lines, reloads session contents, adds inline review comments, and paints attention marks on character ranges. Use when the user has a Hunk session running or wants to review diffs interactively.
 ---
 
 # Hunk Review
@@ -21,6 +21,7 @@ If no session exists, ask the user to launch Hunk in their terminal first.
 7. hunk session reload -- <command>                     # swap contents if needed
 8. hunk session comment add ...                         # leave one review note
 9. hunk session comment apply ...                       # apply many agent notes in one stdin batch
+10. hunk session highlight add ...                      # light up the exact range you are explaining
 ```
 
 ## Session selection
@@ -44,16 +45,23 @@ Use `--source` only for advanced reloads where the live session you want to cont
 
 ```bash
 hunk session list [--json]
-hunk session get (--repo . | <id>) [--json]
-hunk session context (--repo . | <id>) [--json]
-hunk session review (--repo . | <id>) [--json] [--include-patch]
+hunk session get (<session-id> | --repo <path>) [--json]
+hunk session context (<session-id> | --repo <path>) [--json]
+hunk session review (<session-id> | --repo <path>) [--include-patch] [--include-notes] [--json]
 ```
 
 - `get` shows the session `Path`, `Repo`, and `Source`, which helps when choosing between `--repo` and `--session-path`
 - `Repo` is what `--repo` matches; `Path` is what `--session-path` matches
 - `review --json` returns file and hunk structure by default; add `--include-patch` only when a caller truly needs raw unified diff text
+- `review --include-notes` also returns the live review notes alongside the file and hunk structure
 
 ### Navigate
+
+```bash
+hunk session navigate (<session-id> | --repo <path>) --file <path> (--hunk <n> | --old-line <n> | --new-line <n>) [--json]
+hunk session navigate (<session-id> | --repo <path>) --comment <id> [--json]
+hunk session navigate (<session-id> | --repo <path>) (--next-comment | --prev-comment) [--json]
+```
 
 Absolute navigation requires `--file` and exactly one of `--hunk`, `--new-line`, or `--old-line`:
 
@@ -61,6 +69,12 @@ Absolute navigation requires `--file` and exactly one of `--hunk`, `--new-line`,
 hunk session navigate --repo . --file src/App.tsx --hunk 2
 hunk session navigate --repo . --file src/App.tsx --new-line 372
 hunk session navigate --repo . --file src/App.tsx --old-line 355
+```
+
+Exact comment navigation uses the `commentId` returned by `hunk session comment list --json` and does not require `--file`:
+
+```bash
+hunk session navigate --repo . --comment comment-1
 ```
 
 Relative comment navigation jumps between annotated hunks and does not require `--file`:
@@ -72,11 +86,19 @@ hunk session navigate --repo . --prev-comment
 
 - `--hunk <n>` is 1-based
 - `--new-line` / `--old-line` are 1-based line numbers on that diff side
+- A line target lands the user's viewport on that exact line (falling back to its hunk when the line is inside a collapsed region); `--hunk` lands on the hunk
 - Use either `--next-comment` or `--prev-comment`, not both
 
 ### Reload
 
 Swaps the live session's contents. Pass a Hunk review command after `--`:
+
+```bash
+hunk session reload (<session-id> | --repo <path> | --session-path <path>) [--source <path>] [--json] -- diff [ref] [-- <pathspec...>]
+hunk session reload (<session-id> | --repo <path> | --session-path <path>) [--source <path>] [--json] -- show [ref] [-- <pathspec...>]
+```
+
+Examples:
 
 ```bash
 hunk session reload --repo . -- diff
@@ -96,20 +118,61 @@ hunk session reload --session-path /path/to/live-window --source /path/to/other-
 ### Comments
 
 ```bash
-hunk session comment add --repo . --file README.md --new-line 103 --summary "Tighten this wording" [--rationale "..."] [--author "agent"] [--focus]
-printf '%s\n' '{"comments":[{"filePath":"README.md","newLine":103,"summary":"Tighten this wording"}]}' | hunk session comment apply --repo . --stdin [--focus]
-hunk session comment list --repo . [--file README.md]
-hunk session comment rm --repo . <comment-id>
-hunk session comment clear --repo . --yes [--file README.md]
+hunk session comment add (<session-id> | --repo <path>) (--reply-to <note-id> | --file <path> (--old-line <n> | --new-line <n>)) --summary <text> [--rationale <text>] [--author <name>] [--markup <stml>] [--focus] [--json]
+hunk session comment apply (<session-id> | --repo <path>) --stdin [--focus] [--json]
+hunk session comment list (<session-id> | --repo <path>) [--file <path>] [--type <live|all|ai|agent|user>] [--json]
+hunk session comment rm (<session-id> | --repo <path>) <comment-id> [--json]
+hunk session comment clear (<session-id> | --repo <path>) [--file <path>] [--include-user|--all] --yes [--json]
 ```
 
+Examples:
+
+```bash
+hunk session comment add --repo . --file README.md --new-line 103 --summary "Tighten this wording"
+hunk session comment add --repo . --reply-to user:123 --summary "Addressed in the latest revision"
+printf '%s\n' '{"comments":[{"filePath":"README.md","newLine":103,"summary":"Tighten this wording"}]}' | hunk session comment apply --repo . --stdin
+```
+
+- Agent notes start hidden: the user sees them only after pressing `a` or setting `agent_notes = true`. `--focus` jumps to the new note (or the first note in a batch) and turns agent notes on, so pass it on the first note you leave in a session, or tell the user to press `a`
+- `comment list` shows the comments added through `hunk session comment` by default; `--type user` lists notes the user wrote with `c`, `--type ai` lists notes loaded from an `--agent-context` sidecar, `--type agent` lists agent-authored notes, and `--type all` lists every note
 - `comment add` is best for one note; `comment apply` is best when an agent already has several notes ready
-- `comment add` requires `--file`, `--summary`, and exactly one of `--old-line` or `--new-line`
-- `comment apply` payload items require `filePath`, `summary`, and exactly one target such as `hunk`, `hunkNumber`, `oldLine`, or `newLine`
+- Root `comment add` notes require `--file`, `--summary`, and exactly one of `--old-line` or `--new-line`; replies use `--reply-to <note-id>` with `--summary` and inherit the parent's anchor
+- `comment apply` items require `summary` plus either `replyTo` by itself or `filePath` with exactly one target such as `hunk`, `hunkNumber`, `oldLine`, or `newLine`
 - `comment apply` reads a JSON batch from stdin and validates the full batch before mutating the live session
-- Pass `--focus` when you want to jump to the new note or the first note in a batch
 - `comment list` and `comment clear` accept optional `--file`
 - Quote `--summary` and `--rationale` defensively in the shell
+
+### Attention marks
+
+Highlights paint character ranges inside the diff lines the user is looking at — use them to light up the exact expression you are explaining while you narrate.
+
+```bash
+hunk session highlight add (<session-id> | --repo <path>) --file <path> (--old-line <n> | --new-line <n>) --start <n> --end <n> [--tone <tone>] [--focus] [--json]
+hunk session highlight clear (<session-id> | --repo <path>) [--file <path>] [--json]
+```
+
+Examples:
+
+```bash
+hunk session highlight add --repo . --file src/App.tsx --new-line 42 --start 6 --end 19
+hunk session highlight add --repo . --file src/App.tsx --new-line 42 --start 6 --end 19 --tone warning --focus
+hunk session highlight clear --repo .
+```
+
+- `highlight add` requires `--file`, exactly one of `--old-line` or `--new-line`, and the `--start` / `--end` offsets
+- `--start` is a 0-based inclusive offset into the line's text and `--end` is exclusive, counted in UTF-16 code units — the same `[start, end)` range extensions use
+- Tones: `match` (default), `info`, `warning`, `error`, `dim`; `current` renders as reverse video and is best reserved for the one range under discussion
+- Pass `--focus` to also land the viewport on the marked line
+- Marks survive scrolling, navigation, and reloads that leave the marked file's content unchanged; a reload that changes that file drops its marks, and `highlight clear` removes them explicitly (optionally per `--file`)
+- Marks are visual only — pair them with a `comment add` when the explanation should persist as a note
+
+### Experimental rich markup notes (STML)
+
+Only use STML when `hunk session context --json` lists `stml` in `experimentalFeatures`. The user opts into that experience by launching the review with `--experimental`; do not ask a normal session to render markup.
+
+For an opted-in session, `--markup` (or a `markup` field on apply items) renders the note body as STML — a small HTML-like markup for terminal UI (boxes, rows, gauges, badges, lists, code). Keep `--summary` a real sentence: it is the fallback and the `comment list` text.
+
+Before writing markup, run `hunk markup guide` once — it has copy-paste patterns and the width rules. The session context also reports `noteMarkupWidth` (the live render width); preview with `hunk markup render - --width <that>`. Comment responses echo `markupWidth` and return `markupNotes` when markup degraded — fix what they flag.
 
 ## New files in working-tree reviews
 
@@ -137,18 +200,24 @@ Guidelines:
 
 - Work in the order that tells the clearest story, not necessarily file order
 - Navigate before commenting so the user sees the code you're discussing
+- Use `highlight add --focus` to steer the user's eyes to the exact expression while you explain it, and `highlight clear` before moving to the next topic
 - Use `comment apply` for agent-generated batches and `comment add` for one-off notes
-- Use `--focus` sparingly when the note itself should actively steer the review
+- Use `--focus` on your first note so agent notes become visible, then sparingly when a note should actively steer the review
 - Keep comments focused: intent, structure, risks, or follow-ups
 - Don't comment on every hunk -- highlight what the user wouldn't spot themselves
 
 ## Common errors
 
-- **"No visible diff file matches ..."** -- the file is not in the loaded review. Check `context`, then `reload` if needed.
-- **"No active Hunk sessions"** -- ask the user to open Hunk in their terminal.
+- **"No diff file matches ..."** -- the file is not in the loaded review. Check `context`, then `reload` if needed.
+- **"No active Hunk sessions"** -- if Hunk is visibly running, localhost may be blocked by the agent sandbox; retry with network/sandbox escalation. Otherwise ask the user to open Hunk.
 - **"Multiple active sessions match"** -- pass `<session-id>` explicitly.
-- **"No active Hunk session matches session path ..."** -- for advanced split-path reloads, verify the live window `Path` via `hunk session get` or `list`, then use `--session-path`.
+- **"No active session matches session path ..."** -- for advanced split-path reloads, verify the live window `Path` via `hunk session get` or `list`, then use `--session-path`.
 - **"Pass the replacement Hunk command after `--`"** -- include `--` before the nested `diff` / `show` command.
 - **"Pass --stdin to read batch comments from stdin JSON."** -- `comment apply` only reads its batch payload from stdin.
 - **"Specify exactly one navigation target"** -- pick one of `--hunk`, `--old-line`, or `--new-line`.
+- **"Specify exactly one comment target"** -- pass `comment add` one of `--old-line` or `--new-line`.
+- **"Specify exactly one highlight target"** -- pass `highlight add` one of `--old-line` or `--new-line`.
+- **"Highlight --end must be greater than --start"** -- offsets are `[start, end)` UTF-16 code units into the line text; end is exclusive.
 - **"Specify either --next-comment or --prev-comment, not both."** -- choose one comment-navigation direction.
+- **"The session daemon is ..."** -- a `daemon-build-mismatch` (the `--json` error carries `daemon`, `cli`, `attachedSessions`, and `recommendedAction`). Tell the user which build is newer and how many windows are attached, then **ask** before running `hunk daemon restart --yes`; never restart unprompted. After the restart, windows that failed to register attach on their own, so re-run `hunk session list` instead of relaunching anything. When `recommendedAction` is `use-newer-hunk`, the daemon is the newer build: use that Hunk instead.
+- **"Could not read the raw diff for ..."** -- the session reloaded or closed while `--include-patch` was reading it. Re-run `review`; drop `--include-patch` if you only need file and hunk structure.

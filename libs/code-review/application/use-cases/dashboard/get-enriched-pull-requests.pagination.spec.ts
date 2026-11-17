@@ -60,6 +60,7 @@ const makePrDoc = (prNumber: number) => ({
     title: `PR ${prNumber}`,
     status: 'open',
     merged: false,
+    heavy: false,
     url: `https://example.test/pr/${prNumber}`,
     baseBranchRef: 'main',
     headBranchRef: `feat/${prNumber}`,

@@ -239,17 +239,18 @@ export class BackfillHistoricalPRsUseCase {
                     };
                     const files = await with429Retry(
                         () =>
-                            this.codeManagementService.getFilesByPullRequestId(
-                                {
-                                    organizationAndTeamData,
-                                    repository: {
-                                        id: repository.id,
-                                        name: repository.name,
-                                    },
-                                    prNumber,
+                            this.codeManagementService.getFilesByPullRequestId({
+                                organizationAndTeamData,
+                                repository: {
+                                    id: repository.id,
+                                    name: repository.name,
                                 },
-                            ),
-                        { ...retryOpts, label: `backfill:getFiles PR#${prNumber}` },
+                                prNumber,
+                            }),
+                        {
+                            ...retryOpts,
+                            label: `backfill:getFiles PR#${prNumber}`,
+                        },
                     );
                     const prCommits = await with429Retry(
                         () =>
@@ -434,6 +435,7 @@ export class BackfillHistoricalPRsUseCase {
             user: {
                 id: String(pr.user?.id || ''),
                 username: pr.user?.login || pr.user?.name || '',
+                name: pr.user?.name || '',
             },
             reviewers:
                 pr.reviewers?.map((reviewer) => ({

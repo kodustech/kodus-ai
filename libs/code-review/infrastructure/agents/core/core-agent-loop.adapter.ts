@@ -21,6 +21,11 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import { isClaudeModel } from '@libs/code-review/infrastructure/agents/core/finder-model-profile';
+import {
+    withClaudeOneProblem,
+    withClaudeWritingPolicy,
+} from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
@@ -44,6 +49,8 @@ import {
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
 import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import { buildHeavyLensRun } from '@libs/ee/heavy-mode/heavy-lens-passes';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -58,6 +65,7 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import {
     AstGrepOutputLog,
+    guideSourcesFor,
     makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
     recordAstGrepOutputs,
@@ -99,6 +107,7 @@ export function finderRunEnvironment(
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
         linkedRepoAccess: secrets.linkedRepoAccess,
+        referenceRepositories: secrets.referenceRepositories,
         extraTools: secrets.extraTools,
     });
     // Without a sandbox or tools of the agent's own there are no repository
@@ -116,13 +125,22 @@ export function finderRunEnvironment(
     // Second pass for convention findings (custom agents): needs the guides
     // as they are on the target branch, so only with a sandbox that can run
     // git. Without one, convention findings fall back to HV2 like any other.
-    const readGuide =
+    const guideSources =
         input.conventionGuides !== undefined
-            ? makeTargetBranchGuideReader(
-                  secrets.remoteCommands,
-                  input.baseBranch,
+            ? guideSourcesFor(
+                  input.conventionGuides,
+                  input.conventionGuideReader,
+                  makeTargetBranchGuideReader(
+                      secrets.remoteCommands,
+                      input.baseBranch,
+                  ),
+                  makeTargetBranchGuideLister(
+                      secrets.remoteCommands,
+                      input.baseBranch,
+                  ),
               )
             : undefined;
+    const readGuide = guideSources?.readGuide;
     // What ast-grep matched in this review: a convention finding it backs
     // needs no model check.
     const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
@@ -153,8 +171,18 @@ export function finderRunEnvironment(
     // buildFinderAgentSpec adds submitResultTool to the model's tool set, so its
     // schema (~210 tokens) is part of the real overhead and must be counted too
     // — it matters on small windows where the safety margin is tight.
+    // Claude gets the WHAT/WHY/HOW writing policy (#1821), so its system
+    // prompt, and the overhead counted from it, carry the policy too.
+    // The primary decides, as it does for the finder profile: a fallback that
+    // serves a call keeps the primary's settings.
+    const claudeWording =
+        input.byokProvider === 'anthropic' ||
+        isClaudeModel(secrets.byokConfig?.model);
+    const finderSystemPrompt = claudeWording
+        ? withClaudeWritingPolicy(input.systemPrompt)
+        : input.systemPrompt;
     const overheadTokens = contextWindowTokens
-        ? estimateOverheadTokens(input.systemPrompt, [
+        ? estimateOverheadTokens(finderSystemPrompt, [
               ...tools.list(),
               submitResultTool,
           ])
@@ -198,16 +226,20 @@ export function finderRunEnvironment(
         : runner;
 
     return {
+        runner,
         tools,
         toolCache,
         isSelfContained,
         providerOptions,
         contextWindowTokens,
         overheadTokens,
+        claudeWording,
+        finderSystemPrompt,
         specModelId,
         fallbackModelId,
         finderRunner,
         readGuide,
+        listGuideDir: guideSources?.listGuideDir,
         astGrepLog,
         // What verify runs with (verifyFindings), as runFinderWithVerify gets it.
         verifyParams: {
@@ -224,6 +256,46 @@ export function finderRunEnvironment(
             usageRunName: input.usageRunName,
         },
     };
+}
+
+/**
+ * Whether a run submitted its result whole through the result tool. The
+ * runner makes an artifact of every requested result call, executed or not,
+ * so a turn cut while writing submitResult leaves one holding raw,
+ * unparseable input, an object that is no findings result (`{}`), or items
+ * recovery had to drop: only a result that arrived whole counts. The last
+ * one is the one the review publishes (extractFindings reads the last).
+ */
+function submittedWholeByTool(state: RunState): boolean {
+    const published = [...state.artifacts]
+        .reverse()
+        .find((a) => a.type === FINDER_DONE_TOOL);
+    return !!published && isWholeResult(published.payload);
+}
+
+/**
+ * Whether a run delivered a whole result: through the result tool, or written
+ * as its final answer instead of calling the tool, held to the same test (one
+ * that lost items to the schema is not whole). A final answer the provider cut
+ * (length, content filter) is not a result, however much of it parses.
+ * Reads the outcome extractFindings stamped on the state.
+ */
+function submittedWholeResult(state: RunState): boolean {
+    if (submittedWholeByTool(state)) return true;
+    const stamped = state as RunState & {
+        __findingsOutcome?: string;
+        __textResult?: unknown;
+    };
+    const finalTurn = state.steps[state.steps.length - 1];
+    const finalTurnCut =
+        !!finalTurn?.finishReason &&
+        finalTurn.finishReason !== 'stop' &&
+        finalTurn.finishReason !== 'tool-calls';
+    return (
+        stamped.__findingsOutcome === 'text' &&
+        !finalTurnCut &&
+        isWholeResult(stamped.__textResult)
+    );
 }
 
 /**
@@ -259,11 +331,15 @@ export async function runAgentLoopViaCore(
         providerOptions,
         contextWindowTokens,
         overheadTokens,
+        claudeWording,
+        finderSystemPrompt,
         specModelId,
         fallbackModelId,
-        verifyParams,
+        finderRunner,
         readGuide,
+        listGuideDir,
         astGrepLog,
+        verifyParams,
     } = finderRunEnvironment(input, secrets);
 
     const coverageLedger = new DiffCoverageLedger({
@@ -279,9 +355,10 @@ export async function runAgentLoopViaCore(
         !!input.skipHeavyPasses;
     const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
-    // The ledger is read back below for the coverage summary.
+    // Claude also gets the one-problem rule in the user prompt (#1821); every
+    // other model keeps the prompts as built.
     const finderSpec = buildFinderAgentSpec({
-        systemPrompt: input.systemPrompt,
+        systemPrompt: finderSystemPrompt,
         modelId: specModelId,
         fallbackModelId,
         usageRunName: input.usageRunName,
@@ -298,7 +375,26 @@ export async function runAgentLoopViaCore(
         providerOptions,
         acceptsRevisions: !!input.previousDecisions?.length,
         acceptsConventions: !!readGuide,
+        fullOutput: input.conventionGuides !== undefined,
     });
+    const finderPrompt = claudeWording
+        ? withClaudeOneProblem(input.userPrompt)
+        : input.userPrompt;
+
+    // Heavy mode: the M3 lenses of the categories the team has on.
+    const heavyLenses = input.heavy
+        ? buildHeavyLensRun({
+              input,
+              claudeWording,
+              isSelfContained,
+              modelId: specModelId,
+              fallbackModelId,
+              tools,
+              contextWindowTokens,
+              overheadTokens,
+              providerOptions,
+          })
+        : undefined;
 
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
@@ -346,6 +442,8 @@ export async function runAgentLoopViaCore(
           }
         : {};
 
+    // The same verifyParams the verify eval reads (evals/funnel/verify/run.js),
+    // so the eval measures what production runs.
     const r = await runFinderWithVerify(
         {
             ...verifyParams,
@@ -355,15 +453,14 @@ export async function runAgentLoopViaCore(
             skipSynthesisRescue,
             teamSystemTools: input.teamSystemTools,
             laneFocus: input.laneFocus,
+            ...(heavyLenses && { heavyLenses }),
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,
-                    listGuideDir: makeTargetBranchGuideLister(
-                        secrets.remoteCommands,
-                        input.baseBranch,
-                    ),
+                    listGuideDir,
                     guideFiles: input.conventionGuides,
                     teamInstructions: input.teamInstructions,
+                    instructionFiles: input.repoInstructions?.files,
                     astGrepLog,
                 },
             }),
@@ -377,9 +474,12 @@ export async function runAgentLoopViaCore(
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
                     input.previousDecisions,
+                    input.telemetryMetadata?.teamId,
+                    input.conventionGuides !== undefined,
+                    input.changedFiles?.map((f) => f.filename),
                 ),
         },
-        { prompt: input.userPrompt },
+        { prompt: finderPrompt },
         ctx,
     ).finally(cleanup);
 
@@ -456,6 +556,7 @@ export async function runAgentLoopViaCore(
                       droppedByQuoteCheck: r.droppedByQuoteCheck.length,
                   }),
                   droppedByEvidenceFilter: 0,
+                  verifyMs: r.verifyMs,
                   decisions: [
                       ...r.kept.map((f, i) => ({
                           index: i,
@@ -475,6 +576,16 @@ export async function runAgentLoopViaCore(
                           parseMode: d.parseMode,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
+                          droppedFinding: {
+                              oneSentenceSummary: d.finding.oneSentenceSummary,
+                              suggestionContent: d.finding.suggestionContent,
+                              relevantLinesStart: d.finding.relevantLinesStart,
+                              relevantLinesEnd: d.finding.relevantLinesEnd,
+                              label: d.finding.label,
+                              severity: d.finding.severity,
+                              producedBy: (d.finding as { producedBy?: string })
+                                  .producedBy,
+                          },
                       })),
                       ...r.unverified.map((u, i) => ({
                           index: r.kept.length + r.droppedByVerify.length + i,
@@ -491,19 +602,18 @@ export async function runAgentLoopViaCore(
     // looking: it ran out of steps, or the provider cut its turn so the tools
     // it asked for never ran (the runner records that as `tool.skipped`). A run
     // that answered in prose is not incomplete; prose recovery owns it (#2171).
-    // The runner makes an artifact of every requested result call, executed or
-    // not, so a turn cut while writing submitResult leaves one holding raw,
-    // unparseable input, an object that is no findings result (`{}`), or items
-    // recovery had to drop: only a result that arrived whole counts.
-    // The submitResult the review publishes: extractFindings reads the last.
-    const published = [...r.finderState.artifacts]
-        .reverse()
-        .find((a) => a.type === FINDER_DONE_TOOL);
-    const submitted = !!published && isWholeResult(published.payload);
+    // The result can come from any pass: a first pass whose result was
+    // unusable (no findings list, only its reasoning) followed by a synthesis
+    // rescue that submitted a whole one did deliver a result (#2384). Whether
+    // it stopped early is still the first pass's call (incompleteReason).
+    const submittedByTool = submittedWholeByTool(r.finderState);
+    const submitted = [r.finderState, ...(r.recallStates ?? [])].some(
+        submittedWholeResult,
+    );
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'
-            : !submitted &&
+            : !submittedByTool &&
                 r.finderState.status !== 'error' &&
                 r.finderState.trace.some((e) => e.kind === 'tool.skipped')
               ? 'truncated'
@@ -556,6 +666,7 @@ export async function runAgentLoopViaCore(
         }),
         coverage,
         verification,
+        recallPasses: r.passStats,
         verificationUsage: {
             inputTokens: vu.inputTokens,
             cacheReadTokens: vu.cacheReadTokens,

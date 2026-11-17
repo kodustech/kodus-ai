@@ -18,6 +18,7 @@ import {
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import { GetIntegrationGithubUseCase } from '@libs/platform/application/use-cases/github/get-integration-github';
+import { GetInstallationAuthorizationUseCase } from '@libs/platform/application/use-cases/github/get-installation-authorization.use-case';
 import { GetOrganizationNameUseCase as GetGithubOrganizationNameUseCase } from '@libs/platform/application/use-cases/github/getOrganizationName.use-case';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
@@ -31,6 +32,7 @@ export class GithubController {
     constructor(
         private readonly getIntegrationGithubUseCase: GetIntegrationGithubUseCase,
         private readonly getGithubOrganizationNameUseCase: GetGithubOrganizationNameUseCase,
+        private readonly getInstallationAuthorizationUseCase: GetInstallationAuthorizationUseCase,
     ) {}
 
     // Public on purpose: this endpoint is the GitHub App install callback
@@ -39,18 +41,38 @@ export class GithubController {
     // requiring auth would intermittently 403 the handshake. The path is
     // already listed in JwtAuthGuard.excludePaths (jwt-auth.guard.ts) for the
     // same reason; @Public() makes that decision explicit at the handler.
-    // The response only exposes the GitHub-side install status and the GitHub
-    // org login bound to the installId — no Kodus-side data, no tokens.
+    // The response only exposes the install status: the GitHub org login is
+    // left out, or any caller could map installation ids to organizations.
     @Public()
     @Get('/integration')
     @ApiOperation({
         summary: 'Get GitHub installation status by installId',
         description:
-            'Used by the GitHub App callback page to resolve the installation status and organization name after the user finishes installing the app on GitHub.',
+            'Used by the GitHub App callback page to resolve the installation status after the user finishes installing the app on GitHub.',
     })
     @ApiQuery({ name: 'installId', required: true, type: String })
     public getIntegration(@Query('installId') installId: string) {
         return this.getIntegrationGithubUseCase.execute(installId);
+    }
+
+    @Get('/installation-authorization')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Get the GitHub authorization URL for linking an installation',
+        description:
+            "Returns GitHub's authorization page for the Kodus App, with a state bound to the signed-in user. Linking an installation requires the code GitHub returns from it.",
+    })
+    @ApiQuery({ name: 'installationId', required: true, type: String })
+    public getInstallationAuthorization(
+        @Query('installationId') installationId: string,
+    ) {
+        return this.getInstallationAuthorizationUseCase.execute(installationId);
     }
 
     @Get('/organization-name')

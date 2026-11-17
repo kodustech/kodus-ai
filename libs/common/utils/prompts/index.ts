@@ -8,11 +8,12 @@ export type {
     SafeguardFeatureExtractionResult,
 } from './codeReviewSafeguardFeatures';
 export { prompt_codeReviewSafeguard_verification } from './codeReviewSafeguardVerification';
-import { prompt_validateImplementedSuggestions } from './validateImplementedSuggestions';
+import { prompt_checkSuggestionImplementation } from './checkSuggestionImplementation';
+export type { ImplementationCheckSuggestion } from './checkSuggestionImplementation';
 import { prompt_validateCodeSemantics } from './validateCodeSemantics';
 
 export {
-    prompt_validateImplementedSuggestions,
+    prompt_checkSuggestionImplementation,
     prompt_validateCodeSemantics,
     prompt_codeReviewSafeguard_system,
     prompt_codeReviewSafeguard_featureExtraction,

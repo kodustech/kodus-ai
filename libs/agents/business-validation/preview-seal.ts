@@ -1,4 +1,7 @@
-import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
+import {
+    SealedTokenError,
+    sealedTokens,
+} from '@libs/common/utils/sealed-token';
 
 /**
  * A preview the settings page can post later, as it was shown: the result is
@@ -21,39 +24,23 @@ export class PreviewSealError extends Error {
     }
 }
 
-function previewKey(): Buffer {
-    const ikm = Buffer.from(process.env.API_CRYPTO_KEY ?? '', 'hex');
-    if (ikm.length !== 32) {
-        throw new Error('API_CRYPTO_KEY must be 32 bytes in hexadecimal.');
-    }
-    return Buffer.from(hkdfSync('sha256', ikm, Buffer.alloc(0), KEY_LABEL, 32));
-}
-
-const sign = (data: string) =>
-    createHmac('sha256', previewKey()).update(data).digest('base64url');
+const tokens = sealedTokens<unknown>(KEY_LABEL, PREVIEW_TTL_MS);
 
 export function sealPreview<T>(payload: T, now = Date.now()): string {
-    const data = Buffer.from(
-        JSON.stringify({ payload, expiresAt: now + PREVIEW_TTL_MS }),
-    ).toString('base64url');
-    return `${data}.${sign(data)}`;
+    return tokens.seal(payload, now);
 }
 
 export function openPreview<T>(token: string, now = Date.now()): T {
-    const [data, signature] = token.split('.');
-    if (!data || !signature) {
-        throw new PreviewSealError('The preview is not one Kody made.');
+    try {
+        return tokens.open(token, now) as T;
+    } catch (err) {
+        if (err instanceof SealedTokenError) {
+            throw new PreviewSealError(
+                err.reason === 'expired'
+                    ? 'The preview expired: run the check again.'
+                    : 'The preview is not one Kody made.',
+            );
+        }
+        throw err;
     }
-    const expected = Buffer.from(sign(data));
-    const given = Buffer.from(signature);
-    if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
-        throw new PreviewSealError('The preview is not one Kody made.');
-    }
-    const { payload, expiresAt } = JSON.parse(
-        Buffer.from(data, 'base64url').toString('utf8'),
-    ) as { payload: T; expiresAt: number };
-    if (now > expiresAt) {
-        throw new PreviewSealError('The preview expired: run the check again.');
-    }
-    return payload;
 }

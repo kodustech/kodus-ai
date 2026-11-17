@@ -14,7 +14,10 @@ import {
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
-import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
+import {
+    is429Error,
+    with429Retry,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { GenerateKodyRulesDTO } from '@libs/core/domain/dtos/generate-kody-rules.dto';
 
 import {
@@ -709,6 +712,7 @@ export class GenerateKodyRulesUseCase {
         const settled: PromiseSettledResult<any>[] = [];
         let sampled = 0;
         let scanned = 0;
+        let rateLimited = false;
 
         for (let i = 0; i < scannable.length; i += PR_FETCH_CONCURRENCY) {
             const chunk = scannable.slice(i, i + PR_FETCH_CONCURRENCY);
@@ -729,10 +733,16 @@ export class GenerateKodyRulesUseCase {
             for (const result of chunkSettled) {
                 if (result.status === 'fulfilled') {
                     sampled += countSubstantiveComments(result.value);
+                    rateLimited ||= result.value.rateLimited;
                 }
             }
 
-            if (sampled >= TARGET_SAMPLED_COMMENTS) {
+            // The provider already refused the request rate after
+            // with429Retry waited it out. Walking on would spend the quota
+            // the customer's reviews run on (on gitlab.com it kept the token
+            // in 429 for 12 minutes and the first review was skipped), so
+            // learn from what we have.
+            if (rateLimited || sampled >= TARGET_SAMPLED_COMMENTS) {
                 break;
             }
         }
@@ -743,9 +753,10 @@ export class GenerateKodyRulesUseCase {
         if (scanned < ordered.length) {
             this.logger.log({
                 message:
-                    'Stopped sampling pull requests early (comment budget reached or scan ceiling hit)',
+                    'Stopped sampling pull requests early (comment budget reached, scan ceiling hit or provider rate-limited)',
                 context: GenerateKodyRulesUseCase.name,
                 metadata: {
+                    rateLimited,
                     organizationId: organizationAndTeamData?.organizationId,
                     pullRequestsInWindow: ordered.length,
                     pullRequestsScanned: scanned,
@@ -800,6 +811,9 @@ export class GenerateKodyRulesUseCase {
                             organizationAndTeamData,
                             repository,
                             prNumber,
+                            // Without it GitLab answers a 429 with [], and the
+                            // walk never learns it should stop.
+                            failOnError: true,
                         }),
                     { label: `genRules:getAllComments PR#${prNumber}` },
                 ),
@@ -827,6 +841,10 @@ export class GenerateKodyRulesUseCase {
 
         return {
             pr,
+            rateLimited: [generalComments, reviewComments, files].some(
+                (result) =>
+                    result.status === 'rejected' && is429Error(result.reason),
+            ),
             generalComments: this.settledOrEmpty(
                 generalComments,
                 'comments',

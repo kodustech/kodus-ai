@@ -81,9 +81,6 @@ function reviewOptionsFromEnv() {
 // instructions in reviews" is one of them (evals/repo-instructions/team-config.json).
 // The instruction files a case gives are the repository's (prOf), on either way.
 function teamOf(caseData, teamConfig = null) {
-    if (process.env.RECALL_HEAVY === '1') {
-        throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
-    }
     const memories = parseMaybeJson(caseData.memoryRules) || [];
     const reviewOptions = reviewOptionsFromEnv();
     const v2PromptOverrides = parseMaybeJson(caseData.v2PromptOverrides);
@@ -134,6 +131,8 @@ function prOf(caseData) {
         repoFiles,
         repoBase: repoFiles ? repoBase : undefined,
         targetBranchFiles: instructionFilesOf(caseData),
+        // RECALL_HEAVY=1: the review a `@kody review --heavy` comment asks for.
+        heavy: process.env.RECALL_HEAVY === '1',
     };
 }
 
@@ -225,7 +224,9 @@ class InvestigationAgentProvider {
             const permissionService = evalPermissionService(route.storedConfig);
 
             stage = 'run-review';
-            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService });
+            // RECALL_SANDBOX=none: the review production runs when no sandbox could be created.
+            const sandbox = process.env.RECALL_SANDBOX === 'none' ? 'none' : undefined;
+            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService, ...(sandbox && { sandbox }) });
             if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
             // The stage records a failed agent or step and goes on with what it has:
             // a review that failed measured the failure, not the finder.
@@ -255,6 +256,12 @@ class InvestigationAgentProvider {
                 findings: review.shipped,
                 // What the finder's loops returned, before those steps: reported next to it.
                 loopFindings: agentResult.findings?.suggestions || [],
+                // The finder pass by pass, before the
+                // verify (review-stage.js observeFinderPasses), and tokens and time per step.
+                finderPasses: review.finder || [],
+                stages: global.__EVAL_CASE_ALS?.getStore()?.byStage || null,
+                // What the dedup kept (review-stage.js), scored as its own step.
+                dedupFindings: review.dedupOut,
                 discarded: review.discarded.map((d) => ({ relevantFile: d.relevantFile, relevantLinesStart: d.relevantLinesStart, priorityStatus: d.priorityStatus })),
                 trace: {
                     steps: agentResult.steps,

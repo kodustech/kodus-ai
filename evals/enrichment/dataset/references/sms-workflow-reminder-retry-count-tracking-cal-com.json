@@ -1,0 +1,47 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "defectStatement": "The falsy-result branch increments retryCount when scheduleSMS returns undefined because SMS sending is locked. Two such skips raise retryCount above 1, causing a subsequent cron cleanup to delete the reminder even if its scheduled date is still in the future.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Do not increment retryCount when scheduling is skipped because sending is locked.",
+    "Leave skipped reminders unscheduled and eligible for later scheduling until normal expiry.",
+    "Preserve successful scheduling updates and retry counting for thrown scheduling errors."
+   ],
+   "exampleFix": "",
+   "notes": "Delete exactly lines 178–186; the existing closing brace on line 187 then closes the successful-result branch. Cleanup occurs on the run after the second counted skip."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "defectStatement": "The catch block awaits a retryCount update without handling failure of that update. If the reminder was concurrently deleted or the database operation otherwise fails, the exception escapes the loop, skipping remaining reminders and failing the cron handler.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Continue attempting to increment the affected reminder's retryCount after a caught error.",
+    "Contain failures of the retryCount update so remaining reminders can still be processed.",
+    "Preserve logging of the original scheduling error."
+   ],
+   "exampleFix": "    } catch (error) {\n      try {\n        await prisma.workflowReminder.update({\n          where: {\n            id: reminder.id,\n          },\n          data: {\n            retryCount: reminder.retryCount + 1,\n          },\n        });\n      } catch (retryError) {\n        console.log(`Error updating SMS reminder retry count with error ${retryError}`);\n      }",
+   "notes": "The original error log on line 198 remains outside the replacement. Moving that log before the update alone does not prevent batch abortion; update failures must be contained."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "defectStatement": "The catch block writes retryCount using the reminder value fetched before processing. Concurrent failures can overwrite each other's increments, undercounting retries.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Increment the persisted retryCount by one atomically when handling a failure.",
+    "Continue targeting reminder.id and awaiting the update.",
+    "Preserve the surrounding catch block and error logging."
+   ],
+   "exampleFix": "    } catch (error) {\n      await prisma.workflowReminder.update({\n        where: {\n          id: reminder.id,\n        },\n        data: {\n          retryCount: { increment: 1 },\n        },",
+   "notes": "This fixes the cited catch-block update. The analogous stale update in the else branch remains outside this anchor. The existing closing `});` is outside the replacement range and must not be duplicated."
+  }
+ ]
+}

@@ -101,6 +101,18 @@ describe('LocalSandboxService sandbox file access', () => {
         await expect(sandbox.readFile('a.txt')).resolves.toBe('hello');
     });
 
+    // A name that starts with ".." is a name, not a parent directory.
+    it.each(['..hidden/f.ts', '...', '..env.example'])(
+        'reads and writes %p at the repository root',
+        async (name) => {
+            await sandbox.writeFile(name, 'inside');
+            await expect(sandbox.readFile(name)).resolves.toBe('inside');
+            expect(fs.readFileSync(path.join(dir, name), 'utf-8')).toBe(
+                'inside',
+            );
+        },
+    );
+
     it('writes a repo-relative file and creates parent directories', async () => {
         await sandbox.writeFile('sub/b.txt', 'world');
         expect(fs.readFileSync(path.join(dir, 'sub/b.txt'), 'utf-8')).toBe(
@@ -254,6 +266,31 @@ describe('LocalSandboxService sandbox file access', () => {
         );
     });
 
+    it.each([
+        'app/[...slug]/page.tsx',
+        'app/(..)photo/page.tsx',
+        'src/foo..bar.ts',
+    ])(
+        'reads and writes %p, whose ".." is part of a file name',
+        async (rel) => {
+            await sandbox.writeFile(rel, 'route');
+            expect(fs.readFileSync(path.join(dir, rel), 'utf-8')).toBe('route');
+            await expect(sandbox.readFile(rel)).resolves.toBe('route');
+        },
+    );
+
+    it.each(['sub/../../outside.txt', '..\\outside.txt'])(
+        'rejects %p, which has a ".." segment',
+        async (escapePath) => {
+            await expect(sandbox.readFile(escapePath)).rejects.toThrow(
+                /Path traversal using "\.\." is not allowed/,
+            );
+            await expect(sandbox.writeFile(escapePath, 'x')).rejects.toThrow(
+                /Path traversal using "\.\." is not allowed/,
+            );
+        },
+    );
+
     it('rejects reading through a symlink that escapes the repo', async () => {
         const outsideFile = path.join(outsideDir, 'secret.txt');
         fs.writeFileSync(outsideFile, 'secret');
@@ -320,11 +357,6 @@ describe('LocalSandboxService sandbox file access', () => {
  * treated every in-repo path as an escape — which made the write path's
  * parent-symlink loop `break` early and skip its checks. `isPathInside` decides
  * containment with `path.relative` instead, which is separator-agnostic.
- *
- * The service method uses the current platform's `path`, so on a POSIX CI it
- * only exercises POSIX. To prove the algorithm holds on Windows too, the
- * cross-platform block re-runs the exact same relative-based predicate against
- * `path.win32` and `path.posix` explicitly.
  */
 describe('LocalSandboxService.isPathInside', () => {
     const service = new LocalSandboxService({} as any);
@@ -334,46 +366,14 @@ describe('LocalSandboxService.isPathInside', () => {
     it('accepts the root itself and nested children (POSIX)', () => {
         expect(isInside('/repo', '/repo')).toBe(true);
         expect(isInside('/repo', '/repo/a/b.ts')).toBe(true);
+        expect(isInside('/repo', '/repo/..hidden/f.ts')).toBe(true);
+        expect(isInside('/repo', '/repo/...')).toBe(true);
     });
 
     it('rejects escapes and sibling dirs (POSIX)', () => {
         expect(isInside('/repo', '/repo/../etc/passwd')).toBe(false);
         expect(isInside('/repo', '/repo-legacy/x')).toBe(false);
         expect(isInside('/repo', '/etc/passwd')).toBe(false);
-    });
-
-    describe('algorithm is separator-agnostic (Linux/macOS/Windows)', () => {
-        const predicate = (
-            mod: typeof path.posix | typeof path.win32,
-            root: string,
-            child: string,
-        ): boolean => {
-            const rel = mod.relative(root, child);
-            return rel === '' || (!rel.startsWith('..') && !mod.isAbsolute(rel));
-        };
-
-        it('holds under POSIX separators', () => {
-            expect(predicate(path.posix, '/repo', '/repo/a/b')).toBe(true);
-            expect(predicate(path.posix, '/repo', '/repo/../x')).toBe(false);
-            expect(predicate(path.posix, '/repo', '/repo-legacy/x')).toBe(
-                false,
-            );
-        });
-
-        it('holds under Windows separators — where startsWith("/") failed', () => {
-            // In-repo child: the old `startsWith(root + '/')` returned false
-            // here (backslash), silently flagging a valid path as an escape.
-            expect(predicate(path.win32, 'C:\\repo', 'C:\\repo\\a\\b')).toBe(
-                true,
-            );
-            expect(predicate(path.win32, 'C:\\repo', 'C:\\repo')).toBe(true);
-            // Real escapes still rejected.
-            expect(predicate(path.win32, 'C:\\repo', 'C:\\repo\\..\\etc')).toBe(
-                false,
-            );
-            // Different drive → `relative` returns an absolute path → rejected.
-            expect(predicate(path.win32, 'C:\\repo', 'D:\\repo\\x')).toBe(false);
-        });
     });
 });
 

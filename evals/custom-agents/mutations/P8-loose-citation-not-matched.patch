@@ -1,0 +1,12 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+--- a/libs/code-review/infrastructure/agents/core/convention-check.ts
++++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
+@@ -244,7 +244,7 @@
+             }
+         }
+     }
+-    return matches.size === 1 ? [...matches][0] : f;
++    return f;
+ }
+ 
+ /** Is `file` one of the linked guides (or inside a linked skill/directory)? */

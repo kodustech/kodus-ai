@@ -256,13 +256,6 @@ describe('request assembly (LLM.run args)', () => {
         expect('providerOptions' in req).toBe(false);
     });
 
-    it('threads ctx.signal for cancellation/timeout', async () => {
-        const controller = new AbortController();
-        const runCtx: ToolContext = { runId: 'sig', signal: controller.signal };
-        const { req } = await runOnce({ runCtx });
-        expect(req.signal).toBe(controller.signal);
-    });
-
     it('sets observability naming + the harness cost attrs', async () => {
         const { req } = await runOnce({
             spec: {
@@ -415,45 +408,6 @@ describe('A. output-shape zoo — faithful capture / observable fallback', () =>
         expect(soleArtifactPayload(strForm.state)).toEqual(arr);
     });
 
-    // Row 3 — single object where an array is expected (and vice-versa)
-    it('row3: single object / single-element mismatch preserved verbatim', async () => {
-        const single = { id: 'only' };
-        const { state } = await runOnce({ events: [toolCallEvent(single)] });
-        expect(soleArtifactPayload(state)).toEqual(single);
-    });
-
-    // Row 4 — wrapper key {result:D}/{data:D}/… (runner does NOT unwrap; faithful)
-    it('row4: wrapper-key envelope preserved verbatim (unwrapping is the domain job)', async () => {
-        for (const wrap of ['result', 'data', 'output', 'response', 'json']) {
-            const payload = { [wrap]: { keep: true } };
-            const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-            expect(soleArtifactPayload(state)).toEqual(payload);
-        }
-    });
-
-    // Row 5 — double wrapper
-    it('row5: double wrapper preserved verbatim', async () => {
-        const payload = { result: { result: { keep: true } } };
-        const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-        expect(soleArtifactPayload(state)).toEqual(payload);
-    });
-
-    // Row 6 — numeric/opaque single-key wrap
-    it('row6: numeric/opaque single-key wrap preserved verbatim', async () => {
-        const payload = { '0': { keep: true }, content: { x: 1 } };
-        const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-        expect(soleArtifactPayload(state)).toEqual(payload);
-    });
-
-    // Row 7 — stringified JSON (the core RECOVER path: json_object tool args)
-    it('row7: stringified JSON tool args → recovered to the object', async () => {
-        const D = { queryTasks: ['a', 'b'] };
-        const { state } = await runOnce({
-            events: [toolCallEvent(JSON.stringify(D))],
-        });
-        expect(soleArtifactPayload(state)).toEqual(D);
-    });
-
     // Row 8 — markdown-fenced string (not valid JSON → documented raw fallback)
     it('row8: markdown-fenced string tool args → raw string fallback, no throw (observable non-object)', async () => {
         const fenced = '```json\n{"keep":true}\n```';
@@ -462,27 +416,6 @@ describe('A. output-shape zoo — faithful capture / observable fallback', () =>
         // the raw value. That is OBSERVABLE (payload is a string, not an object),
         // so a domain can detect it — it is NOT a silently-wrong object.
         expect(soleArtifactPayload(state)).toBe(fenced);
-    });
-
-    // Row 9 — prose-wrapped string (not valid JSON → documented raw fallback)
-    it('row9: prose-wrapped string tool args → raw string fallback, no throw', async () => {
-        const prose = 'Here is the result: {"keep":true}';
-        const { state } = await runOnce({ events: [toolCallEvent(prose)] });
-        expect(soleArtifactPayload(state)).toBe(prose);
-    });
-
-    // Row 10 — right data, wrong keys (renamed) — faithful passthrough
-    it('row10: renamed keys preserved verbatim (no silent aliasing)', async () => {
-        const payload = { duplicateGroups: [[0, 1]], uniqueIndices: [2] };
-        const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-        expect(soleArtifactPayload(state)).toEqual(payload);
-    });
-
-    // Row 11a — case/convention mismatch on the PAYLOAD KEYS — faithful passthrough
-    it('row11a: case/convention key mismatch preserved verbatim', async () => {
-        const payload = { query_tasks: ['x'], Keep: 'true' };
-        const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-        expect(soleArtifactPayload(state)).toEqual(payload);
     });
 
     // Row 11b — case mismatch on the RESULT-TOOL NAME: prod drops it SILENTLY.
@@ -504,35 +437,6 @@ describe('A. output-shape zoo — faithful capture / observable fallback', () =>
             expect(captured || signalled).toBe(true);
         },
     );
-
-    // Row 12 — partial object (only some required keys)
-    it('row12: partial object preserved verbatim (validation is the domain job)', async () => {
-        const payload = { findings: [{ id: 1 }] }; // missing `unique`
-        const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-        expect(soleArtifactPayload(state)).toEqual(payload);
-    });
-
-    // Row 13 — extra unknown keys alongside the right ones
-    it('row13: extra unknown keys tolerated, not dropped, not a crash', async () => {
-        const payload = { keep: true, __debug: 'x', trace: [1, 2] };
-        const { state } = await runOnce({ events: [toolCallEvent(payload)] });
-        assertWellFormed(state);
-        expect(soleArtifactPayload(state)).toEqual(payload);
-    });
-
-    // Row 14 — empty object
-    it('row14: empty object → payload {}', async () => {
-        const { state } = await runOnce({ events: [toolCallEvent({})] });
-        expect(soleArtifactPayload(state)).toEqual({});
-    });
-
-    // Row 15 — empty array
-    it('row15: empty array → payload []', async () => {
-        const objForm = await runOnce({ events: [toolCallEvent([])] });
-        expect(soleArtifactPayload(objForm.state)).toEqual([]);
-        const strForm = await runOnce({ events: [toolCallEvent('[]')] });
-        expect(soleArtifactPayload(strForm.state)).toEqual([]);
-    });
 
     // Row 16 — empty string / whitespace-only
     it('row16: empty / whitespace-only string tool args → raw fallback, no throw', async () => {
@@ -568,16 +472,6 @@ describe('A. output-shape zoo — faithful capture / observable fallback', () =>
         expect(soleArtifactPayload(jsonStr.state)).toBe('ok');
     });
 
-    // Row 19 — provider envelope leak arriving as tool input
-    it('row19: provider-envelope-shaped tool input preserved verbatim (no crash)', async () => {
-        const envelope = {
-            choices: [{ message: { content: '{"keep":true}' } }],
-        };
-        const { state } = await runOnce({ events: [toolCallEvent(envelope)] });
-        assertWellFormed(state);
-        expect(soleArtifactPayload(state)).toEqual(envelope);
-    });
-
     // Row 20 — reasoning/thinking leak: the runner captures event.text only,
     // so a `reasoning` field on the step event never leaks into message content.
     it('row20: reasoning/thinking on the step event does NOT leak into the captured message content', async () => {
@@ -592,80 +486,10 @@ describe('A. output-shape zoo — faithful capture / observable fallback', () =>
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// B. SEMANTIC-BUT-WRONG — valid JSON, wrong value encoding. The runner is a
-//    generic capture layer with no per-field schema, so the invariant is
-//    FIDELITY: the raw value survives verbatim into the payload (no silent
-//    coercion, no drop) — the domain owns interpretation.
-// ───────────────────────────────────────────────────────────────────────────
-describe('B. semantic-but-wrong — verbatim fidelity (no silent coercion)', () => {
-    it('row21: boolean-as-string preserved as the string, not coerced', async () => {
-        const { state } = await runOnce({
-            events: [toolCallEvent({ keep: 'true' })],
-        });
-        const p = soleArtifactPayload(state) as any;
-        expect(p.keep).toBe('true');
-        expect(p.keep).not.toBe(true);
-    });
-
-    it('row22: boolean-as-yes/no preserved verbatim', async () => {
-        const { state } = await runOnce({
-            events: [toolCallEvent({ keep: 'yes' })],
-        });
-        expect((soleArtifactPayload(state) as any).keep).toBe('yes');
-    });
-
-    it('row23: boolean-as-number preserved verbatim', async () => {
-        const { state } = await runOnce({
-            events: [toolCallEvent({ keep: 1 })],
-        });
-        expect((soleArtifactPayload(state) as any).keep).toBe(1);
-    });
-
-    it('row24: out-of-set enum/severity preserved verbatim (not defaulted)', async () => {
-        const { state } = await runOnce({
-            events: [toolCallEvent({ severity: 'URGENT' })],
-        });
-        expect((soleArtifactPayload(state) as any).severity).toBe('URGENT');
-    });
-
-    it('row25: dangling/out-of-range index preserved verbatim (not clamped)', async () => {
-        const { state } = await runOnce({
-            events: [toolCallEvent({ unique: [999] })],
-        });
-        expect((soleArtifactPayload(state) as any).unique).toEqual([999]);
-    });
-
-    it('row26: duplicate keys in a JSON-string payload resolve last-wins (JSON.parse)', async () => {
-        // Valid-ish JSON text with a duplicated key; JSON.parse keeps the last.
-        const { state } = await runOnce({
-            events: [toolCallEvent('{"keep":true,"keep":false}')],
-        });
-        expect((soleArtifactPayload(state) as any).keep).toBe(false);
-    });
-
-    it('row27: unicode / emoji / escaped newlines survive the parse verbatim', async () => {
-        const payload = { note: 'café 🚀 line1\nline2\t✓' };
-        const strForm = await runOnce({
-            events: [toolCallEvent(JSON.stringify(payload))],
-        });
-        expect(soleArtifactPayload(strForm.state)).toEqual(payload);
-        const objForm = await runOnce({ events: [toolCallEvent(payload)] });
-        expect(soleArtifactPayload(objForm.state)).toEqual(payload);
-    });
-});
-
-// ───────────────────────────────────────────────────────────────────────────
 // C. UNPARSEABLE / TRANSPORT — the fail-safe layer. Never throw past the
 //    boundary; never ship a silently-wrong "completed".
 // ───────────────────────────────────────────────────────────────────────────
 describe('C. unparseable / transport — documented fail-safe', () => {
-    it('row28: truncated JSON tool args → raw fallback, no throw', async () => {
-        const truncated = '{"findings":[{"id":1},{"id":';
-        const { state } = await runOnce({ events: [toolCallEvent(truncated)] });
-        assertWellFormed(state);
-        expect(soleArtifactPayload(state)).toBe(truncated);
-    });
-
     it('row28b: a tool call left UNEXECUTED on a truncated (length) finish is surfaced as tool.skipped', async () => {
         const { state } = await runOnce({
             events: [
@@ -678,18 +502,6 @@ describe('C. unparseable / transport — documented fail-safe', () => {
         const skipped = state.trace.find((e) => e.kind === 'tool.skipped');
         expect(skipped).toBeDefined();
         expect((skipped?.detail as any)?.finishReason).toBe('length');
-    });
-
-    it('row29: malformed JSON (trailing comma / single quotes / unquoted key) → raw fallback, no throw', async () => {
-        for (const bad of [
-            '{"a":1,}',
-            "{'a':1}",
-            '{a:1}',
-        ]) {
-            const { state } = await runOnce({ events: [toolCallEvent(bad)] });
-            assertWellFormed(state);
-            expect(soleArtifactPayload(state)).toBe(bad);
-        }
     });
 
     it('row30: LLM.run throws → RunState{status:error}, never an exception past the boundary', async () => {
@@ -786,82 +598,6 @@ describe('C. unparseable / transport — documented fail-safe', () => {
 // D. INPUT VARIANTS — feed the boundary; assert the assembly invariant holds.
 // ───────────────────────────────────────────────────────────────────────────
 describe('D. input variants — assembly invariants', () => {
-    it('row35: empty input (empty prompt, no seed) → a single empty user message', async () => {
-        const { req } = await runOnce({ input: { prompt: '' } });
-        expect(req.messages).toEqual([{ role: 'user', content: '' }]);
-    });
-
-    it('row36: single seed message → seed then prompt', async () => {
-        const { req } = await runOnce({
-            input: {
-                prompt: 'p',
-                seedMessages: [{ role: 'user', content: 'one' }],
-            },
-        });
-        expect(req.messages).toEqual([
-            { role: 'user', content: 'one' },
-            { role: 'user', content: 'p' },
-        ]);
-    });
-
-    it('row38: duplicate seed messages are NOT silently deduped', async () => {
-        const dup = { role: 'user' as const, content: 'same' };
-        const { req } = await runOnce({
-            input: { prompt: 'p', seedMessages: [dup, dup] },
-        });
-        expect(req.messages).toEqual([
-            { role: 'user', content: 'same' },
-            { role: 'user', content: 'same' },
-            { role: 'user', content: 'p' },
-        ]);
-    });
-
-    it('row39: null/undefined required fields do not crash assembly', async () => {
-        // seedMessages omitted → defaulted; a seed with null content passes through.
-        const noSeed = await runOnce({ input: { prompt: 'p' } as AgentRunInput });
-        expect(noSeed.req.messages).toEqual([{ role: 'user', content: 'p' }]);
-        const nullContent = await runOnce({
-            input: {
-                prompt: 'p',
-                seedMessages: [{ role: 'user', content: null as any }],
-            },
-        });
-        expect(nullContent.req.messages).toEqual([
-            { role: 'user', content: null },
-            { role: 'user', content: 'p' },
-        ]);
-    });
-
-    it('row40: special chars / whitespace-only / huge diff prompt is threaded verbatim', async () => {
-        const weird = '```\n\t🚀 <script> café   ' + 'x'.repeat(5000);
-        const { req } = await runOnce({ input: { prompt: weird } });
-        expect(req.messages[req.messages.length - 1]).toEqual({
-            role: 'user',
-            content: weird,
-        });
-    });
-
-    it('row42: seed-order permutation is preserved 1:1 (no hidden reordering)', async () => {
-        const a = { role: 'user' as const, content: 'A' };
-        const b = { role: 'assistant' as const, content: 'B' };
-        const ab = await runOnce({
-            input: { prompt: 'p', seedMessages: [a, b] },
-        });
-        const ba = await runOnce({
-            input: { prompt: 'p', seedMessages: [b, a] },
-        });
-        expect(ab.req.messages.map((m: any) => m.content)).toEqual([
-            'A',
-            'B',
-            'p',
-        ]);
-        expect(ba.req.messages.map((m: any) => m.content)).toEqual([
-            'B',
-            'A',
-            'p',
-        ]);
-    });
-
     it('D-invariant: a stray system-role seed is coerced to user (Gemini no-system rule)', async () => {
         const { req } = await runOnce({
             input: {

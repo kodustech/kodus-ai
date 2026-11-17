@@ -63,6 +63,80 @@ Use a directive to say *"look here hardest"* — not *"only look here."*
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+A focus directive tells Kody *where* to look hardest. `--heavy` tells it to look *wider*: next
+to the usual review, nine specialist reviewers each read the whole diff for one kind of defect
+only:
+
+- code that says one thing and does another (names, measurements, results)
+- text that reaches a person — messages, comments, translations — disagreeing with the code
+- invalid state, broken invariants and race conditions
+- boundary, index and ordering assumptions
+- secrets and identity: comparisons, normalisation, fallbacks
+- a changed contract that a caller was not updated for
+- tests that would still pass if the behaviour they cover broke
+- data leaking into responses, logs and error messages
+- two changed files that do not agree with each other
+
+Every finding of a specialist goes through the same verification as the main review's before
+anything is posted, then through the usual deduplication and severity, so a guess that does not
+hold up is dropped like any other.
+
+### Heavy by default, or for one review
+
+The **Review mode** setting on [Code review → General](/en/how_to_use/code_review/configs/general#review-mode)
+picks how every review of a repository runs: **Balanced** (the default, the main review alone) or
+**Heavy**. It applies to automatic reviews, to `@kody review` and to `kodus review`. A flag on one
+command overrides it for that review:
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
+kodus review --heavy
+kodus review --balanced
+```
+
+`--heavy` runs a heavy review on a repository set to Balanced; `--balanced` runs a balanced review
+on a repository set to Heavy. If a command carries both, `--heavy` wins.
+
+Either flag can sit anywhere on the command line — before or after your focus text — and it is
+stripped from the directive either way, so `@kody review focus on the retry logic --heavy`
+focuses on "the retry logic".
+
+Flags combine in any order: `@kody review --heavy --force` runs a forced heavy review. On a pull
+request Kody already reviewed, a flag asking for a different mode than the last review used
+reviews the whole pull request, not only the commits since then.
+
+A dash is required: a bare `heavy` or `balanced` is read as directive text, so `@kody review heavy
+checkout path` focuses on "heavy checkout path" rather than enabling the flag.
+
+### What to expect
+
+- **Available to everyone**, on Cloud and self-hosted. No opt-in. In the CLI it needs a signed-in team (`kodus auth login`): a trial review runs without it and says so.
+- **Your categories still apply.** The specialists of a category you turned off do not run: seven
+  of them are Bug, two are Security. Kody Rules and custom agents run as they always do.
+- **It runs on the Heavy model.** Under **AI providers → Routing → Code Review**, **Model for
+  Heavy** picks the model of heavy reviews and **Model for Balanced** the one of balanced reviews.
+  With no Heavy model set, a heavy review uses the organization default. A model set for a
+  repository or directory in **Code review → General** runs both modes.
+- **It costs more and takes longer.** On our evaluation of 30 pull requests, against Balanced on
+  the same model, a heavy review took up to about twice as long and about 2.5 times the model cost
+  per pull request. It found about one more real issue every two pull requests, and posted about
+  one more comment per pull request that was not a real problem. On your own model key (BYOK) the
+  extra cost is on your provider's bill, and a provider with a low concurrency limit may queue the
+  calls.
+- **Without repository access** (no sandbox), the specialists read the diff alone, as the main
+  review does in that case.
+- The pull request list shows a **Heavy** badge on pull requests whose last review ran in heavy
+  mode.
+
+<Tip>
+  Set Heavy as the review mode of the repositories where missing something is expensive — a
+  payments service, an auth module — or ask for it with `--heavy` on a single risky change.
+</Tip>
+
 ## Writing a Good Directive
 
 - **Be specific about the area, not the verdict.** "focus on concurrency in the queue consumer" works better than "find bugs".

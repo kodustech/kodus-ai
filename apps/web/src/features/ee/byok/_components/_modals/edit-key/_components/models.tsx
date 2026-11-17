@@ -40,6 +40,7 @@ const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
 export const ByokModelSelect = ({
     excludeIds = [],
     credentialStored = false,
+    credentialId,
     lockedInUse = false,
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
@@ -49,6 +50,10 @@ export const ByokModelSelect = ({
      *  a connected provider). For a live-listing provider this lets the picker
      *  fetch the real list from the saved slot even before the user types a key. */
     credentialStored?: boolean;
+    /** The saved credential the form is using (its key field hidden). Lists
+     *  with it, ignoring any key typed earlier — needed when the provider has
+     *  several (two OpenAI-compatible gateways). */
+    credentialId?: string;
     /** True when the model being edited is referenced by Routing (default /
      *  fallback / a per-agent override). Swapping its id would silently change
      *  what runs, so the model field is read-only — tuning stays editable. */
@@ -79,6 +84,17 @@ export const ByokModelSelect = ({
         setManual(null);
     }
     const manual = manualOverride ?? autoManual;
+    // The picker's manual row passes the id typed in its search box, so the
+    // manual input opens with it instead of empty.
+    const switchToManual = (typed?: string) => {
+        if (typed) {
+            form.setValue("model", typed, {
+                shouldDirty: true,
+                shouldValidate: true,
+            });
+        }
+        setManual(true);
+    };
 
     // In use in Routing → the model identity is frozen. Show it read-only with a
     // hint pointing at where to change it, instead of the editable picker.
@@ -102,18 +118,14 @@ export const ByokModelSelect = ({
             <ModelSelectLive
                 excludeIds={excludeIds}
                 credentialStored={credentialStored}
+                credentialId={credentialId}
                 requiresBaseUrl={foundProvider.requiresBaseUrl ?? false}
-                onUseManual={() => setManual(true)}
+                onUseManual={switchToManual}
             />
         );
     }
 
-    return (
-        <ModelSelect
-            excludeIds={excludeIds}
-            onUseManual={() => setManual(true)}
-        />
-    );
+    return <ModelSelect excludeIds={excludeIds} onUseManual={switchToManual} />;
 };
 
 // Exported lightweight manual input for external fallbacks
@@ -221,7 +233,7 @@ const ModelPickerPopover = ({
     onUseManual,
 }: {
     models: LLMProviderModel[];
-    onUseManual?: () => void;
+    onUseManual?: (typed?: string) => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
     const [open, setOpen] = useState(false);
@@ -229,7 +241,15 @@ const ModelPickerPopover = ({
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
 
     return (
-        <Popover modal open={open} onOpenChange={setOpen}>
+        <Popover
+            modal
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                // A closed picker must not leave its filter text behind for the
+                // manual row to pick up the next time it opens.
+                if (!next) setSearch("");
+            }}>
             <Controller
                 name="model"
                 control={form.control}
@@ -273,6 +293,10 @@ const ModelPickerPopover = ({
                 className="w-[var(--radix-popover-trigger-width)] p-0">
                 <Command
                     filter={(value, search) => {
+                        // The manual-entry row is not a model: keep it so an id
+                        // the list does not carry can still be entered.
+                        if (value === "__manual__") return 1;
+
                         const repository = models.find((r) => r.id === value);
 
                         if (!repository) return 0;
@@ -321,6 +345,7 @@ const ModelPickerPopover = ({
                                     });
 
                                     resetErrorBoundary();
+                                    setSearch("");
                                     setOpen(false);
                                 }}>
                                 <span className="flex min-w-0 flex-col gap-0.5">
@@ -353,7 +378,8 @@ const ModelPickerPopover = ({
                             key="__manual__"
                             value="__manual__"
                             onSelect={() => {
-                                onUseManual?.();
+                                onUseManual?.(search.trim());
+                                setSearch("");
                                 setOpen(false);
                             }}>
                             <span>
@@ -377,7 +403,7 @@ const ModelSelect = ({
     onUseManual,
     excludeIds = [],
 }: {
-    onUseManual?: () => void;
+    onUseManual?: (typed?: string) => void;
     excludeIds?: string[];
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -426,11 +452,13 @@ const ModelSelectLive = ({
     onUseManual,
     excludeIds = [],
     credentialStored,
+    credentialId,
     requiresBaseUrl = false,
 }: {
-    onUseManual?: () => void;
+    onUseManual?: (typed?: string) => void;
     excludeIds?: string[];
     credentialStored: boolean;
+    credentialId?: string;
     /** A custom endpoint: nothing to ask until its base URL is typed. */
     requiresBaseUrl?: boolean;
 }) => {
@@ -444,7 +472,14 @@ const ModelSelectLive = ({
         useDebouncedValue((form.watch("baseURL") ?? "").trim(), 700) ||
         undefined;
     const typedKey = useDebouncedValue(typedKeyRaw, 700);
-    const hasKey = typedKey.length > 0;
+    // A stored credential in play wins over a key typed earlier for another
+    // endpoint: that key's field is hidden and the save will not use it.
+    const hasKey = typedKey.length > 0 && !credentialId;
+    // The credential follows the URL field at once, the URL used here only
+    // after the debounce. Wait for them to agree so a request never pairs one
+    // endpoint's credential with another endpoint's URL.
+    const rawBaseURL = (form.watch("baseURL") ?? "").trim();
+    const urlSettled = (typedBaseURL ?? "") === rawBaseURL;
 
     const typedAwsBearerRaw = (form.watch("awsBearerToken") ?? "").trim();
     const typedAwsAccessKeyIdRaw = (
@@ -470,7 +505,7 @@ const ModelSelectLive = ({
     const hasCredential =
         hasKey || hasAwsBearer || hasAwsIam || credentialStored;
     const missingBaseUrl = requiresBaseUrl && !typedBaseURL;
-    const enabled = hasCredential && !missingBaseUrl;
+    const enabled = hasCredential && !missingBaseUrl && urlSettled;
 
     const { data, isFetching, isError } = useLLMProviderModelsPreview({
         provider,
@@ -478,6 +513,9 @@ const ModelSelectLive = ({
         baseURL: typedBaseURL,
         awsBearerToken: hasAwsBearer ? typedAwsBearer : undefined,
         awsRegion: isBedrock ? typedAwsRegion || undefined : undefined,
+        // A typed key lists with itself; otherwise the server lists with the
+        // stored credential the page targets.
+        credentialId,
         enabled,
     });
 
@@ -513,7 +551,7 @@ const ModelSelectLive = ({
                         variant="tertiary"
                         size="xs"
                         className="mt-2"
-                        onClick={onUseManual}>
+                        onClick={() => onUseManual()}>
                         Type model manually
                     </Button>
                 )}
@@ -547,7 +585,7 @@ const ModelSelectLive = ({
                         variant="tertiary"
                         size="xs"
                         className="mt-2"
-                        onClick={onUseManual}>
+                        onClick={() => onUseManual()}>
                         Type model manually
                     </Button>
                 )}

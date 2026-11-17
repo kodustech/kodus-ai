@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/@kodus/cli"><img src="https://img.shields.io/npm/dm/@kodus/cli.svg" alt="npm downloads"></a>
   <a href="https://github.com/kodustech/cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/kodustech/cli" alt="license"></a>
   <a href="https://github.com/kodustech/cli"><img src="https://img.shields.io/github/stars/kodustech/cli" alt="stars"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="node version"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D22.19-brightgreen" alt="node version"></a>
 </p>
 
 <p align="center">

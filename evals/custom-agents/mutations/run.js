@@ -31,6 +31,7 @@ const args = Object.fromEntries(
 const MODEL = args.model || 'deepseek-v4-flash@fireworks';
 
 const SPEC = {
+    architectureTemplate: 'evals/custom-agents/architecture-template.spec.ts',
     provider:
         'libs/code-review/infrastructure/agents/providers/custom-agent.provider.spec.ts',
     prompt: 'libs/code-review/infrastructure/agents/prompts/prompt-builder.custom-agent.spec.ts',
@@ -42,12 +43,32 @@ const SPEC = {
     quote: 'libs/code-review/infrastructure/agents/core/convention-check.spec.ts',
     cascade:
         'libs/ee/codeBase/__tests__/directory-custom-agents-cascade.spec.ts',
+    otherRepoQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.other-repository.spec.ts',
+    otherRepoKnowledge:
+        'libs/code-review/infrastructure/agents/knowledge/other-repository-knowledge.spec.ts',
+    reviewKnowledge:
+        'libs/code-review/infrastructure/agents/knowledge/review-knowledge.spec.ts',
+    finished:
+        'libs/code-review/infrastructure/agents/core/incomplete-and-unverified.spec.ts',
+    recovery:
+        'libs/code-review/infrastructure/agents/core/finder.recovery-nulls.spec.ts',
+    localSandboxQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.local-sandbox.spec.ts',
+    instructionQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.repo-instructions.spec.ts',
+    secondPass:
+        'libs/code-review/infrastructure/agents/core/convention-second-pass.spec.ts',
 };
 
 // The cases whose checks a model-judged property owns, so its run pays only for them.
 const MODEL_CASES = {
     P1: 'money-float-tax,money-discount-decimal,money-cents-helpers,api-error-leak,api-error-contract',
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
+    P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
+    P12: 'instructions-rule-violated,instructions-rule-followed',
+    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-imports-controller,architecture-shared-component-uses-ui-primitive',
+    P14: 'code-pattern-departed,code-pattern-followed',
 };
 
 const MUTATIONS = [
@@ -101,6 +122,75 @@ const MUTATIONS = [
         patch: 'P7-directory-override-ignored.patch',
         break: "a directory's agent with an inherited id is added beside it instead of replacing it (enabled:false at a directory no longer turns it off)",
         checks: [{ jest: [SPEC.cascade] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-other-repository-guides-unread.patch',
+        break: 'the quote gate reads a guide of another repository from the reviewed one, where it is not',
+        checks: [{ jest: [SPEC.otherRepoKnowledge, SPEC.localSandboxQuote] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-loose-citation-not-matched.patch',
+        break: 'a finding citing a rules-repository guide as repo/path or the bare path is no longer matched to it',
+        checks: [{ jest: [SPEC.otherRepoQuote] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-pinned-ref-ignored.patch',
+        break: 'a skill or doc of another repository is read on its default branch even when the team pinned a branch or tag',
+        checks: [{ jest: [SPEC.otherRepoKnowledge] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-main-review-reads-other-repository.patch',
+        break: 'a guide of another repository linked to the main review reaches the built-in agents, which have no quote gate',
+        checks: [{ jest: [SPEC.reviewKnowledge] }],
+    },
+    {
+        property: 'P9',
+        patch: 'P9-first-pass-only-result.patch',
+        break: 'only the first pass can deliver the result, so a synthesis rescue that submitted a whole one is read as no result (#2384)',
+        checks: [{ jest: [SPEC.finished] }],
+    },
+    {
+        property: 'P10',
+        patch: 'P10-recovery-null-required.patch',
+        break: 'prose recovery requires the label key, so an answer with "label": null fails and asks the model again (#2384)',
+        checks: [{ jest: [SPEC.recovery] }],
+    },
+    {
+        property: 'P11',
+        patch: 'P11-local-sandbox-guides-unread.patch',
+        break: 'the quote gate reads a guide of the reviewed repository only through the sandbox command channel, which the local sandbox refuses for git, so every finding quoting it is dropped',
+        checks: [
+            { jest: [SPEC.localSandboxQuote] },
+            { model: MODEL_CASES.P11 },
+        ],
+    },
+    {
+        property: 'P12',
+        patch: 'P12-instruction-files-unquotable.patch',
+        break: 'the quote gate takes no repository instruction file as a source, so a rule quoted from the CLAUDE.md or AGENTS.md the review loaded is dropped as not a linked guide',
+        checks: [
+            { jest: [SPEC.instructionQuote, SPEC.secondPass] },
+            { model: MODEL_CASES.P12 },
+        ],
+    },
+    {
+        property: 'P13',
+        patch: 'P13-architecture-direction-rule-dropped.patch',
+        break: 'the Architecture template loses its dependency-direction rule, so an agent saved from it no longer names a domain module that depends on the web layer',
+        checks: [
+            { jest: [SPEC.architectureTemplate] },
+            { model: MODEL_CASES.P13 },
+        ],
+    },
+    {
+        property: 'P14',
+        patch: 'P14-code-file-citation-dropped.patch',
+        break: 'a convention citing a code file as the pattern goes to the quote gate again, which drops it as not a linked guide',
+        checks: [{ jest: [SPEC.secondPass] }, { model: MODEL_CASES.P14 }],
     },
 ];
 

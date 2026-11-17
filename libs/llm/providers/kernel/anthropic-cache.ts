@@ -2,10 +2,9 @@
  * The Anthropic inline prompt-cache marker.
  *
  * `{ anthropic: { cacheControl: ephemeral } }` is the `providerOptions` shape the
- * Anthropic API honors — and, per the AI SDK docs, the SAME shape the
- * Anthropic-on-Bedrock and Anthropic-on-Vertex adapters honor for Claude models.
- * Keeping ONE constructor means the three Claude paths (native / Bedrock / Vertex)
- * never drift on the marker shape; each module's `systemCacheControl` returns THIS.
+ * Anthropic API and the Anthropic-on-Vertex adapter honor for Claude models.
+ * Bedrock does NOT read it: its adapter takes `bedrock.cachePoint`, so the
+ * Bedrock module builds its own marker.
  */
 import { detectModelFamily } from './model-family';
 

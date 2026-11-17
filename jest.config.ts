@@ -4,6 +4,14 @@ const require = createRequire(import.meta.url);
 export default {
     preset: 'ts-jest',
     testEnvironment: 'node',
+    // Jest defaults to one worker per core but one: a full local run takes
+    // every core and, with the dev stack up, the machine's memory. Half the
+    // cores locally; CI runners are small, so they keep Jest's default.
+    // (Jest rejects `maxWorkers: undefined`, so CI leaves the key out.)
+    ...(process.env.CI ? {} : { maxWorkers: '50%' }),
+    // Restart a worker that holds more than 1GB between test files, so a
+    // long run does not grow until the machine swaps.
+    workerIdleMemoryLimit: '1GB',
     setupFiles: ['<rootDir>/test/jest.setup.ts'],
     moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
     // Web app deps (e.g. tiny-invariant, @radix-ui/*, class-variance-authority)
@@ -277,6 +285,9 @@ export default {
         // by the eval's simulated sandbox — their *.spec.ts files are review
         // input, not this repo's tests.
         '<rootDir>/evals/[^/]+/fixtures/',
+        // Local scratch space (gitignored): may hold old checkouts of this
+        // repo, whose specs are not this branch's tests.
+        '<rootDir>/.tmp/',
     ],
     // Resolve ESM-style .js imports to .ts files in packages
     resolver: '<rootDir>/jest-resolver.cjs',

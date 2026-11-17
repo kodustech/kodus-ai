@@ -66,6 +66,12 @@ export interface ModelReasoningTraits {
      * before this existed, so nothing changes for them.
      */
     reasoningControl?: 'thinking-toggle' | 'effort-only';
+    /** The `thinking: {type:'enabled'}` toggle carries a `budget_tokens`. The
+     *  DeepSeek hosts disagree on which control they honor (#2267): Together
+     *  REQUIRES the budget and 400s without it, Fireworks bounds reasoning by it,
+     *  api.deepseek.com accepts and ignores it and honors `reasoning_effort`.
+     *  Sending both lets each host take its own. Absent ⇒ no budget. */
+    thinkingCarriesBudget?: boolean;
     /** The effort vocabulary the brand actually implements. DeepSeek and GLM use
      *  low/high/max and do NOT accept "medium"; our 4-value scale is mapped into
      *  it by {@link compatibleEffortValue}. Absent ⇒ our own vocabulary. */
@@ -248,6 +254,7 @@ export function resolveCompatibleReasoningTraits(
             acceptsEffortWithThinking: true,
             effortScale: 'low-high-max',
             rejectsSamplingWhileThinking: true,
+            thinkingCarriesBudget: true,
         };
     }
 

@@ -1,3 +1,8 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     CommitSchema,
     ExpandedMergeRequestSchema,
@@ -122,7 +127,13 @@ import {
     isGitlabRateLimitError,
     toGitlabRateLimitError,
 } from './gitlab-rate-limit.util';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from './webhook-setup/webhook-setup';
 
 /**
  * Award emojis are the one reaction source that costs a request per comment —
@@ -382,6 +393,7 @@ export class GitlabService implements Omit<
             }),
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     }
 
@@ -1308,7 +1320,12 @@ export class GitlabService implements Omit<
                     'Failed to list repositories when creating integration',
                 context: GitlabService.name,
                 error: error,
-                metadata: params,
+                // Named fields only: authDetails carries the access and
+                // refresh tokens.
+                metadata: {
+                    host: params?.authDetails?.host,
+                    authMode: params?.authDetails?.authMode,
+                },
             });
             return {
                 success: false,
@@ -1433,6 +1450,7 @@ export class GitlabService implements Omit<
                                         ),
                                     default_branch: defaultBranch,
                                     lastActivityAt: project.last_activity_at,
+                                    ...gitlabRepositoryFlags(project),
                                 };
                             };
 
@@ -1476,6 +1494,7 @@ export class GitlabService implements Omit<
                                                 project?.path_with_namespace,
                                         ),
                                     default_branch: project?.default_branch,
+                                    ...gitlabRepositoryFlags(project),
                                 };
                             }
                         }
@@ -2313,14 +2332,21 @@ export class GitlabService implements Omit<
                 deletions: changeCount.deletes,
                 changes: changeCount.adds + changeCount.deletes,
                 patch: file.diff,
-                previous_filename: file.renamed_file ? file.old_path : undefined,
+                previous_filename: file.renamed_file
+                    ? file.old_path
+                    : undefined,
             };
         });
     }
 
     async getChangedFilesSinceLastCommit(params: any) {
-        const { organizationAndTeamData, repository, prNumber, lastCommit } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            lastCommit,
+            keepRemovedFiles,
+        } = params;
 
         const gitlabAuthDetail = await this.getAuthDetails(
             organizationAndTeamData,
@@ -2357,6 +2383,24 @@ export class GitlabService implements Omit<
             headSha,
         );
 
+        // GitLab leaves diffs out past its limits and says so here; a partial
+        // list can drop the MR's own files (#2268).
+        if (comparison.compare_timeout) {
+            this.logger.warn({
+                message: `Compare for MR!${prNumber} since ${baseSha} timed out`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseSha,
+                    headSha,
+                    reason: 'compare_timeout',
+                },
+            });
+            return null;
+        }
+
         const diffs = comparison.diffs || [];
 
         // 4. Get the MR diffs to filter out files that came from merge commits
@@ -2386,9 +2430,15 @@ export class GitlabService implements Omit<
 
         const mrFileNames = new Set(mrDiffs.map((f) => f.new_path));
 
-        // 5. Keep only files that exist in both compare AND MR diffs list
+        // 5. Keep only files that exist in both compare AND MR diffs list.
+        // A file the MR added and a later push deleted is no longer in the
+        // MR's diffs; a caller that asks for removed files gets it too.
         return diffs
-            .filter((file) => mrFileNames.has(file.new_path))
+            .filter(
+                (file) =>
+                    mrFileNames.has(file.new_path) ||
+                    (keepRemovedFiles && file.deleted_file),
+            )
             .map((file) => {
                 const changeCount = this.countChanges(file.diff);
 
@@ -2635,7 +2685,9 @@ export class GitlabService implements Omit<
                 updatedAt: discussion?.notes[0]?.updated_at,
             };
         } catch (error) {
-            const isLineMismatch = error.cause.description.includes(
+            // A rate-limit error carries no `cause`; reading it threw a
+            // TypeError that hid the 429 from the caller.
+            const isLineMismatch = !!error?.cause?.description?.includes(
                 'must be a valid line code',
             );
 
@@ -3289,6 +3341,73 @@ export class GitlabService implements Omit<
                 metadata: { organizationAndTeamData },
             });
         }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'GitLab',
+            permissionHint:
+                'Creating a project webhook needs the Maintainer or Owner role on the project.',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        let gitlabAPI: ReturnType<GitlabService['instanceGitlabApi']>;
+        const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+
+        try {
+            if (!webhookUrl) {
+                throw new Error(
+                    'The GitLab webhook URL is not configured (API_GITLAB_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            gitlabAPI = this.instanceGitlabApi(
+                await this.getAuthDetails(organizationAndTeamData),
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start GitLab webhook setup',
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
+
+        const result = await runWebhookSetup(
+            repositories,
+            (repo) =>
+                this.ensureSingleKodusHook(
+                    gitlabAPI,
+                    repo.id,
+                    webhookUrl,
+                    organizationAndTeamData,
+                ),
+            labels,
+        );
+
+        this.logger.log({
+            message: 'GitLab webhook setup finished',
+            context: GitlabService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
     }
 
     /**
@@ -4514,6 +4633,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        headSha?: string;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4527,6 +4647,7 @@ export class GitlabService implements Omit<
             await gitlabAPI.MergeRequestApprovals.approve(
                 repository.id,
                 prNumber,
+                ...(params.headSha ? [{ sha: params.headSha }] : []),
             );
 
             this.logger.log({
@@ -4544,6 +4665,7 @@ export class GitlabService implements Omit<
                 error: error,
                 metadata: params,
             });
+            if (params.headSha) throw error;
             return null;
         }
     }
@@ -4591,10 +4713,11 @@ export class GitlabService implements Omit<
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
-            await gitlabAPI.MergeRequestDiscussions.create(
+            const discussion = await gitlabAPI.MergeRequestDiscussions.create(
                 repository.id,
                 prNumber,
                 formattedBody,
@@ -4606,6 +4729,13 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService requestChangesPullRequest',
                 metadata: params,
             });
+
+            // On GitLab this discussion IS the request: it stays unresolved,
+            // and blocks the merge where every thread must be resolved, until
+            // it is resolved by id.
+            return discussion?.id
+                ? { summaryCommentId: String(discussion.id) }
+                : undefined;
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes on MR #${params.prNumber}`,
@@ -5291,6 +5421,44 @@ export class GitlabService implements Omit<
             });
 
             return false;
+        }
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!auth?.accessToken) return 'unavailable';
+            const api = this.instanceGitlabApi(auth);
+            const group = await api.Groups.show(params.team.replace(/^@/, ''));
+            const users = await api.Users.all({ username: params.author });
+            const user = users.find(
+                (candidate) =>
+                    candidate.username.toLowerCase() ===
+                    params.author.toLowerCase(),
+            );
+            if (!group?.id || !user?.id) return 'unavailable';
+            try {
+                const member = await api.GroupMembers.show(group.id, user.id, {
+                    includeInherited: true,
+                });
+                if (member.state !== 'active') return 'not-member';
+                if (
+                    member.expires_at &&
+                    new Date(member.expires_at).getTime() < Date.now()
+                )
+                    return 'not-member';
+                return member.access_level > 0 ? 'member' : 'not-member';
+            } catch (error) {
+                return providerErrorStatus(error) === 404
+                    ? 'not-member'
+                    : 'unavailable';
+            }
+        } catch {
+            return 'unavailable';
         }
     }
 
@@ -6247,4 +6415,16 @@ export class GitlabService implements Omit<
         // `getUserByUsername`.
         return null;
     }
+}
+
+function gitlabRepositoryFlags(project: {
+    archived?: boolean;
+    forked_from_project?: unknown;
+    mirror?: boolean;
+}): { archived: boolean; fork: boolean; mirror: boolean } {
+    return {
+        archived: Boolean(project?.archived),
+        fork: Boolean(project?.forked_from_project),
+        mirror: Boolean(project?.mirror),
+    };
 }

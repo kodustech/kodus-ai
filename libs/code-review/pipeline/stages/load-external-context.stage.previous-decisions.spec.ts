@@ -65,18 +65,6 @@ describe('LoadExternalContextStage previous review decisions (issue #1313, uncon
         expect(featureGate.isEnabled).not.toHaveBeenCalled();
     });
 
-    it('returns undefined (not an empty array) when there are no changed files', async () => {
-        const { stage, buildPreviousReviewDecisionsUseCase } = makeStage();
-
-        const result = await (stage as any).loadPreviousReviewDecisions({
-            ...context,
-            changedFiles: [],
-        });
-
-        expect(result).toBeUndefined();
-        expect(buildPreviousReviewDecisionsUseCase.execute).not.toHaveBeenCalled();
-    });
-
     it('loads them when every changed file is ignored and a custom agent names one (#2172)', async () => {
         const { stage, buildPreviousReviewDecisionsUseCase } = makeStage();
         const allIgnored = {

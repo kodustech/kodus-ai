@@ -20,6 +20,12 @@
  */
 export const LLM_TASK = {
     codeReview: 'codeReview',
+    /** Shared pre-review PR assessment. Inherits the org default when unset. */
+    riskAssessment: 'riskAssessment',
+    /** A heavy review (the generalist plus the M3 lenses), set in General
+     *  settings or asked with `--heavy`. `codeReview` stays the Balanced review.
+     *  Inherits the org default when unset, like every other task. */
+    codeReviewHeavy: 'codeReviewHeavy',
     /** The Kody-Rules review agent (categoryLabel 'kody_rules') — enforcing the
      *  org's authored rules on a PR. A distinct workload from the defect-finding
      *  agents (bug/perf/security/generalist) that stay under `codeReview`, so it
@@ -36,6 +42,10 @@ export const LLM_TASK = {
     /** A team-defined custom review agent finding issues (#2172). A per-agent
      *  `models.run` override wins over this task's routing. */
     customAgent: 'customAgent',
+    /** The deep scan of a whole repository (#2451): its map, lenses,
+     *  reproduction tests. A long agentic run, so a team may route it to a
+     *  model of its own. Inherits the org default when unset. */
+    securityScan: 'securityScan',
 } as const;
 
 export type LlmTask = (typeof LLM_TASK)[keyof typeof LLM_TASK];

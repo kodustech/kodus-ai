@@ -281,6 +281,26 @@ export function githubRateLimitWaitMs(
     return looksSecondary ? 60_000 : null;
 }
 
+// Which limit was hit and how far over: without these a 429 cannot tell a
+// burst from an exhausted hourly quota, or this run from another consumer of
+// the same account (2026-10-28 gitlab cell, 12 minutes of 429).
+const RATE_LIMIT_HEADERS = [
+    "retry-after",
+    "ratelimit-name",
+    "ratelimit-limit",
+    "ratelimit-observed",
+    "ratelimit-remaining",
+    "ratelimit-resettime",
+];
+
+export function describeRateLimitHeaders(headers: Headers): string {
+    const parts = RATE_LIMIT_HEADERS.flatMap((name) => {
+        const value = headers.get(name);
+        return value ? [`${name}=${value}`] : [];
+    });
+    return parts.length ? ` [${parts.join(" ")}]` : "";
+}
+
 function retryAfterMs(resp: HttpResponse<unknown>, attempt: number): number {
     const header = resp.headers.get("retry-after");
     if (header) {
@@ -309,7 +329,7 @@ export async function http<T = unknown>(
                 const delay = retryAfterMs(resp, rateLimitHits);
                 rateLimitHits++;
                 log.info(
-                    `[http] 429 on ${opts.method ?? "GET"} ${url} (rate-limit ${rateLimitHits}/${RATE_LIMIT_RETRIES}) — waiting ${delay}ms`,
+                    `[http] 429 on ${opts.method ?? "GET"} ${url} (rate-limit ${rateLimitHits}/${RATE_LIMIT_RETRIES}) — waiting ${delay}ms${describeRateLimitHeaders(resp.headers)}`,
                 );
                 await new Promise((r) => setTimeout(r, delay));
                 i--; // this loop turn didn't consume a transport retry

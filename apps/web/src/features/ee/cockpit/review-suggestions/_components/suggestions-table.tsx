@@ -23,9 +23,11 @@ import { buildReviewDeepLinkUrl } from "@services/pull-requests/utils";
 import type { SuggestionsExplorerItem } from "../../_services/analytics/review/explorer-fetch";
 import { columns } from "./columns";
 
-const statusLabel = (status: string | null) => {
-    if (status === "implemented") return "✓ implemented";
-    if (status === "partially_implemented") return "◐ partially implemented";
+const statusLabel = (item: SuggestionsExplorerItem) => {
+    if (item.implementationStatus === "implemented") return "✓ implemented";
+    if (item.implementationStatus === "partially_implemented")
+        return "◐ partially implemented";
+    if (item.notMeasured) return "? not measured";
     return "○ not implemented";
 };
 
@@ -72,9 +74,7 @@ export const SuggestionsTable = ({
                                         </span>
                                     )}
                                     <span className="text-text-tertiary text-[11px] font-semibold">
-                                        {statusLabel(
-                                            selected.implementationStatus,
-                                        )}
+                                        {statusLabel(selected)}
                                     </span>
                                 </div>
                                 <SheetTitle className="text-base leading-snug">

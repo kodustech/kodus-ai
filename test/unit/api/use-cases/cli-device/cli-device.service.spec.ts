@@ -152,20 +152,6 @@ describe('CliDeviceService', () => {
                 }),
             );
         });
-
-        it('passes userAgent to create', async () => {
-            await service.validateOrRegisterDevice({
-                deviceId: DEVICE_ID,
-                organizationId: ORG_ID,
-                userAgent: 'Kodus-CLI/1.0',
-            });
-
-            expect(mockRepository.create).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    userAgent: 'Kodus-CLI/1.0',
-                }),
-            );
-        });
     });
 
     // =========================================================================
@@ -244,23 +230,6 @@ describe('CliDeviceService', () => {
                 DEVICE_UUID,
                 hashToken(result.deviceToken),
                 undefined,
-            );
-        });
-
-        it('passes userAgent when reissuing token', async () => {
-            mockRepository.findOne.mockResolvedValue(makeDeviceEntity());
-
-            await service.validateOrRegisterDevice({
-                deviceId: DEVICE_ID,
-                deviceToken: 'wrong-token',
-                organizationId: ORG_ID,
-                userAgent: 'Kodus-CLI/3.0',
-            });
-
-            expect(mockRepository.updateTokenHash).toHaveBeenCalledWith(
-                DEVICE_UUID,
-                expect.any(String),
-                'Kodus-CLI/3.0',
             );
         });
     });

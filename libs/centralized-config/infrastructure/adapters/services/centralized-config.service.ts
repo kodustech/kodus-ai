@@ -201,10 +201,13 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 if (dirName === '.') return {}; // Global config
 
                 const directorySegments = dirName.split('/');
-                const repoName = directorySegments[0];
-                const repoId = resolvedRepoIds.get(repoName.toLowerCase());
+                const match = this.matchRepositoryPrefix(
+                    directorySegments,
+                    resolvedRepoIds,
+                );
 
-                if (!repoId) {
+                if (!match) {
+                    const repoName = directorySegments[0];
                     this.logger.warn({
                         message: `Could not resolve repository ID for repository name: ${repoName}`,
                         context: CentralizedConfigService.name,
@@ -213,7 +216,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     return null;
                 }
 
-                const remainder = directorySegments.slice(1);
+                const { repoName, repoId, remainder } = match;
 
                 // Repository root config: {repo}/kodus-config.yml
                 if (remainder.length === 0) {
@@ -265,6 +268,32 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         );
 
         return this.sortConfigFiles(configFilePaths);
+    }
+
+    /**
+     * Resolves the repository a centralized path belongs to. Repository
+     * folders are named after the stored repository name, which contains
+     * slashes on GitLab (`group/repo`, `group/subgroup/repo`), so the longest
+     * leading run of segments that matches a known name wins.
+     */
+    private matchRepositoryPrefix(
+        segments: string[],
+        resolvedRepoIds: Map<string, string>,
+    ): { repoName: string; repoId: string; remainder: string[] } | null {
+        for (let length = segments.length; length > 0; length--) {
+            const repoName = segments.slice(0, length).join('/');
+            const repoId = resolvedRepoIds.get(repoName.toLowerCase());
+
+            if (repoId) {
+                return {
+                    repoName,
+                    repoId,
+                    remainder: segments.slice(length),
+                };
+            }
+        }
+
+        return null;
     }
 
     async fetchConfigFile(params: {
@@ -1852,10 +1881,13 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     centralizedDirectoryPath = `.kody-rules/${rulesSubdir}`;
                 } else {
                     // Repository/Directory-group rules
-                    const repoName = pathSegments[0];
-                    repositoryId = resolvedRepoIds.get(repoName.toLowerCase());
+                    const match = this.matchRepositoryPrefix(
+                        pathSegments.slice(0, kodyRulesIndex),
+                        resolvedRepoIds,
+                    );
 
-                    if (!repositoryId) {
+                    if (!match) {
+                        const repoName = pathSegments[0];
                         this.logger.warn({
                             message: `Could not resolve repository ID for repository name: ${repoName}`,
                             context: CentralizedConfigService.name,
@@ -1864,10 +1896,8 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         return null;
                     }
 
-                    const directorySegments = pathSegments.slice(
-                        1,
-                        kodyRulesIndex,
-                    );
+                    const { repoName, remainder: directorySegments } = match;
+                    repositoryId = match.repoId;
 
                     if (directorySegments.length === 0) {
                         centralizedDirectoryPath = `${repoName}/.kody-rules/${rulesSubdir}`;

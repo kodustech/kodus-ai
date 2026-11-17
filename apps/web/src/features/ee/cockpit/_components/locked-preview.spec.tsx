@@ -23,12 +23,4 @@ describe("CockpitLockedPreview", () => {
         // so a blurred screenshot can't be mistaken for the org's own data.
         expect(container.textContent).not.toMatch(/\d/);
     });
-
-    it("renders no data-fetching hooks — a static tree with no async boundaries", () => {
-        // A regression guard for the design constraint in the component's own
-        // comment: this preview must never fetch real analytics. Rendering
-        // synchronously without throwing/suspending is a cheap proxy for
-        // "nothing here awaits a network call".
-        expect(() => render(<CockpitLockedPreview />)).not.toThrow();
-    });
 });

@@ -67,7 +67,7 @@ const BOUNDARIES = [
     },
     {
         phase: 'dedup',
-        files: ['libs/code-review/pipeline/stages/agent-review.stage.ts'],
+        files: ['libs/code-review/infrastructure/agents/engine/finding-dedup.ts'],
         requires: ['schema', 'shape'],
     },
     {
@@ -77,6 +77,14 @@ const BOUNDARIES = [
         ],
         requires: ['schema', 'shape'],
         note: 'off-schema output recovered by normalizeEnvelope; a failed call posts the findings it had to judge (#2097)',
+    },
+    {
+        phase: 'enrich-content',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/enrich-content.ts',
+        ],
+        requires: ['schema'],
+        note: "the finding's title, fixStatus and improvedCode in one call (#1821)",
     },
     {
         phase: 'kody-rules-shard',
@@ -151,9 +159,29 @@ const BOUNDARIES = [
     },
     {
         phase: 'approval-risk',
-        files: ['libs/code-review/domain/approval/assess-approval-risk.ts'],
+        files: [
+            'libs/code-review/domain/approval/assess-approval-risk.ts',
+            'libs/code-review/domain/risk/assess-change-risk.ts',
+        ],
         requires: ['schema'],
         note: 'invalid or unavailable risk output is held for human approval',
+    },
+    {
+        phase: 'approval-policy-eligibility',
+        files: [
+            'libs/code-review/domain/approval/assess-policy-eligibility.ts',
+        ],
+        requires: ['schema'],
+        note: 'only explicit eligibility qualifies a policy; incomplete or invalid evidence never authorizes it',
+    },
+    {
+        phase: 'pr-risk-assessment',
+        files: [
+            'libs/code-review/domain/risk/assess-pr-risk.ts',
+            'libs/code-review/domain/risk/assess-change-risk.ts',
+        ],
+        requires: ['schema'],
+        note: 'invalid or insufficient output remains unavailable; review uses its configured default and automatic approval stays blocked',
     },
     {
         phase: 'llmResponseProcessor',
@@ -173,7 +201,7 @@ const BOUNDARIES = [
             'libs/code-review/infrastructure/agents/engine/severity-prompt.ts',
         ],
         accepted: true,
-        note: 'text call; parseSeverityResponse is bespoke and degrades to all-medium (no dropped findings) — candidate to wire onto extractJsonFromText',
+        note: 'text call; parseSeverityResponse reads the last object carrying classifications (extractLastJsonObjectWith), so reasoning returned ahead of the answer does not break it; unparseable degrades to all-medium (no dropped findings)',
     },
     {
         phase: 'format-suggestion-content',
@@ -189,7 +217,7 @@ const BOUNDARIES = [
             'libs/ai-engine/infrastructure/adapters/services/reference-detector.service.ts',
         ],
         accepted: true,
-        note: 'uses a PARALLEL extractor (extractJsonFromResponse) with its OWN 42-row contract (aggressive bracket-slice + fail-safe) — tested, not a silent-loss gap; consolidating onto extractJsonFromText is a semantics migration, not a swap',
+        note: 'text call; the last object carrying the list (extractLastJsonObjectWith) when there is one, else normalizeEnvelope (bare/fenced/prose/wrapped array, a lone reference), objects only; the prompt example is dropped — an unparseable reply is unreliable and not cached',
     },
 ];
 

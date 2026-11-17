@@ -39,8 +39,8 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
      *
      * The ONE LLM.run site (reference-detector.service.ts:159) is a TEXT call —
      * it passes NO `schema`, so the model returns a raw string and the boundary
-     * parses it with `extractJsonFromResponse` (prompt-parser.utils.ts), which
-     * only accepts a top-level JSON ARRAY. The declared return is always
+     * parses it with `parseReferenceReply` (normalizeEnvelope: a bare, fenced,
+     * prose-wrapped or wrapped array, or one reference without the array). The declared return is always
      * `IDetectedReference[]`. These tests pin request assembly (exact args /
      * system / user / byokConfig threading), envelope parsing across the
      * output-shape zoo, the fail-safe layer, input variants, and the
@@ -68,8 +68,6 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
             byokConfig: SLOT,
             ...over,
         });
-
-        const REF = { fileName: 'src/utils.ts', originalText: '@src/utils.ts' };
 
         const mockRun = (value: unknown) =>
             jest.spyOn(LLM, 'run').mockResolvedValue(value as any);
@@ -154,12 +152,9 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 expect(out).toEqual([{ fileName: 'a.ts' }, { fileName: 'b.ts' }]);
             });
 
-            // row 3 — single OBJECT where D expects an ARRAY. extractJsonFromResponse
-            // returns null for a non-array, so the boundary DROPS a recoverable
-            // reference and ships [] with no signal (#1786 silent-drop class).
-            // Source: reference-detector.service.ts:176.
-            it.failing(
-                'row 3 — single object should be recovered as a 1-element array (SILENT DROP today)',
+            // row 3 — single OBJECT where D expects an ARRAY: lifted to [obj].
+            it(
+                'row 3 — single object should be recovered as a 1-element array',
                 async () => {
                     mockRun(JSON.stringify({ fileName: 'src/a.ts' }));
                     const out = await svc.detectReferences(baseParams() as any);
@@ -171,26 +166,6 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 mockRun(JSON.stringify({ result: [{ fileName: 'a.ts' }] }));
                 const out = await svc.detectReferences(baseParams() as any);
                 expect(out).toEqual([{ fileName: 'a.ts' }]);
-            });
-
-            it('row 5 — double wrapper {result:{result:[...]}}: still recovers the inner array', async () => {
-                mockRun(
-                    JSON.stringify({ result: { result: [{ fileName: 'a.ts' }] } }),
-                );
-                const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([{ fileName: 'a.ts' }]);
-            });
-
-            it('row 6 — opaque single-key wrap {"0":[...]} / {content:[...]}: recovers', async () => {
-                mockRun(JSON.stringify({ '0': [{ fileName: 'a.ts' }] }));
-                expect(await svc.detectReferences(baseParams() as any)).toEqual([
-                    { fileName: 'a.ts' },
-                ]);
-                jest.restoreAllMocks();
-                mockRun(JSON.stringify({ content: [{ fileName: 'b.ts' }] }));
-                expect(await svc.detectReferences(baseParams() as any)).toEqual([
-                    { fileName: 'b.ts' },
-                ]);
             });
 
             it('row 7 — stringified JSON (array wrapped in a JSON string): unwrap + recover', async () => {
@@ -205,25 +180,13 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 expect(out).toEqual([{ fileName: 'a.ts' }]);
             });
 
-            it('row 9 — prose-wrapped "Here is the result: [...]": bracket-slice recovers', async () => {
-                mockRun('Here is the result: [{"fileName":"a.ts"}]. Done!');
-                const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([{ fileName: 'a.ts' }]);
-            });
-
-            it('row 10 — right data, wrong keys: passes through unchanged (this layer does NOT remap/validate keys)', async () => {
-                mockRun(JSON.stringify([{ path: 'src/a.ts' }]));
-                const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([{ path: 'src/a.ts' }]);
-            });
-
             // row 11 — case/convention mismatch on the control-marker key. The
             // filter only checks lowercase filePath/fileName/originalText
             // (service:179-184), so a marker under `FileName` LEAKS through as a
             // file — the exact "@kody-sync as a file" class the service header
             // warns about. Source: reference-detector.service.ts:179-184.
-            it.failing(
-                'row 11 — control marker under a case-variant key must still be filtered (LEAKS today)',
+            it(
+                'row 11 — control marker under a case-variant key must still be filtered',
                 async () => {
                     mockRun(JSON.stringify([{ FileName: '@kody-sync' }]));
                     const out = await svc.detectReferences(baseParams() as any);
@@ -231,79 +194,10 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 },
             );
 
-            it('row 12 — partial object (only some keys): tolerated, returned as-is', async () => {
-                mockRun(JSON.stringify([{ fileName: 'src/a.ts' }]));
-                const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([{ fileName: 'src/a.ts' }]);
-            });
-
-            it('row 13 — extra unknown keys: tolerated, not crashed', async () => {
-                mockRun(
-                    JSON.stringify([
-                        { fileName: 'a.ts', originalText: '@a', weird: 123 },
-                    ]),
-                );
-                const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([
-                    { fileName: 'a.ts', originalText: '@a', weird: 123 },
-                ]);
-            });
-
-            it('row 14 — empty object {}: no array → fail-safe []', async () => {
-                mockRun('{}');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 15 — empty array []: returns []', async () => {
-                mockRun('[]');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 16 — empty / whitespace-only string: returns []', async () => {
-                mockRun('');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-                jest.restoreAllMocks();
-                mockRun('   \n  ');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 17 — null / undefined return: returns []', async () => {
-                mockRun(null);
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-                jest.restoreAllMocks();
-                mockRun(undefined);
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 18 — primitive where object expected (true / 0 / "ok"): returns []', async () => {
-                for (const v of ['true', '0', '"ok"']) {
-                    jest.restoreAllMocks();
-                    mockRun(v);
-                    expect(
-                        await svc.detectReferences(baseParams() as any),
-                    ).toEqual([]);
-                }
-            });
-
-            // row 19 — provider envelope leak {choices:[{message:{content}}]}.
-            // The bracket-slice grabs the `choices` array, so the boundary ships
-            // the RAW message object as if it were a reference (never extracts
-            // the inner content). Source: reference-detector.service.ts:175-196
-            // + prompt-parser.utils.ts bracket-slice.
-            it.failing(
-                'row 19 — provider envelope must NOT leak as a reference (recover inner payload) (LEAKS today)',
+            // row 19 — provider envelope {choices:[{message:{content}}]} written
+            // as the reply: its content is read, never shipped as a reference.
+            it(
+                'row 19 — provider envelope must NOT leak as a reference (recover inner payload)',
                 async () => {
                     mockRun(
                         JSON.stringify({
@@ -321,59 +215,159 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                     expect(out).toEqual([{ fileName: 'real.ts' }]);
                 },
             );
+        });
 
-            it('row 20 — reasoning/thinking leak before the array: bracket-slice recovers the array', async () => {
-                mockRun(
-                    '<thinking>let me look for refs</thinking>\n[{"fileName":"a.ts"}]',
-                );
+        describe('#2304 — the reply is parsed, not bracket-sliced', () => {
+            it('a single object holding an array field is one reference, not its inner array', async () => {
+                mockRun(JSON.stringify({ fileName: 'a.ts', lines: [1, 2] }));
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out).toEqual([{ fileName: 'a.ts', lines: [1, 2] }]);
+            });
+
+            it('recovers an array behind a trailing comma', async () => {
+                mockRun('[{"fileName":"a.ts"},]');
                 const out = await svc.detectReferences(baseParams() as any);
                 expect(out).toEqual([{ fileName: 'a.ts' }]);
             });
-        });
 
-        // ── B. Semantic-but-wrong (rows 21-27) ──
-        describe('B. semantic-but-wrong', () => {
-            it('row 26 — duplicate keys in a ref object: JSON last-wins, no crash', async () => {
-                mockRun('[{"fileName":"a.ts","fileName":"b.ts"}]');
+            it('recovers an array wrapped in prose', async () => {
+                mockRun('Here are the references: [{"fileName":"a.ts"}]. Done.');
                 const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([{ fileName: 'b.ts' }]);
+                expect(out).toEqual([{ fileName: 'a.ts' }]);
             });
 
-            it('row 27 — unicode / emoji / escaped newlines in string fields: preserved intact', async () => {
-                mockRun(
-                    JSON.stringify([
-                        {
-                            fileName: 'src/café_🚀.ts',
-                            originalText: '@café\nnext',
-                        },
-                    ]),
-                );
+            it('drops array items that are not references', async () => {
+                mockRun('[{"fileName":"a.ts"}, "b.ts", 3, null, {"path":"c.ts"}]');
                 const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([
-                    { fileName: 'src/café_🚀.ts', originalText: '@café\nnext' },
+                expect(out).toEqual([{ fileName: 'a.ts' }]);
+            });
+
+            it('marks an unparseable reply unreliable so it is not cached', async () => {
+                mockRun('I cannot help with that request.');
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r).toEqual({ references: [], reliable: false });
+            });
+        });
+
+        describe('#2409 — reasoning returned ahead of the answer', () => {
+            // Together cut the reasoning channel at a quoted `</think>`; the rest
+            // of the reasoning, quoting the rule and the prompt's example, came
+            // before the answer.
+            const answer =
+                '{\n  "references": [\n    {"fileName": "docs/tags.md", "originalText": "@file:docs/tags.md"}\n  ]\n}';
+            const example =
+                '{"references": [{"fileName": "file-name.ext", "originalText": "@file:file-name.ext#L10-L20"}]}';
+
+            it('reads the answer after reasoning that quotes braces and lists', async () => {
+                mockRun(
+                    '` are in @file:docs/tags.md. Shape: {fileName, originalText}; keys like [references] and `{ a: [1] }`.\nNeed valid JSON.\n\nFinal.' +
+                        answer,
+                );
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r.reliable).toBe(true);
+                expect(r.references.map((x) => x.fileName)).toEqual([
+                    'docs/tags.md',
                 ]);
+            });
+
+            it('reads the answer, not the example the reasoning quoted', async () => {
+                mockRun(`\`. Format:\n${example}\nNow the answer.\n${answer}`);
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out.map((x) => x.fileName)).toEqual(['docs/tags.md']);
+            });
+
+            it('takes the example alone for no answer, not for "no references"', async () => {
+                mockRun(example);
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r).toEqual({ references: [], reliable: false });
+            });
+
+            describe('a draft list in the reasoning never wins over the final answer', () => {
+                const draft =
+                    '{"references":[{"fileName":"docs/draft.md"}]}';
+                const final = (reply: string) => {
+                    mockRun(reply);
+                    return svc.detectReferencesWithStatus(baseParams() as any);
+                };
+
+                it('a final [] after a <think> block is a reliable "no references"', async () => {
+                    expect(
+                        await final(`<think>Consider ${draft}; actually no references.</think>\n[]`),
+                    ).toEqual({ references: [], reliable: true });
+                });
+
+                it('a final non-empty array after a <think> block', async () => {
+                    const r = await final(
+                        `<think>Consider ${draft}.</think>\n[{"fileName":"docs/tags.md","originalText":"@file:docs/tags.md"}]`,
+                    );
+                    expect(r.reliable).toBe(true);
+                    expect(r.references.map((x) => x.fileName)).toEqual(['docs/tags.md']);
+                });
+
+                it('a final items envelope after a <think> block', async () => {
+                    const r = await final(
+                        `<think>Consider ${draft}.</think>\n{"items":[{"fileName":"docs/tags.md"}]}`,
+                    );
+                    expect(r.references.map((x) => x.fileName)).toEqual(['docs/tags.md']);
+                });
+
+                it('a final [] after reasoning returned as content (no <think>)', async () => {
+                    expect(
+                        await final(`. Consider ${draft}; actually the rule cites no file.\n[]`),
+                    ).toEqual({ references: [], reliable: true });
+                });
+
+                it('an unfinished <think> holding a draft is no answer', async () => {
+                    expect(
+                        await final(`<think>Consider ${draft} and then`),
+                    ).toEqual({ references: [], reliable: false });
+                });
+            });
+
+            it('a reply ending on the example is unreliable, not an earlier list', async () => {
+                // The list before the example may be one the reasoning quoted;
+                // an unreliable answer is retried, a wrong one is cached.
+                mockRun(`${answer}\nFormat was:\n${example}`);
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r).toEqual({ references: [], reliable: false });
             });
         });
 
         // ── C. Unparseable / transport — the fail-safe layer (rows 28-34) ──
         describe('C. unparseable / transport', () => {
-            it('row 28 — truncated JSON (mid-object, no closing ]): fail-safe []', async () => {
-                mockRun('[{"fileName":"a.ts"');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 29 — malformed JSON (trailing comma / single quotes): fail-safe []', async () => {
-                mockRun('[{"fileName":"a.ts"},]');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-                jest.restoreAllMocks();
-                mockRun("[{'fileName':'a.ts'}]");
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
+            // Every reply with no recoverable array — empty, primitive, an
+            // object, truncated or malformed JSON, an {error} payload, refusal
+            // prose — fails safe to [], always an array.
+            it('fails safe to [] on every reply with no array in it', async () => {
+                for (const value of [
+                    '{}',
+                    '',
+                    '   \n  ',
+                    null,
+                    undefined,
+                    'true',
+                    '0',
+                    '"ok"',
+                    '[{"fileName":"a.ts"',
+                    "[{'fileName':'a.ts'}]",
+                    JSON.stringify({ error: 'model unavailable' }),
+                    { error: 'model unavailable' },
+                    'I cannot help with that request.',
+                ]) {
+                    jest.restoreAllMocks();
+                    mockRun(value);
+                    expect(
+                        await svc.detectReferences(baseParams() as any),
+                    ).toEqual([]);
+                }
             });
 
             it('row 30 — LLM.run throws: signals explicitly (rejects; no silent []) ', async () => {
@@ -384,81 +378,10 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                     svc.detectReferences(baseParams() as any),
                 ).rejects.toThrow('network timeout');
             });
-
-            it('row 31 — {error:...} returned as content instead of throwing: fail-safe []', async () => {
-                mockRun(JSON.stringify({ error: 'model unavailable' }));
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-                // non-string object leak guarded by extractJsonFromResponse too
-                jest.restoreAllMocks();
-                mockRun({ error: 'model unavailable' });
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 32 — empty success (content = ""): fail-safe []', async () => {
-                mockRun('');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 33 — refusal prose ("I cannot help..."): no array → fail-safe []', async () => {
-                mockRun('I cannot help with that request.');
-                expect(await svc.detectReferences(baseParams() as any)).toEqual(
-                    [],
-                );
-            });
-
-            it('row 34 — abort-signal rejection propagates (boundary threads no signal; behaves like row 30)', async () => {
-                const abortErr = new Error('The operation was aborted');
-                abortErr.name = 'AbortError';
-                jest.spyOn(LLM, 'run').mockRejectedValue(abortErr);
-                await expect(
-                    svc.detectReferences(baseParams() as any),
-                ).rejects.toThrow('The operation was aborted');
-            });
         });
 
         // ── D. Input variants (rows 35-42) ──
         describe('D. input variants', () => {
-            it('row 35 — empty input (empty promptText): still calls LLM.run once, returns []', async () => {
-                const spy = mockRun('[]');
-                const out = await svc.detectReferences(
-                    baseParams({ promptText: '' }) as any,
-                );
-                expect(spy).toHaveBeenCalledTimes(1);
-                expect(out).toEqual([]);
-            });
-
-            it('row 36 — single item: returns the one detected reference', async () => {
-                mockRun(JSON.stringify([REF]));
-                const out = await svc.detectReferences(baseParams() as any);
-                expect(out).toEqual([REF]);
-            });
-
-            it('row 37 — large input: sent in ONE call (no chunking/batching in this boundary)', async () => {
-                const spy = mockRun('[]');
-                const huge =
-                    'refer to @big.ts ' + 'x'.repeat(200_000) + ' @end.ts';
-                await svc.detectReferences(
-                    baseParams({ promptText: huge }) as any,
-                );
-                expect(spy).toHaveBeenCalledTimes(1);
-            });
-
-            it('row 38 — duplicate mentions in input: no input-dedup, single call, model output returned as-is', async () => {
-                const spy = mockRun(JSON.stringify([{ fileName: 'a.ts' }]));
-                await svc.detectReferences(
-                    baseParams({
-                        promptText: 'see @a.ts and again @a.ts',
-                    }) as any,
-                );
-                expect(spy).toHaveBeenCalledTimes(1);
-            });
-
             it('row 39 — null/undefined required fields (no org/team, no byok): does not crash, returns array', async () => {
                 mockRun('[]');
                 const spy = jest.spyOn(LLM, 'run');
@@ -487,64 +410,6 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 expect(arg.user).toContain('@real.ts');
                 expect(arg.user).toContain('🚀');
             });
-
-            it('row 42 — order permutation: boundary is order-preserving passthrough (no reordering)', async () => {
-                jest.spyOn(LLM, 'run').mockResolvedValueOnce(
-                    JSON.stringify([{ fileName: 'a' }, { fileName: 'b' }]) as any,
-                );
-                const first = await svc.detectReferences(baseParams() as any);
-                jest.spyOn(LLM, 'run').mockResolvedValueOnce(
-                    JSON.stringify([{ fileName: 'b' }, { fileName: 'a' }]) as any,
-                );
-                const second = await svc.detectReferences(baseParams() as any);
-                expect(first).toEqual([{ fileName: 'a' }, { fileName: 'b' }]);
-                expect(second).toEqual([{ fileName: 'b' }, { fileName: 'a' }]);
-            });
-        });
-
-        // ── E. Provider policy: no schema → no structured-output gate → uniform zoo ──
-        describe('E. provider policy (parse path is provider-independent)', () => {
-            // The single-object drop (row 3) must behave IDENTICALLY whether the
-            // slot is a strict-json_schema provider or a json_object-fallback
-            // one, because this boundary never passes a schema and so never hits
-            // the gate. Pinned as the CORRECT (recover) behavior under both.
-            for (const provider of ['anthropic', 'moonshotai', 'kimi', 'z-ai']) {
-                it.failing(
-                    `row 3 under ${provider} — single object should recover to a 1-element array (SILENT DROP today)`,
-                    async () => {
-                        mockRun(JSON.stringify({ fileName: 'src/a.ts' }));
-                        const out = await svc.detectReferences(
-                            baseParams({
-                                byokConfig: { provider, model: 'm' } as any,
-                            }) as any,
-                        );
-                        expect(out).toEqual([{ fileName: 'src/a.ts' }]);
-                    },
-                );
-            }
-        });
-
-        // ── Return-shape invariant: ALWAYS an array across the non-throwing zoo ──
-        describe('always returns an array (declared type invariant)', () => {
-            it.each([
-                ['exact array', '[{"fileName":"a"}]'],
-                ['empty array', '[]'],
-                ['object', '{"fileName":"a"}'],
-                ['empty object', '{}'],
-                ['primitive', 'true'],
-                ['null', null],
-                ['empty string', ''],
-                ['refusal prose', 'I cannot help.'],
-                ['truncated', '[{"fileName":'],
-                ['wrapper', '{"result":[{"fileName":"a"}]}'],
-            ])(
-                'returns an array for %s',
-                async (_label, value) => {
-                    mockRun(value);
-                    const out = await svc.detectReferences(baseParams() as any);
-                    expect(Array.isArray(out)).toBe(true);
-                },
-            );
         });
     });
 
@@ -661,11 +526,19 @@ describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
         });
     });
 
-    it('a reply that is not a JSON array is not a reliable answer', async () => {
-        run.mockResolvedValue('{"filePath":"docs/api.md"}');
+    it('a reply with no reference list is not a reliable answer', async () => {
+        run.mockResolvedValue('{"note":"nothing to see"}');
         expect(
             (await svc.detectReferencesWithStatus(params as any)).reliable,
         ).toBe(false);
+    });
+
+    it('a single reference sent without the array is a reliable answer', async () => {
+        run.mockResolvedValue('{"filePath":"docs/api.md"}');
+        expect(await svc.detectReferencesWithStatus(params as any)).toEqual({
+            references: [{ filePath: 'docs/api.md', fileName: 'docs/api.md' }],
+            reliable: true,
+        });
     });
 
     it('an empty JSON array is a reliable "no references"', async () => {
@@ -679,7 +552,7 @@ describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
     it('detectReferences keeps returning just the references', async () => {
         run.mockResolvedValue('[{"filePath":"docs/api.md"}]');
         expect(await svc.detectReferences(params as any)).toEqual([
-            { filePath: 'docs/api.md' },
+            { filePath: 'docs/api.md', fileName: 'docs/api.md' },
         ]);
     });
 });

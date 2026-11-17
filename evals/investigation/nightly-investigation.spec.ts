@@ -222,3 +222,41 @@ describe('gate refuses a judge it was not calibrated with', () => {
         expect(result.reason).toContain('gpt-5.6-luna (effort low)');
     });
 });
+
+describe('confirmation of a heavy run', () => {
+    // A heavy night is gated on evals/heavy-recall/targets.json; its
+    // confirmation must re-gate on the same floors, not the light ones.
+    it('re-gates on the floors file the first run was gated with', () => {
+        /* eslint-disable @typescript-eslint/no-var-requires */
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+        const { spawnSync } = require('child_process');
+        /* eslint-enable @typescript-eslint/no-var-requires */
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'confirm-heavy-'));
+        // Between the light floor (0.30) and the heavy one (0.40) for this model.
+        const run = {
+            model: 'deepseek-v4-flash@fireworks',
+            targets: 'evals/heavy-recall/targets.json',
+            infraBudget: 0,
+            metrics: { recall_mean: 0.35, precision_mean: 0.5, f1_mean: 0.4 },
+            tokens: { prompt: 10, completion: 1 },
+            rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.35, precision: 0.5, tpFindings: 3, fpFindings: 3, toolCalls: 40, goldenResults: [] } }],
+        };
+        const first = path.join(dir, 'first.json');
+        const second = path.join(dir, 'second.json');
+        const out = path.join(dir, 'out.json');
+        fs.writeFileSync(first, JSON.stringify(run));
+        fs.writeFileSync(second, JSON.stringify(run));
+
+        const result = spawnSync(
+            'node',
+            ['evals/investigation/confirm-gate.js', first, second, `--out=${out}`, '--set=controlled'],
+            { env: { ...process.env, JUDGE_MODEL: 'gpt-5.6-luna', JUDGE_REASONING_EFFORT: 'low' }, encoding: 'utf8' },
+        );
+
+        expect(result.status).toBe(1);
+        const gate = JSON.parse(fs.readFileSync(out, 'utf8')).gate;
+        expect(gate.checks.find((c: any) => c.name === 'recall_mean').floor).toBe(0.4);
+    });
+});

@@ -31,6 +31,12 @@ export const PipelineReasons = {
             message: 'Too Many Files',
             action: 'Reduce PR size for better review quality',
         } as PipelineReason,
+        UNREADABLE: {
+            message: 'Changes Unreadable',
+            description:
+                "The Git provider's diff of this PR could not be read in full; the review was not run",
+            action: 'Re-run the review',
+        } as PipelineReason,
     },
     COMMITS: {
         NO_NEW: {

@@ -126,6 +126,147 @@ describe('connection probe covers every registered provider', () => {
         expect(result.httpStatus).toBe(404);
     });
 
+    describe('native OpenAI on a base URL without an API version (#2150)', () => {
+        const notFound = () => {
+            const err: any = new Error('Not Found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            generateText.mockRejectedValue(err);
+        };
+
+        it('suggests /v1 when the 404 came from <host>/responses', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.code).toBe('not_found');
+            expect(result.message).toContain(
+                'https://llm-proxy.example.com/v1',
+            );
+        });
+
+        it('says nothing about a version the URL already has', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com/v1',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.message).not.toContain('/v1');
+        });
+
+        it.each([['team-review'], ['gpt-5.4-mini'], ['qwen2.5-72b']])(
+            'says nothing when the provider says model %s is missing',
+            async (model) => {
+                const err: any = new Error('Not Found');
+                err.name = 'AI_APICallError';
+                err.statusCode = 404;
+                err.responseBody = JSON.stringify({
+                    error: {
+                        message: `The model \`${model}\` does not exist or you do not have access to it.`,
+                    },
+                });
+                generateText.mockRejectedValue(err);
+                const result = await useCase().execute({
+                    provider: 'openai',
+                    apiKey: 'sk-test',
+                    baseURL: 'https://llm-proxy.example.com',
+                    model,
+                });
+
+                expect(result.message).not.toContain('/v1');
+            },
+        );
+
+        it('says nothing when the provider names the model as the cause', async () => {
+            const err: any = new Error('model_not_found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            err.responseBody = JSON.stringify({
+                error: {
+                    message:
+                        'The model `team-review` does not exist or you do not have access to it.',
+                    code: 'model_not_found',
+                },
+            });
+            generateText.mockRejectedValue(err);
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'team-review',
+            });
+
+            expect(result.code).toBe('not_found');
+            expect(result.message).not.toContain('/v1');
+        });
+
+        it('still suggests /v1 when the 404 only mentions models in passing', async () => {
+            const err: any = new Error('Not Found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            err.responseBody = JSON.stringify({
+                error: { message: 'Unknown route. Try /v1/models or /v1/responses.' },
+            });
+            generateText.mockRejectedValue(err);
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.message).toContain('https://llm-proxy.example.com/v1');
+        });
+
+        it('still suggests /v1 when the 404 says a route does not exist', async () => {
+            const err: any = new Error('Not Found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            err.responseBody = JSON.stringify({
+                error: { message: 'Route /responses does not exist.' },
+            });
+            generateText.mockRejectedValue(err);
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.message).toContain('https://llm-proxy.example.com/v1');
+        });
+
+        it('suggests /v1 on an OpenAI-compatible endpoint too', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai_compatible',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'some-model',
+            });
+
+            expect(result.message).toContain('https://llm-proxy.example.com/v1');
+        });
+
+        it('says nothing on a direct key, which has no base URL', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                model: 'nope',
+            });
+
+            expect(result.message).not.toContain('/v1');
+        });
+    });
+
     it('treats a bad key as an auth failure', async () => {
         const err: any = new Error('invalid api key');
         err.name = 'AI_APICallError';

@@ -126,6 +126,33 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Read off production (#2104): Z.AI's weekly/monthly cap (code 1310)
+        // says neither quota nor balance, so it landed on RATE_LIMIT. A
+        // one-shot call (maxRetries: 0) never fails over on RATE_LIMIT, and the
+        // configured fallback sat unused until the cap reset.
+        it('reads the Z.AI weekly/monthly cap as a spent quota and fails over', () => {
+            const err = errorWithStatus(
+                'Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-10 21:00:06',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(true);
+        });
+
+        // Its neighbour, Z.AI code 1308, is a window that reopens within hours.
+        // It stays a rate limit, the cheap direction to be wrong in.
+        it('keeps the Z.AI short-window usage limit on RATE_LIMIT', () => {
+            const err = errorWithStatus(
+                'Usage limit reached for 5 hour. Your limit will reset at 2026-10-10 21:00:06',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
         it('treats plain 429 → RATE_LIMIT', () => {
             const err = errorWithStatus('too many requests', 429);
             expect(classifyLLMError(err).category).toBe(
@@ -141,7 +168,9 @@ describe('classifyLLMError', () => {
 
         it('reads a Google per-minute token quota on a 429 as RATE_LIMIT', () => {
             const err = errorWithStatus(
-                googleQuota('GenerateContentPaidTierInputTokensPerModelPerMinute'),
+                googleQuota(
+                    'GenerateContentPaidTierInputTokensPerModelPerMinute',
+                ),
                 429,
             );
             expect(classifyLLMError(err).category).toBe(
@@ -151,7 +180,9 @@ describe('classifyLLMError', () => {
 
         it('keeps a Google daily quota on a 429 as QUOTA_EXCEEDED', () => {
             const err = errorWithStatus(
-                googleQuota('GenerateRequestsPerDayPerProjectPerModel-FreeTier'),
+                googleQuota(
+                    'GenerateRequestsPerDayPerProjectPerModel-FreeTier',
+                ),
                 429,
             );
             expect(classifyLLMError(err).category).toBe(
@@ -222,6 +253,16 @@ describe('classifyLLMError', () => {
         it('reads the HTTP status from the last attempt', () => {
             const err = exhausted(apiError(503, 'Service Unavailable'));
             expect(classifyLLMError(err).httpStatus).toBe(503);
+        });
+
+        // Production 2026-10-29: an OpenAI-compatible gateway answers 499 when
+        // its upstream drops the request. Read as UNKNOWN it got no same-model
+        // retry and no failover, and the file's review was lost.
+        it('a gateway 499 (upstream cancelled) → TRANSIENT', () => {
+            const err = exhausted(apiError(499, 'status code 499'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
         });
 
         it('a 404 on every attempt → MODEL_NOT_FOUND', () => {
@@ -319,6 +360,16 @@ describe('classifyLLMError', () => {
             const err = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',
             );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
+        // Production 2026-10-29: a gateway caps the request body instead of
+        // the token count. Read as UNKNOWN, the PR summary never retried on a
+        // smaller budget and failed outright.
+        it('"total text input size exceeds 8 MB" → CONTEXT_OVERFLOW', () => {
+            const err = new Error('The total text input size exceeds 8 MB');
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.CONTEXT_OVERFLOW,
             );
@@ -530,12 +581,15 @@ describe('classifyLLMError', () => {
             'the upstream returned status=503',
             'a JSON body {"code":503} came back from the proxy',
             'a JSON body {"statusCode":503} came back from the proxy',
-        ])('status keyword/word-glued 5xx without a real status (%s) → not TRANSIENT', (msg) => {
-            const err = new Error(msg);
-            expect(classifyLLMError(err).category).not.toBe(
-                LlmErrorCategory.TRANSIENT,
-            );
-        });
+        ])(
+            'status keyword/word-glued 5xx without a real status (%s) → not TRANSIENT',
+            (msg) => {
+                const err = new Error(msg);
+                expect(classifyLLMError(err).category).not.toBe(
+                    LlmErrorCategory.TRANSIENT,
+                );
+            },
+        );
 
         it('unrecognized message → UNKNOWN', () => {
             const err = new Error('something weird happened in the SDK');
@@ -678,6 +732,19 @@ describe('attachClassification / getClassification', () => {
         expect(retrieved?.provider).toBe('anthropic');
     });
 
+    it('classifyLLMError keeps the classification attached where the error was thrown', () => {
+        const err = attachClassification(new Error('bad env'), {
+            category: LlmErrorCategory.CONFIG_INVALID,
+            rawMessage: 'bad env',
+            friendlyMessage: 'bad env',
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+        expect(llmErrorLogLevel(err)).toBe('warn');
+        expect(shouldFailoverToNextModel(err)).toBe(false);
+    });
+
     it('returns undefined when no classification is attached', () => {
         expect(getClassification(new Error('untagged'))).toBeUndefined();
         expect(getClassification(null)).toBeUndefined();
@@ -693,5 +760,81 @@ describe('attachClassification / getClassification', () => {
         });
         expect(serialized).not.toContain('AUTH_INVALID');
         expect(serialized).not.toContain('reviewErrorClassification');
+    });
+});
+
+describe('REQUEST_REJECTED (#1687)', () => {
+    const apiError = (statusCode: number, message: string) =>
+        new APICallError({
+            message,
+            url: 'https://api.openai.com/v1/chat/completions',
+            requestBodyValues: {},
+            statusCode,
+            responseBody: JSON.stringify({ error: { message } }),
+        });
+
+    const LUNA =
+        'Function tools with reasoning_effort are not supported for gpt-5.6-luna in /v1/chat/completions';
+
+    it('classifies a 400 no other category explains, quoting the provider in the headline', () => {
+        const info = classifyLLMError(apiError(400, LUNA), 'openai');
+        expect(info.category).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        expect(info.friendlyMessage).toBe(
+            `The provider (openai) refused the request for this model: ${LUNA}`,
+        );
+    });
+
+    it.each([
+        'API key not valid. Please pass a valid API key.',
+        'API key expired. Please renew the API key.',
+        '{"reason":"API_KEY_INVALID","domain":"googleapis.com"}',
+    ])("keeps Google's 400 for a rejected key as AUTH_INVALID: %s", (msg) => {
+        expect(classifyLLMError(apiError(400, msg), 'google').category).toBe(
+            LlmErrorCategory.AUTH_INVALID,
+        );
+    });
+
+    it('treats a 422 the same way', () => {
+        expect(
+            classifyLLMError(
+                apiError(422, 'Unprocessable: unknown field "foo"'),
+            ).category,
+        ).toBe(LlmErrorCategory.REQUEST_REJECTED);
+    });
+
+    it('falls back to a sentence of its own when the provider said nothing usable', () => {
+        const info = classifyLLMError(errorWithStatus('', 400));
+        expect(info.category).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        expect(info.friendlyMessage).toBe(
+            'The provider refused the request for this model.',
+        );
+    });
+
+    it('leaves a 400 whose wording names a context overflow as CONTEXT_OVERFLOW', () => {
+        expect(
+            classifyLLMError(
+                apiError(
+                    400,
+                    "This model's maximum context length is 128000 tokens. However, your messages resulted in 200000 tokens.",
+                ),
+            ).category,
+        ).toBe(LlmErrorCategory.CONTEXT_OVERFLOW);
+    });
+
+    it('does not cascade to the fallback model and is not terminal', () => {
+        const err = apiError(400, LUNA);
+        expect(shouldFailoverToNextModel(err)).toBe(false);
+        expect(isTerminalCategory(LlmErrorCategory.REQUEST_REJECTED)).toBe(
+            false,
+        );
+    });
+
+    it('leaves non-4xx-request errors where they were', () => {
+        expect(classifyLLMError(apiError(500, 'boom')).category).toBe(
+            LlmErrorCategory.TRANSIENT,
+        );
+        expect(classifyLLMError(new Error('socket hang up')).category).not.toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
     });
 });

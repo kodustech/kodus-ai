@@ -371,6 +371,26 @@ export const anthropicModule: ProviderModule = {
               '{\n  "thinking": { "type": "enabled", "budgetTokens": 20000 }\n}'
             : '{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}',
     modelListing: anthropicModelListing,
+    selfHostedEnv: (id) => {
+        if (id === 'anthropic') {
+            // The OpenAI-named vars are left to the inference path: on a
+            // self-hosted install they usually hold an OpenAI key (embeddings)
+            // and an OpenAI-protocol proxy URL.
+            return {
+                apiKeyVars: ['API_ANTHROPIC_API_KEY'],
+                baseURL: {},
+            };
+        }
+        if (id === 'anthropic_compatible') {
+            // No fallback: API_ANTHROPIC_API_KEY holds a real Anthropic key,
+            // and this endpoint is a third party.
+            return {
+                apiKeyVars: [],
+                baseURL: { required: true },
+            };
+        }
+        return null;
+    },
 };
 
 registerProvider(anthropicModule);

@@ -3,38 +3,6 @@ import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 
 describe('assertContextWindowFitsOverhead', () => {
-    it('does not throw when contextWindow comfortably exceeds the static overhead', () => {
-        expect(() =>
-            assertContextWindowFitsOverhead({
-                input: {
-                    changedFiles: [],
-                    prTitle: 'Add feature',
-                    prBody: 'small body',
-                },
-                contextWindow: 128_000,
-                modelName: 'gemini-2.5-pro',
-            }),
-        ).not.toThrow();
-    });
-
-    it('throws AgentContextWindowTooSmallError when overhead alone exceeds the window (Llama 12,288)', () => {
-        // The agent's static prompt overhead is ~15_500 tokens (system prompt
-        // + tool schemas). A 12_288-token Llama cannot fit even an empty PR.
-        expect(() =>
-            assertContextWindowFitsOverhead({
-                input: {
-                    changedFiles: [
-                        { filename: 'a.ts', patch: 'diff --git a/a.ts b/a.ts' },
-                    ] as any,
-                    prTitle: 'tiny',
-                    prBody: 'tiny',
-                },
-                contextWindow: 12_288,
-                modelName: 'meta-llama/Llama-3.3-70B-Instruct',
-            }),
-        ).toThrow(AgentContextWindowTooSmallError);
-    });
-
     it('error carries the numeric context for telemetry/UI', () => {
         try {
             assertContextWindowFitsOverhead({

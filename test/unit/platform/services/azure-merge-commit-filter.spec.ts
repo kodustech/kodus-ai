@@ -155,12 +155,13 @@ describe('AzureReposService.getChangedFilesSinceLastCommit - merge commit filter
     function setupDiffResponse(
         changes: Array<{ path: string; changeType: string }>,
     ) {
-        mockGetDiff.mockResolvedValue(
-            changes.map((c) => ({
+        mockGetDiff.mockResolvedValue({
+            changes: changes.map((c) => ({
                 item: { path: c.path, gitObjectType: 'blob' },
                 changeType: c.changeType,
             })),
-        );
+            allChangesIncluded: true,
+        });
     }
 
     function setupFileContentResponses(contents: Record<string, string>) {
@@ -238,9 +239,12 @@ describe('AzureReposService.getChangedFilesSinceLastCommit - merge commit filter
             expect(result).toBeNull();
         });
 
-        it('should return null when no file changes exist', async () => {
+        it('should return [] when no file changes exist', async () => {
             setupPrResponse('head-hash');
-            mockGetDiff.mockResolvedValue([]);
+            mockGetDiff.mockResolvedValue({
+                changes: [],
+                allChangesIncluded: true,
+            });
 
             const result = await service.getChangedFilesSinceLastCommit({
                 organizationAndTeamData: organizationAndTeamData as any,
@@ -249,23 +253,26 @@ describe('AzureReposService.getChangedFilesSinceLastCommit - merge commit filter
                 lastCommit,
             });
 
-            expect(result).toBeNull();
+            expect(result).toEqual([]);
         });
 
         it('should filter out non-blob changes', async () => {
             setupPrResponse('head-hash');
 
             // getDiff returns blob and tree items
-            mockGetDiff.mockResolvedValue([
-                {
-                    item: { path: '/src/app.ts', gitObjectType: 'blob' },
-                    changeType: 'edit',
-                },
-                {
-                    item: { path: '/src/folder', gitObjectType: 'tree' },
-                    changeType: 'add',
-                },
-            ]);
+            mockGetDiff.mockResolvedValue({
+                changes: [
+                    {
+                        item: { path: '/src/app.ts', gitObjectType: 'blob' },
+                        changeType: 'edit',
+                    },
+                    {
+                        item: { path: '/src/folder', gitObjectType: 'tree' },
+                        changeType: 'add',
+                    },
+                ],
+                allChangesIncluded: true,
+            });
 
             setupPrFilesResponse(['/src/app.ts', '/src/folder']);
 
@@ -362,17 +369,20 @@ describe('AzureReposService.getChangedFilesSinceLastCommit - merge commit filter
         it('should skip files with null path', async () => {
             setupPrResponse('head-hash');
 
-            mockGetDiff.mockResolvedValue([
-                {
-                    item: { path: '/src/valid.ts', gitObjectType: 'blob' },
-                    changeType: 'edit',
-                },
-                {
-                    item: { path: null, gitObjectType: 'blob' },
-                    changeType: 'add',
-                },
-                { item: null, changeType: 'edit' },
-            ]);
+            mockGetDiff.mockResolvedValue({
+                changes: [
+                    {
+                        item: { path: '/src/valid.ts', gitObjectType: 'blob' },
+                        changeType: 'edit',
+                    },
+                    {
+                        item: { path: null, gitObjectType: 'blob' },
+                        changeType: 'add',
+                    },
+                    { item: null, changeType: 'edit' },
+                ],
+                allChangesIncluded: true,
+            });
 
             setupPrFilesResponse(['/src/valid.ts']);
 

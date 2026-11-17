@@ -12,6 +12,7 @@ import { LICENSE_SERVICE_TOKEN } from './interfaces/license.interface';
 import { LicenseService } from './license.service';
 import { SelfHostedLicenseService } from './self-hosted-license.service';
 import { AutoAssignLicenseUseCase } from './use-cases/auto-assign-license.use-case';
+import { ResolveUsageByokViewUseCase } from './use-cases/resolve-usage-byok-view.use-case';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { environment } from '@libs/ee/configs/environment';
 
@@ -36,6 +37,7 @@ import { environment } from '@libs/ee/configs/environment';
             inject: [LicenseService, SelfHostedLicenseService],
         },
         AutoAssignLicenseUseCase,
+        ResolveUsageByokViewUseCase,
         EnterpriseTierGuard,
     ],
     exports: [
@@ -43,6 +45,7 @@ import { environment } from '@libs/ee/configs/environment';
         SelfHostedLicenseService,
         LICENSE_SERVICE_TOKEN,
         AutoAssignLicenseUseCase,
+        ResolveUsageByokViewUseCase,
         EnterpriseTierGuard,
     ],
 })

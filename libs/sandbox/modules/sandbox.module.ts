@@ -14,17 +14,33 @@ import {
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
 import { SandboxLeaseManager } from '@libs/sandbox/infrastructure/services/sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services/sandbox-lease-reaper.service';
+import {
+    SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
+    SandboxConcurrencyConfigService,
+} from '@libs/sandbox/infrastructure/services/sandbox-concurrency-config.service';
+import {
+    ISandboxEgressPolicy,
+    SANDBOX_EGRESS_POLICY_TOKEN,
+    SandboxEgressPolicyService,
+} from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
+import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
+import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
 @Module({
     imports: [
         MongooseModule.forFeature([
             { name: SandboxLeaseModel.name, schema: SandboxLeaseSchema },
         ]),
+        GlobalParametersModule,
+        IntegrationConfigModule,
     ],
     providers: [
         {
             provide: SANDBOX_PROVIDER_TOKEN,
-            useFactory: (configService: ConfigService) => {
+            useFactory: (
+                configService: ConfigService,
+                egressPolicy: ISandboxEgressPolicy,
+            ) => {
                 const provider =
                     configService.get<string>('SANDBOX_PROVIDER') || 'auto';
 
@@ -36,7 +52,7 @@ import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services
                     return new LocalSandboxService(configService);
                 }
                 if (provider === 'e2b') {
-                    return new E2BSandboxService(configService);
+                    return new E2BSandboxService(configService, egressPolicy);
                 }
 
                 // 'auto' (default): prefer E2B when an API key is configured,
@@ -45,13 +61,21 @@ import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services
                 // review and conversation. NullSandbox is reserved for
                 // explicit `SANDBOX_PROVIDER=null` (test environments).
                 if (configService.get<string>('API_E2B_KEY')) {
-                    return new E2BSandboxService(configService);
+                    return new E2BSandboxService(configService, egressPolicy);
                 }
                 return new LocalSandboxService(configService);
             },
-            inject: [ConfigService],
+            inject: [ConfigService, SANDBOX_EGRESS_POLICY_TOKEN],
+        },
+        {
+            provide: SANDBOX_EGRESS_POLICY_TOKEN,
+            useClass: SandboxEgressPolicyService,
         },
         SandboxLeaseRepository,
+        {
+            provide: SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
+            useClass: SandboxConcurrencyConfigService,
+        },
         {
             provide: SANDBOX_LEASE_MANAGER_TOKEN,
             useClass: SandboxLeaseManager,

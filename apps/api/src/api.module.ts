@@ -34,6 +34,7 @@ import { UserModule } from '@libs/identity/modules/user.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { IssuesModule } from '@libs/issues/issues.module';
+import { SecurityScanModule } from '@libs/security-scan/security-scan.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { KodusIssuesMcpModule } from '@libs/mcp-server/kodus-issues-mcp.module';
 import { McpModule } from '@libs/mcp-server/mcp.module';
@@ -69,6 +70,7 @@ import { GithubController } from './controllers/github.controller';
 import { IntegrationController } from './controllers/integration.controller';
 import { IntegrationConfigController } from './controllers/integrationConfig.controller';
 import { IssuesController } from './controllers/issues.controller';
+import { SecurityScansController } from './controllers/securityScans.controller';
 import { KodyRulesController } from './controllers/kodyRules.controller';
 import { LicenseController } from './controllers/license.controller';
 import { OrganizationController } from './controllers/organization.controller';
@@ -87,6 +89,7 @@ import { PullRequestMessagesController } from './controllers/pullRequestMessages
 import { RuleLikeController } from './controllers/ruleLike.controller';
 import { BusinessLogicController } from './controllers/businessLogic.controller';
 import { CustomAgentsController } from './controllers/customAgents.controller';
+import { RiskAssessmentController } from './controllers/riskAssessment.controller';
 import { SkillsController } from './controllers/skills.controller';
 import { SSOConfigController } from './controllers/ssoConfig.controller';
 import { TeamCliKeyController } from './controllers/team-cli-key.controller';
@@ -130,6 +133,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         PermissionsModule,
         KodyRulesModule,
         IssuesModule,
+        SecurityScanModule,
         OrganizationModule,
         TeamModule,
         TeamMembersModule,
@@ -176,6 +180,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         PullRequestMessagesController,
         CodeBaseController,
         IssuesController,
+        SecurityScansController,
         KodyRulesController,
         RuleLikeController,
         OrganizationController,
@@ -184,6 +189,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         SkillsController,
         BusinessLogicController,
         CustomAgentsController,
+        RiskAssessmentController,
         TeamController,
         TeamCliKeyController,
         TeamMembersController,

@@ -2,6 +2,11 @@ import * as os from 'os';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
 import {
+    INBOX_RELEASE_TIMEOUT_MS,
+    parseDrainTimeoutMs,
+} from '@libs/core/workflow/infrastructure/drain-timeout';
+import { SHUTDOWN_AFTER_DRAIN_MS } from './worker-drain.service';
+import {
     Injectable,
     OnApplicationBootstrap,
     OnApplicationShutdown,
@@ -33,6 +38,19 @@ import {
  * 3. **Periodic health check** — safety net that polls channel state
  *    in case events were missed.
  */
+/**
+ * The whole bounded shutdown chain: job drain, consumer cancels and the
+ * connection close (SHUTDOWN_AFTER_DRAIN_MS), and the inbox release. The
+ * force-exit must not fire before any of them could have finished.
+ */
+export function forceExitAfterMs(): number {
+    return (
+        parseDrainTimeoutMs() +
+        SHUTDOWN_AFTER_DRAIN_MS +
+        INBOX_RELEASE_TIMEOUT_MS
+    );
+}
+
 @Injectable()
 export class WorkerHealthGuardService
     implements OnApplicationBootstrap, OnApplicationShutdown
@@ -384,9 +402,16 @@ export class WorkerHealthGuardService
         // lives at msgOptions.queueOptions.channel (same path the lib itself
         // uses to dispatch — see selectManagedChannel call site).
         const consumersMap =
-            (this.amqpConnection as unknown as { _consumers?: Record<string, unknown> })._consumers ?? {};
+            (
+                this.amqpConnection as unknown as {
+                    _consumers?: Record<string, unknown>;
+                }
+            )._consumers ?? {};
         const consumerCountByChannel: Record<string, number> = {};
-        type ConsumerOpts = { queueOptions?: { channel?: string }; channel?: string };
+        type ConsumerOpts = {
+            queueOptions?: { channel?: string };
+            channel?: string;
+        };
         for (const c of Object.values(consumersMap)) {
             const opts = (c as { msgOptions?: ConsumerOpts })?.msgOptions;
             const channelName: string =
@@ -424,21 +449,31 @@ export class WorkerHealthGuardService
             metadata: { instanceId: this.instanceId, exitCode: code },
         });
 
-        // Give shutdown hooks 30s to run, then force exit.
-        // This must be longer than the WorkerDrainService timeout (default 25s).
+        // Give the shutdown hooks the job drain budget plus room to cancel
+        // consumers, release inbox locks and close the connection, then force
+        // exit. A fixed 30s killed the process mid-drain whenever
+        // API_WORKER_DRAIN_TIMEOUT_MS was longer (prod uses 240s), before the
+        // inbox locks were released.
+        const forceExitMs = forceExitAfterMs();
         const forceExitTimer = setTimeout(() => {
             this.logger.error({
                 message: 'Graceful shutdown timed out. Force exiting.',
                 context: WorkerHealthGuardService.name,
-                metadata: { instanceId: this.instanceId },
+                metadata: {
+                    instanceId: this.instanceId,
+                    exitCode: code,
+                    timeoutMs: forceExitMs,
+                    drainTimeoutMs: parseDrainTimeoutMs(),
+                },
             });
             process.exit(code);
-        }, 30_000);
+        }, forceExitMs);
 
         // process.kill(process.pid, 'SIGTERM') triggers NestJS shutdown hooks
         // (enableShutdownHooks is called in main.ts), which runs:
-        // - WorkerDrainService.onApplicationShutdown (close consumers)
-        // - WorkflowJobConsumer.onApplicationShutdown (release inbox locks)
+        // - WorkerDrainService.onModuleDestroy (cancel consumers)
+        // - WorkflowJobConsumer.beforeApplicationShutdown (drain, release inbox locks)
+        // - WorkerDrainService.onApplicationShutdown (close connection)
         // - This service's onApplicationShutdown (cleanup timer)
         process.kill(process.pid, 'SIGTERM');
 

@@ -85,10 +85,19 @@ export type KnowledgeTargetBudget = {
  */
 export function knowledgeBudgets(
     items: KnowledgeItem[],
-    resolutions: KnowledgeItemResolution[],
+    resolutions: Array<KnowledgeItemResolution & { repository?: string }>,
 ): KnowledgeTargetBudget[] {
+    // The same path in two repositories is two docs.
+    // Only a string names a repository; anything else reads as this one.
+    const sourceKey = (entry: { path: string; repository?: unknown }) => {
+        const repository = entry.repository;
+        return `${typeof repository === 'string' ? repository.toLowerCase() : ''}|${entry.path}`;
+    };
     const tokensByPath = new Map(
-        resolutions.map((resolution) => [resolution.path, resolution.tokens]),
+        resolutions.map((resolution) => [
+            sourceKey(resolution),
+            resolution.tokens,
+        ]),
     );
     const budgets = new Map<string, KnowledgeTargetBudget>();
 
@@ -106,7 +115,7 @@ export function knowledgeBudgets(
                 budget.skills += 1;
             } else {
                 budget.docs += 1;
-                budget.docTokens += tokensByPath.get(item.path) ?? 0;
+                budget.docTokens += tokensByPath.get(sourceKey(item)) ?? 0;
             }
             budgets.set(key, budget);
         }

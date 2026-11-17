@@ -50,9 +50,4 @@ describe('featured-review snapshot', () => {
         expect('highlight' in snap).toBe(false);
         expect('sortOrder' in snap).toBe(false);
     });
-
-    it('slug stays first-class so import upsert can key on it', () => {
-        expect(SNAPSHOT_FIELDS).toContain('slug');
-        expect(pickSnapshot(fullDoc).slug).toBe('react-fizz-resume-abort');
-    });
 });

@@ -202,7 +202,7 @@ export const CreditsWalletStrip = () => {
     const custom = Number(customAmount);
     const customValid =
         customAmount.trim() !== "" &&
-        Number.isFinite(custom) &&
+        Number.isInteger(custom) &&
         custom >= min &&
         custom <= max;
     // The pre-selected amount: the smallest pack on a first funding, the
@@ -396,7 +396,7 @@ export const CreditsWalletStrip = () => {
                                     autoFocus
                                     size="md"
                                     className="w-full pl-7 tabular-nums"
-                                    inputMode="decimal"
+                                    inputMode="numeric"
                                     placeholder={`${min}–${max}`}
                                     aria-label={`Custom amount, ${usd(min, 0)} to ${usd(max, 0)}`}
                                     value={customAmount}

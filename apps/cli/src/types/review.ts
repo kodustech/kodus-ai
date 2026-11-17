@@ -40,6 +40,9 @@ export interface ReviewResult {
     issues: ReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    /** What the review did differently from what was asked (e.g. a `--heavy`
+     *  the plan runs Balanced), for callers that read no spinner. */
+    notices?: string[];
 }
 
 export interface ApiFileSuggestion {
@@ -131,6 +134,10 @@ export interface ReviewConfig {
     fast?: boolean;
     /** Free-text steering directive (`--focus`); sanitized + capped server-side. */
     focus?: string;
+    /** `--heavy` / `--balanced`: the review mode asked for, over the one set in
+     *  settings. */
+    heavy?: boolean;
+    balanced?: boolean;
     files?: FileContent[];
 }
 

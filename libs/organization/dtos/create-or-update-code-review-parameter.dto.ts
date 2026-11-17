@@ -1,5 +1,16 @@
 import { Type } from 'class-transformer';
 import {
+    approvalPoliciesSchema,
+    type NamedApprovalPolicy,
+} from '@libs/core/infrastructure/config/types/general/approval-policies';
+import {
+    riskCriteriaSchema,
+    riskReviewRoutingSchema,
+    REVIEW_SETTINGS_INHERITABLE_FIELDS,
+    type RiskCriterion,
+    type RiskReviewRouting,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import {
     ArrayMaxSize,
     ArrayMinSize,
     IsArray,
@@ -32,11 +43,14 @@ import {
     CUSTOM_AGENT_LIMITS,
     GroupingModeSuggestions,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
+    KNOWLEDGE_REF_PATTERN,
+    KNOWLEDGE_REPOSITORY_PATTERN,
     KnowledgeItem,
     customAgentSlugClashMessage,
     firstDuplicate,
     LimitationType,
     ReviewCadenceType,
+    SELECTABLE_REVIEW_MODES,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { cliInstallProblem } from '@libs/core/infrastructure/config/types/general/cli-install';
 import {
@@ -709,6 +723,10 @@ class CustomAgentConfigDto {
     @IsBoolean()
     enabled: boolean;
 
+    @IsOptional()
+    @IsIn(['always', 'risk-found'])
+    runWhen?: 'always' | 'risk-found';
+
     @IsString()
     @MaxLength(CUSTOM_AGENT_LIMITS.maxInstructionsLength)
     instructions: string;
@@ -790,6 +808,23 @@ class KnowledgeItemDto {
     @IsIn(['skill', 'doc'])
     kind: 'skill' | 'doc';
 
+    /** Another connected repository (`owner/repo`); unset for the reviewed one. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    @Matches(KNOWLEDGE_REPOSITORY_PATTERN, {
+        message: 'repository must be owner/repo',
+    })
+    repository?: string;
+
+    /** Branch or tag of `repository`; unset reads its default branch. */
+    @IsOptional()
+    @IsString()
+    @Matches(KNOWLEDGE_REF_PATTERN, {
+        message: 'ref must be a branch or tag name',
+    })
+    ref?: string;
+
     @IsArray()
     @ValidateBy(
         {
@@ -844,6 +879,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
     automatedReviewActive?: boolean;
 
     @IsOptional()
+    @IsIn(SELECTABLE_REVIEW_MODES)
+    reviewMode?: (typeof SELECTABLE_REVIEW_MODES)[number];
+
+    @IsOptional()
     @IsBoolean()
     showStatusFeedback?: boolean;
 
@@ -861,6 +900,20 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsBoolean()
     pullRequestApprovalActive?: boolean;
 
+    @ValidateIf((_, value) => value !== undefined)
+    @IsArray()
+    @Type(() => Object)
+    @ValidateBy({
+        name: 'approvalPolicies',
+        validator: {
+            validate: (value: unknown) =>
+                approvalPoliciesSchema.safeParse(value).success,
+            defaultMessage: () =>
+                'Approval policies must be valid and have distinct IDs and names.',
+        },
+    })
+    approvalPolicies?: NamedApprovalPolicy[];
+
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(50)
@@ -876,6 +929,37 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsBoolean()
     approvalRiskActive?: boolean;
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsBoolean()
+    riskAssessmentActive?: boolean;
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsArray()
+    @ArrayMaxSize(50)
+    @Type(() => Object)
+    @ValidateBy({
+        name: 'riskCriteria',
+        validator: {
+            validate: (value: unknown) =>
+                riskCriteriaSchema.safeParse(value).success,
+            defaultMessage: () =>
+                'Risk criteria must be valid and have unique IDs.',
+        },
+    })
+    riskCriteria?: RiskCriterion[];
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsObject()
+    @ValidateBy({
+        name: 'riskReviewRouting',
+        validator: {
+            validate: (value: unknown) =>
+                riskReviewRoutingSchema.safeParse(value).success,
+            defaultMessage: () => 'Risk routing must select Balanced or Heavy.',
+        },
+    })
+    riskReviewRouting?: RiskReviewRouting;
 
     @IsOptional()
     @IsString()
@@ -1068,6 +1152,16 @@ export class ExpectedCustomAgentsRevisionsDto {
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(REVIEW_SETTINGS_INHERITABLE_FIELDS.length)
+    @IsIn(REVIEW_SETTINGS_INHERITABLE_FIELDS, { each: true })
+    @ApiPropertyOptional({
+        type: [String],
+        description: 'Scoped review settings to restore from the parent.',
+    })
+    inheritFields?: string[];
+
     @IsObject()
     @ApiProperty({
         type: OrganizationAndTeamDataDto,

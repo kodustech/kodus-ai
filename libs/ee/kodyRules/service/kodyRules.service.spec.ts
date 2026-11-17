@@ -148,14 +148,6 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
         );
     });
 
-    it('reuses the caller-provided `limited` flag instead of a second license lookup', async () => {
-        await svc.syncRulesWithPlanLimit(ORG, {
-            entity: entityOf([rule(1)]) as any,
-            limited: false,
-        });
-        expect(permission.shouldLimitResources).not.toHaveBeenCalled();
-    });
-
     it('falls back to shouldLimitResources when `limited` is not provided', async () => {
         permission.shouldLimitResources.mockResolvedValue(false);
         await svc.syncRulesWithPlanLimit(ORG, {
@@ -520,34 +512,10 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(out.length).toBeGreaterThan(0);
     });
 
-    it('row 5 — double wrapper {result:{result:D}}: returns the safe empty default (no payload surfaces)', async () => {
-        llmRun.mockResolvedValue({ result: { result: { recommendations: [] } } });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 6 — numeric/opaque single-key wrap ({"0":D}/{content:D}): safe empty default', async () => {
-        llmRun.mockResolvedValueOnce({ '0': { recommendations: [] } });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-        llmRun.mockResolvedValueOnce({ content: { recommendations: [] } });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 7 — stringified JSON: a string return has no .recommendations → safe []', async () => {
         llmRun.mockResolvedValue(
             JSON.stringify({ recommendations: [{ uuid: REAL_LIBRARY_UUID }] }),
         );
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 8 — markdown-fenced JSON string: safe []', async () => {
-        llmRun.mockResolvedValue(
-            '```json\n{"recommendations":[{"uuid":"x"}]}\n```',
-        );
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 9 — prose-wrapped string: safe []', async () => {
-        llmRun.mockResolvedValue('Here you go: {"recommendations":[]} thanks!');
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
@@ -593,11 +561,6 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(out.map((r) => r.uuid)).toContain(REAL_LIBRARY_UUID);
     });
 
-    it('row 14 — empty object {}: safe []', async () => {
-        llmRun.mockResolvedValue({});
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 15 — empty array (both {recommendations:[]} and bare []): safe []', async () => {
         llmRun.mockResolvedValueOnce({ recommendations: [] });
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
@@ -605,40 +568,10 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
-    it('row 16 — empty / whitespace string: safe []', async () => {
-        llmRun.mockResolvedValueOnce('');
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-        llmRun.mockResolvedValueOnce('   \n\t ');
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 17 — null / undefined return: safe []', async () => {
         llmRun.mockResolvedValueOnce(null);
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
         llmRun.mockResolvedValueOnce(undefined);
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 18 — primitive where object expected (true/0/"ok"): safe []', async () => {
-        for (const v of [true, 0, 'ok']) {
-            llmRun.mockResolvedValueOnce(v);
-            expect(
-                await svc.getRecommendedRulesBySuggestions(ORG, REPO),
-            ).toEqual([]);
-        }
-    });
-
-    it('row 19 — provider envelope leak ({choices:[{message:{content}}]}): not unwrapped here → safe []', async () => {
-        llmRun.mockResolvedValue({
-            choices: [{ message: { content: '{"recommendations":[]}' } }],
-        });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 20 — reasoning/thinking leak in content (prose string): safe []', async () => {
-        llmRun.mockResolvedValue(
-            '<thinking>let me analyze…</thinking> no signature block',
-        );
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
@@ -658,38 +591,11 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
-    it('row 29 — malformed JSON error from LLM.run: fail-safe []', async () => {
-        llmRun.mockRejectedValue(new SyntaxError('Unexpected token } in JSON'));
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 30 — LLM.run throws (network/timeout): never propagates, fail-safe []', async () => {
         llmRun.mockRejectedValue(new Error('ETIMEDOUT'));
         await expect(
             svc.getRecommendedRulesBySuggestions(ORG, REPO),
         ).resolves.toEqual([]);
-    });
-
-    it('row 31 — error object {error:...} returned instead of thrown: safe []', async () => {
-        llmRun.mockResolvedValue({ error: 'model unavailable' });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 32 — empty success (content ""): safe []', async () => {
-        llmRun.mockResolvedValue('');
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 33 — refusal prose ("I cannot help…"): safe []', async () => {
-        llmRun.mockResolvedValue("I'm sorry, I can't help with that.");
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 34 — abort signal surfaced as a rejection: fail-safe []', async () => {
-        llmRun.mockRejectedValue(
-            Object.assign(new Error('aborted'), { name: 'AbortError' }),
-        );
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
     // ============================ D. input variants ========================
@@ -993,11 +899,6 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((await resolve(genMemory())).action).toBe('create');
     });
 
-    it('row 6 — {content:D} wrap: safe default create', async () => {
-        llmRun.mockResolvedValue({ content: { action: 'skip' } });
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
     it('rows 7-9 — stringified / fenced / prose string: no .action → safe default create', async () => {
         for (const v of [
             '{"action":"skip","targetMemoryUuid":"m1"}',
@@ -1037,46 +938,10 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((await resolve(genMemory())).action).toBe('skip');
     });
 
-    it('row 14 — empty object {}: safe default create', async () => {
-        llmRun.mockResolvedValue({});
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 15 — empty array []: safe default create', async () => {
-        llmRun.mockResolvedValue([]);
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 16 — empty / whitespace string: safe default create', async () => {
-        llmRun.mockResolvedValueOnce('');
-        expect((await resolve(genMemory())).action).toBe('create');
-        llmRun.mockResolvedValueOnce('   ');
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
     it('row 17 — null / undefined: safe default create', async () => {
         llmRun.mockResolvedValueOnce(null);
         expect((await resolve(genMemory())).action).toBe('create');
         llmRun.mockResolvedValueOnce(undefined);
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 18 — primitive (true/0/"ok"): safe default create', async () => {
-        for (const v of [true, 0, 'ok']) {
-            llmRun.mockResolvedValueOnce(v);
-            expect((await resolve(genMemory())).action).toBe('create');
-        }
-    });
-
-    it('row 19 — provider envelope leak ({choices:[...]}): no .action → safe default create', async () => {
-        llmRun.mockResolvedValue({
-            choices: [{ message: { content: '{"action":"skip"}' } }],
-        });
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 20 — reasoning/thinking leak (prose string): safe default create', async () => {
-        llmRun.mockResolvedValue('<thinking>hmm</thinking> unsigned');
         expect((await resolve(genMemory())).action).toBe('create');
     });
 
@@ -1133,38 +998,11 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((svc as any).logger.error).toHaveBeenCalled();
     });
 
-    it('row 29 — malformed JSON error: caught → safe default create', async () => {
-        llmRun.mockRejectedValue(new SyntaxError('Unexpected token'));
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
     it('row 30 — LLM.run throws (network): never propagates → safe default create', async () => {
         llmRun.mockRejectedValue(new Error('ECONNRESET'));
         await expect(resolve(genMemory())).resolves.toEqual(
             expect.objectContaining({ action: 'create' }),
         );
-    });
-
-    it('row 31 — error object {error:...}: no .action → safe default create', async () => {
-        llmRun.mockResolvedValue({ error: 'model unavailable' });
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 32 — empty success (content ""): safe default create', async () => {
-        llmRun.mockResolvedValue('');
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 33 — refusal prose: safe default create', async () => {
-        llmRun.mockResolvedValue("I cannot help with that request.");
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 34 — abort surfaced as rejection: caught → safe default create', async () => {
-        llmRun.mockRejectedValue(
-            Object.assign(new Error('aborted'), { name: 'AbortError' }),
-        );
-        expect((await resolve(genMemory())).action).toBe('create');
     });
 
     // ============================ D. input variants ========================

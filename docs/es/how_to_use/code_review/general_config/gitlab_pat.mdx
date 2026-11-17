@@ -1,11 +1,13 @@
 ---
 title: "Token PAT de GitLab"
-description: "Genera el Personal Access Token de GitLab que Kody necesita para leer tus repositorios y publicar comentarios, con los scopes exactos."
+description: "Genera el token de acceso personal o de grupo de GitLab que Kody necesita para leer tus repositorios y publicar comentarios, con los scopes exactos."
 ---
 
 ## Introducción al PAT
 
 Para permitir que Kody realice Revisiones de Código automáticas, necesitas generar un Token de Acceso Personal (PAT) en GitLab. Este token permite a Kody acceder de forma segura a tus repositorios y realizar análisis de código de manera controlada.
+
+Kody publica las revisiones como el usuario de GitLab al que pertenece el token. Con un token de acceso personal, las revisiones aparecen en tu propia cuenta, igual que cuando te conectas con OAuth. Para que aparezcan en un usuario bot separado, usa un token de acceso de grupo, descrito más abajo.
 
 ## Generar el PAT (Token de Acceso Personal)
 
@@ -28,15 +30,42 @@ Sigue estos pasos para configurar el token correctamente:
    - **Nombre del Token**: Elige un nombre fácilmente identificable, como `kody_code_review`.
    - **Fecha de Vencimiento**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
    - **Permisos**: Configura los siguientes permisos:
-     - **api**: Acceso de lectura.
-     - **read_api**: Acceso de lectura.
-     - **read_user**: Acceso de lectura.
-     - **read_repository**: Acceso de lectura.
-     - **write_repository**: Acceso de lectura.
+     - **api**
+     - **read_api**
+     - **read_user**
+     - **read_repository**
+     - **write_repository**
 
 5. **Finaliza y guarda el token**:
    - Después de configurar los permisos, haz clic en `Generar token`.
    - Asegúrate de copiar el token generado y guardarlo de forma segura, ya que lo necesitarás para configurar Kody.
+
+## Usar un Token de Acceso de Grupo
+
+Un token de acceso de grupo publica las revisiones como un usuario bot que GitLab crea para el token, con el nombre del token. El bot tiene acceso a todos los proyectos del grupo y de sus subgrupos.
+
+<Note>
+  En GitLab.com, los tokens de acceso de grupo requieren una suscripción Premium o Ultimate y no están disponibles durante una prueba. En GitLab Self-Managed y GitLab Dedicated, están disponibles con cualquier licencia.
+</Note>
+
+1. **Abre los tokens de acceso del grupo**:
+
+   - En GitLab, abre el grupo que contiene tus repositorios y ve a `Configuración` > `Tokens de acceso`.
+
+2. **Agrega un nuevo token**:
+
+   - Haz clic en el botón `Agregar nuevo token`.
+
+3. **Configura el nuevo token con las siguientes especificaciones**:
+
+   - **Nombre del token**: El nombre que mostrarán las revisiones de Kody, como `Kody`.
+   - **Fecha de vencimiento**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
+   - **Rol**: `Maintainer`. Kody lo necesita para crear el webhook en cada proyecto.
+   - **Alcances**: `api` y `read_repository`. Kody clona tus repositorios, y en un token de acceso de grupo `api` no incluye Git sobre HTTPS.
+
+4. **Finaliza y guarda el token**:
+   - Haz clic en `Crear token de acceso de grupo`.
+   - Copia el token y guárdalo de forma segura. GitLab solo lo muestra una vez.
 
 ## Agregar el Token a Kody
 
@@ -44,3 +73,5 @@ Después de generar el token, pégalo en Kodus:
 
 - **Durante el onboarding**: en **Connect your Git tool**, elige la pestaña **Gitlab** y haz clic en **Connect via token**.
 - **Más tarde**: en la barra lateral, abre **Repositories**, haz clic en **Gitlab** en **Connect a provider**, cambia a la pestaña **Token**, pega el token y haz clic en **Validate and save**. Para un GitLab autogestionado, activa **Self-hosted** e ingresa la **Gitlab URL**.
+- **Reemplazar un token**: en **Repositories**, haz clic en **Update token** en la tarjeta de **Gitlab**, pega el nuevo token y haz clic en **Update token**. Los webhooks y los repositorios seleccionados se mantienen.
+- **Dejar OAuth**: **Update token** no aparece en conexiones hechas con OAuth. Haz clic en **Reset**, elige **Just reset the integration**, vuelve a conectar con el token como se describe arriba y selecciona tus repositorios.

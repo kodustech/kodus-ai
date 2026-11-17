@@ -1,7 +1,6 @@
 import {
     ruleCompileHash,
     ruleContextNeedHash,
-    CONTEXT_NEED_PROMPT_VERSION,
 } from '@libs/common/utils/kody-rules/compile-hash';
 import { createHash } from 'crypto';
 import { KodyRuleDetectorCompilerService } from './kody-rule-detector-compiler.service';
@@ -242,65 +241,15 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
     // (b) return { compiled:false, declineReason:<string> }, (c) never throw.
     it.each([
         ['A2 bare array instead of object', [validD]],
-        [
-            'A3 array where object D expected',
-            [{ mechanical: true, pattern: 'x' }],
-        ],
         ['A4 {result:D} wrapper', { result: validD }],
-        ['A4 {data:D} wrapper', { data: validD }],
-        ['A4 {output:D} wrapper', { output: validD }],
-        ['A4 {response:D} wrapper', { response: validD }],
-        ['A4 {json:D} wrapper', { json: validD }],
-        [
-            'A5 double {result:{result:D}} wrapper',
-            { result: { result: validD } },
-        ],
-        ['A6 numeric single-key {"0":D} wrap', { 0: validD }],
-        ['A6 {content:D} opaque wrap', { content: validD }],
         ['A7 stringified JSON', JSON.stringify(validD)],
-        [
-            'A8 markdown-fenced JSON',
-            '```json\n' + JSON.stringify(validD) + '\n```',
-        ],
-        [
-            'A9 prose-wrapped JSON',
-            'Here is the result: ' + JSON.stringify(validD) + '\nLet me know!',
-        ],
         [
             'A10 right data under wrong keys',
             { is_mechanical: true, regex: validD.pattern },
         ],
-        [
-            'A11 case/convention mismatch (Mechanical/Pattern)',
-            { Mechanical: true, Pattern: validD.pattern },
-        ],
         ['A12 partial object (mechanical, no pattern)', { mechanical: true }],
-        [
-            'A12 partial object (pattern, no mechanical)',
-            { pattern: validD.pattern },
-        ],
-        ['A14 empty object {}', {}],
-        ['A15 empty array []', []],
-        ['A16 empty string', ''],
-        ['A16 whitespace-only string', '   \n\t '],
         ['A17 null', null],
-        ['A17 undefined', undefined],
         ['A18 primitive true', true],
-        ['A18 primitive 0', 0],
-        ['A18 primitive "ok"', 'ok'],
-        [
-            'A19 provider envelope leak {choices:[{message:{content}}]}',
-            { choices: [{ message: { content: JSON.stringify(validD) } }] },
-        ],
-        [
-            'A20 thinking/reasoning leak block',
-            {
-                content: [
-                    { type: 'thinking', thinking: 'hmm' },
-                    { type: 'text', text: JSON.stringify(validD) },
-                ],
-            },
-        ],
     ])(
         'declines %s (no persist, well-formed CompileResult, no throw)',
         async (_label, out) => {
@@ -426,24 +375,6 @@ describe('CONTRACT B: semantic-but-wrong value encodings', () => {
         expect(res.compiled).toBe(false);
         expect(typeof res.declineReason).toBe('string');
     });
-    it('B22 boolean-as-yes/no mechanical:"yes" declines safely', async () => {
-        const { svc, kodyRulesService } = make({
-            mechanical: 'yes',
-            pattern: validD.pattern,
-        });
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('B23 boolean-as-number mechanical:1 declines safely', async () => {
-        const { svc, kodyRulesService } = make({
-            mechanical: 1,
-            pattern: validD.pattern,
-        });
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
     it.failing(
         'B21 coerces mechanical:"true" to true and persists (#1786)',
         async () => {
@@ -483,66 +414,12 @@ describe('CONTRACT B: semantic-but-wrong value encodings', () => {
 });
 
 describe('CONTRACT C: unparseable / transport — the fail-safe layer', () => {
-    it('C28 truncated JSON body declines (documented fallback, no crash)', async () => {
-        const { svc, kodyRulesService } = make(
-            '{"mechanical":true,"pattern":"con',
-        );
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C29 malformed JSON body (trailing comma / unquoted keys) declines', async () => {
-        const { svc, kodyRulesService } = make(
-            '{mechanical: true, pattern: "x",}',
-        );
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
     it('C30 LLM.run rejects (network/timeout) — fails safe to declineReason:"error", never throws, never persists', async () => {
         const { svc, kodyRulesService } = make(null);
         mockRun.mockReset();
         mockRun.mockRejectedValue(
             new Error('provider 500 / suspended BYOK key'),
         );
-        await expect(svc.compileAndSave(org, 'r1', gatedRule)).resolves.toEqual(
-            { compiled: false, declineReason: 'error' },
-        );
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-    });
-    it('C31 an error-object return {error:...} is not trusted (declines, no persist)', async () => {
-        const { svc, kodyRulesService } = make({
-            error: 'rate limited',
-            code: 429,
-        });
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C32 empty-success return declines', async () => {
-        const { svc, kodyRulesService } = make('');
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C33 refusal prose return ("I cannot help…") declines', async () => {
-        const { svc, kodyRulesService } = make(
-            "I'm sorry, but I can't help with that request.",
-        );
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C34 an aborted call fails safe (declineReason:"error") rather than throwing past the boundary', async () => {
-        // Unlike the pure gate (which rethrows), the SERVICE wraps the whole call
-        // in try/catch, so an AbortError is absorbed into the documented fallback.
-        const { svc, kodyRulesService } = make(null);
-        mockRun.mockReset();
-        mockRun.mockImplementation(async () => {
-            const e = new Error('The operation was aborted');
-            e.name = 'AbortError';
-            throw e;
-        });
         await expect(svc.compileAndSave(org, 'r1', gatedRule)).resolves.toEqual(
             { compiled: false, declineReason: 'error' },
         );

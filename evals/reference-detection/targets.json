@@ -1,0 +1,6 @@
+{
+    "__doc": [
+        "No floor: run by hand (README). Calibrate from two full runs of one commit (evals/README.md, \"Floors and judges\") before gating it."
+    ],
+    "models": {}
+}

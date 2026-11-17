@@ -126,6 +126,8 @@ async function main() {
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
+    const heavyOut = path.join(scratch, 'heavy-recall-eval-fake.json');
+    const heavyDump = path.join(scratch, 'heavy-dump');
     const managedOut = path.join(scratch, 'finder-recall-managed.json');
     const traceDir = path.join(scratch, 'trace');
     const reviewCasesFile = path.join(scratch, 'review-cases.json');
@@ -169,6 +171,17 @@ async function main() {
             model: true,
             args: ['evals/parse/run.js', '--model=eval-fake', '--gate'],
         },
+        // Every case reaches the scripted model, whose answer yields no finding.
+        {
+            name: 'prose-recovery',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/prose-recovery/run.js',
+                '--model=eval-fake',
+                '--gate',
+            ],
+        },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         {
             name: 'shape-invariance',
@@ -196,7 +209,16 @@ async function main() {
                 '--gate',
             ],
         },
-        { name: 'business-logic-requirements', result: 'shared', model: true, args: ['evals/business-logic-requirements/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'business-logic-requirements',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/business-logic-requirements/run.js',
+                '--model=eval-fake',
+                '--gate',
+            ],
+        },
         {
             name: 'approval-risk',
             result: 'shared',
@@ -208,12 +230,50 @@ async function main() {
                 '--gate',
             ],
         },
+        {
+            name: 'pr-risk',
+            result: 'shared',
+            model: true,
+            args: ['evals/pr-risk/run.js', '--model=eval-fake', '--gate'],
+        },
+        {
+            name: 'approval-risk-shared',
+            result: 'shared',
+            model: true,
+            args: ['evals/approval-risk/run.js', '--model=eval-fake', '--set=full-balanced', '--compare-shared', '--ids=pylint-dev/pylint#7537'],
+        },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         {
             name: 'memories',
             result: 'shared',
             model: true,
             args: ['evals/memories/run.js', '--model=eval-fake', '--gate'],
+        },
+        // The security scan's engine over a repository written for it: map,
+        // lenses, verify and finalize reach the scripted model; nothing ships.
+        {
+            name: 'security-scan',
+            result: 'shared',
+            model: true,
+            // Exercise CI's key-free startup even on a configured dev machine.
+            env: {
+                API_CRYPTO_KEY: '',
+                DOTENV_CONFIG_PATH: process.platform === 'win32' ? 'NUL' : '/dev/null',
+            },
+            check: ({ result, verdictPrompts }) => {
+                const droveLenses = result?.cases?.length && result.cases.every(c =>
+                    c.coverage?.done > 0 && Object.entries(c.coverage.modelCalls ?? {}).some(([name, count]) =>
+                        /^security-scan-(authz|injection|ssrf|data_exposure|secret_identity|misconfiguration|resource_exhaustion)$/.test(name) && count > 0));
+                if (!droveLenses) return `scan reached no completed lens unit: ${JSON.stringify(result?.cases?.map(c => c.coverage))}`;
+                if (!verdictPrompts.length) return 'scan reached no verifier';
+                return null;
+            },
+            args: [
+                'evals/security-scan/run.js',
+                '--model=eval-fake',
+                '--set=wiring',
+                '--budget=1',
+            ],
         },
         // Each team's custom agents through production's stage on a repository
         // written for it: the gate holds what the review hands every agent (its
@@ -255,6 +315,32 @@ async function main() {
                 '--controls',
             ],
         },
+        // The severity step on two PRs of the severity dataset: one call per PR, each level mapped back.
+        {
+            name: 'severity-levels',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/severity-levels/run.js',
+                '--model=eval-fake',
+                '--gate',
+                '--limit=2',
+                '--concurrency=1',
+            ],
+        },
+        {
+            name: 'suggestion-enrichment',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/suggestion-enrichment/run.js',
+                '--model=eval-fake',
+                '--judge=eval-fake',
+                '--gate',
+                '--limit=2',
+                '--concurrency=1',
+            ],
+        },
         {
             name: 'funnel-verify',
             result: 'shared',
@@ -282,6 +368,36 @@ async function main() {
             check: () => {
                 const findings =
                     readJson(finderOut)?.rows?.[0]?.metadata?.findings;
+                return findings >= 1
+                    ? null
+                    : `expected the scripted finding to reach scoring, got findings=${findings}`;
+            },
+        },
+        // The same review in heavy mode (evals/heavy-recall): the lenses must run
+        // next to the generalist and the scripted finding still reach scoring.
+        {
+            name: 'heavy-recall',
+            model: true,
+            result: 'finder',
+            env: { RECALL_DUMP: heavyDump },
+            args: [
+                'evals/heavy-recall/run.js',
+                '--model=eval-fake',
+                `--cases=${FINDER_CASE}`,
+                '--concurrency=1',
+                `--output=${heavyOut}`,
+            ],
+            check: () => {
+                const findings =
+                    readJson(heavyOut)?.rows?.[0]?.metadata?.findings;
+                const dump = readJson(
+                    path.join(heavyDump, `${FINDER_CASE}.raw.txt`),
+                );
+                const lenses = (dump?.finderPasses || [])
+                    .flatMap((run) => run.passes || [])
+                    .filter((p) => String(p.label).startsWith('lens-')).length;
+                if (!lenses)
+                    return 'expected the heavy review to run its lenses, got none';
                 return findings >= 1
                     ? null
                     : `expected the scripted finding to reach scoring, got findings=${findings}`;
@@ -374,6 +490,18 @@ async function main() {
             args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'],
         },
         {
+            name: 'implementation-check',
+            result: 'shared',
+            model: true,
+            args: ['evals/implementation-check/run.js', '--model=eval-fake', '--limit=3'],
+        },
+        {
+            name: 'reference-detection',
+            result: 'shared',
+            model: true,
+            args: ['evals/reference-detection/run.js', '--model=eval-fake'],
+        },
+        {
             name: 'reply-addressing',
             result: 'shared',
             model: true,
@@ -408,6 +536,30 @@ async function main() {
                 'evals/thread-actions/run.js',
                 '--model=eval-fake',
                 '--kind=memory',
+                '--gate',
+            ],
+        },
+        {
+            name: 'thread-rule-offers',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/thread-actions/run.js',
+                '--model=eval-fake',
+                '--kind=rule',
+                '--metric=offers',
+                '--gate',
+            ],
+        },
+        {
+            name: 'thread-memory-offers',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/thread-actions/run.js',
+                '--model=eval-fake',
+                '--kind=memory',
+                '--metric=offers',
                 '--gate',
             ],
         },
@@ -475,6 +627,7 @@ async function main() {
         else if (step.check) {
             problem = step.check({
                 models,
+                result: readJson(resultFile),
                 verdictPrompts:
                     server.stats.verdictPrompts.slice(verdictsBefore),
                 finderToolResults:

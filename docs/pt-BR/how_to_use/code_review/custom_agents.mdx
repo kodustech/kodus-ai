@@ -90,6 +90,8 @@ Num diretório, um agente herdado abre somente leitura, com o botão **Override 
 
 A página tem uma linha de status (ligado/desligado, os arquivos em que ele roda e o que postou nos últimos 30 dias), quatro cards e o painel **Try it**. As alterações na página são mantidas com **Save**.
 
+Quando as últimas execuções do agente falharam ou pararam antes de terminar, a linha de status avisa, com o motivo e o que resolve: **Change the model** quando o modelo não existe mais ou a conta não pode usá-lo, **Open AI providers** quando a chave foi recusada ou a conta está sem créditos. O aviso some quando uma execução termina.
+
 ### Instructions
 
 | Campo | Observações |
@@ -103,7 +105,7 @@ A página tem uma linha de status (ligado/desligado, os arquivos em que ele roda
 | --- | --- |
 | **Files** | Globs que o agente revisa, ex.: `src/payments/**`. Vazio roda em todo pull request. |
 | **Except** | Globs que ele pula, ex.: `**/*.test.ts`, `**/generated/**`. |
-| **Skills & docs** | Os guias que o agente segue, lidos da branch de destino do pull request. Veja [Skills, docs e ferramentas](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools). |
+| **Skills & docs** | Os guias que o agente segue, lidos da branch de destino do pull request, ou de outro repositório na branch padrão dele ou numa branch ou tag que você definir. Veja [Skills, docs e ferramentas](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools). |
 
 Os globs são comparados com o caminho a partir da raiz do repositório, em todos os níveis, inclusive num diretório.
 
@@ -174,10 +176,10 @@ A Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desli
     Roda todo agente ligado cujos globs batem com pelo menos um arquivo alterado. Um agente sem arquivo correspondente não roda.
   </Step>
   <Step title="Revisão">
-    Cada agente revisa só os seus arquivos, ao lado da revisão da Kody, e reporta só o que as instruções pedem. Ele lê skills e docs da branch de destino e usa as suas ferramentas.
+    Cada agente revisa só os seus arquivos, ao lado da revisão da Kody, e reporta só o que as instruções pedem. Ele lê skills e docs da branch de destino (um guia de outro repositório, da branch definida para ele) e usa as suas ferramentas.
   </Step>
   <Step title="Checagem de cada apontamento">
-    Um apontamento de convenção precisa citar a regra que aplica, de um guia vinculado ou das instruções do agente. Uma citação que não está no guia na branch de destino é descartada. Uma citação encurtada com "..." passa quando cada parte está lá, na ordem. Depois, um verificador descarta apontamentos fora do foco do agente ou sem respaldo no código. Um match do ast-grep vale como prova sozinho.
+    Um apontamento de convenção precisa citar a regra que aplica, de um guia vinculado ou das instruções do agente. Uma citação que não está no guia, na branch de onde ele é lido, é descartada. Uma citação encurtada com "..." passa quando cada parte está lá, na ordem. Depois, um verificador descarta apontamentos fora do foco do agente ou sem respaldo no código. Um match do ast-grep vale como prova sozinho.
   </Step>
   <Step title="Configurações do agente">
     A severidade mínima do agente e, depois, o limite de comentários (ficam os mais graves).
@@ -220,17 +222,24 @@ Os comentários de cada agente levam a tag dele, então o pull request mostra qu
   <Accordion title="Por que um apontamento foi descartado?">
     Rode o agente com o **Try it** no mesmo pull request: cada apontamento descartado mostra o motivo. Os mais comuns:
 
-    - A citação não está no guia na branch de destino (foi parafraseada, ou o guia só mudou no próprio pull request).
+    - A citação não está no guia na branch de onde ele é lido (foi parafraseada, ou o guia só mudou no próprio pull request).
     - O apontamento está fora do que as instruções do agente pedem.
     - O verificador não achou respaldo no código.
     - Ficou abaixo da severidade mínima do agente ou passou do limite de comentários.
     - A revisão da Kody reportou o mesmo problema e manteve o comentário dela.
   </Accordion>
+  <Accordion title="Por que um guia de outro repositório não é aplicado?">
+    O **Try it** mostra, em **Warnings**, qual arquivo não foi lido e por quê. Os motivos mais comuns:
+
+    - O repositório não está mais conectado à Kodus (foi desmarcado em Git settings, renomeado ou o acesso foi revogado). Conecte de novo e escolha em **Other repository…**.
+    - Não deu para listar os repositórios da integração naquele momento. A próxima revisão tenta de novo.
+    - O arquivo não está na branch padrão desse repositório, nem na branch ou tag que você definiu.
+  </Accordion>
   <Accordion title="Dá para configurar agentes no kodus-config.yml?">
     Não. `customAgents` e `knowledge` no `kodus-config.yml` não são lidos. O comentário final avisa: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
   </Accordion>
   <Accordion title="Um pull request pode mudar as regras que o avaliam?">
-    Não. Skills, docs e arquivos de regras do ast-grep são lidos da branch de destino do pull request. Edições neles dentro do pull request valem depois do merge.
+    Não. Skills, docs e arquivos de regras do ast-grep são lidos da branch de destino do pull request. Edições neles dentro do pull request valem depois do merge. Uma skill ou doc de outro repositório é lida na branch padrão desse repositório, ou na branch ou tag que o time definiu, nunca numa ref que o pull request indique.
   </Accordion>
   <Accordion title="O que acontece com os comentários antigos quando apago um agente?">
     Os apontamentos dele continuam nos pull requests anteriores. As skills e docs continuam cadastradas na página Skills & docs.

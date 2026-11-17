@@ -39,9 +39,7 @@ import type { ProviderBuildConfig } from '../kernel/types';
 const FLASH = 'fireworks/accounts/fireworks/models/deepseek-v4p1-flash';
 const RETIRED_FLASH =
     'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
-const PRO = 'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813';
-const KIMI = 'fireworks/accounts/fireworks/models/kimi-k2p7-code';
-const GLM52 = 'fireworks/accounts/fireworks/models/glm-5p2';
+const GLM53 = 'fireworks/accounts/fireworks/models/glm-5p3';
 const GLM53F = 'fireworks/accounts/fireworks/models/glm-5p3-flash';
 const bare = (id: string) => id.slice('fireworks/'.length);
 
@@ -105,6 +103,15 @@ describe('model id grammar', () => {
         );
     });
 
+    it.each([
+        ['fireworks/accounts/fireworks/models/deepseek-v4-pro-0813', FLASH],
+        ['fireworks/accounts/fireworks/models/glm-5p2', GLM53],
+        ['fireworks/accounts/fireworks/models/kimi-k2p7-code', GLM53],
+    ])('keeps a config saved with dropped %s reviewing as its replacement', (old, now) => {
+        expect(isKodusCatalogModel(old)).toBe(true);
+        expect(kodusModelPricing(old)).toEqual(kodusModelPricing(now));
+    });
+
     it('does not resolve Object.prototype names as retired ids', () => {
         for (const id of ['constructor', 'toString', '__proto__']) {
             expect(splitKodusModelId(id)).toBeNull();
@@ -137,7 +144,7 @@ describe('catalog = price list', () => {
 
     it('carries exactly the curated set (no frontier closed models)', () => {
         expect(KODUS_CATALOG.map((m) => m.id).sort()).toEqual(
-            [FLASH, PRO, KIMI, GLM52, GLM53F].sort(),
+            [FLASH, GLM53, GLM53F].sort(),
         );
     });
 
@@ -149,7 +156,7 @@ describe('catalog = price list', () => {
         expect(kodusModelPricing(FLASH)).toBeDefined();
         expect(kodusModelPricing('anthropic/claude-sonnet-5')).toBeUndefined();
         expect(isKodusCatalogModel(GLM53F)).toBe(true);
-        expect(isKodusCatalogModel('fireworks/accounts/fireworks/models/glm-5p3')).toBe(false);
+        expect(isKodusCatalogModel('fireworks/accounts/fireworks/models/glm-5p1')).toBe(false);
     });
 
     it('lists the catalog statically under its own id only', () => {
@@ -224,7 +231,7 @@ describe('platform key + endpoint resolution', () => {
         const spy = jest.spyOn(openaiModule, 'build');
         try {
             kodusModule.build({
-                ...slot(PRO),
+                ...slot(GLM53),
                 baseURL: 'https://evil.example/v1',
                 awsRegion: 'us-east-1',
             } as ProviderBuildConfig);
@@ -254,11 +261,11 @@ describe('protocol facts delegate to the upstream under the upstream id', () => 
             baseURL: 'https://api.fireworks.ai/inference/v1',
         }) as ProviderBuildConfig;
 
-    it.each([FLASH, PRO, KIMI, GLM52, GLM53F])('%s: capabilities == upstream(bare)', (id) => {
+    it.each([FLASH, GLM53, GLM53F])('%s: capabilities == upstream(bare)', (id) => {
         expect(kodusModule.capabilities(id)).toEqual(openaiModule.capabilities(bare(id)));
     });
 
-    it.each([FLASH, KIMI, GLM52, GLM53F])('%s: reasoningTraits + temperaturePolicy', (id) => {
+    it.each([FLASH, GLM53, GLM53F])('%s: reasoningTraits + temperaturePolicy', (id) => {
         expect(kodusModule.reasoningTraits(slot(id))).toEqual(
             openaiModule.reasoningTraits(upCfg(id)),
         );
@@ -267,7 +274,7 @@ describe('protocol facts delegate to the upstream under the upstream id', () => 
         );
     });
 
-    it.each([FLASH, KIMI, GLM53F])('%s: reasoning() for every effort', (id) => {
+    it.each([FLASH, GLM53, GLM53F])('%s: reasoning() for every effort', (id) => {
         for (const effort of ['none', 'low', 'medium', 'high'] as const) {
             expect(kodusModule.reasoning!(slot(id), effort)).toEqual(
                 openaiModule.reasoning!(upCfg(id), effort),
@@ -275,10 +282,9 @@ describe('protocol facts delegate to the upstream under the upstream id', () => 
         }
     });
 
-    it("Fireworks' version separator is understood: GLM 5.3 and Kimi K2.7 Code always think", () => {
+    it("Fireworks' version separator is understood: GLM 5.3 always thinks", () => {
         expect(kodusModule.reasoningTraits(slot(GLM53F)).canDisableThinking).toBe(false);
-        expect(kodusModule.reasoningTraits(slot(KIMI)).canDisableThinking).toBe(false);
-        expect(kodusModule.reasoningTraits(slot(GLM52)).canDisableThinking).toBe(true);
+        expect(kodusModule.reasoningTraits(slot(GLM53)).canDisableThinking).toBe(false);
         expect(kodusModule.reasoningTraits(slot(FLASH)).thinksByDefault).toBe(true);
     });
 

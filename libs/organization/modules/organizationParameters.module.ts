@@ -26,6 +26,7 @@ import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ProviderModule } from '@libs/core/infrastructure/services/providers/provider.module';
 import { ParametersModule } from './parameters.module';
+import { TeamModule } from './team.module';
 import { OrganizationModule } from './organization.module';
 import {
     KODUS_PROVIDER_GATE_TOKEN,
@@ -38,6 +39,8 @@ import {
         forwardRef(() => PlatformModule),
         forwardRef(() => CodebaseModule),
         forwardRef(() => ParametersModule),
+        // The BYOK model-delete guard reads every team's code-review config.
+        forwardRef(() => TeamModule),
         // The Kodus provider gate reads the org's release track.
         forwardRef(() => OrganizationModule),
         ProviderModule,

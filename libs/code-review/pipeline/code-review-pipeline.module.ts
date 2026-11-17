@@ -1,3 +1,4 @@
+import { CustomAgentRunsModule } from '@libs/code-review/modules/custom-agent-runs.module';
 import { CloneParamsResolverService } from './services/clone-params-resolver.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
@@ -15,6 +16,11 @@ import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
 import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
+import { AssessPrRiskStage } from './stages/assess-pr-risk.stage';
+import { PrRiskAssessmentService } from './services/pr-risk-assessment.service';
+import { ApprovalPoliciesService } from './services/approval-policies.service';
+import { OwnChangeRequestService } from './services/own-change-request.service';
+import { ResolveRiskRoutingStage } from './stages/resolve-risk-routing.stage';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
@@ -92,6 +98,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
 @Module({
     imports: [
+        CustomAgentRunsModule,
         // Explicit even though FeatureGateModule is @Global(): the pipeline
         // (AgentReviewStage) injects FeatureGateService, so declaring it here
         // guarantees availability for any consumer instead of relying on a
@@ -173,6 +180,11 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CreateFileCommentsStage,
         AggregateResultsStage,
         DecidePrApprovalStage,
+        AssessPrRiskStage,
+        PrRiskAssessmentService,
+        ApprovalPoliciesService,
+        OwnChangeRequestService,
+        ResolveRiskRoutingStage,
         UpdateCommentsAndGenerateSummaryStage,
         RequestChangesOrApproveStage,
         ValidateSuggestionsStage,
@@ -222,6 +234,9 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CodeReviewPipelineObserver,
     ],
     exports: [
+        ApprovalPoliciesService,
+        OwnChangeRequestService,
+        PrRiskAssessmentService,
         CodeReviewPipelineStrategy,
 
         CodeReviewJobProcessorService,

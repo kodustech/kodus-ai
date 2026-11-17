@@ -4,6 +4,7 @@
  * edit that silently drops a section is caught.
  */
 import {
+    buildCompactUserPrompt,
     buildSystemPrompt,
     buildUserPrompt,
     formatTraceDecisions,
@@ -515,25 +516,6 @@ describe('repository instructions block', () => {
         expect(sys).toContain('readRepoInstruction');
     });
 
-    it('tells the generalist to read every listed file, not only when it needs one', () => {
-        const sys = buildSystemPrompt(
-            baseInput({ repoInstructions }),
-            generalistMeta,
-        );
-        expect(sys).toMatch(
-            /Before you finish, read each file listed here with readRepoInstruction/,
-        );
-        expect(sys).not.toContain('when you need what it says');
-    });
-
-    it('says readRepoInstruction works without the other tools', () => {
-        const sys = buildSystemPrompt(
-            baseInput({ remoteCommands: undefined, repoInstructions }),
-            generalistMeta,
-        );
-        expect(sys).toMatch(/readRepoInstruction[^.]*even[^.]*no other tools/);
-    });
-
     it('leaves the file content out of the finder prompt', () => {
         const sys = buildSystemPrompt(
             baseInput({ repoInstructions }),
@@ -609,5 +591,43 @@ describe('CrossRepoBoundary lane', () => {
             'Do not report boundary mismatches your instructions do not cover.',
         );
         expect(prompt).toContain('acme/web');
+    });
+});
+
+describe('custom agent output format', () => {
+    const agentMeta = { ...meta, conventionGuides: [] };
+
+    it.each([
+        ['full', buildUserPrompt],
+        ['compact', buildCompactUserPrompt],
+    ])('asks a custom agent for the full finding (%s prompt)', (_, build) => {
+        const prompt = build(baseInput(), agentMeta);
+        expect(prompt).toContain('Assign a confidence score (1-10)');
+        if (build === buildUserPrompt) {
+            expect(prompt).toContain('"existingCode"');
+            expect(prompt).toContain('"severity": "critical|high|medium|low"');
+        }
+    });
+
+    it('asks the finder for the five fields only', () => {
+        const prompt = buildUserPrompt(baseInput(), meta);
+        expect(prompt).not.toContain('"existingCode"');
+        expect(prompt).not.toContain('Assign a confidence score');
+    });
+});
+
+describe('PRContext truncation', () => {
+    const prContext = (prBody: string) =>
+        /<PRContext>([\s\S]*)<\/PRContext>/.exec(
+            buildUserPrompt(baseInput({ prTitle: 't', prBody }), meta),
+        )![1];
+    const LONE_SURROGATE =
+        /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+
+    it('does not split an emoji that straddles the 500-character limit', () => {
+        // The emoji's high surrogate is unit 499, its low surrogate unit 500.
+        const context = prContext('x'.repeat(499) + '\u{1F527} more text');
+        expect(LONE_SURROGATE.test(context)).toBe(false);
+        expect(context).toBe('Title: t\n' + 'x'.repeat(499));
     });
 });

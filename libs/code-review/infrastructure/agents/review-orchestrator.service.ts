@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { llmErrorLogLevel } from '@libs/llm/error-classifier';
+import { classifyLLMError, llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Injectable, Optional } from '@nestjs/common';
 
 import {
@@ -19,7 +19,8 @@ import {
     filesInAgentScope,
     ignoredFilesInAgentScope,
     scopeCallGraph,
-    selectCustomAgents,
+    customAgentCandidates,
+    customAgentRiskSkipReason,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
@@ -275,7 +276,7 @@ export class ReviewOrchestratorService {
                     },
                 });
             }
-            for (const agent of selectCustomAgents(
+            for (const agent of customAgentCandidates(
                 customAgents,
                 onlyCustomAgent,
             )) {
@@ -295,6 +296,16 @@ export class ReviewOrchestratorService {
                     droppedByVerify: 0,
                 };
                 customAgentRuns.push(run);
+                const riskSkip = customAgentRiskSkipReason(
+                    agent,
+                    agentInput.riskAssessment,
+                    onlyCustomAgent,
+                );
+                if (riskSkip) {
+                    run.status = 'risk-condition-not-met';
+                    run.reason = riskSkip;
+                    continue;
+                }
                 if (files.length === 0) {
                     run.status = 'no-matching-files';
                     this.logger.log({
@@ -458,6 +469,7 @@ export class ReviewOrchestratorService {
                         (result.value.discardedByVerifyError?.length ?? 0);
                     if (result.value.hitHardLimit) {
                         customRun.status = 'incomplete';
+                        customRun.reason = result.value.finishReason;
                     }
                 }
 
@@ -536,6 +548,12 @@ export class ReviewOrchestratorService {
                 });
                 if (customRun) {
                     customRun.status = 'failed';
+                    // The category and status only: the provider's message
+                    // can carry key fragments, and this lands in the logs.
+                    const { category, httpStatus } = classifyLLMError(err);
+                    customRun.reason = httpStatus
+                        ? `${category} (HTTP ${httpStatus})`
+                        : category;
                 }
 
                 // A thrown agent is dropped by allSettled, and with it anything
@@ -593,7 +611,7 @@ export class ReviewOrchestratorService {
 
     private getMaxStepsForAgent(
         agentName: string,
-        reviewMode?: 'fast' | 'normal' | 'deep',
+        reviewMode?: 'fast' | 'balanced' | 'deep',
         changedFilesCount = 0,
     ): number {
         if (reviewMode === 'deep') {

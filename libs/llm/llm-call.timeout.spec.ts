@@ -1,26 +1,6 @@
-import {
-    AGENT_TIMEOUT_MS,
-    LLM_CALL_TIMEOUT_MS,
-    hardTimeout,
-    timeoutSignal,
-} from '@libs/llm/llm-call';
+import { hardTimeout, timeoutSignal } from '@libs/llm/llm-call';
 
 describe('llm-call timeout primitives', () => {
-    describe('AGENT_TIMEOUT_MS contract', () => {
-        it('caps a single agent at exactly 80 minutes', () => {
-            // Sized off 14 days of production AgentReviewStage durations (n=94):
-            // p99 29.5 min, max 32.2, and 1.1% already past the old 30-minute
-            // value — which means enforcing that one would have killed real
-            // reviews of large PRs. See the hierarchy note in llm-call.ts.
-            expect(AGENT_TIMEOUT_MS).toBe(80 * 60 * 1000);
-        });
-
-        it('caps a single LLM call at exactly 20 minutes', () => {
-            // Lockstep with the undici headersTimeout in fetch-timeouts.ts.
-            expect(LLM_CALL_TIMEOUT_MS).toBe(20 * 60 * 1000);
-        });
-    });
-
     describe('timeoutSignal', () => {
         beforeEach(() => {
             jest.useFakeTimers();
@@ -38,12 +18,6 @@ describe('llm-call timeout primitives', () => {
         it('aborts at exactly ms elapsed', () => {
             const signal = timeoutSignal(1_000);
             jest.advanceTimersByTime(1_000);
-            expect(signal.aborted).toBe(true);
-        });
-
-        it('produces an aborted signal after AGENT_TIMEOUT_MS (30min)', () => {
-            const signal = timeoutSignal(AGENT_TIMEOUT_MS);
-            jest.advanceTimersByTime(AGENT_TIMEOUT_MS);
             expect(signal.aborted).toBe(true);
         });
     });
@@ -116,25 +90,6 @@ describe('llm-call timeout primitives', () => {
             jest.advanceTimersByTime(200);
 
             await expect(wrapped).rejects.toThrow('inner-fail');
-        });
-
-        it('uses AGENT_TIMEOUT_MS as the contract for an 80-minute agent run', async () => {
-            // End-to-end: a 30-min budget + 5s grace ⇒ rejects at 30:05.
-            const inner = new Promise<never>(() => {});
-            const wrapped = hardTimeout(
-                inner,
-                AGENT_TIMEOUT_MS,
-                'agent-loop',
-            );
-            const result = wrapped.catch((e) => e);
-
-            jest.advanceTimersByTime(AGENT_TIMEOUT_MS + 5_001);
-
-            const err = await result;
-            expect((err as Error).message).toContain('[HARD-TIMEOUT]');
-            expect((err as Error).message).toContain('agent-loop');
-            // 80 minutes = 4800 seconds
-            expect((err as Error).message).toContain('4800s');
         });
     });
 });

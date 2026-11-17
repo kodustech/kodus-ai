@@ -31,6 +31,8 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
                 name: tool.name,
                 description: tool.description,
                 annotations: tool.annotations,
+                _meta: tool._meta,
+                serverName: 'kodus-mcp',
                 inputSchema: { type: 'object', properties: {} },
             })),
         executeTool: async (name: string, args: Record<string, unknown>) => {
@@ -50,6 +52,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversation/conversationAgent';
 import { KodyIssuesTools } from '@libs/mcp-server/tools/kodyIssues.tools';
 import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
+import { KODUS_MCP_INTEGRATION_ID } from '@libs/mcp-server/utils/mcp-auth.constants';
 
 import {
     CONFIRMATION_TURN,
@@ -61,10 +64,10 @@ import {
 } from './__test-utils__/kody-thread-scenarios';
 
 /**
- * The REAL Kodus MCP tool definitions — names, descriptions and annotations as
- * the server serves them. Using the real declarations rather than a hand-kept
- * copy is what proves the agent derives its behavior from them: re-annotate a
- * tool at the source and these expectations move with it.
+ * The REAL Kodus MCP tool definitions — names, descriptions, annotations and
+ * `_meta` as the server serves them. Using the real declarations rather than a
+ * hand-kept copy is what proves the agent derives its behavior from them:
+ * re-annotate a tool at the source and these expectations move with it.
  */
 const ORG_MCP_TOOLS = [
     ...new KodyRulesTools({} as never, {} as never, {} as never).getAllTools(),
@@ -179,9 +182,13 @@ function buildProvider(conversationStore?: {
         } as any,
         { resolveTaskSlot: jest.fn().mockResolvedValue(null) } as any,
         {
-            getConnections: jest
-                .fn()
-                .mockResolvedValue([{ name: 'kodus-mcp', type: 'http' }]),
+            getConnections: jest.fn().mockResolvedValue([
+                {
+                    name: 'kodus-mcp',
+                    type: 'http',
+                    integrationId: KODUS_MCP_INTEGRATION_ID,
+                },
+            ]),
         } as any,
         undefined,
         conversationStore as any,

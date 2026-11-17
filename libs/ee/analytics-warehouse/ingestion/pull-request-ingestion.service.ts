@@ -510,16 +510,18 @@ export class PullRequestIngestionService {
                         "suggestion_id", "organizationId", "pullRequestId",
                         "repositoryId", "filePath", "label", "severity",
                         "suggestionDeliveryStatus", "suggestionImplementationStatus",
-                        "suggestionCreatedAt", "brokenKodyRulesIds", "raw"
+                        "suggestionCreatedAt", "brokenKodyRulesIds", "raw",
+                        "suggestionImplementationCheckOutcome"
                      ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13
                      )
                      ON CONFLICT ("suggestion_id") DO UPDATE SET
                         "suggestionDeliveryStatus" = EXCLUDED."suggestionDeliveryStatus",
                         "suggestionImplementationStatus" = EXCLUDED."suggestionImplementationStatus",
                         "suggestionCreatedAt" = EXCLUDED."suggestionCreatedAt",
                         "brokenKodyRulesIds" = EXCLUDED."brokenKodyRulesIds",
-                        "raw" = EXCLUDED."raw"`,
+                        "raw" = EXCLUDED."raw",
+                        "suggestionImplementationCheckOutcome" = EXCLUDED."suggestionImplementationCheckOutcome"`,
                     [
                         s.id,
                         pr.organizationId,
@@ -535,6 +537,14 @@ export class PullRequestIngestionService {
                             ? s.brokenKodyRulesIds
                             : null,
                         JSON.stringify(s),
+                        // `unmeasured` only when no check ever decided it: the
+                        // Cockpit keeps those out of the rate. A suggestion an
+                        // earlier check decided stays `decided`.
+                        s.implementationCheck?.verdict
+                            ? 'decided'
+                            : typeof s.implementationCheck?.outcome === 'string'
+                              ? s.implementationCheck.outcome
+                              : null,
                     ],
                 );
                 suggestions += 1;

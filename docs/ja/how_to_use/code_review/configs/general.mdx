@@ -44,6 +44,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -51,6 +52,11 @@ reviewCadence:
     timeWindow: 15 # 分
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalLabels: []
+approvalAuthors: []
+approvalRiskActive: false
+approvalRiskInstructions: ''
+approvalSensitivePaths: []
 isRequestChangesActive: false # GitLab では利用できません
 runOnDraft: true
 ignorePaths:
@@ -159,10 +165,28 @@ Kody は PR が開かれたときに自動的にレビューするか、`@kody s
   </Tab>
 </Tabs>
 
+### レビューモード
+
+Kody がプルリクエストをどこまで深くレビューするか（`reviewMode`）：
+
+- **Balanced**（デフォルト）：標準のレビュー。
+- **Heavy**：9 つの専門レビュアーがメインレビューと並行して実行され、モデル呼び出しが増える代わりに
+  リコールが高まります。[Heavy mode](/ja/how_to_use/code_review/review_directive#heavy-mode) を参照してください。
+
+このモードはすべてのレビュー（自動レビュー、`@kody review`、`kodus review`）に適用されます。1 回の
+レビューだけ、`--heavy` または `--balanced` でもう一方のモードを指定できます。このページの他の設定と
+同様に、グローバル、リポジトリ単位、ディレクトリ単位で設定できます。
+
+2 つの選択肢の下にある **Review models** には、各モードが実行されるモデルが読み取り専用で表示されます。
+モデルは **AI providers → Routing** で決まります（変更するには **View organization routing** を開きます）。
+ただし、リポジトリまたはディレクトリが独自のモデルを設定している場合は、そのモデルが両方のモードで
+使われます。接続済みのモデルが 1 つだけの場合、このセクションはその旨を表示するだけです。独自の
+モデルがない場合（Kodus 管理）は表示されません。
+
 ### PR ワークフロー
 
 #### PR の自動承認
-**Enable Pull Request Approval** — 問題が見つからない場合、Kody は PR を承認します。
+**Automatic PR approval** — Kody は、クリーンなレビューの後、または自分が残したコメントがすべて解決された時点で PR を承認します。マージは行いません。**Conditional approval (Beta)** を使うと、Kody が承認できる PR と、代わりに人が承認すべき場合を指定できます。[自動承認](/ja/how_to_use/code_review/configs/auto_approve)を参照してください。
 
 **対応プラットフォーム：** GitHub、GitLab、Bitbucket、Azure Repos、Forgejo
 

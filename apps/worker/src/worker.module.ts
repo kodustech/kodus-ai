@@ -79,6 +79,46 @@ export class WorkerModule {
             SharedMongoModule.forRoot(),
         ];
 
+        // The modules the job pipeline needs, for either consuming role.
+        const jobImports = [
+            CodebaseModule,
+            CodeReviewFeedbackModule,
+            AutomationModule,
+            PlatformModule,
+            PlatformDataModule,
+            ParametersModule,
+            TeamModule,
+            OrganizationModule,
+            LicenseModule,
+            SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
+            NotificationModule,
+        ];
+
+        if (role === 'security-scan') {
+            return {
+                module: WorkerModule,
+                imports: [
+                    ...baseImports,
+                    SharedPostgresModule.forRoot({ poolSize: 6 }),
+                    RabbitMQWrapperModule.register({
+                        enableConsumers: true,
+                        securityScanOnly: true,
+                    }),
+                    WorkflowModule.register({ type: 'security-scan-worker' }),
+                    ...jobImports,
+                ],
+                providers: [
+                    WorkerDrainService,
+                    WorkerHealthGuardService,
+                    {
+                        provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+                        useClass: ConditionalApprovalAccessService,
+                    },
+                    LangfuseShutdownProvider,
+                ] satisfies Provider[],
+            };
+        }
+
         if (role === 'code-review') {
             return {
                 module: WorkerModule,
@@ -87,17 +127,7 @@ export class WorkerModule {
                     SharedPostgresModule.forRoot({ poolSize: 12 }),
                     RabbitMQWrapperModule.register({ enableConsumers: true }),
                     WorkflowModule.register({ type: 'worker' }),
-                    CodebaseModule,
-                    CodeReviewFeedbackModule,
-                    AutomationModule,
-                    PlatformModule,
-                    PlatformDataModule,
-                    ParametersModule,
-                    TeamModule,
-                    OrganizationModule,
-                    LicenseModule,
-                    SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
-                    NotificationModule,
+                    ...jobImports,
                     SelfHostedBeaconModule,
                 ],
                 providers: [

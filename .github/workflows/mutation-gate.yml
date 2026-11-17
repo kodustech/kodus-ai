@@ -88,6 +88,12 @@ jobs:
                   export const environment = devEnvironment;
                   EOF
 
+            # A changed spec that drives the real LocalSandbox shells out to
+            # ripgrep, as production does (docker/Dockerfile installs it).
+            # Without it Stryker's initial run fails with `spawn rg ENOENT`.
+            - name: Install ripgrep (the local sandbox shells out to it)
+              run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
             - name: Run the mutation gate on changed files
               id: run
               env:

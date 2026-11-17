@@ -16,10 +16,17 @@ import { ORGANIZATIONS_PATHS } from "@services/organizations";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { useGetGithubIntegrationByInstallId } from "@services/setup/hooks";
 import { InstallationStatus } from "@services/setup/types";
-import { AxiosError } from "axios";
 import { getCookie, deleteCookie } from "cookies-next/client";
 import { CopyIcon } from "lucide-react";
+import { startGithubInstallationAuthorization } from "@services/setup/github-installation-authorization";
+import {
+    GITHUB_CODE_PARAM,
+    GITHUB_ERROR_PARAM,
+    GITHUB_STATE_PARAM,
+    githubAuthorizationErrorMessage,
+} from "src/core/integrations/github-installation-authorization";
 import { PlatformType } from "src/core/types";
+import { apiErrorMessage } from "src/core/utils/api-error";
 import { axiosAuthorized } from "src/core/utils/axios";
 
 type Step = "checking" | "creating" | "success" | "needs-login" | "failed";
@@ -28,6 +35,11 @@ export default function GithubIntegrationClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const installationId = searchParams.get("installation_id");
+    // Back from GitHub's user authorization (see
+    // github-installation-authorization).
+    const githubCode = searchParams.get(GITHUB_CODE_PARAM);
+    const githubState = searchParams.get(GITHUB_STATE_PARAM);
+    const githubError = searchParams.get(GITHUB_ERROR_PARAM);
 
     const { data, isLoading, error } = useGetGithubIntegrationByInstallId(
         installationId ?? "",
@@ -54,6 +66,12 @@ export default function GithubIntegrationClient() {
     }
 
     useEffect(() => {
+        if (githubError) {
+            setFailureMessage(githubAuthorizationErrorMessage(githubError));
+            setStep("failed");
+            return;
+        }
+
         if (!installationId) {
             setStep("failed");
             return;
@@ -61,7 +79,6 @@ export default function GithubIntegrationClient() {
         if (isLoading) return;
 
         if (data?.status === InstallationStatus.SUCCESS) {
-            setOrganizationName(data.organizationName);
             setStep("success");
             return;
         }
@@ -83,6 +100,8 @@ export default function GithubIntegrationClient() {
             }
         })();
 
+        // An install started from the onboarding never lands here: proxy.ts
+        // leaves it on the setup page.
         if (!team?.uuid) {
             setStep("needs-login");
             return;
@@ -90,6 +109,19 @@ export default function GithubIntegrationClient() {
 
         creatingRef.current = true;
         setStep("creating");
+
+        if (!githubCode || !githubState) {
+            startGithubInstallationAuthorization(
+                installationId,
+                `/github-integration?installation_id=${encodeURIComponent(installationId)}`,
+            ).catch((err) => {
+                console.error("[GithubIntegration] authorization failed", err);
+                setFailureMessage(apiErrorMessage(err));
+                setStep("failed");
+                creatingRef.current = false;
+            });
+            return;
+        }
 
         (async () => {
             try {
@@ -110,6 +142,8 @@ export default function GithubIntegrationClient() {
                 const response = await createCodeManagementIntegration({
                     integrationType: PlatformType.GITHUB,
                     installationId,
+                    githubCode,
+                    githubState,
                     organizationAndTeamData: {
                         organizationId,
                         teamId: team.uuid!,
@@ -151,20 +185,24 @@ export default function GithubIntegrationClient() {
                 setStep("failed");
             } catch (err) {
                 console.error("[GithubIntegration] failed to create", err);
-                if (err instanceof AxiosError) {
-                    const backendMessage = (err.response?.data as {
-                        message?: string;
-                    })?.message;
-                    setFailureMessage(backendMessage);
-                }
+                setFailureMessage(apiErrorMessage(err));
                 setStep("failed");
             } finally {
                 creatingRef.current = false;
             }
         })();
-    }, [data, error, installationId, isLoading, router]);
+    }, [
+        data,
+        error,
+        installationId,
+        isLoading,
+        router,
+        githubCode,
+        githubState,
+        githubError,
+    ]);
 
-    if (step === "checking" || step === "creating" || isLoading) {
+    if (step === "checking" || step === "creating" || (isLoading && !githubError)) {
         return (
             <div className="flex h-full w-full items-center justify-center">
                 <Spinner />
@@ -178,11 +216,17 @@ export default function GithubIntegrationClient() {
                 <Card className="w-lg">
                     <CardHeader>
                         <CardTitle>
-                            GitHub integration with{" "}
-                            <span className="text-primary-light">
-                                {organizationName ?? data?.organizationName}
-                            </span>{" "}
-                            successfully completed!
+                            {organizationName ? (
+                                <>
+                                    GitHub integration with{" "}
+                                    <span className="text-primary-light">
+                                        {organizationName}
+                                    </span>{" "}
+                                    successfully completed!
+                                </>
+                            ) : (
+                                "GitHub integration successfully completed!"
+                            )}
                         </CardTitle>
                     </CardHeader>
 

@@ -124,16 +124,6 @@ const formatterCall = () =>
     (formatSuggestionContent as jest.Mock).mock.calls.at(-1);
 
 describe('AgentReviewStage — formatter input', () => {
-    it('passes each finding title', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
-
-        await run(stage, makeContext());
-
-        const [items] = formatterCall();
-        expect(items[0].title).toBe('user object can be null and is dereferenced');
-    });
-
     it('drops a saved copy of a shipped default instead of treating it as team guidelines', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));

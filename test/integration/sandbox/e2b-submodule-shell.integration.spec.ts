@@ -230,135 +230,25 @@ describe('E2B submodule fetch — the real command strings, against real git', (
         ({ server: foreignServer, port: foreignPort } =
             await startForeignHost());
 
-        const sub = join(scratch, 'commons');
-        await git(['init', '-b', 'main', sub]);
-        await writeFile(
-            join(sub, 'date.ts'),
-            'export const coerceToDate = (v: unknown) => new Date(String(v));\n',
-            'utf8',
-        );
-        await git(['-C', sub, 'add', '.']);
-        await git(['-C', sub, 'commit', '-m', 'commons']);
-        await publish(sub, 'commons');
-        const { stdout: subSha } = await git(['-C', sub, 'rev-parse', 'HEAD']);
-
-        const sub2 = join(scratch, 'brain');
-        await git(['init', '-b', 'main', sub2]);
-        await writeFile(
-            join(sub2, 'brain.ts'),
-            'export const b = 2;\n',
-            'utf8',
-        );
-        await git(['-C', sub2, 'add', '.']);
-        await git(['-C', sub2, 'commit', '-m', 'brain']);
-        await publish(sub2, 'brain');
-        const { stdout: sub2Sha } = await git([
-            '-C',
-            sub2,
-            'rev-parse',
-            'HEAD',
-        ]);
-
-        const buildSuper = async (name: string, submoduleUrl: string) => {
+        // Every fixture repository is independent of the others except for
+        // the submodule SHAs, so they are built concurrently: sequential git
+        // spawns were most of this suite's wall time.
+        const buildSub = async (name: string, file: string, body: string) => {
             const dir = join(scratch, name);
             await git(['init', '-b', 'main', dir]);
-            await writeFile(
-                join(dir, '.gitmodules'),
-                `[submodule "commons-mod"]\n\tpath = packages/commons\n\turl = ${submoduleUrl}\n`,
-                'utf8',
-            );
-            await writeFile(
-                join(dir, 'app.ts'),
-                'export const a = 1;\n',
-                'utf8',
-            );
-            await git(['-C', dir, 'add', '.gitmodules', 'app.ts']);
-            await git([
-                '-C',
-                dir,
-                'update-index',
-                '--add',
-                '--cacheinfo',
-                `160000,${subSha.trim()},packages/commons`,
-            ]);
+            await writeFile(join(dir, file), body, 'utf8');
+            await git(['-C', dir, 'add', '.']);
             await git(['-C', dir, 'commit', '-m', name]);
             await publish(dir, name);
+            const { stdout } = await git(['-C', dir, 'rev-parse', 'HEAD']);
+            return stdout;
         };
-
-        await buildSuper('super', `http://127.0.0.1:${port}/commons.git`);
-        await buildSuper('super-relative', '../commons.git');
-        await buildSuper(
-            'super-foreign',
-            `http://127.0.0.1:${foreignPort}/commons.git`,
-        );
-        await buildSuper(
-            'super-escape',
-            '../../../../../../evil.example/commons.git',
-        );
-
-        // One legitimate submodule NEXT TO a broken one. `git submodule init`
-        // is all-or-nothing, so before the per-path retry this fetched neither.
-        {
-            const dir = join(scratch, 'super-mixed');
-            await git(['init', '-b', 'main', dir]);
-            await writeFile(
-                join(dir, '.gitmodules'),
-                `[submodule "good"]\n\tpath = packages/commons\n\turl = http://127.0.0.1:${port}/commons.git\n` +
-                    `[submodule "broken"]\n\tpath = packages/broken\n\turl = ../../../../../../evil.example/x.git\n`,
-                'utf8',
-            );
-            await git(['-C', dir, 'add', '.gitmodules']);
-            for (const p of ['packages/commons', 'packages/broken']) {
-                await git([
-                    '-C',
-                    dir,
-                    'update-index',
-                    '--add',
-                    '--cacheinfo',
-                    `160000,${subSha.trim()},${p}`,
-                ]);
-            }
-            await git(['-C', dir, 'commit', '-m', 'mixed']);
-            await publish(dir, 'super-mixed');
-        }
-
-        // Two same-host submodules, both valid. The test denies ONE of them to
-        // model an installation that covers `brain` but not `commons`.
-        {
-            const dir = join(scratch, 'super-two');
-            await git(['init', '-b', 'main', dir]);
-            await writeFile(
-                join(dir, '.gitmodules'),
-                `[submodule "commons-mod"]\n\tpath = packages/commons\n\turl = http://127.0.0.1:${port}/commons.git\n` +
-                    `[submodule "brain-mod"]\n\tpath = packages/brain\n\turl = http://127.0.0.1:${port}/brain.git\n`,
-                'utf8',
-            );
-            await git(['-C', dir, 'add', '.gitmodules']);
-            await git([
-                '-C',
-                dir,
-                'update-index',
-                '--add',
-                '--cacheinfo',
-                `160000,${subSha.trim()},packages/commons`,
-            ]);
-            await git([
-                '-C',
-                dir,
-                'update-index',
-                '--add',
-                '--cacheinfo',
-                `160000,${sub2Sha.trim()},packages/brain`,
-            ]);
-            await git(['-C', dir, 'commit', '-m', 'two']);
-            await publish(dir, 'super-two');
-        }
 
         // A submodule pinned to a commit that is NOT the branch tip, served by
         // a repository that does not allow unadvertised-object fetches. This
         // is the ordinary state of a submodule: it is pinned, and upstream
         // moves on.
-        {
+        const buildPinned = async () => {
             const pinned = join(scratch, 'pinned-sub');
             await git(['init', '-b', 'main', pinned]);
             await writeFile(
@@ -403,7 +293,116 @@ describe('E2B submodule fetch — the real command strings, against real git', (
             ]);
             await git(['-C', dir, 'commit', '-m', 'pinned']);
             await publish(dir, 'super-pinned');
-        }
+        };
+
+        const [subSha, sub2Sha] = await Promise.all([
+            buildSub(
+                'commons',
+                'date.ts',
+                'export const coerceToDate = (v: unknown) => new Date(String(v));\n',
+            ),
+            buildSub('brain', 'brain.ts', 'export const b = 2;\n'),
+            buildPinned(),
+        ]);
+
+        const buildSuper = async (name: string, submoduleUrl: string) => {
+            const dir = join(scratch, name);
+            await git(['init', '-b', 'main', dir]);
+            await writeFile(
+                join(dir, '.gitmodules'),
+                `[submodule "commons-mod"]\n\tpath = packages/commons\n\turl = ${submoduleUrl}\n`,
+                'utf8',
+            );
+            await writeFile(
+                join(dir, 'app.ts'),
+                'export const a = 1;\n',
+                'utf8',
+            );
+            await git(['-C', dir, 'add', '.gitmodules', 'app.ts']);
+            await git([
+                '-C',
+                dir,
+                'update-index',
+                '--add',
+                '--cacheinfo',
+                `160000,${subSha.trim()},packages/commons`,
+            ]);
+            await git(['-C', dir, 'commit', '-m', name]);
+            await publish(dir, name);
+        };
+
+        // One legitimate submodule NEXT TO a broken one. `git submodule init`
+        // is all-or-nothing, so before the per-path retry this fetched neither.
+        const buildMixed = async () => {
+            const dir = join(scratch, 'super-mixed');
+            await git(['init', '-b', 'main', dir]);
+            await writeFile(
+                join(dir, '.gitmodules'),
+                `[submodule "good"]\n\tpath = packages/commons\n\turl = http://127.0.0.1:${port}/commons.git\n` +
+                    `[submodule "broken"]\n\tpath = packages/broken\n\turl = ../../../../../../evil.example/x.git\n`,
+                'utf8',
+            );
+            await git(['-C', dir, 'add', '.gitmodules']);
+            for (const p of ['packages/commons', 'packages/broken']) {
+                await git([
+                    '-C',
+                    dir,
+                    'update-index',
+                    '--add',
+                    '--cacheinfo',
+                    `160000,${subSha.trim()},${p}`,
+                ]);
+            }
+            await git(['-C', dir, 'commit', '-m', 'mixed']);
+            await publish(dir, 'super-mixed');
+        };
+
+        // Two same-host submodules, both valid. The test denies ONE of them to
+        // model an installation that covers `brain` but not `commons`.
+        const buildTwo = async () => {
+            const dir = join(scratch, 'super-two');
+            await git(['init', '-b', 'main', dir]);
+            await writeFile(
+                join(dir, '.gitmodules'),
+                `[submodule "commons-mod"]\n\tpath = packages/commons\n\turl = http://127.0.0.1:${port}/commons.git\n` +
+                    `[submodule "brain-mod"]\n\tpath = packages/brain\n\turl = http://127.0.0.1:${port}/brain.git\n`,
+                'utf8',
+            );
+            await git(['-C', dir, 'add', '.gitmodules']);
+            await git([
+                '-C',
+                dir,
+                'update-index',
+                '--add',
+                '--cacheinfo',
+                `160000,${subSha.trim()},packages/commons`,
+            ]);
+            await git([
+                '-C',
+                dir,
+                'update-index',
+                '--add',
+                '--cacheinfo',
+                `160000,${sub2Sha.trim()},packages/brain`,
+            ]);
+            await git(['-C', dir, 'commit', '-m', 'two']);
+            await publish(dir, 'super-two');
+        };
+
+        await Promise.all([
+            buildSuper('super', `http://127.0.0.1:${port}/commons.git`),
+            buildSuper('super-relative', '../commons.git'),
+            buildSuper(
+                'super-foreign',
+                `http://127.0.0.1:${foreignPort}/commons.git`,
+            ),
+            buildSuper(
+                'super-escape',
+                '../../../../../../evil.example/commons.git',
+            ),
+            buildMixed(),
+            buildTwo(),
+        ]);
     });
 
     afterAll(async () => {
@@ -467,20 +466,26 @@ describe('E2B submodule fetch — the real command strings, against real git', (
 
     it('populates a same-host submodule through the real shell', async () => {
         const { dir } = await checkout('super');
+        // `.gitmodules` names the section "commons-mod" but the path is
+        // `packages/commons`: config is keyed by NAME, `submodule update` takes
+        // the PATH. Mixing them up fetches nothing.
         const file = await readFile(
             join(dir, 'packages', 'commons', 'date.ts'),
             'utf8',
         );
         expect(file).toContain('coerceToDate');
-    });
-
-    it('the `--get-regexp` pattern survives the shell', async () => {
-        await checkout('super');
         // If the shell had eaten the backslashes or the `$`, the dump would
         // have matched nothing and no submodule would have been fetched.
         expect(
             commands.some((c) => c.includes("'^submodule\\..*\\.url$'")),
         ).toBe(true);
+        // The server 401s anything without the exact header, so a mangled or
+        // wrongly-scoped key could not have fetched the submodule above...
+        expect(commands.some((c) => c.includes("'submodule' 'update'"))).toBe(
+            true,
+        );
+        // ...and it never travels as a command argument.
+        for (const c of commands) expect(c).not.toContain(AUTH);
     });
 
     it('populates a RELATIVE url — proves `-c remote.origin.url=` survives too', async () => {
@@ -490,17 +495,6 @@ describe('E2B submodule fetch — the real command strings, against real git', (
             'utf8',
         );
         expect(file).toContain('coerceToDate');
-    });
-
-    it('the scoped auth header authenticates — it is what the server accepted', async () => {
-        await checkout('super');
-        // The server 401s anything without the exact header, so a mangled or
-        // wrongly-scoped key could not have fetched the submodule above.
-        expect(commands.some((c) => c.includes("'submodule' 'update'"))).toBe(
-            true,
-        );
-        // ...and it never travels as a command argument.
-        for (const c of commands) expect(c).not.toContain(AUTH);
     });
 
     it('never fetches a foreign-host submodule, and never offers it the token', async () => {
@@ -602,15 +596,5 @@ describe('E2B submodule fetch — the real command strings, against real git', (
                     !c.includes("'--depth=1'"),
             ),
         ).toBe(true);
-    });
-
-    it('a submodule NAME that differs from its PATH is handled', async () => {
-        // `.gitmodules` names the section "commons-mod" but the path is
-        // `packages/commons`: config is keyed by NAME, `submodule update` takes
-        // the PATH. Mixing them up fetches nothing.
-        const { dir } = await checkout('super');
-        expect(await readdir(join(dir, 'packages', 'commons'))).toContain(
-            'date.ts',
-        );
     });
 });

@@ -41,15 +41,131 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         repo = new PullRequestsRepository(model as any);
     });
 
+    describe("Kody's change request", () => {
+        const T1 = '2026-11-11T17:23:13.000Z';
+        const target = {
+            'organizationId': 'org-A',
+            'repository.id': 'repo-alpha',
+            'number': 7,
+        };
+
+        it('records a request on the targeted PR, adding to an earlier one', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
+
+            await expect(
+                repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
+                    requestedAt: T1,
+                    commentIds: ['101', '102'],
+                    summaryCommentId: 'd-1',
+                }),
+            ).resolves.toBe(true);
+
+            expect(model.updateOne).toHaveBeenCalledWith(target, {
+                $set: { 'kodyChangeRequest.requestedAt': T1 },
+                $addToSet: {
+                    'kodyChangeRequest.commentIds': { $each: ['101', '102'] },
+                    'kodyChangeRequest.summaryCommentIds': 'd-1',
+                },
+            });
+        });
+
+        it('adds no summary when the host left none, and says when no PR matched', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 0 });
+
+            await expect(
+                repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
+                    requestedAt: T1,
+                    commentIds: ['101'],
+                }),
+            ).resolves.toBe(false);
+
+            expect(model.updateOne.mock.calls[0][1].$addToSet).toEqual({
+                'kodyChangeRequest.commentIds': { $each: ['101'] },
+            });
+        });
+
+        it('forgets only the request it was handed, by unsetting the field', async () => {
+            model.updateOne = jest
+                .fn()
+                .mockResolvedValueOnce({ modifiedCount: 1 })
+                .mockResolvedValueOnce({ modifiedCount: 0 });
+
+            await expect(
+                repo.clearKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(true);
+            // A request made again since: another `requestedAt`, no match.
+            await expect(
+                repo.clearKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(false);
+
+            expect(model.updateOne).toHaveBeenCalledWith(
+                { ...target, 'kodyChangeRequest.requestedAt': T1 },
+                { $unset: { kodyChangeRequest: '' } },
+            );
+        });
+
+        it('tells whether the open PR still carries the request it was handed', async () => {
+            model.exists = jest
+                .fn()
+                .mockResolvedValueOnce({ _id: 'pr-7' })
+                .mockResolvedValueOnce(null);
+
+            await expect(
+                repo.hasOpenKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(true);
+            await expect(
+                repo.hasOpenKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(false);
+
+            expect(model.exists).toHaveBeenCalledWith({
+                ...target,
+                'status': 'open',
+                'kodyChangeRequest.requestedAt': T1,
+            });
+        });
+
+        it('lists the open PRs of one organization that carry a request, through its index', async () => {
+            const listed = [{ number: 7 }];
+            const query: any = {};
+            query.lean = jest.fn().mockReturnValue(query);
+            query.hint = jest.fn().mockReturnValue(query);
+            query.maxTimeMS = jest.fn().mockReturnValue(query);
+            query.exec = jest.fn().mockResolvedValue(listed);
+            model.find = jest.fn().mockReturnValue(query);
+
+            await expect(
+                repo.findOpenPullRequestsWithKodyChangeRequest('org-A'),
+            ).resolves.toBe(listed);
+
+            expect(model.find).toHaveBeenCalledWith(
+                {
+                    'organizationId': 'org-A',
+                    'kodyChangeRequest.requestedAt': { $exists: true },
+                    'status': 'open',
+                },
+                {
+                    '_id': 0,
+                    'number': 1,
+                    'provider': 1,
+                    'repository.id': 1,
+                    'repository.name': 1,
+                    'kodyChangeRequest': 1,
+                },
+            );
+            expect(query.hint).toHaveBeenCalledWith(
+                'idx_org_kody_change_request',
+            );
+        });
+    });
+
     describe('setApprovalReasonDeliveryFailure', () => {
-        it('writes only the targeted PR and clears only an existing notice', async () => {
+        it('scopes ordered writes and clears to the targeted PR', async () => {
             model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
             const failure = {
                 decision: 'hold' as const,
                 reason: 'A person must approve.',
                 occurredAt: '2026-10-24T00:00:00.000Z',
             };
-
             expect(
                 await repo.setApprovalReasonDeliveryFailure(
                     'org-A',
@@ -58,32 +174,28 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     failure,
                 ),
             ).toBe(true);
-            expect(model.updateOne).toHaveBeenNthCalledWith(
-                1,
-                {
-                    organizationId: 'org-A',
-                    'repository.id': 'repo-alpha',
-                    number: 7,
-                },
-                { $set: { approvalReasonDeliveryFailure: failure } },
-            );
-
             await repo.setApprovalReasonDeliveryFailure(
                 'org-A',
                 'repo-alpha',
                 7,
                 null,
+                { expectedFailure: failure },
             );
-            expect(model.updateOne).toHaveBeenNthCalledWith(
-                2,
-                {
-                    organizationId: 'org-A',
+            for (const [filter] of model.updateOne.mock.calls) {
+                expect(filter).toMatchObject({
+                    'organizationId': 'org-A',
                     'repository.id': 'repo-alpha',
-                    number: 7,
-                    approvalReasonDeliveryFailure: { $ne: null },
-                },
-                { $set: { approvalReasonDeliveryFailure: null } },
-            );
+                    'number': 7,
+                });
+            }
+            expect(
+                model.updateOne.mock.calls[0][1].$set
+                    .approvalReasonDeliveryFailure,
+            ).toEqual(failure);
+            expect(
+                model.updateOne.mock.calls[1][1].$set
+                    .approvalReasonDeliveryFailure,
+            ).toBeNull();
         });
 
         it('reports a missing PR when a failed delivery cannot be recorded', async () => {
@@ -116,9 +228,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 organizationId: 'org-A',
             } as any;
 
-            await repo.appendPrLevelSuggestions(entity, [
-                { id: 'new' } as any,
-            ]);
+            await repo.appendPrLevelSuggestions(entity, [{ id: 'new' } as any]);
 
             expect(findOneAndUpdate).toHaveBeenCalledTimes(1);
             const [filter, update, options] = findOneAndUpdate.mock.calls[0];
@@ -183,10 +293,14 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
     describe('findPRNumbersByTitleAndOrganization (PR list title search)', () => {
         it('matches the typed title as literal text, case-insensitive', async () => {
-            const findExec = jest.fn().mockResolvedValue([]);
-            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
-            const lean = jest.fn().mockReturnValue({ maxTimeMS });
-            model.find = jest.fn().mockReturnValue({ lean });
+            // Chainable in any order, like the mongoose query it stands for.
+            const query: Record<string, jest.Mock> = {
+                exec: jest.fn().mockResolvedValue([]),
+            };
+            for (const method of ['hint', 'lean', 'maxTimeMS']) {
+                query[method] = jest.fn(() => query);
+            }
+            model.find = jest.fn().mockReturnValue(query);
 
             await repo.findPRNumbersByTitleAndOrganization(
                 'fix(api) .*',
@@ -273,6 +387,33 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findPullRequestAuthorsOpenedSince', () => {
+        it('bounds the scan by createdAt so the org+repo+createdAt index applies', async () => {
+            const option = jest.fn().mockReturnValue({ exec });
+            aggregate.mockReturnValue({ option });
+            exec.mockResolvedValue([
+                { _id: '{u1}', name: 'Ana', username: 'ana' },
+            ]);
+            const since = '2026-09-12T00:00:00.000Z';
+
+            const authors = await repo.findPullRequestAuthorsOpenedSince(
+                since,
+                'org-A',
+                ['r1'],
+            );
+
+            expect(authors).toEqual([
+                { id: '{u1}', name: 'Ana', username: 'ana' },
+            ]);
+            const match = aggregate.mock.calls[0][0][0].$match;
+            expect(match.organizationId).toBe('org-A');
+            expect(match['repository.id']).toEqual({ $in: ['r1'] });
+            expect(match.createdAt).toEqual({ $gte: new Date(since) });
+            expect(match.openedAt).toEqual({ $gte: since });
+            expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+        });
+    });
+
     describe('findPullRequestsWithDeliveredSuggestions', () => {
         it('projects the read fields before unwinding files/suggestions', async () => {
             const option = jest.fn().mockReturnValue({ exec });
@@ -297,7 +438,15 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.suggestions.id': 1,
                 'files.suggestions.deliveryStatus': 1,
                 'files.suggestions.comment': 1,
+                'approvalReasonDeliveryFailure': 1,
             });
+            expect(
+                pipeline.find((step) => step.$group).$group
+                    .approvalReasonDeliveryFailure,
+            ).toEqual({ $first: '$approvalReasonDeliveryFailure' });
+            expect(pipeline.at(-1).$project.approvalReasonDeliveryFailure).toBe(
+                1,
+            );
             expect(pipeline[2]).toEqual({ $unwind: '$files' });
             expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
         });
@@ -305,7 +454,27 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
     describe('findPullRequestsWithoutDeliveredSuggestionsForApproval', () => {
         it('queries exact repository/PR pairs in bounded pages without loading file arrays', async () => {
-            const findExec = jest.fn().mockResolvedValue([]);
+            const failure = {
+                decision: 'approve',
+                reason: 'Approved by policy Docs.',
+                occurredAt: '2026-11-10T12:00:00Z',
+                reviewedHeadSha: 'head',
+                reviewedBaseSha: 'base',
+            };
+            const findExec = jest
+                .fn()
+                .mockResolvedValueOnce([
+                    {
+                        _id: 'pr',
+                        number: 1,
+                        organizationId: 'org-A',
+                        status: 'open',
+                        provider: 'github',
+                        repository: { id: 'repo-a', name: 'Repo A' },
+                        approvalReasonDeliveryFailure: failure,
+                    },
+                ])
+                .mockResolvedValue([]);
             const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
             const lean = jest.fn().mockReturnValue({ maxTimeMS });
             const limit = jest.fn().mockReturnValue({ lean });
@@ -316,11 +485,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 pullRequestNumber: index + 1,
             }));
 
-            await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
-                'org-A',
-                refs,
-                'open',
-            );
+            const results =
+                await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                    'org-A',
+                    refs,
+                    'open',
+                );
 
             expect(model.find).toHaveBeenCalledTimes(2);
             const [filter, projection] = model.find.mock.calls[0];
@@ -335,6 +505,8 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             });
             expect(filter.$nor).toHaveLength(1);
             expect(projection.files).toBeUndefined();
+            expect(projection.approvalReasonDeliveryFailure).toBe(1);
+            expect(results[0].approvalReasonDeliveryFailure).toEqual(failure);
             expect(sort).toHaveBeenCalledWith({ _id: 1 });
             expect(limit).toHaveBeenNthCalledWith(1, 100);
             expect(limit).toHaveBeenNthCalledWith(2, 1);
@@ -511,6 +683,67 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.suggestions.id': 'sugg-id-1',
                 'organizationId': 'org-A',
             });
+        });
+    });
+
+    describe('updateSuggestion without the document back', () => {
+        it('projects only the id, so a write costs no PR document', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                { returnDocument: false },
+            );
+
+            const [filter, , options] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toMatchObject({
+                'files.suggestions.id': 'sugg-id-1',
+            });
+            expect(options).toMatchObject({ projection: { _id: 1 } });
+        });
+    });
+
+    describe('updateSuggestion with a status condition', () => {
+        it('matches only a suggestion whose stored status is outside the excluded ones, in the query and the array filter', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                { implementationStatusNotIn: ['implemented'] as any },
+            );
+
+            const [filter, update, options] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'files.suggestions': {
+                    $elemMatch: {
+                        id: 'sugg-id-1',
+                        implementationStatus: { $nin: ['implemented'] },
+                    },
+                },
+            });
+            expect(update).toEqual({
+                $set: {
+                    'files.$[file].suggestions.$[suggestion].implementationStatus':
+                        'implemented',
+                },
+            });
+            expect(options.arrayFilters).toEqual([
+                {
+                    'file.suggestions': {
+                        $elemMatch: {
+                            id: 'sugg-id-1',
+                            implementationStatus: { $nin: ['implemented'] },
+                        },
+                    },
+                },
+                {
+                    'suggestion.id': 'sugg-id-1',
+                    'suggestion.implementationStatus': {
+                        $nin: ['implemented'],
+                    },
+                },
+            ]);
         });
     });
 

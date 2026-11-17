@@ -2,6 +2,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -9,6 +10,12 @@ reviewCadence:
     timeWindow: 15 # minutes
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalPolicies: []
+riskAssessmentActive: false
+riskCriteria: []
+riskReviewRouting:
+    noRisk: balanced
+    riskFound: heavy
 approvalLabels: []
 approvalAuthors: []
 approvalRiskActive: false

@@ -1,3 +1,4 @@
+import { byokAuthKind } from '@libs/llm/slot-auth';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isByokConfig,
@@ -400,7 +401,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!(await this.kodusGate?.isEnabledFor(organizationId))) {
             this.logger.warn({
-                message: 'Refused to connect the Kodus provider: org outside the private alpha',
+                message:
+                    'Refused to connect the Kodus provider: org outside the private alpha',
                 context: CreateOrUpdateOrganizationParametersUseCase.name,
                 metadata: { organizationId, provider: 'kodus' },
             });
@@ -411,8 +413,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     /**
      * v2 encrypt/keep. For each incoming credential, encrypt/keep its secret
      * fields against the matching prior credential (matched by `id`, else by
-     * `provider`): a blank/empty field keeps the prior ciphertext, a real value
-     * is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
+     * `provider`) on the same endpoint: a blank/empty field keeps the prior
+     * ciphertext, a real value is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
      * models[] / routing / version pass through untouched — field-level encrypt
      * only, no re-encryption of untouched ciphertext.
      */
@@ -464,11 +466,33 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 }
                 return managed;
             }
+            const byId = existingById.get(cred.id);
+            // A stored key only stays with the endpoint it was saved for.
+            // Repointing a credential — or a new one on another endpoint
+            // borrowing by provider — needs its key typed again; a blank
+            // field would otherwise send the old key to the new host.
+            const candidate =
+                byId ?? existingByProvider.get(cred.provider) ?? undefined;
             const prior =
-                (cred.id ? existingById.get(cred.id) : undefined) ??
-                (cred.provider
-                    ? (existingByProvider.get(cred.provider) ?? undefined)
-                    : undefined);
+                candidate && sameEndpoint(cred, candidate)
+                    ? candidate
+                    : undefined;
+            if (candidate && !prior) {
+                this.logger.warn({
+                    message:
+                        'BYOK save: refused to reuse a stored key across endpoints',
+                    context: CreateOrUpdateOrganizationParametersUseCase.name,
+                    metadata: {
+                        organizationId: this.request?.user?.organization?.uuid,
+                        provider: cred.provider,
+                        credentialId: cred.id,
+                        priorCredentialId: candidate.id,
+                        matchedBy: byId ? 'id' : 'provider',
+                        host: hostOf(credentialBaseURL(cred)),
+                        priorHost: hostOf(credentialBaseURL(candidate)),
+                    },
+                });
+            }
             const encrypted = this.encryptCredentialSecrets(cred, prior);
             // Auth-path integrity: after encrypt/keep, a non-managed credential
             // must carry a usable secret (a kept ciphertext counts). Bedrock
@@ -554,16 +578,14 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             }
             return;
         }
-        const has = (v: unknown): boolean =>
-            typeof v === 'string' && v.length > 0;
         const settings = (cred?.settings ?? {}) as Record<string, unknown>;
 
+        const auth = byokAuthKind(cred?.provider, {
+            ...settings,
+            apiKey: cred?.apiKey,
+        });
         if (cred?.provider === BYOKProvider.AMAZON_BEDROCK) {
-            const hasBearer = has(settings.awsBearerToken);
-            const hasIam =
-                has(settings.awsAccessKeyId) &&
-                has(settings.awsSecretAccessKey);
-            if (!hasBearer && !hasIam) {
+            if (!auth) {
                 throw new BadRequestException(
                     'Bedrock BYOK credential requires either awsBearerToken or awsAccessKeyId + awsSecretAccessKey',
                 );
@@ -571,7 +593,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             return;
         }
 
-        if (!has(cred?.apiKey)) {
+        if (!auth) {
             throw new BadRequestException(
                 `apiKey is required for the ${cred?.provider ?? 'unknown'} BYOK credential`,
             );
@@ -639,3 +661,34 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         return /^.{2}\.{3}.{3}$/.test(value);
     }
 }
+
+const credentialBaseURL = (cred: BYOKCredential): string | undefined => {
+    const value = (cred.settings as Record<string, unknown> | undefined)
+        ?.baseURL;
+    return typeof value === 'string' ? value : undefined;
+};
+
+/** No endpoint on either side counts as the provider's default. */
+const sameEndpoint = (next: BYOKCredential, prior: BYOKCredential): boolean =>
+    normalizeEndpoint(credentialBaseURL(next)) ===
+    normalizeEndpoint(credentialBaseURL(prior));
+
+/** Scheme and host compare without case (URL lowercases them), and a
+ *  trailing slash is dropped; the path and query keep their case, since a
+ *  gateway may route by tenant in the path. */
+const normalizeEndpoint = (value?: string): string => {
+    const trimmed = (value ?? '').trim();
+    if (!URL.canParse(trimmed)) return trimmed;
+    const url = new URL(trimmed);
+    url.pathname = stripTrailingSlashes(url.pathname);
+    return url.href;
+};
+
+const stripTrailingSlashes = (value: string): string => {
+    let end = value.length;
+    while (end > 0 && value[end - 1] === '/') end--;
+    return value.slice(0, end);
+};
+
+const hostOf = (value?: string): string | undefined =>
+    value && URL.canParse(value) ? new URL(value).host : undefined;

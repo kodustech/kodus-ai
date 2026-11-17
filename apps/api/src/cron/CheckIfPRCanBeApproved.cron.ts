@@ -1,5 +1,31 @@
+import { calculateBackoffIntervalExact } from '@libs/common/utils/polling/exponential-backoff';
+import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import {
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+    IOrganizationParametersService,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
+import {
+    isCurrentRiskAssessment,
+    riskApprovalVeto,
+    type RiskAssessmentResult,
+} from '@libs/code-review/domain/risk/risk-assessment';
+import {
+    prRiskConfigurationKey,
+    prRiskDescriptionKey,
+} from '@libs/code-review/domain/risk/risk-configuration';
+import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
+import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
+import {
+    hasOpenFinding,
+    hostCommentKey,
+} from '@libs/code-review/domain/approval/own-change-request';
+import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
+import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
@@ -47,6 +73,7 @@ import {
     IConditionalApprovalAccessService,
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import {
+    APPROVAL_REASON_WRITE_TIMEOUT_MS,
     formatApprovalReasonComment,
     isApprovalReasonComment,
 } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
@@ -79,7 +106,9 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
@@ -114,9 +143,24 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
-const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
+// The cron puts at most PR_CONCURRENCY writes ahead in the installation queue
+// (45s), inside APPROVAL_REASON_WRITE_TIMEOUT_MS. No hold reason starts after
+// the deadline, so the last ones land inside the 5-minute lock; the next run
+// recomputes and posts the rest.
+const APPROVAL_REASON_WRITE_DEADLINE_MS = 3 * 60 * 1000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
+// One bound for the whole withdrawal: a status read, a comment list and the
+// dismissal itself, each a provider round trip.
+const CHANGE_REQUEST_WITHDRAWAL_TIMEOUT_MS = 30_000;
+// A host that refuses the dismissal (a token without the role, a branch rule
+// restricting who dismisses reviews) refuses it again on the next pass, and
+// keeps refusing for as long as the PR is open: each refusal waits four times
+// longer than the last, up to a day.
+const CHANGE_REQUEST_REFUSAL_BACKOFF_MS = 15 * 60 * 1000;
+const CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
+const SHARED_RISK_STALE_REASON =
+    'The risk assessment does not match the current PR or risk settings. Run a new review before automatic approval.';
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -131,6 +175,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         string,
         IPullRequestMessages | null
     >();
+    private reasonWriteDeadline = Number.POSITIVE_INFINITY;
 
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
@@ -153,7 +198,66 @@ export class CheckIfPRCanBeApprovedCronProvider {
         private readonly distributedLockService: DistributedLockService,
         @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
         private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
+        @Optional()
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParameters?: IOrganizationParametersService,
+        private readonly approvalPolicies?: ApprovalPoliciesService,
+        private readonly ownChangeRequest?: OwnChangeRequestService,
     ) {}
+
+    private async sharedRiskIsCurrent(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+        prNumber: number;
+        pullRequest: PullRequest;
+        config: CodeReviewConfig;
+        risk?: RiskAssessmentResult;
+    }): Promise<boolean> {
+        if (!this.organizationParameters) return false;
+        try {
+            const stored = await runWithBoundedTimeout(
+                this.organizationParameters.findByKey(
+                    OrganizationParametersKey.BYOK_CONFIG,
+                    input.organizationAndTeamData,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'risk model configuration lookup',
+            );
+            const { slot, verdict } = resolveTaskSlot(
+                isByokConfig(stored?.configValue)
+                    ? stored.configValue
+                    : undefined,
+                LLM_TASK.riskAssessment,
+            );
+            if (verdict && !verdict.modelId) return false;
+            return isCurrentRiskAssessment(input.risk, {
+                organizationId: input.organizationAndTeamData.organizationId,
+                repositoryId: input.repositoryId,
+                prNumber: input.prNumber,
+                headSha: input.pullRequest?.head?.sha ?? '',
+                baseSha: input.pullRequest?.base?.sha ?? '',
+                configurationKey: prRiskConfigurationKey({
+                    criteria: input.config.riskCriteria,
+                    language: input.config.languageResultPrompt,
+                    modelSlot: slot,
+                }),
+                descriptionKey: prRiskDescriptionKey(input.pullRequest),
+            });
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not verify shared risk configuration for approval',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repositoryId: input.repositoryId,
+                    prNumber: input.prNumber,
+                },
+            });
+            return false;
+        }
+    }
 
     @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
         name: 'CHECK IF PR SHOULD BE APPROVED',
@@ -189,6 +293,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
         // Clear cache at start of each cron run
         this.pullRequestMessagesCache.clear();
+        this.reasonWriteDeadline =
+            Date.now() + APPROVAL_REASON_WRITE_DEADLINE_MS;
 
         try {
             this.logger.log({
@@ -472,7 +578,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         const execution =
                                             await this.automationExecutionService.findLatestExecutionByFilters(
                                                 {
-                                                    status: AutomationStatus.SUCCESS,
+                                                    status: [
+                                                        AutomationStatus.SUCCESS,
+                                                        AutomationStatus.PARTIAL_ERROR,
+                                                    ],
                                                     teamAutomation: {
                                                         uuid: teamAutomation.uuid,
                                                     },
@@ -595,9 +704,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                                 },
                                                                 prNumber:
                                                                     pr.number,
-                                                                // The GitHub adapter caches by head only.
-                                                                // A new base can change this diff, so a
-                                                                // directory-policy miss must fetch live files.
+                                                                headSha:
+                                                                    currentPullRequest
+                                                                        ?.head
+                                                                        ?.sha,
+                                                                baseSha:
+                                                                    currentPullRequest
+                                                                        ?.base
+                                                                        ?.sha,
                                                             },
                                                             pr.provider as PlatformType,
                                                         ),
@@ -719,7 +833,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
                                                 repository,
-                                                files as FileChange[],
+                                                directoryChangedPaths.map(
+                                                    (filename) => ({
+                                                        filename,
+                                                    }),
+                                                ),
                                             );
                                     } else {
                                         if (
@@ -766,6 +884,20 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     }),
                 ),
             );
+
+            // An approval clears Kody's change request by itself, so this
+            // runs after them. Every PR that carries the request is judged
+            // here on its own terms: it must stop blocking the merge once
+            // the findings behind it are resolved, approved by Kody or not.
+            if (this.ownChangeRequest) {
+                await this.withdrawResolvedChangeRequests(
+                    teams,
+                    parametersByTeam,
+                    teamAutomationsByTeam,
+                    teamLimit,
+                    prLimit,
+                );
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error checking if PR can be approved generator cron',
@@ -790,6 +922,445 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
     }
 
+    /** When a refused withdrawal is tried again, by organization, repository and PR. */
+    private readonly changeRequestRefusals = new Map<
+        string,
+        { until: number; count: number; organizationId: string }
+    >();
+
+    private async withdrawResolvedChangeRequests(
+        teams: Array<{ uuid: string; organization?: { uuid?: string } }>,
+        parametersByTeam: Map<
+            string,
+            { configValue?: { repositories?: Array<{ id?: string }> } }
+        >,
+        teamAutomationsByTeam: Map<string, { uuid: string }>,
+        teamLimit: <T>(task: () => Promise<T>) => Promise<T>,
+        prLimit: <T>(task: () => Promise<T>) => Promise<T>,
+    ): Promise<void> {
+        // A repository may be reviewed by more than one team of its
+        // organization: its PR is still judged once, against the reviews of
+        // every one of them.
+        const reviewersByRepository = new Map<
+            string,
+            { teamId: string; teamAutomationId: string }[]
+        >();
+        const organizationIds = new Set<string>();
+        for (const team of teams) {
+            const organizationId = team.organization?.uuid;
+            const repositories = parametersByTeam.get(team.uuid)?.configValue
+                ?.repositories;
+            const teamAutomation = teamAutomationsByTeam.get(team.uuid);
+            if (
+                !organizationId ||
+                !Array.isArray(repositories) ||
+                !teamAutomation
+            ) {
+                continue;
+            }
+            organizationIds.add(organizationId);
+            for (const repository of repositories) {
+                const key = `${organizationId}:${repository?.id}`;
+                const reviewers = reviewersByRepository.get(key) ?? [];
+                reviewers.push({
+                    teamId: team.uuid,
+                    teamAutomationId: teamAutomation.uuid,
+                });
+                reviewersByRepository.set(key, reviewers);
+            }
+        }
+
+        const listed = new Set<string>();
+        const notListed = new Set<string>();
+        await Promise.allSettled(
+            [...organizationIds].map((organizationId) =>
+                teamLimit(async () => {
+                    let pullRequests: IPullRequestWithKodyChangeRequest[];
+                    try {
+                        pullRequests =
+                            await this.pullRequestService.findOpenPullRequestsWithKodyChangeRequest(
+                                organizationId,
+                            );
+                    } catch (error) {
+                        notListed.add(organizationId);
+                        this.logger.error({
+                            message:
+                                "Could not list the PRs carrying Kody's change request",
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: { organizationId },
+                        });
+                        return;
+                    }
+                    await Promise.allSettled(
+                        pullRequests.map((pullRequest) => {
+                            const repositoryKey = `${organizationId}:${pullRequest.repository?.id}`;
+                            const reviewers =
+                                reviewersByRepository.get(repositoryKey);
+                            if (!reviewers) return undefined;
+                            const key = `${repositoryKey}:${pullRequest.number}`;
+                            listed.add(key);
+                            return prLimit(() =>
+                                this.withdrawResolvedChangeRequest(
+                                    key,
+                                    {
+                                        organizationId,
+                                        teamId: reviewers[0].teamId,
+                                    },
+                                    pullRequest,
+                                    reviewers.map(
+                                        (reviewer) => reviewer.teamAutomationId,
+                                    ),
+                                ),
+                            );
+                        }),
+                    );
+                }),
+            ),
+        );
+
+        // A PR that left the list (closed, withdrawn, approved) has nothing
+        // left to wait for. A list that could not be read says nothing about
+        // its PRs, so their waits stand.
+        for (const [key, refusal] of this.changeRequestRefusals) {
+            if (!listed.has(key) && !notListed.has(refusal.organizationId)) {
+                this.changeRequestRefusals.delete(key);
+            }
+        }
+    }
+
+    private async withdrawResolvedChangeRequest(
+        key: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+        pullRequest: IPullRequestWithKodyChangeRequest,
+        teamAutomationIds: string[],
+    ): Promise<void> {
+        const refusal = this.changeRequestRefusals.get(key);
+        if (refusal && refusal.until > Date.now()) {
+            return;
+        }
+        try {
+            await runWithBoundedTimeout(
+                this.ownChangeRequest.withdrawIfResolved({
+                    organizationAndTeamData,
+                    pullRequest,
+                    // A review still running may be about to request changes
+                    // over a finding this pass has not seen.
+                    isReviewRunning: async () =>
+                        (
+                            await Promise.all(
+                                teamAutomationIds.map((teamAutomationId) =>
+                                    this.hasInProgressReviewExecution({
+                                        teamAutomationId,
+                                        pullRequestNumber: pullRequest.number,
+                                        repositoryId:
+                                            pullRequest.repository?.id,
+                                    }),
+                                ),
+                            )
+                        ).some(Boolean),
+                }),
+                CHANGE_REQUEST_WITHDRAWAL_TIMEOUT_MS,
+                'change request withdrawal',
+            );
+            this.changeRequestRefusals.delete(key);
+        } catch (error) {
+            const count = (refusal?.count ?? 0) + 1;
+            const wait = calculateBackoffIntervalExact(count - 1, {
+                baseInterval: CHANGE_REQUEST_REFUSAL_BACKOFF_MS,
+                maxInterval: CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS,
+                multiplier: 4,
+            });
+            this.changeRequestRefusals.set(key, {
+                until: Date.now() + wait,
+                count,
+                organizationId: organizationAndTeamData.organizationId,
+            });
+            this.logger.warn({
+                message: `Could not withdraw Kody's change request on PR#${pullRequest.number} (attempt ${count}); next attempt in ${Math.round(wait / 60_000)} minutes`,
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: pullRequest.repository?.id,
+                    prNumber: pullRequest.number,
+                },
+            });
+        }
+    }
+
+    private async approveByNamedPolicy(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        pr: IPullRequestWithDeliveredSuggestions;
+        codeReviewConfig: CodeReviewConfig;
+        teamAutomationId: string;
+    }): Promise<boolean> {
+        const {
+            organizationAndTeamData,
+            pr,
+            codeReviewConfig,
+            teamAutomationId,
+        } = input;
+        const request = {
+            organizationAndTeamData,
+            repository: pr.repository,
+            prNumber: pr.number,
+        };
+        const platformType = pr.provider as PlatformType;
+        const hold = async (reason: string) => {
+            await this.postConditionalApprovalReason(request, platformType, {
+                kind: 'hold',
+                reason,
+            });
+            return false;
+        };
+        try {
+            if (!codeReviewConfig.pullRequestApprovalActive) return false;
+            const status = await runWithBoundedTimeout(
+                this.codeManagementService.getReviewStatusByPullRequest(
+                    request,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'policy approval status',
+            );
+            // Policy edits never rewrite an existing approval. Only repair an
+            // explanation whose delivery failed after our confirmed approval.
+            if (status === PullRequestReviewState.APPROVED) {
+                const failure = pr.approvalReasonDeliveryFailure;
+                if (
+                    failure?.decision === 'approve' &&
+                    failure.reviewedHeadSha &&
+                    failure.reviewedBaseSha
+                ) {
+                    try {
+                        const live = await runWithBoundedTimeout(
+                            this.codeManagementService.getPullRequest(
+                                request,
+                                platformType,
+                            ),
+                            FINAL_PROVIDER_TIMEOUT_MS,
+                            'approval reason retry snapshot',
+                        );
+                        if (
+                            live?.head?.sha === failure.reviewedHeadSha &&
+                            live?.base?.sha === failure.reviewedBaseSha
+                        ) {
+                            await this.postConditionalApprovalReason(
+                                request,
+                                platformType,
+                                {
+                                    kind: 'approve',
+                                    reason: failure.reason,
+                                    reviewedHeadSha: failure.reviewedHeadSha,
+                                    reviewedBaseSha: failure.reviewedBaseSha,
+                                },
+                                failure,
+                            );
+                        }
+                    } catch (error) {
+                        this.logger.warn({
+                            message:
+                                'Could not retry a confirmed approval reason',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: pr.repository.id,
+                                prNumber: pr.number,
+                            },
+                        });
+                    }
+                }
+                return false;
+            }
+            if (status == null || !this.approvalPolicies)
+                return hold('Approval conditions could not be verified.');
+            const latest =
+                await this.automationExecutionService.findLatestExecutionByFilters(
+                    {
+                        teamAutomation: { uuid: teamAutomationId },
+                        pullRequestNumber: pr.number,
+                        repositoryId: pr.repository.id,
+                    },
+                );
+            if (latest?.status !== AutomationStatus.SUCCESS)
+                return hold('The latest review did not complete.');
+            const data = latest.dataExecution;
+            const reviewed = data?.approvalDecision as
+                ApprovalDecision | undefined;
+            const summary = data?.approvalReviewSummary;
+            if (
+                !summary?.complete ||
+                !reviewed?.reviewedHeadSha ||
+                !reviewed.reviewedBaseSha
+            )
+                return hold(
+                    'Run a complete PR review before automatic approval.',
+                );
+            const live = await runWithBoundedTimeout(
+                this.codeManagementService.getPullRequest(
+                    { ...request, includeLabels: true },
+                    platformType,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'policy PR snapshot',
+            );
+            if (
+                live?.head?.sha !== reviewed.reviewedHeadSha ||
+                live?.base?.sha !== reviewed.reviewedBaseSha ||
+                this.getLastAnalyzedCommitSha(data.lastAnalyzedCommit) !==
+                    reviewed.reviewedHeadSha
+            )
+                return hold('The PR changed after it was reviewed.');
+            if (summary.prFindings > 0)
+                return hold(
+                    'PR-level findings require a new clean review before automatic approval.',
+                );
+            if (summary.lineFindings > 0 || pr.suggestions?.length) {
+                if (!pr.suggestions?.length)
+                    return hold('Review findings could not be verified.');
+                const comments = await runWithBoundedTimeout(
+                    platformType === PlatformType.GITHUB
+                        ? this.codeManagementService.getPullRequestReviewThreads(
+                              request,
+                              platformType,
+                          )
+                        : this.codeManagementService.getPullRequestReviewComments(
+                              request,
+                              platformType,
+                          ),
+                    FINAL_PROVIDER_TIMEOUT_MS,
+                    'policy review findings',
+                );
+                if (!Array.isArray(comments))
+                    return hold('Review findings remain unresolved.');
+                if (
+                    hasOpenFinding(
+                        pr.suggestions.map((suggestion) =>
+                            String(suggestion.comment?.id),
+                        ),
+                        comments,
+                        platformType,
+                    )
+                )
+                    return hold('Review findings remain unresolved.');
+            }
+            if (
+                codeReviewConfig.riskAssessmentActive === true &&
+                !(await this.sharedRiskIsCurrent({
+                    organizationAndTeamData,
+                    repositoryId: pr.repository.id,
+                    prNumber: pr.number,
+                    pullRequest: live,
+                    config: codeReviewConfig,
+                    risk: data.riskAssessment,
+                }))
+            )
+                return hold(SHARED_RISK_STALE_REASON);
+            const { decision, eligibility } =
+                await this.approvalPolicies.evaluate({
+                    organizationAndTeamData,
+                    repository: pr.repository,
+                    pullRequest: { ...live, number: pr.number },
+                    config: codeReviewConfig,
+                    platformType,
+                    reviewClean: true,
+                    risk: data.riskAssessment,
+                    heavy: data.heavy,
+                    previousEligibility: data.approvalPolicyEligibility,
+                });
+            if (Object.keys(eligibility).length)
+                await this.automationExecutionService.update(
+                    { uuid: latest.uuid },
+                    {
+                        dataExecution: {
+                            ...data,
+                            approvalPolicyEligibility: eligibility,
+                        },
+                    },
+                );
+            if (decision.kind !== 'approve') {
+                await this.postConditionalApprovalReason(
+                    request,
+                    platformType,
+                    decision,
+                );
+                return false;
+            }
+            if (
+                await this.hasInProgressReviewExecution({
+                    teamAutomationId,
+                    pullRequestNumber: pr.number,
+                    repositoryId: pr.repository.id,
+                })
+            )
+                return false;
+            // A failed or partial rerun that finished during policy evaluation also wins.
+            const finalExecution =
+                await this.automationExecutionService.findLatestExecutionByFilters(
+                    {
+                        teamAutomation: { uuid: teamAutomationId },
+                        pullRequestNumber: pr.number,
+                        repositoryId: pr.repository.id,
+                    },
+                );
+            if (
+                finalExecution?.uuid !== latest.uuid ||
+                finalExecution?.status !== AutomationStatus.SUCCESS
+            )
+                return hold(
+                    'A newer review must complete before automatic approval.',
+                );
+            const finalPr = await runWithBoundedTimeout(
+                this.codeManagementService.getPullRequest(
+                    { ...request, includeLabels: true },
+                    platformType,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'policy final snapshot',
+            );
+            if (
+                finalPr?.head?.sha !== decision.reviewedHeadSha ||
+                finalPr?.base?.sha !== decision.reviewedBaseSha ||
+                approvalPrMetadataKey(finalPr) !== decision.reviewedMetadataKey
+            )
+                return hold(
+                    'The PR changed while approval conditions were evaluated.',
+                );
+            const approvalAttemptAt = new Date().toISOString();
+            await this.codeManagementService.approvePullRequest(
+                { ...request, headSha: decision.reviewedHeadSha },
+                platformType,
+            );
+            if (
+                (await this.codeManagementService.getReviewStatusByPullRequest(
+                    request,
+                )) !== PullRequestReviewState.APPROVED
+            )
+                return hold('The provider did not confirm automatic approval.');
+            await this.postConditionalApprovalReason(
+                request,
+                platformType,
+                decision,
+                undefined,
+                approvalAttemptAt,
+            );
+            return true;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Approval policy verification failed',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: pr.repository.id,
+                    prNumber: pr.number,
+                },
+            });
+            return hold('Approval conditions could not be verified.');
+        }
+    }
+
     private async shouldApprovePR({
         organizationAndTeamData,
         pr,
@@ -805,6 +1376,25 @@ export class CheckIfPRCanBeApprovedCronProvider {
         currentPullRequest?: PullRequest | null;
         directoryChangedPaths?: string[];
     }): Promise<boolean> {
+        if (codeReviewConfig?.reviewSettingsError) {
+            await this.postConditionalApprovalReason(
+                {
+                    organizationAndTeamData,
+                    repository: pr.repository,
+                    prNumber: pr.number,
+                },
+                pr.provider as PlatformType,
+                { kind: 'hold', reason: REVIEW_SETTINGS_HOLD_REASON },
+            );
+            return false;
+        }
+        if (usesNamedApprovalPolicies(codeReviewConfig))
+            return this.approveByNamedPolicy({
+                organizationAndTeamData,
+                pr,
+                codeReviewConfig,
+                teamAutomationId,
+            });
         const repository = pr?.repository;
         const prNumber = pr?.number;
         const platformType = pr?.provider as PlatformType;
@@ -855,16 +1445,33 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
         const lastExecution =
             await this.automationExecutionService.findLatestExecutionByFilters({
-                status: AutomationStatus.SUCCESS,
+                status: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
                 teamAutomation: { uuid: teamAutomationId },
                 pullRequestNumber: prNumber,
                 repositoryId: repository?.id,
             });
+        // Read partial executions so a failed rerun cannot expose an older
+        // successful judgment. Partial reviews cannot issue a new approval.
+        if (
+            lastExecution?.status === AutomationStatus.PARTIAL_ERROR &&
+            !policyActive
+        ) {
+            return false;
+        }
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
         let changedPaths: string[] = directoryChangedPaths ?? [];
         const reviewedDecision = lastExecution?.dataExecution?.approvalDecision;
+        // Only pre-deploy legacy judgments may use the old head-bound result.
+        // Independent choices and every new shared result require its snapshot.
+        const needsSharedRisk =
+            codeReviewConfig?.riskAssessmentActive === true &&
+            (codeReviewConfig.riskAssessmentSource !== 'legacy' ||
+                !!lastExecution?.dataExecution?.riskAssessment);
         if (
             allowNoComments &&
             (!['approve', 'hold', 'out-of-scope'].includes(
@@ -918,6 +1525,21 @@ export class CheckIfPRCanBeApprovedCronProvider {
             }
 
             if (policyActive) {
+                if (
+                    reviewedDecision?.reviewedBaseSha &&
+                    currentPullRequest?.base?.sha !==
+                        reviewedDecision.reviewedBaseSha
+                ) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        {
+                            kind: 'hold',
+                            reason: 'The target branch changed after this PR was reviewed.',
+                        },
+                    );
+                    return false;
+                }
                 // A conditional approval must have a saved successful review
                 // and a live head. Do not infer either from a missing response.
                 if (
@@ -939,6 +1561,55 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                     return false;
                 }
+                if (lastExecution.status === AutomationStatus.PARTIAL_ERROR) {
+                    // The approval can succeed before publishing its explanation
+                    // fails. Repair that comment only after verifying the host;
+                    // a saved decision alone must never replay a partial review.
+                    if (reviewedDecision?.kind === 'approve') {
+                        const hostStatus = await runWithBoundedTimeout(
+                            this.codeManagementService.getReviewStatusByPullRequest(
+                                codeManagementRequestData,
+                            ),
+                            FINAL_PROVIDER_TIMEOUT_MS,
+                            'approval provider-status lookup',
+                        ).catch((error) => {
+                            this.logger.warn({
+                                message:
+                                    'Could not verify approval for partial review reconciliation',
+                                context:
+                                    CheckIfPRCanBeApprovedCronProvider.name,
+                                error,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    repositoryId: repository?.id,
+                                    prNumber,
+                                },
+                            });
+                            return null;
+                        });
+                        if (hostStatus == null) return false;
+                        if (hostStatus === PullRequestReviewState.APPROVED) {
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                reviewedDecision,
+                            );
+                            return false;
+                        }
+                    }
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        {
+                            kind: 'hold',
+                            reason:
+                                reviewedDecision?.kind === 'hold'
+                                    ? reviewedDecision.reason
+                                    : 'The latest review did not complete successfully. A new successful review is required before automatic approval.',
+                        },
+                    );
+                    return false;
+                }
                 if (policy.sensitivePaths?.length && !directoryChangedPaths) {
                     let files: Awaited<
                         ReturnType<
@@ -950,6 +1621,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             this.codeManagementService.getFilesByPullRequestId(
                                 {
                                     ...codeManagementRequestData,
+                                    headSha: currentPullRequest?.head?.sha,
+                                    baseSha: currentPullRequest?.base?.sha,
                                 },
                                 platformType,
                             ),
@@ -1024,6 +1697,41 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         });
                         return null;
                     })) === PullRequestReviewState.APPROVED;
+                if (
+                    needsSharedRisk &&
+                    !approvedOnHost &&
+                    !(await this.sharedRiskIsCurrent({
+                        organizationAndTeamData,
+                        repositoryId: repository.id,
+                        prNumber,
+                        pullRequest: currentPullRequest,
+                        config: codeReviewConfig,
+                        risk: lastExecution.dataExecution?.riskAssessment,
+                    }))
+                ) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        { kind: 'hold', reason: SHARED_RISK_STALE_REASON },
+                    );
+                    return false;
+                }
+                const sharedVeto = lastExecution.dataExecution?.riskAssessment
+                    ? riskApprovalVeto(
+                          codeReviewConfig?.riskAssessmentActive === true,
+                          lastExecution.dataExecution.riskAssessment,
+                          currentHeadSha,
+                          currentPullRequest,
+                      )
+                    : undefined;
+                if (sharedVeto) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        { kind: 'hold', reason: sharedVeto },
+                    );
+                    return false;
+                }
                 const decision = evaluateReviewedHeadApproval({
                     approvalActive: true,
                     reviewedDecision,
@@ -1119,21 +1827,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
 
                 reviewComments = reviewComments.filter((comment) => {
-                    let commentId;
+                    const commentId = comment
+                        ? hostCommentKey(comment, platformType)
+                        : undefined;
 
-                    if (platformType === PlatformType.GITHUB) {
-                        commentId = comment?.fullDatabaseId || comment?.id;
-                    } else if (platformType === PlatformType.AZURE_REPOS) {
-                        commentId = comment?.threadId;
-                    } else {
-                        commentId = comment?.id;
-                    }
-
-                    if (!commentId) {
-                        return false;
-                    }
-
-                    return deliveredCommentIds.has(String(commentId));
+                    return !!commentId && deliveredCommentIds.has(commentId);
                 });
 
                 this.logger.log({
@@ -1285,9 +1983,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         (latestPullRequest as any)?.headSha ||
                         (latestPullRequest as any)?.head?.commit?.sha;
                     const directoryPolicyBaseSha =
+                        reviewedDecision?.reviewedBaseSha ??
                         preloadedPullRequest?.base?.sha;
                     const directoryBaseChanged =
-                        !!preloadedPullRequest &&
+                        (!!preloadedPullRequest ||
+                            !!reviewedDecision?.reviewedBaseSha) &&
                         (!directoryPolicyBaseSha ||
                             latestPullRequest?.base?.sha !==
                                 directoryPolicyBaseSha);
@@ -1309,17 +2009,41 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         }
                         return false;
                     }
-                    conditionalDecision = evaluateReviewedHeadApproval({
-                        approvalActive: true,
-                        reviewedDecision,
-                        policy,
-                        author: latestPullRequest?.user?.login,
-                        labels: latestPullRequest?.labels,
-                        changedPaths,
-                        reviewClean: true,
-                        risk: lastExecution?.dataExecution?.approvalRisk,
-                        currentHeadSha: latestHeadSha,
-                    });
+                    if (
+                        needsSharedRisk &&
+                        !(await this.sharedRiskIsCurrent({
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                            pullRequest: latestPullRequest,
+                            config: codeReviewConfig,
+                            risk: lastExecution.dataExecution?.riskAssessment,
+                        }))
+                    ) {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            { kind: 'hold', reason: SHARED_RISK_STALE_REASON },
+                        );
+                        return false;
+                    }
+                    conditionalDecision = {
+                        ...evaluateReviewedHeadApproval({
+                            approvalActive: true,
+                            reviewedDecision,
+                            policy,
+                            author: latestPullRequest?.user?.login,
+                            labels: latestPullRequest?.labels,
+                            changedPaths,
+                            reviewClean: true,
+                            risk: lastExecution?.dataExecution?.approvalRisk,
+                            currentHeadSha: latestHeadSha,
+                        }),
+                        reviewedHeadSha: latestHeadSha,
+                        reviewedBaseSha: latestPullRequest?.base?.sha,
+                        reviewedMetadataKey:
+                            approvalPrMetadataKey(latestPullRequest),
+                    };
                     if (conditionalDecision.kind !== 'approve') {
                         if (conditionalDecision.kind === 'hold') {
                             await this.postConditionalApprovalReason(
@@ -1332,6 +2056,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     }
                 }
 
+                const approvalAttemptAt = new Date().toISOString();
                 await this.codeManagementService.checkIfPullRequestShouldBeApproved(
                     {
                         organizationAndTeamData,
@@ -1355,6 +2080,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         codeManagementRequestData,
                         platformType,
                         conditionalDecision,
+                        undefined,
+                        approvalAttemptAt,
                     );
                 }
                 return true;
@@ -1387,7 +2114,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
         },
         platformType: PlatformType,
         decision: ApprovalDecision,
+        expectedFailure?: IApprovalReasonDeliveryFailure,
+        publicationAttemptAt?: string,
     ): Promise<void> {
+        // A hold is recomputed on every run, so a late one waits for the next.
+        // An approval's reason is not: it is always posted.
+        if (
+            decision.kind !== 'approve' &&
+            Date.now() >= this.reasonWriteDeadline
+        ) {
+            return;
+        }
+        const occurredAt = publicationAttemptAt ?? new Date().toISOString();
+        const guard = {
+            notAfter: occurredAt,
+            ...(expectedFailure ? { expectedFailure } : {}),
+        };
         let operation = 'getAllCommentsInPullRequest';
         try {
             const body = formatApprovalReasonComment(
@@ -1460,7 +2202,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                 }
             }
-            await this.recordApprovalReasonDelivery(request, null);
+            await this.recordApprovalReasonDelivery(request, null, guard);
         } catch (error) {
             this.logger.warn({
                 message: 'Could not post conditional approval reason',
@@ -1475,11 +2217,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
                 },
             });
-            await this.recordApprovalReasonDelivery(request, {
-                decision: decision.kind === 'approve' ? 'approve' : 'hold',
-                reason: decision.reason,
-                occurredAt: new Date().toISOString(),
-            });
+            await this.recordApprovalReasonDelivery(
+                request,
+                {
+                    decision: decision.kind === 'approve' ? 'approve' : 'hold',
+                    reason: decision.reason,
+                    occurredAt: expectedFailure?.occurredAt ?? occurredAt,
+                    ...(decision.kind === 'approve' &&
+                    decision.reviewedHeadSha &&
+                    decision.reviewedBaseSha
+                        ? {
+                              reviewedHeadSha: decision.reviewedHeadSha,
+                              reviewedBaseSha: decision.reviewedBaseSha,
+                          }
+                        : {}),
+                },
+                guard,
+            );
         }
     }
 
@@ -1490,6 +2244,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             prNumber: number;
         },
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<void> {
         let organizationAndTeamData: OrganizationAndTeamData | undefined;
         let repositoryId: string | undefined;
@@ -1504,11 +2259,19 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     repositoryId,
                     prNumber,
                     failure,
+                    guard,
                 );
             if (!persisted) {
-                throw new Error(
-                    'Pull request for delivery status was not found',
-                );
+                this.logger.warn({
+                    message:
+                        'Approval reason delivery status was not changed: PR missing or notice superseded',
+                    context: CheckIfPRCanBeApprovedCronProvider.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId,
+                        prNumber,
+                    },
+                });
             }
         } catch (error) {
             this.logger.error({

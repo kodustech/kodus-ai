@@ -8,6 +8,7 @@ export const FEATURE_KEYS = {
     githubEnterpriseServerPat: 'github-enterprise-server-pat',
     kodusTraceReviewContext: 'kodus-trace-review-context',
     kodusProvider: 'kodus-provider',
+    deepScan: 'deep-scan',
     deterministicEvidence: 'deterministic-evidence',
     customAgents: 'custom-agents',
     conditionalPrApproval: 'conditional-pr-approval',

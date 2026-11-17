@@ -1,21 +1,215 @@
 /**
- * Unit tests for parseReviewDirective — the free-text steering directive a user
- * appends to a review command (`@kody review focus on the auth logic`). The
- * directive must be captured for real commands, ignored for plain commands and
- * non-commands, and have the `--force` flag and quotes stripped.
+ * Unit tests for the comment-command helpers: review command detection, the
+ * --force flag, non-review mentions, Kody markers, and parseReviewDirective —
+ * the free-text steering directive a user appends to a review command
+ * (`@kody review focus on the auth logic`). The directive must be captured for
+ * real commands, ignored for plain commands and non-commands, and have flags
+ * and quotes stripped.
  */
 import {
+    hasKodyMarker,
+    hasReviewMarker,
     parseReviewDirective,
     normalizeReviewDirective,
     isReviewCommand,
     isForceReviewCommand,
+    isHeavyReviewCommand,
     isKodyMentionNonReview,
+    requestedReviewModeOf,
 } from './codeCommentMarkers';
+
+describe('isReviewCommand', () => {
+    it('matches review/start-review at the start, with whitespace, any case and trailing text', () => {
+        expect(isReviewCommand('@kody review')).toBe(true);
+        expect(isReviewCommand('@kody start-review')).toBe(true);
+        expect(isReviewCommand('  @kody review')).toBe(true);
+        expect(isReviewCommand('\t@kody start-review')).toBe(true);
+        expect(isReviewCommand('@KODY REVIEW')).toBe(true);
+        expect(isReviewCommand('@Kody Start-Review')).toBe(true);
+        expect(isReviewCommand('@kody review please')).toBe(true);
+        expect(isReviewCommand('@kody start-review now')).toBe(true);
+        expect(isReviewCommand('@kody review --force')).toBe(true);
+        expect(isReviewCommand('@kody start-review --force')).toBe(true);
+    });
+
+    it('rejects partial words, other commands, mid-text mentions and empty input', () => {
+        expect(isReviewCommand('@kody reviewing')).toBe(false);
+        expect(isReviewCommand('@kody review-code')).toBe(false);
+        expect(isReviewCommand('@kody help')).toBe(false);
+        expect(isReviewCommand('@kody explain')).toBe(false);
+        expect(isReviewCommand('@kody what is this?')).toBe(false);
+        expect(isReviewCommand('@kody what is this code doing?')).toBe(false);
+        expect(isReviewCommand('@kody')).toBe(false);
+        expect(isReviewCommand('hey @kody review')).toBe(false);
+        expect(isReviewCommand('please @kody start-review')).toBe(false);
+        expect(isReviewCommand(null)).toBe(false);
+        expect(isReviewCommand(undefined)).toBe(false);
+        expect(isReviewCommand('')).toBe(false);
+    });
+
+    describe('custom bot username', () => {
+        it('matches the custom bot for review and start-review', () => {
+            expect(isReviewCommand('@mybot review', 'mybot')).toBe(true);
+            expect(isReviewCommand('@mybot start-review', 'mybot')).toBe(true);
+        });
+
+        it('preserves @kody as fallback when custom bot username is set', () => {
+            expect(isReviewCommand('@kody review', 'mybot')).toBe(true);
+        });
+
+        it('does not match custom bot when no botUsername is provided', () => {
+            expect(isReviewCommand('@mybot review')).toBe(false);
+        });
+
+        it('handles bot usernames with special regex characters', () => {
+            expect(isReviewCommand('@my.bot review', 'my.bot')).toBe(true);
+            expect(isReviewCommand('@my-bot review', 'my-bot')).toBe(true);
+            expect(isReviewCommand('@my+bot review', 'my+bot')).toBe(true);
+        });
+
+        it('is case-insensitive', () => {
+            expect(isReviewCommand('@MyBot review', 'mybot')).toBe(true);
+            expect(isReviewCommand('@MYBOT REVIEW', 'mybot')).toBe(true);
+        });
+    });
+});
+
+describe('isForceReviewCommand', () => {
+    it('matches --force / -force on review and start-review, any case, with trailing text', () => {
+        expect(isForceReviewCommand('@kody review --force')).toBe(true);
+        expect(isForceReviewCommand('@kody start-review --force')).toBe(true);
+        expect(isForceReviewCommand('@kody review -force')).toBe(true);
+        expect(isForceReviewCommand('@kody review --force please retry')).toBe(
+            true,
+        );
+        expect(isForceReviewCommand('@KODY REVIEW --FORCE')).toBe(true);
+    });
+
+    it('matches --force anywhere on the first line, after other flags or focus text', () => {
+        expect(isForceReviewCommand('@kody review --heavy --force')).toBe(true);
+        expect(
+            isForceReviewCommand('@kody review the auth logic --force'),
+        ).toBe(true);
+        expect(
+            isForceReviewCommand('@mybot review --balanced --force', 'mybot'),
+        ).toBe(true);
+        expect(isForceReviewCommand('@kody review the forced retries')).toBe(
+            false,
+        );
+        expect(isForceReviewCommand('@kody review\n--force')).toBe(false);
+    });
+
+    it('rejects plain review commands, "force" mid-word and empty input', () => {
+        expect(isForceReviewCommand('@kody review')).toBe(false);
+        expect(isForceReviewCommand('@kody start-review')).toBe(false);
+        expect(isForceReviewCommand('@kody review --forced')).toBe(false);
+        expect(isForceReviewCommand(null)).toBe(false);
+        expect(isForceReviewCommand(undefined)).toBe(false);
+        expect(isForceReviewCommand('')).toBe(false);
+    });
+
+    it('matches a custom bot username and keeps @kody as fallback', () => {
+        expect(isForceReviewCommand('@mybot review --force', 'mybot')).toBe(
+            true,
+        );
+        expect(isForceReviewCommand('@mybot review -force', 'mybot')).toBe(
+            true,
+        );
+        expect(isForceReviewCommand('@kody review --force', 'mybot')).toBe(
+            true,
+        );
+    });
+});
+
+describe('isKodyMentionNonReview', () => {
+    it('is true for a mention that is not a review command', () => {
+        expect(isKodyMentionNonReview('@kody help')).toBe(true);
+        expect(isKodyMentionNonReview('@kody explain')).toBe(true);
+        expect(isKodyMentionNonReview('@kody explain this')).toBe(true);
+        expect(isKodyMentionNonReview('@kody what is this?')).toBe(true);
+        expect(isKodyMentionNonReview('@kody what is this code doing?')).toBe(
+            true,
+        );
+        expect(isKodyMentionNonReview('  @kody help')).toBe(true);
+        expect(isKodyMentionNonReview('@kody')).toBe(true);
+        expect(isKodyMentionNonReview('@kody reviewing')).toBe(true);
+        expect(isKodyMentionNonReview('@kody review-code')).toBe(true);
+    });
+
+    it('is false for review commands (any case), mid-text mentions and empty input', () => {
+        expect(isKodyMentionNonReview('@kody review')).toBe(false);
+        expect(isKodyMentionNonReview('@kody start-review')).toBe(false);
+        expect(isKodyMentionNonReview('  @kody review')).toBe(false);
+        expect(isKodyMentionNonReview('@KODY REVIEW')).toBe(false);
+        expect(isKodyMentionNonReview('@KODY start-review')).toBe(false);
+        expect(isKodyMentionNonReview('@kody REVIEW')).toBe(false);
+        expect(isKodyMentionNonReview('hey @kody help')).toBe(false);
+        expect(isKodyMentionNonReview(null)).toBe(false);
+        expect(isKodyMentionNonReview(undefined)).toBe(false);
+        expect(isKodyMentionNonReview('')).toBe(false);
+    });
+
+    it('supports a custom bot username and keeps @kody as fallback', () => {
+        expect(
+            isKodyMentionNonReview('@mybot what do you think?', 'mybot'),
+        ).toBe(true);
+        expect(isKodyMentionNonReview('@mybot review', 'mybot')).toBe(false);
+        expect(
+            isKodyMentionNonReview('@kody what do you think?', 'mybot'),
+        ).toBe(true);
+    });
+});
+
+describe('hasReviewMarker', () => {
+    it('finds the kody-codereview marker with any whitespace, case or surrounding text', () => {
+        expect(hasReviewMarker('<!-- kody-codereview -->')).toBe(true);
+        expect(hasReviewMarker('<!--kody-codereview-->')).toBe(true);
+        expect(hasReviewMarker('<!--  kody-codereview  -->')).toBe(true);
+        expect(
+            hasReviewMarker('Some text <!-- kody-codereview --> more text'),
+        ).toBe(true);
+        expect(hasReviewMarker('<!-- KODY-CODEREVIEW -->')).toBe(true);
+        expect(hasReviewMarker('<!-- Kody-CodeReview -->')).toBe(true);
+    });
+
+    it('is false when the marker is absent or input is empty', () => {
+        expect(hasReviewMarker('no marker here')).toBe(false);
+        expect(hasReviewMarker('<!-- other-marker -->')).toBe(false);
+        expect(hasReviewMarker(null)).toBe(false);
+        expect(hasReviewMarker(undefined)).toBe(false);
+        expect(hasReviewMarker('')).toBe(false);
+    });
+});
+
+describe('hasKodyMarker', () => {
+    it('recognizes Kody summaries and start/review commands', () => {
+        expect(hasKodyMarker('## Code Review Completed! 🔥')).toBe(true);
+        expect(hasKodyMarker('# Found critical issues please fix them')).toBe(
+            true,
+        );
+        expect(hasKodyMarker('@kody start')).toBe(true);
+        expect(hasKodyMarker('@kody start-review')).toBe(true);
+        expect(hasKodyMarker('@kody review')).toBe(true);
+        expect(hasKodyMarker('kody start')).toBe(true);
+        expect(hasKodyMarker('kody review')).toBe(true);
+        expect(hasKodyMarker('start-review')).toBe(true);
+    });
+
+    it('is false for regular comments and empty input', () => {
+        expect(hasKodyMarker('This is a regular comment')).toBe(false);
+        expect(hasKodyMarker('Please fix this bug')).toBe(false);
+        expect(hasKodyMarker(null)).toBe(false);
+        expect(hasKodyMarker(undefined)).toBe(false);
+    });
+});
 
 describe('parseReviewDirective', () => {
     it('captures the trailing directive on a review command', () => {
-        expect(parseReviewDirective('@kody review focus on the auth logic')).toBe(
-            'focus on the auth logic',
+        expect(
+            parseReviewDirective('@kody review focus on the auth logic'),
+        ).toBe('focus on the auth logic');
+        expect(parseReviewDirective('@kody review auth logic')).toBe(
+            'auth logic',
         );
     });
 
@@ -28,13 +222,28 @@ describe('parseReviewDirective', () => {
     it('returns undefined for a plain review command (no directive)', () => {
         expect(parseReviewDirective('@kody review')).toBeUndefined();
         expect(parseReviewDirective('@kody review   ')).toBeUndefined();
+        expect(parseReviewDirective('@kody review --force')).toBeUndefined();
+        expect(parseReviewDirective('@kody review --heavy')).toBeUndefined();
     });
 
-    it('strips a leading --force / force flag before the directive', () => {
+    it('strips flags whatever their position (leading, trailing, multiple)', () => {
         expect(
             parseReviewDirective('@kody review --force focus on security'),
         ).toBe('focus on security');
-        expect(parseReviewDirective('@kody review --force')).toBeUndefined();
+        expect(parseReviewDirective('@kody review --heavy auth')).toBe('auth');
+        expect(parseReviewDirective('@kody review auth --heavy')).toBe('auth');
+        expect(parseReviewDirective('@kody review auth --heavy --force')).toBe(
+            'auth',
+        );
+        expect(parseReviewDirective('@kody review --force auth --heavy')).toBe(
+            'auth',
+        );
+    });
+
+    it('does not strip focus words that merely contain heavy/force', () => {
+        expect(
+            parseReviewDirective('@kody review the forced retries path'),
+        ).toBe('the forced retries path');
     });
 
     it('strips surrounding quotes', () => {
@@ -51,13 +260,17 @@ describe('parseReviewDirective', () => {
 
     it('uses only the first line of the comment', () => {
         expect(
-            parseReviewDirective('@kody review focus on X\nignored second line'),
+            parseReviewDirective(
+                '@kody review focus on X\nignored second line',
+            ),
         ).toBe('focus on X');
     });
 
     it('returns undefined for non-commands and empty input', () => {
         expect(parseReviewDirective('just a normal comment')).toBeUndefined();
-        expect(parseReviewDirective('@kody what do you think?')).toBeUndefined();
+        expect(
+            parseReviewDirective('@kody what do you think?'),
+        ).toBeUndefined();
         expect(parseReviewDirective('')).toBeUndefined();
         expect(parseReviewDirective(null)).toBeUndefined();
         expect(parseReviewDirective(undefined)).toBeUndefined();
@@ -73,6 +286,31 @@ describe('parseReviewDirective', () => {
         const text = 'please review-code this';
         expect(isReviewCommand(text)).toBe(false);
         expect(parseReviewDirective(text)).toBeUndefined();
+    });
+
+    it('captures a directive for a custom bot username and keeps @kody as fallback', () => {
+        expect(
+            parseReviewDirective(
+                '@mybot review focus on the auth logic',
+                'mybot',
+            ),
+        ).toBe('focus on the auth logic');
+        expect(
+            parseReviewDirective(
+                '@mybot start-review focus on rate limiting',
+                'mybot',
+            ),
+        ).toBe('focus on rate limiting');
+        expect(parseReviewDirective('@mybot review', 'mybot')).toBeUndefined();
+        expect(
+            parseReviewDirective(
+                '@mybot review --force focus on security',
+                'mybot',
+            ),
+        ).toBe('focus on security');
+        expect(parseReviewDirective('@kody review focus on X', 'mybot')).toBe(
+            'focus on X',
+        );
     });
 
     describe('sanitization (prompt-injection structural breakout)', () => {
@@ -140,118 +378,126 @@ describe('normalizeReviewDirective (shared by the CLI --focus path)', () => {
     });
 });
 
-describe('custom bot username support', () => {
-    describe('isReviewCommand', () => {
-        it('matches @kody review by default (no botUsername)', () => {
-            expect(isReviewCommand('@kody review')).toBe(true);
-        });
-
-        it('matches @kody start-review by default', () => {
-            expect(isReviewCommand('@kody start-review')).toBe(true);
-        });
-
-        it('matches custom bot username review', () => {
-            expect(isReviewCommand('@mybot review', 'mybot')).toBe(true);
-        });
-
-        it('matches custom bot username start-review', () => {
-            expect(isReviewCommand('@mybot start-review', 'mybot')).toBe(true);
-        });
-
-        it('preserves @kody as fallback when custom bot username is set', () => {
-            expect(isReviewCommand('@kody review', 'mybot')).toBe(true);
-        });
-
-        it('does not match custom bot when no botUsername is provided', () => {
-            expect(isReviewCommand('@mybot review')).toBe(false);
-        });
-
-        it('handles bot usernames with special regex characters', () => {
-            expect(isReviewCommand('@my.bot review', 'my.bot')).toBe(true);
-            expect(isReviewCommand('@my-bot review', 'my-bot')).toBe(true);
-            expect(isReviewCommand('@my+bot review', 'my+bot')).toBe(true);
-        });
-
-        it('is case-insensitive', () => {
-            expect(isReviewCommand('@MyBot review', 'mybot')).toBe(true);
-            expect(isReviewCommand('@MYBOT REVIEW', 'mybot')).toBe(true);
-        });
+describe('isHeavyReviewCommand', () => {
+    it('matches --heavy in any position of a review command', () => {
+        expect(isHeavyReviewCommand('@kody review --heavy')).toBe(true);
+        expect(isHeavyReviewCommand('@kody review auth --heavy')).toBe(true);
+        expect(isHeavyReviewCommand('@kody review --heavy --force')).toBe(true);
+        expect(isHeavyReviewCommand('@kody start-review --heavy')).toBe(true);
     });
 
-    describe('isForceReviewCommand', () => {
-        it('matches custom bot username with --force flag', () => {
-            expect(isForceReviewCommand('@mybot review --force', 'mybot')).toBe(
-                true,
-            );
-        });
-
-        it('matches custom bot username with -force flag', () => {
-            expect(isForceReviewCommand('@mybot review -force', 'mybot')).toBe(
-                true,
-            );
-        });
-
-        it('preserves @kody as fallback when custom bot username is set', () => {
-            expect(isForceReviewCommand('@kody review --force', 'mybot')).toBe(
-                true,
-            );
-        });
+    it('does not match a bare `heavy`, a plain review or a non-command', () => {
+        expect(isHeavyReviewCommand('@kody review heavy checkout path')).toBe(
+            false,
+        );
+        expect(isHeavyReviewCommand('@kody review')).toBe(false);
+        expect(isHeavyReviewCommand('please run --heavy')).toBe(false);
+        expect(isHeavyReviewCommand(undefined)).toBe(false);
     });
 
-    describe('isKodyMentionNonReview', () => {
-        it('matches custom bot username mention without review command', () => {
-            expect(
-                isKodyMentionNonReview('@mybot what do you think?', 'mybot'),
-            ).toBe(true);
-        });
-
-        it('does not match custom bot username review command', () => {
-            expect(isKodyMentionNonReview('@mybot review', 'mybot')).toBe(false);
-        });
-
-        it('preserves @kody as fallback when custom bot username is set', () => {
-            expect(
-                isKodyMentionNonReview('@kody what do you think?', 'mybot'),
-            ).toBe(true);
-        });
+    it('matches a custom bot username, keeping @kody as fallback', () => {
+        expect(isHeavyReviewCommand('@mybot review --heavy', 'mybot')).toBe(
+            true,
+        );
+        expect(isHeavyReviewCommand('@kody review --heavy', 'mybot')).toBe(
+            true,
+        );
     });
 
-    describe('parseReviewDirective', () => {
-        it('captures directive with custom bot username', () => {
-            expect(
-                parseReviewDirective(
-                    '@mybot review focus on the auth logic',
-                    'mybot',
-                ),
-            ).toBe('focus on the auth logic');
-        });
+    it('leaves --heavy out of the review directive', () => {
+        expect(parseReviewDirective('@kody review --heavy the auth flow')).toBe(
+            'the auth flow',
+        );
+    });
+});
 
-        it('captures directive with start-review alias and custom bot', () => {
-            expect(
-                parseReviewDirective(
-                    '@mybot start-review focus on rate limiting',
-                    'mybot',
-                ),
-            ).toBe('focus on rate limiting');
-        });
+describe('requestedReviewModeOf', () => {
+    it('reads --heavy and --balanced in any position of a review command', () => {
+        expect(requestedReviewModeOf('@kody review --heavy')).toBe('heavy');
+        expect(requestedReviewModeOf('@kody review --balanced')).toBe(
+            'balanced',
+        );
+        expect(requestedReviewModeOf('@kody review auth --balanced')).toBe(
+            'balanced',
+        );
+        expect(requestedReviewModeOf('@mybot review --balanced', 'mybot')).toBe(
+            'balanced',
+        );
+    });
 
-        it('returns undefined for plain review command with custom bot', () => {
-            expect(parseReviewDirective('@mybot review', 'mybot')).toBeUndefined();
-        });
+    it('lets --heavy win when both flags are passed', () => {
+        expect(requestedReviewModeOf('@kody review --balanced --heavy')).toBe(
+            'heavy',
+        );
+    });
 
-        it('strips --force flag with custom bot username', () => {
-            expect(
-                parseReviewDirective(
-                    '@mybot review --force focus on security',
-                    'mybot',
-                ),
-            ).toBe('focus on security');
-        });
+    it('asks for no mode without a flag, so the mode in settings applies', () => {
+        expect(requestedReviewModeOf('@kody review')).toBeUndefined();
+        expect(requestedReviewModeOf('@kody review --force')).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review balanced checkout path'),
+        ).toBeUndefined();
+        expect(requestedReviewModeOf(undefined)).toBeUndefined();
+    });
 
-        it('preserves @kody as fallback when custom bot username is set', () => {
-            expect(
-                parseReviewDirective('@kody review focus on X', 'mybot'),
-            ).toBe('focus on X');
-        });
+    it('leaves --balanced out of the review directive', () => {
+        expect(
+            parseReviewDirective(
+                '@kody review --force --balanced the auth flow',
+            ),
+        ).toBe('the auth flow');
+        expect(
+            parseReviewDirective('@kody review the auth flow --balanced'),
+        ).toBe('the auth flow');
+    });
+});
+
+describe('review flags inside prose', () => {
+    it.each([
+        '@kody review check the --force-push path',
+        '@kody review the --forced flag',
+    ])('does not read %s as --force', (text) => {
+        expect(isForceReviewCommand(text)).toBe(false);
+    });
+
+    it('does not read --heavy-handed or --balanced-tree as a mode', () => {
+        expect(
+            requestedReviewModeOf('@kody review the --heavy-handed retry'),
+        ).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review the --balanced-tree insert'),
+        ).toBeUndefined();
+    });
+
+    it.each([
+        '@kody review --force, please',
+        '@kody review `--force`',
+        '@kody review (--force)',
+    ])('reads a flag followed by punctuation: %s', (text) => {
+        expect(isForceReviewCommand(text)).toBe(true);
+    });
+
+    it('keeps hyphenated focus words in the directive', () => {
+        expect(
+            parseReviewDirective('@kody review the API is well-balanced.'),
+        ).toBe('the API is well-balanced.');
+        expect(
+            requestedReviewModeOf('@kody review the API is well-balanced.'),
+        ).toBeUndefined();
+    });
+
+    it('reads --heavy followed by punctuation', () => {
+        expect(requestedReviewModeOf('@kody review `--heavy`')).toBe('heavy');
+        expect(requestedReviewModeOf('@kody review --balanced.')).toBe(
+            'balanced',
+        );
+    });
+
+    it('still reads the flags in any order, and keeps the prose ones in the directive', () => {
+        const text = '@kody review check the --force-push path --heavy --force';
+
+        expect(isForceReviewCommand(text)).toBe(true);
+        expect(requestedReviewModeOf(text)).toBe('heavy');
+        expect(parseReviewDirective(text)).toBe('check the --force-push path');
     });
 });

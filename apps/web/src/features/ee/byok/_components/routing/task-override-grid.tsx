@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -27,10 +28,12 @@ import {
     GitPullRequestIcon,
     ListChecksIcon,
     MessageSquareIcon,
+    ShieldAlertIcon,
     ShieldCheckIcon,
     type LucideIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
+import { HEAVY_MODE_PLAN_TAG } from "src/features/ee/heavy-mode/plan";
 
 import type { LlmTask } from "../../_types";
 import { modelLabelFor, TASK_DESCRIPTIONS } from "../../_utils";
@@ -45,6 +48,8 @@ export type PoolModel = {
     /** Provider id (from the model's credential) — drives the provider avatar. */
     provider?: string;
     capabilities?: SurfacedCapabilities;
+    disabled?: boolean;
+    disabledReason?: string;
 };
 
 /**
@@ -64,6 +69,7 @@ export const ModelCombobox = ({
     searchPlaceholder = "Search models…",
     emptyLabel = "No model found.",
     defaultOption,
+    disabled = false,
 }: {
     models: PoolModel[];
     value?: string;
@@ -79,6 +85,7 @@ export const ModelCombobox = ({
      *  the single control's way back to the inherited value, so the dropdown both
      *  sets and clears an override. `selected` is true when the row inherits. */
     defaultOption?: { label: string; selected: boolean; onSelect: () => void };
+    disabled?: boolean;
 }) => {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -86,8 +93,9 @@ export const ModelCombobox = ({
     return (
         <Popover
             modal
-            open={open}
+            open={open && !disabled}
             onOpenChange={(next) => {
+                if (disabled) return;
                 setOpen(next);
                 // Reset the filter on close so the list doesn't reopen pre-filtered.
                 if (!next) setSearch("");
@@ -138,13 +146,20 @@ export const ModelCombobox = ({
                             </CommandItem>
                         )}
                         {models.map((model) => {
-                            const gate = gateTask
-                                ? capabilityGate(
-                                      gateTask,
-                                      model.capabilities,
-                                      model.label,
-                                  )
-                                : { ok: true as const };
+                            const gate = model.disabled
+                                ? {
+                                      ok: false,
+                                      reason:
+                                          model.disabledReason ??
+                                          "This model is unavailable.",
+                                  }
+                                : gateTask
+                                  ? capabilityGate(
+                                        gateTask,
+                                        model.capabilities,
+                                        model.label,
+                                    )
+                                  : { ok: true as const };
                             const selected = model.id === value;
 
                             const label = (
@@ -223,18 +238,22 @@ export const ModelCombobox = ({
  * agent always uses the org DEFAULT (no task→task chaining), so the inherited
  * state is uniformly "Use default". Reused by every agent card.
  */
-const TaskModelControl = ({
+export const TaskModelControl = ({
     task,
     models,
     defaultModelId,
     taskOverrides,
     onChange,
+    disabled = false,
+    label,
 }: {
     task: LlmTask;
     models: PoolModel[];
     defaultModelId?: string;
     taskOverrides: Partial<Record<LlmTask, string>>;
     onChange: (task: LlmTask, modelId: string | undefined) => void;
+    disabled?: boolean;
+    label?: string;
 }) => {
     // Flat inheritance: with no override of its own, the task runs the org default.
     const inheritedId = defaultModelId;
@@ -246,15 +265,28 @@ const TaskModelControl = ({
             ? rawOverrideId
             : undefined;
     const overrideModel = models.find((m) => m.id === overrideId);
-    const isCustom = !!overrideModel;
-    const gate = overrideModel
-        ? capabilityGate(task, overrideModel.capabilities, overrideModel.label)
-        : { ok: true as const };
+    const isCustom = !!overrideId;
+    const effectiveModel = models.find(
+        (m) => m.id === (overrideId ?? inheritedId),
+    );
+    const gate =
+        overrideId && !overrideModel
+            ? {
+                  ok: false,
+                  reason: "This saved model is no longer connected. Choose a model or use the default.",
+              }
+            : effectiveModel?.disabled
+              ? { ok: false, reason: effectiveModel.disabledReason }
+              : effectiveModel
+                ? capabilityGate(
+                      task,
+                      effectiveModel.capabilities,
+                      effectiveModel.label,
+                  )
+                : { ok: true as const };
 
     // What actually runs — used for the avatar so the user sees the resolved
     // provider even when the value is inherited.
-    const effectiveId = overrideId ?? inheritedId;
-    const effectiveModel = models.find((m) => m.id === effectiveId);
     const inheritedLabel = modelLabelFor(models, inheritedId);
     const inheritedOptionLabel = `Use default · ${inheritedLabel}`;
 
@@ -264,7 +296,7 @@ const TaskModelControl = ({
     const pickableModels = models.filter((m) => m.id !== defaultModelId);
 
     return (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex max-w-full min-w-0 items-center gap-2">
             {!gate.ok && (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -279,6 +311,7 @@ const TaskModelControl = ({
             )}
             <ModelCombobox
                 models={pickableModels}
+                disabled={disabled}
                 value={overrideId}
                 gateTask={task}
                 onSelect={(id) => onChange(task, id)}
@@ -290,9 +323,11 @@ const TaskModelControl = ({
                 trigger={
                     <Button
                         variant="helper"
-                        size="xs"
+                        size="md"
                         role="combobox"
-                        className="w-full justify-between gap-2 sm:w-auto sm:min-w-64"
+                        aria-label={label}
+                        disabled={disabled}
+                        className="w-full max-w-full min-w-0 justify-between gap-2 sm:min-w-56"
                         rightIcon={
                             <ChevronsUpDownIcon className="-mr-1 opacity-50" />
                         }>
@@ -304,7 +339,9 @@ const TaskModelControl = ({
                                 dir="rtl"
                                 title={
                                     isCustom
-                                        ? modelLabelFor(models, overrideId)
+                                        ? overrideModel
+                                            ? modelLabelFor(models, overrideId)
+                                            : "Unavailable model"
                                         : inheritedOptionLabel
                                 }
                                 style={{ textAlign: "left" }}
@@ -314,7 +351,9 @@ const TaskModelControl = ({
                                         : "text-text-tertiary truncate font-normal"
                                 }>
                                 {isCustom
-                                    ? modelLabelFor(models, overrideId)
+                                    ? overrideModel
+                                        ? modelLabelFor(models, overrideId)
+                                        : "Unavailable model"
                                     : inheritedOptionLabel}
                             </span>
                         </span>
@@ -325,9 +364,7 @@ const TaskModelControl = ({
     );
 };
 
-/** The 5 agent cards. Maps the 6 backend tasks onto the reference's agent
- *  framing: Kody Rules is ONE card holding its Review + Generation tasks; every
- *  other task is its own card. Nothing is hidden. */
+/** Each agent uses the existing task model control and default inheritance. */
 type AgentCard = {
     task: LlmTask;
     Icon: LucideIcon;
@@ -335,13 +372,26 @@ type AgentCard = {
     /** Overrides the task's default description — used where the card title isn't
      *  the raw task name (e.g. "Kody Rules" fronting the kodyRulesReview task). */
     desc?: string;
+    /** Sub-rows, each routing its own task under the card's identity. */
+    rows?: { task: LlmTask; label: string }[];
 };
 
 const AGENT_CARDS: AgentCard[] = [
     {
+        task: "riskAssessment",
+        Icon: ShieldCheckIcon,
+        title: "Risk Assessment",
+    },
+    {
+        // One card, one model per review mode: Balanced keeps the codeReview
+        // task every existing override already points at; Heavy is its own.
         task: "codeReview",
         Icon: GitPullRequestIcon,
         title: "Code Review",
+        rows: [
+            { task: "codeReview", label: "Model for Balanced" },
+            { task: "codeReviewHeavy", label: "Model for Heavy" },
+        ],
     },
     {
         // Kody Rules routes ONE user-configurable task (kodyRulesReview) — rule
@@ -375,6 +425,11 @@ const AGENT_CARDS: AgentCard[] = [
         Icon: BotIcon,
         title: "Custom Agents",
     },
+    {
+        task: "securityScan",
+        Icon: ShieldAlertIcon,
+        title: "Deep scan",
+    },
 ];
 
 const IconTile = ({ Icon }: { Icon: LucideIcon }) => (
@@ -389,15 +444,26 @@ const IconTile = ({ Icon }: { Icon: LucideIcon }) => (
  * provider avatar + value. Kody Rules groups its Review + Generation sub-rows in
  * one card. Backend is untouched — each control still writes taskOverrides[task].
  */
-export const TaskOverrideGrid = (props: {
+export const TaskOverrideGrid = ({
+    heavyPlanAllowed = true,
+    tasks,
+    disabled = false,
+    ...props
+}: {
     models: PoolModel[];
     defaultModelId?: string;
     taskOverrides: Partial<Record<LlmTask, string>>;
     onChange: (task: LlmTask, modelId: string | undefined) => void;
+    /** Heavy runs on Teams and Enterprise only; elsewhere its row is locked. */
+    heavyPlanAllowed?: boolean;
+    tasks?: LlmTask[];
+    disabled?: boolean;
 }) => {
     return (
         <div className="flex flex-col gap-3">
-            {AGENT_CARDS.map((card) => (
+            {AGENT_CARDS.filter(
+                (card) => !tasks || tasks.includes(card.task),
+            ).map((card) => (
                 <div
                     key={card.task}
                     data-routing-anchor={`task:${card.task}`}
@@ -414,8 +480,45 @@ export const TaskOverrideGrid = (props: {
                                 </span>
                             </div>
                         </div>
-                        <TaskModelControl task={card.task} {...props} />
+                        {!card.rows && (
+                            <TaskModelControl
+                                task={card.task}
+                                disabled={disabled}
+                                {...props}
+                            />
+                        )}
                     </div>
+                    {card.rows?.map((row) => (
+                        <div
+                            key={row.task}
+                            data-routing-anchor={
+                                row.task === card.task
+                                    ? undefined
+                                    : `task:${row.task}`
+                            }
+                            className="border-card-lv3/50 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                            <span className="text-text-primary flex items-center gap-2 text-sm">
+                                {row.label}
+                                {row.task === "codeReviewHeavy" &&
+                                    !heavyPlanAllowed && (
+                                        <Badge>{HEAVY_MODE_PLAN_TAG}</Badge>
+                                    )}
+                            </span>
+                            {row.task === "codeReviewHeavy" &&
+                            !heavyPlanAllowed ? (
+                                <span className="text-text-tertiary text-xs">
+                                    Heavy mode is on the Teams and Enterprise
+                                    plans.
+                                </span>
+                            ) : (
+                                <TaskModelControl
+                                    task={row.task}
+                                    disabled={disabled}
+                                    {...props}
+                                />
+                            )}
+                        </div>
+                    ))}
                 </div>
             ))}
         </div>

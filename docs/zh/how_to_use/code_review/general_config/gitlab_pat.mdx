@@ -1,11 +1,13 @@
 ---
 title: "GitLab PAT 令牌"
-description: "生成 Kody 读取代码库并发布审查评论所需的 GitLab Personal Access Token,含所需的确切权限范围。"
+description: "生成 Kody 读取代码库并发布审查评论所需的 GitLab 个人或群组访问令牌,含所需的确切权限范围。"
 ---
 
 ## PAT 简介
 
 要使 Kody 能够执行自动代码审查,您需要在 GitLab 中生成个人访问令牌(PAT)。此令牌允许 Kody 以受控方式安全地访问您的代码库并进行代码分析。
+
+Kody 以令牌所属的 GitLab 用户身份发布审查。使用个人访问令牌时,审查会显示在您自己的账户下,通过 OAuth 连接时也是如此。如果希望审查显示在单独的机器人用户下,请使用下文介绍的群组访问令牌。
 
 ## 生成 PAT(个人访问令牌)
 
@@ -28,15 +30,42 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 GitLab P
    - **令牌名称**:选择一个容易识别的名称,例如 `kody_code_review`。
    - **到期日期**:如果可能,选择较长的到期日期,最好至少 180 天。
    - **权限**:设置以下权限:
-     - **api**:读访问权限。
-     - **read_api**:读访问权限。
-     - **read_user**:读访问权限。
-     - **read_repository**:读访问权限。
-     - **write_repository**:读访问权限。
+     - **api**
+     - **read_api**
+     - **read_user**
+     - **read_repository**
+     - **write_repository**
 
 5. **完成并保存令牌**:
    - 配置权限后,点击 `生成令牌`。
    - 确保复制生成的令牌并安全存储,因为您需要它来配置 Kody。
+
+## 使用群组访问令牌
+
+群组访问令牌会以 GitLab 为该令牌创建的机器人用户身份发布审查,该用户以令牌名称命名。机器人可以访问群组及其子群组中的所有项目。
+
+<Note>
+  在 GitLab.com 上,群组访问令牌需要 Premium 或 Ultimate 订阅,试用期间不可用。在 GitLab Self-Managed 和 GitLab Dedicated 上,任何许可证均可使用。
+</Note>
+
+1. **打开群组的访问令牌页面**:
+
+   - 在 GitLab 中,打开包含您代码库的群组,进入 `设置` > `访问令牌`。
+
+2. **添加新令牌**:
+
+   - 点击 `添加新令牌` 按钮。
+
+3. **使用以下规格设置新令牌**:
+
+   - **令牌名称**:Kody 的审查将显示的名称,例如 `Kody`。
+   - **到期日期**:如果可能,选择较长的到期日期,最好至少 180 天。
+   - **角色**:`Maintainer`。Kody 需要此角色才能在每个项目上创建 Webhook。
+   - **范围**:`api` 和 `read_repository`。Kody 会克隆您的代码库,而群组访问令牌的 `api` 不包含通过 HTTPS 的 Git 访问。
+
+4. **完成并保存令牌**:
+   - 点击 `创建群组访问令牌`。
+   - 复制令牌并安全存储。GitLab 只显示一次。
 
 ## 将令牌添加到 Kody
 
@@ -44,3 +73,5 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 GitLab P
 
 - **在入门引导期间**:在 **Connect your Git tool** 上选择 **Gitlab** 标签页,然后点击 **Connect via token**。
 - **之后**:在侧边栏中打开 **Repositories**,点击 **Connect a provider** 下的 **Gitlab**,切换到 **Token** 标签页,粘贴令牌并点击 **Validate and save**。对于自托管的 GitLab,请打开 **Self-hosted** 并输入 **Gitlab URL**。
+- **替换令牌**:在 **Repositories** 中,点击 **Gitlab** 卡片上的 **Update token**,粘贴新令牌并点击 **Update token**。Webhook 和已选择的代码库都会保留。
+- **从 OAuth 切换**:通过 OAuth 创建的连接不显示 **Update token**。点击 **Reset**,选择 **Just reset the integration**,然后按上述步骤使用令牌重新连接,并选择您的代码库。

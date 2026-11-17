@@ -246,6 +246,16 @@ jobs:
         # someone hitting stop.
         timeout-minutes: 90
         environment: ci
+        # Every gitlab cell drives the same GL_TEST_TOKEN account, and
+        # gitlab.com rate-limits per user. On 2026-10-29 the release train's
+        # gitlab cell and the cron's ran at the same time and both spent the
+        # whole cell in 429. Queue gitlab cells across runs instead; the other
+        # providers keep a group of their own so they never wait. A group holds
+        # one running and one pending job, so a third gitlab cell arriving
+        # replaces the pending one.
+        concurrency:
+            group: ${{ matrix.cell.provider == 'gitlab' && 'e2e-gitlab-test-account' || format('e2e-sh-cell-{0}-{1}-{2}', github.run_id, matrix.cell.provider, matrix.cell.license) }}
+            cancel-in-progress: false
         strategy:
             fail-fast: false
             matrix:

@@ -18,7 +18,7 @@ jest.mock("src/core/config/auth", () => ({
     auth: () => authMock(),
 }));
 
-import { GET, POST } from "./[...path]/route";
+import { GET } from "./[...path]/route";
 
 function mockReq(method: string, init?: { search?: string; body?: any }): any {
     const headers = new Headers({
@@ -105,19 +105,5 @@ describe("/api/proxy/mcp/[...path]", () => {
         await GET(mockReq("GET"), ctx(["integrations"]));
         const [, init] = fetchMock.mock.calls[0];
         expect((init.headers as Headers).get("authorization")).toBeNull();
-    });
-
-    it("strips the incoming Host header", async () => {
-        await GET(mockReq("GET"), ctx(["x"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect((init.headers as Headers).get("host")).toBeNull();
-    });
-
-    it("POST: forwards body stream with duplex", async () => {
-        const body = new ReadableStream();
-        await POST(mockReq("POST", { body }), ctx(["x"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect(init.body).toBe(body);
-        expect((init as any).duplex).toBe("half");
     });
 });

@@ -1,19 +1,15 @@
 /**
  * #2172 — custom agents keep to their lane, and the custom agents of one
- * review share a system-prompt prefix the provider can cache. The generalist
- * (and every built-in agent) renders byte for byte what it rendered before.
+ * review share a system-prompt prefix the provider can cache.
  */
-import { createHash } from 'node:crypto';
-
 import {
     buildSystemPrompt,
     buildUserPrompt,
     hasOwnLane,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
-import { verifierPromptFor } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
-import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { CACHE_PREFIX_BOUNDARY } from '@libs/llm/prompt-cache-boundary';
+import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 
 const generalist: PromptAgentMeta = {
     identity: {
@@ -80,8 +76,6 @@ const security = customAgent(
     },
 );
 
-const sha = (text: string) => createHash('sha256').update(text).digest('hex');
-
 const commonPrefixLength = (a: string, b: string) => {
     let i = 0;
     while (i < a.length && i < b.length && a[i] === b[i]) i++;
@@ -97,61 +91,7 @@ afterAll(() => {
     jest.useRealTimers();
 });
 
-describe('generalist prompts are byte-identical', () => {
-    // sha256 of the prompts rendered on feat/custom-agents@d80afe38d (before
-    // the lane and prefix changes) for this exact input.
-    const BASE: Record<string, [any, string, string]> = {
-        full: [
-            input(),
-            '4f67236a90cbf50ee3b36e581d2cc5f650253582b3897a6bf54a3b79f836c2bc',
-            '98ffa8eff25172be473cd935a6036243fc57daf863e6e45dd337e667851c2ed5',
-        ],
-        compact: [
-            input({ adaptiveProfile: { compactPrompt: true } }),
-            '86b1a846139d9cd01beacc770af75096c5147cbaa3d6fb9a19adaf91795ebca8',
-            'fba3bbef6f6628472d0e6eb806c4f869b57df6b0865789270331adc12b850014',
-        ],
-        selfContained: [
-            input({ remoteCommands: undefined }),
-            '52544dd1089b0f5cd65fc9fbb8f7322a3ce975de19a4678b25717a30d255f979',
-            '06a58f11c5e2f617fcfd0893d009cef63bbf08a30a98ee0b88b28a5e6ba2c2f7',
-        ],
-        withGraph: [
-            input({
-                callGraph: '<CallGraph>g</CallGraph>',
-                reviewDirective: 'auth',
-                linkedRepoAccess: undefined,
-            }),
-            '620249378123462aa69c5bccb81387f05955ccb75a928344a8fa55ddc6ea0134',
-            '63e7e9dc665c9953f1796d2659c5eb1a548d172ca9da7f51eba0da0744bea180',
-        ],
-    };
-
-    it.each(Object.entries(BASE))(
-        '%s system and user prompt',
-        (_name, [given, systemSha, userSha]) => {
-            expect(sha(buildSystemPrompt(given, generalist))).toBe(systemSha);
-            expect(sha(buildUserPrompt(given, generalist))).toBe(userSha);
-        },
-    );
-
-    it('the HV2 verifier prompts', () => {
-        const finding: any = {
-            relevantFile: 'src/pagination.ts',
-            relevantLinesStart: 8,
-            relevantLinesEnd: 9,
-            severity: 'high',
-            suggestionContent: 'off by one',
-            existingCode: 'i <= n',
-        };
-        expect(sha(buildVerifierPrompt('', 0).system)).toBe(
-            '8b281d919d78cf8125620983d883213ce2b16aef9ccc9ea3085b17dcc9c8db98',
-        );
-        expect(sha(verifierPromptFor(finding))).toBe(
-            'b8bf172b6524042f9f1249952eacbba2f15aa2fb868341c7be7d873246697877',
-        );
-    });
-
+describe('generalist prompt', () => {
     it('carries no shared-prefix marker', () => {
         expect(buildSystemPrompt(input(), generalist)).not.toContain(
             CACHE_PREFIX_BOUNDARY,
@@ -199,7 +139,7 @@ describe('custom agent — lane focus', () => {
             'Missing defensive measures (CSRF, rate limiting, input validation)',
         );
         expect(user).toContain('<Diffs>');
-        expect(user).toContain('Assign a confidence score (1-10)');
+        expect(user).toContain(`- ${ONE_PROBLEM_RULE}`);
     });
 
     it('scopes the compact prompt too, and keeps its instructions there', () => {
@@ -214,6 +154,44 @@ describe('custom agent — lane focus', () => {
         expect(buildUserPrompt(compact, e2e)).not.toContain(
             'Reporting threshold (high-recall)',
         );
+    });
+});
+
+describe('custom agent — no sandbox', () => {
+    // A review with no sandbox runs every agent without the repository. The
+    // agent keeps its own lane there instead of the generalist's checklist.
+    const noSandbox = input({ remoteCommands: undefined });
+
+    it('keeps its lane and its instructions in the system prompt', () => {
+        const system = buildSystemPrompt(noSandbox, e2e);
+
+        expect(system).toContain('<CodeReviewAgent mode="self-contained">');
+        expect(system).toContain('Report only findings within your focus');
+        expect(system).toContain(
+            'Every new booking screen needs an end-to-end test',
+        );
+        expect(system).toContain('cannot read the repository');
+        // Its team systems and guides do not need the sandbox: the prompt
+        // must not forbid evidence from them.
+        expect(system).toContain("the team's systems and your guides");
+        expect(system).not.toContain('available only where');
+        expect(system).not.toContain('Your first action must be a tool call');
+        expect(system).not.toContain(
+            'Is there a null/undefined dereference on a path the diff introduces?',
+        );
+    });
+
+    it('scopes the task and the reporting rules of its user prompt', () => {
+        const user = buildUserPrompt(noSandbox, e2e);
+
+        expect(user).toContain('<ReviewTask mode="self-contained">');
+        expect(user).toContain('the issues your focus covers');
+        expect(user).toContain('Report only findings within your focus.');
+        expect(user).not.toContain(
+            'DO report: null/undefined dereferences with no guard',
+        );
+        expect(user).toContain('<Diffs>');
+        expect(user).toContain('Assign a confidence score (1-10)');
     });
 });
 

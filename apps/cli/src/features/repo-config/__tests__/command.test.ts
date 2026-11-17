@@ -28,7 +28,20 @@ describe('registerRepositoryConfigCommand', () => {
                 'remove-base-branch',
                 'add-ignore-title',
                 'remove-ignore-title',
+                'unset',
+                'keys',
+                'model',
             ]),
         );
+
+        const model = remote.commands.find(
+            (command) => command.name() === 'model',
+        );
+        expect(model?.commands.map((command) => command.name())).toEqual([
+            'list',
+            'set',
+            'unset',
+            'test',
+        ]);
     });
 });

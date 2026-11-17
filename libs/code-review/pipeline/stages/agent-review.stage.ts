@@ -1,25 +1,30 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
-import { jsonSchema, type EmbeddingModel } from 'ai';
-import { tracedEmbed as embed } from '@libs/llm/llm-call';
+import { type EmbeddingModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
+import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
 import {
-    DEDUP_SCHEMA,
-    DEDUP_CONTENT_THRESHOLD,
-    DEDUP_EMBEDDING_LOW,
-    DEDUP_EMBEDDING_HIGH,
-    DEDUP_TIEBREAK_SCHEMA,
-    DEDUP_FOLLOWUP_SCHEMA,
-    applyDedupFollowup,
-    buildDedupFollowupPrompt,
-    buildDedupPrompt,
-    buildTiebreakPrompt,
-    unclassifiedDedupIndices,
-    contentSimilarity,
-    cosineSimilarity,
-    dedupEmbeddingText,
-} from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
+    citedFromPatch,
+    enrichSuggestions,
+} from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
+import { enrichDeterministic } from '@libs/code-review/infrastructure/agents/engine/enrich-deterministic';
+import { CATEGORY_LABELS } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
+import {
+    buildDedupTiebreak,
+    deduplicateFindings,
+    embedDedupSuggestion,
+    resolveDedupMerge,
+    summarizeDedupSuggestion,
+    type DedupEmbedCache,
+    type DedupLogMeta,
+    type DedupMergeOptions,
+    type DedupMergeDecision,
+    type DedupTiebreak,
+    type FindingDedupDeps,
+} from '@libs/code-review/infrastructure/agents/engine/finding-dedup';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     fullSuggestionTitle,
@@ -51,6 +56,7 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import {
     CodeSuggestion,
     FileChange,
+    REJECTED_FIX_STATUS,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
@@ -77,8 +83,10 @@ import {
     type CustomAgentCliRun,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
-import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import {
+    analyzerFindingsToSuggestions,
+    isAnalyzerSuggestion,
+} from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
     capCustomAgentComments,
@@ -86,26 +94,24 @@ import {
     customAgentSeverityVerdict,
     indexCustomAgents,
     isCustomAgentFinding,
-    keepOwnFindingsApart,
     findingCitation,
-    preferCustomAgentKeep,
     stripCustomAgentFixes,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
-import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import {
+    CUSTOM_AGENT_RUN_LOG_TOKEN,
+    type ICustomAgentRunLog,
+} from '@libs/code-review/domain/custom-agents/contracts';
+import {
+    summarizeCustomAgentRuns,
+    toCustomAgentRunRecords,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import {
     customAgentSlug,
     ignoredFilesForCustomAgents,
+    selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import {
-    isSameSpot,
-    preferSpecificKeep,
-} from '@libs/code-review/infrastructure/agents/engine/prefer-specific-keep';
-import {
-    bothFromAnalyzers,
-    restatesAnalyzerFinding,
-} from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
 import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
 import {
     LazyLinkedRepoAccess,
@@ -148,7 +154,6 @@ import {
     resolvedModel,
     resolvedProvider,
     usesOrgOwnedKey,
-    DedupTraceGroupSummary,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
 } from '../context/code-review-pipeline.context';
@@ -159,12 +164,11 @@ import {
     getClassification,
     llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
-import { hasManagedModelKey } from '@libs/llm/managed-slot';
-import { LLM } from '@libs/llm/llm';
 import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engine/revision-link';
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import {
     mergeKodyRuleFindings,
+    OTHER_LOCATIONS_HEADING,
     otherLocationsToRender,
 } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
@@ -172,10 +176,6 @@ import {
     type PrDecisionRecord,
 } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
-import {
-    normalizeEnvelope,
-    LLM_ENVELOPE_TAG,
-} from '@libs/llm/structured-output-repair';
 import { CacheService } from '@libs/core/cache/cache.service';
 
 /**
@@ -339,6 +339,25 @@ export function snapLinesToDiff(
  */
 const INSTRUCTION_INDEX_TTL_MS = 60 * 60 * 1000;
 
+/** A suggestion the generalist finder wrote: not a Kody Rule, analyzer or
+ *  custom agent finding. Only these take the parse schema, the strip and the
+ *  enrichment (#1821). */
+function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
+    return (
+        s.label !== 'kody_rules' &&
+        !isAnalyzerSuggestion(s) &&
+        !isCustomAgentFinding(s)
+    );
+}
+
+function isGithubDotCom(cloneUrl: string | undefined): boolean {
+    try {
+        return new URL(cloneUrl ?? '').hostname.toLowerCase() === 'github.com';
+    } catch {
+        return false;
+    }
+}
+
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'AgentReviewStage';
@@ -350,16 +369,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     private summarizeDedupSuggestion(
         suggestion?: Partial<CodeSuggestion>,
     ): DedupTraceSuggestionSummary {
-        return {
-            relevantFile: suggestion?.relevantFile,
-            relevantLinesStart: suggestion?.relevantLinesStart,
-            relevantLinesEnd: suggestion?.relevantLinesEnd,
-            label: suggestion?.label,
-            severity: suggestion?.severity,
-            oneSentenceSummary:
-                suggestion?.oneSentenceSummary ||
-                suggestion?.suggestionContent?.substring(0, 200),
-        };
+        return summarizeDedupSuggestion(suggestion);
     }
 
     private normalizeSeverity(severity?: string): string {
@@ -396,6 +406,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // without it the instruction index is listed on every review.
         @Optional()
         private readonly cacheService?: CacheService,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the agent page cannot say an agent is failing.
+        @Optional()
+        @Inject(CUSTOM_AGENT_RUN_LOG_TOKEN)
+        private readonly customAgentRunLog?: ICustomAgentRunLog,
     ) {
         super();
     }
@@ -448,16 +463,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
 
-        // The generalist, the only agent that reads them, runs only when at
-        // least one of these categories is on.
+        // The generalist reads them, and runs only when at least one of these
+        // categories is on; a custom agent's quote gate checks rules quoted
+        // from them, so an enabled custom agent needs them too.
         const options = context.codeReviewConfig?.reviewOptions;
+        const customAgentRuns = this.customAgentsToRun(context).length > 0;
         if (
             options?.bug === false &&
             options?.security === false &&
-            options?.performance === false
+            options?.performance === false &&
+            !customAgentRuns
         ) {
             this.logger.warn({
-                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off and no custom agent runs, so no agent reads them`,
                 context: this.stageName,
                 metadata: logMetadata,
             });
@@ -637,14 +655,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     async resolveCustomAgents(
         context: CodeReviewPipelineContext,
     ): Promise<CustomAgentConfig[]> {
+        return this.customAgentsToRun(context);
+    }
+
+    private customAgentsToRun(
+        context: CodeReviewPipelineContext,
+    ): CustomAgentConfig[] {
         const configured = context.codeReviewConfig?.customAgents ?? [];
-        const wanted = context.onlyCustomAgent
+        return context.onlyCustomAgent
             ? configured
             : configured.filter((agent) => agent?.enabled);
-        if (!wanted.length) {
-            return [];
-        }
-        return wanted;
     }
 
     /**
@@ -680,6 +700,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     id: run.id,
                     slug: run.slug,
                     status: run.status,
+                    reason: run.reason,
                     kept: run.posted,
                     droppedByChecks: run.droppedByVerify,
                     mergedInDedup: mergedInDedup.filter(
@@ -717,6 +738,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * Keeps how each agent that ran ended (ran, failed, incomplete, and why)
+     * so its page can say it is failing. Never blocks or fails the review.
+     */
+    private recordCustomAgentRuns(
+        context: CodeReviewPipelineContext,
+        runs: ReturnType<typeof summarizeCustomAgentRuns>,
+    ): void {
+        const organizationId = context.organizationAndTeamData?.organizationId;
+        const repositoryId = context.repository?.id;
+        const prNumber = context.pullRequest?.number;
+        if (!this.customAgentRunLog || !organizationId || !repositoryId) return;
+        if (typeof prNumber !== 'number') return;
+        const records = toCustomAgentRunRecords({
+            organizationId,
+            repositoryId: String(repositoryId),
+            prNumber,
+            runs,
+            at: new Date(),
+        });
+        if (!records.length) return;
+        void this.customAgentRunLog.record(records).catch((error) =>
+            this.logger.warn({
+                message: `[AGENT] Could not record custom agent runs for PR#${prNumber}`,
+                context: this.stageName,
+                error,
+                metadata: { organizationId, repositoryId, prNumber },
+            }),
+        );
+    }
+
+    /**
      * Skills and docs linked to the main review and to each custom agent,
      * read from the PR's target branch (#2172). See resolveReviewKnowledge.
      */
@@ -727,7 +779,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<ReviewKnowledge> {
         return resolveReviewKnowledge({
             items: context.codeReviewConfig?.knowledge,
-            customAgents,
+            customAgents: selectCustomAgents(
+                customAgents,
+                context.onlyCustomAgent,
+                context.riskAssessment,
+            ),
             changedFiles,
             baseBranch:
                 context.pullRequest?.base?.ref ||
@@ -931,20 +987,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 String(context.repository?.id || ''),
                             );
 
+                        const baseBranch =
+                            context.sandboxHandle?.baseBranch ||
+                            context.pullRequest?.base?.ref ||
+                            context.repository?.defaultBranch;
+
                         if (repo?.astGraphStatus === AstGraphStatus.READY) {
                             callGraph = await this.graphContext.generateContext(
                                 context.sandboxHandle,
                                 changedFiles,
                                 repo.uuid,
+                                baseBranch,
                             );
                         } else {
                             callGraph =
                                 await this.graphContext.generateContextLegacy(
                                     context.sandboxHandle,
                                     changedFiles,
-                                    context.sandboxHandle?.baseBranch ||
-                                        context.pullRequest?.base?.ref ||
-                                        context.repository?.defaultBranch,
+                                    baseBranch,
                                 );
                         }
                     }
@@ -1295,6 +1355,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // and an agent-level one for the same (model, window) fold
             // into a single bullet in the user-facing notice.
             const allWarnings = dedupReviewWarnings([
+                // Recorded by earlier stages (e.g. a diff cut at the patch
+                // line limit in FetchChangedFilesStage).
+                ...(context.reviewWarnings ?? []),
                 ...(context.customAgentClis?.warnings ?? []),
                 ...stageWarnings,
                 ...(result.warnings ?? []),
@@ -1351,16 +1414,38 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // After the finder, in order: parse schema, anchoring, label
+            // normalization (#1821). Then the dedup and the rest.
+            const logIds = {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+            };
+            const parsedSuggestions = this.discardUnparsedFindings(
+                result.suggestions,
+                allDiscarded,
+                logIds,
+            );
+
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
             // A custom agent's findings on an ignored file it names are held
             // to that file's hunks like any other.
-            const validatedSuggestions = this.anchorSuggestionsToDiff(
-                result.suggestions,
+            const anchoredSuggestions = this.anchorSuggestionsToDiff(
+                parsedSuggestions,
                 [...changedFiles, ...ignoredChangedFiles],
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
+                logIds,
+            );
+
+            const validatedSuggestions = this.normalizeSuggestionLabels(
+                anchoredSuggestions,
+                reviewOptions,
+                !!repoInstructions?.files?.length,
+                allDiscarded,
+                logIds,
             );
 
             // Verify/Discover removed — was hurting recall across all models.
@@ -1390,25 +1475,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // them, a group was kept or dropped whole by whichever occurrence
             // had the longest text. Also before the severity and formatter
             // passes, so a repeat costs no further model call.
-            const repeatCheck = await this.dropRepeats(
+            const repeatCheck = await this.dropRepeatsOnCitedCode(
                 context,
-                [
-                    ...severityNormalizedNonRules,
-                    ...analyzerSuggestions,
-                    ...kodyRulesWithSeverity,
-                ],
+                severityNormalizedNonRules,
+                [...analyzerSuggestions, ...kodyRulesWithSeverity],
+                [...changedFiles, ...ignoredChangedFiles],
                 kodyRulesById,
+                allDiscarded,
                 telemetryMeta,
             );
-            for (const s of repeatCheck.repeats) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            let severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept;
+            let severityNormalized = repeatCheck.kept;
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -1467,6 +1543,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context,
                 allDiscarded,
                 customAgentsById,
+            );
+
+            // Enrichment (#1821): the title, cited code and fix of each finder
+            // suggestion still standing. After the severity step, so only what
+            // reaches the team is enriched; before the title and the formatter,
+            // which read what it writes.
+            deduped = await this.enrichFinderSuggestions(
+                deduped,
+                context,
+                [...changedFiles, ...ignoredChangedFiles],
+                telemetryMeta,
             );
 
             // The agent's fix policy (its floor and limit applied before dedup).
@@ -1589,6 +1676,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             {
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
                 for (const s of deduped) {
+                    // The enrichment chose no code: not an unusable fix.
+                    if (s.fixStatus && s.fixStatus !== 'local') {
+                        continue;
+                    }
+                    // Its enrichment call failed: no fix was proposed, and
+                    // the finding posts as a plain comment.
+                    if (!s.fixStatus && isFinderSuggestion(s)) {
+                        continue;
+                    }
                     const reason = checkFix(
                         s.existingCode,
                         s.improvedCode,
@@ -1599,6 +1695,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
                     s.improvedCode = '';
+                    if (s.fixStatus === 'local') {
+                        s.fixStatus = REJECTED_FIX_STATUS;
+                    }
                 }
                 const totalBadFix = Object.values(badFixCounts).reduce(
                     (sum: number, n) => sum + (n ?? 0),
@@ -1633,8 +1732,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // The CLI output that names a custom agent finding's file and the
             // team rule it applies, after formatting so the rewrite cannot
             // paraphrase or drop them (#2172).
+            const knowledgeSources = reviewKnowledge.sources;
+            const ruleSources = knowledgeSources?.length
+                ? {
+                      sources: knowledgeSources,
+                      platform: context.platformType,
+                      // Unknown visibility counts as public.
+                      reviewedIsPublic:
+                          reviewKnowledge.reviewedRepository?.visibility !==
+                          'private',
+                  }
+                : undefined;
             for (const s of deduped) {
-                const citation = findingCitation(s, cliRuns);
+                const citation = findingCitation(s, cliRuns, ruleSources);
                 if (!citation) continue;
                 s.suggestionContent = `${s.suggestionContent || ''}${citation}`;
                 s.fullExplanation = `${s.fullExplanation || ''}${citation}`;
@@ -1649,7 +1759,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const locationsList = otherLocations
                     .map((loc) => `- \`${loc}\``)
                     .join('\n');
-                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                const otherLocationsSection = `\n\n${OTHER_LOCATIONS_HEADING}\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
                 // llmPrompt is built from fullExplanation below; without the
                 // list an agent working from the prompt fixes only the kept
@@ -1751,12 +1861,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // it (KRC-20) instead of leaking out as an unanchored PR-level
             // comment. `changedFilesByName` (built above for the diff-snap
             // step) tells the two cases apart.
+            //
+            // An analyzer finding on a file whose diff the host withheld takes
+            // no line comment either: GitHub rejects it with 422 "diff is too
+            // large". The analyzers read such a file from a hunk they
+            // recovered, so a lockfile advisory would never reach the PR.
+            const withheldDiffs = new Set(
+                [...changedFiles, ...(context.ignoredFileChanges ?? [])]
+                    .filter((f) => f.filename && !f.patch)
+                    .map((f) => f.filename),
+            );
             const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-                s.label === 'kody_rules' &&
-                (!s.relevantFile ||
-                    s.fileAnchored === true ||
-                    (!s.relevantLinesStart &&
-                        changedFilesByName.has(s.relevantFile)));
+                (isAnalyzerSuggestion(s) &&
+                    withheldDiffs.has(s.relevantFile)) ||
+                (s.label === 'kody_rules' &&
+                    (!s.relevantFile ||
+                        s.fileAnchored === true ||
+                        (!s.relevantLinesStart &&
+                            changedFilesByName.has(s.relevantFile))));
             // Agents set to `single-comment` publish one PR-level comment
             // gathering their findings instead of inline comments (#2172).
             const singleComments = collectSingleComments(
@@ -1786,6 +1908,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allDiscarded,
                 mergedInDedup,
             );
+            this.recordCustomAgentRuns(context, customAgentSummaries);
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
                 (s) => !isPrLevelSuggestion(s),
@@ -1919,6 +2042,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     if (!draft.validSuggestionsByPR) {
                         draft.validSuggestionsByPR = [];
                     }
+                    // An analyzer body opens with its own title, which the
+                    // PR-level comment already shows as its heading, and
+                    // continues with a list that cannot follow a dash.
+                    const withoutTitle = (text: string, title?: string) =>
+                        title && text.startsWith(title)
+                            ? text.slice(title.length).replace(/^[.:]?\s*/, '')
+                            : text;
+                    const cite = (
+                        s: Partial<CodeSuggestion>,
+                        text: string,
+                    ): string => {
+                        const where = s.relevantLinesStart
+                            ? `\`${s.relevantFile}:${s.relevantLinesStart}\``
+                            : `\`${s.relevantFile}\``;
+                        return isAnalyzerSuggestion(s)
+                            ? `${where}\n\n${withoutTitle(text, s.oneSentenceSummary)}`
+                            : `${where} — ${text}`;
+                    };
                     draft.validSuggestionsByPR.push(
                         ...prLevelSuggestions.map((s) => ({
                             id: crypto.randomUUID(),
@@ -1933,15 +2074,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             // empty/unparseable-patch case — would point at
                             // a line that need not exist in the diff at all.
                             suggestionContent: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
+                                ? cite(s, s.suggestionContent || '')
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             fullExplanation: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                ? cite(
+                                      s,
+                                      s.fullExplanation ||
+                                          s.suggestionContent ||
+                                          '',
+                                  )
                                 : s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
@@ -2062,6 +2204,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         changedFiles: FileChange[],
         kodyRules: Partial<IKodyRule>[],
         allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        } = {},
     ): Partial<CodeSuggestion>[] {
         // Snap suggestion line numbers to valid diff ranges before passing downstream.
         // GitHub rejects inline comments on lines that aren't part of the diff.
@@ -2076,6 +2224,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const validatedSuggestions = suggestions
             .map((s) => {
                 const file = changedFilesByName.get(s.relevantFile);
+                // A finding on a file this PR does not change has no hunk to
+                // overlap; the delivery guard would drop it after the dedup and
+                // the severity calls, so it goes now. Kody Rules keep their own
+                // routing (PR-level and file-anchored comments).
+                if (!file && s.label !== 'kody_rules') {
+                    this.logger.log({
+                        message: `[AGENT] Dropped suggestion for ${s.relevantFile}: the file is not changed by this PR`,
+                        context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
+                    });
+                    allDiscarded.push({
+                        ...s,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                    return null;
+                }
                 if (!file) return s;
                 const validRanges = extractValidDiffLines(file.patch);
                 const snapped = snapLinesToDiff(s, validRanges);
@@ -2084,12 +2249,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         this.logger.log({
                             message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
                             context: this.stageName,
+                            metadata: {
+                                ...logMeta,
+                                relevantFile: s.relevantFile,
+                            },
                         });
                         return { ...s, fileAnchored: true };
                     }
                     this.logger.log({
                         message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                     allDiscarded.push({
                         ...s,
@@ -2105,12 +2275,186 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     this.logger.log({
                         message: `[AGENT] Snapped lines for ${s.relevantFile}: ${s.relevantLinesStart}-${s.relevantLinesEnd} → ${snapped.relevantLinesStart}-${snapped.relevantLinesEnd}`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                 }
                 return snapped;
             })
             .filter((s): s is Partial<CodeSuggestion> => s !== null);
         return validatedSuggestions;
+    }
+
+    /**
+     * Parse schema (#1821): a finder suggestion without the five lean fields
+     * is discarded into `allDiscarded`, before anchoring, so every suggestion
+     * anchored has a file and lines. The mapper already gave it the lean shape
+     * (finding-mapper.ts, leanOutput). Custom agents write the full finding and
+     * keep main's anchoring: one without lines snaps to the first hunk.
+     * Returns what goes on to anchoring, Kody Rules last.
+     */
+    private discardUnparsedFindings(
+        suggestions: Partial<CodeSuggestion>[],
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const finderSuggestions = suggestions.filter(isFinderSuggestion);
+        const parsed = parseFinderSchema(
+            finderSuggestions as Array<Record<string, unknown>>,
+        );
+        const parseDiscarded = new Set(parsed.discarded.map((d) => d.index));
+        for (const d of parsed.discarded) {
+            allDiscarded.push({
+                ...finderSuggestions[d.index],
+                priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (parsed.discarded.length > 0) {
+            this.logger.warn({
+                message: `[PARSE-SCHEMA] PR#${logMeta.prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
+                context: this.stageName,
+                metadata: { ...logMeta, discarded: parsed.discarded },
+            });
+        }
+        const discardedByParse = new Set(
+            finderSuggestions.filter((_, i) => parseDiscarded.has(i)),
+        );
+        return [
+            ...suggestions.filter(
+                (s) => s.label !== 'kody_rules' && !discardedByParse.has(s),
+            ),
+            ...suggestions.filter((s) => s.label === 'kody_rules'),
+        ];
+    }
+
+    /**
+     * Label normalization (#1821): a label off the list becomes `bug`, and a
+     * label the team turned off is discarded into `allDiscarded`, never moved
+     * to one that is on. Kody Rules and custom agents answer to their own
+     * config.
+     */
+    private normalizeSuggestionLabels(
+        suggestions: Partial<CodeSuggestion>[],
+        reviewOptions: ReturnType<
+            typeof resolveAgentReviewSettings
+        >['reviewOptions'],
+        hasRepoInstructions: boolean,
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const labeled = normalizeFinderLabels(suggestions, {
+            allowed: new Set<string>([
+                ...CATEGORY_LABELS.filter((c) => reviewOptions?.[c] !== false),
+                ...(hasRepoInstructions ? ['repo_instruction'] : []),
+            ]),
+            exempt: (s) => s.label === 'kody_rules' || isCustomAgentFinding(s),
+        });
+        for (const s of labeled.discarded) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_CATEGORY,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (labeled.discarded.length > 0) {
+            const byLabel: Record<string, number> = {};
+            for (const s of labeled.discarded) {
+                byLabel[s.label] = (byLabel[s.label] || 0) + 1;
+            }
+            this.logger.log({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: discarded ${labeled.discarded.length} suggestions in categories the team turned off`,
+                context: this.stageName,
+                metadata: { ...logMeta, byLabel },
+            });
+        }
+        if (Object.keys(labeled.replaced).length > 0) {
+            this.logger.warn({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
+                context: this.stageName,
+                metadata: { ...logMeta, replaced: labeled.replaced },
+            });
+        }
+        return labeled.suggestions;
+    }
+
+    /**
+     * The repeat check (#2097) on findings that carry their cited code. The
+     * finder's suggestions carry no code: the cited lines, read from the PR
+     * head as the enrichment reads them, let the check match an earlier
+     * comment on the same code in another file. The code goes on a copy the
+     * check reads; the suggestion itself stays lean, and the enrichment reads
+     * the code again. Repeats go to `allDiscarded`; returns what was kept and
+     * the history read, so the revision links resolve against it.
+     */
+    private async dropRepeatsOnCitedCode(
+        context: CodeReviewPipelineContext,
+        nonRuleSuggestions: Partial<CodeSuggestion>[],
+        otherSuggestions: Partial<CodeSuggestion>[],
+        headFileList: FileChange[],
+        kodyRulesById: ReadonlyMap<string, Partial<IKodyRule>>,
+        allDiscarded: Partial<CodeSuggestion>[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<{
+        kept: Partial<CodeSuggestion>[];
+        history: readonly PrDecisionRecord[] | undefined;
+    }> {
+        const headFiles = new Map(headFileList.map((f) => [f.filename, f]));
+        const originalOf = new Map<
+            Partial<CodeSuggestion>,
+            Partial<CodeSuggestion>
+        >();
+        const withCitedCode = nonRuleSuggestions.map((s) => {
+            if (s.existingCode || isCustomAgentFinding(s)) return s;
+            const file = headFiles.get(s.relevantFile);
+            // A review sent as a diff (the CLI's) has no file content:
+            // the cited lines come from the diff's new side.
+            const existingCode =
+                file?.fileContent == null && file?.patch
+                    ? citedFromPatch(
+                          file.patch,
+                          s.relevantLinesStart ?? 1,
+                          s.relevantLinesEnd ?? s.relevantLinesStart ?? 1,
+                      )
+                    : enrichDeterministic(s, file?.fileContent ?? null)
+                          .existingCode;
+            if (!existingCode) return s;
+            const copy = { ...s, existingCode };
+            originalOf.set(copy, s);
+            return copy;
+        });
+        const repeatCheck = await this.dropRepeats(
+            context,
+            [...withCitedCode, ...otherSuggestions],
+            kodyRulesById,
+            telemetryMeta,
+        );
+        for (const s of repeatCheck.repeats) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        const kept = repeatCheck.kept.map((s) => {
+            const original = originalOf.get(s);
+            if (!original) return s;
+            // The check links a kept finding to the earlier comment it
+            // revises on the copy; the link goes back with it.
+            return s.revisesSuggestionId
+                ? { ...original, revisesSuggestionId: s.revisesSuggestionId }
+                : original;
+        });
+        return { kept, history: repeatCheck.history };
     }
 
     /**
@@ -2313,6 +2657,47 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * The enrichment step (enrich-suggestions.ts) on the finder suggestions;
+     * Kody Rules, analyzer and custom agent findings keep what their own
+     * steps wrote. Called by executeStage; the enrichment eval calls it too.
+     */
+    private async enrichFinderSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+        context: CodeReviewPipelineContext,
+        changedFiles: FileChange[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        const prNumber = context.pullRequest?.number;
+        const { suggestions: enriched, counts } = await enrichSuggestions(
+            suggestions,
+            changedFiles,
+            {
+                shouldEnrich: isFinderSuggestion,
+                byokConfig: context.codeReviewConfig?.byokConfig,
+                telemetryMetadata: telemetryMeta,
+                organizationId: context.organizationAndTeamData?.organizationId,
+                usageAttrs: {
+                    prNumber,
+                    ...(context.organizationAndTeamData?.teamId
+                        ? { teamId: context.organizationAndTeamData.teamId }
+                        : {}),
+                },
+            },
+        );
+        this.logger.log({
+            message: `[ENRICH] PR#${prNumber}: enriched ${counts.enriched}, failed ${counts.failed}, skipped ${counts.skipped}`,
+            context: this.stageName,
+            metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+                ...counts,
+            },
+        });
+        return enriched;
+    }
+
+    /**
      * The definitive severity of each finding (the severity classifier; a Kody
      * Rule finding keeps its rule's), then the team's severity threshold, the
      * findings below it moved to `allDiscarded`. Returns the findings that stay.
@@ -2330,7 +2715,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             customAgentsById ??
             indexCustomAgents(await this.resolveCustomAgents(context));
         let deduped = suggestions;
-        // Reclassify severity using dedicated criteria (Gemini Flash)
+        // Reclassify severity with the defined levels (or the team's own criteria).
         // The agent assigns rough severity during investigation; this step
         // applies the definitive criteria (default or client-custom) without
         // biasing the agent's bug-finding behavior.
@@ -2341,6 +2726,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const severityMap = await classifySeverity(
                 deduped.map((s) => ({
                     relevantFile: s.relevantFile || '',
+                    relevantLinesStart: s.relevantLinesStart,
+                    relevantLinesEnd: s.relevantLinesEnd,
                     suggestionContent: s.suggestionContent || '',
                     oneSentenceSummary: s.oneSentenceSummary || '',
                     existingCode: s.existingCode || '',
@@ -2350,11 +2737,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.codeReviewConfig?.byokConfig,
                 context.organizationAndTeamData?.organizationId,
             );
+            // Findings the classifier left out keep the default (medium).
+            let unclassified = 0;
             for (let i = 0; i < deduped.length; i++) {
-                const classified = severityMap.get(i);
-                if (!classified) {
-                    continue;
-                }
                 const hasKodyRuleSeverity =
                     deduped[i].brokenKodyRulesIds?.length > 0;
                 // A custom agent's severity is the team's call too: its
@@ -2364,16 +2749,35 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (hasKodyRuleSeverity || hasCustomAgentSeverity) {
                     continue;
                 }
+                const classified = severityMap.get(i);
+                if (!classified) {
+                    unclassified++;
+                    continue;
+                }
                 deduped[i].severity = classified;
             }
             this.logger.log({
-                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions`,
+                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions (${unclassified} left unclassified, default kept)`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified,
+                },
             });
         } catch (err) {
             this.logger.warn({
                 message: `[AGENT] Severity classification failed, keeping agent-assigned severity: ${err instanceof Error ? err.message : String(err)}`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified: deduped.length,
+                },
             });
         }
 
@@ -2461,174 +2865,67 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return this.dedupEmbedder;
     }
 
-    private async embedDedupSuggestion(
+    private embedDedupSuggestion(
         suggestion: Partial<CodeSuggestion>,
         key: string,
-        cache: Map<string, number[] | null>,
+        cache: DedupEmbedCache,
+        logMeta?: DedupLogMeta,
     ): Promise<number[] | null> {
-        if (cache.has(key)) {
-            return cache.get(key) ?? null;
-        }
-        let vector: number[] | null = null;
-        try {
-            const text = dedupEmbeddingText(suggestion as any);
-            const embedder = this.getDedupEmbedder();
-            if (text && embedder) {
-                const { embedding } = await embed({
-                    model: embedder,
-                    value: text,
-                });
-                vector = embedding;
-            }
-        } catch (err) {
-            this.logger.warn({
-                message: `[DEDUP-GUARD] embedding unavailable, falling back to the tiebreak`,
+        return embedDedupSuggestion(
+            {
+                logger: this.logger,
                 context: this.stageName,
-                error: err,
-            });
-            vector = null;
-        }
-        cache.set(key, vector);
-        return vector;
+                getEmbedder: () => this.getDedupEmbedder(),
+            },
+            suggestion,
+            key,
+            cache,
+            logMeta,
+        );
     }
 
-    /**
-     * Tiered dedup guard (PR #1527): decide whether to honor a merge.
-     *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
-     *   2. else semantic cosine of the two descriptions:
-     *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
-     * Without an embedding (no embedder, or the call failed) the tiebreak
-     * decides the model's proposed merges (#2170). A tiebreak failure falls
-     * back to a veto, so a low-overlap merge is never honored blindly.
-     *
-     * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
-     * grouping to corroborate a match, so the cheap lexical-honor shortcut is
-     * skipped — only a strong semantic signal (embedding-high or a tiebreak yes)
-     * may absorb a suggestion into a rule, keeping false absorptions near zero.
-     */
-    private async resolveDedupMerge(
+    /** Tiered dedup guard (PR #1527), see `finding-dedup.ts#resolveDedupMerge`.
+     * Embeds through `this.embedDedupSuggestion`, so specs can intercept it. */
+    private resolveDedupMerge(
         dup: Partial<CodeSuggestion>,
         keep: Partial<CodeSuggestion>,
         dupKey: string,
         keepKey: string,
-        embedCache: Map<string, number[] | null>,
-        tiebreak: (
-            a: Partial<CodeSuggestion>,
-            b: Partial<CodeSuggestion>,
-        ) => Promise<boolean | null>,
-        opts?: { crossStream?: boolean },
-    ): Promise<{ honor: boolean; reason: string; score: number }> {
-        const lexical = contentSimilarity(dup, keep);
-
-        // Two scanner findings are never duplicates of each other — there is
-        // one suggestion per tool, so the only pair is secrets vs dependencies.
-        // Honoring it would not drop a duplicate; it would drop a whole
-        // category's comment, because the merge keeps only the representative.
-        if (bothFromAnalyzers(dup, keep)) {
-            return {
-                honor: false,
-                reason: 'distinct-analyzers',
-                score: lexical,
-            };
-        }
-
-        if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
-            return { honor: true, reason: 'lexical', score: lexical };
-        }
-
-        const [vecDup, vecKeep] = await Promise.all([
-            this.embedDedupSuggestion(dup, dupKey, embedCache),
-            this.embedDedupSuggestion(keep, keepKey, embedCache),
-        ]);
-        if (!vecDup || !vecKeep) {
-            // A scanner fact the model restated is the duplicate we are most
-            // sure about: it merges without asking. Where embeddings work, the
-            // full guard still decides, so a wide agent finding that merely
-            // overlaps a scanner line is not swallowed.
-            if (restatesAnalyzerFinding(dup, keep)) {
-                return {
-                    honor: true,
-                    reason: 'restates-analyzer (no-embed)',
-                    score: lexical,
-                };
-            }
-            // No embedding (a self-hosted install without the platform OpenAI
-            // key, or a failed call, #2170): the model proposed this merge, so
-            // the tiebreak decides it. The cross-stream pass has no such proposal and
-            // would ask once per suggestion × rule pair: it keeps the veto.
-            if (!opts?.crossStream) {
-                const sameBug = await tiebreak(dup, keep);
-                if (sameBug !== null) {
-                    return {
-                        honor: sameBug,
-                        reason: `llm-tiebreak=${sameBug} (no-embed)`,
-                        score: lexical,
-                    };
-                }
-            }
-            return {
-                honor: false,
-                reason: 'lexical-veto (no-embed)',
-                score: lexical,
-            };
-        }
-
-        const cos = cosineSimilarity(vecDup, vecKeep);
-        if (cos >= DEDUP_EMBEDDING_HIGH) {
-            return { honor: true, reason: 'embedding-high', score: cos };
-        }
-        if (cos < DEDUP_EMBEDDING_LOW) {
-            return { honor: false, reason: 'embedding-low', score: cos };
-        }
-
-        const sameBug = await tiebreak(dup, keep);
-        if (sameBug === null) {
-            return { honor: false, reason: 'tiebreak-error-veto', score: cos };
-        }
-        return {
-            honor: sameBug,
-            reason: `llm-tiebreak=${sameBug}`,
-            score: cos,
-        };
+        embedCache: DedupEmbedCache,
+        tiebreak: DedupTiebreak,
+        opts?: DedupMergeOptions,
+    ): Promise<DedupMergeDecision> {
+        return resolveDedupMerge(
+            {
+                embed: (suggestion, key, cache, logMeta) =>
+                    this.embedDedupSuggestion(suggestion, key, cache, logMeta),
+            },
+            dup,
+            keep,
+            dupKey,
+            keepKey,
+            embedCache,
+            tiebreak,
+            opts,
+        );
     }
 
     /**
      * Build the pairwise "same bug?" tiebreak used by both the within-stream
-     * dedup guard and the cross-stream (Kody-Rule vs suggestion) dedup. Resolves
-     * the secondary model the same way the batch dedup does; any failure returns
-     * null so the caller vetoes (keeps both).
+     * dedup guard and the cross-stream (Kody-Rule vs suggestion) dedup. See
+     * `finding-dedup.ts#buildDedupTiebreak`.
      */
     private buildDedupTiebreak(
         byokConfig: NormalizedModel | undefined,
         telemetryMeta: LangfuseTelemetryMetadata | undefined,
         prNumber: number,
-    ): (
-        a: Partial<CodeSuggestion>,
-        b: Partial<CodeSuggestion>,
-    ) => Promise<boolean | null> {
-        return async (a, b) => {
-            try {
-                // ONE primitive: LLM.run resolves the slot (or managed default),
-                // owns the span + json_schema→json_object fallback, and returns the
-                // parsed object. `runName` reproduces the 'dedup-tiebreak' trace.
-                const out = (await LLM.run({
-                    byokConfig,
-                    schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
-                    user: buildTiebreakPrompt(a as any, b as any),
-                    runName: 'dedup-tiebreak',
-                    organizationId: telemetryMeta?.organizationId,
-                    telemetryMetadata: telemetryMeta,
-                })) as any;
-                return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
-            } catch (err) {
-                this.logger.warn({
-                    message: `[DEDUP-GUARD] PR#${prNumber}: tiebreak failed, vetoing merge`,
-                    context: this.stageName,
-                    error: err,
-                });
-                return null;
-            }
-        };
+    ): DedupTiebreak {
+        return buildDedupTiebreak(
+            { logger: this.logger, context: this.stageName },
+            byokConfig,
+            telemetryMeta,
+            prNumber,
+        );
     }
 
     /**
@@ -2774,7 +3071,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     `r${ri}`,
                     embedCache,
                     tiebreak,
-                    { crossStream: true },
+                    {
+                        crossStream: true,
+                        // An embedding outage on this path names its org and PR.
+                        logMeta: {
+                            prNumber,
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                        },
+                    },
                 );
                 if (decision.honor) {
                     absorbedBy = {
@@ -2798,10 +3103,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
-     * Deduplicate suggestions that describe the same issue using LLM.
-     * Groups by file, then asks Gemini Flash which suggestions are duplicates.
+     * Deduplicate suggestions that describe the same issue using LLM
+     * (`finding-dedup.ts#deduplicateFindings`). The callbacks go through this
+     * stage's methods, so a spy or patch on any of them still takes effect.
      */
-    private async deduplicateSuggestions(
+    private deduplicateSuggestions(
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,
         resolvedSlot?: NormalizedModel,
@@ -2810,543 +3116,42 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
     }> {
-        // The dedup pass runs on the bare resolved model slot (or the managed
-        // default, resolved inside LLM.run).
-        const dedupSlot = resolvedSlot ?? undefined;
-        if (suggestions.length <= 1) {
-            return {
-                suggestions,
-                trace: {
-                    status: 'skipped',
-                    totalClassifiedCount: suggestions.length,
-                    kodyRulesSkippedCount: 0,
-                    nonKodyInputCount: suggestions.length,
-                    nonKodyOutputCount: suggestions.length,
-                    finalOutputCount: suggestions.length,
-                    uniqueCount: suggestions.length,
-                    groupsCount: 0,
-                    removedCount: 0,
-                    unique: suggestions.map((suggestion) =>
-                        this.summarizeDedupSuggestion(suggestion),
-                    ),
-                },
-            };
-        }
+        return deduplicateFindings(
+            this.findingDedupDeps(),
+            suggestions,
+            prNumber,
+            resolvedSlot,
+            telemetryMeta,
+        );
+    }
 
-        try {
-            // Graceful no-model (self-hosted, no key): skip dedup and keep all,
-            // the same everywhere — so dev/CI doesn't fail-loud on a missing key
-            // (LLM.run no longer throws the old NoStructuredFallbackModelError the
-            // catch below keyed off). A model resolves when there's a BYOK slot OR
-            // a managed/env default key is configured — the exact condition the
-            // removed `resolveSecondaryPassModel` (→ getInternalModel) checked.
-            if (!dedupSlot && !hasManagedModelKey()) {
-                this.logger.warn({
-                    message: `[DEDUP] PR#${prNumber}: no secondary model available, keeping all suggestions`,
-                    context: this.stageName,
-                });
-                return {
-                    suggestions,
-                    trace: {
-                        status: 'skipped',
-                        totalClassifiedCount: suggestions.length,
-                        kodyRulesSkippedCount: 0,
-                        nonKodyInputCount: suggestions.length,
-                        nonKodyOutputCount: suggestions.length,
-                        finalOutputCount: suggestions.length,
-                        uniqueCount: suggestions.length,
-                        groupsCount: 0,
-                        removedCount: 0,
-                        unique: suggestions.map((suggestion) =>
-                            this.summarizeDedupSuggestion(suggestion),
-                        ),
-                    },
-                };
-            }
-
-            // ONE primitive: LLM.run resolves the slot (or the managed default),
-            // owns the json_schema→json_object fallback, and records the dedup
-            // usage span ITSELF — agent.name/phase derived from the 'code-review::
-            // dedup' spanName — so the manual recordAgentRunUsage is gone. Returns
-            // the parsed dedup object directly.
-            const dedupOutput = (await LLM.run({
-                byokConfig: resolvedSlot,
-                schema: jsonSchema(DEDUP_SCHEMA as any),
-                user: buildDedupPrompt(suggestions),
-                runName: 'code-review-dedup',
-                spanName: 'code-review::dedup',
-                organizationId: telemetryMeta?.organizationId,
-                telemetryMetadata: telemetryMeta,
-                // Parity with the old recordAgentRunUsage: the dedup span keeps
-                // its type + per-PR/team attribution (the model/credential keys
-                // are derived from the slot inside LLM.run).
-                attrs: {
-                    type: dedupSlot ? 'byok' : 'system',
-                    prNumber,
-                    ...(telemetryMeta?.teamId
-                        ? { teamId: telemetryMeta.teamId }
-                        : {}),
-                },
-            })) as any;
-
-            this.logger.log({
-                message: `[DEDUP-DEBUG] PR#${prNumber}: input=${suggestions.length}, groups=${dedupOutput?.groups?.length ?? 0}, unique=${dedupOutput?.unique?.length ?? 0}`,
-                context: this.stageName,
-            });
-
-            // SHAPE recovery (#1786): a non-strict model may wrap
-            // ({result:{groups,unique}}), rename, stringify, or bare-array the
-            // dedup output — recover the canonical shape before reading, so an
-            // off-schema envelope does not fold into 'keep-all' and ship
-            // duplicate comments.
-            const normalizedDedup = normalizeEnvelope(
-                dedupOutput,
-                'groups',
-                ['duplicateGroups', 'duplicates'],
-                {
-                    onRecover: (reason) =>
-                        this.logger.warn({
-                            message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup output (${reason}) for PR#${prNumber}`,
-                            context: this.stageName,
-                        }),
-                },
-            ) as any;
-
-            // The model ranks `keep` by how a finding reads, which always
-            // favours its own prose over a scanner's, and the longest text over
-            // the one on the defective lines. Re-seat the roles so a
-            // deterministic finding survives the group it was merged into, and
-            // otherwise the finding anchored on the lines at fault. The
-            // follow-up sees the scanner re-seat; the rest runs on the final
-            // groups below.
-            let groups: Array<{
-                keep: number;
-                duplicates: number[];
-            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
-            let unique: number[] = normalizedDedup?.unique || [];
-
-            // A model can stop partway through the list. The left-out
-            // suggestions go back in one short call that sees what was already
-            // decided; any still left out falls to the safety net below.
-            const leftOut =
-                groups.length || unique.length
-                    ? unclassifiedDedupIndices(
-                          suggestions.length,
-                          groups,
-                          unique,
-                      )
-                    : [];
-            // Kept in the dedup trace: a failed follow-up keeps those
-            // suggestions as they were (a duplicate may reach the PR), the same
-            // way a failed dedup keeps everything, without degrading the review.
-            let followupError: string | undefined;
-            if (leftOut.length > 0) {
-                try {
-                    // The same shape recovery as the first answer (#1786): a
-                    // wrapped, bare-array or stringified answer still counts,
-                    // and one with no assignments fails like a failed call.
-                    const followupOutput = await LLM.run({
-                        byokConfig: resolvedSlot,
-                        schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
-                        user: buildDedupFollowupPrompt(
-                            suggestions,
-                            groups,
-                            unique,
-                            leftOut,
-                        ),
-                        runName: 'code-review-dedup-followup',
-                        spanName: 'code-review::dedup',
-                        organizationId: telemetryMeta?.organizationId,
-                        telemetryMetadata: telemetryMeta,
-                        attrs: {
-                            type: dedupSlot ? 'byok' : 'system',
-                            prNumber,
-                            ...(telemetryMeta?.teamId
-                                ? { teamId: telemetryMeta.teamId }
-                                : {}),
-                        },
-                    });
-                    const followup = normalizeEnvelope(
-                        followupOutput,
-                        'assignments',
-                        [],
-                        {
-                            onRecover: (reason) =>
-                                this.logger.warn({
-                                    message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup follow-up output (${reason}) for PR#${prNumber}`,
-                                    context: this.stageName,
-                                }),
-                        },
-                    ) as any;
-                    if (!Array.isArray(followup?.assignments)) {
-                        throw new Error(
-                            'the follow-up answer has no assignments',
-                        );
-                    }
-                    ({ groups, unique } = applyDedupFollowup(
-                        suggestions.length,
-                        groups,
-                        unique,
-                        leftOut,
-                        followup.assignments,
-                    ));
-                    this.logger.log({
-                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: ${leftOut.length} left out, ${unclassifiedDedupIndices(suggestions.length, groups, unique).length} still left out after the follow-up`,
-                        context: this.stageName,
-                    });
-                } catch (error) {
-                    followupError =
-                        error instanceof Error ? error.message : String(error);
-                    this.logger.warn({
-                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them`,
-                        context: this.stageName,
-                        error,
-                        metadata: {
-                            organizationId: telemetryMeta?.organizationId,
-                            teamId: telemetryMeta?.teamId,
-                            prNumber,
-                            leftOutCount: leftOut.length,
-                        },
-                    });
-                }
-            }
-
-            // After the follow-up, so a custom agent's finding taken back out
-            // of a group is not sent to it again and stays unique.
-            groups = keepOwnFindingsApart(
-                preferCustomAgentKeep(
-                    preferSpecificKeep(
-                        preferAnalyzerKeep(groups, suggestions),
-                        suggestions,
-                        unique,
-                    ),
-                    suggestions,
+    private findingDedupDeps(): FindingDedupDeps {
+        return {
+            logger: this.logger,
+            context: this.stageName,
+            summarize: (suggestion) =>
+                this.summarizeDedupSuggestion(suggestion),
+            resolveMerge: (
+                dup,
+                keep,
+                dupKey,
+                keepKey,
+                embedCache,
+                tiebreak,
+                opts,
+            ) =>
+                this.resolveDedupMerge(
+                    dup,
+                    keep,
+                    dupKey,
+                    keepKey,
+                    embedCache,
+                    tiebreak,
+                    opts,
                 ),
-                suggestions,
-            );
-
-            // Semantic tier of the content guard (PR #1527): when lexical overlap
-            // is inconclusive we compare description embeddings, and only escalate
-            // the ambiguous band to a focused LLM tiebreak. Embeddings are memoized
-            // per suggestion for this dedup run.
-            const embedCache = new Map<string, number[] | null>();
-            const runTiebreak = this.buildDedupTiebreak(
-                dedupSlot,
-                telemetryMeta,
-                prNumber,
-            );
-
-            // Safety: if LLM returns nothing useful, keep all
-            if (groups.length === 0 && unique.length === 0) {
-                this.logger.warn({
-                    message: `[DEDUP] PR#${prNumber}: LLM returned empty result, keeping all ${suggestions.length} suggestions`,
-                    context: this.stageName,
-                });
-                return {
-                    suggestions,
-                    trace: {
-                        status: 'empty-keep-all',
-                        totalClassifiedCount: suggestions.length,
-                        kodyRulesSkippedCount: 0,
-                        nonKodyInputCount: suggestions.length,
-                        nonKodyOutputCount: suggestions.length,
-                        finalOutputCount: suggestions.length,
-                        uniqueCount: 0,
-                        groupsCount: 0,
-                        removedCount: 0,
-                        unique: suggestions.map((suggestion) =>
-                            this.summarizeDedupSuggestion(suggestion),
-                        ),
-                    },
-                };
-            }
-
-            const result: Partial<CodeSuggestion>[] = [];
-            const uniqueSuggestions: DedupTraceSuggestionSummary[] = [];
-            const groupSummaries: DedupTraceGroupSummary[] = [];
-            const addedIndices = new Set<number>();
-            const classifiedIndices = new Set<number>();
-            const indexToResult = new Map<number, number>();
-
-            // Layer 1: Number.isInteger guard — NaN and non-integer floats rejected immediately
-
-            // Add unique suggestions as-is
-            for (const idx of unique) {
-                if (
-                    Number.isInteger(idx) &&
-                    idx >= 0 &&
-                    idx < suggestions.length
-                ) {
-                    indexToResult.set(idx, result.length);
-                    result.push(suggestions[idx]);
-                    addedIndices.add(idx);
-                    classifiedIndices.add(idx);
-                    uniqueSuggestions.push(
-                        this.summarizeDedupSuggestion(suggestions[idx]),
-                    );
-                }
-            }
-
-            // Process groups
-            for (const group of groups) {
-                const keepIdx = group.keep;
-                const dupIndices = group.duplicates || [];
-
-                if (
-                    !Number.isInteger(keepIdx) ||
-                    keepIdx < 0 ||
-                    keepIdx >= suggestions.length
-                ) {
-                    // Layer 2: keep is invalid — preserve valid duplicates as independent results
-                    for (const dupIdx of dupIndices) {
-                        classifiedIndices.add(dupIdx);
-                        if (
-                            Number.isInteger(dupIdx) &&
-                            dupIdx >= 0 &&
-                            dupIdx < suggestions.length &&
-                            !addedIndices.has(dupIdx)
-                        ) {
-                            indexToResult.set(dupIdx, result.length);
-                            result.push(suggestions[dupIdx]);
-                            addedIndices.add(dupIdx);
-                            uniqueSuggestions.push(
-                                this.summarizeDedupSuggestion(
-                                    suggestions[dupIdx],
-                                ),
-                            );
-                        }
-                    }
-                    continue;
-                }
-
-                // Skip if this keep was already added (malformed groups with overlapping indices)
-                if (addedIndices.has(keepIdx)) {
-                    // Merge duplicate locations into the already-added suggestion
-                    const existingIdx = indexToResult.get(keepIdx);
-                    if (existingIdx !== undefined) {
-                        const locations: string[] = [];
-                        for (const dupIdx of dupIndices) {
-                            if (
-                                Number.isInteger(dupIdx) &&
-                                dupIdx >= 0 &&
-                                dupIdx < suggestions.length
-                            ) {
-                                classifiedIndices.add(dupIdx);
-                                const dup = suggestions[dupIdx];
-                                // This branch absorbs duplicates without ever
-                                // consulting the content guard, so the invariant
-                                // has to be repeated here: two scanner findings
-                                // are different categories, and absorbing one
-                                // drops a whole category's comment.
-                                if (
-                                    bothFromAnalyzers(dup, suggestions[keepIdx])
-                                ) {
-                                    if (!addedIndices.has(dupIdx)) {
-                                        addedIndices.add(dupIdx);
-                                        indexToResult.set(
-                                            dupIdx,
-                                            result.length,
-                                        );
-                                        result.push(dup);
-                                        uniqueSuggestions.push(
-                                            this.summarizeDedupSuggestion(dup),
-                                        );
-                                    }
-                                    continue;
-                                }
-                                // No content guard on this branch, so a
-                                // nested range may be a different bug: only
-                                // the same location is left out of the list.
-                                const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
-                                const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
-                                if (loc !== keptLoc) {
-                                    locations.push(loc);
-                                }
-                            }
-                        }
-                        if (locations.length > 0) {
-                            const existing = result[existingIdx];
-                            existing.alsoFoundIn = [
-                                ...new Set([
-                                    ...(existing.alsoFoundIn || []),
-                                    ...locations,
-                                ]),
-                            ];
-                        }
-                    } else {
-                        for (const dupIdx of dupIndices) {
-                            if (
-                                Number.isInteger(dupIdx) &&
-                                dupIdx >= 0 &&
-                                dupIdx < suggestions.length
-                            ) {
-                                classifiedIndices.add(dupIdx);
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                const kept = { ...suggestions[keepIdx] };
-                addedIndices.add(keepIdx);
-                classifiedIndices.add(keepIdx);
-                const duplicateSummaries: DedupTraceSuggestionSummary[] = [];
-
-                // Collect locations from duplicates that are in DIFFERENT locations
-                const otherLocations: string[] = [];
-                for (const dupIdx of dupIndices) {
-                    if (
-                        !Number.isInteger(dupIdx) ||
-                        dupIdx < 0 ||
-                        dupIdx >= suggestions.length
-                    ) {
-                        continue;
-                    }
-                    // Content guard: only honor the model's merge when the two
-                    // findings actually describe the same thing. A low word-overlap
-                    // "duplicate" is a DIFFERENT bug the model over-merged (distinct
-                    // issues on overlapping lines) — keep it instead of dropping.
-                    const decision = await this.resolveDedupMerge(
-                        suggestions[dupIdx],
-                        suggestions[keepIdx],
-                        `n${dupIdx}`,
-                        `n${keepIdx}`,
-                        embedCache,
-                        runTiebreak,
-                    );
-                    if (!decision.honor) {
-                        // The model grouped these as duplicates but the guard is
-                        // not confident they are the same bug, so we keep both.
-                        // Log it — otherwise this veto is invisible in production
-                        // (the silent-degradation family from PR #1527).
-                        this.logger.log({
-                            message: `[DEDUP-GUARD] PR#${prNumber}: merge of idx ${dupIdx} into ${keepIdx} rejected (${decision.reason}, score=${decision.score.toFixed(3)})`,
-                            context: this.stageName,
-                        });
-                        classifiedIndices.add(dupIdx);
-                        if (!addedIndices.has(dupIdx)) {
-                            addedIndices.add(dupIdx);
-                            indexToResult.set(dupIdx, result.length);
-                            result.push(suggestions[dupIdx]);
-                            uniqueSuggestions.push(
-                                this.summarizeDedupSuggestion(
-                                    suggestions[dupIdx],
-                                ),
-                            );
-                        }
-                        continue;
-                    }
-                    classifiedIndices.add(dupIdx);
-                    const dup = suggestions[dupIdx];
-                    duplicateSummaries.push(this.summarizeDedupSuggestion(dup));
-                    // The content guard above judged these the same bug, so a
-                    // range around or inside the kept one is the same place,
-                    // not another location.
-                    if (!isSameSpot(dup, kept)) {
-                        otherLocations.push(
-                            `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`,
-                        );
-                    }
-
-                    this.logger.log({
-                        message: `[DEDUP-REMOVED] PR#${prNumber} ${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd} [${dup.label}/${dup.severity}] "${dup.oneSentenceSummary || dup.suggestionContent?.substring(0, 80)}"`,
-                        context: this.stageName,
-                    });
-                }
-
-                if (otherLocations.length > 0) {
-                    kept.alsoFoundIn = [
-                        ...new Set([
-                            ...(kept.alsoFoundIn || []),
-                            ...otherLocations,
-                        ]),
-                    ];
-                }
-
-                groupSummaries.push({
-                    keep: this.summarizeDedupSuggestion(kept),
-                    duplicates: duplicateSummaries,
-                });
-                indexToResult.set(keepIdx, result.length);
-                result.push(kept);
-            }
-
-            // Layer 3: Safety net — add any suggestions not classified by dedup
-            // (neither in unique nor in any group's keep/duplicates). This handles
-            // malformed LLM output that omits some indices entirely.
-            for (let i = 0; i < suggestions.length; i++) {
-                if (!classifiedIndices.has(i)) {
-                    result.push(suggestions[i]);
-                    uniqueSuggestions.push(
-                        this.summarizeDedupSuggestion(suggestions[i]),
-                    );
-                }
-            }
-
-            const totalRemoved = suggestions.length - result.length;
-            if (totalRemoved > 0) {
-                this.logger.log({
-                    message: `[DEDUP] PR#${prNumber}: ${suggestions.length} → ${result.length} (removed ${totalRemoved} duplicates, ${groups.length} groups merged)`,
-                    context: this.stageName,
-                });
-            }
-
-            return {
-                suggestions: result,
-                trace: {
-                    status: 'success',
-                    totalClassifiedCount: suggestions.length,
-                    kodyRulesSkippedCount: 0,
-                    nonKodyInputCount: suggestions.length,
-                    nonKodyOutputCount: result.length,
-                    finalOutputCount: result.length,
-                    uniqueCount: uniqueSuggestions.length,
-                    groupsCount: groupSummaries.length,
-                    removedCount: totalRemoved,
-                    ...(followupError ? { followupError } : {}),
-                    groups: groupSummaries,
-                    unique: uniqueSuggestions,
-                },
-            };
-        } catch (error) {
-            // Fail loud outside production. An unexpected error here (e.g. the
-            // `googleKey` ReferenceError that shipped on a feature branch) is a
-            // programming bug — left to the graceful 'failed-keep-all' path it
-            // ships silently as duplicate comments. In dev/CI/test we re-throw so
-            // it surfaces at PR time. The operational "no model available" case is
-            // handled BEFORE LLM.run by the `dedupSlot`/managed-key guard above,
-            // so it never reaches this catch.
-            const isProduction =
-                (process.env.API_NODE_ENV || process.env.NODE_ENV) ===
-                'production';
-            if (!isProduction) {
-                throw error;
-            }
-            this.logger.error({
-                message: `[DEDUP] PR#${prNumber}: Failed, keeping all ${suggestions.length} suggestions`,
-                context: this.stageName,
-                error,
-            });
-            return {
-                suggestions,
-                trace: {
-                    status: 'failed-keep-all',
-                    totalClassifiedCount: suggestions.length,
-                    kodyRulesSkippedCount: 0,
-                    nonKodyInputCount: suggestions.length,
-                    nonKodyOutputCount: suggestions.length,
-                    finalOutputCount: suggestions.length,
-                    uniqueCount: suggestions.length,
-                    groupsCount: 0,
-                    removedCount: 0,
-                    errorMessage:
-                        error instanceof Error ? error.message : String(error),
-                    unique: suggestions.map((suggestion) =>
-                        this.summarizeDedupSuggestion(suggestion),
-                    ),
-                },
-            };
-        }
+            buildTiebreak: (byokConfig, telemetryMeta, prNumber) =>
+                this.buildDedupTiebreak(byokConfig, telemetryMeta, prNumber),
+        };
     }
 
     /**
@@ -3625,15 +3430,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * Resolve GitHub token for cross-repo file reading (readReference tool).
-     * Uses the same token that was used to clone the repo for the sandbox.
+     * Uses the same token that was used to clone the repo for the sandbox,
+     * and only on a GitHub review: readReference calls api.github.com.
      */
     private async resolveGitHubToken(
         context: CodeReviewPipelineContext,
     ): Promise<string | undefined> {
+        if (context.platformType !== PlatformType.GITHUB) return undefined;
         try {
             if (context.getFreshCloneParams) {
                 const params = await context.getFreshCloneParams();
-                return params?.authToken;
+                // readReference calls api.github.com: a GitHub Enterprise
+                // Server token belongs to its own host.
+                return isGithubDotCom(params?.cloneUrl)
+                    ? params?.authToken
+                    : undefined;
             }
         } catch {
             // Best effort — tool just won't be available

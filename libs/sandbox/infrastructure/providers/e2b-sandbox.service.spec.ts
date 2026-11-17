@@ -29,9 +29,11 @@ import { CommandExitError, Sandbox } from 'e2b';
 import {
     E2BSandboxService,
     buildE2BRemoteCommands,
+    fixedIpReasonFrom,
     syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
 import type { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { readWithinRootCommand } from './read-within-root';
 
 const REPO_DIR = '/home/user/repo';
 
@@ -189,12 +191,62 @@ describe('buildE2BRemoteCommands', () => {
             );
         });
 
+        it('rejects a grep path outside the checkout before running rg', async () => {
+            const run = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.grep('TOKEN', '../secret')).rejects.toThrow(
+                'Path traversal using ".." is not allowed',
+            );
+            await expect(rc.grep('TOKEN', '/etc')).rejects.toThrow(
+                'Absolute paths are not allowed',
+            );
+            expect(run).not.toHaveBeenCalled();
+        });
+
         it('accepts a plain relative path (no throw)', async () => {
             const run = jest
                 .fn()
                 .mockResolvedValue({ stdout: 'x', stderr: '', exitCode: 0 });
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await expect(rc.read('src/a.ts', 0, 0)).resolves.toBe('x');
+        });
+
+        it.each([
+            'app/[...slug]/page.tsx',
+            'app/(..)photo/page.tsx',
+            'src/foo..bar.ts',
+        ])('reads %p, whose ".." is part of a file name', async (routePath) => {
+            const run = jest
+                .fn()
+                .mockResolvedValue({ stdout: 'x', stderr: '', exitCode: 0 });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.read(routePath, 0, 0)).resolves.toBe('x');
+            await expect(rc.grep('x', routePath)).resolves.toBe('x');
+        });
+
+        it.each(['a/../../secret', '..\\secret', 'app/[...slug]/../../x'])(
+            'rejects %p, which has a ".." segment',
+            async (escapePath) => {
+                const run = jest.fn();
+                const rc = buildE2BRemoteCommands(makeSandbox(run));
+                await expect(rc.read(escapePath, 0, 0)).rejects.toThrow(
+                    'Path traversal using ".." is not allowed',
+                );
+                expect(run).not.toHaveBeenCalled();
+            },
+        );
+
+        it('reads under a linked root whose name holds ".."', async () => {
+            const run = jest
+                .fn()
+                .mockResolvedValue({ stdout: 'x', stderr: '', exitCode: 0 });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(
+                rc.read('src/a.ts', 0, 0, '/home/user/_linked/acme_shop..web'),
+            ).resolves.toBe('x');
+            await expect(
+                rc.read('src/a.ts', 0, 0, '/home/user/_linked/../repo'),
+            ).rejects.toThrow('Not a repository root of this sandbox');
         });
     });
 
@@ -307,6 +359,19 @@ describe('buildE2BRemoteCommands', () => {
     });
 
     describe('read', () => {
+        it('does not follow a symlink out of the checkout', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'x',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.read('notes.txt', 0, 0);
+            const cmd = run.mock.calls[0][0] as string;
+            expect(cmd).toContain('Symlink detected, refusing to follow');
+            expect(cmd).toContain('Path escapes repo boundary');
+        });
+
         it('uses cat when start and end are both 0 (whole file)', async () => {
             const run = jest.fn().mockResolvedValue({
                 stdout: 'file body',
@@ -316,9 +381,12 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const out = await rc.read('src/a.ts', 0, 0);
             expect(out).toBe('file body');
-            expect(run).toHaveBeenCalledWith(`cat '${REPO_DIR}/src/a.ts'`, {
-                timeoutMs: 10_000,
-            });
+            expect(run).toHaveBeenCalledWith(
+                readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 0, 0),
+                {
+                    timeoutMs: 10_000,
+                },
+            );
         });
 
         it('uses sed with the exact line range for a normal window', async () => {
@@ -330,7 +398,7 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await rc.read('src/a.ts', 2, 10);
             expect(run).toHaveBeenCalledWith(
-                `sed -n '2,10p' '${REPO_DIR}/src/a.ts'`,
+                readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 2, 10),
                 { timeoutMs: 10_000 },
             );
         });
@@ -344,7 +412,7 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await rc.read('src/a.ts', 0, 5);
             expect(run).toHaveBeenCalledWith(
-                `sed -n '1,5p' '${REPO_DIR}/src/a.ts'`,
+                readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 1, 5),
                 { timeoutMs: 10_000 },
             );
         });
@@ -358,21 +426,7 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await rc.read('src/a.ts', 1, 5);
             expect(run).toHaveBeenCalledWith(
-                `sed -n '1,5p' '${REPO_DIR}/src/a.ts'`,
-                { timeoutMs: 10_000 },
-            );
-        });
-
-        it('clamps a negative start up to 1', async () => {
-            const run = jest.fn().mockResolvedValue({
-                stdout: 'lines',
-                stderr: '',
-                exitCode: 0,
-            });
-            const rc = buildE2BRemoteCommands(makeSandbox(run));
-            await rc.read('src/a.ts', -4, 3);
-            expect(run).toHaveBeenCalledWith(
-                `sed -n '1,3p' '${REPO_DIR}/src/a.ts'`,
+                readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 1, 5),
                 { timeoutMs: 10_000 },
             );
         });
@@ -385,9 +439,8 @@ describe('buildE2BRemoteCommands', () => {
             });
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await rc.read("src/o'brien.ts", 0, 0);
-            expect(run).toHaveBeenCalledWith(
-                `cat '${REPO_DIR}/src/o'\\''brien.ts'`,
-                { timeoutMs: 10_000 },
+            expect(run.mock.calls[0][0]).toContain(
+                `f='${REPO_DIR}/src/o'\\''brien.ts'`,
             );
         });
 
@@ -558,9 +611,12 @@ describe('E2BSandboxService.buildRemoteCommands', () => {
         // Prove the delegate actually drives THIS sandbox and resolves paths
         // against REPO_DIR, not the sandbox CWD.
         await rc.read('src/a.ts', 0, 0);
-        expect(run).toHaveBeenCalledWith(`cat '${REPO_DIR}/src/a.ts'`, {
-            timeoutMs: 10_000,
-        });
+        expect(run).toHaveBeenCalledWith(
+            readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 0, 0),
+            {
+                timeoutMs: 10_000,
+            },
+        );
     });
 });
 
@@ -677,6 +733,17 @@ describe('syncE2BSandboxRepo', () => {
         expect(opts.envs.GIT_AUTH_HEADER).toBe(
             `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
         );
+    });
+
+    it('gives the reuse sync 5 min, not the 2-min create fetch budget', async () => {
+        // A sync that times out is swallowed and the review runs on the stale
+        // checkout (#1313), so it keeps a longer budget than the create path.
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams);
+
+        expect(run.mock.calls[0][1].timeoutMs).toBe(300_000);
     });
 
     it('omits the auth header entirely for an anonymous (public repo) sync', async () => {
@@ -1057,13 +1124,54 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         // Nothing else of the review runs as root.
-        expect(
-            calls.filter(([, opts]) => opts?.user === 'root'),
-        ).toHaveLength(1);
+        expect(calls.filter(([, opts]) => opts?.user === 'root')).toHaveLength(
+            1,
+        );
         expect(instance.privilegesDropped).toBe(true);
         expect((Sandbox as any).create).toHaveBeenCalledWith(
             'tpl',
             expect.objectContaining({ secure: true }),
+        );
+    });
+
+    it('keeps the proxy password out of every command line', async () => {
+        const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
+        (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
+        const config = {
+            get: (key: string) =>
+                ({
+                    API_E2B_KEY: 'key',
+                    API_E2B_TEMPLATE_ID: 'tpl',
+                    API_NODE_ENV: 'test',
+                    E2B_PROXY_HOST: '192.0.2.1',
+                    E2B_PROXY_PASSWORD: 'FAKE_PROXY_PASSWORD',
+                })[key],
+        };
+        await new E2BSandboxService(config as any).createSandboxWithRepo({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'tok',
+            branch: 'feature',
+            prNumber: 1,
+            platform: PlatformType.GITHUB,
+        });
+        const calls = sbx.commands.run.mock.calls;
+        for (const [cmd] of calls) {
+            expect(cmd).not.toContain('FAKE_PROXY_PASSWORD');
+            expect(cmd).not.toMatch(/ -k /);
+        }
+        const proxy = calls.find(([cmd]) => cmd.includes('ss-local'));
+        expect(proxy[0]).toContain('ss-local -c /etc/kodus/ss-local.json ');
+        expect(proxy[0]).toContain('umask 077');
+        expect(proxy[0]).toContain(' -f /run/ss-local.pid');
+        expect(proxy[1]).toEqual(
+            expect.objectContaining({
+                user: 'root',
+                envs: {
+                    SS_CONFIG: JSON.stringify({
+                        password: 'FAKE_PROXY_PASSWORD',
+                    }),
+                },
+            }),
         );
     });
 
@@ -1089,5 +1197,298 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         expect(sbx.commands.run.mock.calls[1][1]?.user).toBeUndefined();
+    });
+});
+
+describe('E2BSandboxService.installDependencies', () => {
+    it('installs as root with the 5 min budget a cold apt-get needs', async () => {
+        const service = Object.create(E2BSandboxService.prototype);
+        service.logger = { log: jest.fn() };
+        const run = jest.fn().mockResolvedValue({ exitCode: 0, stderr: '' });
+
+        await service.installDependencies({ commands: { run } });
+
+        expect(run).toHaveBeenCalledWith(
+            expect.stringContaining('apt-get install'),
+            { timeoutMs: 300_000, user: 'root' },
+        );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Egress route: direct for teams whose Git host does not need our fixed IP
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService egress route', () => {
+    const { PRIVILEGES_DROPPED_MARKER } = jest.requireActual(
+        './review-user-privileges',
+    );
+    const ORG = '11111111-1111-4111-8111-111111111111';
+    const TEAM = '22222222-2222-4222-8222-222222222222';
+    const IP_BLOCK =
+        "remote: the `acme` organization has an IP allow list enabled, and your IP address is not permitted to access this resource.\nfatal: unable to access 'https://github.com/acme/api.git/': The requested URL returned error: 403";
+
+    const exitError = (stderr: string, exitCode = 128) =>
+        new (CommandExitError as any)({ stdout: '', stderr, exitCode });
+
+    /**
+     * A sandbox whose network starts on the egress proxy, as the template
+     * boots it. `onProxy` follows the iptables commands the service runs.
+     */
+    const fakeSandbox = (opts: {
+        directClone?: 'ok' | 'refused';
+        proxyClone?: 'ok' | 'fails';
+        reachable?: boolean;
+        reachCheck?: 'sandbox-error';
+        cannotLeaveProxy?: boolean;
+    }) => {
+        const log: { cmd: string; user?: string; onProxy: boolean }[] = [];
+        let onProxy = true;
+        const run = jest.fn(async (cmd: string, o?: { user?: string }) => {
+            log.push({ cmd, user: o?.user, onProxy });
+            if (cmd.includes('gpasswd')) {
+                return {
+                    stdout: `${PRIVILEGES_DROPPED_MARKER}\n`,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            if (cmd.includes('iptables -t nat -I OUTPUT 1')) {
+                if (opts.cannotLeaveProxy) throw exitError('denied', 1);
+                onProxy = false;
+            } else if (cmd.includes('iptables -t nat -A OUTPUT')) {
+                onProxy = true;
+            } else if (cmd.includes('/dev/tcp/')) {
+                if (opts.reachCheck === 'sandbox-error') {
+                    throw new Error('sandbox API unavailable');
+                }
+                if (opts.reachable === false) throw exitError('', 124);
+            } else if (cmd.includes('git init')) {
+                const outcome = onProxy
+                    ? (opts.proxyClone ?? 'ok')
+                    : (opts.directClone ?? 'ok');
+                if (outcome !== 'ok') throw exitError(IP_BLOCK);
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        const sbx = {
+            sandboxId: 'sbx-1',
+            commands: { run },
+            kill: jest.fn(),
+            files: { read: jest.fn(), write: jest.fn() },
+        };
+        return { sbx, log };
+    };
+
+    const policy = (route: 'direct' | 'fixed_ip') => ({
+        route: jest.fn().mockResolvedValue(route),
+        markFixedIpRequired: jest.fn().mockResolvedValue(undefined),
+    });
+
+    const create = async (opts: {
+        route: 'direct' | 'fixed_ip';
+        sandbox?: Parameters<typeof fakeSandbox>[0];
+        template?: boolean;
+        scoped?: boolean;
+        gitProxyMisconfigured?: boolean;
+    }) => {
+        const { sbx, log } = fakeSandbox(opts.sandbox ?? {});
+        (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
+        const config = {
+            get: (key: string) =>
+                ({
+                    API_E2B_KEY: 'key',
+                    API_NODE_ENV: 'test',
+                    ...(opts.template !== false && {
+                        API_E2B_TEMPLATE_ID: 'tpl',
+                    }),
+                    // setupProxy throws: host without password.
+                    ...(opts.gitProxyMisconfigured && {
+                        E2B_PROXY_HOST: '192.0.2.1',
+                    }),
+                })[key],
+        };
+        const egress = policy(opts.route);
+        const service = new E2BSandboxService(config as any, egress);
+        const result = service.createSandboxWithRepo({
+            cloneUrl: 'https://github.com/acme/api.git',
+            authToken: 'tok',
+            branch: 'feature',
+            prNumber: 1,
+            platform: PlatformType.GITHUB,
+            sandboxMetadata: { stage: 'review' },
+            ...(opts.scoped !== false && { organizationId: ORG, teamId: TEAM }),
+        });
+        return { result, egress, log, sbx };
+    };
+
+    const clones = (log: { cmd: string; onProxy: boolean }[]) =>
+        log.filter((l) => l.cmd.includes('git init'));
+    const touchesNetwork = (log: { cmd: string }[]) =>
+        log.some((l) => l.cmd.includes('iptables'));
+
+    it('leaves the network alone for a team that needs the fixed IP', async () => {
+        const { result, log, egress } = await create({ route: 'fixed_ip' });
+        await result;
+        expect(egress.route).toHaveBeenCalledWith({
+            organizationId: ORG,
+            teamId: TEAM,
+        });
+        expect(touchesNetwork(log)).toBe(false);
+        expect(clones(log)).toHaveLength(1);
+    });
+
+    it('takes the sandbox off the proxy, as root, before the repository is cloned', async () => {
+        const { result, log, egress } = await create({ route: 'direct' });
+        await result;
+        const leave = log.findIndex((l) =>
+            l.cmd.includes('iptables -t nat -I OUTPUT 1'),
+        );
+        const clone = log.findIndex((l) => l.cmd.includes('git init'));
+        expect(leave).toBeGreaterThanOrEqual(0);
+        expect(log[leave].user).toBe('root');
+        expect(leave).toBeLessThan(clone);
+        expect(clones(log)).toEqual([
+            expect.objectContaining({ onProxy: false }),
+        ]);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('clones through the fixed IP and marks the team when the Git host refuses the direct clone', async () => {
+        const { result, log, egress, sbx } = await create({
+            route: 'direct',
+            sandbox: { directClone: 'refused' },
+        });
+        const instance = await result;
+        expect(instance.sandboxId).toBe('sbx-1');
+        expect(sbx.kill).not.toHaveBeenCalled();
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false, true]);
+        expect(egress.markFixedIpRequired).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            'ip_allow_list',
+        );
+    });
+
+    it('goes back to the fixed IP before cloning when the Git host cannot be reached direct', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            sandbox: { reachable: false },
+        });
+        await result;
+        expect(clones(log).map((c) => c.onProxy)).toEqual([true]);
+        expect(egress.markFixedIpRequired).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            'unreachable',
+        );
+    });
+
+    it('clones direct when the reachability check itself could not run: that proves nothing', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            sandbox: { reachCheck: 'sandbox-error' },
+        });
+        await result;
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('still clones through the fixed IP when the git-only proxy setup fails on the way back', async () => {
+        const { result, log, egress, sbx } = await create({
+            route: 'direct',
+            sandbox: { directClone: 'refused' },
+            gitProxyMisconfigured: true,
+        });
+        const instance = await result;
+        expect(instance.sandboxId).toBe('sbx-1');
+        expect(sbx.kill).not.toHaveBeenCalled();
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false, true]);
+        expect(egress.markFixedIpRequired).toHaveBeenCalled();
+    });
+
+    it('marks nothing when the clone fails on the fixed IP too: that is not an egress problem', async () => {
+        const { result, egress } = await create({
+            route: 'direct',
+            sandbox: { directClone: 'refused', proxyClone: 'fails' },
+        });
+        await expect(result).rejects.toBeDefined();
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('stays on the fixed IP when the sandbox cannot be taken off the proxy', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            sandbox: { cannotLeaveProxy: true },
+        });
+        await result;
+        expect(clones(log).map((c) => c.onProxy)).toEqual([true]);
+        expect(log.some((l) => l.cmd.includes('/dev/tcp/'))).toBe(false);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('keeps the fixed IP, without asking, for a sandbox that does not say which team it serves', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            scoped: false,
+        });
+        await result;
+        expect(egress.route).not.toHaveBeenCalled();
+        expect(touchesNetwork(log)).toBe(false);
+    });
+
+    it('does not ask without the template: there is no proxy to take the sandbox off', async () => {
+        const { result, egress } = await create({
+            route: 'direct',
+            template: false,
+        });
+        await result;
+        expect(egress.route).not.toHaveBeenCalled();
+    });
+
+    it('never tells the sandbox provider which organization or team it serves', async () => {
+        const { result } = await create({ route: 'direct' });
+        await result;
+        const metadata = JSON.stringify(
+            (Sandbox as any).create.mock.calls[0][1].metadata,
+        );
+        expect(metadata).not.toContain(ORG);
+        expect(metadata).not.toContain(TEAM);
+    });
+});
+
+describe('fixedIpReasonFrom', () => {
+    const exitError = (stderr: string) =>
+        new (CommandExitError as any)({ stdout: '', stderr, exitCode: 128 });
+
+    it('reads a GitHub IP allow list refusal', () => {
+        expect(
+            fixedIpReasonFrom(
+                exitError('the org has an IP allow list enabled'),
+            ),
+        ).toBe('ip_allow_list');
+    });
+
+    it('reads a 403 without an allow list message as forbidden', () => {
+        expect(
+            fixedIpReasonFrom(
+                exitError(
+                    "fatal: unable to access 'https://gitlab.acme.test/x.git/': The requested URL returned error: 403",
+                ),
+            ),
+        ).toBe('forbidden');
+    });
+
+    it('reads a connection that never got through as unreachable', () => {
+        expect(
+            fixedIpReasonFrom(
+                new Error(
+                    'Git clone failed: Failed to connect to git.acme.test port 443: Connection timed out',
+                ),
+            ),
+        ).toBe('unreachable');
+    });
+
+    it('calls anything else other', () => {
+        expect(
+            fixedIpReasonFrom(exitError("fatal: couldn't find remote ref")),
+        ).toBe('other');
     });
 });

@@ -62,6 +62,15 @@ full PR diff a commit run fetches (the case's files).
    nothing (`fix`, `wip`, `address review comments`), so their summary can only
    come from the diff. With the diff removed from the prompt, DeepSeek failed
    this on 4 of the 10 cases it runs on, those three among them.
+8. **No reasoning** (`expect.noReasoning`) — the published block holds none of
+   the model's deliberation: it neither opens mid-sentence nor carries its
+   phrases ("Wait,", "Draft:", "Need write"). Dataset `think-tag-leak`: a diff
+   that quotes `</think>`. Together ends DeepSeek V4.1 Flash's reasoning channel
+   at that tag and returned the rest as the answer, which the plain-text summary
+   published (#2407). Not a CI case: it reproduces on Together only (Fireworks
+   keeps the tag inside the reasoning), and one in three to ten runs, so it is
+   run by hand, ten times:
+   `node evals/pr-summary/run.js --model=deepseek-v4.1-flash@together --dataset=think-tag-leak`.
 
 ## Run it
 
@@ -74,7 +83,7 @@ node evals/pr-summary/run.js --model=kimi-k2.7-code@openrouter --gate --behaviou
 
 Flags: `--model=<tier0 id>` · `--gate` (exit 1 below the floor) ·
 `--behaviour=replace|concatenate|complement|none` · `--dataset=<name>`
-(default `cases`) · `--limit=N` · `--output=<file>`.
+(default `cases`) · `--limit=N` · `--output=<file>` · `--dump=<dir>` (writes each case's final description to `<dir>/<caseId>.md`).
 
 ## Exit codes (suite contract)
 

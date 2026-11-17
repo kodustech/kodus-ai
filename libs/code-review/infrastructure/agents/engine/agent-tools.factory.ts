@@ -5,6 +5,13 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
+import { isLineNumber } from '@libs/sandbox/infrastructure/providers/read-within-root';
+import { hasParentDirSegment } from '@libs/sandbox/infrastructure/providers/path-segments';
+import {
+    isSecretFilePath,
+    secretFileRefusal,
+    withoutSecretFileLines,
+} from '@libs/code-review/infrastructure/agents/engine/secret-files';
 import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
@@ -81,6 +88,26 @@ function mkTool(
         inputSchema: jsonSchema(schema),
         execute: exec,
     };
+}
+
+/**
+ * A tool argument as a line number: absent is 0, a numeric string is read,
+ * and with `clampNegative` a negative integer becomes 1. Anything else is
+ * null (refused).
+ */
+function toLineNumber(
+    value: unknown,
+    { clampNegative = false }: { clampNegative?: boolean } = {},
+): number | null {
+    if (value === undefined || value === null || value === '') return 0;
+    const n =
+        typeof value === 'string' && /^\s*-?\d+\s*$/.test(value)
+            ? Number(value)
+            : value;
+    if (clampNegative && Number.isSafeInteger(n) && (n as number) < 0) {
+        return 1;
+    }
+    return isLineNumber(n) ? n : null;
 }
 
 function addLineNumbers(content: string, baseLineNumber: number): string {
@@ -184,6 +211,59 @@ function answersNothing(result: string): boolean {
     );
 }
 
+/** `owner/repo`, each part a GitHub name: no other path, query or segment. */
+const REFERENCE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/**
+ * Why readReference refuses `repo`/`path` before any request, or null when
+ * both may be read. It reads only the repositories the review was given;
+ * anything else would reach whatever the review's token can.
+ */
+export function refuseReadReference(
+    repo: string,
+    path: string,
+    readable: ReadonlySet<string>,
+): string | null {
+    const name = repo.trim();
+    if (
+        !REFERENCE_REPOSITORY.test(name) ||
+        name.split('/').some((part) => part === '.' || part === '..')
+    ) {
+        return `Error: "${repo}" is not a repository name; use "owner/repo".`;
+    }
+    if (!readable.has(name.toLowerCase())) {
+        const list = [...readable].join(', ') || '(none)';
+        return `Error: ${name} is not a repository this review can read. Readable: ${list}.`;
+    }
+    if (path.startsWith('/') || path.split(/[/\\]/).includes('..')) {
+        return `Error: "${path}" must be a path inside ${name}.`;
+    }
+    return null;
+}
+
+/**
+ * What readReference tells the model when GitHub refuses a read: which
+ * repository, path and ref failed, and what to change on the next call. A
+ * bare "Could not read" left the model retrying the same wrong branch.
+ */
+function describeReadReferenceFailure(
+    repo: string,
+    path: string,
+    explicitRef: string | undefined,
+    status: number,
+    statusText: string,
+): string {
+    const refLabel = explicitRef
+        ? `branch "${explicitRef}"`
+        : "the repository's default branch";
+    const head = `Error: ${path} was not readable in ${repo} on ${refLabel} (${status} ${statusText}).`;
+    if (status !== 404) return head;
+    const hint = explicitRef
+        ? ' Check the path, or omit the branch parameter to read the default branch.'
+        : ' Check the path and the "owner/repo" name, or pass the branch that holds the file.';
+    return `${head} Not found: the repository, the path or the branch does not exist, or this integration cannot access the repository.${hint}`;
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -192,6 +272,9 @@ export function buildAgentTools(
     documentationSearchOptions?: Record<string, unknown>,
     callGraph?: string,
     linkedRepoAccess?: LinkedRepoAccess,
+    /** Repositories this review's skills and docs come from (`owner/repo`),
+     *  readable through readReference besides the reviewed and linked ones. */
+    referenceRepositories: readonly string[] = [],
 ): Record<string, any> {
     if (!remoteCommands) {
         return {};
@@ -287,7 +370,7 @@ export function buildAgentTools(
         relativePath: string,
     ): { ok: true; abs: string } | { ok: false; error: string } => {
         const rel = (relativePath || '.').replace(/^\/+/, '') || '.';
-        if (rel.includes('..')) {
+        if (hasParentDirSegment(rel)) {
             return {
                 ok: false,
                 error: 'Path traversal using ".." is not allowed',
@@ -365,7 +448,7 @@ export function buildAgentTools(
                 }
                 // rg reads whatever the sandbox user can: a path climbing out
                 // of the checkout would reach other processes' /proc files.
-                if (searchPath.split('/').includes('..')) {
+                if (hasParentDirSegment(searchPath)) {
                     return 'Error: Path traversal using ".." is not allowed';
                 }
 
@@ -376,9 +459,6 @@ export function buildAgentTools(
                 if (linked.rootPath) {
                     if (!remoteCommands.exec) {
                         return 'Error: sandbox exec unavailable for linked-repo search';
-                    }
-                    if (searchPath.includes('..')) {
-                        return 'Error: Path traversal using ".." is not allowed';
                     }
                     try {
                         const safePattern = pattern.replace(/'/g, "'\\''");
@@ -399,10 +479,12 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             return `Error searching linked repo ${linked.repository} for "${pattern}"`;
                         }
-                        if (exitCode === 1 || !stdout.trim()) {
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
+                        if (exitCode === 1 || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
                         }
-                        const raw = stdout.trim();
                         // Tag paths so the agent knows which repo they came from.
                         const tagged = raw
                             .split('\n')
@@ -475,15 +557,17 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             throw new Error('rg error');
                         }
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
                         // exit code 1 = no matches (not an error)
-                        if (exitCode === 1 || !stdout.trim()) {
+                        if (exitCode === 1 || !raw) {
                             return withSubmoduleNote(
                                 'No matches found.',
                                 searchPath,
                             );
                         }
                         if (exitCode === 0) {
-                            const raw = stdout.trim();
                             if (namesOnly) {
                                 return raw
                                     .split('\n')
@@ -526,6 +610,7 @@ export function buildAgentTools(
                         searchPath,
                     );
                 }
+                result = withoutSecretFileLines(result);
                 if (namesOnly) {
                     // The note has to come BEFORE the file-name mapping, and
                     // on the SAME predicate the note itself uses. An empty
@@ -603,8 +688,19 @@ export function buildAgentTools(
                 // Tolerate models sending file/filePath instead of path
                 let filePath: string =
                     args.path || args.filePath || args.file || '';
-                const startLine = args.startLine || args.start_line || 0;
-                const endLine = args.endLine || args.end_line || 0;
+                // The schema is not enforced at runtime: a model may send a
+                // numeric string, or anything else. Only line numbers reach
+                // the sandbox, which builds a sed address from them.
+                // `startLine=grepLine-20` near the top of a file is below 1:
+                // it means "from the first line".
+                const startLine = toLineNumber(
+                    args.startLine ?? args.start_line,
+                    { clampNegative: true },
+                );
+                const endLine = toLineNumber(args.endLine ?? args.end_line);
+                if (startLine === null || endLine === null) {
+                    return 'Error: startLine and endLine must be non-negative integers (line numbers).';
+                }
                 // Strip leading slash — paths are relative to repo root
                 filePath = filePath.replace(/^\/+/, '');
                 if (!filePath) {
@@ -614,23 +710,19 @@ export function buildAgentTools(
                 const linked = await resolveLinkedRoot(args.repo);
                 if (!linked.ok) return `Error: ${linked.error}`;
 
-                // Linked-repo hop: cat/sed under the cloned root via exec.
+                // Linked-repo hop: the provider's own read, rooted at the
+                // clone, refuses a symlink and a path that leaves it, exactly
+                // as it does for the PR's repository.
                 if (linked.rootPath) {
-                    if (!remoteCommands.exec) {
-                        return 'Error: sandbox exec unavailable for linked-repo read';
-                    }
                     const target = safeLinkedPath(linked.rootPath, filePath);
                     if (!target.ok) return `Error: ${target.error}`;
                     try {
-                        const cmd =
-                            startLine === 0 && endLine === 0
-                                ? `cat ${shSingleQuote(target.abs)}`
-                                : `sed -n '${startLine < 1 ? 1 : startLine},${endLine}p' ${shSingleQuote(target.abs)}`;
-                        const { stdout, stderr, exitCode } =
-                            await remoteCommands.exec(cmd);
-                        if (!stdout && (stderr || exitCode !== 0)) {
-                            return `Error reading ${filePath} from linked repo ${linked.repository}: ${(stderr || `exit ${exitCode}`).trim()}`;
-                        }
+                        const stdout = await remoteCommands.read(
+                            filePath,
+                            startLine,
+                            endLine,
+                            linked.rootPath,
+                        );
                         if (!stdout) {
                             return startLine > 0
                                 ? `readFile: no content in [${linked.repository}] ${filePath} for the requested range`
@@ -1492,9 +1584,20 @@ fi
     // `@file:org/design-system/docs/pattern.md`). Sandbox-based `readFile`
     // only sees the current PR's repo, so without this tool the agent has
     // no way to fetch externally-referenced files.
+    // What readReference may read: the reviewed repository, its linked ones
+    // and the repositories its skills and docs come from.
+    const readableReferences = new Set(
+        [
+            repositoryFullName,
+            ...(linkedRepoAccess?.list() ?? []).map((r) => r.repository),
+            ...referenceRepositories,
+        ]
+            .filter((r): r is string => typeof r === 'string' && !!r.trim())
+            .map((r) => r.trim().toLowerCase()),
+    );
     if (gitHubToken) {
         tools.readReference = mkTool(
-            'Read a file from another repository. Use this to fetch reference files mentioned in rules (e.g., coding standards, patterns from other repos). Accepts the full "owner/repo" form and an optional branch.',
+            'Read a file from another repository this review links (its linked repositories and the repositories its skills and docs come from). Use this to fetch reference files mentioned in rules (e.g., coding standards, patterns from other repos). Accepts the full "owner/repo" form and an optional branch.',
             {
                 type: 'object',
                 properties: {
@@ -1510,18 +1613,36 @@ fi
                     },
                     branch: {
                         type: 'string',
-                        description: 'Branch name (default: main)',
+                        description:
+                            "Branch name. Omit it to read the repository's default branch (which may be master, develop, ...).",
                     },
                 },
                 required: ['repo', 'path'],
             },
             async ({ repo, path, branch }: any) => {
                 if (!repo || !path) return 'Error: repo and path are required';
-                const ref = branch || 'main';
+                const refused = refuseReadReference(
+                    String(repo),
+                    String(path),
+                    readableReferences,
+                );
+                if (refused) return refused;
+                repo = String(repo).trim();
+                // No branch: omit `ref` and GitHub's contents API reads the
+                // repository's default branch. Hardcoding `main` 404'd on
+                // every read of a repository whose default is master/develop.
+                const explicitRef =
+                    typeof branch === 'string' && branch.trim()
+                        ? branch.trim()
+                        : undefined;
+                const ref = explicitRef ?? '(default branch)';
                 const safePath = encodeURIComponent(path);
+                const query = explicitRef
+                    ? `?ref=${encodeURIComponent(explicitRef)}`
+                    : '';
                 try {
                     const response = await fetch(
-                        `https://api.github.com/repos/${repo}/contents/${safePath}?ref=${ref}`,
+                        `https://api.github.com/repos/${repo}/contents/${safePath}${query}`,
                         {
                             headers: {
                                 Authorization: `Bearer ${gitHubToken}`,
@@ -1534,7 +1655,13 @@ fi
                             message: `[READ-REFERENCE] ${repo}#${ref} ${path} → ${response.status} ${response.statusText}`,
                             context: 'agent-tools.readReference',
                         });
-                        return `Error: Could not read ${path} from ${repo} (${response.status} ${response.statusText})`;
+                        return describeReadReferenceFailure(
+                            repo,
+                            path,
+                            explicitRef,
+                            response.status,
+                            response.statusText,
+                        );
                     }
                     const content = await response.text();
                     logger.log({
@@ -1712,10 +1839,52 @@ fi
         );
     }
 
+    guardSecretFiles(tools);
+
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
         context: 'agent-tools.factory',
     });
 
     return tools;
+}
+
+/**
+ * No tool returns the content of a secret file the repository committed
+ * (secret-files.ts): it would reach the model provider and the trace. The
+ * readers refuse the path, and search output drops the file's lines, on
+ * every route a tool takes (linked repositories, sandbox rg, the provider's
+ * grep).
+ */
+function guardSecretFiles(tools: Record<string, any>): void {
+    for (const name of ['readFile', 'readReference']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            const filePath = String(
+                args?.path || args?.filePath || args?.file || '',
+            );
+            return isSecretFilePath(filePath)
+                ? secretFileRefusal(filePath)
+                : execute(args);
+        };
+    }
+    for (const name of ['grep', 'getCallers']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            // Every alias grep reads its path from: a search scoped to one
+            // file prints its lines without the file name.
+            const searchPath = String(
+                args?.path || args?.directory || args?.dir || '',
+            );
+            if (isSecretFilePath(searchPath)) {
+                return secretFileRefusal(searchPath);
+            }
+            const out = await execute(args);
+            return typeof out === 'string' ? withoutSecretFileLines(out) : out;
+        };
+    }
 }

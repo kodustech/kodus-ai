@@ -8,6 +8,7 @@ import { GithubMappedPlatform } from './github';
 import { GitlabMappedPlatform } from './gitlab';
 
 export * from './webhooks.utils';
+export * from './webhook-source-host';
 
 const platformMaps = new Map<PlatformType, IMappedPlatform>([
     [PlatformType.GITHUB, new GithubMappedPlatform()],

@@ -3,6 +3,7 @@
  * Kodus Tech. All rights reserved.
  */
 
+import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -201,6 +202,8 @@ export class CodeReviewHandlerService {
         parentSignal?: AbortSignal,
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective?: string,
+        // `@kody review --heavy` / `--balanced`, over the mode in settings.
+        requestedReviewMode?: RequestedReviewMode,
         // `@kody -v <slug>` — run only that custom agent (#2172).
         onlyCustomAgent?: string,
     ) {
@@ -228,6 +231,7 @@ export class CodeReviewHandlerService {
                 triggerCommentId,
                 userGitId,
                 reviewDirective,
+                requestedReviewMode,
                 ...(onlyCustomAgent ? { onlyCustomAgent } : {}),
                 pipelineMetadata: {
                     lastExecution: {
@@ -357,6 +361,10 @@ export class CodeReviewHandlerService {
                 automaticReviewStatus: result?.automaticReviewStatus,
                 approvalDecision: result?.approvalDecision,
                 approvalRisk: result?.approvalRisk,
+                riskAssessment: result?.riskAssessment,
+                approvalPolicyEligibility: result?.approvalPolicyEligibility,
+                approvalReviewSummary: result?.approvalReviewSummary,
+                customAgentRiskSkips: result?.customAgentRiskSkips,
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 businessLogicValidatedAt: result?.businessLogicValidatedAt,
@@ -365,6 +373,7 @@ export class CodeReviewHandlerService {
                     failovers,
                 ),
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
+                heavy: result?.heavy,
             };
         } catch (error) {
             if (initialContext) {

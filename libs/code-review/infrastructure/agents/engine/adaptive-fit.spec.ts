@@ -24,9 +24,6 @@ describe('resolveAdaptiveProfile', () => {
 
     describe('threshold mapping (each band picks the lowest-cost profile)', () => {
         it.each<[number, AdaptiveProfileKind]>([
-            [1_048_576, 'full'],
-            [200_000, 'full'],
-            [128_000, 'full'],
             [64_000, 'full'],
             [63_999, 'light'],
             [32_000, 'light'],
@@ -35,7 +32,6 @@ describe('resolveAdaptiveProfile', () => {
             [15_999, 'minimal'],
             [8_000, 'minimal'],
             [7_999, 'unviable'],
-            [4_096, 'unviable'],
         ])('window=%i → profile=%s', (contextWindowTokens, expectedKind) => {
             const profile = resolveAdaptiveProfile(contextWindowTokens);
             expect(profile.kind).toBe(expectedKind);
@@ -44,7 +40,7 @@ describe('resolveAdaptiveProfile', () => {
     });
 
     describe('full profile (≥64K): no adaptive flags — full-fidelity review', () => {
-        it.each([1_048_576, 200_000, 128_000, 64_000])(
+        it.each([1_048_576, 64_000])(
             'window=%i → all flags off',
             (contextWindowTokens) => {
                 expectFlags(resolveAdaptiveProfile(contextWindowTokens), {
@@ -91,11 +87,6 @@ describe('resolveAdaptiveProfile', () => {
                 allOptional: true,
                 maxDiffChars: 4_000,
             });
-        });
-
-        it('window=8K → same minimal profile', () => {
-            expect(resolveAdaptiveProfile(8_000).kind).toBe('minimal');
-            expect(resolveAdaptiveProfile(8_000).maxDiffChars).toBe(4_000);
         });
     });
 

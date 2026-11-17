@@ -124,6 +124,23 @@ export const VERDICT_KEEP_ALIASES = [
     'shouldKeep',
 ] as const;
 
+export interface VerdictRecoveryOptions {
+    /** Read `keep` written as "true"/"false", "yes"/"no" or 1/0 as the boolean
+     *  it means. Off by default: a caller whose contract is to fail open on any
+     *  non-boolean `keep` (the business-rules verifier) keeps doing so. */
+    coerceKeep?: boolean;
+}
+
+/** `keep` as a non-strict model spells it, or undefined when unreadable. */
+function readKeep(raw: unknown): boolean | undefined {
+    if (raw === 1 || raw === 0) return raw === 1;
+    if (typeof raw !== 'string') return undefined;
+    const t = raw.trim().toLowerCase();
+    if (t === 'true' || t === 'yes') return true;
+    if (t === 'false' || t === 'no') return false;
+    return undefined;
+}
+
 /** Read `{keep, rationale, confidence}` off a verdict object that is ALREADY in
  *  canonical shape (top-level boolean `keep`). Returns null otherwise — the
  *  caller then falls through to its next source. No shape recovery: see
@@ -155,13 +172,21 @@ export function readVerdictObject(
 export function recoverVerdictObject(
     value: unknown,
     onRecover?: (reason: string) => void,
+    opts: VerdictRecoveryOptions = {},
 ): Omit<Verdict, 'toolCalls' | 'parseMode'> | null {
-    return readVerdictObject(
-        normalizeEnvelope(value, 'keep', [...VERDICT_KEEP_ALIASES], {
-            scalar: true,
-            ...(onRecover ? { onRecover } : {}),
-        }),
-    );
+    const shaped = normalizeEnvelope(value, 'keep', [...VERDICT_KEEP_ALIASES], {
+        scalar: true,
+        ...(onRecover ? { onRecover } : {}),
+    });
+    if (opts.coerceKeep && shaped && typeof shaped === 'object') {
+        const raw = (shaped as Record<string, unknown>).keep;
+        const keep = typeof raw === 'boolean' ? undefined : readKeep(raw);
+        if (keep !== undefined) {
+            onRecover?.(`coerced-keep-${typeof raw}`);
+            return readVerdictObject({ ...shaped, keep });
+        }
+    }
+    return readVerdictObject(shaped);
 }
 
 /** Recover a verdict the model wrote as TEXT instead of calling the verdict tool
@@ -174,6 +199,7 @@ export function recoverVerdictObject(
 export function verdictFromText(
     state: RunState,
     onRecover?: (reason: string) => void,
+    opts: VerdictRecoveryOptions = {},
 ): Omit<Verdict, 'toolCalls' | 'parseMode'> | null {
     const last = state.steps[state.steps.length - 1];
     const text = last?.message.content;
@@ -183,7 +209,7 @@ export function verdictFromText(
         ...VERDICT_KEEP_ALIASES,
     ]);
     if (!obj) return null;
-    return recoverVerdictObject(obj, onRecover);
+    return recoverVerdictObject(obj, onRecover, opts);
 }
 
 /** Extract the Verdict from a verifier run: the materialized artifact first, then

@@ -62,38 +62,67 @@ export const KODY_MENTION_NON_REVIEW_PATTERN =
     /^\s*@kody\b(?!\s+(start-review|review)(?=\s|$))/i;
 
 /**
- * Force re-review flag. Customers append `--force` (or `force`) to bypass
- * the "no new commits / already reviewed" guard so they can re-run a review
- * after fixing whatever made the previous run fail (e.g. topping up BYOK
- * credits). Telemetry distinguishes it from the regular command via the
- * `command-force` origin set by each provider's webhook handler.
+ * Force re-review flag. Customers add `--force` to bypass the "no new
+ * commits / already reviewed" guard so they can re-run a review after fixing
+ * whatever made the previous run fail (e.g. topping up BYOK credits). Like
+ * `--heavy`, it can sit anywhere on the command's first line. Telemetry
+ * distinguishes it from the regular command via the `command-force` origin
+ * set by each provider's webhook handler.
  */
 export const KODY_FORCE_REVIEW_COMMAND_PATTERN =
-    /^\s*@kody\s+(start-review|review)\s+--?force\b/i;
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]+[^\n]*?(?<![\w-])--?force(?![\w-])/i;
+
+/**
+ * Heavy-mode flag. Customers append `--heavy` to a review command to run the
+ * M3 lenses next to the generalist — higher recall, at the cost of more model
+ * calls — whatever review mode is set in settings. Can be combined with a focus
+ * directive and with `--force`, in any order.
+ *
+ * A dash is required (like `--force`): a bare `heavy` is treated as directive
+ * text, not the flag, to avoid mis-firing on focus phrases (e.g.
+ * `@kody review heavy checkout path`).
+ */
+export const KODY_HEAVY_REVIEW_COMMAND_PATTERN =
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]+[^\n]*?(?<![\w-])--?heavy(?![\w-])/i;
+
+/**
+ * Balanced-mode flag: `--balanced` runs a balanced review (the generalist
+ * alone) on a repository set to Heavy. Same rules as `--heavy`.
+ */
+export const KODY_BALANCED_REVIEW_COMMAND_PATTERN =
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]+[^\n]*?(?<![\w-])--?balanced(?![\w-])/i;
 
 /**
  * Build a review command regex for a given bot username.
  * Falls back to DEFAULT_BOT_USERNAME when botUsername is empty/undefined.
  */
-function buildReviewCommandPattern(
-    botUsername?: string | null,
-): RegExp {
+function buildReviewCommandPattern(botUsername?: string | null): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
-    return new RegExp(
-        `^\\s*@${name}\\s+(start-review|review)(?=\\s|$)`,
-        'i',
-    );
+    return new RegExp(`^\\s*@${name}\\s+(start-review|review)(?=\\s|$)`, 'i');
 }
 
 /**
  * Build a force-review command regex for a given bot username.
  */
-function buildForceReviewCommandPattern(
+function buildForceReviewCommandPattern(botUsername?: string | null): RegExp {
+    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
+    return new RegExp(
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]+[^\\n]*?(?<![\\w-])--?force(?![\\w-])`,
+        'i',
+    );
+}
+
+/**
+ * Build a review-mode flag (`heavy` / `balanced`) command regex for a given
+ * bot username.
+ */
+function buildReviewModeCommandPattern(
+    flag: 'heavy' | 'balanced',
     botUsername?: string | null,
 ): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
     return new RegExp(
-        `^\\s*@${name}\\s+(start-review|review)\\s+--?force\\b`,
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]+[^\\n]*?(?<![\\w-])--?${flag}(?![\\w-])`,
         'i',
     );
 }
@@ -101,12 +130,10 @@ function buildForceReviewCommandPattern(
 /**
  * Build a review command head regex for a given bot username.
  */
-function buildReviewCommandHeadPattern(
-    botUsername?: string | null,
-): RegExp {
+function buildReviewCommandHeadPattern(botUsername?: string | null): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
     return new RegExp(
-        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]*(?:(?:--?force|--?heavy)\\b[ \\t]*)*`,
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]*(?:(?:--?force|--?heavy|--?balanced)(?![\\w-])[ \\t]*)*`,
         'i',
     );
 }
@@ -114,15 +141,64 @@ function buildReviewCommandHeadPattern(
 /**
  * Build a non-review mention regex for a given bot username.
  */
-function buildMentionNonReviewPattern(
-    botUsername?: string | null,
-): RegExp {
+function buildMentionNonReviewPattern(botUsername?: string | null): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
     return new RegExp(
         `^\\s*@${name}\\b(?!\\s+(start-review|review)(?=\\s|$))`,
         'i',
     );
 }
+
+/**
+ * Check if the review command carries the heavy flag (`@kody review --heavy`).
+ * Subset of isReviewCommand. Callers set `heavy: true` on the review context so
+ * the finder runs the M3 lenses.
+ */
+export const isHeavyReviewCommand = (
+    text: string | undefined | null,
+    botUsername?: string | null,
+): boolean => {
+    if (!text) return false;
+    if (KODY_HEAVY_REVIEW_COMMAND_PATTERN.test(text)) return true;
+    if (
+        botUsername &&
+        buildReviewModeCommandPattern('heavy', botUsername).test(text)
+    )
+        return true;
+    return false;
+};
+
+/**
+ * Check if the review command carries the balanced flag
+ * (`@kody review --balanced`).
+ */
+export const isBalancedReviewCommand = (
+    text: string | undefined | null,
+    botUsername?: string | null,
+): boolean => {
+    if (!text) return false;
+    if (KODY_BALANCED_REVIEW_COMMAND_PATTERN.test(text)) return true;
+    if (
+        botUsername &&
+        buildReviewModeCommandPattern('balanced', botUsername).test(text)
+    )
+        return true;
+    return false;
+};
+
+/**
+ * The review mode a command asks for, over the one set in settings: `heavy`
+ * when it carries `--heavy` (it wins over `--balanced`), `balanced` for
+ * `--balanced`, none otherwise.
+ */
+export const requestedReviewModeOf = (
+    text: string | undefined | null,
+    botUsername?: string | null,
+): 'heavy' | 'balanced' | undefined => {
+    if (isHeavyReviewCommand(text, botUsername)) return 'heavy';
+    if (isBalancedReviewCommand(text, botUsername)) return 'balanced';
+    return undefined;
+};
 
 /**
  * Check if comment is a review command (@kody start-review or @kody review).
@@ -167,7 +243,7 @@ export const isForceReviewCommand = (
  * a free-text steering directive (e.g. `@kody review focus on the auth logic`).
  */
 const KODY_REVIEW_COMMAND_HEAD_PATTERN =
-    /^\s*@kody\s+(?:start-review|review)\b[ \t]*(?:(?:--?force|--?heavy)\b[ \t]*)*/i;
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]*(?:(?:--?force|--?heavy|--?balanced)(?![\w-])[ \t]*)*/i;
 
 /** Hard cap so a pasted wall of text can't blow up the prompt. */
 const MAX_REVIEW_DIRECTIVE_LENGTH = 500;
@@ -229,7 +305,9 @@ export const parseReviewDirective = (
     // Try the hardcoded @kody pattern first, then the custom bot pattern
     const head =
         text.match(KODY_REVIEW_COMMAND_HEAD_PATTERN) ||
-        (botUsername ? text.match(buildReviewCommandHeadPattern(botUsername)) : null);
+        (botUsername
+            ? text.match(buildReviewCommandHeadPattern(botUsername))
+            : null);
     if (!head) return undefined;
 
     return normalizeReviewDirective(
@@ -238,15 +316,13 @@ export const parseReviewDirective = (
             .split(/\r?\n/)[0]
             .trim()
             .replace(/^["'`]+|["'`]+$/g, '')
-            // Drop `--heavy`/`--force` flags left ANYWHERE in the directive.
+            // Drop `--heavy`/`--balanced`/`--force` flags left ANYWHERE in the directive.
             // The head pattern only eats LEADING flags, so a flag placed after
             // (or between) the focus text — `@kody review auth --heavy` — would
-            // otherwise pollute the <ReviewFocus> hint. `\b` keeps focus words
-            // like "forced"/"heavyweight" intact; the global flag handles
+            // otherwise pollute the <ReviewFocus> hint. A flag no word character or dash
+            // touches keeps "forced", "--force-push" and "well-balanced" intact; the global flag handles
             // multiple flags in any order. Whitespace is collapsed downstream.
-            // `--heavy` no longer selects a mode; it is still dropped so an
-            // old `@kody review --heavy` runs a normal review.
-            .replace(/\s*--?(?:heavy|force)\b/gi, ''),
+            .replace(/\s*(?<![\w-])--?(?:heavy|balanced|force)(?![\w-])/gi, ''),
     );
 };
 

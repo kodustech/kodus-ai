@@ -23,11 +23,30 @@
  */
 import { isOpenAiReasonerId } from '../kernel/model-family';
 
+/** OpenAI's own API, the native provider's default base URL. */
+export const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
+
 /** A base URL on OpenAI's own API host. */
 export function isOpenAiHost(baseURL: string | undefined): boolean {
     if (!baseURL) return false;
     try {
         return new URL(baseURL).hostname.toLowerCase() === 'api.openai.com';
+    } catch {
+        return false;
+    }
+}
+
+/** A base URL on an Azure OpenAI or Foundry resource, in any Azure cloud
+ *  (`.com`, `.us`, `.cn`). An API Management front door (`*.azure-api.net`) is
+ *  not one: it can sit before any OpenAI-protocol backend. */
+export function isAzureOpenAiHost(baseURL: string | undefined): boolean {
+    if (!baseURL) return false;
+    try {
+        const host = new URL(baseURL).hostname.toLowerCase();
+        return (
+            /\.(openai|cognitiveservices)\.azure\.(com|us|cn)$/.test(host) ||
+            host.endsWith('.services.ai.azure.com')
+        );
     } catch {
         return false;
     }

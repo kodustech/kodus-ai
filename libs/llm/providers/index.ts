@@ -23,5 +23,5 @@ import './zai';
 import './kodus';
 
 export { REGISTRY, registerProvider } from './kernel/registry';
-export type { ProviderModule } from './kernel/types';
+export type { ProviderModule, SelfHostedEnvVars } from './kernel/types';
 export { isCuratedCatalogProvider } from './curated-catalog';

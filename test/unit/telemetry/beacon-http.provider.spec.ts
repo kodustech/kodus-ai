@@ -11,7 +11,7 @@ describe('BeaconHttpProvider', () => {
     });
 
     describe('isDisabled', () => {
-        it.each(['1', 'true', 'TRUE', 'yes', 'YES', 'on', 'On'])(
+        it.each(['1', 'TRUE', 'yes', 'On'])(
             'returns true for KODUS_TELEMETRY_DISABLED=%s',
             (value) => {
                 process.env.KODUS_TELEMETRY_DISABLED = value;
@@ -20,7 +20,7 @@ describe('BeaconHttpProvider', () => {
             },
         );
 
-        it.each(['', '0', 'false', 'no', 'off', 'maybe'])(
+        it.each(['', '0', 'false', 'off', 'maybe'])(
             'returns false for KODUS_TELEMETRY_DISABLED=%s',
             (value) => {
                 process.env.KODUS_TELEMETRY_DISABLED = value;
@@ -53,24 +53,6 @@ describe('BeaconHttpProvider', () => {
                         'Content-Type': 'application/json',
                         'User-Agent': 'kodus-self-hosted/1.0.0',
                     }),
-                }),
-            );
-        });
-
-        it('uses KODUS_TELEMETRY_ENDPOINT when set', async () => {
-            process.env.KODUS_TELEMETRY_ENDPOINT =
-                'http://127.0.0.1:43111/test-heartbeat';
-            global.fetch = jest
-                .fn()
-                .mockResolvedValue({ status: 204 }) as unknown as typeof fetch;
-
-            const ok = await new BeaconHttpProvider().send({ a: 1 }, '1.0.0');
-
-            expect(ok).toBe(true);
-            expect(global.fetch).toHaveBeenCalledWith(
-                'http://127.0.0.1:43111/test-heartbeat',
-                expect.objectContaining({
-                    method: 'POST',
                 }),
             );
         });

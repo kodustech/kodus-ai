@@ -79,7 +79,7 @@ const files = [
 function inputFor(over: Record<string, unknown> = {}) {
     return {
         reviewOptions: { bug: true, security: true, performance: true },
-        reviewMode: 'normal',
+        reviewMode: 'balanced',
         prNumber: 7,
         changedFiles: files,
         kodyRules: [{ uuid: 'r1' }],
@@ -88,6 +88,65 @@ function inputFor(over: Record<string, unknown> = {}) {
 }
 
 describe('ReviewOrchestratorService — custom agents', () => {
+    it.each([
+        [{ status: 'disabled' }, 'risk-disabled'],
+        [{ status: 'unavailable', reason: 'Timeout.' }, 'risk-unavailable'],
+        [{ status: 'assessed', riskIdentified: false }, 'risk-not-found'],
+    ])(
+        'reports an intentional conditional skip for %j without creating a provider',
+        async (riskAssessment, reason) => {
+            const { service, factory } = setup();
+            const result = await service.execute(
+                inputFor({
+                    customAgents: [agentConfig({ runWhen: 'risk-found' })],
+                    riskAssessment,
+                }),
+            );
+            expect(factory.create).not.toHaveBeenCalled();
+            expect(result.customAgentRuns).toEqual([
+                expect.objectContaining({
+                    status: 'risk-condition-not-met',
+                    reason,
+                }),
+            ]);
+            expect(result.failures).toEqual([]);
+            expect(result.incomplete).toEqual([]);
+        },
+    );
+
+    it('passes the one shared risk result as context to an eligible agent', async () => {
+        const { service, customCalls } = setup();
+        const riskAssessment = {
+            status: 'assessed',
+            riskIdentified: true,
+            reason: 'Ledger balance can change.',
+        };
+        await service.execute(
+            inputFor({
+                customAgents: [agentConfig({ runWhen: 'risk-found' })],
+                riskAssessment,
+            }),
+        );
+        expect(customCalls.get('agent-1')).toMatchObject({ riskAssessment });
+    });
+
+    it('runs an explicitly named disabled conditional agent without risk and without built-in reviewers', async () => {
+        const { service, generalist, kodyRules, factory } = setup();
+        const result = await service.execute(
+            inputFor({
+                onlyCustomAgent: 'ledger-rules',
+                customAgents: [
+                    agentConfig({ enabled: false, runWhen: 'risk-found' }),
+                ],
+                riskAssessment: { status: 'disabled' },
+            }),
+        );
+        expect(factory.create).toHaveBeenCalledTimes(1);
+        expect(generalist.execute).not.toHaveBeenCalled();
+        expect(kodyRules.execute).not.toHaveBeenCalled();
+        expect(result.customAgentRuns[0].status).toBe('ran');
+    });
+
     it('runs each enabled agent in parallel with the generalist and Kody Rules', async () => {
         const { service, generalist, kodyRules, factory } = setup();
 
@@ -522,6 +581,25 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(out.customAgentRuns?.[0].status).toBe('failed');
     });
 
+    it('records why a custom agent failed, without the provider message', async () => {
+        const { service } = setup(() => {
+            throw Object.assign(
+                new Error('Rate limit reached for org sk-ant-secret'),
+                { statusCode: 429 },
+            );
+        });
+
+        const out = await service.execute(
+            inputFor({ customAgents: [agentConfig()] }),
+        );
+
+        expect(out.customAgentRuns?.[0]).toMatchObject({
+            status: 'failed',
+            reason: 'RATE_LIMIT (HTTP 429)',
+        });
+        expect(JSON.stringify(out.customAgentRuns)).not.toContain('sk-ant');
+    });
+
     it('logs a skipped and a failed agent with the review and agent ids', async () => {
         const { service } = setup(() => {
             throw new Error('provider down');
@@ -616,7 +694,10 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(out.incomplete).toEqual([
             expect.objectContaining({ finishReason: 'no-result' }),
         ]);
-        expect(out.customAgentRuns?.[0].status).toBe('incomplete');
+        expect(out.customAgentRuns?.[0]).toMatchObject({
+            status: 'incomplete',
+            reason: 'no-result',
+        });
     });
 
     it('runs nothing custom when no agents are passed (feature off)', async () => {

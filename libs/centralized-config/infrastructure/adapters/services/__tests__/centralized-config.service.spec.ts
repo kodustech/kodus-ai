@@ -922,6 +922,54 @@ describe('CentralizedConfigService', () => {
             ).rejects.toThrow();
         });
 
+        it('discoverConfigFiles resolves repositories whose stored name contains a slash (GitLab)', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'acme/my-repo/kodus-config.yml' },
+                {
+                    type: 'file',
+                    path: 'acme/platform/api/kodus-config.yml',
+                },
+                {
+                    type: 'file',
+                    path: 'acme/my-repo/src%2Fapi/kodus-config.yml',
+                },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [
+                    {
+                        id: 'r-1',
+                        name: 'acme/my-repo',
+                        full_name: 'acme/my-repo',
+                    },
+                    {
+                        id: 'r-2',
+                        name: 'acme/platform/api',
+                        full_name: 'acme/platform/api',
+                    },
+                ],
+            );
+
+            const discovered = await service.discoverConfigFiles({
+                organizationAndTeamData,
+                repository: { name: 'config-repo', id: 'repo-1' },
+            });
+
+            expect(
+                discovered.map((d) => [
+                    d.repositoryId,
+                    d.centralizedDirectoryPath,
+                    d.directoryPaths,
+                ]),
+            ).toEqual(
+                expect.arrayContaining([
+                    ['r-1', 'acme/my-repo', undefined],
+                    ['r-2', 'acme/platform/api', undefined],
+                    ['r-1', 'acme/my-repo/src%2Fapi', ['/src/api']],
+                ]),
+            );
+            expect(discovered).toHaveLength(3);
+        });
+
         // H5 — a `kodus-config.yml` more than one level below the repository
         // folder is dropped by discovery with nothing but a log line. Executed
         // rather than assumed: this is what a user who hand-writes
@@ -1080,17 +1128,6 @@ describe('CentralizedConfigService', () => {
         });
 
         describe('getCentralizedConfigRepository', () => {
-            it('returns the configured repository', async () => {
-                mockParametersService.findByKey.mockResolvedValue({
-                    configValue: { repository: { id: 'r1', name: 'kodus' } },
-                });
-                const repo =
-                    await service.getCentralizedConfigRepository(
-                        organizationAndTeamData,
-                    );
-                expect(repo).toEqual({ id: 'r1', name: 'kodus' });
-            });
-
             it('throws when no repository is configured', async () => {
                 mockParametersService.findByKey.mockResolvedValue({
                     configValue: {},
@@ -1106,17 +1143,6 @@ describe('CentralizedConfigService', () => {
         });
 
         describe('fetchConfigFile', () => {
-            it('returns the config file on success', async () => {
-                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
-                    version: 2,
-                });
-                const file = await service.fetchConfigFile({
-                    organizationAndTeamData,
-                    repository: { name: 'r', id: 'r1' },
-                });
-                expect(file).toEqual({ version: 2 });
-            });
-
             it('returns null (does not throw) when the read fails', async () => {
                 mockCodeBaseConfigService.getKodusConfigFile.mockRejectedValue(
                     new Error('boom'),
@@ -1172,6 +1198,51 @@ describe('CentralizedConfigService', () => {
     });
 
     describe('discoverKodyRulesFiles', () => {
+        it('resolves Kody rules of repositories whose stored name contains a slash (GitLab)', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                {
+                    path: 'acme/platform/api/.kody-rules/review/a.yml',
+                    type: 'file' as const,
+                },
+                {
+                    path: 'acme/platform/api/src%2Fv1/.kody-rules/review/b.yml',
+                    type: 'file' as const,
+                },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [
+                    {
+                        id: 'r-2',
+                        name: 'acme/platform/api',
+                        full_name: 'acme/platform/api',
+                    },
+                ],
+            );
+
+            const result = await service.discoverKodyRulesFiles({
+                organizationAndTeamData,
+                repository: { name: 'central-repo', id: 'central-repo-id' },
+            });
+
+            expect(
+                result.map((r) => [
+                    r.repositoryId,
+                    r.centralizedDirectoryPath,
+                    r.directoryPaths,
+                ]),
+            ).toEqual(
+                expect.arrayContaining([
+                    ['r-2', 'acme/platform/api/.kody-rules/review', undefined],
+                    [
+                        'r-2',
+                        'acme/platform/api/src%2Fv1/.kody-rules/review',
+                        ['/src/v1'],
+                    ],
+                ]),
+            );
+            expect(result).toHaveLength(2);
+        });
+
         it('should discover Kody rule files from centralized repository', async () => {
             const mockRepoTree = [
                 {
@@ -2074,5 +2145,114 @@ describe('CentralizedConfigService', () => {
                 mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
             ).not.toHaveBeenCalled();
         });
+    });
+});
+
+/**
+ * `synchronizeKodyRules` — what a rejected rule file tells its owner.
+ *
+ * Production 2026-09-28: one org synced 7 rule files and failed 22, every one
+ * reported as "Rule file does not comply with required schema" — no field, no
+ * reason. The zod result that knew which field was wrong was discarded, so the
+ * owner (and we) could not tell what to change in the YAML.
+ */
+describe('CentralizedConfigService.synchronizeKodyRules — rejected rule files', () => {
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    } as any;
+    const actor = {
+        organizationId: 'org-1',
+        source: 'sync' as const,
+        userEmail: 'sync@kodus.io',
+        userId: 'u-1',
+    };
+
+    function makeService(ruleContent: Record<string, unknown>) {
+        const createOrUpdateKodyRulesUseCase = { execute: jest.fn() };
+        const service = new CentralizedConfigService(
+            {} as any, // parametersService
+            {
+                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([]),
+            } as any,
+            {} as any, // codeManagementService
+            { execute: jest.fn() } as any, // updateOrCreateCodeReviewParameterUseCase
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any, // codeBaseConfigService
+            createOrUpdateKodyRulesUseCase as any,
+            {} as any,
+            { findByOrganizationId: jest.fn().mockResolvedValue(null) } as any,
+        );
+        jest.spyOn(service, 'getCentralizedConfigRepository').mockResolvedValue(
+            { id: 'repo-central', name: 'central' } as any,
+        );
+        jest.spyOn(service, 'fetchKodyRuleFile').mockResolvedValue(
+            ruleContent as any,
+        );
+        return { service, createOrUpdateKodyRulesUseCase };
+    }
+
+    const ruleFile = {
+        ruleFilePath: 'app-baseline/.kody-rules/review/add-tests.yml',
+        repositoryId: 'repo-1',
+    } as any;
+
+    it('names the offending field when a rule fails the schema', async () => {
+        const { service, createOrUpdateKodyRulesUseCase } = makeService({
+            title: 'Add tests',
+            rule: 'Every defensive branch needs a test',
+            severity: 'urgent', // not one of low | medium | high | critical
+        });
+
+        const result = await service.synchronizeKodyRules({
+            organizationAndTeamData,
+            ruleFiles: [ruleFile],
+            actor,
+        });
+
+        expect(createOrUpdateKodyRulesUseCase.execute).not.toHaveBeenCalled();
+        expect(result.failureDetails).toHaveLength(1);
+        expect(result.failureDetails![0].file).toBe(ruleFile.ruleFilePath);
+        expect(result.failureDetails![0].error).toContain('severity');
+    });
+
+    it('names every offending field, nested ones by their full path', async () => {
+        const { service } = makeService({
+            title: 'Add tests',
+            rule: 'Every defensive branch needs a test',
+            severity: 'urgent',
+            inheritance: { inheritable: 'yes', include: [], exclude: [] },
+        });
+
+        const result = await service.synchronizeKodyRules({
+            organizationAndTeamData,
+            ruleFiles: [ruleFile],
+            actor,
+        });
+
+        const error = result.failureDetails![0].error;
+        expect(error).toContain('inheritance.inheritable: ');
+        expect(error).toContain('severity: ');
+        expect(error).toContain('; ');
+    });
+
+    it('still syncs a rule that passes the schema', async () => {
+        const { service, createOrUpdateKodyRulesUseCase } = makeService({
+            title: 'Add tests',
+            rule: 'Every defensive branch needs a test',
+            severity: 'high',
+        });
+
+        const result = await service.synchronizeKodyRules({
+            organizationAndTeamData,
+            ruleFiles: [ruleFile],
+            actor,
+        });
+
+        expect(createOrUpdateKodyRulesUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(result.failureDetails).toBeUndefined();
     });
 });

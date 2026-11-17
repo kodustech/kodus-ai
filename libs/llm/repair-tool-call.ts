@@ -22,6 +22,9 @@ import {
     readOutput,
     salvageStructuredError,
 } from '@libs/llm/structured-output-repair';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('ToolCallRepair');
 
 export async function repairInvalidToolInput(opts: {
     model: LanguageModel;
@@ -29,11 +32,32 @@ export async function repairInvalidToolInput(opts: {
     toolCall: { toolName: string; input: unknown; [k: string]: unknown };
     inputSchema: (o: { toolName: string }) => PromiseLike<unknown>;
     error: unknown;
+    /** Runs the re-ask inside the caller's usage span, so its tokens are
+     *  charged to the org like the loop's own. */
+    inSpan?: <T>(exec: () => Promise<T>) => Promise<T>;
+    /** The review's ids, on every log line of the repair. */
+    logContext?: {
+        organizationId?: string;
+        teamId?: string;
+        prNumber?: number;
+    };
 }): Promise<Record<string, unknown> | null> {
     const { model, abortSignal, toolCall, inputSchema, error } = opts;
+    const inSpan = opts.inSpan ?? (<T>(exec: () => Promise<T>) => exec());
     if (NoSuchToolError.isInstance(error)) {
         return null;
     }
+
+    logger.log({
+        message: `[tool-repair] invoked for "${toolCall.toolName}" — model sent invalid tool input`,
+        context: 'repairInvalidToolInput',
+        metadata: {
+            ...opts.logContext,
+            toolName: toolCall.toolName,
+            validationError:
+                (error as Error)?.message?.slice(0, 300) ?? String(error),
+        },
+    });
 
     // Guarantee the correction is VALIDATED against the tool schema. A raw
     // jsonSchema() would let Output.object parse-but-not-check, so a still-wrong
@@ -51,7 +75,8 @@ export async function repairInvalidToolInput(opts: {
         // the review executor: pass `output`, read `experimental_output`/`output`.
         // Output.object now validates the correction against the schema and throws
         // NoObjectGeneratedError if it still doesn't conform.
-        const result = await generateText({
+        const result = await inSpan(() =>
+            generateText({
             model,
             abortSignal,
             output: Output.object({ schema: validatingSchema as any }),
@@ -61,7 +86,13 @@ export async function repairInvalidToolInput(opts: {
                 `Validation error: ${(error as Error)?.message ?? String(error)}`,
                 `Return corrected arguments that satisfy the schema. Keep the original intent; only fix what is malformed.`,
             ].join('\n'),
-        } as any);
+            } as any),
+        );
+        logger.log({
+            message: `[tool-repair] repaired "${toolCall.toolName}" via model re-ask`,
+            context: 'repairInvalidToolInput',
+            metadata: { ...opts.logContext, toolName: toolCall.toolName },
+        });
         return { ...toolCall, input: JSON.stringify(readOutput(result)) };
     } catch (err) {
         // The correction failed to parse/validate. The SHARED salvage does the
@@ -71,8 +102,29 @@ export async function repairInvalidToolInput(opts: {
         // default "don't repair, fail the step" (kept fully fail-soft).
         const recovered = await salvageStructuredError(err, validatingSchema);
         if (recovered !== undefined) {
+            logger.log({
+                message: `[tool-repair] repaired "${toolCall.toolName}" via deterministic salvage`,
+                context: 'repairInvalidToolInput',
+                metadata: {
+                    ...opts.logContext,
+                    toolName: toolCall.toolName,
+                    // The re-ask failed; the salvage read its text.
+                    repairError:
+                        (err as Error)?.message?.slice(0, 300) ?? String(err),
+                },
+            });
             return { ...toolCall, input: JSON.stringify(recovered) };
         }
+        logger.warn({
+            message: `[tool-repair] DISCARDED tool call "${toolCall.toolName}" — repair and salvage both failed, step is dropped`,
+            context: 'repairInvalidToolInput',
+            metadata: {
+                ...opts.logContext,
+                toolName: toolCall.toolName,
+                repairError:
+                    (err as Error)?.message?.slice(0, 300) ?? String(err),
+            },
+        });
         return null;
     }
 }

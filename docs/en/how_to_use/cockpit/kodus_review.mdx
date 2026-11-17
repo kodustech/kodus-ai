@@ -35,6 +35,7 @@ Scope rules — the same across every implementation-rate chart:
 
 - Only **delivered** suggestions count (the ones actually posted as PR comments). Drafts Kodus filtered out before commenting are never counted.
 - Suggestions are attributed to the **week the PR closed**, because implementation status is only final once the PR merges.
+- A suggestion the last implementation check **could not decide** (the model call failed, its answer was unreadable, or only the whole PR's diff was available) is left out of the rate rather than counted as not implemented. The weekly chart says how many were left out, and the explorer lists them under the **Not measured** status.
 
 ### Week over week
 

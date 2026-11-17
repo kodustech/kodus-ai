@@ -3,7 +3,10 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { IEmailProvider, SendEmailPayload } from './email-provider.contract';
+import { Address } from 'nodemailer/lib/mailer';
 import { createTransport, Transporter } from 'nodemailer';
+
+const DEFAULT_FROM = 'noreply@notifications.kodus.io';
 
 /**
  * SMTP email provider using nodemailer.
@@ -12,12 +15,27 @@ import { createTransport, Transporter } from 'nodemailer';
 export class SmtpEmailProvider implements IEmailProvider {
     private readonly logger = createLogger(SmtpEmailProvider.name);
     private transporter: Transporter | null = null;
-    private readonly from: string;
+    private readonly configuredFrom: string | undefined;
 
     constructor(private readonly configService: ConfigService) {
-        this.from =
-            configService.get<string>('API_SMTP_FROM') ??
-            'noreply@notifications.kodus.io';
+        this.configuredFrom =
+            configService.get<string>('API_SMTP_FROM')?.trim() || undefined;
+    }
+
+    /**
+     * Templates always pass the Kodus cloud sender in `payload.from`. On
+     * self-hosted SMTP the operator's API_SMTP_FROM must win: most servers
+     * reject or rewrite a sender the authenticated account doesn't own.
+     * The template's display name ("Kody from Kodus") is kept.
+     */
+    private resolveFrom(payloadFrom: string | undefined): string | Address {
+        if (!this.configuredFrom) return payloadFrom || DEFAULT_FROM;
+        if (this.configuredFrom.includes('<')) return this.configuredFrom;
+
+        const name = payloadFrom?.match(/^\s*"?([^"<]*?)"?\s*<[^>]*>\s*$/)?.[1];
+        return name
+            ? { name, address: this.configuredFrom }
+            : this.configuredFrom;
     }
 
     private async getTransporter(): Promise<Transporter> {
@@ -44,7 +62,7 @@ export class SmtpEmailProvider implements IEmailProvider {
         try {
             const transport = await this.getTransporter();
             const info = await transport.sendMail({
-                from: payload.from ?? this.from,
+                from: this.resolveFrom(payload.from),
                 to: payload.to,
                 subject: payload.subject,
                 html: payload.html,

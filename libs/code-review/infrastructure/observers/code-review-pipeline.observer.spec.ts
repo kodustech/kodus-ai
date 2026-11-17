@@ -1,7 +1,7 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { IAutomationExecutionService } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
-import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/stages/finish-comments.stage';
+import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/constants/error-reasons';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
     CheckConclusion,
@@ -948,42 +948,6 @@ describe('CodeReviewPipelineObserver', () => {
                 expect.objectContaining({
                     status: AutomationStatus.PARTIAL_ERROR,
                     message: 'Timeout waiting for LLM response',
-                }),
-            );
-        });
-
-        it('should save actual error message for FinishCommentsStage', async () => {
-            context.errors = [
-                {
-                    stage: 'FinishCommentsStage',
-                    substage: 'resolve-comment',
-                    error: new Error('GitHub API rate limit exceeded'),
-                    // Posting comments fails but the review itself
-                    // completed — partial degradation, not a critical
-                    // failure of the review.
-                    severity: 'partial',
-                },
-            ];
-
-            await observer.onStageStart(
-                'FinishCommentsStage',
-                context as CodeReviewPipelineContext,
-                observersContext,
-            );
-
-            await observer.onStageFinish(
-                'FinishCommentsStage',
-                context as CodeReviewPipelineContext,
-                observersContext,
-            );
-
-            expect(
-                mockAutomationExecutionService.updateStageLog,
-            ).toHaveBeenCalledWith(
-                'stage-log-uuid',
-                expect.objectContaining({
-                    status: AutomationStatus.PARTIAL_ERROR,
-                    message: 'GitHub API rate limit exceeded',
                 }),
             );
         });

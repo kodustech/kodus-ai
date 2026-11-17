@@ -8,7 +8,7 @@ export interface CodeStructureResult {
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/i;
 
 export function supportsCodeStructureAnalysis(path: string): boolean {
-    return SOURCE_FILE.test(path) && !/\.d\.ts$/i.test(path);
+    return SOURCE_FILE.test(path) && !/\.d\.[cm]?ts$/i.test(path);
 }
 
 function isFunction(node: ts.Node): node is ts.FunctionLikeDeclaration {

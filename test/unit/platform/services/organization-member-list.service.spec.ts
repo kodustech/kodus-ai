@@ -134,6 +134,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
+                requireLoaded: false,
             });
         });
 
@@ -152,6 +153,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
+                requireComplete: false,
             });
         });
 
@@ -200,6 +202,74 @@ describe('OrganizationMemberListService', () => {
             expect(result.members).toEqual([
                 { id: 1, name: 'Alice Doe', type: 'user' },
             ]);
+        });
+    });
+
+    describe('when the caller requires pull request authors', () => {
+        it('is unavailable when the author lookup fails, even with members', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockRejectedValue(
+                new Error('Too Many Requests'),
+            );
+
+            const strict = await service.fetch(organizationAndTeamData, {
+                requireAuthors: true,
+            });
+            const lenient = await service.fetch(organizationAndTeamData);
+
+            expect(strict).toEqual({ status: 'unavailable', members: [] });
+            expect(lenient.status).toBe('ok');
+            // Only the strict caller asks the provider to fail on "not loaded yet"
+            expect(
+                mockCodeManagementService.getPullRequestAuthors.mock.calls.map(
+                    ([params]) => params.requireLoaded,
+                ),
+            ).toEqual([true, false]);
+        });
+
+        it('is unavailable when the member read fails, even with stored authors', async () => {
+            mockCodeManagementService.getListMembers.mockRejectedValue(
+                new Error('Too Many Requests'),
+            );
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '7', name: 'Recent Author' },
+            ]);
+
+            const strict = await service.fetch(organizationAndTeamData, {
+                requireAuthors: true,
+            });
+            const lenient = await service.fetch(organizationAndTeamData);
+
+            expect(strict).toEqual({ status: 'unavailable', members: [] });
+            expect(lenient.status).toBe('ok');
+            // Only the strict caller asks the provider for a complete list
+            expect(
+                mockCodeManagementService.getListMembers.mock.calls.map(
+                    ([params]) => params.requireComplete,
+                ),
+            ).toEqual([true, false]);
+        });
+
+        it('stays ok when the lookup succeeds with no recent authors', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
+
+            const result = await service.fetch(organizationAndTeamData, {
+                requireAuthors: true,
+            });
+
+            expect(result.status).toBe('ok');
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ requireLoaded: true }),
+            );
         });
     });
 
@@ -299,7 +369,9 @@ describe('OrganizationMemberListService', () => {
             mockCodeManagementService.getListMembers.mockResolvedValue([
                 { id: 1, name: 'Alice' },
             ]);
-            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
 
             await service.fetch(organizationAndTeamData, { skipCache: true });
 
@@ -335,7 +407,9 @@ describe('OrganizationMemberListService', () => {
             mockCodeManagementService.getListMembers.mockResolvedValue([
                 { id: 1, name: 'Alice' },
             ]);
-            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
 
             await service.fetch(organizationAndTeamData);
 
@@ -349,7 +423,9 @@ describe('OrganizationMemberListService', () => {
             mockCacheService.getFromCache.mockRejectedValue(
                 new Error('redis down'),
             );
-            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
 
             const result = await service.fetch(organizationAndTeamData);
 

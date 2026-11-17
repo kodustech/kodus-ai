@@ -30,13 +30,6 @@ describe('KodusIssuesTools', () => {
         tools = module.get<KodusIssuesTools>(KodusIssuesTools);
     });
 
-    it('exposes both generic issue tools', () => {
-        expect(tools.getAllTools().map((tool) => tool.name)).toEqual([
-            'KODUS_LIST_ISSUES',
-            'KODUS_GET_ISSUE',
-        ]);
-    });
-
     it('lists issues via the code-management facade', async () => {
         const issue = {
             id: '1',

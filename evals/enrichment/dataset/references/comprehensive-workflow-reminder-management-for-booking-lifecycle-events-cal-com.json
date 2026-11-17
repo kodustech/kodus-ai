@@ -1,0 +1,35 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "defectStatement": "A SendGrid cancellation failure exits the entire cancellation loop and skips awaiting the queued Prisma deletions. Later reminders remain uncancelled, and the failed row can disrupt subsequent runs while it remains eligible.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Attempt cancellation of remaining reminders even when an earlier cancellation fails.",
+    "Await database deletions for successfully cancelled reminders despite other cancellation failures.",
+    "Report failures without preventing the subsequent email-scheduling phase.",
+    "Retain reminders whose cancellation failed unless a reliable terminal outcome is established."
+   ],
+   "exampleFix": "  const workflowRemindersToDelete: Prisma.Prisma__WorkflowReminderClient<WorkflowReminder, never>[] = [];\n\n  for (const reminder of remindersToCancel) {\n    try {\n      await client.request({\n        url: \"/v3/user/scheduled_sends\",\n        method: \"POST\",\n        body: {\n          batch_id: reminder.referenceId,\n          status: \"cancel\",\n        },\n      });\n\n      const workflowReminderToDelete = prisma.workflowReminder.delete({\n        where: {\n          id: reminder.id,\n        },\n      });\n\n      workflowRemindersToDelete.push(workflowReminderToDelete);\n    } catch (error) {\n      console.log(`Error cancelling scheduled Emails: ${error}`);\n    }\n  }\n\n  try {\n    await Promise.all(workflowRemindersToDelete);\n  } catch (error) {\n    console.log(`Error deleting cancelled Email reminders: ${error}`);\n  }",
+   "notes": "Awaiting each deletion within an isolated per-reminder try/catch is also valid. Prisma delete operations are lazy; collecting them without reaching the await does not execute them."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "defectStatement": "deleteScheduledSMSReminder skips database deletion when twilio.cancelSMS rejects because both operations share one try block. With callers no longer deleting the row independently, cancellation failures leave stale reminder records.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Attempt and await database deletion even when Twilio cancellation rejects.",
+    "Attempt Twilio cancellation when referenceId is present.",
+    "Delete the database reminder when referenceId is null without calling Twilio.",
+    "Preserve logging and containment of cancellation and database errors."
+   ],
+   "exampleFix": "export const deleteScheduledSMSReminder = async (reminderId: number, referenceId: string | null) => {\n  try {\n    if (referenceId) {\n      try {\n        await twilio.cancelSMS(referenceId);\n      } catch (error) {\n        console.log(`Error canceling SMS with error ${error}`);\n      }\n    }\n    await prisma.workflowReminder.delete({\n      where: {\n        id: reminderId,\n      },\n    });",
+   "notes": "The existing outer catch and function closure remain outside the replacement. Independent deletion fixes the cleanup regression but cannot stop an SMS already scheduled at Twilio when provider cancellation fails; a reliable cancellation retry would require additional behavior."
+  }
+ ]
+}

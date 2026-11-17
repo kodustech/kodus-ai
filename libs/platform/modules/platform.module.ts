@@ -23,6 +23,7 @@ import { AzureReposPullRequestHandler } from '../infrastructure/webhooks/azure/a
 import { BitbucketPullRequestHandler } from '../infrastructure/webhooks/bitbucket/bitbucketPullRequest.handler';
 import { ForgejoPullRequestHandler } from '../infrastructure/webhooks/forgejo/forgejoPullRequest.handler';
 import { GitHubPullRequestHandler } from '../infrastructure/webhooks/github/githubPullRequest.handler';
+import { GithubChecksService } from '../infrastructure/adapters/services/github/github-checks.service';
 import { GitLabMergeRequestHandler } from '../infrastructure/webhooks/gitlab/gitlabPullRequest.handler';
 
 import { BusinessLogicPublisher } from '../application/services/business-logic-publisher.service';
@@ -30,6 +31,8 @@ import { BusinessLogicReplies } from '../application/services/business-logic-rep
 import { BusinessLogicRecheckService } from '../application/services/business-logic-recheck.service';
 import { OrganizationMemberListService } from '../application/services/organization-member-list.service';
 import { WebhookContextService } from '../application/services/webhook-context.service';
+import { RepositoryConnectionService } from '../application/services/repository-sync/repository-connection.service';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { GetConnectionsUseCase } from '../application/use-cases/integrations/get-connections.use-case';
 import { GetOrganizationLanguageUseCase } from '../application/use-cases/organization/get-organization-language.use-case';
 import { PlatformCoreModule } from './platform-core.module';
@@ -80,6 +83,9 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        RepositoryConnectionService,
+        DistributedLockService,
+        GithubChecksService,
         BusinessLogicPublisher,
         BusinessLogicReplies,
         BusinessLogicRecheckService,
@@ -117,6 +123,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        RepositoryConnectionService,
         BusinessLogicPublisher,
         BusinessLogicRecheckService,
         'AZURE_REPOS_WEBHOOK_HANDLER',

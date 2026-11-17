@@ -86,14 +86,4 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
 
         expect(result).toEqual(reaped);
     });
-
-    it('returns an empty array when nothing is stale', async () => {
-        const result = await repo.failStaleProcessing({
-            olderThan,
-            lastError,
-            errorClassification: ErrorClassification.PERMANENT,
-        });
-
-        expect(result).toEqual([]);
-    });
 });

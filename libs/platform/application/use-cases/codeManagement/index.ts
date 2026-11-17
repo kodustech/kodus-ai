@@ -1,5 +1,6 @@
 import { AutoRevokeRemovedLicenseSeatsUseCase } from './auto-revoke-removed-license-seats.use-case';
 import { BackfillAstGraphBuildUseCase } from './backfill-ast-graph-build.use-case';
+import { CarryReviewCheckToMergeQueueUseCase } from './carry-review-check-to-merge-queue.use-case';
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 import { CreateIntegrationUseCase } from './create-integration.use-case';
 import { CreatePRCodeReviewUseCase } from './create-prs-code-review.use-case';
@@ -21,8 +22,15 @@ import { ReceiveWebhookUseCase } from './receiveWebhook.use-case';
 import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
 import { TriggerBusinessValidationUseCase } from './trigger-business-validation.use-case';
 import { UpdateAutoLicenseAllowedUsersUseCase } from './update-auto-license-allowed-users.use-case';
+import {
+    GetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
+    SetRepositorySelectionUseCase,
+} from './repository-selection.use-cases';
+import { SyncAllRepositoriesUseCase } from './sync-all-repositories.use-case';
 
 export default [
+    CarryReviewCheckToMergeQueueUseCase,
     GetCodeManagementMemberListUseCase,
     CreateIntegrationUseCase,
     CreateRepositoriesUseCase,
@@ -46,4 +54,8 @@ export default [
     UpdateAutoLicenseAllowedUsersUseCase,
     PruneRemovedLicenseSeatsUseCase,
     AutoRevokeRemovedLicenseSeatsUseCase,
+    SyncAllRepositoriesUseCase,
+    GetRepositorySelectionUseCase,
+    SetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
 ];

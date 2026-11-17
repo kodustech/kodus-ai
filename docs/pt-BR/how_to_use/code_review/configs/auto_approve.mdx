@@ -1,0 +1,129 @@
+---
+title: "Auto-aprovação"
+description: "Quando o Kody aprova um pull request, como limitar quais PRs ele pode aprovar e o que ele faz quando segura a aprovação."
+---
+
+Ative **Automatic PR approval** em **Code review → General** (`pullRequestApprovalActive`, desativado
+por padrão). O Kody aprova pelo review do seu provedor Git. Ele nunca faz o merge.
+
+## Quando o Kody aprova
+
+O Kody aprova um PR em um destes dois momentos:
+
+- **Depois de uma revisão limpa.** A revisão não postou sugestões e nenhuma etapa dela falhou. Uma
+  falha ao gerar o resumo do PR é a única que não impede a aprovação.
+- **Depois que os comentários dele são resolvidos.** A cada 2 minutos, o Kody verifica os PRs
+  abertos que revisou nos últimos 7 dias e aprova aqueles em que todos os comentários que ele
+  deixou estão resolvidos.
+
+Nos dois casos, o Kody aprova o commit que revisou: se alguém fez push depois da última revisão do
+Kody, ele espera a próxima revisão. Uma execução iniciada com `@kody -v <agent>` roda só aquele
+custom agent, então nunca aprova.
+
+## Aprovação condicional (Beta)
+
+Disponível nos planos **Teams e Enterprise** com acesso ao beta. As condições aparecem abaixo de
+**Automatic PR approval** e podem ser definidas no escopo Global, Repository ou Directory, como as
+outras configurações. Elas valem para o PR inteiro, não só para os commits desde a última revisão
+do Kody.
+
+### Quais PRs podem ser auto-aprovados?
+
+Por padrão, todos os PRs são elegíveis. Para limitar:
+
+- **PR labels** (`approvalLabels`): o PR precisa ter pelo menos um desses labels.
+- **PR authors** (`approvalAuthors`): o PR precisa ter sido aberto por um desses logins do provedor.
+
+Maiúsculas e minúsculas não importam. Se você definir os dois, o PR precisa atender aos dois. Até
+50 labels e 50 autores.
+
+O Kody confere os labels de novo antes de aprovar, então você pode adicionar um label de aprovação
+depois da revisão: o Kody aprova em poucos minutos, desde que ninguém tenha feito push desde então.
+
+### Quando é preciso aprovação humana?
+
+- **Paths requiring human approval** (`approvalSensitivePaths`): padrões glob como `src/auth/**`,
+  até 100. Se algum arquivo alterado corresponder, o Kody segura a aprovação. Um arquivo renomeado
+  conta pelo caminho antigo e pelo novo.
+- **Assess PR risk** (`approvalRiskActive`): o Kody aprova só os PRs que avalia como de baixo risco.
+  Veja [Avaliação de risco](#avaliação-de-risco).
+- **Additional team guidance** (`approvalRiskInstructions`): aparece quando **Assess PR risk** está
+  ativado. Até 4.000 caracteres de contexto para a avaliação, ex.: *Exija uma pessoa para aprovar
+  mudanças no retry de pagamentos*.
+
+### Avaliação de risco
+
+O Kody faz a avaliação com o seu modelo de code review (o seu modelo BYOK, se você configurou um).
+Ele lê o diff inteiro do PR (até 50.000 caracteres), o título e a descrição, a orientação do seu
+time e o histórico de cada arquivo e diretório alterado: quantos PRs mergeados mexeram nele e
+quantos desses corrigiram um bug.
+
+Um PR mergeado conta como correção de bug quando fecha uma issue com o label `bug`, `defect` ou
+`regression`, ou quando o título diz fix, bug, regression ou hotfix. O Kody coleta esse histórico
+em segundo plano a cada 2 horas, só no **GitHub e GitLab**. A primeira varredura cobre os últimos
+30 dias, e o histórico cresce a partir daí até um ano. Veja em **Cockpit → Code hotspots**.
+
+Só risco **baixo** aprova; **médio** e **alto** seguram o PR para uma pessoa. O Kody também segura
+quando:
+
+- o PR muda o fluxo de controle (`if`, `return`, `throw`) em arquivos de código e não adiciona
+  nenhum teste;
+- a avaliação não pôde rodar, por exemplo porque a chamada ao modelo falhou.
+
+Um arquivo sem histórico não é tratado como seguro. No Bitbucket, Azure Repos e Forgejo, e antes da
+primeira varredura, o Kody avalia sem histórico.
+
+<Note>
+  Ativar **Assess PR risk** não desfaz aprovações: um PR que o Kody já aprovou mantém a aprovação
+  para aquele commit, e o Kody avalia o próximo. Um PR que o Kody revisou antes mas não aprovou
+  espera o próximo commit.
+</Note>
+
+### O que o Kody posta no PR
+
+Com condições definidas, o comentário de fim de revisão termina com **Automatic approval eligible**
+ou **Automatic approval held** e o motivo. O Kody também mantém um comentário separado, **Automatic
+approval completed** ou **Automatic approval held**, e o edita nas revisões seguintes em vez de
+postar um novo. Um PR fora dos seus filtros de label ou autor não recebe o comentário separado, a
+menos que o Kody já o tenha aprovado ou comentado nele antes.
+
+Quando uma revisão seguinte segura um PR que o Kody tinha aprovado (um commit novo recebe sugestões
+ou mexe num path sensível, ou o PR perdeu o label de aprovação), o Kody retira a própria aprovação.
+Aprovações de pessoas continuam.
+
+Se o Kody não conseguir confirmar que o comentário foi publicado, o PR mostra **Approval note
+unverified** em **Reviews → Pull requests**, com o motivo que o Kody tentou postar. Confira os
+comentários do PR e as permissões da integração do repositório.
+
+<Note>
+  Se a sua organização perder o acesso ao beta ou sair dos planos Teams e Enterprise, as condições
+  salvas continuam segurando a aprovação; o Kody não volta a aprovar todo PR limpo. **Code review →
+  General** então mostra **Saved conditions are holding automatic approval** e um botão **Clear
+  saved conditions**.
+</Note>
+
+### Plataformas
+
+| Provedor | Labels | Histórico de código | Observações |
+| --- | --- | --- | --- |
+| GitHub | Sim | Sim | |
+| GitLab | Sim | Sim | |
+| Forgejo | Sim | Não | Para retirar uma aprovação, o usuário do token precisa ser admin do repositório. Veja [Token de Acesso do Forgejo](/pt-BR/how_to_use/code_review/general_config/forgejo_pat). |
+| Bitbucket | Ignorados | Não | As outras condições continuam valendo. |
+| Azure Repos | Não | Não | Enquanto houver labels configurados, todo PR fica esperando uma pessoa. |
+
+## kodus-config.yml
+
+O Kody lê essas chaves só quando **kodus Config File Overrides Web Preferences** está ativado. Veja
+[Prioridade de Configuração](/pt-BR/how_to_use/code_review/configs/general#prioridade-de-configuração).
+
+```yaml
+pullRequestApprovalActive: true
+approvalLabels: ['docs', 'chore'] # qualquer um destes; vazio = todo PR
+approvalAuthors: [] # logins do provedor; vazio = qualquer autor
+approvalSensitivePaths:
+    - 'src/auth/**'
+    - '**/migrations/**'
+approvalRiskActive: true
+approvalRiskInstructions: 'Exija uma pessoa para aprovar mudanças no retry de pagamentos.'
+```

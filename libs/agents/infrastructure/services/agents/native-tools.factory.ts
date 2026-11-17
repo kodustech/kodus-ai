@@ -32,6 +32,9 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
     }
 
     const remote = sandbox.remoteCommands;
+    // Azure Repos paths start with `/`; the sandbox rejects absolute paths.
+    const repoPath = (path: string | undefined) =>
+        (path ?? '.').replace(/^\/+/, '') || '.';
 
     const grepTool: ToolConfig = {
         name: 'grep',
@@ -60,7 +63,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
                 path?: string;
                 glob?: string;
             };
-            const result = await remote.grep(pattern, path ?? '.', glob);
+            const result = await remote.grep(pattern, repoPath(path), glob);
             return { matches: result };
         },
     };
@@ -88,7 +91,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
                 start: number;
                 end: number;
             };
-            const content = await remote.read(path, start, end);
+            const content = await remote.read(repoPath(path), start, end);
             return { content };
         },
     };
@@ -112,7 +115,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
                 path: string;
                 maxDepth?: number;
             };
-            const listing = await remote.listDir(path, maxDepth ?? 2);
+            const listing = await remote.listDir(repoPath(path), maxDepth ?? 2);
             return { listing };
         },
     };

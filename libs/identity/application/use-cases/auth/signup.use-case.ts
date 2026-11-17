@@ -22,6 +22,7 @@ import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
+import { sanitizeFirstTouch } from '@libs/organization/domain/organization/first-touch';
 import { ITeam } from '@libs/organization/domain/team/interfaces/team.interface';
 import {
     ITeamMemberService,
@@ -35,6 +36,11 @@ import { SignUpDTO } from '@libs/identity/dtos/create-user-organization.dto';
 
 export interface SignUpOptions {
     preVerified?: boolean;
+    /**
+     * Existing organization the account joins. Only for callers that already
+     * proved membership (SSO); the public signup body cannot carry it.
+     */
+    organizationId?: string;
 }
 
 @Injectable()
@@ -59,13 +65,8 @@ export class SignUpUseCase implements IUseCase {
         payload: SignUpDTO,
         options?: SignUpOptions,
     ): Promise<Partial<IUser>> {
-        const { email, password, name, organizationId } = payload;
-
-        this.logger.error({
-            message: 'TEST LOG: Starting signup process',
-            context: SignUpUseCase.name,
-            metadata: { email, organizationId, name },
-        });
+        const { email, password, name, firstTouch } = payload;
+        const organizationId = options?.organizationId;
 
         try {
             const userExists = await this.checkIfUserAlreadyExists(email);
@@ -104,9 +105,14 @@ export class SignUpUseCase implements IUseCase {
 
                 user.role = Role.OWNER;
                 user.status = STATUS.ACTIVE;
+                // First touch is recorded only here, in the insert that creates
+                // the organization: joining an existing one never changes it.
                 user.organization =
                     await this.organizationService.createOrganizationWithTenant(
-                        user.organization,
+                        {
+                            ...user.organization,
+                            firstTouch: sanitizeFirstTouch(firstTouch),
+                        },
                     );
             }
 

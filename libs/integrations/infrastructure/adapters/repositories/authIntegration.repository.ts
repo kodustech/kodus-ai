@@ -96,6 +96,7 @@ export class AuthIntegrationRepository implements IAuthIntegrationRepository {
                 organization,
                 team,
                 integration,
+                authDetails,
                 ...otherFilterAttributes
             } = filter || {};
 
@@ -111,24 +112,43 @@ export class AuthIntegrationRepository implements IAuthIntegrationRepository {
                 integration,
             );
 
+            // Same matching as findOne: authDetails by JSON containment, and
+            // the organization loaded so callers can tell links apart.
             const findOptions: FindManyOptions<AuthIntegrationModel> = {
                 where: {
                     ...otherFilterAttributes,
                     ...organizationCondition,
                     ...teamCondition,
                     ...integrationCondition,
+                    ...(authDetails && Object.keys(authDetails).length > 0
+                        ? {
+                              authDetails: Raw(
+                                  (alias) => `${alias} @> :authDetails`,
+                                  { authDetails: JSON.stringify(authDetails) },
+                              ),
+                          }
+                        : {}),
                 },
+                relations: ['organization'],
             };
 
             const authIntegrations =
                 await this.authIntegrationRepository.find(findOptions);
 
-            return mapSimpleModelToEntity(
-                authIntegrations,
-                AuthIntegrationEntity,
+            // One entity per row. mapSimpleModelToEntity maps a single model:
+            // handed the array, it read the indexes and returned one empty
+            // entity, so no caller ever saw a row's organization.
+            return authIntegrations.map((model) =>
+                mapSimpleModelToEntity<
+                    AuthIntegrationModel,
+                    AuthIntegrationEntity
+                >(model, AuthIntegrationEntity),
             );
         } catch (error) {
-            console.log(error);
+            // Rethrown, as findOne does: "no rows" must never stand in for
+            // "could not read" (the GitHub App link check relies on it).
+            console.error('Error while fetching AuthIntegrations:', error);
+            throw error;
         }
     }
 

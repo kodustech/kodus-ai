@@ -29,7 +29,7 @@ import {
     listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
 import {
     buildPathMismatchWarning,
     buildVerifyUnavailableWarning,
@@ -56,14 +56,18 @@ import {
     type AgentModelParams,
     type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import { sandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
 import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 
 /** Tools an agent adds to its run, and how to release them afterwards. */
@@ -150,6 +154,12 @@ export abstract class BaseCodeReviewAgentProvider {
         return false;
     }
 
+    /** Whether heavy mode runs the M3 lenses next to this agent. Only the
+     *  generalist: its findings are the ones the lenses complement. */
+    protected runsHeavyLenses(): boolean {
+        return false;
+    }
+
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
     ): ReviewFindingLabel[] {
@@ -174,12 +184,32 @@ export abstract class BaseCodeReviewAgentProvider {
     /**
      * The run's model and, when the agent checks its findings on a model of
      * its own, the check slot (#2172). The built-in agents route `codeReview`
-     * and verify on the same model.
+     * — `codeReviewHeavy` for the agent that runs the lenses in a heavy
+     * review — and verify on the same model.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
-        return resolveReviewAgentModel(input, this.permissionValidationService);
+        return resolveReviewAgentModel(
+            input,
+            this.permissionValidationService,
+            this.runsHeavyLenses() && input.heavy
+                ? LLM_TASK.codeReviewHeavy
+                : LLM_TASK.codeReview,
+        );
+    }
+
+    /**
+     * Run settings that depend on the resolved model, applied once it is
+     * known. Unchanged for every agent but the generalist. Must be idempotent:
+     * a chunked review runs execute again on each batch.
+     */
+    protected applyModelSettings(
+        input: ReviewAgentInput,
+        _modelName: string,
+        _byokConfig?: NormalizedModel,
+    ): ReviewAgentInput {
+        return input;
     }
 
     /**
@@ -315,13 +345,34 @@ export abstract class BaseCodeReviewAgentProvider {
             context: identity.name,
         });
 
+        input = this.applyModelSettings(input, modelName, byokConfig);
+
         // Check if the estimated prompt exceeds the context window budget
         // and needs chunking. The measurement accounts for diff + callGraph
         // + PR context + coverage list + static overhead (system prompt +
         // tool schemas) — not just the diff.
-        const contextWindow = resolveContextWindow({
-            byokMaxInputTokens: mainModel.maxInputTokens,
-            modelName,
+        // Looked up by the bare model id: the `provider:model` label misses the
+        // mirror's exact and normalized keys.
+        const windowModelId = mainModel.modelId ?? modelName;
+        const { tokens: contextWindow, source: contextWindowSource } =
+            resolveContextWindowWithSource({
+                byokMaxInputTokens: mainModel.maxInputTokens,
+                modelName: windowModelId,
+            });
+        // The window is otherwise invisible: a model the mirror does not know
+        // gets the 128k default with no error, and the review plans against it.
+        this.agentLogger.log({
+            message: `[AGENT] ${identity.name} context window: ${contextWindow} tokens for ${modelName}`,
+            context: identity.name,
+            metadata: {
+                organizationId: input.organizationAndTeamData?.organizationId,
+                teamId: input.organizationAndTeamData?.teamId,
+                prNumber: input.prNumber,
+                modelName,
+                modelId: windowModelId,
+                contextWindowTokens: contextWindow,
+                contextWindowSource,
+            },
         });
         // Resolve adaptive-fit profile from the same context window the
         // preflight will check against. Prefer the stage-supplied profile
@@ -430,6 +481,12 @@ export abstract class BaseCodeReviewAgentProvider {
                 (estimatedPromptTokens > promptBudget &&
                     input.reviewMode !== 'deep'));
 
+        // Tiers only where main has them: a PR over the prompt budget or a
+        // small-window model. With tiers, CompletionGatePolicy holds the
+        // result until every critical hunk is read, which on a PR that fits
+        // can run a finder that answers from the diff to its step cap.
+        const shouldTierFiles = shouldFireFilter;
+
         if (shouldFireFilter) {
             const filesBefore = input.changedFiles.length;
             const filteredFiles = applyLargePrAggressiveFilter(
@@ -470,7 +527,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     });
                 }
             }
+        }
 
+        if (shouldTierFiles) {
             const scores = computeFileScores(
                 input.changedFiles,
                 input.callGraphJson,
@@ -651,6 +710,10 @@ export abstract class BaseCodeReviewAgentProvider {
                 verifyByokConfig: checkByokConfig,
                 gitHubToken: input.gitHubToken,
                 linkedRepoAccess: input.linkedRepoAccess,
+                referenceRepositories: knowledgeRepositories(
+                    input.knowledge,
+                    input.knowledgeReader,
+                ),
                 documentationSearchService: this.documentationSearchService,
                 documentationSearchOptions: {
                     organizationAndTeamData: input.organizationAndTeamData,
@@ -727,11 +790,33 @@ export abstract class BaseCodeReviewAgentProvider {
                     ),
                     allowedLabels: this.getAllowedSuggestionLabels(input),
                     conventionGuides: this.getConventionGuides(input),
+                    // The target branch: the knowledge reader, else the
+                    // sandbox's fetched base ref through sandbox.run (a code
+                    // file a convention cites, with no skill or doc linked).
+                    conventionGuideReader:
+                        input.knowledgeReader ??
+                        sandboxBaseBranchReader(
+                            input.customAgentTooling?.sandbox,
+                            input.baseBranch,
+                        ),
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
+                    // Heavy mode (`--heavy`) — forwarded explicitly: loopParams is
+                    // built field-by-field, so without this line the lenses never run.
+                    heavy: this.runsHeavyLenses() && input.heavy,
+                    // A chunked review runs the lenses per batch: tell them so.
+                    ...(this.runsHeavyLenses() &&
+                        input.heavy &&
+                        input.batchIndex &&
+                        (input.batchTotal ?? 0) > 1 && {
+                            lensBatch: {
+                                index: input.batchIndex,
+                                total: input.batchTotal,
+                            },
+                        }),
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
@@ -1042,7 +1127,12 @@ export abstract class BaseCodeReviewAgentProvider {
             changedFiles: input.changedFiles,
             kodyRules: input.kodyRules,
             prNumber: input.prNumber,
+            organizationId: input.organizationAndTeamData?.organizationId,
+            teamId: input.organizationAndTeamData?.teamId,
             isKodyRules: this.getCategoryLabel() === 'kody_rules',
+            leanOutput:
+                this.getCategoryLabel() !== 'kody_rules' &&
+                this.getConventionGuides(input) === undefined,
             identityName: this.getIdentity().name,
             labelPolicy: {
                 categoryLabel: this.getCategoryLabel(),
@@ -1074,4 +1164,26 @@ export abstract class BaseCodeReviewAgentProvider {
     protected buildUserPrompt(input: ReviewAgentInput): string {
         return buildUserPromptFor(input, this.promptMeta(input));
     }
+}
+
+/** The other repositories an agent's skills and docs come from
+ *  (`owner/repo:path` → `owner/repo`), which readReference may read. */
+export function knowledgeRepositories(
+    knowledge: ResolvedKnowledge | undefined,
+    reader: BaseBranchReader | undefined,
+): string[] {
+    const paths = [
+        ...(knowledge?.skills ?? []).map((skill) => skill.path),
+        ...(knowledge?.docs ?? []).map((doc) => doc.path),
+    ];
+    return [
+        ...new Set(
+            paths
+                // Only what the reader routes to a linked repository: a path
+                // of the reviewed repository can hold a colon too.
+                .filter((path) => reader?.isOtherRepository?.(path))
+                .map((path) => parseKnowledgeSourcePath(path)?.repository)
+                .filter((repository): repository is string => !!repository),
+        ),
+    ];
 }

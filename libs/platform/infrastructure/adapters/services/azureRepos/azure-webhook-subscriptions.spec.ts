@@ -16,9 +16,8 @@ import { AzureReposService } from './azureRepos.service';
  * delaying every request the service account made — code reviews included —
  * by about 20 seconds.
  *
- * These exercise the real `AzureReposService`, deliberately: the pre-existing
- * `test/unit/platform/services/azure-delete-webhook.spec.ts` reimplements
- * `deleteWebhook` inside the spec file, so it passes no matter what the
+ * These exercise the real `AzureReposService`, deliberately: a spec that
+ * reimplements `deleteWebhook` inside the spec file passes no matter what the
  * service does and catches no regression in it.
  *
  * What must keep holding, and why each one is here:
@@ -434,6 +433,86 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
             );
             // One listing for the pass, one for its rerun.
             expect(helper.listSubscriptions).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    describe('a save that lands while the sync is setting up hooks', () => {
+        it('still runs its full pass once the targeted setup frees the slot', async () => {
+            withSelection([REPO_A, REPO_B]);
+
+            let releaseListing: (subs: AzureRepoSubscription[]) => void;
+            helper.listSubscriptions.mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        releaseListing = resolve;
+                    }),
+            );
+
+            const targeted = service.ensureRepositoryWebhooks({
+                organizationAndTeamData: orgTeam,
+                repositories: [REPO_A as any],
+            });
+            await waitFor(() => helper.listSubscriptions.mock.calls.length === 1);
+
+            // Coalesces into the slot the targeted setup holds.
+            await service.createWebhook(orgTeam);
+
+            helper.listSubscriptions.mockResolvedValue([]);
+            releaseListing!([]);
+            await targeted;
+
+            // The full pass covers the whole selection: REPO_B gets its hooks.
+            await waitFor(() =>
+                helper.createSubscriptionForProject.mock.calls.some(
+                    ([args]) =>
+                        args?.subscriptionPayload?.publisherInputs
+                            ?.repository === REPO_B.id,
+                ),
+            );
+        });
+    });
+
+    describe('a targeted setup that cannot get the slot in time', () => {
+        it('does not run beside the full pass and leaves its claim alone, deferring its repositories to the next sync', async () => {
+            withSelection([REPO_A]);
+            const previousWait = AzureReposService.WEBHOOK_PASS_WAIT_MS;
+            AzureReposService.WEBHOOK_PASS_WAIT_MS = 20;
+
+            let releaseListing: (subs: AzureRepoSubscription[]) => void;
+            helper.listSubscriptions.mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        releaseListing = resolve;
+                    }),
+            );
+
+            try {
+                const fullPass = service.createWebhook(orgTeam);
+                await waitFor(
+                    () => helper.listSubscriptions.mock.calls.length === 1,
+                );
+
+                const result = await service.ensureRepositoryWebhooks({
+                    organizationAndTeamData: orgTeam,
+                    repositories: [REPO_B as any],
+                });
+
+                expect(result.configured).toEqual([]);
+                expect(result.failed).toEqual({});
+                expect(result.notAttempted).toEqual([REPO_B.id]);
+                expect(result.deferred?.reason).toBeTruthy();
+                expect(helper.listSubscriptions).toHaveBeenCalledTimes(1);
+
+                // The full pass still owns the slot: a new save coalesces.
+                await service.createWebhook(orgTeam);
+                expect(helper.listSubscriptions).toHaveBeenCalledTimes(1);
+
+                helper.listSubscriptions.mockResolvedValue([]);
+                releaseListing!([]);
+                await fullPass;
+            } finally {
+                AzureReposService.WEBHOOK_PASS_WAIT_MS = previousWait;
+            }
         });
     });
 

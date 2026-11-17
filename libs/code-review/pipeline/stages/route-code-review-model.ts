@@ -1,8 +1,10 @@
 import { isByokConfig, LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { overrideContext } from '@libs/llm/routing-strategy';
 
 /**
- * The model the codeReview task runs on for an org's stored BYOK config, as
+ * The model a review runs on for an org's stored BYOK config — the
+ * `codeReviewHeavy` task for a heavy review, `codeReview` otherwise — as
  * ValidateConfigStage writes it into the review config: the routed slot (the
  * id or NAME override applied), or nothing — the env/managed default —
  * when there is no config or the routing is blocked. ValidateConfigStage and
@@ -11,25 +13,29 @@ import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 export function routeCodeReviewModel(
     storedConfig: unknown,
     codeReviewConfig: { byokModelId?: string; byokModel?: string },
+    heavy = false,
 ): {
     resolvedModelSlot: NormalizedModel | undefined;
     /** A config is stored but routes the codeReview task nowhere. */
     blocked: boolean;
     reason?: string;
 } {
-    // Override precedence: byokModelId (id) wins over the byokModel NAME.
-    const overrideRef =
-        codeReviewConfig.byokModelId?.trim() ||
-        codeReviewConfig.byokModel?.trim();
-
     // Resolve the codeReview task's slot + verdict through the single
     // resolution primitive. A null/absent config yields a null slot → the
     // env/managed default downstream.
     const { slot: routedMain, verdict } = isByokConfig(storedConfig)
-        ? resolveTaskSlot(storedConfig, LLM_TASK.codeReview, {
-              // The strategy handles the id-THEN-name match (REQ-COMPAT-01).
-              ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
-          })
+        ? resolveTaskSlot(
+              storedConfig,
+              heavy ? LLM_TASK.codeReviewHeavy : LLM_TASK.codeReview,
+              {
+              // byokModelId (id) wins over the byokModel NAME; the strategy
+              // handles the id-THEN-name match (REQ-COMPAT-01).
+                  ctx: overrideContext(
+                      codeReviewConfig.byokModelId,
+                      codeReviewConfig.byokModel,
+                  ),
+              },
+          )
         : { slot: null, verdict: null };
 
     return {
