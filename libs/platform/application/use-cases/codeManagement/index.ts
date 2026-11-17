@@ -10,6 +10,7 @@ import { DeleteIntegrationUseCase } from './delete-integration.use-case';
 import { FinishOnboardingUseCase } from './finish-onboarding.use-case';
 import { GetCodeManagementMemberListUseCase } from './get-code-management-members-list.use-case';
 import { GetCurrentCodeManagementUserUseCase } from './get-current-code-management-user.use-case';
+import { GetMemberLabelsUseCase } from './get-member-labels.use-case';
 import { GetPRsByRepoUseCase } from './get-prs-repo.use-case';
 import { GetPRsUseCase } from './get-prs.use-case';
 import { GetRepositoriesUseCase } from './get-repositories';
@@ -32,6 +33,7 @@ import { SyncAllRepositoriesUseCase } from './sync-all-repositories.use-case';
 export default [
     CarryReviewCheckToMergeQueueUseCase,
     GetCodeManagementMemberListUseCase,
+    GetMemberLabelsUseCase,
     CreateIntegrationUseCase,
     CreateRepositoriesUseCase,
     BackfillAstGraphBuildUseCase,

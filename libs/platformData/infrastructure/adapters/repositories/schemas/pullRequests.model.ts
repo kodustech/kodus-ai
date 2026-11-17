@@ -313,6 +313,11 @@ PullRequestsSchema.index(
 // on organizationId (equality) then the open-state fields keeps it index-bound.
 // Create with `{ background: true }` on large prod collections.
 PullRequestsSchema.index(
+    { 'organizationId': 1, 'user.id': 1, 'createdAt': -1 },
+    { name: 'idx_org_user_id_createdAt_for_seat_labels' },
+);
+
+PullRequestsSchema.index(
     { organizationId: 1, status: 1, merged: 1, openedAt: 1 },
     { name: OPEN_PULL_REQUESTS_INDEX },
 );
