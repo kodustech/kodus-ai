@@ -14,12 +14,17 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+
 describe('OrganizationMemberListService', () => {
     let service: OrganizationMemberListService;
     let mockCodeManagementService: {
         getListMembers: jest.Mock;
         getPullRequestAuthors: jest.Mock;
+        canFindRecentPullRequestAuthors: jest.Mock;
+        findRecentPullRequestAuthors: jest.Mock;
     };
+    let mockLicenseService: { getAllUsersWithLicense: jest.Mock };
     let mockCacheService: {
         getFromCache: jest.Mock;
         addToCache: jest.Mock;
@@ -35,6 +40,11 @@ describe('OrganizationMemberListService', () => {
         mockCodeManagementService = {
             getListMembers: jest.fn(),
             getPullRequestAuthors: jest.fn().mockResolvedValue([]),
+            canFindRecentPullRequestAuthors: jest.fn().mockResolvedValue(false),
+            findRecentPullRequestAuthors: jest.fn().mockResolvedValue([]),
+        };
+        mockLicenseService = {
+            getAllUsersWithLicense: jest.fn().mockResolvedValue([]),
         };
 
         mockCacheService = {
@@ -53,6 +63,10 @@ describe('OrganizationMemberListService', () => {
                 {
                     provide: CacheService,
                     useValue: mockCacheService,
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: mockLicenseService,
                 },
             ],
         }).compile();
@@ -482,6 +496,88 @@ describe('OrganizationMemberListService', () => {
             expect(
                 mockCodeManagementService.getPullRequestAuthors,
             ).toHaveBeenCalled();
+        });
+    });
+    describe('unlisted seat holders', () => {
+        beforeEach(() => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.canFindRecentPullRequestAuthors.mockResolvedValue(
+                true,
+            );
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: '1' },
+                { git_id: '8' },
+                { git_id: '9' },
+            ]);
+        });
+
+        it('lists a seat holder the provider confirms as a recent author', async () => {
+            mockCodeManagementService.findRecentPullRequestAuthors.mockResolvedValue(
+                [{ id: '8', name: 'Dana', type: 'user' }],
+            );
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.findRecentPullRequestAuthors,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData,
+                authorIds: ['8', '9'],
+            });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: [
+                    { id: 1, name: 'Alice', type: 'user' },
+                    { id: '8', name: 'Dana', type: 'user' },
+                ],
+            });
+        });
+
+        it('reads the list as incomplete when the check fails', async () => {
+            mockCodeManagementService.findRecentPullRequestAuthors.mockRejectedValue(
+                new Error('HTTP 429'),
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+            await expect(
+                service.fetch(organizationAndTeamData, {
+                    requireAuthors: true,
+                }),
+            ).resolves.toEqual({ status: 'unavailable', members: [] });
+        });
+
+        it('reads the list as incomplete when the seats cannot be read', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockRejectedValue(
+                new Error('timeout'),
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+        });
+
+        it('reads no seats for a provider that cannot check', async () => {
+            mockCodeManagementService.canFindRecentPullRequestAuthors.mockResolvedValue(
+                false,
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: true }),
+            );
+            expect(
+                mockLicenseService.getAllUsersWithLicense,
+            ).not.toHaveBeenCalled();
         });
     });
 });

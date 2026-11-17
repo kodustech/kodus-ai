@@ -36,6 +36,7 @@ describe('GitLab seat prune, adapter to revocation', () => {
     let gitlabAPI: {
         Projects: { allUsers: jest.Mock };
         Users: { show: jest.Mock };
+        MergeRequests: { all: jest.Mock };
     };
     let cache: Map<string, unknown>;
     let licenseService: {
@@ -65,8 +66,16 @@ describe('GitLab seat prune, adapter to revocation', () => {
                     return { bot: false };
                 }),
             },
+            MergeRequests: { all: jest.fn().mockResolvedValue([]) },
         };
         rateLimitRepository(null);
+
+        gitlabAPI.MergeRequests.all.mockImplementation(
+            async ({ authorId }: { authorId: number }) =>
+                authorId === 88
+                    ? [{ project_id: 10, author: { name: 'Dana' } }]
+                    : [],
+        );
 
         const pullRequestsService = {
             findPullRequestAuthorsOpenedSince: jest.fn().mockResolvedValue([
@@ -107,6 +116,9 @@ describe('GitLab seat prune, adapter to revocation', () => {
             getPullRequestAuthors: (params) =>
                 gitlab.getPullRequestAuthors(params),
             getTypeIntegration: jest.fn().mockResolvedValue('gitlab'),
+            canFindRecentPullRequestAuthors: jest.fn().mockResolvedValue(true),
+            findRecentPullRequestAuthors: (params) =>
+                gitlab.findRecentPullRequestAuthors(params),
         };
 
         cache = new Map();
@@ -128,6 +140,7 @@ describe('GitLab seat prune, adapter to revocation', () => {
                     { git_id: '3' },
                     { git_id: '66' },
                     { git_id: '77' },
+                    { git_id: '88' },
                 ]),
             unassignLicenses: jest.fn(async (_org, gitIds: string[]) => ({
                 revoked: [...gitIds],
@@ -138,6 +151,7 @@ describe('GitLab seat prune, adapter to revocation', () => {
         const memberList = new OrganizationMemberListService(
             codeManagementService as any,
             cacheService as any,
+            licenseService as any,
         );
         page = new GetCodeManagementMemberListUseCase(
             memberList,
@@ -194,5 +208,29 @@ describe('GitLab seat prune, adapter to revocation', () => {
         );
         expect(memberCacheKeys()).toHaveLength(1);
         expect(pruned.revoked).toEqual(['77']);
+    });
+
+    it('keeps D, confirmed with GitLab, although no stored PR names them', async () => {
+        const listed = await page.execute('team-1');
+
+        expect(listed).toEqual(
+            expect.objectContaining({
+                complete: true,
+                members: expect.arrayContaining([
+                    { id: '88', name: 'Dana', type: 'user' },
+                ]),
+            }),
+        );
+    });
+
+    it('revokes nothing while the GitLab check on unlisted seat holders is rate limited', async () => {
+        gitlabAPI.MergeRequests.all.mockRejectedValue(httpError(429));
+
+        const listed = await page.execute('team-1');
+        const pruned = await prune.execute({ organizationAndTeamData });
+
+        expect(listed).toEqual(expect.objectContaining({ complete: false }));
+        expect(pruned.status).toBe('members_unavailable');
+        expect(licenseService.unassignLicenses).not.toHaveBeenCalled();
     });
 });

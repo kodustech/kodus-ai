@@ -1,8 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { CacheService } from '@libs/core/cache/cache.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
 export type OrganizationMemberSummary = {
@@ -53,6 +57,8 @@ export class OrganizationMemberListService {
     constructor(
         private readonly codeManagementService: CodeManagementService,
         private readonly cacheService: CacheService,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
     ) {}
 
     /**
@@ -138,13 +144,86 @@ export class OrganizationMemberListService {
             return unavailable();
         }
 
+        if (
+            memberResult.status !== 'fulfilled' ||
+            authorResult.status !== 'fulfilled'
+        ) {
+            return { status: 'ok', complete: false, members: normalized };
+        }
+
+        const confirmed = await this.confirmUnlistedSeatHolders(
+            organizationAndTeamData,
+            normalized,
+        );
+
+        if (confirmed === null) {
+            return options.requireAuthors
+                ? unavailable()
+                : { status: 'ok', complete: false, members: normalized };
+        }
+
         return {
             status: 'ok',
-            complete:
-                memberResult.status === 'fulfilled' &&
-                authorResult.status === 'fulfilled',
-            members: normalized,
+            complete: true,
+            members: this.normalize([...normalized, ...confirmed]),
         };
+    }
+
+    /**
+     * Stored PR authors can miss somebody (the backfill keeps only the most
+     * recent PRs of each repository), so a seat holder missing from the list
+     * is checked with the provider before the list calls them gone. Answers
+     * the seat holders found to be recent authors, or `null` when the check
+     * could not be made.
+     */
+    private async confirmUnlistedSeatHolders(
+        organizationAndTeamData: OrganizationAndTeamData,
+        members: OrganizationMemberSummary[],
+    ): Promise<RawMember[] | null> {
+        const listedIds = new Set(members.map((member) => String(member.id)));
+
+        try {
+            if (
+                !(await this.codeManagementService.canFindRecentPullRequestAuthors(
+                    organizationAndTeamData,
+                ))
+            ) {
+                return [];
+            }
+
+            const seats = await this.licenseService.getAllUsersWithLicense(
+                organizationAndTeamData,
+            );
+
+            const unlistedIds = (seats ?? [])
+                .map((seat) => String(seat.git_id))
+                .filter((gitId) => gitId && !listedIds.has(gitId));
+
+            if (unlistedIds.length === 0) {
+                return [];
+            }
+
+            const found =
+                await this.codeManagementService.findRecentPullRequestAuthors({
+                    organizationAndTeamData,
+                    authorIds: unlistedIds,
+                });
+
+            return found ?? [];
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not confirm unlisted seat holders with the code integration; treating the member list as incomplete',
+                context: OrganizationMemberListService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                },
+                error,
+            });
+
+            return null;
+        }
     }
 
     /**
