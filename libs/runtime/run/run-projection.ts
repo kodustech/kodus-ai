@@ -7,7 +7,7 @@ import type { RunBootFailure } from './boot-failure';
 import type { ClaimReadyTiming } from './environment-setup';
 
 import type { RunReproduction } from './reproduction';
-import type { Uncovered } from './run-report';
+import type { ReportExercised, Uncovered } from './run-report';
 import type {
     CheckConclusion,
     ProbeVerdict,
@@ -96,6 +96,8 @@ export interface RuntimeRunProjection {
      * the Run page name them.
      */
     noRuntimeEffect?: { file: string; why: string }[];
+    /** Which changed lines ran (run-report.ts ReportExercisedSchema); in `report`, absent on older Runs. */
+    exercised?: ReportExercised;
     publishStartedAt?: string;
     published?: string[];
     requestedAt: string;

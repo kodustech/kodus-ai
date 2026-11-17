@@ -39,7 +39,7 @@ The cell's driver for self-hosted Linux hosts (`-driver docker-gvisor`, the defa
 
 ## Module map
 
-Files (37, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `data.go`, `decoy.go`, `diagnose.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, `size.go`, `sweep.go`, `up.go`, `workspace_exec.go`
+Files (38, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `coverage.go`, `data.go`, `decoy.go`, `diagnose.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, `size.go`, `sweep.go`, `up.go`, `workspace_exec.go`
 
 Imports these Runtime modules:
 

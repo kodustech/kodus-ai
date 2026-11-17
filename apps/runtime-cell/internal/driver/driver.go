@@ -712,6 +712,15 @@ type MachineHealth struct {
 	OOMKills uint64
 }
 
+// CoverageFlusher has a Run's instrumented services write the V8 coverage
+// they have so far (SIGUSR2 to the preload NODE_OPTIONS requires) without
+// stopping them, for claim.exercised (feature exercisedLines): only
+// services, the ones UpRequest.Coverage named. Only this cell's workload
+// machines.
+type CoverageFlusher interface {
+	FlushCoverage(ctx context.Context, ref MachineRef, services []string) error
+}
+
 // ServiceLogReader reads what a claim's services logged in a window, each
 // line with the daemon's timestamp (compose logs --timestamps --since
 // --until): a probe round's service logs (EVIDENCE-CAPTURE-DESIGN). Raw

@@ -154,8 +154,16 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 			return err
 		})
 	}()
-	ack, err := conn.RequestAck(sctx, protocol.Header{ID: a.cfg.NewID()}, a.Hello())
+	trim := a.trimHello.Swap(false)
+	hello := a.hello(trim)
+	ack, err := conn.RequestAck(sctx, protocol.Header{ID: a.cfg.NewID()}, hello)
 	if err != nil {
+		if !trim && len(hello.Features) > olderHubFeatureLimit && refusedBody(err) {
+			// A hub before the 64 limit: the next hello fits its 32, and
+			// the one after that tries the whole list again.
+			a.trimHello.Store(true)
+			a.log.Warn("hub.hello_features_refused", "features", len(hello.Features), "next", olderHubFeatureLimit)
+		}
 		return asVersionRefusal(err)
 	}
 	version, err := chosenVersion(ack)
@@ -261,6 +269,18 @@ func (a *Agent) recordHubProtocol(version int64, accepts *protocol.AckBodyCellPr
 	if err := hubprotocol.Save(a.cfg.HubProtocolState, s); err != nil {
 		a.log.Warn("hub.protocol_state_failed", "err", err, "path", a.cfg.HubProtocolState)
 	}
+}
+
+// refusedBody is a hello the hub's schema may have refused: a nack of its
+// body, or no answer at all, since a hub nacks a frame it cannot decode
+// without `re` (cell-hub.ts onMessage) and the cell drops such a nack. A
+// slow hub read this way costs one trimmed session, never the session.
+func refusedBody(err error) bool {
+	var nack *hubclient.NackError
+	if errors.As(err, &nack) {
+		return nack.Code == string(protocol.CodeInvalidBody)
+	}
+	return errors.Is(err, hubclient.ErrAckTimeout)
 }
 
 // versionRefusedError is a hello the hub refused for the cell's protocol

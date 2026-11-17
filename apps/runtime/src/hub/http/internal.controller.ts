@@ -4,7 +4,7 @@ import { Body, Controller, Get, HttpCode, HttpException, Inject, NotFoundExcepti
 import { z } from 'zod';
 
 import { ProbeSchema } from '@libs/runtime/probe';
-import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, ClaimRunIdentitySchema, claimReposError, EvidenceRequestSchema, MachineSizeSchema, MessageBodySchemas, RepoRefSchema, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema } from '@libs/runtime/protocol';
+import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, ClaimRunIdentitySchema, claimReposError, EvidenceRequestSchema, ExercisedRequestSchema, MachineSizeSchema, MessageBodySchemas, RepoRefSchema, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema } from '@libs/runtime/protocol';
 import { CLAIM_CONSUMERS } from '@libs/runtime/contracts/enums';
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '@libs/runtime/protocol/recipe';
 import { PreviewIdSchema } from '@libs/runtime/contracts/preview';
@@ -262,6 +262,18 @@ export class InternalController {
     async snapshot(@Param('claimId') claimId: string, @Body() body: unknown) {
         const b = parseBody(z.strictObject({ ...Tenant, stepId: z.uuid(), purpose: z.enum(SNAPSHOT_PURPOSES) }), body);
         return this.hub.snapshot(ref(claimId, b), b.stepId, b.purpose).catch(mapped);
+    }
+
+    /**
+     * claim.exercised on the PR claim: `{ exercised }` with the cell's counts, null when the cell
+     * does not name exercisedLines (nothing was sent); an EnvError when the claim or its cell is gone.
+     */
+    @Post('claims/:claimId/exercised')
+    @HttpCode(200)
+    async exercised(@Param('claimId') claimId: string, @Body() body: unknown) {
+        const b = parseBody(z.strictObject({ ...Tenant, stepId: z.uuid(), exercised: ExercisedRequestSchema }), body);
+        const r = await this.hub.exercised(ref(claimId, b), b.stepId, b.exercised).catch(mapped);
+        return r && 'code' in r ? r : { exercised: r ?? null };
     }
 
     /** image.bake for the setup claim's default-branch commit (S-52); 409 when refused. */

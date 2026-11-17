@@ -228,6 +228,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                             ...(evidenceUploads ? { evidenceUploads } : {}),
                             log: { info: (e) => logger.log(e), warn: (e) => logger.warn(e) },
                             ...(config.roundSnapshots ? { roundSnapshots: true } : {}),
+                            exercisedLinesThresholdPercent: config.exercisedLinesThresholdPercent,
                         });
                     },
                 },

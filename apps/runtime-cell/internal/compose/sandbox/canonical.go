@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	pathpkg "path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -143,6 +144,10 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 	if c.o.Decoy != "" && !mountsReadOnly(svc["volumes"], c.o.Decoy, DecoyTarget) {
 		c.add(path+".volumes", "the cell's decoy file is not mounted")
 	}
+	covered := c.o.Coverage.covers(name)
+	if covered && (!mountsWritable(svc["volumes"], c.o.Coverage.Dir, CoverageTarget) || !mountsReadOnly(svc["volumes"], c.o.Coverage.Preload, CoveragePreloadTarget)) {
+		c.add(path+".volumes", "the cell's coverage mounts are not mounted")
+	}
 	if c.o.Trust.Set() {
 		if !mountsReadOnly(svc["volumes"], c.o.Trust.Bundle, machinetrust.BundleTarget) || !mountsReadOnly(svc["volumes"], c.o.Trust.CellCA, machinetrust.CellCATarget) {
 			c.add(path+".volumes", "the cell's trust files are not mounted")
@@ -167,11 +172,18 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 		if t, _ := m["target"].(string); (t == machinetrust.Dir || strings.HasPrefix(t, machinetrust.Dir+"/")) && !c.cellTrustMount(m) {
 			c.add(vp, t+" is the cell's")
 		}
+		cellCoverage := covered && c.cellCoverageMount(m)
+		if t, _ := m["target"].(string); coverageTarget(pathpkg.Clean(t)) && !cellCoverage {
+			c.add(vp, t+" is the cell's")
+		}
 		switch m["type"] {
 		case "bind":
 			src, _ := m["source"].(string)
-			if ro, _ := m["read_only"].(bool); !ro {
+			if ro, _ := m["read_only"].(bool); !ro && (!cellCoverage || m["target"] != CoverageTarget) {
 				c.add(vp, "bind is not read-only")
+			}
+			if cellCoverage {
+				break // the cell's coverage directory and preload
 			}
 			if c.o.Resolv != "" && src == c.o.Resolv && m["target"] == ResolvTarget {
 				break // a bind from outside the checkout: the cell's own file
@@ -376,6 +388,30 @@ func mountsReadOnly(v any, source, target string) bool {
 		}
 	}
 	return false
+}
+
+// mountsWritable: v binds source at target, writable (what compose prints
+// with no read_only).
+func mountsWritable(v any, source, target string) bool {
+	vols, _ := v.([]any)
+	for _, x := range vols {
+		m, _ := x.(map[string]any)
+		if ro, _ := m["read_only"].(bool); !ro && m["type"] == "bind" && m["source"] == source && m["target"] == target {
+			return true
+		}
+	}
+	return false
+}
+
+// cellCoverageMount: m is the cell's coverage directory or preload, bound
+// where Apply put it (the preload read-only).
+func (c *checker) cellCoverageMount(m map[string]any) bool {
+	if m["type"] != "bind" {
+		return false
+	}
+	src, _ := m["source"].(string)
+	ro, _ := m["read_only"].(bool)
+	return src == c.o.Coverage.Dir && m["target"] == CoverageTarget || src == c.o.Coverage.Preload && m["target"] == CoveragePreloadTarget && ro
 }
 
 // cellTrustMount: m is one of the cell's trust files, bound where Apply

@@ -1,6 +1,6 @@
 import { DEV_SECRET_SEAL_KEY_HEX } from '../testing/dev-seal-key';
 import { loadRuntimeConfig, loadSetupConfig, loadWorkerConfig } from './config';
-import { DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
+import { DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT, DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
 import { signUploadGrant } from '@libs/runtime/contracts/evidence';
 import { UploadGrantSchema } from '@libs/runtime/protocol/messages';
 
@@ -119,6 +119,14 @@ describe('runtime config', () => {
         expect(loadWorkerConfig({ ...base, RUNTIME_SETUP_CONCURRENCY: '1', RUNTIME_WORKER_CONCURRENCY: '20' }).workerConcurrency).toBe(20);
         for (const [name, bad] of [['RUNTIME_SETUP_CONCURRENCY', '0'], ['RUNTIME_WORKER_CONCURRENCY', '21'], ['RUNTIME_WORKER_CONCURRENCY', '0']])
             expect(() => loadWorkerConfig({ ...base, [name]: bad })).toThrow(new RegExp(name));
+    });
+    it('keeps a Run green only when half its measured changed lines ran, unless RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT says another share from 0 to 100', () => {
+        const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
+        expect(loadWorkerConfig(base).exercisedLinesThresholdPercent).toBe(DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT);
+        expect(loadWorkerConfig({ ...base, RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT: '0' }).exercisedLinesThresholdPercent).toBe(0);
+        expect(loadWorkerConfig({ ...base, RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT: '100' }).exercisedLinesThresholdPercent).toBe(100);
+        for (const bad of ['-1', '101', '50.5', 'half'])
+            expect(() => loadWorkerConfig({ ...base, RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT: bad })).toThrow(/RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT/);
     });
     it("runs 2 setups of one organization at once unless set, between 1 and 8", () => {
         const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };

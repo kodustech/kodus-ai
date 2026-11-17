@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 
 import type { PastPlans } from '../run/plan-reuse';
@@ -74,6 +75,8 @@ export interface RunDependenciesOptions {
     log?: RunLog;
     /** RunDeps.roundSnapshots (RUNTIME_ROUND_SNAPSHOTS). */
     roundSnapshots?: boolean;
+    /** RunDeps.exercisedLinesThresholdPercent (RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT). */
+    exercisedLinesThresholdPercent?: number;
 }
 
 /** What an environment client is built for: one Run, or one setup (no Run). */
@@ -152,6 +155,17 @@ export const healthOfSetup =
 /** The canary key, derived from the sealing key (one secret to manage, separate purposes). */
 export { canaryKeyFrom } from '@libs/runtime/canary';
 
+/**
+ * The worker's port to claim.exercised: the cell's counts, or undefined when the cell does not name
+ * exercisedLines or the ask failed (the Run reads it as not measured, never as a blocker).
+ */
+function exercisedPort(env: EnvironmentRuntime): NonNullable<RunDeps['requestExercised']> {
+    return async (claim, request) => {
+        const r = await env.exercisedLines!(claim.claimId, randomUUID(), request);
+        return r && !('code' in r) ? r : undefined;
+    };
+}
+
 export class RunDependenciesFactory implements RunDepsFactory {
     private readonly canaries: CanaryVault;
 
@@ -173,11 +187,13 @@ export class RunDependenciesFactory implements RunDepsFactory {
             claims: this.deps.claims,
             metrics: this.deps.metrics,
             now: () => new Date(),
+            ...(env.exercisedLines ? { requestExercised: exercisedPort(env) } : {}),
             ...(this.deps.evidence ? { evidence: this.deps.evidence } : {}),
             ...(this.deps.evidenceUploads ? { evidenceUploads: this.deps.evidenceUploads } : {}),
             ...(this.deps.onReleaseFailed ? { onReleaseFailed: this.deps.onReleaseFailed } : {}),
             ...(this.deps.log ? { log: this.deps.log } : {}),
             ...(this.deps.roundSnapshots ? { roundSnapshots: true } : {}),
+            ...(this.deps.exercisedLinesThresholdPercent !== undefined ? { exercisedLinesThresholdPercent: this.deps.exercisedLinesThresholdPercent } : {}),
             ...(this.deps.pastPlans ? { pastPlans: this.deps.pastPlans } : {}),
             ...(this.deps.stability ? { stability: this.deps.stability } : {}),
         };

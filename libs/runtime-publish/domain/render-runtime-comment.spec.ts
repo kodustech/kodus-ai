@@ -988,3 +988,26 @@ describe('two probes of one route', () => {
     });
 });
 
+
+describe('changed lines exercised', () => {
+    const green = { state: 'no_regressions' as const, verdictState: 'no_regressions' as const, paths: [report().paths[1]], uncovered: [] };
+    const files = [{ path: 'src/orders.ts', changedLines: 10, exercisedLines: 4, status: 'measured' as const }];
+
+    it('says how many changed lines ran, and a Run partly tested by it says why in the comment and the check', () => {
+        const r = report({ ...green, state: 'partly_tested', verdictState: 'partly_tested', exercised: { summary: { exercised: 4, changed: 10, threshold: 0.5, language: 'node', measured: true }, files } });
+        expect(RuntimeRunReportSchema.safeParse(r).success).toBe(true);
+        const body = renderReportComment(r, {});
+        expect(body).toContain('Changed lines exercised: 4 of 10');
+        expect(body).toContain('- Only 4 of 10 changed lines ran during the probes, under the 50% this Run needs.');
+        expect(renderCheckOutput(r, {}).summary).toContain('4 of 10 changed lines ran');
+    });
+
+    it('says the lines were not measured when the cell gave no answer', () => {
+        const body = renderReportComment(report({ ...green, exercised: { summary: { exercised: 0, changed: 0, threshold: 0.5, measured: false }, files: [] } }), {});
+        expect(body).toContain('Changed lines exercised: not measured');
+    });
+
+    it('has no exercised line on a Run without the field', () => {
+        expect(renderReportComment(report(green), {})).not.toContain('Changed lines exercised');
+    });
+});

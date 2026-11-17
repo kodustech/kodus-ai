@@ -28,7 +28,9 @@ import { TelemetryRuntimeLlmSpendReader } from './infrastructure/telemetry-llm-s
 import { PgRuntimeUsageReportReader } from './infrastructure/pg-runtime-usage-report.reader';
 import { GetRuntimeUsageReportUseCase } from './application/use-cases/usage-report.use-case';
 import { GetRuntimeHealthUseCase } from './application/use-cases/runtime-health.use-case';
+import { GetRuntimeSpeedUseCase } from './application/use-cases/runtime-speed.use-case';
 import { PgRuntimeHealthReader, RUNTIME_HEALTH_READER } from './infrastructure/pg-runtime-health.reader';
+import { PgRuntimeSpeedReader, RUNTIME_SPEED_READER } from './infrastructure/pg-runtime-speed.reader';
 import { ApplyBlockerFixUseCase } from './application/use-cases/apply-blocker-fix.use-case';
 import { ProposeInferredRecipeUseCase } from './application/use-cases/propose-inferred-recipe.use-case';
 import { ListEnvironmentLessonsUseCase, UpdateEnvironmentLessonUseCase } from './application/use-cases/lessons.use-cases';
@@ -225,6 +227,7 @@ const useCases = [
     UpdateRuntimeMachineMinutesUseCase,
     GetRuntimeUsageReportUseCase,
     GetRuntimeHealthUseCase,
+    GetRuntimeSpeedUseCase,
     UpdateRuntimeOrgSettingsUseCase,
     UpdateRuntimeRepositorySettingsUseCase,
     CreateCellRegistrationTokenUseCase,
@@ -444,6 +447,12 @@ const useCases = [
             provide: RUNTIME_HEALTH_READER,
             inject: [RuntimeReadDb],
             useFactory: (db: RuntimeReadDb) => new PgRuntimeHealthReader(db),
+        },
+        // The Health screen's Speed card: Runs of the window with their first probe and machine source, org-scoped and bounded.
+        {
+            provide: RUNTIME_SPEED_READER,
+            inject: [RuntimeReadDb],
+            useFactory: (db: RuntimeReadDb) => new PgRuntimeSpeedReader(db),
         },
         {
             provide: RUNTIME_CLAIM_USAGE_READER,

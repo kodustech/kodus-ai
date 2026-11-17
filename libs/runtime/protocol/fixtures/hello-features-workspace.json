@@ -47,7 +47,8 @@
         "hostHardening",
         "buildStateRebuildCost",
         "runIdentity",
-        "cellProtocols"
+        "cellProtocols",
+        "exercisedLines"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

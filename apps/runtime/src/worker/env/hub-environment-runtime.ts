@@ -8,7 +8,7 @@ import type { AcquireOptions, AcquireRequest, BakeOutcome, BakeRequest, Blocked,
 import { bootTimedOut, environmentHealthOf, isBlocked, isolationUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
 import { typedBlocked } from '@libs/runtime/environment/typed-blocker';
 import type { Probe } from '@libs/runtime/probe';
-import type { ClaimRepo, EvidenceRequest, RepoRef } from '@libs/runtime/protocol';
+import type { ClaimRepo, EvidenceRequest, ExercisedRequest, ExercisedResult, RepoRef } from '@libs/runtime/protocol';
 import { type ClaimWorkspace, type RunStreamEvent, workspaceSideOf } from '@libs/runtime/run';
 import { traceHeaders } from '@libs/runtime/telemetry';
 
@@ -524,6 +524,21 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             return { id: r.id, ms: r.ms };
         } catch (e) {
             if (e instanceof HubRefused) return { code: 'transport_lost', stepId };
+            throw e;
+        }
+    }
+
+    /**
+     * claim.exercised through the claim's replica: undefined when the cell does not name
+     * exercisedLines (the hub sent nothing) or refused the frame.
+     */
+    async exercisedLines(claimId: string, stepId: string, request: ExercisedRequest): Promise<ExercisedResult | undefined | EnvError> {
+        try {
+            const r = await this.onClaim<{ exercised: ExercisedResult | null }>(claimId, '/exercised', { stepId, exercised: request }, TIMEOUT.step(60_000));
+            if ('code' in r) return r;
+            return r.exercised ?? undefined;
+        } catch (e) {
+            if (e instanceof HubRefused) return undefined;
             throw e;
         }
     }

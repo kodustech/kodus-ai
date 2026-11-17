@@ -34,6 +34,7 @@ const (
 	MessageTypeGuestResult    MessageType = "guest.result"
 	MessageTypeMachineReset   MessageType = "machine.reset"
 	MessageTypeClaimSnapshot  MessageType = "claim.snapshot"
+	MessageTypeClaimExercised MessageType = "claim.exercised"
 	MessageTypeStepResult     MessageType = "step.result"
 	MessageTypeStepStream     MessageType = "step.stream"
 	MessageTypeImageBake      MessageType = "image.bake"
@@ -889,6 +890,20 @@ type ClaimSnapshotBody struct {
 	Purpose ClaimSnapshotBodyPurpose `json:"purpose"`
 }
 
+type ClaimExercisedBodyExercisedFilesItem struct {
+	Path  string  `json:"path"`
+	Lines []int64 `json:"lines"`
+}
+
+type ClaimExercisedBodyExercised struct {
+	Files []ClaimExercisedBodyExercisedFilesItem `json:"files"`
+}
+
+type ClaimExercisedBody struct {
+	StepID    string                      `json:"stepId"`
+	Exercised ClaimExercisedBodyExercised `json:"exercised"`
+}
+
 type Executor string
 
 const (
@@ -1129,18 +1144,57 @@ type StepResultBodySnapshot struct {
 	Ms      int64                    `json:"ms"`
 }
 
+type StepResultBodyExercisedLanguage string
+
+const (
+	StepResultBodyExercisedLanguageNode        StepResultBodyExercisedLanguage = "node"
+	StepResultBodyExercisedLanguageUnsupported StepResultBodyExercisedLanguage = "unsupported"
+)
+
+type StepResultBodyExercisedFilesItemStatus string
+
+const (
+	StepResultBodyExercisedFilesItemStatusMeasured StepResultBodyExercisedFilesItemStatus = "measured"
+	StepResultBodyExercisedFilesItemStatusUnknown  StepResultBodyExercisedFilesItemStatus = "unknown"
+)
+
+type StepResultBodyExercisedFilesItemReason string
+
+const (
+	StepResultBodyExercisedFilesItemReasonNoCoverageWritten   StepResultBodyExercisedFilesItemReason = "no_coverage_written"
+	StepResultBodyExercisedFilesItemReasonNotLoadedUnproven   StepResultBodyExercisedFilesItemReason = "not_loaded_unproven"
+	StepResultBodyExercisedFilesItemReasonUnmappedSource      StepResultBodyExercisedFilesItemReason = "unmapped_source"
+	StepResultBodyExercisedFilesItemReasonUnsupportedLanguage StepResultBodyExercisedFilesItemReason = "unsupported_language"
+	StepResultBodyExercisedFilesItemReasonUnsupportedDriver   StepResultBodyExercisedFilesItemReason = "unsupported_driver"
+	StepResultBodyExercisedFilesItemReasonCoverageTooLarge    StepResultBodyExercisedFilesItemReason = "coverage_too_large"
+)
+
+type StepResultBodyExercisedFilesItem struct {
+	Path           string                                  `json:"path"`
+	ChangedLines   int64                                   `json:"changedLines"`
+	ExercisedLines json.RawMessage                         `json:"exercisedLines"`
+	Status         StepResultBodyExercisedFilesItemStatus  `json:"status"`
+	Reason         *StepResultBodyExercisedFilesItemReason `json:"reason,omitempty"`
+}
+
+type StepResultBodyExercised struct {
+	Language StepResultBodyExercisedLanguage    `json:"language"`
+	Files    []StepResultBodyExercisedFilesItem `json:"files"`
+}
+
 type StepResultBody struct {
-	StepID             string                  `json:"stepId"`
-	Executor           Executor                `json:"executor"`
-	ImageID            string                  `json:"imageId"`
-	VMHealth           VMHealth                `json:"vmHealth"`
-	Exec               *ExecResult             `json:"exec,omitempty"`
-	Probe              *ProbeResult            `json:"probe,omitempty"`
-	BrowserExploration *BrowserExploreResult   `json:"browserExploration,omitempty"`
-	Sandbox            *SandboxResult          `json:"sandbox,omitempty"`
-	Snapshot           *StepResultBodySnapshot `json:"snapshot,omitempty"`
-	Redactions         *int64                  `json:"redactions,omitempty"`
-	DurationMs         *int64                  `json:"durationMs,omitempty"`
+	StepID             string                   `json:"stepId"`
+	Executor           Executor                 `json:"executor"`
+	ImageID            string                   `json:"imageId"`
+	VMHealth           VMHealth                 `json:"vmHealth"`
+	Exec               *ExecResult              `json:"exec,omitempty"`
+	Probe              *ProbeResult             `json:"probe,omitempty"`
+	BrowserExploration *BrowserExploreResult    `json:"browserExploration,omitempty"`
+	Sandbox            *SandboxResult           `json:"sandbox,omitempty"`
+	Snapshot           *StepResultBodySnapshot  `json:"snapshot,omitempty"`
+	Exercised          *StepResultBodyExercised `json:"exercised,omitempty"`
+	Redactions         *int64                   `json:"redactions,omitempty"`
+	DurationMs         *int64                   `json:"durationMs,omitempty"`
 }
 
 type StepStreamBody struct {
@@ -1286,6 +1340,8 @@ func newBody(t MessageType) (any, bool) {
 		return new(MachineResetBody), true
 	case MessageTypeClaimSnapshot:
 		return new(ClaimSnapshotBody), true
+	case MessageTypeClaimExercised:
+		return new(ClaimExercisedBody), true
 	case MessageTypeStepResult:
 		return new(StepResultBody), true
 	case MessageTypeStepStream:
@@ -1357,6 +1413,8 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeMachineReset, true
 	case ClaimSnapshotBody, *ClaimSnapshotBody:
 		return MessageTypeClaimSnapshot, true
+	case ClaimExercisedBody, *ClaimExercisedBody:
+		return MessageTypeClaimExercised, true
 	case StepResultBody, *StepResultBody:
 		return MessageTypeStepResult, true
 	case StepStreamBody, *StepStreamBody:

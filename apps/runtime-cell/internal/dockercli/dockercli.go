@@ -1084,6 +1084,12 @@ func TagFromLabel(label string) string {
 	return label
 }
 
+// ComposeKill sends signal to the named services of a project.
+func (c CLI) ComposeKill(ctx context.Context, project, signal string, services ...string) error {
+	_, err := c.run(ctx, nil, composecmd.Kill(project, signal, services...)...)
+	return err
+}
+
 // ComposeStopServices stops the named services of a project (all of them
 // when none is named).
 func (c CLI) ComposeStopServices(ctx context.Context, project string, services ...string) error {

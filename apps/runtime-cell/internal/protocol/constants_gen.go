@@ -37,6 +37,7 @@ const (
 	FeatureBuildStateRebuildCost = "buildStateRebuildCost"
 	FeatureRunIdentity           = "runIdentity"
 	FeatureCellProtocols         = "cellProtocols"
+	FeatureExercisedLines        = "exercisedLines"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -73,6 +74,7 @@ var CellFeatures = []string{
 	FeatureBuildStateRebuildCost,
 	FeatureRunIdentity,
 	FeatureCellProtocols,
+	FeatureExercisedLines,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):
@@ -157,6 +159,15 @@ const MaxProbeLogTailText = 512
 
 // MaxCellMemoryMB is MAX_CELL_MEMORY_MB (libs/runtime/protocol/messages.ts): the most memory a heartbeat may name, in MB.
 const MaxCellMemoryMB = 1048576
+
+// MaxHelloFeaturesOlderHub is HELLO_FEATURES_OLDER_HUB_MAX (libs/runtime/protocol/messages.ts): the most features a hub before the 64 limit accepts in a hello.
+const MaxHelloFeaturesOlderHub = 32
+
+// MaxExercisedFiles is EXERCISED_LINES_LIMITS.files (libs/runtime/protocol/messages.ts): the most files one claim.exercised names.
+const MaxExercisedFiles = 200
+
+// MaxExercisedLinesPerFile is EXERCISED_LINES_LIMITS.linesPerFile (libs/runtime/protocol/messages.ts): the most changed lines one file of a claim.exercised names.
+const MaxExercisedLinesPerFile = 2000
 
 // MaxClaimSecrets is MAX_CLAIM_SECRETS (libs/runtime/protocol/messages.ts): the most org secrets one claim carries.
 const MaxClaimSecrets = 100

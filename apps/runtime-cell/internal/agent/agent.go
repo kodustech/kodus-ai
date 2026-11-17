@@ -19,12 +19,14 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/admission"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/coverage"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/evidence"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/outbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/pool"
@@ -42,16 +44,19 @@ type Agent struct {
 	// established counts the sessions the hub accepted (Run resets its
 	// reconnect backoff when one did).
 	established atomic.Int64
-	cfg         Config
-	clock       clock.Clock
-	log         *slog.Logger
-	leases      *lease.Manager
-	deadman     *lease.DeadMan
-	steps       *dedup.Store
-	claims      *claims.Registry
-	outbox      *outbox.Outbox
-	m           agentMetrics
-	wg          sync.WaitGroup
+	// trimHello asks the next hello to fit an older hub's 32 features: set
+	// when a hub refused a longer hello's body, cleared by the next one.
+	trimHello atomic.Bool
+	cfg       Config
+	clock     clock.Clock
+	log       *slog.Logger
+	leases    *lease.Manager
+	deadman   *lease.DeadMan
+	steps     *dedup.Store
+	claims    *claims.Registry
+	outbox    *outbox.Outbox
+	m         agentMetrics
+	wg        sync.WaitGroup
 
 	// mu guards the hub session only: conn, version, accepts and runCtx.
 	// Every other part keeps its own state behind its own lock.
@@ -71,6 +76,7 @@ type Agent struct {
 	origin *provenance.Record
 	// evidence captures what a step leaves: logs, egress, the cast.
 	evidence *evidence.Collector
+	coverage *coverage.Counter
 	// pool keeps the warm pools pool.target asked for (its own lock).
 	pool *pool.Manager
 
@@ -115,6 +121,7 @@ func New(cfg Config) (*Agent, error) {
 		beat:    make(chan struct{}, 1),
 		m:       newAgentMetrics(cfg.Metrics),
 	}
+	a.coverage = &coverage.Counter{Flusher: cfg.Parts.Coverage, Clock: cfg.Clock}
 	a.evidence = &evidence.Collector{ServiceLogs: cfg.Parts.ServiceLogs, Outbound: cfg.Outbound, HTTP: cfg.EvidenceHTTP, Clock: cfg.Clock, Accepts: a.hubAccepts}
 	a.pool = pool.New(pool.Config{
 		CellID: cfg.CellID, Pooler: cfg.Parts.Pooler, Machines: cfg.Driver, OrgKey: cfg.OrgKey,
@@ -255,11 +262,18 @@ func (a *Agent) observeClaims() {
 	}
 }
 
+// olderHubFeatureLimit is protocol.MaxHelloFeaturesOlderHub, a variable so
+// a test can reach it with the harness's fewer features.
+var olderHubFeatureLimit = protocol.MaxHelloFeaturesOlderHub
+
 // Hello is the first frame: versions, driver, isolation, regions, owner,
 // and what the hub may ask of this cell: the optional claim.acquire fields
 // it decodes and the largest size its driver grants one claim (the hub
 // sends a sized claim only to a cell whose maximum fits it).
-func (a *Agent) Hello() *protocol.HelloBody {
+func (a *Agent) Hello() *protocol.HelloBody { return a.hello(false) }
+
+// hello is Hello, cut to an older hub's 32 features when trim is set.
+func (a *Agent) hello(trim bool) *protocol.HelloBody {
 	caps := a.cfg.Driver.Capabilities()
 	regions := a.cfg.Regions
 	if regions == nil {
@@ -269,6 +283,9 @@ func (a *Agent) Hello() *protocol.HelloBody {
 	kept := features[:0]
 	for _, feature := range features {
 		if feature == protocol.FeatureBrowserExplore && a.cfg.BrowserExplore == nil {
+			continue
+		}
+		if feature == protocol.FeatureExercisedLines && !a.cfg.ExercisedLines {
 			continue
 		}
 		if feature == protocol.FeatureRecipeFakes && !a.cfg.FakeSupport {
@@ -311,6 +328,12 @@ func (a *Agent) Hello() *protocol.HelloBody {
 		kept = append(kept, feature)
 	}
 	features = kept
+	// A hub before the 64 limit refuses a hello of more than 32 features.
+	// After such a refusal (session.go) the next hello drops the newest
+	// optional one (exercisedLines, evidence the verdict never reads).
+	if trim && len(features) > olderHubFeatureLimit {
+		features = slices.DeleteFunc(features, func(f string) bool { return f == protocol.FeatureExercisedLines })
+	}
 
 	return &protocol.HelloBody{
 		Versions:     protocol.SupportedVersions(),

@@ -26,6 +26,7 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/internal/agent`](../agent/AGENTS.md)
+- [`apps/runtime-cell/internal/agent/coverage`](../agent/coverage/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/evidence`](../agent/evidence/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/outbox`](../agent/outbox/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/pool`](../agent/pool/AGENTS.md)

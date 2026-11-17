@@ -1,6 +1,6 @@
 import { createPublicKey } from 'crypto';
 import { envInteger, requireEnvInt } from '@libs/runtime/contracts/env-int';
-import { DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
+import { DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT, DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
 import { readFileSync } from 'fs';
 
 import { z } from 'zod';
@@ -151,6 +151,12 @@ export interface WorkerConfig extends RuntimeConfig {
      * as its round snapshot once ready, and the Run's resets restore it (RunDeps.roundSnapshots).
      */
     roundSnapshots: boolean;
+    /**
+     * RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT (0..100, default 50): the share of a Run's measured
+     * changed lines that must run during the probes for a green Run to stay green; below it the Run
+     * is partly tested (decideRunVerdict exercised). 0 never downgrades.
+     */
+    exercisedLinesThresholdPercent: number;
     /** RUNTIME_SECRET_SEAL_KEY: opens the repo and Run tokens inside the step that uses them. */
     secretSealKey: Buffer;
     git: { provider: 'github' | 'gitlab' | 'bitbucket' | 'azure_repos' | 'forgejo'; apiBase: string };
@@ -440,6 +446,7 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
         setupConcurrency,
         workerConcurrency: boundedInt(env, 'RUNTIME_WORKER_CONCURRENCY', Math.min(10, base.globalConcurrency), 1, base.globalConcurrency),
         roundSnapshots: flag01(env, 'RUNTIME_ROUND_SNAPSHOTS', '1'),
+        exercisedLinesThresholdPercent: boundedInt(env, 'RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT', DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT, 0, 100),
         secretSealKey,
         git: {
             provider: z.enum(GIT_PROVIDERS).parse(env.RUNTIME_GIT_PROVIDER || 'github'),

@@ -1,7 +1,7 @@
 import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import type { BakeOutcome, BakeRequest, Blocked, Claim, Consumer, EnvError, ExecRequest, LeaseRenewal, ProbeOutcome, StepResult } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, helloVersionRefusal, HUB_CELL_PROTOCOLS, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
+import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, type ExercisedRequest, type ExercisedResult, helloVersionRefusal, HUB_CELL_PROTOCOLS, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
 import type { RunStreamEvent, RunStreamStore } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -521,6 +521,11 @@ export class CellHub {
                 : {}),
         });
     }
+    /** claim.exercised: the PR claim's changed lines its services ran; undefined when the cell does not name exercisedLines. */
+    exercised(ref: ClaimRef, stepId: string, request: ExercisedRequest): Promise<ExercisedResult | undefined | EnvError> {
+        return this.steps.exercised(ref, stepId, request);
+    }
+
     /** claim.snapshot: the claim's workload kept as a memory snapshot (template, session or round). */
     snapshot(ref: ClaimRef, stepId: string, purpose: SnapshotPurpose): Promise<{ id: string; purpose: SnapshotPurpose; ms: number; cellId: string } | EnvError> {
         return this.steps.snapshot(ref, stepId, purpose);

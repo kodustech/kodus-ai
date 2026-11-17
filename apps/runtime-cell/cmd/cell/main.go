@@ -181,6 +181,8 @@ func run(log *slog.Logger, args []string) error {
 		Repo:    func(acq protocol.ClaimAcquireBody) (string, error) { return git.TarballURL(acq.Repo, acq.Sha) },
 		Log:     log,
 		Metrics: reg,
+		// exercisedLines (-exercised-lines, off by default until the coverage dir is capped).
+		ExercisedLines: st.ExercisedLines,
 	}
 	// cell update reads it to refuse a release this hub would refuse (cellStateDir).
 	cfg.HubProtocolState = filepath.Join(st.StateDir, hubprotocol.StateName)

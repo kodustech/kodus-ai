@@ -79,6 +79,8 @@ func (a *Agent) Handle(ctx context.Context, m *protocol.Message) error {
 			func(ctx context.Context, c *claims.Claim) { a.runExec(ctx, c, b, cwd, repo) })
 	case *protocol.ClaimSnapshotBody:
 		return a.claimSnapshot(tctx, claimID, b)
+	case *protocol.ClaimExercisedBody:
+		return a.claimExercised(tctx, claimID, b)
 	case *protocol.MachineResetBody:
 		// A sandbox claim resets only to its own round snapshot.
 		if b.Snapshot.Kind != protocol.SnapshotKindMemory {

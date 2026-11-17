@@ -3,6 +3,8 @@ package drivertest
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -20,11 +22,16 @@ type RequestSubject struct {
 	Booter driver.ComposeBooter
 	// Prepare readies a claim's workload machine and its project (ws/<app>
 	// under a workspace root) and returns ask with Ref, Compose, ProjectDir
-	// and WorkspaceRoot set. Compose has a service that builds an image
+	// and WorkspaceRoot set. Compose has a service, PreparedService, that builds an image
 	// that asks a build secret named BuildSecretName. ask carries the other
 	// fields, so a backend that stands in for compose answers as compose
 	// would for them.
 	Prepare func(t *testing.T, ask driver.UpRequest) driver.UpRequest
+	// Flusher is the driver's CoverageFlusher; nil: it collects no
+	// coverage, and UpRequest.Coverage is never asked of it. Flushed is
+	// the services the backend signalled to flush on ref, in order.
+	Flusher driver.CoverageFlusher
+	Flushed func(t *testing.T, ref driver.MachineRef) []string
 	// Booted is what the backend shows of the last Up of ref.
 	Booted func(t *testing.T, ref driver.MachineRef) Booted
 
@@ -39,6 +46,9 @@ type RequestSubject struct {
 // BuildSecretName is the build secret Prepare's project asks for.
 const BuildSecretName = "NPM_TOKEN"
 
+// PreparedService is the service of Prepare's project.
+const PreparedService = "app"
+
 // Booted is what a backend shows of one Up.
 type Booted struct {
 	// Trusted: the project's services got the cell's trust files.
@@ -49,6 +59,10 @@ type Booted struct {
 	// the build that asked them, or recorded on the machine so it never
 	// becomes a template or a session.
 	BuildSecrets bool
+	// Coverage: PreparedService got the coverage directory writable at
+	// sandbox.CoverageTarget and the preload read-only at
+	// sandbox.CoveragePreloadTarget.
+	Coverage bool
 }
 
 // RunRequests runs every request check that applies to the subject, each
@@ -61,6 +75,8 @@ func RunRequests(t *testing.T, newSubject func(t *testing.T) RequestSubject) {
 		"an Up hands its builds the claim's secrets, and none without":  upHonorsBuildSecrets,
 		"an Up gives its Output the boot's lines":                       upHonorsOutput,
 		"an Up of a project outside its WorkspaceRoot is refused":       upHonorsWorkspaceRoot,
+		"an Up mounts a Run's coverage files, and none without":         upHonorsCoverage,
+		"a coverage flush signals the instrumented services":            flushSignalsTheServices,
 	}
 	sandbox := map[string]func(*testing.T, RequestSubject){
 		"a sandbox asked with CellTrust gets the trust files, or is refused as unsupported": sandboxHonorsCellTrust,
@@ -144,6 +160,39 @@ func upHonorsWorkspaceRoot(t *testing.T, s RequestSubject) {
 	req.WorkspaceRoot = t.TempDir() // another workspace: the project is outside it
 	if _, err := s.Booter.Up(context.Background(), req); err == nil {
 		t.Fatal("an Up of a project outside its workspace root ran")
+	}
+}
+
+func upHonorsCoverage(t *testing.T, s RequestSubject) {
+	if s.Flusher == nil {
+		t.Skip("the driver collects no coverage (no driver.CoverageFlusher)")
+	}
+	preload := filepath.Join(t.TempDir(), "coverage-preload.cjs")
+	if err := os.WriteFile(preload, []byte("// preload\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cov := driver.Coverage{Dir: t.TempDir(), Preload: preload, Services: []string{PreparedService}}
+	if _, b := s.up(t, driver.UpRequest{Coverage: cov}); !b.Coverage {
+		t.Fatal("an Up asked with Coverage left the service without the coverage files")
+	}
+	if _, b := s.up(t, driver.UpRequest{}); b.Coverage {
+		t.Fatal("an Up asked without Coverage mounted coverage files")
+	}
+}
+
+func flushSignalsTheServices(t *testing.T, s RequestSubject) {
+	if s.Flusher == nil {
+		t.Skip("the driver collects no coverage (no driver.CoverageFlusher)")
+	}
+	req, _ := s.up(t, driver.UpRequest{})
+	if err := s.Flusher.FlushCoverage(context.Background(), req.Ref, []string{PreparedService}); err != nil {
+		t.Fatalf("FlushCoverage: %v", err)
+	}
+	if got := s.Flushed(t, req.Ref); len(got) != 1 || got[0] != PreparedService {
+		t.Fatalf("flushed %v, want [%s]", got, PreparedService)
+	}
+	if err := s.Flusher.FlushCoverage(context.Background(), req.Ref, []string{"--all"}); err == nil {
+		t.Fatal("a flush of a name that is no service ran")
 	}
 }
 

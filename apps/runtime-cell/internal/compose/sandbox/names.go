@@ -19,6 +19,22 @@ const ResolvTarget = "/etc/resolv.conf"
 // where a container's secrets usually are, and nothing legitimate reads.
 const DecoyTarget = "/run/secrets/npmrc"
 
+// CoverageTarget is where a Run's instrumented services write V8 coverage
+// (NODE_V8_COVERAGE, feature exercisedLines), the one writable bind a
+// service gets; CoveragePreloadTarget the read-only file NODE_OPTIONS
+// requires so SIGUSR2 flushes it. Both are the cell's whether coverage is
+// on or not: no checkout mounts there.
+const (
+	CoverageTarget        = "/run/kodus-coverage"
+	CoveragePreloadTarget = "/run/kodus-coverage-preload.cjs"
+)
+
+// coverageTarget is a mount target that is, or is under, the cell's
+// coverage targets.
+func coverageTarget(t string) bool {
+	return t == CoverageTarget || strings.HasPrefix(t, CoverageTarget+"/") || t == CoveragePreloadTarget
+}
+
 // firstServiceHost is the first address handed to a service; the ones
 // below it (the gateway) stay free, and the subnet's upper half is left to
 // Docker for the holder and the egress (PrepareClaim's --ip-range).

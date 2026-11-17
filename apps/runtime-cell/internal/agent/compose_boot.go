@@ -87,6 +87,11 @@ func (a *Agent) bootCompose(ctx context.Context, c *claims.Claim, workload drive
 	if err := proj.AddEnvironment(driver.CanaryEnvOf(canaries)); err != nil {
 		return blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
 	}
+	// A Run's Node services write V8 coverage (exercised.go): their env
+	// here, the files mounted by the driver at Up.
+	if err := a.instrumentCoverage(c, proj); err != nil {
+		return blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
+	}
 	file, err := proj.Marshal()
 	if err != nil {
 		return blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
@@ -102,14 +107,15 @@ func (a *Agent) bootCompose(ctx context.Context, c *claims.Claim, workload drive
 }
 
 // upRequest is what a compose Up of the claim asks the driver: whether its
-// machines trust the cell CA, the Run's canaries, the workspace root, and
+// machines trust the cell CA, the Run's canaries, the workspace root, a
+// Run's coverage files (exercised.go), and
 // the org secrets as placeholders for its image builds (G6): the services
 // get them in their environment (bootCompose), a build those it asked for as
 // BuildKit secrets.
 func (a *Agent) upRequest(c *claims.Claim, workload driver.MachineRef, file []byte, dir string, canaries []driver.Canary, output func(line string)) driver.UpRequest {
 	return driver.UpRequest{
 		Ref: workload, Compose: file, ProjectDir: dir, WorkspaceRoot: a.workspaceRoot(c),
-		CellTrust: a.cellTrustFor(c, a.cfg.CellTrust), Canaries: canaries, BuildSecrets: secretEnv(c), Output: output,
+		CellTrust: a.cellTrustFor(c, a.cfg.CellTrust), Canaries: canaries, BuildSecrets: secretEnv(c), Coverage: a.coverageOf(c), Output: output,
 	}
 }
 

@@ -104,6 +104,8 @@ export function buildReport(args: {
     noRuntimeEffect?: { file: string }[];
     /** The projection's coldBuild: a side that built with no cache because the cell had evicted the environment's state. */
     coldBuild?: RuntimeRunReport['coldBuild'];
+    /** The projection's exercised: which changed lines the PR side ran (claim.exercised). */
+    exercised?: RuntimeRunReport['exercised'];
 }): RuntimeRunReport {
     const paths = args.probes.slice(0, 100).map((p) => ({
         entryPoint: clip(p.entryPoint || 'unknown', 512),
@@ -144,6 +146,7 @@ export function buildReport(args: {
         ...(args.coldBuild && !Number.isNaN(Date.parse(args.coldBuild.evictedAt))
             ? { coldBuild: { side: args.coldBuild.side, cause: 'build_state_evicted' as const, evictedAt: new Date(args.coldBuild.evictedAt).toISOString() } }
             : {}),
+        ...(args.exercised ? { exercised: args.exercised } : {}),
         ...(args.state === 'nothing_to_test' && args.noRuntimeEffect?.length ? { noRuntimeEffect: args.noRuntimeEffect.slice(0, 20).map((f) => clip(f.file, 512)) } : {}),
     };
 }

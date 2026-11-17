@@ -134,7 +134,12 @@ type Config struct {
 	Egress       EgressControl
 	RecipeEgress RecipeEgressValidator
 	FakeSupport  bool // this driver materializes the closed recipe fake services
-	OrgKey       func(orgID string) (string, error)
+	// ExercisedLines: this cell names exercisedLines and answers
+	// claim.exercised (exercised.go): a Run's Node services write V8
+	// coverage on a driver with Parts.Coverage; other drivers answer
+	// unsupported_driver. cmd/cell turns it on unless -exercised-lines=false.
+	ExercisedLines bool
+	OrgKey         func(orgID string) (string, error)
 	// ClaimSecrets returns more exact values the cell knows for a claim
 	// (seed passwords, test secrets it injected); they are redacted from
 	// everything the claim sends, like the download token (S-51).

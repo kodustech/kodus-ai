@@ -4,7 +4,7 @@ import type { BlockerKind, CellOwner, ClaimConsumer, ClaimSide, Expose as Shared
 import type { EvidenceRef, Probe, ProbeResult } from '@libs/runtime/probe';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
 import type { IsolationMinimum } from '@libs/runtime/contracts/isolation';
-import type { BootPhases, BuildSteps, ClaimCanary, ClaimRunIdentity, EvidenceRequest, FailureBundle } from '@libs/runtime/protocol';
+import type { BootPhases, BuildSteps, ClaimCanary, ClaimRunIdentity, EvidenceRequest, ExercisedRequest, ExercisedResult, FailureBundle } from '@libs/runtime/protocol';
 
 // The one door every consumer uses to get "this app up at this SHA"
 // (docs §5, ADR-002). The control plane never talks to a cloud or a machine:
@@ -342,6 +342,12 @@ export interface EnvironmentRuntime {
      * later resets name. Absent where the environment keeps none; a cell without snapshots answers an EnvError.
      */
     snapshotRound?(claimId: string, stepId: string): Promise<{ id: string; ms: number } | EnvError>;
+    /**
+     * claim.exercised on the PR claim (feature exercisedLines): which changed lines its services ran.
+     * Undefined when the cell does not name the feature, so nothing was asked. Absent where the
+     * environment cannot ask.
+     */
+    exercisedLines?(claimId: string, stepId: string, request: ExercisedRequest): Promise<ExercisedResult | undefined | EnvError>;
     release(claimId: string): Promise<void>;
     /** Writes files into the claim's checkout (the protocol's upload); absent where a driver has none. */
     upload?(claimId: string, req: UploadRequest): Promise<void | EnvError>;

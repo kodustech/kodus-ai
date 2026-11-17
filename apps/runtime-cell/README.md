@@ -27,6 +27,7 @@ Control side (the agent and what it talks to):
 - `agent/claims`: each claim's state machine (acquiring, ready, failed, held, released), behind the claim's lock, and the registry that bounds how many claims a cell holds. Claim ids are validated here (`id.go`).
 - `agent/outbox`: claim frames (`claim.ready`, `claim.failed`, `step.result`, `blocked`) resent until the hub acks them.
 - `agent/admission`: the memory ledger: megabytes per claim id, what fits, what asynchronous work still holds. It knows no driver, claim or hub.
+- `agent/coverage`: `claim.exercised` (feature `exercisedLines`), which of a PR's changed lines a Run claim's Node services ran: it flushes their V8 coverage (`Parts.Coverage`), waits until the files stop growing and sends counts only. It sees a claim as a logger, a workload, its instrumented services, its coverage directory and its checkout.
 - `agent/evidence`: what a step leaves (service logs, egress, database effects, the exec's cast), redacted, bounded and uploaded only with its grant. It sees a claim as an id, a logger, a workload and a redactor.
 - `agent/pool`: the warm pool: targets per environment, the ready machines, refill and discard, behind its own lock. The agent adopts what it hands out.
 - `agent/provenance`: where machines and images came from: tainted machines, the images this cell baked, each environment's last, the bakes in progress.
@@ -402,6 +403,7 @@ Flags override `-config` (JSON or YAML; `deploy/local-docker.example.json`). The
 | `-cell-ca-cert`, `-machine-roots` | The injector's CA certificate and the public roots a claim with org secrets trusts (default: the cell's trust store). |
 | `-observer` | `http` (observer machines) or `inprocess` (fake, local-docker). |
 | `-preview` | Serve preview URLs (off by default): name the `preview` feature, dial the edge a `preview.tunnel` names with the cell's own certificate (the edge's tunnel certificate must chain to `-ca`, the hub CA), and pass a preview claim's streams to its observer's `/v1/preview` proxy (`internal/preview`, docs/runtime/preview-urls.md). |
+| `-exercised-lines` | Count which of a PR's changed lines its Node services ran (`claim.exercised`, default true): a Run's Node services, PR and base side, get `NODE_V8_COVERAGE` and a SIGUSR2 flush preload, the claim's coverage directory mounted writable on them alone (`sandbox.Options.Coverage`); on a driver with no `Parts.Coverage` (microvm, k8s-sandbox) every file is `unsupported_driver`. `false`: no `exercisedLines` feature, nothing instrumented. |
 | `-git-api` | The one Git API tarballs come from (GitHub today). |
 | `-workdir`, `-state-dir` | Scratch for tarballs and checkouts; driver state. |
 | `-gvisor-holder-image` | Required by docker-gvisor. |

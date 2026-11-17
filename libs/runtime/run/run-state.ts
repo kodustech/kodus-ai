@@ -1,5 +1,6 @@
 import type { BlockerKind, CheckConclusion as SharedCheckConclusion, FindingIntent, FindingKind, Verdict } from '@libs/runtime/contracts/enums';
 
+import { type ExercisedSummary, exercisedShortfall } from './exercised-lines';
 import type { ReplayLanes } from './replay-lanes';
 import type { ResponseDiff } from './response-diff';
 
@@ -177,6 +178,11 @@ export interface VerdictInput {
      * are already inconclusive; the Run is partly tested at best.
      */
     identityMismatch?: boolean;
+    /**
+     * Which changed lines ran (exercised-lines.ts). Below its threshold, a Run
+     * that would be green is partly tested; nothing measured changes nothing.
+     */
+    exercised?: ExercisedSummary;
 }
 
 export interface VerdictOutcome {
@@ -219,6 +225,12 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     else verdictState = 'no_regressions';
 
     const forcedNeutral: string[] = [];
+    // Only a green Run is held back: the rule never upgrades and never touches a regression.
+    const shortfall = verdictState === 'no_regressions' ? exercisedShortfall(input.exercised) : undefined;
+    if (shortfall) {
+        verdictState = 'partly_tested';
+        forcedNeutral.push(shortfall);
+    }
     if (input.blockedOutbound) forcedNeutral.push(`${input.blockedOutbound} blocked outbound request${input.blockedOutbound > 1 ? 's' : ''}`);
     if (input.dependencyChangeUntested) forcedNeutral.push('dependency change not behavior-tested');
     if (input.diffTruncated) forcedNeutral.push('diff too large to test whole');

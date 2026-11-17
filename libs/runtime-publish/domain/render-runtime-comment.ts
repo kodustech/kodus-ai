@@ -12,6 +12,7 @@ import {
 import { VISUAL_CHANGE_ONLY_REASON } from '@libs/runtime/contracts/enums';
 import { REPOSITORY_ALIAS_PATTERN } from '@libs/runtime/contracts/workspace';
 import type { BootBlockerCause } from '@libs/runtime/run/run-report';
+import { exercisedFact, exercisedShortfall } from '@libs/runtime/run/exercised-lines';
 
 import type { RunTargetWorkspaceRef } from './run-target';
 
@@ -701,11 +702,17 @@ export function partlyTestedReasons(report: RuntimeRunReport, links: RuntimeLink
         return ['This pull request changes nothing Kody can call (no route, job or command), so there was nothing to test.'];
     }
     const groups = groupedUncovered(report);
-    return GROUP_ORDER.filter((g) => groups.has(g)).map((g) => {
+    const reasons = GROUP_ORDER.filter((g) => groups.has(g)).map((g) => {
         const entryPoints = groups.get(g)!;
         return GROUP_REASON[g](listOf(entryPoints), entryPoints.length > 1, links);
     });
+    const shortfall = exercisedShortfallOf(report);
+    if (shortfall) reasons.push(`Only ${shortfall} during the probes, under the ${Math.round(report.exercised!.summary.threshold * 100)}% this Run needs.`);
+    return reasons;
 }
+
+/** "N of M changed lines ran" when the measured share is under the Run's threshold (decideRunVerdict exercised). */
+const exercisedShortfallOf = (report: RuntimeRunReport) => exercisedShortfall(report.exercised?.summary);
 
 /** The same causes as counts, for the check summary, which never names an entry point. */
 const GROUP_COUNT: Record<UncoveredGroup, (n: number) => string> = {
@@ -728,6 +735,9 @@ function partlyTestedCheckLine(report: RuntimeRunReport): string {
         ...GROUP_ORDER.filter((g) => groups.has(g)).map((g) => GROUP_COUNT[g](groups.get(g)!.length)),
         ...(blocked ? [`${blocked} blocked by the environment`] : []),
     ];
+    const shortfall = exercisedShortfallOf(report);
+    if (!report.uncovered.length && shortfall) return `${shortfall}.`;
+    if (shortfall) causes.push(shortfall);
     const head = `${plural(report.uncovered.length, 'path')} without a verdict out of ${report.paths.length + report.uncovered.length}`;
     return causes.length ? `${head}: ${causes.join(', ')}.` : `${head}.`;
 }
@@ -816,6 +826,8 @@ export function renderReportComment(
     ].filter(Boolean);
     if (summary.length) lines.push(summary.join(' · '));
     if (report.trigger) lines.push(`Ran because: ${TRIGGER[report.trigger]}`);
+    const exercised = exercisedFact(report.exercised?.summary);
+    if (exercised) lines.push(exercised);
     const workspace = workspaceLine(ran.workspace);
     if (workspace) lines.push(workspace);
     const extra = stateLine(report, links);

@@ -5,7 +5,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { BROWSER_ROUND_GRACE_MS } from '@libs/runtime/contracts/evidence';
 import type { EnvError, ExecRequest, ProbeOutcome, StepResult } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import { type Envelope, type EvidenceRequest, evidenceRequestFor, type MessageBody, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
+import { type Envelope, type EvidenceRequest, evidenceRequestFor, type MessageBody, type SandboxOp, type SandboxResult, type SnapshotPurpose, type ExercisedRequest, type ExercisedResult, ExercisedRequestSchema, ExercisedResultSchema } from '@libs/runtime/protocol';
 import { redactPatterns } from '@libs/runtime/redaction';
 import type { RunStreamEvent } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
@@ -28,7 +28,7 @@ import type { ClaimService } from './claim.service';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
-type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore' | 'sandbox.op' | 'claim.snapshot' | 'upload';
+type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore' | 'sandbox.op' | 'claim.snapshot' | 'claim.exercised' | 'upload';
 // Known cell admission failures only. A customer's arbitrary nack code is not
 // diagnostic data and must not reach a stream, span or structured log.
 const STEP_REFUSALS = new Set([
@@ -52,7 +52,7 @@ export class StepDispatcher {
     ) {}
 
     /** The cell's session; a read that fails is logged and answers as no session, so each caller refuses the feature or sends no evidence. */
-    private async sessionFor(cellId: string, purpose: 'evidence' | 'browser_explore' | 'workspace' | 'workload_exec') {
+    private async sessionFor(cellId: string, purpose: 'evidence' | 'browser_explore' | 'workspace' | 'workload_exec' | 'exercised_lines') {
         if (!this.sessionOf) return null;
         try {
             return await this.sessionOf(cellId);
@@ -354,6 +354,29 @@ export class StepDispatcher {
             })
             .catch((e: unknown) => this.log('error', 'sandbox.audit_unrecorded', { claimId: claim.claimId, cellId: claim.cellId, stepId, error: (e as Error).message }));
         return result;
+    }
+
+    /**
+     * claim.exercised (feature exercisedLines): which of the PR's changed lines the PR claim's
+     * services ran. Undefined, with no frame sent, when the claim is not the PR side, the request
+     * does not parse or the cell's session does not name the feature; a result that does not parse
+     * is undefined too.
+     */
+    async exercised(ref: ClaimRef, stepId: string, request: ExercisedRequest): Promise<ExercisedResult | undefined | EnvError> {
+        const claim = await this.claims.findActiveClaim(ref);
+        if (!claim) return { code: 'lease_expired' };
+        const parsed = ExercisedRequestSchema.safeParse(request);
+        if (claim.side !== 'pr' || !parsed.success) return undefined;
+        const connection = this.connections.get(claim.cellId);
+        if (!connection) return { code: 'cell_unavailable', cellId: claim.cellId };
+        const session = await this.sessionFor(claim.cellId, 'exercised_lines');
+        if (!this.connections.isCurrent(connection) || !connection.helloDone || connection.closed) return { code: 'cell_unavailable', cellId: claim.cellId };
+        if (session?.sessionEpoch !== connection.sessionEpoch || !session.features?.includes('exercisedLines')) return undefined;
+        const r = await this.sendStep(ref, 'claim.exercised', { stepId, exercised: parsed.data }, JSON.stringify({ kind: 'claim.exercised', request: parsed.data }), 60_000, connection);
+        if ('code' in r) return r;
+        if (r.body.executor !== 'vm') return undefined;
+        const body = ExercisedResultSchema.safeParse(r.body.exercised);
+        return body.success ? body.data : undefined;
     }
 
     /**

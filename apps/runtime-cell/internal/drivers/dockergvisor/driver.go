@@ -544,7 +544,7 @@ func (d *Driver) Parts() driver.Parts {
 		Baker: d, BakePinner: d, BakeCatalog: d, Resetter: d,
 		Composer: d, Recipes: d, Pooler: d, Memory: d,
 		Diagnoser: d, ServiceLogs: d, BootTimes: d, BootPhases: d, BuildStates: d,
-		SQLObservers: d, Sweeper: d,
+		SQLObservers: d, Sweeper: d, Coverage: d,
 	}
 	if d.SandboxesEnabled() {
 		p.Sandboxes = d

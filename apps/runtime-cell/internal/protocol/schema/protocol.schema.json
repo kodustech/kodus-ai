@@ -56,6 +56,7 @@
             "guest.result",
             "machine.reset",
             "claim.snapshot",
+            "claim.exercised",
             "step.result",
             "step.stream",
             "image.bake",
@@ -2842,6 +2843,62 @@
       ],
       "additionalProperties": false
     },
+    "claim.exercised": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "stepId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "exercised": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "minItems": 1,
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024,
+                    "pattern": "^(?:[^/\\\\.\\x00][^/\\\\\\x00]*|\\.[^/\\\\.\\x00][^/\\\\\\x00]*|\\.\\.[^/\\\\\\x00]+)(\\/(?:[^/\\\\.\\x00][^/\\\\\\x00]*|\\.[^/\\\\.\\x00][^/\\\\\\x00]*|\\.\\.[^/\\\\\\x00]+))*$"
+                  },
+                  "lines": {
+                    "minItems": 1,
+                    "maxItems": 2000,
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000000
+                    }
+                  }
+                },
+                "required": [
+                  "path",
+                  "lines"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "files"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "stepId",
+        "exercised"
+      ],
+      "additionalProperties": false
+    },
     "step.result": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -3849,6 +3906,80 @@
             "id",
             "purpose",
             "ms"
+          ],
+          "additionalProperties": false
+        },
+        "exercised": {
+          "type": "object",
+          "properties": {
+            "language": {
+              "type": "string",
+              "enum": [
+                "node",
+                "unsupported"
+              ]
+            },
+            "files": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024,
+                    "pattern": "^(?:[^/\\\\.\\x00][^/\\\\\\x00]*|\\.[^/\\\\.\\x00][^/\\\\\\x00]*|\\.\\.[^/\\\\\\x00]+)(\\/(?:[^/\\\\.\\x00][^/\\\\\\x00]*|\\.[^/\\\\.\\x00][^/\\\\\\x00]*|\\.\\.[^/\\\\\\x00]+))*$"
+                  },
+                  "changedLines": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2000
+                  },
+                  "exercisedLines": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "measured",
+                      "unknown"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "no_coverage_written",
+                      "not_loaded_unproven",
+                      "unmapped_source",
+                      "unsupported_language",
+                      "unsupported_driver",
+                      "coverage_too_large"
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "changedLines",
+                  "exercisedLines",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "language",
+            "files"
           ],
           "additionalProperties": false
         },

@@ -14,6 +14,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
@@ -28,6 +29,16 @@ type requestDocker struct {
 	*memDocker
 	rendered map[string]string   // project -> the rendered compose file
 	mounts   map[string][]string // holder -> its read-only binds
+	killed   map[string][]string // project -> the services sent the flush signal
+}
+
+func (c *requestDocker) ComposeKill(_ context.Context, project, signal string, services ...string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if signal == coverageFlushSignal {
+		c.killed[project] = append(c.killed[project], services...)
+	}
+	return nil
 }
 
 func (c *requestDocker) RunHolder(ctx context.Context, h dockercli.HolderSpec) (dockercli.Container, error) {
@@ -82,7 +93,7 @@ func (c *requestDocker) ComposeUp(ctx context.Context, p dockercli.ComposeProjec
 // in-memory Docker shows them.
 func TestTheDockerGVisorDriverHonorsItsRequests(t *testing.T) {
 	drivertest.RunRequests(t, func(t *testing.T) drivertest.RequestSubject {
-		docker := &requestDocker{memDocker: newMemDocker(), rendered: map[string]string{}, mounts: map[string][]string{}}
+		docker := &requestDocker{memDocker: newMemDocker(), rendered: map[string]string{}, mounts: map[string][]string{}, killed: map[string][]string{}}
 		docker.plant(dockercli.Container{ID: "cegress", Name: "kodus-egress", Networks: map[string]string{"kodus-cell": "10.9.0.2"}})
 		trust := t.TempDir()
 		files := machinetrust.Files{Bundle: filepath.Join(trust, "ca-bundle.pem"), CellCA: filepath.Join(trust, "cell-ca.pem")}
@@ -116,6 +127,12 @@ func TestTheDockerGVisorDriverHonorsItsRequests(t *testing.T) {
 		return drivertest.RequestSubject{
 			Capabilities: d.Capabilities(),
 			Booter:       d,
+			Flusher:      d,
+			Flushed: func(t *testing.T, ref driver.MachineRef) []string {
+				docker.mu.Lock()
+				defer docker.mu.Unlock()
+				return docker.killed[ref.MachineID]
+			},
 			Prepare: func(t *testing.T, ask driver.UpRequest) driver.UpRequest {
 				ref, err := d.Create(context.Background(), newSpec(t))
 				if err != nil {
@@ -146,6 +163,7 @@ func TestTheDockerGVisorDriverHonorsItsRequests(t *testing.T) {
 					got.Decoy = string(b)
 				}
 				got.BuildSecrets = secrets
+				got.Coverage = renderedCoverage(t, file)
 				return got
 			},
 			Sandboxer:   d,
@@ -157,4 +175,30 @@ func TestTheDockerGVisorDriverHonorsItsRequests(t *testing.T) {
 			},
 		}
 	})
+}
+
+// renderedCoverage: the rendered file binds a directory writable at the
+// coverage target and a file read-only at the preload's, on the prepared
+// service.
+func renderedCoverage(t *testing.T, file string) bool {
+	t.Helper()
+	var doc struct {
+		Services map[string]struct {
+			Volumes []map[string]any `yaml:"volumes"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(file), &doc); err != nil {
+		t.Fatal(err)
+	}
+	var dir, preload bool
+	for _, v := range doc.Services[drivertest.PreparedService].Volumes {
+		ro, _ := v["read_only"].(bool)
+		switch {
+		case v["type"] == "bind" && v["target"] == sandbox.CoverageTarget && !ro && v["source"] != "":
+			dir = true
+		case v["type"] == "bind" && v["target"] == sandbox.CoveragePreloadTarget && ro && v["source"] != "":
+			preload = true
+		}
+	}
+	return dir && preload
 }

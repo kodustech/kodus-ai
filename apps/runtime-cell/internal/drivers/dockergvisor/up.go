@@ -142,7 +142,8 @@ func (b *projectBoot) renderProject() (dockercli.ComposeProject, []byte, error) 
 }
 
 // sandbox reads where the machine runs (its claim network, cgroup parent and
-// limits) and plants the decoy: the options compose is rewritten with.
+// limits), plants the decoy and takes a Run's coverage files: the options
+// compose is rewritten with.
 func (b *projectBoot) sandbox() error {
 	d, ctx, ref := b.d, b.ctx, b.ref
 	// A reset's down is the first phase of the boot that follows it.
@@ -184,6 +185,9 @@ func (b *projectBoot) sandbox() error {
 	}
 	if b.req.CellTrust {
 		b.opts.Trust = d.cfg.Trust // a claim with org secrets: the cell CA in every service
+	}
+	if cov := b.req.Coverage; cov.Set() {
+		b.opts.Coverage = sandbox.Coverage{Dir: cov.Dir, Preload: cov.Preload, Services: cov.Services} // a Run's instrumented services
 	}
 	if b.opts.Decoy, err = d.writeDecoy(ref.MachineID, b.req.Canaries); err != nil {
 		return fmt.Errorf("dockergvisor: decoy file: %w", err)

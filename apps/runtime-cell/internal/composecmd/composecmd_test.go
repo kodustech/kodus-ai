@@ -40,6 +40,7 @@ func TestEachVerbIsTheComposeCommandLineTheDriversRun(t *testing.T) {
 		},
 		{"down by name keeps volumes unless asked", Down("p", false), "compose -p p down --remove-orphans"},
 		{"down with volumes removes them", Down("p", true), "compose -p p down --remove-orphans -v"},
+		{"kill signals the named services only", Kill("p", "SIGUSR2", "api", "worker"), "compose -p p kill -s SIGUSR2 -- api worker"},
 		{"exec runs without a tty", Project{Name: "p"}.Exec("api", "sh", "-c", "x"), "compose -p p exec -T api sh -c x"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

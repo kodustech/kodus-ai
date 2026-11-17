@@ -103,6 +103,9 @@ type Options struct {
 	// a file the cell owns; mounted read-only at DecoyTarget on every
 	// service. Empty: none.
 	Decoy string
+	// Coverage is a Run's V8 coverage (feature exercisedLines), set for a
+	// Run's claims only. Zero: none.
+	Coverage Coverage
 	// Trust are the cell's trust files (machinetrust: the public roots and
 	// the cell CA, and the cell CA alone), set for a claim with org secrets:
 	// mounted read-only on every service at machinetrust.BundleTarget and
@@ -144,6 +147,21 @@ type Options struct {
 	// others. Empty: no cap.
 	DiskSize string
 }
+
+// Coverage is where a Run's instrumented services write V8 coverage: Dir
+// a directory the cell owns, bound writable at CoverageTarget, and Preload
+// a file the cell owns, bound read-only at CoveragePreloadTarget, on each
+// of Services (compose.AddNodeCoverage's) and no other.
+type Coverage struct {
+	Dir, Preload string
+	Services     []string
+}
+
+// Set says coverage is on for some service.
+func (c Coverage) Set() bool { return c.Dir != "" && c.Preload != "" && len(c.Services) > 0 }
+
+// covers says service is one of the instrumented ones.
+func (c Coverage) covers(service string) bool { return c.Set() && slices.Contains(c.Services, service) }
 
 // The log bound of a service when the cell sets none: 30 MiB of logs.
 const (
@@ -679,7 +697,7 @@ func (c *checker) checkMount(vol any, path string, declared map[string]bool) {
 	if t := mountTarget(vol); t == ResolvTarget || t == "/etc/hosts" {
 		c.add(path, "name resolution is the cell's: "+t+" cannot be mounted")
 		return
-	} else if t == DecoyTarget || t == machinetrust.Dir || strings.HasPrefix(t, machinetrust.Dir+"/") {
+	} else if t == DecoyTarget || coverageTarget(t) || t == machinetrust.Dir || strings.HasPrefix(t, machinetrust.Dir+"/") {
 		c.add(path, t+" is the cell's")
 		return
 	}
@@ -920,6 +938,12 @@ func (c *checker) rewriteService(name string, svc map[string]any) {
 	if o.Decoy != "" {
 		vols, _ := svc["volumes"].([]any)
 		svc["volumes"] = append(vols, map[string]any{"type": "bind", "source": o.Decoy, "target": DecoyTarget, "read_only": true})
+	}
+	if o.Coverage.covers(name) {
+		vols, _ := svc["volumes"].([]any)
+		svc["volumes"] = append(vols,
+			map[string]any{"type": "bind", "source": o.Coverage.Dir, "target": CoverageTarget, "read_only": false},
+			map[string]any{"type": "bind", "source": o.Coverage.Preload, "target": CoveragePreloadTarget, "read_only": true})
 	}
 	if o.Trust.Set() {
 		vols, _ := svc["volumes"].([]any)

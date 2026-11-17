@@ -2,6 +2,7 @@ package agent
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -70,5 +71,28 @@ func TestHelloAnnouncesTheBackendsAndTheHostTheMachinesRunOn(t *testing.T) {
 	plain := newHarness(t).a.Hello().Capabilities
 	if plain == nil || plain.Backends == nil || len(plain.Backends) != 0 || plain.Arch == "" {
 		t.Fatalf("plain capabilities %+v", plain)
+	}
+}
+
+// exercisedLines is named when the cell answers claim.exercised, whatever
+// the count (an older hub's refusal trims the next hello: session.go), and
+// never by a cell that does not; a trimmed hello leaves it out first.
+func TestHelloNamesExercisedLinesOnlyWhenOnAndATrimmedHelloLeavesItOut(t *testing.T) {
+	if got := newHarness(t, func(*Config) {}).a.Hello().Features; slices.Contains(got, protocol.FeatureExercisedLines) {
+		t.Fatalf("named without the port: %v", got)
+	}
+	h := newHarness(t, func(cfg *Config) { cfg.ExercisedLines = true })
+	got := h.a.Hello().Features
+	if !slices.Contains(got, protocol.FeatureExercisedLines) {
+		t.Fatalf("not named when on: %v", got)
+	}
+	limit := olderHubFeatureLimit
+	olderHubFeatureLimit = len(got) - 1
+	t.Cleanup(func() { olderHubFeatureLimit = limit })
+	if trimmed := h.a.hello(true).Features; len(trimmed) != len(got)-1 || slices.Contains(trimmed, protocol.FeatureExercisedLines) {
+		t.Fatalf("trimmed hello %v", trimmed)
+	}
+	if again := h.a.Hello().Features; !slices.Contains(again, protocol.FeatureExercisedLines) {
+		t.Fatalf("an untrimmed hello lost it: %v", again)
 	}
 }

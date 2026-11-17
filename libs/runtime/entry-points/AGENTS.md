@@ -8,6 +8,7 @@ What a diff can change at runtime and what a probe actually reached, decided by 
 - Coverage from the observer's request log: `coverage.ts` `routeShapeOf`, `requestMatchesEntryPoint`, `coveredEntryPoint`.
 - A diff with nothing to test: `no-effect.ts` `noRuntimeEffectOf`, `noEffectReason`, `codeChangedLines` (comments and layout only, documentation; JS/TS through the TypeScript parser, small lexers for Go and Python).
 - The link from a finding to the code: `diff-ref.ts` `diffRefOf`, `firstAddedLine`.
+- The changed lines the cell measures: `executable-lines.ts` `executableChangedLines` (added code rows of JS/TS files, new-side numbers; no comments, blank lines, tests or documentation; at most `MAX_EXERCISED_FILES` files and `MAX_EXERCISED_LINES_PER_FILE` lines each).
 
 ## Does not own
 - Routes of files the diff does not touch but that import a changed one: `libs/runtime/planner/import-graph`.
@@ -32,7 +33,7 @@ What a diff can change at runtime and what a probe actually reached, decided by 
 
 ## Module map
 
-Files (7, tests apart): `coverage.ts`, `diff-ref.ts`, `extract.ts`, `helper-reach.ts`, `index.ts`, `no-effect.ts`, `route-table.ts`
+Files (8, tests apart): `coverage.ts`, `diff-ref.ts`, `executable-lines.ts`, `extract.ts`, `helper-reach.ts`, `index.ts`, `no-effect.ts`, `route-table.ts`
 
 Imports these Runtime modules:
 

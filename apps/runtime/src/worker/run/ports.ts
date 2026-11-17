@@ -1,5 +1,6 @@
 import type { ForkApprovalTokens } from '@libs/runtime/contracts/runtime-commands';
-import type { EnvironmentRuntime } from '@libs/runtime/environment';
+import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
+import type { ExercisedRequest, ExercisedResult } from '@libs/runtime/protocol/messages';
 import type { RunProjectionStore, RunStreamEvent, RuntimePublishRequested } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -146,6 +147,17 @@ export interface RunDeps {
      * once it is ready, and the Run's resets go back to it (cells that keep snapshots only).
      */
     roundSnapshots?: boolean;
+    /**
+     * RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT: the share (percent) of the measured changed lines
+     * the PR side must run for a green Run to stay green; absent: DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT.
+     */
+    exercisedLinesThresholdPercent?: number;
+    /**
+     * claim.exercised on the PR claim after the probes (feature exercisedLines): how many of the
+     * named changed lines ran. undefined: the cell gave no answer (no feature, a nack, a timeout,
+     * a malformed body); the Run then says "not measured" and keeps its verdict. Absent: never asked.
+     */
+    requestExercised?: (claim: Claim, request: ExercisedRequest) => Promise<ExercisedResult | undefined>;
     /** Earlier Runs' accepted plans, for a Run of the same head (plan-reuse.ts); absent: every Run plans. */
     pastPlans?: PastPlans;
     /** The probes' stability history (ADR-050); absent: every probe starts with the table's default and nothing is recorded. */

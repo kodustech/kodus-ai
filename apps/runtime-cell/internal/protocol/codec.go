@@ -154,7 +154,8 @@ var ClaimScopedTypes = map[MessageType]bool{
 	MessageTypeMachineReset: true, MessageTypeStepResult: true, MessageTypeStepStream: true,
 	MessageTypeEgressPolicy: true, MessageTypeClaimProgress: true, MessageTypeBrowserExplore: true,
 	MessageTypeSandboxAcquire: true, MessageTypeSandboxOp: true, MessageTypeClaimSnapshot: true,
-	MessageTypePreviewRoute: true, MessageTypePreviewUnroute: true,
+	MessageTypeClaimExercised: true,
+	MessageTypePreviewRoute:   true, MessageTypePreviewUnroute: true,
 }
 
 // ReplyTypes answer another message: the envelope must name it (re).
@@ -274,6 +275,9 @@ func refineSandboxSnapshot(b *SandboxAcquireBody) error {
 // checkStepResult: a probe result comes from the observer, an exec result
 // from the VM, never both.
 func checkStepResult(b *StepResultBody) error {
+	if b.Exercised != nil && (b.Exec != nil || b.Probe != nil || b.BrowserExploration != nil || b.Sandbox != nil || b.Snapshot != nil || b.Executor != ExecutorVM) {
+		return fmt.Errorf("exercised: an exercised result is an exclusive vm result")
+	}
 	if b.Snapshot != nil && (b.Exec != nil || b.Probe != nil || b.BrowserExploration != nil || b.Sandbox != nil || b.Executor != ExecutorVM) {
 		return fmt.Errorf("snapshot: a snapshot result is an exclusive vm result")
 	}

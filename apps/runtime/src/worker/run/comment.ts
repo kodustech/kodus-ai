@@ -1,4 +1,5 @@
 import type { CheckOutcome, ProbeVerdict } from '@libs/runtime/run';
+import { exercisedFact, type ExercisedSummary } from '@libs/runtime/run/exercised-lines';
 
 // The comment is built only from structured fields (ADR-052): verdicts,
 // probe ids and entry points. Agent prose never reaches it.
@@ -18,8 +19,12 @@ export function buildComment(args: {
     recipeChangedInPr?: string[];
     /** The member repository the PR is in: its `.kodus/` changes were not applied. */
     recipeChangedInMember?: string;
+    /** Which changed lines the PR side ran; absent: no line. */
+    exercised?: ExercisedSummary;
 }): string {
     const lines = [`### Kody Runtime · ${esc(args.check.title)}`, '', `Tested at \`${args.headSha.slice(0, 12)}\`, base and PR replayed on the same image.`, ''];
+    const exercised = exercisedFact(args.exercised);
+    if (exercised) lines.push(exercised, '');
     if (args.securityEvent) {
         lines.push('**Security event**: a decoy credential planted in the machine crossed a boundary, so the Run stopped. Entry points without a verdict were not verified.', '');
     }

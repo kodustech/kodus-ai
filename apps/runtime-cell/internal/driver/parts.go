@@ -55,6 +55,9 @@ type Parts struct {
 	BuildStates BuildStateReporter
 	// SQLObservers provisions an observer's read-only SQL account.
 	SQLObservers SQLObserverProvisioner
+	// Coverage flushes a Run's V8 coverage (claim.exercised); nil: the
+	// cell instruments nothing and answers unsupported_driver.
+	Coverage CoverageFlusher
 	// Sweeper removes, on its own, this cell's machines past their ceiling;
 	// nil: the reaper alone does.
 	Sweeper Sweeper

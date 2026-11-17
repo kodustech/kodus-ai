@@ -1837,3 +1837,33 @@ describe('alert-source admission refusal through hub and gate', () => {
         await c.onClose();
     });
 });
+
+const exercisedRequest = { files: [{ path: 'src/x.js', lines: [3, 4, 9] }] };
+const exercisedResult = { language: 'node', files: [{ path: 'src/x.js', changedLines: 3, exercisedLines: 2, status: 'measured' }] };
+describe('claim.exercised', () => {
+    it('asks the PR claim of a cell that names exercisedLines and returns its counts', async () => {
+        const t = setup(); const c = await t.connect('cell-a', 'kodus', { features: ['exercisedLines'] });
+        const claim = await t.acquireOn(c, 'cell-a');
+        if ('status' in claim) throw new Error('blocked');
+        t.store.claims.get(claim.claimId)!.side = 'pr';
+        const id = randomUUID(); const out = t.hub.exercised(ref(claim.claimId), id, exercisedRequest);
+        await tick(); await tick();
+        expect(c.sock.last('claim.exercised')).toMatchObject({ claimId: claim.claimId, body: { stepId: id, exercised: exercisedRequest } });
+        await c.onMessage(frame('cell-a', 'step.result', { stepId: id, executor: 'vm', imageId: 'img-1', vmHealth: 'ok', exercised: exercisedResult }, { claimId: claim.claimId }));
+        expect(await out).toEqual(exercisedResult);
+    });
+
+    it('answers not supported without a frame when the cell does not name exercisedLines, or the claim is not the PR side', async () => {
+        const t = setup(); const c = await t.connect('cell-a', 'kodus', { features: [] });
+        const claim = await t.acquireOn(c, 'cell-a');
+        if ('status' in claim) throw new Error('blocked');
+        const row = t.store.claims.get(claim.claimId)!;
+        row.side = 'pr';
+        expect(await t.hub.exercised(ref(claim.claimId), randomUUID(), exercisedRequest)).toBeUndefined();
+        const t2 = setup(); const c2 = await t2.connect('cell-a', 'kodus', { features: ['exercisedLines'] });
+        const base = await t2.acquireOn(c2, 'cell-a');
+        if ('status' in base) throw new Error('blocked');
+        expect(await t2.hub.exercised(ref(base.claimId), randomUUID(), exercisedRequest)).toBeUndefined();
+        expect([...c.sock.sent, ...c2.sock.sent].some(m => m.type === 'claim.exercised')).toBe(false);
+    });
+});

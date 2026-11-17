@@ -32,12 +32,30 @@ type UpRequest struct {
 	// build; the injector swaps it for the value on the secret's hosts. A
 	// machine whose builds hold them never becomes a template or a session.
 	BuildSecrets map[string]string
+	// Coverage is where a Run's instrumented services write V8 coverage
+	// (feature exercisedLines). The agent sets it for a Run's claim only,
+	// on a driver with a CoverageFlusher, never for a setup, a bake or a
+	// pool sandbox. Zero: none.
+	Coverage Coverage
 	// Output takes the lines a long boot step prints (a build's progress,
 	// compose's own messages), so the agent can show a setup as it runs
 	// (claim.progress). It is called from the step's goroutine and must
 	// return quickly. Nil: nobody listens.
 	Output func(line string)
 }
+
+// Coverage is a Run's V8 coverage files, in the claim's own directory and
+// removed with it: Dir, the directory the services write (writable at
+// sandbox.CoverageTarget), and Preload, the file NODE_OPTIONS requires
+// (read-only at sandbox.CoveragePreloadTarget), on each of Services, the
+// services the agent instrumented (compose.AddNodeCoverage), and no other.
+type Coverage struct {
+	Dir, Preload string
+	Services     []string
+}
+
+// Set says the request asks for coverage on some service.
+func (c Coverage) Set() bool { return c.Dir != "" && c.Preload != "" && len(c.Services) > 0 }
 
 // Emit sends line to the request's Output, when there is one.
 func (r UpRequest) Emit(line string) {

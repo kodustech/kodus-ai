@@ -94,6 +94,9 @@ type Claim struct {
 	// from, kept to bring the project up again after a reset.
 	composeFile []byte
 	composeDir  string
+	// coverage are the services the claim's boot instrumented for V8
+	// coverage (claim.exercised); nil: none.
+	coverage []string
 	// compromised is why the claim may run nothing more (an exfiltration
 	// alert); empty while it is not.
 	compromised string
@@ -393,6 +396,21 @@ func (c *Claim) SetCompose(file []byte, dir string) {
 	c.mu.Lock()
 	c.composeFile, c.composeDir = slices.Clone(file), dir
 	c.mu.Unlock()
+}
+
+// SetCoverage keeps the services the claim's boot instrumented for V8
+// coverage.
+func (c *Claim) SetCoverage(services []string) {
+	c.mu.Lock()
+	c.coverage = slices.Clone(services)
+	c.mu.Unlock()
+}
+
+// Coverage is the services the claim's boot instrumented (nil: none).
+func (c *Claim) Coverage() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.coverage)
 }
 
 // Compose is the compose project the claim booted from (nil file: none).

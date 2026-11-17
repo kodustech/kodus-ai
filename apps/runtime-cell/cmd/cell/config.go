@@ -307,6 +307,9 @@ type settings struct {
 	// Preview serves preview URLs (docs/runtime/preview-urls.md): the cell
 	// names the feature and dials the edge the hub's preview.tunnel names.
 	Preview bool
+	// ExercisedLines answers claim.exercised (feature exercisedLines): a
+	// Run's Node services write V8 coverage on a driver that flushes it.
+	ExercisedLines bool
 	// GVisorObserverImage runs each claim's observer (cmd/observer at
 	// /observer, by digest); GVisorObserverTLS is the directory with its
 	// server certificate and the CA of -observer-cert.
@@ -395,6 +398,7 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.StringVar(&s.GVisorHelperImage, "gvisor-helper-image", "", "docker-gvisor: image with sh and cp that copies a bake's data volumes under gVisor, pinned by digest (repo@sha256:..., refused otherwise; busybox:1.36 pinned by digest when empty)")
 	fs.StringVar(&s.GVisorObserverImage, "gvisor-observer-image", "", "docker-gvisor: the observer image (cmd/observer at /observer), by digest; each claim's observer runs it under gVisor on the claim network (-observer http)")
 	fs.BoolVar(&s.Preview, "preview", false, "serve preview URLs: name the preview feature, dial the preview edge with the cell's certificate when the hub asks, and pass a preview claim's streams to its observer (the edge's tunnel certificate must chain to -ca, the hub CA)")
+	fs.BoolVar(&s.ExercisedLines, "exercised-lines", false, "count which of a PR's changed lines its Node services ran (claim.exercised): a Run's Node services get NODE_V8_COVERAGE and a SIGUSR2 flush preload on docker-gvisor; other drivers answer unsupported_driver. Off by default: the coverage dir is a bind outside the services' storage_opt cap, so a PR can fill the host's disk through it (docs/runtime/exercised-lines.md gap 1); turn it on only on a host that bounds the claim dir")
 	fs.BoolVar(&s.BrowserExplore, "browser-explore", false, "docker-gvisor: enable local agent-browser exploration with a compatible pinned browser image; upgrade the product planner API first")
 	fs.StringVar(&s.GVisorBrowserImage, "gvisor-browser-image", "", "docker-gvisor: the browser runner image (apps/runtime-cell/browser-runner), by digest; each browser probe round runs it under gVisor on the claim network (ADR-071)")
 	fs.StringVar(&s.GVisorObserverTLS, "gvisor-observer-tls-dir", "/etc/kodus/cell/observer-server", "docker-gvisor: cert.pem and key.pem of the observers (for -observer-server-name) and ca.pem, the CA of -observer-cert; mounted read-only into each observer")

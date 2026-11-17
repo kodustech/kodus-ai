@@ -212,6 +212,9 @@ func (m *memDocker) ComposeStopServices(context.Context, string, ...string) erro
 	return nil
 }
 func (m *memDocker) ComposeStart(context.Context, string) error { return nil }
+func (m *memDocker) ComposeKill(context.Context, string, string, ...string) error {
+	return nil
+}
 
 func (m *memDocker) ComposeDown(_ context.Context, project string, volumes bool) error {
 	m.mu.Lock()

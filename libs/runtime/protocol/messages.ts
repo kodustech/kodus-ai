@@ -343,8 +343,74 @@ export const CELL_FEATURES = [
     'buildStateRebuildCost',
     'runIdentity',
     'cellProtocols',
+    // claim.exercised and step.result exercised: after the probes, the cell
+    // counts which of the PR's changed lines its Node services ran
+    // (EXERCISED_LINES_LIMITS). The hub sends the frame only to a cell that
+    // names it. The 33rd name: a cell names it only while its hello stays
+    // within HELLO_FEATURES_OLDER_HUB_MAX, so a hub older than the 64 still
+    // accepts the hello.
+    'exercisedLines',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
+
+/**
+ * The most features a hub before the 64 limit accepts in a hello. A cell
+ * keeps its hello within it, dropping the newest optional feature it would
+ * name past it, until every hub accepts 64.
+ */
+export const HELLO_FEATURES_OLDER_HUB_MAX = 32;
+
+/**
+ * claim.exercised (feature exercisedLines): which of the PR's changed lines
+ * the PR side ran during the probes. The worker names the changed executable
+ * lines (repository-relative paths, new-side line numbers); the cell answers
+ * line counts per file and never the coverage itself, which stays in the
+ * claim.
+ */
+export const EXERCISED_LINES_LIMITS = { files: 200, linesPerFile: 2_000, maxLine: 1_000_000 } as const;
+export const EXERCISED_LANGUAGES = ['node', 'unsupported'] as const;
+export const EXERCISED_FILE_STATUSES = ['measured', 'unknown'] as const;
+/**
+ * Why a file is unknown:
+ *   - no_coverage_written: no service of the claim wrote coverage.
+ *   - not_loaded_unproven: no script or source map maps to the file, and no
+ *     other file of the claim mapped (nothing proves the mapping works).
+ *   - unmapped_source: a script maps to the file but its coverage could not
+ *     be read back to its lines (a source map that does not decode).
+ *   - unsupported_language: not a JS or TS file.
+ *   - unsupported_driver: the claim's driver cannot collect coverage.
+ *   - coverage_too_large: the coverage the claim wrote is past the cell's bound.
+ */
+export const EXERCISED_UNKNOWN_REASONS = ['no_coverage_written', 'not_loaded_unproven', 'unmapped_source', 'unsupported_language', 'unsupported_driver', 'coverage_too_large'] as const;
+const exercisedPath = z.string().min(1).max(1_024).regex(UPLOAD_PATH);
+const exercisedCount = z.number().int().min(0).max(EXERCISED_LINES_LIMITS.linesPerFile);
+export const ExercisedRequestSchema = z.strictObject({
+    files: z
+        .array(
+            z.strictObject({
+                path: exercisedPath,
+                lines: z.array(z.number().int().min(1).max(EXERCISED_LINES_LIMITS.maxLine)).min(1).max(EXERCISED_LINES_LIMITS.linesPerFile),
+            }),
+        )
+        .min(1)
+        .max(EXERCISED_LINES_LIMITS.files),
+});
+export type ExercisedRequest = z.infer<typeof ExercisedRequestSchema>;
+export const ExercisedResultSchema = z.strictObject({
+    language: z.enum(EXERCISED_LANGUAGES),
+    files: z
+        .array(
+            z.strictObject({
+                path: exercisedPath,
+                changedLines: exercisedCount,
+                exercisedLines: exercisedCount.nullable(),
+                status: z.enum(EXERCISED_FILE_STATUSES),
+                reason: z.enum(EXERCISED_UNKNOWN_REASONS).optional(),
+            }),
+        )
+        .max(EXERCISED_LINES_LIMITS.files),
+});
+export type ExercisedResult = z.infer<typeof ExercisedResultSchema>;
 
 /**
  * The optional fields a cell may send that a hub older than them refuses
@@ -887,6 +953,9 @@ export const MessageBodySchemas = {
     // only its network until released); round restores it at once from the
     // snapshot. Answered by step.result snapshot.
     'claim.snapshot': z.strictObject({ stepId: z.uuid(), purpose: z.enum(SNAPSHOT_PURPOSES) }),
+    // After the probes, on the PR claim (feature exercisedLines): count the
+    // changed lines its services ran. Answered by step.result exercised.
+    'claim.exercised': z.strictObject({ stepId: z.uuid(), exercised: ExercisedRequestSchema }),
     'step.result': z.strictObject({
         stepId: z.uuid(),
         executor: z.enum(['observer', 'vm']),
@@ -910,6 +979,8 @@ export const MessageBodySchemas = {
         sandbox: SandboxResultSchema.optional(),
         // claim.snapshot's: the snapshot the cell made (executor vm, nothing else).
         snapshot: z.strictObject({ id: SnapshotIdSchema, purpose: z.enum(SNAPSHOT_PURPOSES), ms }).optional(),
+        // claim.exercised's: line counts per changed file (executor vm, nothing else).
+        exercised: ExercisedResultSchema.optional(),
         // How many values the cell replaced with [redacted:<rule>] in this
         // result before it left the cell (S-51).
         redactions: z.number().int().min(0).optional(),
@@ -919,6 +990,7 @@ export const MessageBodySchemas = {
     }).superRefine((b, ctx) => {
         if (b.sandbox && (b.exec || b.probe || b.browserExploration || b.executor !== 'vm')) ctx.addIssue({ code: 'custom', message: 'a sandbox result is an exclusive vm result', path: ['sandbox'] });
         if (b.snapshot && (b.exec || b.probe || b.browserExploration || b.sandbox || b.executor !== 'vm')) ctx.addIssue({ code: 'custom', message: 'a snapshot result is an exclusive vm result', path: ['snapshot'] });
+        if (b.exercised && (b.exec || b.probe || b.browserExploration || b.sandbox || b.snapshot || b.executor !== 'vm')) ctx.addIssue({ code: 'custom', message: 'an exercised result is an exclusive vm result', path: ['exercised'] });
         if (b.browserExploration && (b.exec || b.probe || b.executor !== 'observer')) ctx.addIssue({ code: 'custom', message: 'browser exploration is an exclusive observer result', path: ['browserExploration'] });
         // A probe result comes from the observer, an exec result from the VM,
         // never both: a result that says otherwise is refused, not guessed.

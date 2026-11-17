@@ -89,6 +89,12 @@ func Down(project string, volumes bool) []string {
 	return args
 }
 
+// Kill sends signal to the named services of a project, and no other:
+// "--" ends the flags, so no service name reads as one.
+func Kill(project, signal string, services ...string) []string {
+	return append(Project{Name: project}.with("kill", "-s", signal, "--"), services...)
+}
+
 // ShellQuote is s as one single-quoted POSIX shell word.
 func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 

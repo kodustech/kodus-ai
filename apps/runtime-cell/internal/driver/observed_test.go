@@ -105,6 +105,7 @@ type everyPart struct {
 	driver.BootPhaser
 	driver.BuildStateReporter
 	driver.SQLObserverProvisioner
+	driver.CoverageFlusher
 	driver.Sweeper
 }
 

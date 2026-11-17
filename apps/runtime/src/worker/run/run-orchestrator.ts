@@ -1,4 +1,9 @@
 import { coveredEntryPoint, diffRefOf, extractEntryPoints, noRuntimeEffectOf } from '@libs/runtime/entry-points';
+import { executableChangedLines } from '@libs/runtime/entry-points/executable-lines';
+import { DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT } from '@libs/runtime/contracts/limits';
+import { EXERCISED_LINES_LIMITS, type ExercisedResult, ExercisedRequestSchema, ExercisedResultSchema } from '@libs/runtime/protocol/messages';
+import { exercisedSummaryOf } from '@libs/runtime/run/exercised-lines';
+import type { ReportExercised } from '@libs/runtime/run/run-report';
 import { exercisedOf } from '@libs/runtime/probe/exercised';
 import { AcquireRequest, Blocked, Claim, isBlocked, isCapacityWait, readyDeadlineOf } from '@libs/runtime/environment';
 import { baseUnstableFields, browserStepKindsOf, decideIntendedChange, decideNewEndpoint, GateStep, LATEST_IMAGE, markUnbackedClaims, NORMALIZER_VERSION, probeKeyOf, StabilityRecord, stabilityPolicyFor } from '@libs/runtime/gate';
@@ -489,6 +494,7 @@ export async function publish(
                       bootFailure: current?.bootFailure,
                       noRuntimeEffect: current?.noRuntimeEffect,
                       coldBuild: current?.coldBuild,
+                      exercised: current?.exercised,
                   }),
                   canaries,
               );
@@ -504,6 +510,7 @@ export async function publish(
                       securityEvent: state === 'halted',
                       recipeChangedInPr: current?.recipeChangedInPr,
                       recipeChangedInMember: current?.recipeChangedInMember,
+                      exercised: current?.exercised?.summary,
                   })
                 : `### Kody Runtime · ${check.title}`,
             canaries,
@@ -1458,6 +1465,33 @@ async function testSides(run: RunScope, ready: ReadySides, providedPlan: AgentPl
     return t;
 }
 
+/**
+ * After the probes, which of the PR's changed executable lines the PR claim ran (claim.exercised),
+ * in one step. Absent when the diff has none or the Run stopped early. A cell that gives no answer
+ * (or a malformed one) never fails the Run: the summary reads not measured and the verdict stays.
+ */
+async function exercisedOnPr(run: RunScope, pr: Claim): Promise<ReportExercised | undefined> {
+    const { deps, req, ctx } = run;
+    if (ctx.stoppedEarly) return undefined;
+    const files = executableChangedLines(req.diff, { maxFiles: EXERCISED_LINES_LIMITS.files, maxLinesPerFile: EXERCISED_LINES_LIMITS.linesPerFile });
+    if (!files.length) return undefined;
+    const threshold = (deps.exercisedLinesThresholdPercent ?? DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT) / 100;
+    return deps.step('exercised', async () => {
+        const request = ExercisedRequestSchema.safeParse({ files });
+        let answer: ExercisedResult | undefined;
+        if (request.success) {
+            try {
+                answer = await deps.requestExercised?.(pr, request.data);
+            } catch (e) {
+                if (isCancellation(e)) throw e;
+            }
+        }
+        const valid = answer ? ExercisedResultSchema.safeParse(answer) : undefined;
+        const result = valid?.success ? valid.data : undefined;
+        return { summary: exercisedSummaryOf(result, threshold), files: result?.files ?? [] };
+    });
+}
+
 /** reporting: the egress the cell blocked, the Run's verdict and reproduction, and its end. */
 async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Promise<RunResult> {
     const { deps, req, canaries, ctx, tally, startedAt } = run;
@@ -1498,6 +1532,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
         probes = redactDeep(probes, canaries);
     }
     ctx.dependencyChangeUntested = t.dependency.length > 0 && !verdicts.some((v) => t.dependency.some((d) => d.id === v.entryPoint));
+    const exercised = await exercisedOnPr(run, pr);
     const verdict = decideRunVerdict({
         entryPoints: t.verdictEntryPoints,
         probes,
@@ -1506,6 +1541,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
         // A diff the product cut is partly tested at best.
         diffTruncated: req.diffTruncated === true,
         identityMismatch: !!ready.identityMismatch,
+        ...(exercised ? { exercised: exercised.summary } : {}),
     });
     tally.findings = verdict.findings.length;
     if (ctx.securityViolation) await securityViolationEvent(deps, req, ctx.securityViolation);
@@ -1527,6 +1563,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
             uncoveredEntryPoints: verdict.uncoveredEntryPoints,
             uncovered: uncoveredOf(probes, verdict.uncoveredEntryPoints, ctx.stoppedEarly),
             verdictState: verdict.verdictState,
+            ...(exercised ? { exercised } : {}),
         });
         await deps.events.append(req.organizationId, req.runId, {
             type: 'verdict',

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BLOCKER_KINDS, FINDING_INTENTS, FINDING_KINDS, MAX_RECIPE_CHANGED_PATHS, RECIPE_CHANGED_PATH, RUN_TRIGGERS, SECURITY_VIOLATION_SIGNATURE, VERDICTS } from '@libs/runtime/contracts/enums';
 import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
 import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
+import { EXERCISED_LANGUAGES, EXERCISED_LINES_LIMITS, ExercisedResultSchema } from '@libs/runtime/protocol/messages';
 
 import { RUN_STATES } from './run-state';
 
@@ -117,6 +118,24 @@ export const UncoveredSchema = z.strictObject({
 });
 export type Uncovered = z.infer<typeof UncoveredSchema>;
 
+const lineCount = z.number().int().min(0).max(EXERCISED_LINES_LIMITS.files * EXERCISED_LINES_LIMITS.linesPerFile);
+/**
+ * Which changed lines ran (exercised-lines.ts): the sum over the measured
+ * files, the threshold the verdict used, and the cell's answer per file.
+ * Absent on Runs before it, or when the worker did not ask.
+ */
+export const ReportExercisedSchema = z.strictObject({
+    summary: z.strictObject({
+        exercised: lineCount,
+        changed: lineCount,
+        threshold: z.number().min(0).max(1),
+        language: z.enum(EXERCISED_LANGUAGES).optional(),
+        measured: z.boolean(),
+    }),
+    files: ExercisedResultSchema.shape.files,
+});
+export type ReportExercised = z.infer<typeof ReportExercisedSchema>;
+
 export const RuntimeRunReportSchema = z.strictObject({
     state: z.enum(RUN_STATES),
     verdictState: z.enum(['no_regressions', 'regression', 'partly_tested', 'could_not_boot', 'nothing_to_test']).optional(),
@@ -175,6 +194,7 @@ export const RuntimeRunReportSchema = z.strictObject({
     recipeChangedInPr: z.array(z.string().regex(RECIPE_CHANGED_PATH)).min(1).max(MAX_RECIPE_CHANGED_PATHS).optional(),
     /** The PR is in this member repository of a multi-repository environment: its recipeChangedInPr were not applied (only the primary's recipe boots). */
     recipeChangedInMember: RepositoryAliasSchema.optional(),
+    exercised: ReportExercisedSchema.optional(),
 });
 export type RuntimeRunReport = z.infer<typeof RuntimeRunReportSchema>;
 

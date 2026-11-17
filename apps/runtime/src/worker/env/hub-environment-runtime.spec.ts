@@ -525,3 +525,19 @@ describe("a Run side's round snapshot through the hub", () => {
         expect(await env.snapshotRound('claim-1', stepId)).toEqual({ code: 'transport_lost', stepId });
     });
 });
+
+describe("the PR claim's exercised lines through the hub", () => {
+    const request = { files: [{ path: 'src/x.js', lines: [3] }] };
+    const result = { language: 'node', files: [{ path: 'src/x.js', changedLines: 1, exercisedLines: 1, status: 'measured' }] };
+    it("asks the claim's replica and returns the counts; a cell without exercisedLines or a refusal is undefined", async () => {
+        const calls: Call[] = [];
+        const env = runtime(client(async (url, headers, body) => {
+            await recording(calls)(url, headers, body);
+            return { status: 200, text: JSON.stringify({ exercised: result }) };
+        }));
+        expect(await env.exercisedLines('claim-1', 's1', request)).toEqual(result);
+        expect(calls[0]).toMatchObject({ url: 'https://hub-1/internal/claims/claim-1/exercised', body: { organizationId: 'org-a', runId: 'run-1', stepId: 's1', exercised: request } });
+        expect(await runtime(client(async () => ({ status: 200, text: '{"exercised":null}' }))).exercisedLines('claim-1', 's2', request)).toBeUndefined();
+        expect(await runtime(client(async () => ({ status: 409, text: JSON.stringify({ code: 'refused', message: 'no' }) }))).exercisedLines('claim-1', 's3', request)).toBeUndefined();
+    });
+});

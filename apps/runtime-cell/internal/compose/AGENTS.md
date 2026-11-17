@@ -28,7 +28,7 @@ Reads a checkout's docker compose project and adapts it to run on a cell, as dat
 
 ## Module map
 
-Files (5, tests apart): `adapt.go`, `fakes.go`, `overlay.go`, `profiles.go`, `project.go`
+Files (6, tests apart): `adapt.go`, `fakes.go`, `node_coverage.go`, `overlay.go`, `profiles.go`, `project.go`
 
 Imports these Runtime modules:
 
@@ -38,6 +38,7 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/internal/agent`](../agent/AGENTS.md)
+- [`apps/runtime-cell/internal/agent/coverage`](../agent/coverage/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/localdocker`](../drivers/localdocker/AGENTS.md)
 
 <!-- module-map:end -->

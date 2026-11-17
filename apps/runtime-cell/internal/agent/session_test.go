@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -214,6 +215,75 @@ func TestAnEstablishedSessionResetsTheReconnectBackoff(t *testing.T) {
 	// waited the 320 ms the failures had reached).
 	if gap := hellos[6].Sub(hellos[5]); gap > 250*time.Millisecond {
 		t.Fatalf("redial after an established session took %s: the backoff was not reset", gap)
+	}
+}
+
+// A hub before the 64 limit refuses a hello of more than 32 features: the
+// next hello fits its 32 (exercisedLines left out) and is accepted, and the
+// one after that tries the whole list again, so an upgraded hub hears it.
+func TestAHelloPastAnOlderHubsFeatureLimitIsSentTrimmedOnceAfterItsRefusal(t *testing.T) {
+	h := newHarness(t, func(cfg *Config) { cfg.ExercisedLines = true })
+	full := h.a.Hello().Features
+	// The harness names fewer than a production cell: the older hub's
+	// limit is brought down to one below what it names.
+	limit := olderHubFeatureLimit
+	olderHubFeatureLimit = len(full) - 1
+	t.Cleanup(func() { olderHubFeatureLimit = limit })
+	if !slices.Contains(full, protocol.FeatureExercisedLines) {
+		t.Fatalf("exercisedLines not named: %v", full)
+	}
+	var mu sync.Mutex
+	var sent [][]string
+	url, tlsCfg := scriptedHub(t, func(m *protocol.Message, answerWith func(body any)) {
+		hello, ok := m.Body.(*protocol.HelloBody)
+		if !ok {
+			return // heartbeats go unanswered: an accepted session ends at once
+		}
+		mu.Lock()
+		sent = append(sent, hello.Features)
+		mu.Unlock()
+		if len(hello.Features) > olderHubFeatureLimit {
+			answerWith(&protocol.NackBody{Code: string(protocol.CodeInvalidBody), Message: "features: too many"})
+			return
+		}
+		v := protocol.SupportedVersions()[0]
+		answerWith(&protocol.AckBody{Version: &v})
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = h.a.Run(ctx, RunConfig{HubURL: url, TLS: tlsCfg, Backoff: 5 * time.Millisecond, MaxBackoff: 10 * time.Millisecond, RefusedBackoff: time.Hour, HeartbeatEvery: 10 * time.Millisecond, AckTimeout: 50 * time.Millisecond, MissedHeartbeats: 1})
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := len(sent)
+		mu.Unlock()
+		if n >= 3 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sent) < 3 {
+		t.Fatalf("hellos = %d, want 3", len(sent))
+	}
+	if len(sent[0]) != len(full) {
+		t.Fatalf("first hello named %d features, want the whole %d", len(sent[0]), len(full))
+	}
+	if len(sent[1]) > olderHubFeatureLimit || slices.Contains(sent[1], protocol.FeatureExercisedLines) {
+		t.Fatalf("hello after the refusal named %d features (exercisedLines %v)", len(sent[1]), slices.Contains(sent[1], protocol.FeatureExercisedLines))
+	}
+	if len(sent[2]) != len(full) {
+		t.Fatalf("the hello after a trimmed session named %d features, want the whole %d again", len(sent[2]), len(full))
+	}
+	if !strings.Contains(h.logs.String(), "msg=hub.hello_features_refused") {
+		t.Fatalf("the refusal is not logged:\n%s", h.logs.String())
 	}
 }
 

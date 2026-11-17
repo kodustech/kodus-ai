@@ -353,3 +353,27 @@ func TestAValueFromTheFileCountsAsExplicitlySetForFlagOwnership(t *testing.T) {
 		t.Fatalf("flag over file: %q %v", s.GVisorMemLimit, err)
 	}
 }
+
+// Exercised lines are off unless the operator turns them on (the coverage
+// dir has no size cap yet), by flag or by the config file.
+func TestExercisedLinesIsOffByDefaultAndTurnsOn(t *testing.T) {
+	st, err := parse(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.ExercisedLines {
+		t.Fatal("exercised lines are on by default")
+	}
+	if st, err = parse(t, "-exercised-lines"); err != nil || !st.ExercisedLines {
+		t.Fatalf("-exercised-lines: %v, on=%v", err, st.ExercisedLines)
+	}
+	if st, err = parse(t, "-config", writeConfig(t, "cell.yaml", "exercised-lines: true\n")); err != nil || !st.ExercisedLines {
+		t.Fatalf("the file's exercised-lines: true: %v, on=%v", err, st.ExercisedLines)
+	}
+	if st, err = parse(t, "-exercised-lines=false"); err != nil || st.ExercisedLines {
+		t.Fatalf("-exercised-lines=false: %v, on=%v", err, st.ExercisedLines)
+	}
+	if st, err = parse(t, "-config", writeConfig(t, "cell.yaml", "exercised-lines: false\n")); err != nil || st.ExercisedLines {
+		t.Fatalf("the file's exercised-lines: false: %v, on=%v", err, st.ExercisedLines)
+	}
+}

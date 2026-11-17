@@ -1,11 +1,11 @@
 # apps/runtime-cell/internal/agent
 
-The cell agent: the application of the cell process ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It holds the outbound session to the runtime-hub, turns each hub frame into work on the driver, the transport, the observer and the egress control it is given (`Config`), and keeps the leases and the dead-man switch. It is a router over its parts (`agent/claims`, `outbox`, `pool`, `admission`, `provenance`, `evidence`, `checkout`); it decides nothing about the PR.
+The cell agent: the application of the cell process ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It holds the outbound session to the runtime-hub, turns each hub frame into work on the driver, the transport, the observer and the egress control it is given (`Config`), and keeps the leases and the dead-man switch. It is a router over its parts (`agent/claims`, `outbox`, `pool`, `admission`, `provenance`, `evidence`, `coverage`, `checkout`); it decides nothing about the PR.
 
 ## Owns
 - The hub session: `session.go` `Agent.Run`, `session` (hello, version choice, housekeeping, heartbeat); a hello refused for the cell's version (`cell_too_new`, `cell_too_old`, an older hub's `unsupported_version`: `asVersionRefusal`) is logged `hub.refused_version` at error and retried only after `RunConfig.RefusedBackoff` (5 min); after an accepted hello, `recordHubProtocol` writes the chosen version and the ack's `cellProtocols` to `Config.HubProtocolState` (`internal/hubprotocol`) for `cell update`, and the hello names `cellProtocols` only when that path is set; `handle.go` `Agent.Handle` (one frame to one handler, ack or nack at once).
 - A claim's life: `acquire.go` `acquire` (admission, ceiling per consumer `hardCeiling`, `rejoin`), `prepare.go` `prepare` (the steps on one `preparation`: network, machines, code, upload, compose, egress, recipeSteps, observerSQL, running), `settle.go` `bringUp` (`claim.ready` or `claim.failed`), `release.go` `release`, `cleanup`, `ReapDeadClaims`.
-- Steps on a ready claim: `steps.go` `admitStep` (dedup by `stepId`, the claim's step limit), `runProbe`, `runExec`; `browser.go`, `browser_explore.go`; `snapshots.go` (memory snapshots, `machine.reset` to a round); `observer_sql.go`.
+- Steps on a ready claim: `steps.go` `admitStep` (dedup by `stepId`, the claim's step limit), `runProbe`, `runExec`; `browser.go`, `browser_explore.go`; `snapshots.go` (memory snapshots, `machine.reset` to a round); `observer_sql.go`; `exercised.go` (`claim.exercised` through the `agent/coverage` part, and which claims' boots instrument their Node services: `collectsCoverage`, a Run's PR or base side only, on a driver with `Parts.Coverage`).
 - Uploads into the checkout: `upload.go` (`checkUpload` before admission: paths out of the checkout, in `.git` or over the cell's `.kodus*`/`.kody*` files, grants that are not plain http(s), modes past 0777; `runUpload` GETs every file's read grant over `EvidenceHTTP`, at most `MaxUploadFileBytes` 4 MiB a file and `MaxUploadBytes` 16 MiB a step, digest-checked when `sha256` is set, then writes each through `Transport.Exec` as base64 env chunks into a staging file renamed over the path; `uploadCanon` leaves the grant URL out). No error, log or result names a grant.
 - What a prepare failure says: `blocker.go` `blockerErr` (kind and stable signature), `bundle.go` `collectBundle` (a setup's failure bundle, 1 MiB), `hold.go` `startHold` (a failed clean setup kept until its ceiling).
 - Egress: `egress_policy.go` `EgressRules.ClaimPolicy`, `PolicySpec`, `InspectRulesFor`; `egress_sync.go` (store and push the hub's allowlist); `recipe_requirements.go` `CheckRecipeEgress`.
@@ -37,13 +37,14 @@ The cell agent: the application of the cell process ([architecture.md](../../../
 
 ## Module map
 
-Files (40, tests apart): `acquire.go`, `agent.go`, `alerts.go`, `blocker.go`, `browser.go`, `browser_explore.go`, `bundle.go`, `canaries.go`, `compose_boot.go`, `config.go`, `disk_watch.go`, `egress_policy.go`, `egress_sync.go`, `evidence_claim.go`, `handle.go`, `hold.go`, `image_policy.go`, `manifest.go`, `memory.go`, `metrics.go`, `observer_sql.go`, `org_secrets.go`, `pool_claims.go`, `prepare.go`, `preview.go`, `progress.go`, `recipe_fakes.go`, `recipe_requirements.go`, `redaction.go`, `release.go`, `run_identity.go`, `sandbox.go`, `sandbox_pool.go`, `session.go`, `settle.go`, `snapshots.go`, `source_health.go`, `steps.go`, `upload.go`, `workspace.go`
+Files (41, tests apart): `acquire.go`, `agent.go`, `alerts.go`, `blocker.go`, `browser.go`, `browser_explore.go`, `bundle.go`, `canaries.go`, `compose_boot.go`, `config.go`, `disk_watch.go`, `egress_policy.go`, `egress_sync.go`, `evidence_claim.go`, `exercised.go`, `handle.go`, `hold.go`, `image_policy.go`, `manifest.go`, `memory.go`, `metrics.go`, `observer_sql.go`, `org_secrets.go`, `pool_claims.go`, `prepare.go`, `preview.go`, `progress.go`, `recipe_fakes.go`, `recipe_requirements.go`, `redaction.go`, `release.go`, `run_identity.go`, `sandbox.go`, `sandbox_pool.go`, `session.go`, `settle.go`, `snapshots.go`, `source_health.go`, `steps.go`, `upload.go`, … and 1 more
 
 Imports these Runtime modules:
 
 - [`apps/runtime-cell/internal/agent/admission`](admission/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/checkout`](checkout/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/claims`](claims/AGENTS.md)
+- [`apps/runtime-cell/internal/agent/coverage`](coverage/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/evidence`](evidence/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/outbox`](outbox/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/pool`](pool/AGENTS.md)

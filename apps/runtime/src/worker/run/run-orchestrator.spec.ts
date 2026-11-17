@@ -555,6 +555,68 @@ describe('runRuntimeRun', () => {
         expect(result.title).toBe('No regressions in what was tested · 2 blocked outbound requests');
     });
 
+    describe('changed lines exercised on the PR side', () => {
+        const greenRun = () => {
+            const listOnly = JSON.parse(shopTurns[1].text);
+            listOnly.probes = listOnly.probes.filter((p: any) => p.probe.id === 'orders-list');
+            const h = inMemoryRunDeps({ turns: [shopTurns[0], { ...shopTurns[1], text: JSON.stringify(listOnly) }] as any });
+            const req = shopRunRequest({
+                diff: [{ path: 'src/orders/orders.controller.ts', patch: '@@ -4,1 +4,2 @@\n     list() {\n+        return 1;', content: "@Controller('orders')\nexport class A {\n    @Get()\n    list() {\n        return 1;\n    }\n}" }],
+            });
+            return { ...h, req };
+        };
+        // The last comment is the report; the ones before it are progress.
+        const reportOf = (published: any[]) => published.filter((p) => p.kind === 'comment').at(-1)?.report;
+
+        it('asks the PR claim for the changed executable lines, and 4 of 10 under the threshold keeps a green Run partly tested', async () => {
+            const { deps, projection, published, claims, req } = greenRun();
+            const asked: any[] = [];
+            deps.requestExercised = async (claim, request) => {
+                asked.push({ side: claims.claims.get(claim.claimId)?.side, request });
+                return { language: 'node', files: [{ path: 'src/orders/orders.controller.ts', changedLines: 10, exercisedLines: 4, status: 'measured' }] };
+            };
+            await seed(projection, req);
+            const result = await runRuntimeRun(req, deps);
+            expect(asked).toEqual([{ side: 'pr', request: { files: [{ path: 'src/orders/orders.controller.ts', lines: [5] }] } }]);
+            expect(result).toMatchObject({ state: 'partly_tested' });
+            const exercised = { summary: { exercised: 4, changed: 10, threshold: 0.5, language: 'node', measured: true }, files: [{ path: 'src/orders/orders.controller.ts', changedLines: 10, exercisedLines: 4, status: 'measured' }] };
+            expect((await projection.get(req.runId))?.exercised).toEqual(exercised);
+            expect(reportOf(published)?.exercised).toEqual(exercised);
+        });
+
+        it('keeps the verdict when the cell gives no answer, and records the lines as not measured', async () => {
+            const { deps, projection, published, req } = greenRun();
+            deps.requestExercised = async () => undefined;
+            await seed(projection, req);
+            const result = await runRuntimeRun(req, deps);
+            expect(result).toMatchObject({ state: 'no_regressions' });
+            expect(reportOf(published)?.exercised).toEqual({ summary: { exercised: 0, changed: 0, threshold: 0.5, measured: false }, files: [] });
+        });
+
+        it('reads the threshold from the deps: 30% keeps 4 of 10 green', async () => {
+            const { deps, projection, req } = greenRun();
+            deps.exercisedLinesThresholdPercent = 30;
+            deps.requestExercised = async () => ({ language: 'node', files: [{ path: 'src/orders/orders.controller.ts', changedLines: 10, exercisedLines: 4, status: 'measured' }] });
+            await seed(projection, req);
+            expect(await runRuntimeRun(req, deps)).toMatchObject({ state: 'no_regressions' });
+            expect((await projection.get(req.runId))?.exercised?.summary.threshold).toBe(0.3);
+        });
+
+        it('asks nothing and records nothing when the diff has no changed executable line', async () => {
+            const { deps, projection, req } = greenRun();
+            const noCode = { ...req, diff: [{ ...req.diff[0], patch: '@@ -4,1 +4,1 @@\n     list() {' }] };
+            let asked = 0;
+            deps.requestExercised = async () => {
+                asked++;
+                return undefined;
+            };
+            await seed(projection, noCode);
+            expect(await runRuntimeRun(noCode, deps)).toMatchObject({ state: 'no_regressions' });
+            expect(asked).toBe(0);
+            expect((await projection.get(req.runId))?.exercised).toBeUndefined();
+        });
+    });
+
     it('finalizeStoppedRun supersedes a live Run without a comment and releases its claims', async () => {
         const { deps, projection, published, claims } = inMemoryRunDeps();
         const req = shopRunRequest();
