@@ -48,15 +48,27 @@ describe('eval model route — Claude on Amazon Bedrock', () => {
         );
     });
 
-    it('keeps an API-key provider unchanged', () => {
-        const config = storedByokConfig({
-            provider: 'anthropic',
-            model: 'claude-sonnet-5-5',
-            apiKey: 'sk-test',
-        });
-        const [credential] = config.credentials;
-        expect(decrypt(credential.apiKey)).toBe('sk-test');
-        expect(credential.settings).toEqual({});
+    it('keeps an API-key entry unchanged next to a Bedrock model', () => {
+        const config = storedByokConfigOf([
+            {
+                id: 'm1',
+                provider: 'anthropic',
+                model: 'claude-sonnet-5-5',
+                apiKey: 'sk-test',
+            },
+            {
+                id: 'm2',
+                provider: 'amazon_bedrock',
+                model: 'us.anthropic.claude-sonnet-5-5',
+                apiKey: 'ABSK-test-key',
+                awsRegion: 'us-east-1',
+            },
+        ]);
+        const [anthropic, bedrock] = config.credentials;
+        expect(decrypt(anthropic.apiKey)).toBe('sk-test');
+        expect(anthropic.settings).toEqual({});
+        expect(bedrock.apiKey).toBe('');
+        expect(decrypt(bedrock.settings.awsBearerToken)).toBe('ABSK-test-key');
     });
 
     it('routes the tier-0 Bedrock id with the key from API_AWS_BEDROCK', () => {

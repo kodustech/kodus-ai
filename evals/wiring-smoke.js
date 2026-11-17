@@ -427,10 +427,17 @@ async function main() {
                 '--quality',
                 '--judge=eval-fake',
             ],
+            // The scripted model never lands a finding on a violation site, so
+            // the judge is not called here: this proves the quality block,
+            // latency and per-run tokens are written, not what the judge says.
             check: ({ result }) =>
-                result?.metrics && 'titleQuality' in result.metrics && result.latency && Array.isArray(result.tokensByRun)
+                result?.quality?.judge === 'eval-fake' &&
+                result.quality.judgeErrors === 0 &&
+                Number.isFinite(result.latency?.stageMsP50) &&
+                Array.isArray(result.tokensByRun) &&
+                result.tokensByRun.length > 0
                     ? null
-                    : 'expected the quality metrics, the stage latency and the per-run tokens in the result',
+                    : 'expected the quality block for the eval-fake judge with no judge error, the stage latency and the per-run tokens in the result',
         },
         // The finder reads the target branch's CLAUDE.md through
         // readRepoInstruction; the verifier receives that instruction.

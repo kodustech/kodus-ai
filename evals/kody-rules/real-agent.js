@@ -124,10 +124,11 @@ const qualityDetails = [];
 
 async function gradeFindings(judge, findings, rule, fileContents, caseLabel) {
     const q = quality.emptyQuality();
+    const contentByPath = new Map(Object.entries(fileContents || {}).map(([f, c]) => [normalizePath(f), c]));
     for (const s of findings) {
         const before = snapshotTokens();
         try {
-            const { score, verdict } = await quality.grade(judge, s, rule, fileContents?.[s.relevantFile]);
+            const { score, verdict } = await quality.grade(judge, s, rule, contentByPath.get(normalizePath(s.relevantFile)));
             quality.addQuality(q, score);
             qualityDetails.push({
                 case: caseLabel,

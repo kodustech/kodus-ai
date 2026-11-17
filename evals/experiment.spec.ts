@@ -462,7 +462,7 @@ describe('evals/experiment.js the Kody Rules agent', () => {
     const run = {
         metric: { name: 'occurrence recall', value: 0.5 },
         cases: [
-            { id: 'a', hits: 3, total: 4, flagged: 5, offSite: 1, cleanFiles: 10, falseAlarms: 1, quality: { graded: 3, titleOk: 2, fixGraded: 3, fixPass: 3, judgeErrors: 0 } },
+            { id: 'a', hits: 3, total: 4, flagged: 5, offSite: 1, cleanFiles: 10, falseAlarms: 1, quality: { graded: 4, titleOk: 2, fixGraded: 3, fixPass: 1, judgeErrors: 0 } },
             { id: 'b', hits: 0, total: 0, flagged: 0, offSite: 0, cleanFiles: 4, falseAlarms: 0 },
         ],
     };
@@ -479,8 +479,8 @@ describe('evals/experiment.js the Kody Rules agent', () => {
     });
 
     it('reads title and fix quality only where the judge graded', () => {
-        expect(rows('kody-title-quality')).toEqual([['a', 2, 3]]);
-        expect(rows('kody-fix-quality')).toEqual([['a', 3, 3]]);
+        expect(rows('kody-title-quality')).toEqual([['a', 2, 4]]);
+        expect(rows('kody-fix-quality')).toEqual([['a', 1, 3]]);
     });
 
     it('guards the files outside a rule’s language with the polyglot set, scored as specificity', () => {
@@ -488,6 +488,12 @@ describe('evals/experiment.js the Kody Rules agent', () => {
         expect(guard.run).toEqual(expect.arrayContaining(['--dataset=polyglot-cases']));
         const read = guard.read({ metric: {}, cases: [{ id: 'r', hits: 0, total: 0, cleanFiles: 12, falseAlarms: 2 }] });
         expect(read.cases.map((c: Case) => [c.id, c.hits, c.total])).toEqual([['r', 10, 12]]);
+    });
+
+    it('leaves a guard case without a false-alarm count unmeasured rather than perfect', () => {
+        const [guard] = plan.guards;
+        const read = guard.read({ metric: {}, cases: [{ id: 'r', cleanFiles: 12 }, { id: 's', cleanFiles: 3, falseAlarms: 0 }] });
+        expect(read.cases.map((c: Case) => [c.id, c.hits, c.total])).toEqual([['s', 3, 3]]);
     });
 
     it('never runs on a PR check: every case is a real review on a real model', () => {

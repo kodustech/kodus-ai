@@ -203,7 +203,7 @@ const STEP_EVALS = {
             derived: [
                 { id: 'kody-line-precision', label: 'Flags on a real violation', question: 'Of the lines the agent flagged, how many break the rule?', hits: (c) => c.flagged - c.offSite, total: (c) => (Number.isInteger(c.flagged) ? c.flagged : NaN) },
                 { id: 'kody-specificity', label: 'Clean files left alone', question: 'Of the files that break no rule, how many did the agent leave alone?', hits: (c) => c.cleanFiles - c.falseAlarms, total: (c) => (Number.isInteger(c.cleanFiles) ? c.cleanFiles : NaN) },
-                { id: 'kody-title-quality', label: 'Titles that name the problem', question: 'Of the findings on a real violation, how many have a title the judge says names the problem?', hits: (c) => c.quality?.titleOk, total: (c) => (c.quality ? c.quality.graded : NaN) },
+                { id: 'kody-title-quality', label: 'Titles that name the problem', question: 'Of the findings on a real violation, how many have a title in the expected format that the judge says names the problem?', hits: (c) => c.quality?.titleOk, total: (c) => (c.quality ? c.quality.graded : NaN) },
                 { id: 'kody-fix-quality', label: 'Fixes the judge passes', question: 'Of the findings on a real violation, how many carry a fix the judge passes?', hits: (c) => c.quality?.fixPass, total: (c) => (c.quality ? c.quality.fixGraded : NaN) },
             ],
         },
@@ -213,7 +213,7 @@ const STEP_EVALS = {
                 label: "Files outside the rule's language left alone",
                 run: ['evals/kody-rules/real-agent.js', '--runs=1', '--dataset=polyglot-cases'],
                 question: 'With a Ruby-only rule over Ruby, JavaScript and template PRs, how many files outside Ruby does the agent leave alone?',
-                read: (raw) => ({ ...raw, cases: (raw.cases || []).filter((c) => Number.isInteger(c.cleanFiles)).map((c) => ({ id: c.id, checks: 'Leaves every file outside the rule alone', hits: c.cleanFiles - (c.falseAlarms || 0), total: c.cleanFiles })) }),
+                read: (raw) => ({ ...raw, cases: (raw.cases || []).filter((c) => Number.isInteger(c.cleanFiles) && Number.isInteger(c.falseAlarms)).map((c) => ({ id: c.id, checks: 'Leaves every file outside the rule alone', hits: c.cleanFiles - c.falseAlarms, total: c.cleanFiles })) }),
             },
         ],
     },
