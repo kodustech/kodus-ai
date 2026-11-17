@@ -14,7 +14,7 @@ import { ASKED_RUNS_REACHED_DETAIL } from '../application/asked-runs';
 import { COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY } from '../domain/trigger-rules';
 import type { PullRequestHead, RuntimeGitPort, RuntimeRepoTokenIssuer, RuntimeRepositorySettingsRecord } from '../domain/ports';
 import { CodeManagementRepoTokenIssuer } from '../infrastructure/repo-token-issuer.adapter';
-import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, REPO, run, SECRET, SHA, storeWith, TEAM } from './fixtures';
+import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, REPO, run, SECRET, SHA, runtimeReleaseGate, storeWith, TEAM } from './fixtures';
 import { InMemoryPublicationStore, InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 
 const NEW_SHA = 'c'.repeat(40);
@@ -59,6 +59,8 @@ async function setup(opts: {
     /** What the integration's own credential can do on the repository, as the provider answers it. */
     readAccess?: 'ok' | 'denied' | 'unknown';
     issuer?: RuntimeRepoTokenIssuer;
+    /** Whether the org may use the Runtime (alpha track and flag); on by default. */
+    released?: boolean;
 } = {}) {
     const head = opts.head === undefined ? { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'open' as const } : opts.head;
     const git = {
@@ -102,6 +104,7 @@ async function setup(opts: {
             platform.port,
             { ownAuthor: async () => ({ userIds: [KODY_ACCOUNT] }) },
         ),
+        runtimeReleaseGate(opts.released ?? true),
     );
     const requested = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.requested').map((r) => RuntimeRunRequestedSchema.parse(stripType(r.payload.payload)));
     const cancels = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.cancel_requested').map((r) => RuntimeRunCancelRequestedSchema.parse(stripType(r.payload.payload)));
@@ -137,6 +140,28 @@ function fakePlatform() {
 const stripType = ({ workflowType: _t, ...rest }: any) => rest;
 
 describe('Runtime PR trigger (PR 2)', () => {
+    it('a PR event from an org the Runtime is not released to is skipped as not_enabled, before any read or enqueue', async () => {
+        const s = await setup({ released: false });
+        const getHead = jest.spyOn(s.git, 'getPullRequestHead');
+        await expect(s.useCase.execute(event())).resolves.toEqual({ action: 'skipped', reason: 'not_enabled' });
+        expect(getHead).not.toHaveBeenCalled();
+        expect(s.requested()).toHaveLength(0);
+        expect(s.pool.onPullRequest).not.toHaveBeenCalled();
+    });
+
+    it('a `@kody runtime` from an org the Runtime is not released to gets no answer on the PR', async () => {
+        const s = await setup({ released: false, canWrite: true });
+        await expect(s.useCase.execute(event({ event: 'comment', commenter: { id: '42', login: 'maria' } }))).resolves.toEqual({ action: 'skipped', reason: 'not_enabled' });
+        expect(s.platform.comments).toHaveLength(0);
+        expect(s.requested()).toHaveLength(0);
+    });
+
+    it('a PR closed in an org the Runtime is not released to still stops the Runs it had accepted', async () => {
+        const s = await setup({ released: false, runs: [run({ state: 'testing' })], head: { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'closed' } });
+        await expect(s.useCase.execute(event({ event: 'closed' }))).resolves.toEqual({ action: 'cancelled', reason: 'pr_closed' });
+        expect(s.cancels()).toHaveLength(1);
+    });
+
     it('a PR that matches a rule enqueues a Run with its publish target, from the outbox envelope', async () => {
         const { useCase, targets, requested } = await setup();
         const outcome = await useCase.execute(runtimeTriggerOutboxMessage(event(), 'm-1').payload);

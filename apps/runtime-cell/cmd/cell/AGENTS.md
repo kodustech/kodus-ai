@@ -5,12 +5,12 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 ## Owns
 - Settings: `config.go` `settings.register`, `parseSettings`; the config file (`-config`, YAML or JSON) sets any registered flag by name (`applyFile`, `loadFile`), and a flag wins over the file.
 - The driver registry: `drivers.go` `drivers` (one `driverEntry` per `Kind`: gate, validation, observer modes, `Open`), `selectDriver` (`-driver auto`, `-isolation-backend`), `flagOwners` and `checkFlagOwners`.
-- Opening each driver and filling `agent.Config.Parts`: `wire.go` `wireAWS`, `wireDockerGVisor`, `wireMicroVM`, `wireK8s`, `wireFake`, `wireLocalDocker`; per-driver flags in `microvm.go`, `k8s.go`, `sandbox.go`, `claim_limits.go`.
+- Opening each driver and filling `agent.Config.Parts`: `wire.go` `wireAWS`, `wireDockerGVisor`, `wireMicroVM`, `wireK8s`, `wireFake`, `wireLocalDocker`; per-driver flags in `microvm.go`, `k8s.go` (environment Runs on k8s-sandbox: `k8senv.go`, the `-k8s-env-*` flags, `checkK8sEnv` from the gate, `envConfig` to `k8ssandbox.EnvConfig`, `k8sObservers` and `k8sPreviewUpstreams` over `DialObserver`, `transport.Compose{Run: d.Exec}` in `wireK8s` when `RunsEnvironments`), `sandbox.go`, `claim_limits.go`.
 - What the agent gets beside the driver: `main.go` `buildAgent` (observers, preview tunnel, egress control with `policyPusher`, alert feeds, denied and outbound readers), `memory.go` `observeDriver` (memory admission budget), `disk.go` `diskWatch`.
 - Trust: `roots.go` `loadRoots` (hub CA, cell-local CA, injector CA; refuses two that share a key), `trust.go` `trustSettings.write` (the files a claim with org secrets mounts), `main.go` `resolveCellID` (the id is the certificate's CN).
 - Shutdown order: `serve.go` `serveCell` (agent and loops stop, `sweepExpired` ends, then the driver closes, all within `shutdownGrace`).
 - `cell update`'s state dir: `config.go` `cellStateDir` (the `-state-dir` the cell runs with under a config file, by `parseSettings`), and `agent.Config.HubProtocolState` at `<state-dir>/hub-protocol.state` (`main.go`): the skew check reads it, and `cell update-watch` (`cellupdate.RunWatch`, run by the host's timer from the release before an update) takes its `at` after the swap as the new release's health signal.
-- Host preflight: `preflight.go` `runPreflight` parses the cell's own flags and `-config` (`parseSettings`, `selectDriver`), then runs `internal/preflight`'s checks for the driver they resolve to, with the host's probes (`hostPreflightProbes`) and the drivers' own rules (`dockergvisor.ValidateClaimLimitDaemon`, `microvm.Prerequisites` on `microvmConfig`, the settings `openMicroVM` opens with).
+- Host preflight: `preflight.go` `runPreflight` parses the cell's own flags and `-config` (`parseSettings`, `selectDriver`), then runs `internal/preflight`'s checks for the driver they resolve to, with the host's probes (`hostPreflightProbes`) and the drivers' own rules (`dockergvisor.ValidateClaimLimitDaemon`, `microvm.Prerequisites` on `microvmConfig`, the settings `openMicroVM` opens with; on k8s-sandbox `checkK8sLocal`: every image by digest, and with `-k8s-env-namespace` the observer TLS files against `-observer-server-name`, `k8sEnvFiles`, the check `openK8s` runs; the cluster checks stay at cell start in `k8ssandbox.Preflight`).
 - Enrollment commands: `register.go` `runEnroll`; host PKI: `localpki.go`; template export and import: `template.go` `runTemplate`.
 
 ## Does not own
@@ -37,7 +37,7 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 
 ## Module map
 
-Files (17, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `k8s.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `preflight.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
+Files (18, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `k8s.go`, `k8senv.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `preflight.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
 
 Imports these Runtime modules:
 
@@ -46,6 +46,7 @@ Imports these Runtime modules:
 - [`apps/runtime-cell/internal/buildmirror`](../../internal/buildmirror/AGENTS.md)
 - [`apps/runtime-cell/internal/cellupdate`](../../internal/cellupdate/AGENTS.md)
 - [`apps/runtime-cell/internal/claimlimits`](../../internal/claimlimits/AGENTS.md)
+- [`apps/runtime-cell/internal/compose/kube`](../../internal/compose/kube/AGENTS.md)
 - [`apps/runtime-cell/internal/dockercli`](../../internal/dockercli/AGENTS.md)
 - [`apps/runtime-cell/internal/driver`](../../internal/driver/AGENTS.md)
 - [`apps/runtime-cell/internal/driver/fake`](../../internal/driver/fake/AGENTS.md)

@@ -8,6 +8,8 @@
 //	release-sign generate -private FILE -public FILE
 //	release-sign protocol -dir DIR
 //	release-sign sign -key FILE -release vX.Y.Z -dir DIR
+//	release-sign index -key FILE -latest vX.Y.Z -minimum vX.Y.Z -dir DIR
+//	release-sign bundle -key FILE -release vX.Y.Z -release-dir DIR -images FILE -runsc ARCH=FILE -out DIR
 package main
 
 import (

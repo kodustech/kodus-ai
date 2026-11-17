@@ -9,7 +9,7 @@ import { RuntimeWebhookReconciler, type WebhookReconcilerMetrics } from '../appl
 import type { OpenPullRequestSummary, PullRequestHead, RuntimeGitPort, RuntimeRepositorySettingsRecord } from '../domain/ports';
 import { RECONCILE_MAX_ATTEMPTS, type WebhookReconcilerConfig } from '../domain/webhook-reconciler';
 import { loadWebhookReconcilerConfig } from '../infrastructure/runtime-api.config';
-import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, REPO, run, SECRET, SHA, storeWith, TEAM } from './fixtures';
+import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, REPO, run, SECRET, SHA, runtimeReleaseGate, storeWith, TEAM } from './fixtures';
 import { InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 import { InMemoryReconciledHeadStore } from '../testing';
 import { type InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
@@ -92,7 +92,7 @@ function replica(
         clock,
     );
     const members = RuntimeEnvironmentMembers.primaryOnly(environments);
-    const trigger = new RuntimePullRequestTriggerUseCase({ listRepositories: async () => settings }, environments, db.projection, git, builder, enqueuer, setups, undefined, members);
+    const trigger = new RuntimePullRequestTriggerUseCase({ listRepositories: async () => settings }, environments, db.projection, git, builder, enqueuer, setups, undefined, members, undefined, runtimeReleaseGate());
     let throwsLeft = opts.triggerThrows ?? 0;
     const execute = jest.fn(async (message: unknown, executeOpts?: { reportFailures?: boolean }) => {
         if (throwsLeft > 0) {

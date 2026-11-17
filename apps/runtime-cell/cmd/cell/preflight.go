@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -106,7 +107,8 @@ func runPreflight(args []string, stdout, stderr io.Writer, p preflightProbes) in
 	case microvm.Kind:
 		checkMicroVMHost(&r, st, cellID, p)
 	case k8ssandbox.Kind:
-		r.Notes = append(r.Notes, "k8s-sandbox: the cluster checks (privileged pods refused, the RuntimeClass, the NetworkPolicies) run at cell start (k8ssandbox.Preflight), not here")
+		checkK8sLocal(&r, st)
+		r.Notes = append(r.Notes, "k8s-sandbox: the cluster checks (privileged pods refused, the RuntimeClass, the NetworkPolicies; with -k8s-env-namespace the environment gate refusing a privileged pod by name and admitting the driver's) run at cell start (k8ssandbox.Preflight), not here")
 	case awsec2.Kind:
 		_, err := readAWSConfig(st.AWSConfig)
 		r.Add(preflight.Loaded("aws-config", err, st.AWSConfig, "write the aws-ec2 settings (VPC, subnets, groups, launch template, org keys) to -aws-config"))
@@ -115,6 +117,39 @@ func runPreflight(args []string, stdout, stderr io.Writer, p preflightProbes) in
 		r.Notes = append(r.Notes, sel.Kind+": a development driver; no host checks")
 	}
 	return write()
+}
+
+// Names of the k8s-sandbox checks cell preflight runs on its own files and
+// flags (the -k8s-env-* consistency is the settings check: checkK8sEnv).
+const (
+	nameK8sImages      = "k8s-images"
+	nameK8sObserverTLS = "k8s-env-observer-tls"
+)
+
+// checkK8sLocal checks what a k8s-sandbox cell needs that is readable
+// without the API server: every image by digest, and with environment
+// Runs on, the observer TLS files and -observer-server-name against them.
+func checkK8sLocal(r *preflight.Report, st settings) {
+	k, e := st.K8s, st.K8s.Env
+	var bad []string
+	for flag, v := range map[string]string{
+		"-k8s-holder-image": k.HolderImage, "-k8s-sandbox-image": k.SandboxImage, "-k8s-probe-image": k.ProbeImage,
+		"-k8s-env-builder-image": e.BuilderImage, "-k8s-env-observer-image": e.ObserverImage,
+	} {
+		if v != "" && !imageRef.MatchString(v) {
+			bad = append(bad, flag+" "+v)
+		}
+	}
+	var err error
+	if len(bad) > 0 {
+		slices.Sort(bad)
+		err = fmt.Errorf("not by digest (repository@sha256:<64 hex>): %s", strings.Join(bad, ", "))
+	}
+	r.Add(preflight.Loaded(nameK8sImages, err, "every image is by digest", "reference each image as repository@sha256:<digest>, as the chart does"))
+	if e.on() {
+		r.Add(preflight.Loaded(nameK8sObserverTLS, k8sEnvFiles(e.ObserverTLSDir, st.ObsServerName), e.ObserverTLSDir,
+			"write cert.pem and key.pem (a certificate for -observer-server-name) and ca.pem (the CA of -observer-cert) to -k8s-env-observer-tls-dir"))
+	}
 }
 
 // checkCellFiles checks what run() loads before any driver: the identity

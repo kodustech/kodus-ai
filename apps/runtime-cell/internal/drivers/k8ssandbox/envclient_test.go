@@ -116,3 +116,38 @@ func TestRunCommandReadsTheExitCodeAndClosesStdin(t *testing.T) {
 		t.Error("status parse")
 	}
 }
+
+// StreamCommand hands every line as it comes, stdout's and stderr's, a
+// line split across messages whole and one past the bound cut, and returns
+// the exit code.
+func TestStreamCommandHandsEachLineAsItComes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{execProtoV5}})
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.CloseNow() }()
+		ctx := r.Context()
+		for _, m := range [][]byte{
+			append([]byte{chanStderr}, "#1 [internal] load build definition\n#1 DO"...),
+			append([]byte{chanStderr}, "NE 0.1s\r\n"...),
+			append([]byte{chanStdout}, "out line\n"...),
+			append([]byte{chanStderr}, strings.Repeat("x", maxStreamLine+10)+"\nlast"...),
+		} {
+			_ = c.Write(ctx, websocket.MessageBinary, m)
+		}
+		st, _ := json.Marshal(map[string]any{"status": "Failure", "details": map[string]any{"causes": []any{map[string]any{"reason": "ExitCode", "message": "1"}}}})
+		_ = c.Write(ctx, websocket.MessageBinary, append([]byte{chanStatus}, st...))
+	}))
+	defer srv.Close()
+	c := &Client{Base: srv.URL, HTTP: srv.Client()}
+	var lines []string
+	code, err := c.StreamCommand(context.Background(), "envs", "p", "buildkitd", []string{"buildctl", "build"}, func(l string) { lines = append(lines, l) })
+	if err != nil || code != 1 {
+		t.Fatalf("code %d err %v", code, err)
+	}
+	if len(lines) != 5 || lines[0] != "#1 [internal] load build definition" || lines[1] != "#1 DONE 0.1s" || lines[2] != "out line" ||
+		len(lines[3]) != maxStreamLine || lines[4] != "last" {
+		t.Errorf("lines %q", lines)
+	}
+}

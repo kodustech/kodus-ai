@@ -54,6 +54,8 @@ import { SetFindingFeedbackUseCase } from './application/use-cases/finding-feedb
 import { SetFindingIntentUseCase } from './application/use-cases/finding-intent.use-case';
 import { GetRuntimeRunUseCase } from './application/use-cases/get-run.use-case';
 import { SimulateRuntimeRunUseCase } from './application/use-cases/simulate.use-case';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { ReleaseTrackRuntimeRelease } from './infrastructure/release-track-runtime-release.gate';
 import { RuntimePullRequestTriggerUseCase } from './application/use-cases/pull-request-trigger.use-case';
 import { RuntimeRunRequestBuilder } from './application/run-request-builder.service';
 import { RuntimeEnvironmentMembers } from './application/environment-members.service';
@@ -105,6 +107,7 @@ import {
     RUNTIME_LLM_PROVIDER,
     RUNTIME_LLM_USAGE_STORE,
     RUNTIME_REPO_TOKEN_ISSUER,
+    RUNTIME_RELEASE_GATE,
     RUNTIME_RUN_PROJECTION_STORE,
     RUNTIME_RUN_STREAM_STORE,
     RUNTIME_TEAM_REPOSITORIES,
@@ -275,8 +278,11 @@ const useCases = [
         forwardRef(() => PlatformModule),
         forwardRef(() => GithubModule),
         forwardRef(() => IntegrationConfigModule),
+        forwardRef(() => OrganizationModule),
     ],
     providers: [
+        // Kody Runtime is released by the org's release track (alpha): every entry point asks it.
+        { provide: RUNTIME_RELEASE_GATE, useClass: ReleaseTrackRuntimeRelease },
         RuntimePoolController,
         RuntimePoolSchedulerCron,
         // A lost PR close: the sessions that hold its code are checked against the PR's state.
@@ -511,6 +517,6 @@ const useCases = [
         RuntimeA2ABearerGuard,
         ...useCases,
     ],
-    exports: [RUNTIME_RUN_PROJECTION_STORE, RUNTIME_CLOCK, RUNTIME_WEBHOOK_RECONCILER_CONFIG, RuntimeWebhookReconciler, ...useCases, RuntimeReaderAuthGuard, RuntimeRunEnqueuer, RuntimeEnvToolsService, RuntimePoolController, RuntimeA2AAdapter, RuntimeA2ABearerGuard],
+    exports: [RUNTIME_RUN_PROJECTION_STORE, RUNTIME_RELEASE_GATE, RUNTIME_CLOCK, RUNTIME_WEBHOOK_RECONCILER_CONFIG, RuntimeWebhookReconciler, ...useCases, RuntimeReaderAuthGuard, RuntimeRunEnqueuer, RuntimeEnvToolsService, RuntimePoolController, RuntimeA2AAdapter, RuntimeA2ABearerGuard],
 })
 export class RuntimeApiModule {}

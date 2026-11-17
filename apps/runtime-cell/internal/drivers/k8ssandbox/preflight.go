@@ -24,6 +24,8 @@ import (
 //  3. A probe pod on the RuntimeClass reports its kernel and dials an
 //     address the namespace's NetworkPolicies must refuse (the API server).
 //     Under gVisor the kernel names gvisor; the dial must not connect.
+//
+// With EnvNamespace, 1 and 2 run there too, before 3 (envGate).
 type Preflight struct {
 	Kube         KubeAPI
 	CellID       string
@@ -38,8 +40,16 @@ type Preflight struct {
 	KernelMustContain string
 	// ResolverIP is the probe's DNS, as for every claim pod.
 	ResolverIP string
-	Timeout    time.Duration
-	Poll       time.Duration
+	// EnvNamespace, set, is the cell's environment namespace (environment
+	// Runs on): before the probe, a privileged pod with a hostPath there
+	// must be refused by the environment gate by name (EnvGatePolicy, the
+	// ValidatingAdmissionPolicy and its binding in force: Pod Security
+	// privileged admits it), and a pod as the driver makes them there must
+	// be admitted (the RuntimeClass in the gate's set, the cell's Role
+	// creates pods there). Both dry run: nothing is created.
+	EnvNamespace string
+	Timeout      time.Duration
+	Poll         time.Duration
 }
 
 // ProbeResult is what `cell probe` writes to its termination message.
@@ -53,8 +63,10 @@ type ProbeResult struct {
 // PreflightReport is what the preflight saw, for the cell's log.
 type PreflightReport struct {
 	PrivilegedRefused string
-	Kernel            string
-	Dial              string
+	// EnvGateRefused is the environment gate's refusal (EnvNamespace set).
+	EnvGateRefused string
+	Kernel         string
+	Dial           string
 }
 
 // Preflight failures, each naming what to fix.
@@ -63,6 +75,8 @@ var (
 	ErrRuntimeClass      = errors.New("k8ssandbox: a claim pod on the RuntimeClass is refused")
 	ErrNotSandboxed      = errors.New("k8ssandbox: the probe pod does not run under the isolated runtime")
 	ErrPoliciesDecorated = errors.New("k8ssandbox: the probe pod reached the API server: the namespace's NetworkPolicies are not enforced (a CNI that enforces NetworkPolicy is required)")
+	ErrEnvGateMissing    = errors.New("k8ssandbox: the environment namespace does not refuse a privileged pod with a hostPath by the environment gate: apply deploy/kubernetes/environment-namespace.yaml (the ValidatingAdmissionPolicy " + EnvGatePolicy + " and its binding)")
+	ErrEnvPodRefused     = errors.New("k8ssandbox: an environment pod as the driver makes them is refused in the environment namespace (the RuntimeClass outside the gate's set, or the cell's Role there missing)")
 )
 
 func randomSuffix() string {
@@ -141,6 +155,13 @@ func (p Preflight) Run(ctx context.Context) (PreflightReport, error) {
 	default:
 		return rep, fmt.Errorf("k8ssandbox: preflight: %w", err)
 	}
+	if p.EnvNamespace != "" {
+		refused, err := p.envGate(ctx)
+		if err != nil {
+			return rep, err
+		}
+		rep.EnvGateRefused = refused
+	}
 	name := "kodus-preflight-" + randomSuffix()
 	pod := p.probePod(name)
 	if _, err := p.Kube.CreatePod(ctx, p.Namespace, pod, true); err != nil {
@@ -166,6 +187,32 @@ func (p Preflight) Run(ctx context.Context) (PreflightReport, error) {
 		return rep, fmt.Errorf("%w: %s", ErrPoliciesDecorated, res.Target)
 	}
 	return rep, nil
+}
+
+// envGate is check 1 and 2 in the environment namespace, where Pod Security
+// is privileged and only the gate refuses: a refusal that does not name the
+// gate (RBAC's, say) proves nothing of it.
+func (p Preflight) envGate(ctx context.Context) (string, error) {
+	in := func(o Object) Object {
+		o["metadata"].(map[string]any)["namespace"] = p.EnvNamespace
+		return o
+	}
+	_, err := p.Kube.CreatePod(ctx, p.EnvNamespace, in(p.privilegedPod()), true)
+	var apiErr *APIError
+	switch {
+	case err == nil:
+		return "", ErrEnvGateMissing
+	case errors.As(err, &apiErr) && apiErr.Refused() && strings.Contains(apiErr.Message, EnvGatePolicy):
+	case errors.As(err, &apiErr) && apiErr.Refused():
+		return "", fmt.Errorf("%w: refused otherwise: %s", ErrEnvGateMissing, apiErr.Message)
+	default:
+		return "", fmt.Errorf("k8ssandbox: preflight: %w", err)
+	}
+	refused := apiErr.Message
+	if _, err := p.Kube.CreatePod(ctx, p.EnvNamespace, in(p.probePod("kodus-preflight-env-"+randomSuffix())), true); err != nil {
+		return "", fmt.Errorf("%w (%s): %w", ErrEnvPodRefused, p.RuntimeClass, err)
+	}
+	return refused, nil
 }
 
 // waitProbe waits for the probe pod to end and reads its result.

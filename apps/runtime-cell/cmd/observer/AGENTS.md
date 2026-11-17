@@ -1,9 +1,10 @@
 # apps/runtime-cell/cmd/observer
 
-The observer as its own process (ADR-053): on docker-gvisor each claim's observer machine runs it from `-gvisor-observer-image` under runsc on the claim network (`-observer http`). It serves the cell agent over mTLS and runs typed HTTP and read-only SQL probes against the claim's machines. A thin `main` over `internal/observer/observersrv` `Run`. On a Firecracker cell the same server runs as `kody-guest observer` (`cmd/kody-guest`).
+The observer as its own process (ADR-053): on docker-gvisor each claim's observer machine runs it from `-gvisor-observer-image` under runsc on the claim network (`-observer http`). On Kubernetes (`k8ssandbox`'s environment mode) it runs from the cell image at `/usr/local/bin/observer` in the claim's observer pod, on loopback only, and `-stdio-bridge 127.0.0.1:7443` carries each of the cell's connections over pods/exec (`observersrv.Bridge`). It serves the cell agent over mTLS and runs typed HTTP and read-only SQL probes against the claim's machines. A thin `main` over `internal/observer/observersrv` `Run`. On a Firecracker cell the same server runs as `kody-guest observer` (`cmd/kody-guest`).
 
 ## Rules and limits
 - `-insecure-dev` (plain HTTP) needs `KODY_RUNTIME_DEV=1`, else exit 2 (`lifecycle.Usage`).
+- `-stdio-bridge` serves nothing: it carries one connection to a loopback address and exits.
 - `-sql-dsn` is a template; `{address}` is the claim machine's host and port, the user the read-only one a bake created.
 - What the observer probes, records and refuses is `internal/observer`; nothing is decided here.
 

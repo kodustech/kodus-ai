@@ -1,0 +1,206 @@
+claimPolicy:
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: workload
+            kodus.io/side: pr
+        name: env-claim-1
+        namespace: kodus-runtime-environments
+    spec:
+        egress:
+            - to:
+                - podSelector:
+                    matchExpressions:
+                        - key: kodus.io/role
+                          operator: NotIn
+                          values:
+                            - observer
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+            - ports:
+                - port: 5353
+                  protocol: UDP
+                - port: 5353
+                  protocol: TCP
+                - port: 8080
+                  protocol: TCP
+                - port: 8443
+                  protocol: TCP
+              to:
+                - namespaceSelector:
+                    matchLabels:
+                        kubernetes.io/metadata.name: kodus-runtime
+                  podSelector:
+                    matchLabels:
+                        app.kubernetes.io/component: cell
+        ingress:
+            - from:
+                - podSelector:
+                    matchExpressions:
+                        - key: kodus.io/role
+                          operator: NotIn
+                          values:
+                            - observer
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+                - podSelector:
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+                        kodus.io/role: observer
+        podSelector:
+            matchExpressions:
+                - key: kodus.io/role
+                  operator: NotIn
+                  values:
+                    - observer
+            matchLabels:
+                kodus.io/cell: cell-a
+                kodus.io/claim: claim-1
+        policyTypes:
+            - Ingress
+            - Egress
+observer:
+    apiVersion: v1
+    kind: Pod
+    metadata:
+        annotations:
+            kodus.io/hard-expires: "2026-11-17T12:00:00Z"
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: observer
+            kodus.io/side: pr
+        name: env-claim-1--observer
+        namespace: kodus-runtime-environments
+    spec:
+        activeDeadlineSeconds: 3600
+        automountServiceAccountToken: false
+        containers:
+            - command:
+                - /usr/local/bin/observer
+                - -listen
+                - 127.0.0.1:7443
+                - -cell-id
+                - cell-a
+                - -cert
+                - /etc/kodus/observer/cert.pem
+                - -key
+                - /etc/kodus/observer/key.pem
+                - -ca
+                - /etc/kodus/observer/ca.pem
+              image: registry.example/kodus-runtime-cell@sha256:3333333333333333333333333333333333333333333333333333333333333333
+              imagePullPolicy: IfNotPresent
+              name: observer
+              resources:
+                limits:
+                    cpu: 250m
+                    memory: 256Mi
+                requests:
+                    cpu: 250m
+                    memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                    drop:
+                        - ALL
+                privileged: false
+                readOnlyRootFilesystem: true
+                runAsGroup: 65532
+                runAsNonRoot: true
+                runAsUser: 65532
+              volumeMounts:
+                - mountPath: /etc/kodus/observer
+                  name: tls
+                  readOnly: true
+        dnsConfig:
+            nameservers:
+                - 127.0.0.1
+        dnsPolicy: None
+        enableServiceLinks: false
+        hostIPC: false
+        hostNetwork: false
+        hostPID: false
+        initContainers:
+            - command:
+                - /bin/sh
+                - -c
+                - trap 'exit 143' TERM INT; until [ -e /kodus/gate/open ]; do sleep 0.2; done
+              image: registry.example/kodus-helper@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: IfNotPresent
+              name: kodus-init
+              resources:
+                limits:
+                    cpu: 100m
+                    memory: 64Mi
+                requests:
+                    cpu: 100m
+                    memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                    add:
+                        - CHOWN
+                        - DAC_OVERRIDE
+                        - FOWNER
+                        - FSETID
+                    drop:
+                        - ALL
+                privileged: false
+                runAsUser: 0
+              volumeMounts:
+                - mountPath: /kodus/gate
+                  name: kodus-gate
+                - mountPath: /kodus/copy/tls
+                  name: tls
+        restartPolicy: Never
+        runtimeClassName: gvisor
+        securityContext:
+            fsGroup: 65532
+            seccompProfile:
+                type: RuntimeDefault
+        terminationGracePeriodSeconds: 5
+        volumes:
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: kodus-gate
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: tls
+observerPolicy:
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: observer
+            kodus.io/side: pr
+        name: env-claim-1--observer
+        namespace: kodus-runtime-environments
+    spec:
+        egress:
+            - to:
+                - podSelector:
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+                        kodus.io/role: workload
+        podSelector:
+            matchLabels:
+                kodus.io/cell: cell-a
+                kodus.io/claim: claim-1
+                kodus.io/role: observer
+        policyTypes:
+            - Ingress
+            - Egress

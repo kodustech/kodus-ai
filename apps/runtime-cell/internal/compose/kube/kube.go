@@ -143,8 +143,12 @@ type Options struct {
 	// (the cell's, with sh, tar and find).
 	RuntimeClass string
 	HelperImage  string
-	// Size is shared by the services (requests equal limits).
-	Size Size
+	// Size is shared by the services (requests equal limits), less
+	// Reserved: the claim's observer's share, which runs beside them (and
+	// beside a builder) in the claim's size, as docker-gvisor's observer
+	// runs in its claim's budget.
+	Size     Size
+	Reserved Share
 	// DeadlineSeconds is every pod's activeDeadlineSeconds: the kubelet
 	// ends it at the claim's ceiling whatever happens to the cell.
 	DeadlineSeconds int64
@@ -348,7 +352,7 @@ func Render(raw []byte, o Options) (*Plan, error) {
 		case !topKeys[k]:
 			r.refuse(k, "not in the allowlist")
 		case k == "secrets":
-			r.ignored = append(r.ignored, sandbox.Violation{Path: k, Reason: "top-level secrets are read by builds only, and the backend builds nothing"})
+			r.ignored = append(r.ignored, sandbox.Violation{Path: k, Reason: "top-level secrets are read by builds only (the builder asks for them), never by a pod"})
 		}
 	}
 	interpolateTree(doc, "", func(p, why string) { r.refuse(strings.TrimPrefix(p, "."), why) })
@@ -387,6 +391,23 @@ func Render(raw []byte, o Options) (*Plan, error) {
 }
 
 func (o Options) check() error {
+	if err := o.checkPlacement(); err != nil {
+		return err
+	}
+	switch {
+	case len(o.Nameservers) == 0:
+		return errors.New("kube: the pods need the cell's resolver as their nameserver")
+	case o.Size.MemoryMB <= 0 || o.Size.CPUs <= 0:
+		return errors.New("kube: the claim's size is required")
+	case o.Reserved.MemoryMB < 0 || o.Reserved.MilliCPU < 0:
+		return errors.New("kube: a reserved share is never negative")
+	}
+	return nil
+}
+
+// checkPlacement checks what every object of the claim needs: where it
+// lives, how it is named and selected, what it runs on, until when.
+func (o Options) checkPlacement() error {
 	switch {
 	case o.Namespace == "" || o.RuntimeClass == "" || o.HelperImage == "":
 		return errors.New("kube: namespace, runtime class and helper image required")
@@ -394,10 +415,6 @@ func (o Options) check() error {
 		return fmt.Errorf("kube: prefix %q is not a DNS label", o.Prefix)
 	case len(o.Selector) == 0:
 		return errors.New("kube: a claim selector is required")
-	case len(o.Nameservers) == 0:
-		return errors.New("kube: the pods need the cell's resolver as their nameserver")
-	case o.Size.MemoryMB <= 0 || o.Size.CPUs <= 0:
-		return errors.New("kube: the claim's size is required")
 	case o.DeadlineSeconds <= 0:
 		return errors.New("kube: the claim's deadline is required")
 	}
@@ -572,7 +589,7 @@ func (r *renderer) order(specs map[string]*serviceSpec) []string {
 // claim's size.
 func (r *renderer) sizes(specs map[string]*serviceSpec, names []string) error {
 	const minMB, minMilli = 32, 50
-	mem, cpu := r.o.Size.MemoryMB, r.o.Size.CPUs*1000
+	mem, cpu := r.o.share()
 	var freeMem, freeCPU int
 	for _, n := range names {
 		s := specs[n]
@@ -587,9 +604,9 @@ func (r *renderer) sizes(specs map[string]*serviceSpec, names []string) error {
 	}
 	switch {
 	case mem < 0 || (freeMem > 0 && mem/freeMem < minMB):
-		return &sandbox.RefusedError{Violations: []sandbox.Violation{{Path: "services", Reason: fmt.Sprintf("the services' memory does not fit the claim's %d MB", r.o.Size.MemoryMB)}}}
+		return &sandbox.RefusedError{Violations: []sandbox.Violation{{Path: "services", Reason: fmt.Sprintf("the services' memory does not fit the claim's %d MB%s", r.o.Size.MemoryMB, r.o.reservedNote())}}}
 	case cpu < 0 || (freeCPU > 0 && cpu/freeCPU < minMilli):
-		return &sandbox.RefusedError{Violations: []sandbox.Violation{{Path: "services", Reason: fmt.Sprintf("the services' CPUs do not fit the claim's %d CPUs", r.o.Size.CPUs)}}}
+		return &sandbox.RefusedError{Violations: []sandbox.Violation{{Path: "services", Reason: fmt.Sprintf("the services' CPUs do not fit the claim's %d CPUs%s", r.o.Size.CPUs, r.o.reservedNote())}}}
 	}
 	for _, n := range names {
 		s := specs[n]
@@ -649,43 +666,50 @@ func (r *renderer) claim(key string) Volume {
 	}}
 }
 
-// policy isolates the claim: ingress from its own pods only, egress to its
-// own pods and the egress peers.
+// policy isolates the claim: its pods (services and builders, never its
+// observer, ObserverPolicy's) accept their own pods and the claim's observer
+// only, and reach their own pods and the egress peers.
 func (r *renderer) policy() Object {
-	self := map[string]any{"podSelector": map[string]any{"matchLabels": toAny(r.o.Selector)}}
+	self := map[string]any{"podSelector": r.o.claimSelector()}
+	observer := map[string]any{"podSelector": r.o.observerSelector()}
 	egress := []any{map[string]any{"to": []any{self}}}
 	for _, p := range r.o.Egress {
-		peer := map[string]any{}
-		if p.CIDR != "" {
-			peer["ipBlock"] = map[string]any{"cidr": p.CIDR}
-		} else {
-			peer["namespaceSelector"] = map[string]any{"matchLabels": toAny(p.NamespaceLabels)}
-			peer["podSelector"] = map[string]any{"matchLabels": toAny(p.PodLabels)}
-		}
-		rule := map[string]any{"to": []any{peer}}
-		if len(p.Ports) > 0 {
-			var ports []any
-			for _, pt := range p.Ports {
-				proto := pt.Protocol
-				if proto == "" {
-					proto = "TCP"
-				}
-				ports = append(ports, map[string]any{"protocol": proto, "port": pt.Port})
-			}
-			rule["ports"] = ports
-		}
-		egress = append(egress, rule)
+		egress = append(egress, egressRule(p))
 	}
 	return Object{
 		"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
 		"metadata": r.meta(r.o.Prefix, r.labels(nil), nil),
 		"spec": map[string]any{
-			"podSelector": map[string]any{"matchLabels": toAny(r.o.Selector)},
+			"podSelector": r.o.claimSelector(),
 			"policyTypes": []any{"Ingress", "Egress"},
-			"ingress":     []any{map[string]any{"from": []any{self}}},
+			"ingress":     []any{map[string]any{"from": []any{self, observer}}},
 			"egress":      egress,
 		},
 	}
+}
+
+// egressRule lets a pod connect to one peer, on its ports.
+func egressRule(p EgressPeer) map[string]any {
+	peer := map[string]any{}
+	if p.CIDR != "" {
+		peer["ipBlock"] = map[string]any{"cidr": p.CIDR}
+	} else {
+		peer["namespaceSelector"] = map[string]any{"matchLabels": toAny(p.NamespaceLabels)}
+		peer["podSelector"] = map[string]any{"matchLabels": toAny(p.PodLabels)}
+	}
+	rule := map[string]any{"to": []any{peer}}
+	if len(p.Ports) > 0 {
+		var ports []any
+		for _, pt := range p.Ports {
+			proto := pt.Protocol
+			if proto == "" {
+				proto = "TCP"
+			}
+			ports = append(ports, map[string]any{"protocol": proto, "port": pt.Port})
+		}
+		rule["ports"] = ports
+	}
+	return rule
 }
 
 func toAny(m map[string]string) map[string]any {
@@ -785,7 +809,7 @@ func (r *renderer) image(s *serviceSpec, svc map[string]any, p string) {
 		if built := r.o.Built[s.name]; built != "" {
 			img = built
 		} else {
-			r.unsupported1(p+".build", "the Kubernetes backend has no image builder yet (a rootless BuildKit pod on the RuntimeClass): use an image from a registry")
+			r.unsupported1(p+".build", "this cell has no image builder on Kubernetes (k8s-sandbox EnvConfig.BuilderImage and BuildRegistry): use an image from a registry")
 			return
 		}
 	}

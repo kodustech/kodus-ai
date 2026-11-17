@@ -1,6 +1,7 @@
 package k8ssandbox
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -61,7 +62,15 @@ type CommandResult struct {
 // written then closed, stdout and stderr kept up to maxOut bytes each.
 type CommandRunner interface {
 	RunCommand(ctx context.Context, namespace, pod, container string, argv []string, stdin []byte, maxOut int) (CommandResult, error)
+	// StreamCommand runs argv with no stdin to its end and hands each line
+	// it prints, stdout and stderr, to line as it comes (a build's
+	// progress), keeping none; a line past maxLine bytes is cut there. It
+	// returns the exit code (-1 when the stream ended with no status).
+	StreamCommand(ctx context.Context, namespace, pod, container string, argv []string, line func(string)) (int, error)
 }
+
+// maxStreamLine bounds one line StreamCommand hands on.
+const maxStreamLine = 16 << 10
 
 // IsConflict reports the API server's 409 (the object exists).
 func IsConflict(err error) bool {
@@ -138,9 +147,82 @@ func (c *Client) RunCommand(ctx context.Context, namespace, pod, container strin
 	for _, a := range argv {
 		q.Add("command", a)
 	}
+	res := CommandResult{ExitCode: -1}
+	keep := func(into *[]byte, b []byte) {
+		if room := maxOut - len(*into); room >= len(b) {
+			*into = append(*into, b...)
+		} else {
+			*into = append(*into, b[:max(room, 0)]...)
+			res.Truncated = true
+		}
+	}
+	code, err := c.execCommand(ctx, namespace, pod, q, stdin, func(ch byte, b []byte) {
+		if ch == chanStdout {
+			keep(&res.Stdout, b)
+		} else {
+			keep(&res.Stderr, b)
+		}
+	})
+	res.ExitCode = code
+	return res, err
+}
+
+// StreamCommand is RunCommand's stream: no stdin, every line to line.
+func (c *Client) StreamCommand(ctx context.Context, namespace, pod, container string, argv []string, line func(string)) (int, error) {
+	if len(argv) == 0 {
+		return -1, errors.New("k8ssandbox: exec needs a command")
+	}
+	q := url.Values{"container": {container}, "stdout": {"true"}, "stderr": {"true"}}
+	for _, a := range argv {
+		q.Add("command", a)
+	}
+	var out, errs lineSplitter
+	out.line, errs.line = line, line
+	code, err := c.execCommand(ctx, namespace, pod, q, nil, func(ch byte, b []byte) {
+		if ch == chanStdout {
+			out.write(b)
+		} else {
+			errs.write(b)
+		}
+	})
+	out.flush()
+	errs.flush()
+	return code, err
+}
+
+// lineSplitter hands on whole lines, a line cut at maxStreamLine.
+type lineSplitter struct {
+	buf  []byte
+	line func(string)
+}
+
+func (l *lineSplitter) write(b []byte) {
+	for len(b) > 0 {
+		i := bytes.IndexByte(b, '\n')
+		if i < 0 {
+			l.buf = append(l.buf, b[:min(len(b), max(maxStreamLine-len(l.buf), 0))]...)
+			return
+		}
+		l.buf = append(l.buf, b[:min(i, max(maxStreamLine-len(l.buf), 0))]...)
+		l.flush()
+		b = b[i+1:]
+	}
+}
+
+func (l *lineSplitter) flush() {
+	if len(l.buf) > 0 {
+		l.line(strings.TrimRight(string(l.buf), "\r"))
+		l.buf = l.buf[:0]
+	}
+}
+
+// execCommand runs one exec to its end: stdin (when not nil) written then
+// closed, each stdout and stderr message to out, the exit code from the
+// status channel.
+func (c *Client) execCommand(ctx context.Context, namespace, pod string, q url.Values, stdin []byte, out func(ch byte, b []byte)) (int, error) {
 	h := http.Header{}
 	if err := c.authorize(h); err != nil {
-		return CommandResult{}, err
+		return -1, err
 	}
 	hc := &http.Client{Transport: c.HTTP.Transport}
 	conn, resp, err := websocket.Dial(ctx, strings.TrimRight(c.Base, "/")+podPath(namespace, pod)+"/exec?"+q.Encode(), &websocket.DialOptions{
@@ -151,60 +233,48 @@ func (c *Client) RunCommand(ctx context.Context, namespace, pod, container strin
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusNotFound {
-				return CommandResult{}, ErrNotFound
+				return -1, ErrNotFound
 			}
-			return CommandResult{}, statusError(http.MethodGet, podPath(namespace, pod)+"/exec", resp.StatusCode, body)
+			return -1, statusError(http.MethodGet, podPath(namespace, pod)+"/exec", resp.StatusCode, body)
 		}
-		return CommandResult{}, fmt.Errorf("k8ssandbox: exec %s/%s: %w", namespace, pod, err)
+		return -1, fmt.Errorf("k8ssandbox: exec %s/%s: %w", namespace, pod, err)
 	}
 	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(execReadLimit)
 	if stdin != nil {
 		if conn.Subprotocol() != execProtoV5 {
-			return CommandResult{}, errors.New("k8ssandbox: the API server's exec has no stdin close (v4): this command needs v5.channel.k8s.io")
+			return -1, errors.New("k8ssandbox: the API server's exec has no stdin close (v4): this command needs v5.channel.k8s.io")
 		}
 		for p := stdin; ; {
 			n := min(len(p), execWriteChunk)
 			msg := append([]byte{chanStdin}, p[:n]...)
 			if err := conn.Write(ctx, websocket.MessageBinary, msg); err != nil {
-				return CommandResult{}, fmt.Errorf("k8ssandbox: exec stdin: %w", err)
+				return -1, fmt.Errorf("k8ssandbox: exec stdin: %w", err)
 			}
 			if p = p[n:]; len(p) == 0 {
 				break
 			}
 		}
 		if err := conn.Write(ctx, websocket.MessageBinary, []byte{chanClose, chanStdin}); err != nil {
-			return CommandResult{}, fmt.Errorf("k8ssandbox: exec stdin close: %w", err)
-		}
-	}
-	res := CommandResult{ExitCode: -1}
-	keep := func(into *[]byte, b []byte) {
-		if room := maxOut - len(*into); room >= len(b) {
-			*into = append(*into, b...)
-		} else {
-			*into = append(*into, b[:max(room, 0)]...)
-			res.Truncated = true
+			return -1, fmt.Errorf("k8ssandbox: exec stdin close: %w", err)
 		}
 	}
 	for {
 		_, msg, err := conn.Read(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
-				return res, ctx.Err()
+				return -1, ctx.Err()
 			}
-			return res, nil // the stream ended without a status
+			return -1, nil // the stream ended without a status
 		}
 		if len(msg) == 0 {
 			continue
 		}
 		switch msg[0] {
-		case chanStdout:
-			keep(&res.Stdout, msg[1:])
-		case chanStderr:
-			keep(&res.Stderr, msg[1:])
+		case chanStdout, chanStderr:
+			out(msg[0], msg[1:])
 		case chanStatus:
-			res.ExitCode = exitCode(msg[1:])
-			return res, nil
+			return exitCode(msg[1:]), nil
 		}
 	}
 }

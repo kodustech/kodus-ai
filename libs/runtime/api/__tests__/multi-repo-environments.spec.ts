@@ -39,6 +39,7 @@ import {
     storeWith,
     TEAM,
     user,
+    runtimeReleaseGate,
 } from './fixtures';
 import { InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 
@@ -327,6 +328,8 @@ describe('the PR trigger through membership', () => {
             { get: async () => ({ state: 'active', organizationId: ORG }) as any },
             undefined,
             w.members,
+            undefined,
+            runtimeReleaseGate(),
         );
         const strip = ({ workflowType: _t, ...rest }: any) => rest;
         const requested = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.requested').map((r) => RuntimeRunRequestedSchema.parse(strip(r.payload.payload)));

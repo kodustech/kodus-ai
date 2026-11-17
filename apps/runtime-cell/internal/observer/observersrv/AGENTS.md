@@ -5,6 +5,7 @@ The observer machine's server as both its programs run it: `cmd/observer` on TCP
 ## Owns
 - `observersrv.go` `Run` and `Options`: TLS from `tlsutil.Server`, shutdown when ctx ends (10 s grace), the server closed on return.
 - `legacySQLClient`: the static DSN template (`{address}`) older cells still pass; Postgres only.
+- `bridge.go` `Bridge`: one connection between stdin and stdout and the observer's loopback listener, for the cell's pods/exec on Kubernetes (`cmd/observer -stdio-bridge`); loopback only, half-closed when stdin ends, over when the server closes.
 
 ## Does not own
 - Probes, configuration binding and preview proxying: `internal/observer`.
@@ -21,7 +22,7 @@ The observer machine's server as both its programs run it: `cmd/observer` on TCP
 
 ## Module map
 
-Files (1, tests apart): `observersrv.go`
+Files (2, tests apart): `bridge.go`, `observersrv.go`
 
 Imports these Runtime modules:
 

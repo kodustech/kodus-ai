@@ -1,0 +1,10 @@
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "server.js"]
+    depends_on:
+      cache: {condition: service_started}
+  cache:
+    image: redis:7

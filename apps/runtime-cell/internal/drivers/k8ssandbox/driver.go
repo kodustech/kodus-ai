@@ -10,8 +10,9 @@
 // Config.Env, environment Runs from prebuilt images, one pod per compose
 // service in the cell's environment namespace (env.go; Parts gains
 // Composer, Recipes, Resetter and ServiceLogs). Without Config.Env every
-// Run is refused with driver.ErrUnsupported (NoRuns); builds, observers,
-// previews, bakes and snapshots are refused either way.
+// Run is refused with driver.ErrUnsupported (NoRuns); with it, image builds
+// and the claim's observer pod come with their settings (envbuild.go,
+// envobserver.go). Bakes and snapshots are refused either way.
 package k8ssandbox
 
 import (
@@ -19,10 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/kube"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
@@ -82,6 +85,9 @@ type Driver struct {
 	exec Execer
 	cfg  Config
 	envs envStates
+	// observerLocks orders a claim's observer pod's recycle against its
+	// SetExpiry and Destroy (envobserver.go).
+	observerLocks keyedLocks
 }
 
 // New checks the configuration only; the preflight (Preflight) is what
@@ -158,14 +164,16 @@ func (d *Driver) claimLabels(org, claim string) map[string]any {
 }
 
 // PrepareClaim creates nothing: the chart's policies already isolate every
-// claim pod (no ingress, egress to the cell's proxy and resolver only). The
-// claim's group is its id, the label its pods carry.
+// claim pod (no ingress, egress to the cell's proxy and resolver only), and an
+// environment claim's policies come with its observer and its Up. The
+// claim's group is its id, the label its pods carry. Expose ports reach the
+// claim's observer pod only, so a cell without one refuses them.
 func (d *Driver) PrepareClaim(_ context.Context, spec driver.ClaimNetworkSpec) (driver.ClaimNetwork, error) {
 	if err := driver.ValidateClaimID(spec.ClaimID); err != nil {
 		return driver.ClaimNetwork{}, err
 	}
-	if len(spec.Expose) > 0 {
-		return driver.ClaimNetwork{}, fmt.Errorf("%w: k8ssandbox exposes no claim port: the observer pod and previews are not wired on Kubernetes yet", driver.ErrUnsupported)
+	if len(spec.Expose) > 0 && (d.cfg.Env == nil || !d.cfg.Env.observersOn()) {
+		return driver.ClaimNetwork{}, fmt.Errorf("%w: k8ssandbox exposes a claim's ports to its observer pod only, and this cell runs none (no environment observer image)", driver.ErrUnsupported)
 	}
 	return driver.ClaimNetwork{WorkloadGroupID: spec.ClaimID, ObserverGroupID: spec.ClaimID, EgressAddress: d.cfg.EgressAddress}, nil
 }
@@ -331,11 +339,16 @@ func (d *Driver) ref(spec driver.MachineSpec, name, address string) driver.Machi
 	return driver.MachineRef{MachineID: id, DriverRef: id, PrivateAddress: address, ImageID: spec.ImageID, Tags: spec.AllTags()}
 }
 
-// Create makes a machine pod of the holder image. Nothing runs a Run on it
-// (NoRuns); it is the machine the conformance suite and a lease track.
+// Create makes a machine pod of the holder image: the workload of an
+// environment Run (its project runs beside it, env.go), and the machine the
+// conformance suite and a lease track. With an environment observer image the
+// observer machine is the claim's observer pod instead (envobserver.go).
 func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.MachineRef, error) {
 	if err := d.check(spec); err != nil {
 		return driver.MachineRef{}, err
+	}
+	if spec.Role == driver.RoleObserver && d.cfg.Env != nil && d.cfg.Env.observersOn() {
+		return d.createObserver(ctx, spec)
 	}
 	p, err := d.pod(spec, podShape{container: containerMain, image: d.cfg.HolderImage})
 	if err != nil {
@@ -487,8 +500,12 @@ func (d *Driver) DialGuest(ctx context.Context, ref driver.MachineRef) (io.ReadW
 }
 
 // Destroy deletes the pod only when it carries this cell's label, and the
-// claim's objects in the environment namespace with it.
+// claim's objects in the environment namespace with it; an observer machine
+// its pod and policy only.
 func (d *Driver) Destroy(ctx context.Context, ref driver.MachineRef) error {
+	if d.isObserverRef(ref) {
+		return d.destroyObserver(ctx, ref)
+	}
 	p, name, err := d.ownPod(ctx, ref)
 	if err != nil || p == nil {
 		return err
@@ -520,6 +537,16 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 	if err != nil {
 		return nil, err
 	}
+	// The claims' observer machines live in the environment namespace.
+	if role, ok := selector[driver.TagRole]; d.cfg.Env != nil && (!ok || role == kube.ObserverRole) {
+		obs := maps.Clone(ls)
+		obs[label(driver.TagRole)] = kube.ObserverRole
+		more, err := d.cfg.Env.API.ListPods(ctx, d.cfg.Env.Namespace, obs)
+		if err != nil {
+			return nil, err
+		}
+		pods = append(pods, more...)
+	}
 	var out []driver.MachineRef
 	for _, p := range pods {
 		if !d.owns(p) {
@@ -548,6 +575,9 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 // pod, held under the ceiling the pod carries (not the one the caller's ref
 // says).
 func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.Time) error {
+	if d.isObserverRef(ref) {
+		return d.setObserverExpiry(ctx, ref, at)
+	}
 	p, name, err := d.ownPod(ctx, ref)
 	if err != nil {
 		return err
@@ -555,16 +585,23 @@ func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.T
 	if p == nil {
 		return fmt.Errorf("k8ssandbox: pod %s is gone: %w", ref.DriverRef, ErrNotFound)
 	}
+	return d.patchExpiry(ctx, d.k, d.cfg.Namespace, name, p, at)
+}
+
+// patchExpiry patches the pod's kodus.io/expires annotation, held under the
+// ceiling the pod carries.
+func (d *Driver) patchExpiry(ctx context.Context, k KubeAPI, namespace, name string, p Object, at time.Time) error {
+	ref := namespace + "/" + name
 	annotations, _ := meta(p)["annotations"].(map[string]any)
 	ceiling := map[string]string{}
 	if v, ok := annotations[label(driver.TagHardExpires)].(string); ok {
 		ceiling[driver.TagHardExpires] = v
 	}
-	at, err = driver.ClampToCeiling(at, ceiling)
+	at, err := driver.ClampToCeiling(at, ceiling)
 	if err != nil {
-		return fmt.Errorf("k8ssandbox: pod %s: %w", ref.DriverRef, err)
+		return fmt.Errorf("k8ssandbox: pod %s: %w", ref, err)
 	}
-	return d.k.PatchPodAnnotations(ctx, d.cfg.Namespace, name, map[string]string{label(driver.TagExpires): driver.FormatTime(at)})
+	return k.PatchPodAnnotations(ctx, namespace, name, map[string]string{label(driver.TagExpires): driver.FormatTime(at)})
 }
 
 // Sweep deletes this cell's pods past their hard ceiling, or with none that

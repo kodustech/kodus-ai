@@ -819,3 +819,16 @@ export * from './env-tools';
 // External findings/task admission belongs to the product, never Runtime state.
 export { RUNTIME_EXTERNAL_FINDINGS, RUNTIME_EXTERNAL_FINDINGS_STORE, RUNTIME_EXTERNAL_STOP_READER } from './external-findings';
 export type { ExternalFindingsPort, ExternalFindingsStore, ExternalStopReader, ExternalTaskView } from './external-findings';
+
+/**
+ * Whether an organization may use the Runtime: its stored release track is
+ * `alpha` (`isKodyRuntimeReleasedToTrack`), in cloud and self-hosted alike. Every
+ * entry point that starts or shows Runtime work asks it; the paths that carry a
+ * Run already accepted (cell, hub, internal) never do, so a Run in flight finishes.
+ */
+export const RUNTIME_RELEASE_GATE = Symbol.for('RuntimeApi.ReleaseGate');
+
+export interface RuntimeReleaseGate {
+    /** False on any doubt: no org, a check that failed, an unknown track. */
+    isEnabledFor(organizationId: string | undefined): Promise<boolean>;
+}

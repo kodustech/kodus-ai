@@ -1,0 +1,163 @@
+builder:
+    apiVersion: v1
+    kind: Pod
+    metadata:
+        annotations:
+            kodus.io/compose-service: api
+            kodus.io/hard-expires: "2026-11-17T12:00:00Z"
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: builder
+            kodus.io/service: api
+            kodus.io/side: pr
+        name: env-claim-1--build-api
+        namespace: kodus-runtime-environments
+    spec:
+        activeDeadlineSeconds: 3600
+        automountServiceAccountToken: false
+        containers:
+            - args:
+                - --oci-worker-no-process-sandbox
+                - --config
+                - /kodus/buildkit/buildkitd.toml
+              image: registry.example/kodus-runtime-builder@sha256:2222222222222222222222222222222222222222222222222222222222222222
+              name: buildkitd
+              readinessProbe:
+                exec:
+                    command:
+                        - buildctl
+                        - debug
+                        - workers
+                failureThreshold: 3
+                periodSeconds: 1
+              resources:
+                limits:
+                    cpu: 2000m
+                    memory: 2048Mi
+                requests:
+                    cpu: 2000m
+                    memory: 2048Mi
+              securityContext:
+                appArmorProfile:
+                    type: Unconfined
+                capabilities:
+                    drop:
+                        - NET_RAW
+                        - AUDIT_WRITE
+                privileged: false
+                runAsGroup: 1000
+                runAsNonRoot: true
+                runAsUser: 1000
+                seccompProfile:
+                    type: Unconfined
+              volumeMounts:
+                - mountPath: /etc/hosts
+                  name: kodus-hosts
+                  readOnly: true
+                  subPath: hosts
+                - mountPath: /kodus/context
+                  name: context
+                  readOnly: true
+                - mountPath: /kodus/buildkit
+                  name: buildkit
+                  readOnly: true
+                - mountPath: /home/user/.local/share/buildkit
+                  name: buildkitd
+        dnsConfig:
+            nameservers:
+                - 10.96.12.34
+        dnsPolicy: None
+        enableServiceLinks: false
+        hostIPC: false
+        hostNetwork: false
+        hostPID: false
+        initContainers:
+            - command:
+                - /bin/sh
+                - -c
+                - trap 'exit 143' TERM INT; until [ -e /kodus/gate/open ]; do sleep 0.2; done
+              image: registry.example/kodus-helper@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: IfNotPresent
+              name: kodus-init
+              resources:
+                limits:
+                    cpu: 100m
+                    memory: 64Mi
+                requests:
+                    cpu: 100m
+                    memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                    add:
+                        - CHOWN
+                        - DAC_OVERRIDE
+                        - FOWNER
+                        - FSETID
+                    drop:
+                        - ALL
+                privileged: false
+                runAsUser: 0
+              volumeMounts:
+                - mountPath: /kodus/gate
+                  name: kodus-gate
+                - mountPath: /kodus/hosts
+                  name: kodus-hosts
+                - mountPath: /kodus/copy/context
+                  name: context
+                - mountPath: /kodus/copy/buildkit
+                  name: buildkit
+        restartPolicy: Never
+        runtimeClassName: gvisor
+        securityContext:
+            seccompProfile:
+                type: RuntimeDefault
+        terminationGracePeriodSeconds: 5
+        volumes:
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: kodus-gate
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: kodus-hosts
+            - emptyDir:
+                sizeLimit: 1Gi
+              name: context
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: buildkit
+            - emptyDir:
+                sizeLimit: 10Gi
+              name: buildkitd
+policy:
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: builder
+            kodus.io/side: pr
+        name: env-claim-1--build
+        namespace: kodus-runtime-environments
+    spec:
+        egress:
+            - ports:
+                - port: 5000
+                  protocol: TCP
+              to:
+                - ipBlock:
+                    cidr: 10.96.0.50/32
+        podSelector:
+            matchLabels:
+                kodus.io/cell: cell-a
+                kodus.io/claim: claim-1
+                kodus.io/role: builder
+        policyTypes:
+            - Egress

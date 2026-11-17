@@ -3,15 +3,17 @@
 The compose rules of the Kubernetes environment backend (gvisor, one pod per service; [`docs/runtime/kubernetes-environment-runs.md`](../../../../../docs/runtime/kubernetes-environment-runs.md)): the claim's compose file and its settings in, Kubernetes objects out. A pure rule package of the cell process, the sibling of `internal/compose/sandbox`; `drivers/k8ssandbox` renders every environment Up with it.
 
 ## Owns
-- `kube.go` `Render`: every key on an allowlist, every refusal at once (`sandbox.RefusedError` for what no cell runs, `UnsupportedError`/`ErrUnsupported` for a build with no builder and a volume two services share), `Plan.Ignored` for keys with no meaning on a pod (labels, logging, profiles, top-level secrets).
+- `kube.go` `Render`: every key on an allowlist, every refusal at once (`sandbox.RefusedError` for what no cell runs, `UnsupportedError`/`ErrUnsupported` for a build with no image in `Options.Built` and a volume two services share), `Plan.Ignored` for keys with no meaning on a pod (labels, logging, profiles, top-level secrets).
 - What every pod gets whatever the file says (`pod`): the RuntimeClass, no token, no host namespaces, no privilege or escalation, `sandbox.ServiceCaps` at most, RuntimeDefault seccomp, the cell's resolver only, `activeDeadlineSeconds`, requests equal to limits from the claim's size shared by the services (`sizes`), the gate init container (`InitContainer`, `GateWait`, `InitScript`), and with `Options.Decoy` the Run's decoy file at `sandbox.DecoyTarget`.
 - Name resolution: `Plan.HostsFile`, the /etc/hosts the cell writes into each pod (every service name and network alias at its pod's address). No Service object: compose reaches any port by name, and the claim's pods resolve through the cell only.
-- The start order (`order`: waves by `depends_on`, cycles and unknown services refused, `service_healthy` on an image HEALTHCHECK refused), the claim's NetworkPolicy (`policy`), named volumes as PersistentVolumeClaims (`claim`), binds as checkout copies (`Copy`).
+- The start order (`order`: waves by `depends_on`, cycles and unknown services refused, `service_healthy` on an image HEALTHCHECK refused), the claim's NetworkPolicy (`policy`: it selects the claim's services and builders, never its observer, and admits the claim's own pods and its observer only), named volumes as PersistentVolumeClaims (`claim`), binds as checkout copies (`Copy`).
+- The image builder's pod and policy: `builder.go` `BuilderPod` (rootless BuildKit as in BuildKit's `pod.rootless.yaml`: the `buildkitd` container Unconfined as uid 1000, unprivileged, no capability added, `--oci-worker-no-process-sandbox`; the claim's labels with `RoleLabel: BuilderRole`, its whole size and deadline; the gate init container that receives the context and BuildKit's config), `BuildPolicy` (egress to the build registry and mirror for the builder pods only). A built service runs `Options.Built[service]`, the image the builder pushed, by digest.
+- The claim's observer pod and policy: `observer.go` `ObserverPod` (cmd/observer at `ObserverBinary`, the cell image's path, on the claim's RuntimeClass with the claim's labels and `RoleLabel: ObserverRole`; non-root `ObserverUID` on a read-only root, every capability dropped, RuntimeDefault seccomp, no token, its own `ObserverSpec` size and the claim's deadline; serving on loopback `ObserverListen` only; no nameserver but its loopback; the gate init container that receives its TLS files in `ObserverTLSDir`), `ObserverPolicy` (no ingress, egress to the claim's service pods only), `ObserverBridge` (the argv that carries one connection over pods/exec), `Options.Reserved` (the observer's `Share`, taken from the claim's size before the services or a builder share it).
 - Values as compose would hand them: `values.go` `interpolate` (compose's rules with an empty environment), `kubeLiteral` (every `$` escaped from Kubernetes' `$(VAR)`), `splitShell`, `parseEnvFile`, sizes, durations, `slug`.
 
 ## Does not own
 - Reading the project and the agent's adaptations: `internal/compose`. The docker cells' allowlist: `internal/compose/sandbox` (whose `RefusedError`, `Violation` and `ServiceCaps` this package reuses).
-- Creating anything on a cluster, the gate's operations, golden data: `drivers/k8ssandbox` (`env.go`).
+- Creating anything on a cluster, the gate's operations, golden data, running a build: `drivers/k8ssandbox` (`env.go`, `envbuild.go`). The admission rule that lets the builder run Unconfined: `drivers/k8ssandbox` `EnvGateValidations`, on this package's names.
 
 ## Rules and limits
 - A new compose feature is closed by default: refused until a case here models it.
@@ -23,13 +25,13 @@ The compose rules of the Kubernetes environment backend (gvisor, one pod per ser
 - A key with no runtime meaning on a pod: `ignoredKeys`, with why.
 
 ## Tests
-- `go test ./internal/compose/kube` (pure): golden files in `testdata` (`-update` rewrites them), refusals, interpolation, the hosts file.
+- `go test ./internal/compose/kube` (pure): golden files in `testdata` (`-update` rewrites them; `build` a built service, `builder` the builder pod and policy, `observer` the observer pod, its policy and the claim's), which policy peers select which pods (`TestOnlyTheClaimsOwnObserverReachesItsServices`), refusals, interpolation, the hosts file.
 
 <!-- module-map:start (generated by scripts/runtime/module-docs.mjs; do not edit) -->
 
 ## Module map
 
-Files (2, tests apart): `kube.go`, `values.go`
+Files (4, tests apart): `builder.go`, `kube.go`, `observer.go`, `values.go`
 
 Imports these Runtime modules:
 
@@ -38,6 +40,7 @@ Imports these Runtime modules:
 
 Imported by:
 
+- [`apps/runtime-cell/cmd/cell`](../../../cmd/cell/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/k8ssandbox`](../../drivers/k8ssandbox/AGENTS.md)
 
 <!-- module-map:end -->

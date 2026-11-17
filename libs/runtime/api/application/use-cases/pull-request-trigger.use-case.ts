@@ -19,6 +19,7 @@ import {
     RUNTIME_ENVIRONMENT_SETUP_READER,
     RUNTIME_GIT_PORT,
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
+    RUNTIME_RELEASE_GATE,
     RUNTIME_RUN_PROJECTION_STORE,
     RUNTIME_SETTINGS_STORE,
     repositoryAccessProblemOf,
@@ -28,6 +29,7 @@ import {
     type RepositoryAccessProblem,
     type RunProjectionReader,
     type RuntimeEnvironmentSetupReader,
+    type RuntimeReleaseGate,
     type RuntimeGitPort,
     type RuntimeRepositorySettingsRecord,
     type RuntimeSettingsStore,
@@ -125,6 +127,9 @@ export class RuntimePullRequestTriggerUseCase {
         @Optional()
         @Inject(RUNTIME_SKIPPED_TRIGGER_REPLY_TOKEN)
         private readonly skipReplies?: Pick<SkippedTriggerReplyPublisher, 'answer'>,
+        // Required by Nest; a use case made without it starts nothing (fails closed).
+        @Inject(RUNTIME_RELEASE_GATE)
+        private readonly release?: RuntimeReleaseGate,
     ) {}
 
     /**
@@ -146,6 +151,17 @@ export class RuntimePullRequestTriggerUseCase {
             return { action: 'skipped', reason: 'invalid_event' };
         }
         const ev = parsed.data;
+        // The Runtime is an alpha in the feature catalog: an org it is not released to starts nothing and
+        // hears nothing, a `@kody runtime` included (no answer advertises it). A close still goes through,
+        // so the Runs it accepted before stop with their PR.
+        if (ev.event !== 'closed' && !(await this.release?.isEnabledFor(ev.organizationId))) {
+            this.logger.log({
+                message: 'Runtime trigger: skipped',
+                context: RuntimePullRequestTriggerUseCase.name,
+                metadata: { organizationId: ev.organizationId, repositoryId: ev.repository.id, prNumber: ev.prNumber, event: ev.event, reason: 'not_enabled' },
+            });
+            return { action: 'skipped', reason: 'not_enabled' };
+        }
         const facts: DecisionFacts = {};
         let outcome: TriggerOutcome;
         try {

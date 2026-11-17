@@ -81,13 +81,17 @@ func golden(t *testing.T, p *Plan) []byte {
 // file: one pod per service on the RuntimeClass with the claim's labels, a
 // claim per named volume, and the claim's NetworkPolicy.
 func TestRenderMatchesTheGoldenFiles(t *testing.T) {
-	for _, name := range []string{"single", "app-postgres-redis", "volumes", "ports"} {
+	for _, name := range []string{"single", "app-postgres-redis", "volumes", "ports", "build"} {
 		t.Run(name, func(t *testing.T) {
 			raw, err := os.ReadFile(filepath.Join("testdata", name+".compose.yaml"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			p, err := Render(raw, opts())
+			o := opts()
+			if name == "build" {
+				o.Built = map[string]string{"api": builtAPI}
+			}
+			p, err := Render(raw, o)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -106,6 +110,46 @@ func TestRenderMatchesTheGoldenFiles(t *testing.T) {
 				t.Errorf("render differs from %s (run with -update and read the diff):\n%s", file, got)
 			}
 		})
+	}
+}
+
+// builtAPI is the image the builder pushed for the build golden's api, as
+// the nodes pull it: by digest.
+const builtAPI = "registry.kodus-runtime.svc:5000/kodus-build/claim-1/api@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+
+// A service with a build section runs the image the builder made for it,
+// pulled by digest, with everything else the file says; the builder's pod
+// is rootless BuildKit on the claim's RuntimeClass with the claim's labels
+// in the builder's role, its whole size and deadline, and the build policy
+// selects only the claim's builder pods.
+func TestTheBuilderPodAndPolicyMatchTheirGoldenFile(t *testing.T) {
+	b, err := BuilderPod(opts(), BuildPod{Service: "api", Image: "registry.example/kodus-runtime-builder@sha256:2222222222222222222222222222222222222222222222222222222222222222"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.PodName != "env-claim-1--build-api" {
+		t.Errorf("pod name %q", b.PodName)
+	}
+	pol := BuildPolicy(opts(), []EgressPeer{{CIDR: "10.96.0.50/32", Ports: []Port{{Port: 5000}}}})
+	got, err := yaml.Marshal(map[string]any{"builder": b.Pod, "policy": pol})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join("testdata", "builder.golden.yaml")
+	if *update {
+		if err := os.WriteFile(file, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(file)
+	if err != nil || string(got) != string(want) {
+		t.Errorf("builder differs from %s (run with -update and read the diff): %v\n%s", file, err, got)
+	}
+	if BuildPolicy(opts(), nil) != nil {
+		t.Error("a build policy with no peer")
+	}
+	if _, err := BuilderPod(opts(), BuildPod{Service: "api"}); err == nil {
+		t.Error("a builder pod with no image")
 	}
 }
 

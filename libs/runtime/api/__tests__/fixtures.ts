@@ -281,3 +281,12 @@ export class InMemoryEnvironmentRepositories implements EnvironmentRepositorySto
         return new Date(NOW.getTime() + this.tick++).toISOString();
     }
 }
+
+/** The Runtime release gate of an org on the alpha track with the flag on (or off, for the refusal tests). */
+export const runtimeReleaseGate = (enabled: boolean | ((organizationId: string | undefined) => boolean) = true) => ({
+    asked: [] as Array<string | undefined>,
+    async isEnabledFor(organizationId: string | undefined) {
+        this.asked.push(organizationId);
+        return typeof enabled === 'function' ? enabled(organizationId) : enabled;
+    },
+});

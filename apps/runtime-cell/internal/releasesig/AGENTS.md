@@ -8,7 +8,8 @@ Signing and verifying a cell release offline (S-17 (a), [`docs/runtime/isolation
 - The release index: `index.go` `Index`, `MarshalIndex`, `SignIndex`, `VerifyIndex` (TUF-lite: latest, minimum, revoked keys, issued, expires at most `MaxIndexValidity`), signed under its own prefix so a release signature never passes for an index one. `VerifySigned` names the key a release was signed with.
 - Installing a listed file: `CopyChecked` (hashes the bytes it writes, never replaces), `CheckFile`.
 - What a release speaks: `protocol.go` `ProtocolName` (`PROTOCOL`, one line `<lowest> <highest>`), `Protocol`, `FormatProtocol`, `ParseProtocol`, `ReadProtocol` (only through the verified manifest: unlisted is unknown, a listed one must match and parse).
-- The release tool: `tool.go` `RunTool` (generate a key pair, write `PROTOCOL` from what the caller's build speaks, sign a directory, sign a release index).
+- The offline bundle an air-gapped host installs from: `bundle.go` `BundleManifestName` (`BUNDLE`), `Artifact`, `Bundle`, `MarshalBundle`, `ParseBundle`, `BundleMessage`, `SignBundle`, `VerifyBundle` (signature, every artifact's sha256, each image archive's `index.json` listing its pinned digest, the release inside and its index), `BuildBundle`.
+- The release tool: `tool.go` `RunTool` (generate a key pair, write `PROTOCOL` from what the caller's build speaks, sign a directory, sign a release index, make a bundle).
 
 ## Does not own
 - Swapping `current` and `previous` in the installer's layout: `internal/cellupdate`.
@@ -20,6 +21,7 @@ Signing and verifying a cell release offline (S-17 (a), [`docs/runtime/isolation
 - `Verify` refuses with no key pinned, a missing or malformed manifest or signature, another release's name or an unpinned key. It reads no listed file: each is hashed as it is installed.
 - An index expires (freeze defense): the release owner re-issues it before `expires` (`scripts/sign-release.sh index`), or hosts stop installing.
 - An index never revokes the key that signs it.
+- A bundle is signed with the release key under its own prefix (`kodus-cell-release-bundle v1`): no new key type, and no bundle signature passes for a release or index one. Its manifest format is also read by the installer's `cell-host.sh` (shell and OpenSSL): change both together, and the installer's fixture (`scripts/runtime/testdata/cell-bundle`).
 - `PROTOCOL` is written before `SHA256SUMS` is made over the directory (the release workflow), so it is signed like a command; the tool never replaces one.
 - `keys/cell-release.pub` holds no key yet, so `cell update` refuses every release until the release owner generates one. The private half never enters this tree.
 
@@ -30,7 +32,7 @@ Signing and verifying a cell release offline (S-17 (a), [`docs/runtime/isolation
 
 ## Module map
 
-Files (5, tests apart): `index.go`, `pinned.go`, `protocol.go`, `releasesig.go`, `tool.go`
+Files (6, tests apart): `bundle.go`, `index.go`, `pinned.go`, `protocol.go`, `releasesig.go`, `tool.go`
 
 Imports these Runtime modules:
 

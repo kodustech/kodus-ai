@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -41,6 +42,40 @@ type cluster struct {
 	failing map[string]string
 	logs    map[string]string
 	onExec  func(pod string, argv []string, stdin []byte) CommandResult
+	// The builder: every buildctl argv it ran (pod first), the lines it
+	// prints, its exit code, the digest it pushed, and whether the kubelet
+	// OOM-killed it.
+	buildctl    [][]string
+	buildLines  []string
+	buildExit   int
+	buildDigest string
+	buildOOM    bool
+	builderPods []Object
+	// The observer: every pods/exec with stdin and stdout attached (the
+	// pod, the container, then argv), and the stream its bridge opens.
+	dials  [][]string
+	onDial func() io.ReadWriteCloser
+}
+
+// StreamCommand is buildctl in the builder pod: its lines, its exit.
+func (c *cluster) StreamCommand(_ context.Context, ns, pod, container string, argv []string, line func(string)) (int, error) {
+	c.mu.Lock()
+	p, ok := c.pods[ns+"/"+pod]
+	if !ok || container != kube.BuilderContainer {
+		c.mu.Unlock()
+		return -1, ErrNotFound
+	}
+	c.buildctl = append(c.buildctl, append([]string{pod}, argv...))
+	lines, code := c.buildLines, c.buildExit
+	if c.buildOOM {
+		p["status"].(map[string]any)["containerStatuses"] = []any{map[string]any{"name": container,
+			"state": map[string]any{"terminated": map[string]any{"reason": "OOMKilled", "exitCode": 137}}}}
+	}
+	c.mu.Unlock()
+	for _, l := range lines {
+		line(l)
+	}
+	return code, nil
 }
 
 func newCluster() *cluster {
@@ -65,6 +100,9 @@ func (c *cluster) CreatePod(_ context.Context, ns string, pod Object, dryRun boo
 	}
 	if dryRun {
 		return pod, nil
+	}
+	if hasLabels(pod, map[string]string{kube.RoleLabel: kube.BuilderRole}) {
+		c.builderPods = append(c.builderPods, roundTrip(pod))
 	}
 	meta(pod)["namespace"] = ns
 	c.next++
@@ -191,6 +229,9 @@ func (c *cluster) RunCommand(_ context.Context, ns, pod, container string, argv 
 	if !ok {
 		return CommandResult{}, ErrNotFound
 	}
+	if container == kube.BuilderContainer && slices.Equal(argv, []string{"cat", buildMetadata}) {
+		return CommandResult{Stdout: []byte(`{"containerimage.digest":"` + c.buildDigest + `"}`)}, nil
+	}
 	if container != kube.InitContainer {
 		if c.onExec == nil {
 			if slices.Contains(argv, "pwd") {
@@ -277,11 +318,22 @@ type envFixture struct {
 
 func newEnvFixture(t *testing.T, recipeYAML string) *envFixture {
 	t.Helper()
+	return newEnvFixtureWith(t, recipeYAML, nil)
+}
+
+// newEnvFixtureWith is newEnvFixture on an environment configuration
+// mutate changes.
+func newEnvFixtureWith(t *testing.T, recipeYAML string, mutate func(*EnvConfig)) *envFixture {
+	t.Helper()
 	c := newCluster()
-	d, err := New(c, nil, Config{
+	env := &EnvConfig{API: c, Exec: c, Namespace: envNS, HelperImage: "helper@sha256:2"}
+	if mutate != nil {
+		mutate(env)
+	}
+	d, err := New(c, c, Config{
 		CellID: "cell-a", Namespace: sandboxNS, RuntimeClass: "gvisor", HolderImage: "holder@sha256:1", EgressAddress: "10.96.0.53",
 		ReadyTimeout: 2 * time.Second, Poll: time.Millisecond,
-		Env: &EnvConfig{API: c, Exec: c, Namespace: envNS, HelperImage: "helper@sha256:2"},
+		Env: env,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -427,9 +479,13 @@ func TestNoGoldenServiceMeansEmptyVolumesEachRound(t *testing.T) {
 
 // What the backend cannot run is refused before anything is created: a
 // build (no builder yet) and a claim with org secrets are the platform's
-// gaps (ErrUnsupported), a privileged service the file's (RefusedError).
+// gaps (ErrUnsupported) on a cell with no builder, a privileged service
+// the file's (RefusedError).
 func TestUpRefusesWhatTheBackendCannotRunBeforeCreatingAnything(t *testing.T) {
 	f := newEnvFixture(t, "")
+	if err := os.WriteFile(filepath.Join(f.dir, "Dockerfile"), []byte("FROM busybox\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.up("services:\n  a:\n    build: .\n"); !errors.Is(err, driver.ErrUnsupported) || !errors.Is(err, kube.ErrUnsupported) {
 		t.Errorf("build: %v", err)
 	}

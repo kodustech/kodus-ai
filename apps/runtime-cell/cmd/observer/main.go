@@ -44,10 +44,14 @@ func run(log *slog.Logger) error {
 	// The read-only user is created at bake from the seed; {address} is the
 	// claim VM's host:port.
 	dsn := flag.String("sql-dsn", os.Getenv("KODUS_OBSERVER_SQL_DSN"), "DSN template, e.g. postgres://kody_observer@{address}/app?sslmode=disable")
+	bridge := flag.String("stdio-bridge", "", "carry one connection between stdin and stdout and this loopback address, then exit (the cell's way in over pods/exec on Kubernetes); serves nothing")
 	flag.Parse()
-	log.Info("observer.start", "version", version.Get())
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
+	if *bridge != "" {
+		return observersrv.Bridge(ctx, *bridge, os.Stdin, os.Stdout)
+	}
+	log.Info("observer.start", "version", version.Get())
 
 	if *insecure {
 		if os.Getenv(devEnv) != "1" {

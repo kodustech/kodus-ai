@@ -221,15 +221,33 @@ func wireK8s(ctx context.Context, w wiring, cfg *agent.Config) (opened, error) {
 		return opened{}, err
 	}
 	w.log.Info("k8s.preflight.passed", "namespace", st.K8s.Namespace, "runtimeClass", st.K8s.RuntimeClass, "kernel", rep.Kernel, "probeDial", rep.Dial, "privilegedPod", rep.PrivilegedRefused)
-	// Sandboxes only: an environment Run's upload and exec are refused
-	// until compose on Kubernetes is wired (docs/runtime/kubernetes.md).
+	// Without -k8s-env-namespace, sandboxes only: an environment Run's upload
+	// and exec are refused. With it, the project boots from the checkout
+	// through the driver (Up) and exec runs in the project's public service
+	// pod over pods/exec (Driver.Exec), as on docker-gvisor.
 	cfg.Driver, cfg.Parts, cfg.Transport = d, d.Parts(), k8ssandbox.NoRuns{}
+	if d.RunsEnvironments() {
+		// No CellTrust: the cell's trust files in environment pods are not
+		// built, so a claim with org secrets is refused (the driver's
+		// driver.ErrUnsupported).
+		cfg.Transport = transport.Compose{Run: d.Exec}
+	}
 	cfg.SandboxPool = st.Sandbox.Pool
 	cfg.GuestTraceContext = st.Sandbox.GuestTrace
 	cfg.SandboxSize = driver.ClaimSize{MemoryMB: st.Sandbox.MemoryMB, CPUs: st.Sandbox.CPUs}
 	cfg.OrgKey = func(org string) (string, error) { return "k8s-sandbox-" + org, nil }
 	return opened{observers: func() (agent.ObserverFactory, agent.PreviewUpstreamFactory, error) {
-		return noObservers, nil, nil
+		if !d.RunsEnvironments() {
+			return noObservers, nil, nil
+		}
+		obsTLS, _, err := observerClient(st)
+		if err != nil {
+			return nil, nil, err
+		}
+		// An observer pod is reached over pods/exec only: no TCP from the
+		// cell into the environment namespace, previews included.
+		f := k8sObservers(obsTLS, d)
+		return f, k8sPreviewUpstreams(f, obsTLS, d), nil
 	}}, nil
 }
 

@@ -16,6 +16,11 @@ objects:
         egress:
             - to:
                 - podSelector:
+                    matchExpressions:
+                        - key: kodus.io/role
+                          operator: NotIn
+                          values:
+                            - observer
                     matchLabels:
                         kodus.io/cell: cell-a
                         kodus.io/claim: claim-1
@@ -38,10 +43,25 @@ objects:
         ingress:
             - from:
                 - podSelector:
+                    matchExpressions:
+                        - key: kodus.io/role
+                          operator: NotIn
+                          values:
+                            - observer
                     matchLabels:
                         kodus.io/cell: cell-a
                         kodus.io/claim: claim-1
+                - podSelector:
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+                        kodus.io/role: observer
         podSelector:
+            matchExpressions:
+                - key: kodus.io/role
+                  operator: NotIn
+                  values:
+                    - observer
             matchLabels:
                 kodus.io/cell: cell-a
                 kodus.io/claim: claim-1

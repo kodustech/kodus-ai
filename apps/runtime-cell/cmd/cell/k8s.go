@@ -30,6 +30,8 @@ type k8sSettings struct {
 	KernelMustContain string
 	MaxMemoryMB       int
 	MaxCPUs           int
+	// Env turns on environment Runs (k8senv.go).
+	Env k8sEnvSettings
 }
 
 func (s *k8sSettings) register(fs *flag.FlagSet) {
@@ -41,6 +43,7 @@ func (s *k8sSettings) register(fs *flag.FlagSet) {
 	fs.StringVar(&s.EgressService, "k8s-egress-service", "", "k8s-sandbox: the DNS name of the Service in front of this cell's proxy and resolver (53, 80, 443): claim pods' only DNS server and way out")
 	fs.StringVar(&s.KernelMustContain, "k8s-kernel-must-contain", "gvisor", "k8s-sandbox: what the preflight probe's kernel release must name under the RuntimeClass (gVisor's names gvisor); empty for Kata or another runtime")
 	fs.IntVar(&s.MaxMemoryMB, "k8s-max-memory-mb", 8192, "k8s-sandbox: the most memory (MB) one claim may ask; keep it at or under the sandbox namespace's LimitRange")
+	s.Env.register(fs)
 	fs.IntVar(&s.MaxCPUs, "k8s-max-cpus", 4, "k8s-sandbox: the most CPUs one claim may ask; keep it at or under the sandbox namespace's LimitRange")
 }
 
@@ -65,7 +68,7 @@ func checkK8sGate(st settings) error {
 	case st.EgressEPs == "" && !st.Dev:
 		return errors.New("k8s-sandbox needs -egress-control: the egress, resolver and injector enforce every claim's policy")
 	}
-	return nil
+	return checkK8sEnv(st)
 }
 
 // resolveEgress is the egress Service's address, waited for while the
@@ -116,7 +119,7 @@ func openK8s(ctx context.Context, st settings, cellID string) (*k8ssandbox.Drive
 	rep, err := k8ssandbox.Preflight{
 		Kube: k, CellID: cellID, Namespace: st.K8s.Namespace, RuntimeClass: st.K8s.RuntimeClass, ProbeImage: st.K8s.ProbeImage,
 		DialTarget:        net.JoinHostPort(os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT")),
-		KernelMustContain: st.K8s.KernelMustContain, ResolverIP: egressIP,
+		KernelMustContain: st.K8s.KernelMustContain, ResolverIP: egressIP, EnvNamespace: st.K8s.Env.Namespace,
 	}.Run(ctx)
 	if err != nil {
 		return nil, rep, err
@@ -128,18 +131,29 @@ func openK8s(ctx context.Context, st settings, cellID string) (*k8ssandbox.Drive
 			return nil, rep, fmt.Errorf("-cell-ca-cert: %w", err)
 		}
 	}
+	var env *k8ssandbox.EnvConfig
+	if st.K8s.Env.on() {
+		if err := k8sEnvFiles(st.K8s.Env.ObserverTLSDir, st.ObsServerName); err != nil {
+			return nil, rep, fmt.Errorf("-k8s-env-observer-tls-dir: %w", err)
+		}
+		if env, err = envConfig(ctx, st, k, net.DefaultResolver.LookupHost); err != nil {
+			return nil, rep, err
+		}
+	}
 	d, err := k8ssandbox.New(k, k, k8ssandbox.Config{
 		CellID: cellID, Namespace: st.K8s.Namespace, RuntimeClass: st.K8s.RuntimeClass,
 		HolderImage: st.K8s.HolderImage, SandboxImage: st.K8s.SandboxImage, EgressAddress: egressIP, Arch: hostArch(),
 		MaxClaimSize:     driver.ClaimSize{MemoryMB: st.K8s.MaxMemoryMB, CPUs: st.K8s.MaxCPUs},
 		DefaultClaimSize: driver.ClaimSize{MemoryMB: st.Sandbox.MemoryMB, CPUs: st.Sandbox.CPUs},
 		CellCA:           cellCA,
+		Env:              env,
 	})
 	return d, rep, err
 }
 
-// errNoObservers: a k8s-sandbox cell runs no Run, so no observer.
-var errNoObservers = errors.New("observer: k8s-sandbox runs no environment Run, so no observer")
+// errNoObservers: a k8s-sandbox cell without -k8s-env-namespace runs no
+// Run, so no observer.
+var errNoObservers = errors.New("observer: this k8s-sandbox cell runs no environment Run (no -k8s-env-namespace), so no observer")
 
 func noObservers(context.Context, agent.ClaimInfo, []observer.Target) (observer.Client, error) {
 	return nil, errNoObservers

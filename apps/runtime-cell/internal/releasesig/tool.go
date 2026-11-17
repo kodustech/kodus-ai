@@ -18,7 +18,7 @@ import (
 // SHA256SUMS into SHA256SUMS.sig. Exit 0 done, 1 failed, 2 usage.
 func RunTool(args []string, speaks Protocol, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: release-sign generate -private FILE -public FILE | protocol -dir DIR | sign -key FILE -release NAME -dir DIR | index -key FILE -latest NAME -minimum NAME [-valid-days 90] [-revoke ID,ID] -dir DIR")
+		_, _ = fmt.Fprintln(stderr, "usage: release-sign generate -private FILE -public FILE | protocol -dir DIR | sign -key FILE -release NAME -dir DIR | index -key FILE -latest NAME -minimum NAME [-valid-days 90] [-revoke ID,ID] -dir DIR | bundle -key FILE -release NAME -release-dir DIR [-images FILE] [-runsc ARCH=FILE,...] -out DIR")
 		return 2
 	}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
@@ -79,6 +79,19 @@ func RunTool(args []string, speaks Protocol, stdout, stderr io.Writer) int {
 		}
 		if err == nil {
 			_, _ = fmt.Fprintf(stdout, "signed %s: latest %s, minimum %s, valid %d days\n", filepath.Join(*dir, IndexName), *latest, *minimum, *days)
+		}
+	case "bundle":
+		key := fs.String("key", "", "the private key file (the release key that signed SHA256SUMS and the index)")
+		release := fs.String("release", "", "the release's name")
+		relDir := fs.String("release-dir", "", "the signed release: SHA256SUMS(.sig), RELEASE-INDEX(.sig), PROTOCOL and the binaries")
+		images := fs.String("images", "", "tab-separated component, reference (repository@sha256:...) and OCI archive per line")
+		runsc := fs.String("runsc", "", "comma-separated ARCH=FILE: the gvisor.tar.bz2 of each arch (x86_64, aarch64)")
+		out := fs.String("out", "", "the bundle directory to create")
+		if fs.Parse(args[1:]) != nil || *key == "" || *release == "" || *relDir == "" || *out == "" {
+			return 2
+		}
+		if err = bundleDir(*key, *release, *relDir, *images, *runsc, *out); err == nil {
+			_, _ = fmt.Fprintf(stdout, "bundled release %s into %s (signed %s)\n", *release, *out, BundleSignatureName)
 		}
 	default:
 		_, _ = fmt.Fprintf(stderr, "release-sign: unknown command %q\n", args[0])
@@ -147,4 +160,45 @@ func signDir(keyPath, release, dir string) error {
 		return errors.New(sigPath + " already exists")
 	}
 	return os.WriteFile(sigPath, sig, 0o644) //nolint:gosec // G306: a signature, published with the release
+}
+
+// bundleDir is the bundle command: the inputs read, BuildBundle at now.
+func bundleDir(keyPath, release, relDir, imagesFile, runscList, out string) error {
+	keyText, err := os.ReadFile(keyPath) //nolint:gosec // G304: the key file the release job wrote
+	if err != nil {
+		return err
+	}
+	priv, err := ParsePrivateKey(keyText)
+	if err != nil {
+		return err
+	}
+	var images []ImageInput
+	if imagesFile != "" {
+		text, err := os.ReadFile(imagesFile) //nolint:gosec // G304: the image list the release job wrote
+		if err != nil {
+			return err
+		}
+		for i, line := range strings.Split(string(text), "\n") {
+			if line = strings.TrimSpace(line); line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			f := strings.Split(line, "\t")
+			if len(f) != 3 {
+				return fmt.Errorf("%s: line %d is not \"<component>\\t<reference>\\t<archive>\"", imagesFile, i+1)
+			}
+			images = append(images, ImageInput{Component: f[0], Ref: f[1], Archive: f[2]})
+		}
+	}
+	runsc := map[string]string{}
+	for _, kv := range strings.Split(runscList, ",") {
+		if kv = strings.TrimSpace(kv); kv == "" {
+			continue
+		}
+		arch, file, ok := strings.Cut(kv, "=")
+		if !ok || arch == "" || file == "" {
+			return fmt.Errorf("-runsc: %q is not ARCH=FILE", kv)
+		}
+		runsc[arch] = file
+	}
+	return BuildBundle(priv, release, relDir, images, runsc, out, time.Now().UTC())
 }

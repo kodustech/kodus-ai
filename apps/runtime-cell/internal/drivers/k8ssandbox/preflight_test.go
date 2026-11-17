@@ -161,3 +161,86 @@ func TestRunProbeWritesTheResult(t *testing.T) {
 		t.Fatal("no -dial is a usage error")
 	}
 }
+
+// envNamespace is the sandbox namespace's admission plus the environment
+// namespace's: Pod Security privileged there, so only refuse (the gate, or
+// RBAC) says no.
+func envNamespace(runtimeClass string, refuse func(Object) (int, string)) func(Object, bool) (int, string) {
+	sandbox := restrictedNamespace(runtimeClass)
+	return func(pod Object, dry bool) (int, string) {
+		if meta(pod)["namespace"] == "kodus-runtime-environments" {
+			return refuse(pod)
+		}
+		return sandbox(pod, dry)
+	}
+}
+
+// theGate refuses what EnvGateValidations refuses of a preflight pod, as the
+// API server words a ValidatingAdmissionPolicy's denial.
+func theGate(classes ...string) func(Object) (int, string) {
+	return func(pod Object) (int, string) {
+		spec := pod["spec"].(map[string]any)
+		if strings.Contains(strings.ToLower(jsonOf(spec)), "hostpath") || spec["hostPID"] == true {
+			return 403, `pods "x" is forbidden: ValidatingAdmissionPolicy '` + EnvGatePolicy + `' with binding '` + EnvGatePolicy + `' denied request: an environment pod mounts no hostPath`
+		}
+		for _, c := range classes {
+			if spec["runtimeClassName"] == c {
+				return 0, ""
+			}
+		}
+		return 403, `ValidatingAdmissionPolicy '` + EnvGatePolicy + `' denied request: an environment pod runs on one of the RuntimeClasses`
+	}
+}
+
+func TestPreflightWithEnvironmentsProvesTheGateRefusesAndTheDriversPodIsAdmitted(t *testing.T) {
+	api := newAPIServer()
+	api.admit = envNamespace("gvisor", theGate("gvisor"))
+	api.kubelet = probeKubelet(`{"kernel":"4.19.0-gvisor","dial":"timeout","target":"10.96.0.1:443"}`)
+	p := preflight(api, t)
+	p.EnvNamespace = "kodus-runtime-environments"
+	rep, err := p.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rep.EnvGateRefused, EnvGatePolicy) {
+		t.Fatalf("%+v", rep)
+	}
+	if api.count() != 0 {
+		t.Fatalf("the preflight left %d pods", api.count())
+	}
+}
+
+func TestPreflightWithEnvironmentsRefuses(t *testing.T) {
+	cases := []struct {
+		name   string
+		refuse func(Object) (int, string)
+		want   error
+		msg    string
+	}{
+		{name: "an environment namespace that admits a privileged hostPath pod has no gate", refuse: func(Object) (int, string) { return 0, "" }, want: ErrEnvGateMissing},
+		{
+			name: "a refusal that does not name the gate proves nothing of it",
+			refuse: func(Object) (int, string) {
+				return 403, `pods is forbidden: User "system:serviceaccount:kodus-runtime:kodus-runtime-cell" cannot create resource "pods"`
+			},
+			want: ErrEnvGateMissing, msg: "cannot create resource",
+		},
+		{name: "a RuntimeClass outside the gate's set refuses the driver's pod", refuse: theGate("kata-qemu"), want: ErrEnvPodRefused, msg: "RuntimeClasses"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			api := newAPIServer()
+			api.admit = envNamespace("gvisor", c.refuse)
+			api.kubelet = probeKubelet(`{"kernel":"4.19.0-gvisor","dial":"timeout","target":"10.96.0.1:443"}`)
+			p := preflight(api, t)
+			p.EnvNamespace = "kodus-runtime-environments"
+			_, err := p.Run(context.Background())
+			if !errors.Is(err, c.want) || !strings.Contains(err.Error(), c.msg) {
+				t.Fatalf("err = %v, want %v", err, c.want)
+			}
+			if api.count() != 0 {
+				t.Fatalf("the preflight left %d pods", api.count())
+			}
+		})
+	}
+}

@@ -242,9 +242,15 @@ func verify(dir, release string, keys []PublicKey) (map[string]string, string, e
 }
 
 func parseSignature(text []byte, file string) (keyID, release string, sig []byte, err error) {
+	return parseSignatureWith(text, file, signatureHeader)
+}
+
+// parseSignatureWith reads a "header / key / release / signature" file: a
+// release's (signatureHeader) or a bundle's (bundleSignatureHeader).
+func parseSignatureWith(text []byte, file, header string) (keyID, release string, sig []byte, err error) {
 	lines := strings.Split(strings.TrimRight(string(text), "\n"), "\n")
-	if len(lines) != 4 || lines[0] != signatureHeader {
-		return "", "", nil, refuse(file, "not a %q file", signatureHeader)
+	if len(lines) != 4 || lines[0] != header {
+		return "", "", nil, refuse(file, "not a %q file", header)
 	}
 	fields := map[string]string{}
 	for _, l := range lines[1:] {

@@ -3,20 +3,30 @@ package k8ssandbox
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/kube"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerclient"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/testpki"
 )
 
 // On a real cluster (opt-in, KODY_E2E_K8S_ENV=1 with the variables of
@@ -57,17 +67,10 @@ func TestOnAClusterAnEnvironmentRunBootsResetsAndIsolates(t *testing.T) {
 	}
 	envs := "kodus-runtime-environments-e2e"
 	ctx := context.Background()
-	kubectl := func(stdin []byte, args ...string) (string, error) {
-		cmd := exec.Command("kubectl", append([]string{"--context", kctx}, args...)...)
-		if stdin != nil {
-			cmd.Stdin = bytes.NewReader(stdin)
-		}
-		out, err := cmd.CombinedOutput()
-		return string(out), err
-	}
+	kubectl := kubectlOn(kctx)
 
 	// The environment namespace, its gate, default deny and Role.
-	objs, err := EnvironmentNamespace(envs, []string{rc})
+	objs, err := EnvironmentNamespace(envs, []string{rc}, ReferenceEnvAccess)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +111,8 @@ func TestOnAClusterAnEnvironmentRunBootsResetsAndIsolates(t *testing.T) {
 	probePod := func(name string, mutate func(spec map[string]any)) Object {
 		spec := map[string]any{
 			"runtimeClassName": rc, "automountServiceAccountToken": false, "restartPolicy": "Never",
-			"containers": []any{map[string]any{"name": "c", "image": helper, "command": []any{"true"}}},
+			"securityContext": map[string]any{"seccompProfile": map[string]any{"type": "RuntimeDefault"}},
+			"containers":      []any{map[string]any{"name": "c", "image": helper, "command": []any{"true"}}},
 		}
 		mutate(spec)
 		return Object{"apiVersion": "v1", "kind": "Pod", "metadata": map[string]any{"name": name}, "spec": spec}
@@ -138,6 +142,10 @@ func TestOnAClusterAnEnvironmentRunBootsResetsAndIsolates(t *testing.T) {
 		"privileged": func(s map[string]any) {
 			s["containers"].([]any)[0].(map[string]any)["securityContext"] = map[string]any{"privileged": true}
 		},
+		"Unconfined seccomp": func(s map[string]any) {
+			s["containers"].([]any)[0].(map[string]any)["securityContext"] = map[string]any{"seccompProfile": map[string]any{"type": "Unconfined"}}
+		},
+		"no seccomp profile": func(s map[string]any) { delete(s, "securityContext") },
 	} {
 		if msg := refused(probePod("gate-bad", mutate)); !strings.Contains(msg, EnvGatePolicy) && !strings.Contains(msg, "environment pod") {
 			t.Errorf("the gate let a pod with %s through (%q)", name, msg)
@@ -287,6 +295,378 @@ volumes:
 	}
 }
 
+// On a real cluster (opt-in, KODY_E2E_K8S_ENV_BUILD=1 with the variables of
+// the test above and the builder's, the registry's and the observer's): the
+// two sides of a Run, base and PR, are two claims as the agent makes them
+// (each its workload and its observer machine). Each side's web service is
+// built from its own Dockerfile in a builder pod, pushed to the in-cluster
+// registry and run from it by digest, after its redis is healthy; then the
+// claim's observer pod, configured and asked through the real
+// observerclient over DialObserver with mTLS certificates this test issues,
+// probes it over HTTP and gets that side's page. And:
+//
+//   - no builder pod is left once a build is done, and the service runs the
+//     pushed image by digest from the pull name;
+//   - the PR's observer refuses a frame of the base claim, and cannot reach
+//     the base's web pod when the cluster enforces NetworkPolicy (the
+//     control of the test above decides; skipped with the reason otherwise);
+//   - a reset of the PR side reuses its image (no builder pod) and its new
+//     observer answers the probe again;
+//   - Destroy leaves no pod, volume claim or policy of the cell.
+//
+// KODY_E2E_K8S_ENV_BUILDER_IMAGE is rootless BuildKit
+// (moby/buildkit:v0.34.0-rootless or the cell's builder image);
+// KODY_E2E_K8S_ENV_OBSERVER_IMAGE has cmd/observer at kube.ObserverBinary
+// (the cell image, or a distroless image with that binary only);
+// KODY_E2E_K8S_ENV_REGISTRY is the in-cluster registry's address
+// (pod IP:port, plain HTTP), which the builder reaches by the name
+// kodus-e2e-registry through its hosts file and pushes to;
+// KODY_E2E_K8S_ENV_REGISTRY_PULL the name the nodes pull the same
+// repository by (kind: localhost:5001, a containerd hosts.toml to the
+// registry); KODY_E2E_K8S_ENV_MIRROR a docker.io pull-through registry
+// (pod IP:port, plain HTTP) the builder pulls its base image through, by the
+// name kodus-e2e-mirror. .github/workflows/runtime-cell-kind.yml sets them
+// up on kind; docs/runtime/kubernetes-environment-runs.md, "Local test
+// results", records a run.
+func TestOnAClusterEachSideBuildsItsServiceAndItsObserverProbesIt(t *testing.T) {
+	api, kctx, rc := os.Getenv("KODY_E2E_K8S_API"), os.Getenv("KODY_E2E_K8S_CONTEXT"), os.Getenv("KODY_E2E_K8S_RUNTIME_CLASS")
+	helper, redis := os.Getenv("KODY_E2E_K8S_ENV_HELPER_IMAGE"), os.Getenv("KODY_E2E_K8S_ENV_REDIS_IMAGE")
+	builder, observerImage := os.Getenv("KODY_E2E_K8S_ENV_BUILDER_IMAGE"), os.Getenv("KODY_E2E_K8S_ENV_OBSERVER_IMAGE")
+	registry, pull, mirror := os.Getenv("KODY_E2E_K8S_ENV_REGISTRY"), os.Getenv("KODY_E2E_K8S_ENV_REGISTRY_PULL"), os.Getenv("KODY_E2E_K8S_ENV_MIRROR")
+	if os.Getenv("KODY_E2E_K8S_ENV_BUILD") != "1" || api == "" || kctx == "" || rc == "" || helper == "" || redis == "" ||
+		builder == "" || observerImage == "" || registry == "" || pull == "" || mirror == "" {
+		t.Skip("KODY_E2E_K8S_ENV_BUILD=1, KODY_E2E_K8S_API, _CONTEXT, _RUNTIME_CLASS, KODY_E2E_K8S_ENV_HELPER_IMAGE, _REDIS_IMAGE, _BUILDER_IMAGE, _OBSERVER_IMAGE, _REGISTRY, _REGISTRY_PULL and _MIRROR run it on a cluster")
+	}
+	regIP, regPort, err := net.SplitHostPort(registry)
+	if err != nil || net.ParseIP(regIP) == nil {
+		t.Fatalf("KODY_E2E_K8S_ENV_REGISTRY %q is not an IP:port", registry)
+	}
+	mirIP, mirPort, err := net.SplitHostPort(mirror)
+	if err != nil || net.ParseIP(mirIP) == nil {
+		t.Fatalf("KODY_E2E_K8S_ENV_MIRROR %q is not an IP:port", mirror)
+	}
+	port := func(s string) []kube.Port {
+		n, _ := strconv.Atoi(s)
+		return []kube.Port{{Protocol: "TCP", Port: n}}
+	}
+	sandboxes := os.Getenv("KODY_E2E_K8S_NAMESPACE")
+	if sandboxes == "" {
+		sandboxes = sandboxNS
+	}
+	envs := "kodus-runtime-environments-e2e-build"
+	ctx := context.Background()
+	kubectl := kubectlOn(kctx)
+	timing := func(step string, since time.Time) {
+		t.Logf("timing: %s %s", step, time.Since(since).Round(100*time.Millisecond))
+	}
+
+	start := time.Now()
+	objs, err := EnvironmentNamespace(envs, []string{rc}, ReferenceEnvAccess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := yamlDocs(t, objs)
+	if out, err := kubectl(manifest, "apply", "-f", "-"); err != nil {
+		t.Fatalf("apply the environment namespace: %v: %s", err, out)
+	}
+	t.Cleanup(func() {
+		_, _ = kubectl(manifest, "delete", "--wait=false", "--ignore-not-found", "-f", "-")
+	})
+
+	// The observers' server certificate (for the name the cell checks) and
+	// the CA of the cell's client certificate, as -k8s-env-observer-tls-dir.
+	ca, err := testpki.NewCA("e2e-observer-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	obsCert, err := ca.Issue("observer", time.Hour, "observer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsDir := t.TempDir()
+	if err := ca.WriteFiles(tlsDir, "", obsCert); err != nil {
+		t.Fatal(err)
+	}
+	cell := "cell-e2e-build"
+	cellCert, err := ca.Issue(cell, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obsTLS := &tls.Config{Certificates: []tls.Certificate{cellCert}, RootCAs: ca.Pool(), ServerName: "observer", MinVersion: tls.VersionTLS13}
+
+	c := &Client{Base: api, HTTP: http.DefaultClient}
+	d, err := New(c, c, Config{
+		CellID: cell, Namespace: sandboxes, RuntimeClass: rc, HolderImage: helper, EgressAddress: "127.0.0.1",
+		ReadyTimeout: 4 * time.Minute, Poll: 500 * time.Millisecond,
+		Env: &EnvConfig{
+			API: c, Exec: c, Namespace: envs, HelperImage: helper, StopTimeout: time.Minute,
+			BuilderImage: builder, BuildRegistry: "kodus-e2e-registry:" + regPort, BuildRegistryPull: pull, BuildRegistryInsecure: true,
+			BuildMirror:  "kodus-e2e-mirror:" + mirPort,
+			BuildHosts:   map[string]string{"kodus-e2e-registry": regIP, "kodus-e2e-mirror": mirIP},
+			BuildEgress:  []kube.EgressPeer{{CIDR: regIP + "/32", Ports: port(regPort)}, {CIDR: mirIP + "/32", Ports: port(mirPort)}},
+			BuildStorage: "2Gi", ObserverImage: observerImage, ObserverTLSDir: tlsDir,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine := func(claim string, role driver.Role) driver.MachineRef {
+		t.Helper()
+		begin := time.Now()
+		ref, err := d.Create(ctx, driver.MachineSpec{
+			CellID: cell, EnvironmentID: "env-e2e-build", Role: role, OrgID: "org-e2e", ClaimID: claim, ImageID: "img-" + claim,
+			ClaimSize: driver.ClaimSize{MemoryMB: 1024, CPUs: 1}, ClaimGroupID: claim, KMSKeyRef: "k8s-sandbox-org-e2e",
+			ExpiresAt: time.Now().Add(20 * time.Minute), HardExpiresAt: time.Now().Add(time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("%s machine of %s: %v", role, claim, err)
+		}
+		t.Cleanup(func() { _ = d.Destroy(context.Background(), ref) })
+		timing(string(role)+" machine of "+claim, begin)
+		return ref
+	}
+	builders := func() int {
+		t.Helper()
+		pods, err := c.ListPods(ctx, envs, map[string]string{"kodus.io/cell": cell, kube.RoleLabel: kube.BuilderRole})
+		if err != nil {
+			t.Fatalf("list builder pods: %v", err)
+		}
+		return len(pods)
+	}
+	observerClient := func(w, o driver.MachineRef, claim string, extra ...observer.Target) observer.Client {
+		t.Helper()
+		targets, err := d.Targets(w.MachineID, []observer.Target{{Service: "web", Port: 8080, Kind: "http"}})
+		if err != nil {
+			t.Fatalf("targets of %s: %v", claim, err)
+		}
+		hc := &http.Client{Timeout: 2 * time.Minute, Transport: &http.Transport{
+			DisableKeepAlives: true,
+			TLSClientConfig:   obsTLS,
+			DialContext:       func(ctx context.Context, _, _ string) (net.Conn, error) { return d.DialObserver(ctx, o.MachineID) },
+		}}
+		_, obsPort, _ := net.SplitHostPort(kube.ObserverListen)
+		cl, err := observerclient.Configure(ctx, hc, "https://"+net.JoinHostPort(o.PrivateAddress, obsPort),
+			observer.ClaimConfig{ClaimID: claim, ImageID: w.ImageID, Targets: append(targets, extra...)})
+		if err != nil {
+			t.Fatalf("configure the observer of %s: %v", claim, err)
+		}
+		return cl
+	}
+	probe := func(cl observer.Client, frameClaim, service string) (*protocol.StepResultBody, error) {
+		step := hubclient.NewID()
+		frame, err := protocol.Encode(protocol.Header{ID: hubclient.NewID(), CellID: cell, ClaimID: frameClaim}, &protocol.ProbeRunBody{StepID: step, Probe: protocol.Probe{
+			ID: "e2e-web", Origin: protocol.ProbeOriginAgent, Purpose: "the side's page", Expected: "its own text",
+			Compare: []protocol.CompareField{protocol.CompareFieldStatus},
+			Spec:    protocol.ProbeSpec{HTTP: &protocol.HTTPProbe{Target: protocol.ProbeTarget{Service: service, Port: 8080}, Method: "GET", Path: "/", TimeoutMs: 5000}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _, err := cl.Run(ctx, frame)
+		return res, err
+	}
+	page := func(res *protocol.StepResultBody) string {
+		if res == nil || res.Probe == nil || res.Probe.HTTP == nil {
+			return ""
+		}
+		return fmt.Sprintf("%d %s", res.Probe.HTTP.Status, strings.TrimSpace(res.Probe.HTTP.Body))
+	}
+	project := func(side string) string {
+		t.Helper()
+		dir := t.TempDir()
+		files := map[string]string{
+			".kodus/workspace.yaml": "version: 1\nservices:\n  compose:\n    public: web\n",
+			"web/Dockerfile":        fmt.Sprintf("FROM %s\nCOPY index.html /www/index.html\nCMD [\"httpd\", \"-f\", \"-p\", \"8080\", \"-h\", \"/www\"]\n", helper),
+			"web/index.html":        "kody-" + side + "\n",
+			"web/.dockerignore":     "notes.txt\n",
+			"web/notes.txt":         "not in the context\n",
+		}
+		for name, body := range files {
+			p := filepath.Join(dir, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+	compose := []byte(fmt.Sprintf(`services:
+  web:
+    build: {context: ./web}
+    depends_on:
+      cache: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/"]
+      interval: 1s
+      retries: 60
+  cache:
+    image: %s
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      retries: 60
+`, redis))
+	// up boots a side and says how long its build took: from the boot's
+	// "$ build" line to the last BuildKit progress line.
+	up := func(w driver.MachineRef, dir, what string) []string {
+		t.Helper()
+		var lines []string
+		var buildStart, buildEnd time.Time
+		begin := time.Now()
+		_, err := d.Up(ctx, driver.UpRequest{Ref: w, Compose: compose, ProjectDir: dir, Output: func(l string) {
+			lines = append(lines, l)
+			switch {
+			case strings.HasPrefix(l, "$ build"):
+				buildStart = time.Now()
+			case strings.HasPrefix(l, "#") && !buildStart.IsZero():
+				buildEnd = time.Now()
+			}
+			t.Log(what + ": " + l)
+		}})
+		if err != nil {
+			t.Fatalf("%s: %v", what, err)
+		}
+		timing(what, begin)
+		if !buildStart.IsZero() {
+			t.Logf("timing: build in %s %s", what, buildEnd.Sub(buildStart).Round(100*time.Millisecond))
+		}
+		return lines
+	}
+
+	sides := []string{"base", "pr"}
+	work, obs, dirs := map[string]driver.MachineRef{}, map[string]driver.MachineRef{}, map[string]string{}
+	for _, side := range sides {
+		claim := "e2e-build-" + side
+		work[side] = machine(claim, driver.RoleWorkload)
+		obs[side] = machine(claim, driver.RoleObserver)
+		dirs[side] = project(side)
+	}
+	timing("environment namespace and the machines of both sides", start)
+	for _, side := range sides {
+		claim := "e2e-build-" + side
+		if lines := up(work[side], dirs[side], "up "+side); !slices.Contains(lines, "$ build web") {
+			t.Errorf("the %s side's web service was not built: %q", side, lines)
+		}
+		if n := builders(); n != 0 {
+			t.Errorf("%d builder pods left after the %s side's build", n, side)
+		}
+		p, err := c.GetPod(ctx, envs, envPrefix(claim)+"-web")
+		if err != nil {
+			t.Fatalf("the %s side's web pod: %v", side, err)
+		}
+		if img := podImage(p); !strings.HasPrefix(img, pull+"/"+buildRepo(claim, "web")+"@sha256:") {
+			t.Errorf("the %s side's web pod runs %q, not its build by digest from %s", side, img, pull)
+		} else {
+			t.Logf("%s side's web runs %s", side, img)
+		}
+	}
+
+	// Each side's observer probes its own web service.
+	for _, side := range sides {
+		claim := "e2e-build-" + side
+		begin := time.Now()
+		cl := observerClient(work[side], obs[side], claim)
+		timing("configure the observer of "+side, begin)
+		begin = time.Now()
+		res, err := probe(cl, claim, "web")
+		if err != nil {
+			t.Fatalf("probe through the %s observer: %v", side, err)
+		}
+		timing("probe through the observer of "+side, begin)
+		if got, want := page(res), "200 kody-"+side; got != want {
+			t.Errorf("the %s observer's probe got %q, want %q (%+v)", side, got, want, res)
+		} else {
+			t.Logf("the %s observer probed web: %s", side, got)
+		}
+	}
+
+	// The PR's observer is the PR's alone. Its configuration bound it, so a
+	// fresh observer (a reset's) is the one asked to reach the base below.
+	prClaim := "e2e-build-pr"
+	parts := d.Parts()
+	begin := time.Now()
+	if err := parts.Resetter.Reset(ctx, work["pr"], driver.SnapshotRef{Kind: "compose_volumes"}); err != nil {
+		t.Fatalf("reset pr: %v", err)
+	}
+	if lines := up(work["pr"], dirs["pr"], "up pr after its reset"); slices.Contains(lines, "$ build web") {
+		t.Errorf("the PR side built again after a reset that changed nothing: %q", lines)
+	}
+	timing("reset and up of pr", begin)
+	if n := builders(); n != 0 {
+		t.Errorf("%d builder pods after the reset's up", n)
+	}
+	var extra []observer.Target
+	baseIP := ""
+	why := networkPolicyEnforced(t, kubectl, helper)
+	if why == "" {
+		if p, err := c.GetPod(ctx, envs, envPrefix("e2e-build-base")+"-web"); err == nil {
+			baseIP = podStatus(p).ip
+		}
+		extra = append(extra, observer.Target{Service: "base-web", Port: 8080, Kind: "http", Address: net.JoinHostPort(baseIP, "8080")})
+	}
+	cl := observerClient(work["pr"], obs["pr"], prClaim, extra...)
+	if res, err := probe(cl, prClaim, "web"); err != nil || page(res) != "200 kody-pr" {
+		t.Errorf("the PR's new observer after the reset: %q %v", page(res), err)
+	} else {
+		t.Logf("the PR's new observer after the reset probed web: %s", page(res))
+	}
+	if _, err := probe(cl, "e2e-build-base", "web"); err == nil || !strings.Contains(err.Error(), "409") {
+		t.Errorf("the PR's observer ran a frame of the base claim: %v", err)
+	} else {
+		t.Logf("the PR's observer refused a frame of the base claim: %v", err)
+	}
+	if why != "" {
+		t.Logf("SKIPPED the observer's cross-claim assertion: %s", why)
+	} else {
+		res, err := probe(cl, prClaim, "base-web")
+		if got := page(res); strings.Contains(got, "kody-base") {
+			t.Errorf("the PR's observer reached the base's web pod at %s: %q", baseIP, got)
+		} else {
+			t.Logf("NetworkPolicy enforced on the observer: the PR's observer -> the base's web %s: not reached (%v, health %v)", baseIP, err, vmHealth(res))
+		}
+	}
+
+	// Destroy leaves nothing of the cell.
+	begin = time.Now()
+	for _, side := range sides {
+		if err := d.Destroy(ctx, obs[side]); err != nil {
+			t.Errorf("destroy the %s observer: %v", side, err)
+		}
+		if err := d.Destroy(ctx, work[side]); err != nil {
+			t.Errorf("destroy the %s workload: %v", side, err)
+		}
+	}
+	timing("destroy both sides", begin)
+	mine := map[string]string{"kodus.io/cell": cell}
+	pods, _ := c.ListPods(ctx, envs, mine)
+	pvcs, _ := c.ListObjects(ctx, envs, ResourceVolumeClaims, mine)
+	nps, _ := c.ListObjects(ctx, envs, ResourceNetworkPolicies, mine)
+	holders, _ := c.ListPods(ctx, sandboxes, mine)
+	if len(pods)+len(pvcs)+len(nps)+len(holders) != 0 {
+		t.Errorf("left after destroy: %d pods, %d claims, %d policies, %d holders", len(pods), len(pvcs), len(nps), len(holders))
+	}
+}
+
+// podImage is the first container's image of a pod.
+func podImage(p Object) string {
+	spec, _ := p["spec"].(map[string]any)
+	list, _ := spec["containers"].([]any)
+	if len(list) == 0 {
+		return ""
+	}
+	c, _ := list[0].(map[string]any)
+	return str(c["image"])
+}
+
+func vmHealth(res *protocol.StepResultBody) string {
+	if res == nil {
+		return "no result"
+	}
+	return string(res.VMHealth)
+}
+
 // networkPolicyEnforced is a control independent of the driver: in a
 // scratch namespace a client reaches a server, then a deny-all ingress
 // policy on the server must cut it. "" when it does; why not otherwise.
@@ -335,6 +715,18 @@ spec:
 		time.Sleep(2 * time.Second)
 	}
 	return "this cluster's CNI does not enforce NetworkPolicy (a deny-all ingress policy left the control server reachable for 30 s); run the CI job with an enforcing CNI (Calico, or kind's kube-network-policies)"
+}
+
+// kubectlOn runs kubectl on the cluster's context, stdin when given.
+func kubectlOn(kctx string) func([]byte, ...string) (string, error) {
+	return func(stdin []byte, args ...string) (string, error) {
+		cmd := exec.Command("kubectl", append([]string{"--context", kctx}, args...)...)
+		if stdin != nil {
+			cmd.Stdin = bytes.NewReader(stdin)
+		}
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
 }
 
 func yamlDocs(t *testing.T, objs []Object) []byte {

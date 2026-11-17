@@ -52,7 +52,7 @@ func run(log *slog.Logger) error {
 	flag.StringVar(&gv.workDir, "workdir", "/var/lib/kodus-cell", "docker-gvisor: the cell's -workdir (builds, caches and resolv.conf under compose/)")
 	flag.StringVar(&gv.egress, "gvisor-egress-container", "", "docker-gvisor: the cell's egress container, which leaves a claim network before it goes")
 	flag.StringVar(&gv.k8sNamespace, "k8s-namespace", "", "k8s-sandbox: the cell's sandbox namespace, the only one the reaper's Role reaches (required)")
-	flag.StringVar(&gv.k8sEnvNamespace, "k8s-env-namespace", "", "k8s-sandbox: the cell's environment namespace, when it runs environment Runs: a reaped machine's pods, volume claims and policy there go with it, and the orphan pass ends those whose machine is gone (the reaper's Role there: pods, persistentvolumeclaims and networkpolicies get, list, delete)")
+	flag.StringVar(&gv.k8sEnvNamespace, "k8s-env-namespace", "", "k8s-sandbox: the cell's environment namespace, when it runs environment Runs: a reaped machine's pods, volume claims and policy there go with it, and the orphan pass ends those whose machine is gone (the reaper's Role there, k8ssandbox.EnvReaperRules: pods get, list, delete; persistentvolumeclaims and networkpolicies list, delete)")
 	cellCert := flag.String("cell-cert", "", "the cell's identity certificate (cert.pem cell register wrote): its CN is the cell id, when -cell-id is empty (a Kubernetes cell's id exists only after it registered)")
 	flag.StringVar(&gv.microvmState, "firecracker-state-dir", "/var/lib/kodus-cell/state/microvm", "microvm: the cell's -firecracker-state-dir (its records, jails and states; default the cell's <workdir>/state/microvm)")
 	once := flag.Bool("once", false, "run one pass and exit (Lambda, cron)")

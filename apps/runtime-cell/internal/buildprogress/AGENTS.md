@@ -1,6 +1,6 @@
 # apps/runtime-cell/internal/buildprogress
 
-Reads BuildKit's plain progress output (`buildctl --progress plain`) into per-step durations, so a slow build says which steps took the time and a failed one names the step that failed. A pure package in the cell process: `internal/drivers/dockergvisor` feeds it its builds' output (`build.steps`), and `internal/agent` (`progress.go` `livePhases`) turns its phases into a claim's boot phases.
+Reads BuildKit's plain progress output (`buildctl --progress plain`) into per-step durations, so a slow build says which steps took the time and a failed one names the step that failed. A pure package in the cell process: `internal/drivers/dockergvisor` and `internal/drivers/k8ssandbox` (`envbuild.go`, buildctl over pods/exec) feed it their builds' output (`build.steps`), and `internal/agent` (`progress.go` `livePhases`) turns its phases into a claim's boot phases.
 
 ## Owns
 - `buildprogress.go` `Tracker.Line`: one line of progress (a step's header, a status line, a printed line, `DONE`, `CACHED`, `ERROR`, `CANCELED`); anything else is ignored.
@@ -8,7 +8,7 @@ Reads BuildKit's plain progress output (`buildctl --progress plain`) into per-st
 - `phases.go` `Tracker.Phases`: steps named by what they did (the base image, a RUN's command, a COPY's arguments), with the export step split into BuildKit's sub-timers; a step still running counts until the read and is `Running`.
 
 ## Does not own
-- Running the build and its error message around the failure: `internal/drivers/dockergvisor/build.go`.
+- Running the build and its error message around the failure: `internal/drivers/dockergvisor/build.go`, `internal/drivers/k8ssandbox/envbuild.go`.
 - How a phase is shown to the hub: `internal/agent/progress.go`.
 
 ## Rules and limits
@@ -36,5 +36,6 @@ Imported by:
 
 - [`apps/runtime-cell/internal/agent`](../agent/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/dockergvisor`](../drivers/dockergvisor/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/k8ssandbox`](../drivers/k8ssandbox/AGENTS.md)
 
 <!-- module-map:end -->

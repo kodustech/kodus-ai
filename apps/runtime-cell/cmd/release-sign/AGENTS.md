@@ -1,6 +1,6 @@
 # apps/runtime-cell/cmd/release-sign
 
-Release tooling, not a cell command: it makes the release key pair, writes the release's `PROTOCOL` (`protocol`: `internal/protocol` `SupportedVersions` of the build, which is the release's own commit) and signs a release's `SHA256SUMS` (`generate`, `sign`), the half of S-17 that `cell update` (`internal/cellupdate`) verifies on a host. It never ships to a cell host. A thin `main` over `internal/releasesig` `RunTool`.
+Release tooling, not a cell command: it makes the release key pair, writes the release's `PROTOCOL` (`protocol`: `internal/protocol` `SupportedVersions` of the build, which is the release's own commit) signs a release's `SHA256SUMS` (`generate`, `sign`) and its release index (`index`), and makes the signed offline bundle an air-gapped host installs from (`bundle`), the half of S-17 that `cell update` (`internal/cellupdate`) verifies on a host. It never ships to a cell host. A thin `main` over `internal/releasesig` `RunTool`.
 
 ## Rules and limits
 - The format, the signature and the pinned public keys are `internal/releasesig` (`releasesig/keys`); nothing is decided here.

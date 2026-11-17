@@ -51,10 +51,13 @@ import (
 // costs the machine the fast path (its resets start from empty volumes),
 // never a round.
 //
-// Not here yet, refused with driver.ErrUnsupported: builds (a rootless
-// BuildKit pod on the RuntimeClass), the observer pod and previews
-// (PrepareClaim refuses expose ports), the cell's trust files in the
-// services (a claim with org secrets), bakes and snapshots.
+// A build section runs first, in a builder pod of its own (envbuild.go). With
+// ObserverImage the claim's observer machine is a pod of its own beside the
+// services (envobserver.go), and PrepareClaim takes the claim's expose ports.
+//
+// Not here yet, refused with driver.ErrUnsupported: expose ports on a cell
+// with no observer image, the cell's trust files in the services (a claim
+// with org secrets), bakes and snapshots.
 
 // EnvConfig turns on environment Runs in Namespace.
 type EnvConfig struct {
@@ -80,6 +83,45 @@ type EnvConfig struct {
 	// StopTimeout bounds a pod's deletion (its grace period included).
 	StopTimeout time.Duration
 	Log         *slog.Logger
+
+	// Image builds (envbuild.go), on when BuilderImage and BuildRegistry
+	// are both set; without them a build section is driver.ErrUnsupported.
+	// BuilderImage is rootless BuildKit (the cell's builder image, by
+	// digest). BuildRegistry is the host[:port] the builder pushes to;
+	// BuildRegistryPull the one the nodes pull the same images from
+	// (BuildRegistry when empty); BuildRegistryInsecure pushes over plain
+	// HTTP (an in-cluster registry).
+	BuilderImage          string
+	BuildRegistry         string
+	BuildRegistryPull     string
+	BuildRegistryInsecure bool
+	// BuildMirror is a docker.io pull-through mirror (host:port, plain
+	// HTTP) BuildKit pulls base images through; empty: none.
+	BuildMirror string
+	// BuildHosts are the names the builder resolves, name to address (its
+	// /etc/hosts: the registry's and the mirror's; its resolver is the
+	// cell's, which knows no cluster name).
+	BuildHosts map[string]string
+	// BuildEgress is where builder pods may connect besides the claim's
+	// peers: the registry and the mirror (kube.BuildPolicy).
+	BuildEgress []kube.EgressPeer
+	// BuildStorage bounds BuildKit's state on the node ("10Gi" when
+	// empty); MaxContextBytes a build context's copy (256 MiB when zero).
+	BuildStorage    string
+	MaxContextBytes int64
+
+	// The claim's observer (envobserver.go), on when ObserverImage is set:
+	// cmd/observer at kube.ObserverBinary (the cell image), by digest.
+	// ObserverTLSDir is the cell's directory with the observer's cert.pem
+	// and key.pem (for the cell's -observer-server-name) and ca.pem, the CA
+	// of the cell's observer client certificate (docker-gvisor's
+	// -gvisor-observer-tls-dir). ObserverMemoryMB and ObserverMilliCPU are
+	// its share of the claim's size (256 MiB and 250 mCPU when zero), taken
+	// before the services split the rest.
+	ObserverImage    string
+	ObserverTLSDir   string
+	ObserverMemoryMB int
+	ObserverMilliCPU int
 }
 
 func (c *EnvConfig) defaults(cfg Config) error {
@@ -107,7 +149,10 @@ func (c *EnvConfig) defaults(cfg Config) error {
 	if c.Log == nil {
 		c.Log = slog.New(slog.DiscardHandler)
 	}
-	return nil
+	if err := c.observerDefaults(); err != nil {
+		return err
+	}
+	return c.buildDefaults()
 }
 
 // RunsEnvironments says the driver runs environment Runs (Config.Env set):
@@ -126,6 +171,11 @@ type envState struct {
 	goldenOff string
 	exec      *envTarget
 	targets   map[string]envTarget
+	// addrs are the service pods' addresses while the project is up, by
+	// service: the observer's targets.
+	addrs map[string]string
+	// built are the images the machine's builds pushed, by service.
+	built map[string]builtImage
 }
 
 type envTarget struct{ pod, container, dir string }
@@ -147,6 +197,18 @@ func (s *envStates) get(machine string) *envState {
 		s.m[machine] = st
 	}
 	return st
+}
+
+// addresses are the machine's service pods' addresses while its project is
+// up; nil otherwise.
+func (s *envStates) addresses(machine string) map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.m[machine]
+	if !ok || !st.up {
+		return nil
+	}
+	return st.addrs
 }
 
 func (s *envStates) forget(machine string) {
@@ -179,6 +241,9 @@ func (d *Driver) holderFacts(ctx context.Context, ref driver.MachineRef) (holder
 		return holderFacts{}, fmt.Errorf("k8ssandbox: machine %s is gone", ref.MachineID)
 	}
 	labels, _ := meta(p)["labels"].(map[string]any)
+	if role := str(labels[label(driver.TagRole)]); role != string(driver.RoleWorkload) {
+		return holderFacts{}, fmt.Errorf("k8ssandbox: machine %s is a %s, not a workload", ref.MachineID, role)
+	}
 	ann, _ := meta(p)["annotations"].(map[string]any)
 	f := holderFacts{claim: str(labels[label(driver.TagClaim)]), org: str(labels[label(driver.TagOrg)])}
 	if err := driver.ValidateClaimID(f.claim); err != nil {
@@ -218,31 +283,41 @@ func quantityMB(q string) int {
 }
 
 // render is the machine's project as objects.
-func (d *Driver) render(req driver.UpRequest, f holderFacts) (*kube.Plan, error) {
-	e := d.cfg.Env
-	root, err := os.OpenRoot(req.ProjectDir)
+func (d *Driver) render(req driver.UpRequest, f holderFacts, built map[string]string) (*kube.Plan, error) {
+	o, root, err := d.renderOptions(req, f)
 	if err != nil {
-		return nil, fmt.Errorf("k8ssandbox: the checkout: %w", err)
+		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	deadline := int64(f.ceiling.Sub(d.cfg.Now()).Seconds())
-	if deadline < 1 {
-		return nil, errors.New("k8ssandbox: the claim's ceiling passed")
-	}
-	labels := map[string]string{label(driver.TagCell): d.cfg.CellID, label(driver.TagOrg): f.org, label(driver.TagClaim): f.claim, label(driver.TagRole): string(driver.RoleWorkload)}
-	// No builder yet: Built is empty, and a build section is refused as
-	// unsupported (kube.UnsupportedError).
-	plan, err := kube.Render(req.Compose, kube.Options{
-		Namespace: e.Namespace, Prefix: envPrefix(f.claim), Labels: labels, Selector: d.envSelector(f.claim),
-		Annotations:  map[string]string{label(driver.TagHardExpires): driver.FormatTime(f.ceiling)},
-		RuntimeClass: e.RuntimeClass, HelperImage: e.HelperImage, Size: f.size, DeadlineSeconds: deadline,
-		Nameservers: []string{d.cfg.EgressAddress}, Egress: e.Egress, VolumeSize: e.VolumeSize, StorageClass: e.StorageClass,
-		Checkout: root.FS(), Decoy: driver.CanaryFileOf(req.Canaries) != "",
-	})
+	o.Built = built
+	plan, err := kube.Render(req.Compose, o)
 	if errors.Is(err, kube.ErrUnsupported) {
 		return nil, fmt.Errorf("%w: %w", driver.ErrUnsupported, err)
 	}
 	return plan, err
+}
+
+// renderOptions are what the machine's project renders with; root is the
+// checkout the options read, for the caller to close.
+func (d *Driver) renderOptions(req driver.UpRequest, f holderFacts) (kube.Options, *os.Root, error) {
+	e := d.cfg.Env
+	root, err := os.OpenRoot(req.ProjectDir)
+	if err != nil {
+		return kube.Options{}, nil, fmt.Errorf("k8ssandbox: the checkout: %w", err)
+	}
+	deadline := int64(f.ceiling.Sub(d.cfg.Now()).Seconds())
+	if deadline < 1 {
+		_ = root.Close()
+		return kube.Options{}, nil, errors.New("k8ssandbox: the claim's ceiling passed")
+	}
+	labels := map[string]string{label(driver.TagCell): d.cfg.CellID, label(driver.TagOrg): f.org, label(driver.TagClaim): f.claim, label(driver.TagRole): string(driver.RoleWorkload)}
+	return kube.Options{
+		Namespace: e.Namespace, Prefix: envPrefix(f.claim), Labels: labels, Selector: d.envSelector(f.claim),
+		Annotations:  map[string]string{label(driver.TagHardExpires): driver.FormatTime(f.ceiling)},
+		RuntimeClass: e.RuntimeClass, HelperImage: e.HelperImage, Size: f.size, Reserved: e.observerReserve(), DeadlineSeconds: deadline,
+		Nameservers: []string{d.cfg.EgressAddress}, Egress: e.Egress, VolumeSize: e.VolumeSize, StorageClass: e.StorageClass,
+		Checkout: root.FS(), Decoy: driver.CanaryFileOf(req.Canaries) != "",
+	}, root, nil
 }
 
 // Up brings the machine's compose project up on the cluster and returns its
@@ -258,11 +333,25 @@ func (d *Driver) Up(ctx context.Context, req driver.UpRequest) ([]string, error)
 	if err != nil {
 		return nil, err
 	}
-	plan, err := d.render(req, f)
+	e := d.cfg.Env
+	// The build sections, refused all at once (sandbox.Builds: inside the
+	// checkout, no remote context); with a builder, the whole file is
+	// checked with placeholders before anything is built.
+	builds, err := sandbox.Builds(req.Compose, sandbox.Options{ProjectDir: req.ProjectDir, Root: req.WorkspaceRoot})
 	if err != nil {
 		return nil, err
 	}
-	e := d.cfg.Env
+	var pre map[string]string
+	if len(builds) > 0 && e.buildsOn() {
+		pre = prebuilt(builds)
+	}
+	plan, err := d.render(req, f, pre)
+	if err != nil {
+		return nil, err
+	}
+	if err := buildsAskingSecrets(builds, req.BuildSecrets); err != nil {
+		return nil, err
+	}
 	for _, v := range plan.Ignored {
 		e.Log.Info("compose.kube.ignored", "machine", req.Ref.MachineID, "key", v.Path, "reason", v.Reason)
 	}
@@ -272,18 +361,34 @@ func (d *Driver) Up(ctx context.Context, req driver.UpRequest) ([]string, error)
 	}
 	if pods, err := e.API.ListPods(ctx, e.Namespace, d.envSelector(f.claim)); err != nil {
 		return nil, err
-	} else if len(pods) > 0 {
-		return nil, fmt.Errorf("k8ssandbox: claim %s still has %d pods in %s", f.claim, len(pods), e.Namespace)
+	} else if n := len(withoutObserver(pods)); n > 0 {
+		return nil, fmt.Errorf("k8ssandbox: claim %s still has %d pods in %s", f.claim, n, e.Namespace)
+	}
+	b := &envBoot{d: d, st: st, req: req, claim: f.claim}
+	if pre != nil {
+		o, root, err := d.renderOptions(req, f)
+		if err != nil {
+			return nil, err
+		}
+		built, err := b.buildImages(ctx, builds, o)
+		_ = root.Close()
+		if err != nil {
+			return nil, err
+		}
+		if plan, err = d.render(req, f, built); err != nil {
+			return nil, err
+		}
 	}
 	sum := sha256.Sum256(req.Compose)
 	if st.golden != nil && st.sum != sum {
 		st.golden, st.goldenOff = nil, "the compose file changed"
 	}
 	st.plan, st.sum = plan, sum
-	b := &envBoot{d: d, st: st, plan: plan, req: req, claim: f.claim}
+	b.plan = plan
 	if err := b.run(ctx); err != nil {
 		return nil, err
 	}
+	st.addrs = b.addrs
 	st.up = true
 	return b.sources, nil
 }
@@ -306,15 +411,7 @@ func (b *envBoot) say(line string) { b.req.Emit(line) }
 
 func (b *envBoot) run(ctx context.Context) error {
 	e := b.e()
-	if _, err := e.API.CreateObject(ctx, e.Namespace, ResourceNetworkPolicies, b.plan.Policy); IsConflict(err) {
-		name := str(meta(b.plan.Policy)["name"])
-		if err := ignoreNotFound(e.API.DeleteObject(ctx, e.Namespace, ResourceNetworkPolicies, name)); err != nil {
-			return err
-		}
-		if _, err := e.API.CreateObject(ctx, e.Namespace, ResourceNetworkPolicies, b.plan.Policy); err != nil {
-			return err
-		}
-	} else if err != nil {
+	if err := b.d.replaceObject(ctx, ResourceNetworkPolicies, b.plan.Policy); err != nil {
 		return err
 	}
 	for _, v := range b.plan.Volumes {
@@ -785,14 +882,18 @@ func (d *Driver) deletePod(ctx context.Context, name string) error {
 	}
 }
 
-// deleteEnvPods deletes the claim's pods of this cell (and, with all, its
-// volume claims and policy), waiting for the pods to be gone.
+// deleteEnvPods deletes the claim's pods of this cell but its observer (and,
+// with all, the observer too, the volume claims and the policies), waiting
+// for the pods to be gone.
 func (d *Driver) deleteEnvPods(ctx context.Context, claim string, all bool) error {
 	e := d.cfg.Env
 	sel := d.envSelector(claim)
 	pods, err := e.API.ListPods(ctx, e.Namespace, sel)
 	if err != nil {
 		return err
+	}
+	if !all {
+		pods = withoutObserver(pods)
 	}
 	var errs []error
 	for _, p := range pods {
@@ -823,7 +924,8 @@ func (d *Driver) deleteEnvPods(ctx context.Context, claim string, all bool) erro
 
 // Reset takes the project down for the next round (compose_volumes): its
 // pods are deleted; its volume claims, policy and golden copy stay, and the
-// agent's Up after it restores or empties the volumes.
+// agent's Up after it restores or empties the volumes. The claim's observer
+// starts again under the same machine (recycleObserver).
 func (d *Driver) envReset(ctx context.Context, ref driver.MachineRef, snap driver.SnapshotRef) error {
 	if snap.Kind != "compose_volumes" {
 		return fmt.Errorf("%w: k8s-sandbox resets compose volumes only, not %q", driver.ErrUnsupported, snap.Kind)
@@ -835,8 +937,20 @@ func (d *Driver) envReset(ctx context.Context, ref driver.MachineRef, snap drive
 	if err := d.deleteEnvPods(ctx, f.claim, false); err != nil {
 		return err
 	}
-	d.envs.get(ref.MachineID).up = false
-	return nil
+	st := d.envs.get(ref.MachineID)
+	st.up, st.addrs = false, nil
+	return d.recycleObserver(ctx, f)
+}
+
+// withoutObserver are the pods but the claim's observer.
+func withoutObserver(pods []Object) []Object {
+	out := pods[:0:0]
+	for _, p := range pods {
+		if l, _ := meta(p)["labels"].(map[string]any); str(l[label(driver.TagRole)]) != kube.ObserverRole {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // envResetter is the Resetter part (the driver has its own Reset name free

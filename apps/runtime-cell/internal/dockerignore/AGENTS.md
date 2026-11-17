@@ -30,5 +30,6 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/internal/buildfingerprint`](../buildfingerprint/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/k8ssandbox`](../drivers/k8ssandbox/AGENTS.md)
 
 <!-- module-map:end -->

@@ -36,5 +36,6 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/internal/drivers/dockergvisor`](../drivers/dockergvisor/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/k8ssandbox`](../drivers/k8ssandbox/AGENTS.md)
 
 <!-- module-map:end -->
