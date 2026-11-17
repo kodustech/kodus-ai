@@ -927,6 +927,48 @@ describe('SecurityScanJobProcessor', () => {
         );
     });
 
+    it('fails a carried-on scan whose own units all failed: what it inherits was not read by it', async () => {
+        const { processor, scans, issuesService } = setup(
+            {
+                result: finishedResult({
+                    progress: [
+                        { unitId: 'u0', state: 'done', findings: 0 },
+                        { unitId: 'u1', state: 'failed', findings: 0, error: 'every lens failed' },
+                    ],
+                    findings: [],
+                    examinedFiles: [],
+                    examinedByClass: [],
+                }),
+            },
+            scanRecord({
+                progress: [{ unitId: 'u0', state: 'done', findings: 0 }],
+                coverage: {
+                    examinedFiles: [],
+                    examinedByClass: [],
+                    inheritedExaminedByClass: [
+                        { vulnerabilityClass: 'authz', filePaths: ['src/done.ts'] },
+                    ],
+                    unitsTotal: 2,
+                    unitsDone: 1,
+                    unitsFailed: 0,
+                    unitsSkippedByBudget: 0,
+                    languages: ['typescript'],
+                },
+            } as any),
+        );
+
+        await processor.process('job-1');
+
+        // Failed, it is carried on again by the next start; nothing is resolved.
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: SCAN_NO_AREA_EXAMINED_MESSAGE,
+            }),
+        );
+    });
+
     it('completes, resolving in the classes it read, a scan whose only unit failed in other lenses', async () => {
         const examinedByClass = [
             { vulnerabilityClass: 'authz', filePaths: ['src/server.js'] },
