@@ -115,7 +115,7 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
                 expect.objectContaining({
                     requireAuthors: true,
                     skipCache: true,
-                    seatHolderIds: expect.any(Array),
+                    seatHolderIds: ['still-here', 'left-the-company'],
                 }),
             );
         });

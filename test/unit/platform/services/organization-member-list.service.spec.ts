@@ -553,6 +553,18 @@ describe('OrganizationMemberListService', () => {
             ).resolves.toEqual({ status: 'unavailable', members: [] });
         });
 
+        it('reads the list as incomplete when the provider turns out unable to check', async () => {
+            mockCodeManagementService.findRecentPullRequestAuthors.mockResolvedValue(
+                null,
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+        });
+
         it('reads the list as incomplete when the seats cannot be read', async () => {
             mockLicenseService.getAllUsersWithLicense.mockRejectedValue(
                 new Error('timeout'),

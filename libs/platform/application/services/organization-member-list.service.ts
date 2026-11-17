@@ -221,7 +221,8 @@ export class OrganizationMemberListService {
                     authorIds: unlistedIds,
                 });
 
-            return found ?? [];
+            // null: the provider cannot answer after all.
+            return found;
         } catch (error) {
             this.logger.warn({
                 message:
