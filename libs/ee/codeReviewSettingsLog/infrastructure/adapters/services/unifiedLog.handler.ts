@@ -157,6 +157,10 @@ export class UnifiedLogHandler {
             this.logLookupFailure(
                 'Error getting repository additional info',
                 error,
+                {
+                    organizationId,
+                    repositoryId: repository?.id,
+                },
             );
             if (repository) {
                 repository.name = 'Unknown';
@@ -175,6 +179,11 @@ export class UnifiedLogHandler {
             this.logLookupFailure(
                 'Error getting directory additional info',
                 error,
+                {
+                    organizationId,
+                    repositoryId: repository?.id,
+                    directoryId: directory?.id,
+                },
             );
             if (directory) {
                 directory.path = 'Unknown';
@@ -182,7 +191,15 @@ export class UnifiedLogHandler {
         }
     }
 
-    private logLookupFailure(message: string, error: Error): void {
+    private logLookupFailure(
+        message: string,
+        error: Error,
+        metadata: {
+            organizationId: string;
+            repositoryId?: string;
+            directoryId?: string;
+        },
+    ): void {
         // A repository removed from the integration still gets entries:
         // removing its synced Kody Rules writes one per rule (issue #2581).
         // Nothing is wrong there, and "Unknown" is all that can be said.
@@ -193,6 +210,7 @@ export class UnifiedLogHandler {
             message,
             context: UnifiedLogHandler.name,
             error,
+            metadata,
         });
     }
 

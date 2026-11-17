@@ -88,6 +88,14 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
 
         expect(created[0].repository.name).toBe('Unknown');
         expect(errorLog).toHaveBeenCalledTimes(1);
+        expect(errorLog).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId,
+                    repositoryId: 'repo-orphan',
+                }),
+            }),
+        );
     });
 
     it('resolves the name of a repository that is still integrated', async () => {
