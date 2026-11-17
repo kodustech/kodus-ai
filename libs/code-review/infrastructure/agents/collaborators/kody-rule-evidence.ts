@@ -118,8 +118,8 @@ export function kodyRuleEvidenceVerifier(
         remoteCommands: repoAvailable ? input.remoteCommands : undefined,
     });
     const organizationId = input.organizationAndTeamData?.organizationId;
-    // Source collection can take several tool steps. Save the configured
-    // reasoning budget for the verdict, where all the excerpts are present.
+    // The shard uses the configured reasoning budget to propose the finding.
+    // Keep the subsequent source collection and evidence verdict bounded.
     const collectionSlot: NormalizedModel | undefined = slot && {
         ...slot,
         reasoningEffort: 'none',
@@ -241,6 +241,7 @@ export function kodyRuleEvidenceVerifier(
             .slice(0, 8000);
         const verdict = await LLM.run({
             byokConfig: slot,
+            suppressReasoning: true,
             schema: kodyRuleEvidenceVerdictSchema,
             system: JUDGE_EVIDENCE,
             user: JSON.stringify({ ...candidate, excerpts, relatedPatches }),
