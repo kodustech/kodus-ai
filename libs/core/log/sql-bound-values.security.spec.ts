@@ -92,6 +92,22 @@ describe('logger err serializer — MongoDB duplicate key values', () => {
 
         expect(line).not.toContain(SECRET);
     });
+
+    it('does not leak a value that itself contains a newline', () => {
+        const line = serialized(duplicate(`a\n${SECRET}`));
+
+        expect(line).not.toContain(SECRET);
+        expect(line).toContain('email_1');
+    });
+
+    it('redacts a message that never closes its brace', () => {
+        const line = serialized(
+            new Error(`E11000 index: email_1 dup key: { email: "${SECRET}`),
+        );
+
+        expect(line).not.toContain(SECRET);
+        expect(line).toContain('email_1');
+    });
 });
 
 describe('logger err serializer — Postgres exclusion constraint', () => {
