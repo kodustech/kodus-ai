@@ -57,6 +57,24 @@ class InMemoryKodyRulesRepository {
         }
         return this.entity();
     }
+
+    // The one-rule $set the save-time compile writes the detector with
+    // (KodyRulesRepository.updateRuleFieldsByOrganization): an undefined
+    // field is left alone, null is written, and only the touched rule comes
+    // back, normalized as the entity reads it.
+    async updateRuleFieldsByOrganization(organizationId, ruleId, updateData) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const rule = this.doc.rules.find((r) => r.uuid === ruleId);
+        if (!rule) return null;
+        for (const [key, value] of Object.entries(updateData || {})) {
+            if (value !== undefined) rule[key] = value;
+        }
+        return this.entity().rules.find((r) => r.uuid === ruleId);
+    }
+
+    async existsForOrganization(organizationId) {
+        return organizationId === this.doc.organizationId;
+    }
 }
 
 /** What the code host answers about the case's PR (recorded in the dataset). */
