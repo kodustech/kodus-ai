@@ -538,39 +538,63 @@ function windowStartAfterCutSpans(text: string): number {
     return text.length;
 }
 
+/** The end offset of the PRIMARY candidate's span in `text` (already
+ *  reasoning-stripped), mirroring {@link extractJsonFromText}'s selection —
+ *  steps 1 and 2 only, PRE-normalisation: trailing-comma stripping and
+ *  escape legalisation never move span boundaries, so the span end is
+ *  normalization-independent. An indexOf of the NORMALISED candidate is not
+ *  (`{,}` normalises to `{}`, whose first occurrence can sit INSIDE the real
+ *  answer and exclude it — the 410b3f931 floor bug). Null when no span can
+ *  be established (no fence, no balanced slice from the first delimiter) —
+ *  the conservative no-floor. */
+function primarySpanEnd(text: string): number | null {
+    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence?.[1]) {
+        return (fence.index ?? 0) + fence[0].length;
+    }
+    const start = text.search(/[{[]/);
+    if (start < 0) {
+        return null;
+    }
+    const slice = sliceBalancedJson(text.slice(start));
+    return slice ? start + slice.length : null;
+}
+
 /**
- * The LAST top-level balanced JSON object in `text` that parses and (when the
- * wire schema carries a validate fn) clears it. {@link extractJsonFromText}
- * takes the FIRST fence / outermost value, which is the wrong end of the text
- * when the model QUOTES code or an example object before its real answer
- * (#2255): the quote is what it returns and the answer behind it is lost. This
- * walks the same end-favoring rule as {@link scanLastJson} — the answer wins
- * over anything quoted on the way there — with the schema, not key matching, as
- * the test. Only TOP-LEVEL objects compete: a PARSEABLE container is atomic —
- * an object competes as a whole and its nested children or array members never
- * stand in for the answer (those stay undefined, exactly as before this
- * fallback existed) — while a balanced span that is NOT JSON (quoted code, prose with an
- * unmatched brace) is scanned within, since the answer can sit inside it. The
- * one sanctioned nesting is the wrapper envelope: a top-level object that fails
- * validation is retried through its ENVELOPE_WRAPPER_KEYS child, mirroring the
- * rule {@link normalizeEnvelope} applies. Each candidate takes the same
- * escape-legalising retry as the primary path (#2259), and candidates are tried
- * from the END, so the walk stops at the first object that validates; without a
+ * The FIRST top-level balanced JSON object that parses, starts AFTER the
+ * primary candidate's span, and (when the wire schema carries a validate fn)
+ * clears it. {@link extractJsonFromText} takes the FIRST fence / outermost
+ * value, which is the wrong end of the text when the model QUOTES code or an
+ * example object before its real answer (#2255): the quote is what it returns
+ * and the answer behind it is lost. The walk goes FORWARD from the primary
+ * candidate — deliberately NOT end-favoring like {@link scanLastJson}:
+ * review 5939864639 ruled that text AFTER the real answer (a restated
+ * example, or the "Empty would be {…}" sentence our own prompts invite,
+ * kody-rules-agent.provider.ts) must not win over it — walking from the end
+ * shipped an EMPTY review where real findings existed. Only TOP-LEVEL
+ * objects compete: a PARSEABLE container is atomic — an object competes as a
+ * whole and its nested children or array members never stand in for the
+ * answer (those stay undefined, exactly as before this fallback existed) —
+ * while a balanced span that is NOT JSON (quoted code, prose with an
+ * unmatched brace) is scanned within, since the answer can sit inside it.
+ * The one sanctioned nesting is the wrapper envelope: a top-level object
+ * that fails validation is retried through its ENVELOPE_WRAPPER_KEYS child,
+ * mirroring the rule {@link normalizeEnvelope} applies. Each candidate takes
+ * the same escape-legalising retry as the primary path (#2259); without a
  * validate fn (raw jsonSchema, no validator) parse success accepts, matching
  * the primary path. An oversized text (> SALVAGE_MAX_CHARS) walks only its
- * last SALVAGE_MAX_CHARS chars, from an enclosure-aware cut that never starts
- * inside a top-level span (one linear string-aware pass over the full input
- * places it; a severed container cannot promote its nested spans) — the
- * per-delimiter character work stays bounded at the #2112 limit while
- * END-favoring keeps the answer, which trails the quote, inside the window.
- * The accepted residual: when garbage precedes the answer AND a
- * schema-valid restatement follows it, END-favoring returns the restatement —
- * schema alone cannot tell them apart ({@link scanLastJson} leans on a
- * caller-supplied accept predicate; this walk has none). Garbage-before is the
- * common #2255 shape, and a forward walk would resurface it, so the rare
- * trailing case is the price of recovering the common one.
+ * last SALVAGE_MAX_CHARS chars, from an enclosure-aware cut that never
+ * starts inside a top-level span (one linear string-aware pass over the
+ * full input places it; a severed container cannot promote its nested
+ * spans) — the per-delimiter character work stays bounded at the #2112
+ * limit while the forward walk keeps the #2255 answer, which trails the
+ * quote, inside the window. The accepted residual, flipped with the rule
+ * (review 5939864639): a schema-valid example quoted after the primary but
+ * BEFORE the answer wins over that answer — schema alone cannot tell them
+ * apart; judged cheaper than the silent empty-review loss end-favoring
+ * caused.
  */
-async function lastValidatingObject<T = unknown>(
+async function firstValidatingObjectAfter<T = unknown>(
     text: string,
     validate:
         | ((
@@ -579,19 +603,27 @@ async function lastValidatingObject<T = unknown>(
               | ValidationResult<unknown>
               | PromiseLike<ValidationResult<unknown>>)
         | null,
+    /** Candidates must start at/after the primary candidate's span end, in
+     *  the coordinates of `text` as passed in (the window mapping below
+     *  adjusts it); null when there was no primary candidate — everything
+     *  competes. */
+    floor: number | null,
 ): Promise<T | undefined> {
     // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
     // candidate walk (sliceBalancedJson + a parse per delimiter) scans at
-    // most the last SALVAGE_MAX_CHARS chars. The walk is END-favoring and
-    // the #2255 answer sits at the end, so only an answer outside the
-    // window is lost. The cut itself is enclosure-aware — one linear,
-    // allocation-free, string/escape-aware pass over the whole input
-    // (O(N) time, O(1) space) places it so a severed container cannot
-    // promote its nested spans to candidates.
+    // most the last SALVAGE_MAX_CHARS chars, and the forward walk keeps the
+    // #2255 answer — which trails the quote — inside it. The cut itself is
+    // enclosure-aware — one linear, allocation-free, string/escape-aware
+    // pass over the whole input (O(N) time, O(1) space) places it so a
+    // severed container cannot promote its nested spans to candidates. The
+    // floor maps with the cut: a primary that ended before the window
+    // constrains nothing.
     if (text.length > SALVAGE_MAX_CHARS) {
-        text = text.slice(windowStartAfterCutSpans(text));
+        const windowStart = windowStartAfterCutSpans(text);
+        text = text.slice(windowStart);
+        floor = floor === null ? null : Math.max(0, floor - windowStart);
     }
-    const candidates: unknown[] = [];
+    const candidates: { value: unknown; start: number }[] = [];
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (ch !== '{' && ch !== '[') continue;
@@ -615,7 +647,7 @@ async function lastValidatingObject<T = unknown>(
                 typeof parsed === 'object' &&
                 !Array.isArray(parsed)
             ) {
-                candidates.push(parsed);
+                candidates.push({ value: parsed, start: i });
             }
             i += slice.length - 1;
             continue;
@@ -624,8 +656,12 @@ async function lastValidatingObject<T = unknown>(
         // it (an unmatched brace before the answer, its closer after), so
         // keep scanning within instead of skipping the span whole.
     }
-    for (let i = candidates.length - 1; i >= 0; i--) {
-        const value = candidates[i];
+    for (const { value, start } of candidates) {
+        if (floor !== null && start < floor) {
+            // Inside/at the primary candidate's span — the fallback only
+            // takes objects that come AFTER it (review 5939864639).
+            continue;
+        }
         if (!validate) {
             return value as T;
         }
@@ -672,8 +708,9 @@ async function lastValidatingObject<T = unknown>(
  * When the primary candidate is absent — the first fence quoted bracketless
  * code, so nothing JSON-shaped surfaced — or it does not parse or validate (the
  * model quoted a code block or an example object AHEAD of its real answer,
- * #2255, so the first-fence extractor returned the quote), the LAST top-level
- * object that clears the schema wins instead ({@link lastValidatingObject}).
+ * #2255, so the first-fence extractor returned the quote), the FIRST top-level
+ * object AFTER the primary candidate that clears the schema wins instead
+ * ({@link firstValidatingObjectAfter}, forward per review 5939864639).
  */
 export async function repairAndValidate<T = unknown>(
     wire: unknown,
@@ -690,6 +727,13 @@ export async function repairAndValidate<T = unknown>(
     const validate =
         typeof schema.validate === 'function' ? schema.validate : null;
     const candidate = extractJsonFromText(rawText);
+    // The fallback walks FORWARD from the primary candidate (review
+    // 5939864639): only objects that start after its SPAN compete. The span
+    // comes from primarySpanEnd — pre-normalisation, because an indexOf of
+    // the normalised candidate (`{,}` → `{}`) can land INSIDE the real
+    // answer and exclude it. No primary candidate, or a span that cannot be
+    // established, → no floor — conservative, more candidates never fewer.
+    const primaryEnd = candidate != null ? primarySpanEnd(stripped) : null;
     if (candidate != null) {
         const value = parseLenient(candidate);
         if (value !== undefined) {
@@ -702,7 +746,7 @@ export async function repairAndValidate<T = unknown>(
             }
         }
     }
-    return lastValidatingObject<T>(stripped, validate);
+    return firstValidatingObjectAfter<T>(stripped, validate, primaryEnd);
 }
 
 /**

@@ -488,6 +488,28 @@ describe('repairAndValidate', () => {
         );
         const answer = (code: string) =>
             `{"improvedCode":${JSON.stringify(code)},"fixStatus":"fixed"}`;
+        const violationsWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    violations: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                body: { type: 'string' },
+                                line: { type: 'number' },
+                            },
+                            required: ['body', 'line'],
+                            additionalProperties: false,
+                        },
+                    },
+                },
+                required: ['violations'],
+                additionalProperties: false,
+            } as any),
+        );
+        const findings = '{"violations":[{"body":"bug","line":12}]}';
 
         it('recovers the answer after a fenced code block in another language', async () => {
             // The extractor unwraps the FIRST fence whatever its language, so
@@ -556,11 +578,17 @@ describe('repairAndValidate', () => {
             ).toBeUndefined();
         });
 
-        it('accepts the last PARSED object when the wire has no validate fn', async () => {
+        it('accepts the first PARSED object after the primary (no validate fn)', async () => {
             // Same rule as the primary path: a raw jsonSchema without a
-            // validator accepts on parse-success alone.
+            // validator accepts on parse-success alone — and the walk is
+            // FORWARD, so the object right after the quote wins, not the
+            // trailing restatement.
             const raw = jsonSchema({ type: 'object' } as any);
-            const text = '```ruby\n[x || "y"]\n```\n' + answer('const a = 1;');
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                answer('const a = 1;') +
+                '\nrestated: ' +
+                answer('const b = 2;');
             expect(await repairAndValidate(raw, text)).toEqual({
                 improvedCode: 'const a = 1;',
                 fixStatus: 'fixed',
@@ -605,12 +633,13 @@ describe('repairAndValidate', () => {
             });
         });
 
-        it('does not let schema-valid JSON quoted INSIDE the block win', async () => {
-            // The first fence is ruby (the primary fails on it), but a LATER
-            // fence restates the prompt's example — a full schema-valid
-            // object, what prompts embed — before the real answer. A forward
-            // walk would stop at the restated example; end-favoring
-            // (scanLastJson's rule) hands the win to the real answer.
+        it('takes the FIRST schema-valid object after the primary (forward rule)', async () => {
+            // Flipped residual, per review 5939864639: a schema-valid example
+            // quoted after the primary but BEFORE the answer now wins over
+            // that answer — end-favoring returned the answer here, but it
+            // also shipped EMPTY reviews for real findings (see the review
+            // shapes below), so forward is the ruled rule. This pin kills a
+            // revert to the end-favoring walk.
             const text =
                 '```ruby\nheader = fetch\n```\n' +
                 'Example given:\n```json\n' +
@@ -618,9 +647,67 @@ describe('repairAndValidate', () => {
                 '\n```\nAnswer:\n' +
                 answer('const real = 1;');
             expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const example = 0;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('review shape 1: the real answer beats a trailing format example', async () => {
+            // Maintainer review 5939864639, shape 1: end-favoring returned
+            // the "..." example quoted AFTER the real answer.
+            const text =
+                '```ruby\n[x]\n```\n' +
+                answer('const real = 1;') +
+                '\nthe expected format is\n' +
+                '```json\n{"improvedCode":"...","fixStatus":"fixed"}\n```';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
                 improvedCode: 'const real = 1;',
                 fixStatus: 'fixed',
             });
+        });
+
+        it('review shape 2: real findings beat the "Empty would be" sentence', async () => {
+            // Maintainer review 5939864639, shape 2 — the worst one: the
+            // trailing empty example is invited by our own prompts
+            // (kody-rules-agent.provider.ts), and end-favoring turned REAL
+            // findings into an empty review.
+            const text =
+                '```ts\nconst a = 1;\n```\n' +
+                findings +
+                '\nEmpty would be {"violations":[]}';
+            expect(await repairAndValidate(violationsWire, text)).toEqual({
+                violations: [{ body: 'bug', line: 12 }],
+            });
+        });
+
+        it('normalisation of the primary never excludes the answer', async () => {
+            // The 410b3f931 floor bug: the primary candidate `{,}`
+            // normalises to `{}`, and an indexOf of THAT found the first
+            // `{}` inside the real answer's string value — placing the floor
+            // inside the answer and excluding it (undefined on 410b3f931;
+            // the end-favoring parent recovered). The floor is the primary's
+            // SPAN, pre-normalisation: the first fence, behind which the
+            // answer still competes.
+            const text =
+                '```json\n{,}\n```\n' +
+                '{"improvedCode":"{}","fixStatus":"fixed"}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: '{}',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('review shape 3: a prose empty example before an invalid fence re-asks', async () => {
+            // Maintainer review 5939864639, shape 3: the fenced answer fails
+            // the schema ("line" is a string), and the prose empty example
+            // sits BEFORE the primary — nothing after it competes, so the
+            // caller re-asks instead of shipping an empty review.
+            const text =
+                'If nothing is wrong I would return {"violations":[]}.\n' +
+                '```json\n{"violations":[{"body":"bug","line":"12"}]}\n```';
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
         });
 
         it('does NOT let a nested child stand in for the answer', async () => {
