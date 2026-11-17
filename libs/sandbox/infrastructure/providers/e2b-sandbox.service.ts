@@ -754,8 +754,12 @@ export class E2BSandboxService implements ISandboxProvider {
                 message:
                     '[egress] git proxy setup failed after going back to the fixed IP; cloning through the transparent proxy',
                 context: E2BSandboxService.name,
-                error,
-                metadata: { sandboxId: sandbox.sandboxId },
+                // Not the error itself: setupProxy's commands carry the
+                // proxy config, and a command error carries their output.
+                metadata: {
+                    sandboxId: sandbox.sandboxId,
+                    errorName: error instanceof Error ? error.name : 'unknown',
+                },
             });
         }
         return true;

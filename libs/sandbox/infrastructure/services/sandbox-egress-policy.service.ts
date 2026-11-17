@@ -112,6 +112,12 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     private rollout: EgressRollout = OFF;
     private rolloutReadAt = 0;
     private rolloutRetryAt = 0;
+    /**
+     * Teams this worker marked, with the order of the mark. A marker read
+     * that started before a mark must not cache its older answer over it.
+     */
+    private readonly markedAt = new Map<string, number>();
+    private markSeq = 0;
 
     constructor(
         @Optional()
@@ -168,6 +174,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     ): Promise<void> {
         // This worker stops trying direct for the team first, whatever
         // happens to the write below.
+        this.markedAt.set(markerCacheKey(scope), ++this.markSeq);
         await this.cacheMarker(scope, true);
 
         try {
@@ -229,10 +236,14 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             return cached.required;
         }
 
+        const readStartedAt = this.markSeq;
         const config = await this.integrationConfigs!.findOne({
             team: { uuid: scope.teamId },
             configKey: IntegrationConfigKey.EGRESS_FIXED_IP,
         });
+        // Marked by this worker while the read was in flight: the read saw
+        // the database before the mark, and the mark already cached `true`.
+        if ((this.markedAt.get(key) ?? 0) > readStartedAt) return true;
         const required = markerHolds(
             config?.configValue as EgressFixedIpMarker | undefined,
             Date.now(),

@@ -273,6 +273,29 @@ describe('SandboxEgressPolicyService.markFixedIpRequired', () => {
         ).toHaveLength(1);
     });
 
+    it('does not let a marker read that started before the mark cache its older "not required" over it', async () => {
+        const { service, integrationConfigs } = build({
+            rollout: { directByDefault: true },
+        });
+        let release!: () => void;
+        const gate = new Promise<void>((r) => (release = r));
+        const realFindOne = integrationConfigs.findOne.getMockImplementation()!;
+        integrationConfigs.findOne.mockImplementation(async (filter: any) => {
+            if (filter.configKey === IntegrationConfigKey.EGRESS_FIXED_IP) {
+                await gate; // the database answers after the mark
+            }
+            return realFindOne(filter);
+        });
+
+        const inFlight = service.route(scope);
+        await new Promise((r) => setImmediate(r));
+        await service.markFixedIpRequired(scope, 'ip_allow_list');
+        release();
+
+        await expect(inFlight).resolves.toBe('fixed_ip');
+        await expect(service.route(scope)).resolves.toBe('fixed_ip');
+    });
+
     it('never throws when the marker cannot be stored, and still routes this worker through the fixed IP', async () => {
         const { service } = build({
             rollout: { directByDefault: true },
