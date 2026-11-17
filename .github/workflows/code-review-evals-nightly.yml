@@ -224,7 +224,7 @@ jobs:
                       eval-files/
                   retention-days: 90
             - name: Notify Discord (harness broken)
-              if: failure()
+              if: ${{ false }}
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
@@ -310,7 +310,7 @@ jobs:
                   path: kody-rules-report/
                   retention-days: 90
             - name: Notify Discord
-              if: always() && steps.run.outputs.post == 'true'
+              if: ${{ false }}
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
@@ -425,7 +425,7 @@ jobs:
                   path: report/
                   retention-days: 90
             - name: Notify Discord
-              if: always() && steps.run.outputs.post == 'true'
+              if: ${{ false }}
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
@@ -732,6 +732,7 @@ jobs:
                   gcp_project: ${{ vars.GCP_PROJECT }}
 
             - name: Notify Discord
+              if: ${{ false }}
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
