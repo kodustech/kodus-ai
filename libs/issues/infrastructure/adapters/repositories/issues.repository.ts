@@ -61,7 +61,6 @@ export class IssuesRepository implements IIssuesRepository {
         const query = this.issuesModel.find(filter);
 
         const docs = await query.exec();
-        // The mapper returns null for an empty list; callers expect an array.
         return mapSimpleModelsToEntities(docs, IssuesEntity) ?? [];
     }
 

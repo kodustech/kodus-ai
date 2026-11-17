@@ -171,12 +171,8 @@ export class TeamAutomationRepository implements ITeamAutomationRepository {
             const automationModel =
                 await this.teamAutomationRepository.find(findOneOptions);
 
-            // mapSimpleModelsToEntities() returns `null` (not []) when its
-            // input is empty — see libs/core/.../mappers.ts:59. Callers that
-            // do `const [x] = await find(...)` then explode with "is not
-            // iterable" instead of getting the natural "no rows matched"
-            // outcome. Coalesce here so the contract (Promise<Entity[]>) is
-            // honored even on empty lookups.
+            // Callers do `const [x] = await find(...)`; an empty lookup must
+            // stay an empty list (Promise<Entity[]>), never null.
             return (
                 mapSimpleModelsToEntities(
                     automationModel,
