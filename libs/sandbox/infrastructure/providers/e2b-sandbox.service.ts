@@ -56,10 +56,12 @@ export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
 const REPO_DIR = '/home/user/repo';
 
 // The template's transparent proxy: OUTPUT jumps to the SHADOWSOCKS chain
-// (e2b-sandbox/iptables-rules.sh). Removing the jump sends traffic direct.
+// (e2b-sandbox/iptables-rules.sh). A TCP RETURN at the top of OUTPUT skips
+// that jump, which sends traffic direct.
 const EGRESS_JUMP_CHECK =
     'iptables -t nat -C OUTPUT -p tcp -j SHADOWSOCKS 2>/dev/null';
-const EGRESS_JUMP_DELETE = 'iptables -t nat -D OUTPUT -p tcp -j SHADOWSOCKS';
+const EGRESS_BYPASS_CHECK =
+    'iptables -t nat -C OUTPUT -p tcp -j RETURN 2>/dev/null';
 // How long a direct sandbox waits for the Git host to accept a connection.
 const EGRESS_REACH_TIMEOUT_S = 10;
 
@@ -705,9 +707,10 @@ export class E2BSandboxService implements ISandboxProvider {
     }
 
     /**
-     * Takes this sandbox off the egress proxy: removes the jump from OUTPUT
-     * to the template's SHADOWSOCKS chain, so new connections leave direct.
-     * The chain and sslocal stay, for `useFixedIpEgress` to put back.
+     * Takes this sandbox off the egress proxy: puts a `RETURN` for TCP at
+     * the top of OUTPUT in the nat table, so no connection reaches the
+     * template's SHADOWSOCKS jump. A rule at the top, not the jump removed,
+     * so it holds even if the template's boot script appends the jump later.
      * False (the sandbox stays on the fixed IP) when that cannot be done.
      */
     private async useDirectEgress(sandbox: Sandbox): Promise<boolean> {
@@ -715,8 +718,8 @@ export class E2BSandboxService implements ISandboxProvider {
             sandbox,
             [
                 'command -v iptables >/dev/null 2>&1 || exit 0',
-                `for i in 1 2 3 4 5; do ${EGRESS_JUMP_CHECK} || exit 0; ${EGRESS_JUMP_DELETE} || exit 1; done`,
-                `! ${EGRESS_JUMP_CHECK}`,
+                `${EGRESS_BYPASS_CHECK} || iptables -t nat -I OUTPUT 1 -p tcp -j RETURN`,
+                EGRESS_BYPASS_CHECK,
             ].join('; '),
         );
         this.logger.log({
@@ -729,14 +732,33 @@ export class E2BSandboxService implements ISandboxProvider {
         return done;
     }
 
-    /** Puts the sandbox back on the egress proxy. */
+    /**
+     * Puts the sandbox back on the egress proxy: drops the bypass and makes
+     * sure the jump to SHADOWSOCKS is there. False when the network could
+     * not be changed; a failure of the git-only proxy (`setupProxy`) does
+     * not undo it, the transparent proxy is what carries the clone.
+     */
     private async useFixedIpEgress(sandbox: Sandbox): Promise<boolean> {
         const done = await this.runAsRoot(
             sandbox,
-            `${EGRESS_JUMP_CHECK} || iptables -t nat -A OUTPUT -p tcp -j SHADOWSOCKS`,
+            [
+                `while ${EGRESS_BYPASS_CHECK}; do iptables -t nat -D OUTPUT -p tcp -j RETURN || exit 1; done`,
+                `${EGRESS_JUMP_CHECK} || iptables -t nat -A OUTPUT -p tcp -j SHADOWSOCKS`,
+            ].join('; '),
         );
-        if (done) await this.setupProxy(sandbox);
-        return done;
+        if (!done) return false;
+        try {
+            await this.setupProxy(sandbox);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[egress] git proxy setup failed after going back to the fixed IP; cloning through the transparent proxy',
+                context: E2BSandboxService.name,
+                error,
+                metadata: { sandboxId: sandbox.sandboxId },
+            });
+        }
+        return true;
     }
 
     private async runAsRoot(sandbox: Sandbox, cmd: string): Promise<boolean> {
@@ -752,6 +774,7 @@ export class E2BSandboxService implements ISandboxProvider {
                     message: '[egress] root command failed',
                     context: E2BSandboxService.name,
                     error,
+                    metadata: { sandboxId: sandbox.sandboxId },
                 });
             }
             return false;
@@ -776,7 +799,12 @@ export class E2BSandboxService implements ISandboxProvider {
 
         let reason: FixedIpReason;
         let directError: unknown;
-        if (await this.canReachGitHost(sandbox, params.cloneUrl)) {
+        // An inconclusive check (the sandbox API failed, not the connection)
+        // proves nothing: the clone then answers for itself.
+        if (
+            (await this.canReachGitHost(sandbox, params.cloneUrl)) !==
+            'unreachable'
+        ) {
             try {
                 await this.cloneRepository(sandbox, params);
                 return;
@@ -804,6 +832,7 @@ export class E2BSandboxService implements ISandboxProvider {
             metadata: {
                 organizationId: params.organizationId,
                 teamId: params.teamId,
+                sandboxId: sandbox.sandboxId,
                 platform: params.platform,
                 reason,
             },
@@ -824,12 +853,14 @@ export class E2BSandboxService implements ISandboxProvider {
     /**
      * A TCP connect to the Git host, bounded: a firewall that drops our
      * packets would otherwise hold the clone for its whole timeout.
-     * True when the URL cannot be read (the clone then speaks for itself).
+     * `unreachable` only when the connect itself failed or timed out (the
+     * command ran and exited non-zero); `unknown` when the URL cannot be
+     * read or the sandbox could not run the check.
      */
     private async canReachGitHost(
         sandbox: Sandbox,
         cloneUrl: string,
-    ): Promise<boolean> {
+    ): Promise<'reachable' | 'unreachable' | 'unknown'> {
         let host: string;
         let port: string;
         try {
@@ -837,9 +868,9 @@ export class E2BSandboxService implements ISandboxProvider {
             host = url.hostname.replace(/^\[|\]$/g, '');
             port = url.port || (url.protocol === 'http:' ? '80' : '443');
         } catch {
-            return true;
+            return 'unknown';
         }
-        if (!host) return true;
+        if (!host) return 'unknown';
         try {
             const result = await sandbox.commands.run(
                 `timeout ${EGRESS_REACH_TIMEOUT_S} bash -c 'exec 3<>"/dev/tcp/$EGRESS_HOST/$EGRESS_PORT"'`,
@@ -848,9 +879,11 @@ export class E2BSandboxService implements ISandboxProvider {
                     timeoutMs: (EGRESS_REACH_TIMEOUT_S + 5) * 1000,
                 },
             );
-            return result.exitCode === 0;
-        } catch {
-            return false;
+            return result.exitCode === 0 ? 'reachable' : 'unreachable';
+        } catch (error) {
+            return error instanceof CommandExitError
+                ? 'unreachable'
+                : 'unknown';
         }
     }
 

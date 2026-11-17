@@ -1238,6 +1238,7 @@ describe('E2BSandboxService egress route', () => {
         directClone?: 'ok' | 'refused';
         proxyClone?: 'ok' | 'fails';
         reachable?: boolean;
+        reachCheck?: 'sandbox-error';
         cannotLeaveProxy?: boolean;
     }) => {
         const log: { cmd: string; user?: string; onProxy: boolean }[] = [];
@@ -1251,12 +1252,15 @@ describe('E2BSandboxService egress route', () => {
                     exitCode: 0,
                 };
             }
-            if (cmd.includes('iptables -t nat -D')) {
+            if (cmd.includes('iptables -t nat -I OUTPUT 1')) {
                 if (opts.cannotLeaveProxy) throw exitError('denied', 1);
                 onProxy = false;
             } else if (cmd.includes('iptables -t nat -A OUTPUT')) {
                 onProxy = true;
             } else if (cmd.includes('/dev/tcp/')) {
+                if (opts.reachCheck === 'sandbox-error') {
+                    throw new Error('sandbox API unavailable');
+                }
                 if (opts.reachable === false) throw exitError('', 124);
             } else if (cmd.includes('git init')) {
                 const outcome = onProxy
@@ -1285,6 +1289,7 @@ describe('E2BSandboxService egress route', () => {
         sandbox?: Parameters<typeof fakeSandbox>[0];
         template?: boolean;
         scoped?: boolean;
+        gitProxyMisconfigured?: boolean;
     }) => {
         const { sbx, log } = fakeSandbox(opts.sandbox ?? {});
         (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
@@ -1295,6 +1300,10 @@ describe('E2BSandboxService egress route', () => {
                     API_NODE_ENV: 'test',
                     ...(opts.template !== false && {
                         API_E2B_TEMPLATE_ID: 'tpl',
+                    }),
+                    // setupProxy throws: host without password.
+                    ...(opts.gitProxyMisconfigured && {
+                        E2B_PROXY_HOST: '192.0.2.1',
                     }),
                 })[key],
         };
@@ -1332,7 +1341,7 @@ describe('E2BSandboxService egress route', () => {
         const { result, log, egress } = await create({ route: 'direct' });
         await result;
         const leave = log.findIndex((l) =>
-            l.cmd.includes('iptables -t nat -D'),
+            l.cmd.includes('iptables -t nat -I OUTPUT 1'),
         );
         const clone = log.findIndex((l) => l.cmd.includes('git init'));
         expect(leave).toBeGreaterThanOrEqual(0);
@@ -1370,6 +1379,29 @@ describe('E2BSandboxService egress route', () => {
             { organizationId: ORG, teamId: TEAM },
             'unreachable',
         );
+    });
+
+    it('clones direct when the reachability check itself could not run: that proves nothing', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            sandbox: { reachCheck: 'sandbox-error' },
+        });
+        await result;
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('still clones through the fixed IP when the git-only proxy setup fails on the way back', async () => {
+        const { result, log, egress, sbx } = await create({
+            route: 'direct',
+            sandbox: { directClone: 'refused' },
+            gitProxyMisconfigured: true,
+        });
+        const instance = await result;
+        expect(instance.sandboxId).toBe('sbx-1');
+        expect(sbx.kill).not.toHaveBeenCalled();
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false, true]);
+        expect(egress.markFixedIpRequired).toHaveBeenCalled();
     });
 
     it('marks nothing when the clone fails on the fixed IP too: that is not an egress problem', async () => {

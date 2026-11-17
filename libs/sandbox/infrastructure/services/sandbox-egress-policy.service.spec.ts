@@ -1,7 +1,14 @@
+import { Test } from '@nestjs/testing';
+
+import { CacheService } from '@libs/core/cache/cache.service';
 import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-key.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 
+import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { GLOBAL_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
+
 import {
+    markerHolds,
     parseEgressRollout,
     SandboxEgressPolicyService,
 } from './sandbox-egress-policy.service';
@@ -149,6 +156,87 @@ describe('SandboxEgressPolicyService.route', () => {
             ),
         ).toHaveLength(1);
         expect(globalParameters.findByKey).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('markerHolds', () => {
+    const DAY = 24 * 60 * 60_000;
+    const now = Date.parse('2026-11-17T12:00:00Z');
+    const auto = (reason: string, daysAgo: number) => ({
+        required: true,
+        source: 'clone_fallback' as const,
+        reason: reason as any,
+        detectedAt: new Date(now - daysAgo * DAY).toISOString(),
+    });
+
+    it('lets a team be tried direct again a day after an unreachable host marked it (a blip heals itself)', () => {
+        expect(markerHolds(auto('unreachable', 0.5), now)).toBe(true);
+        expect(markerHolds(auto('unreachable', 2), now)).toBe(false);
+        expect(markerHolds(auto('other', 2), now)).toBe(false);
+    });
+
+    it('keeps a marker from a refusal that names the IP for a month', () => {
+        expect(markerHolds(auto('ip_allow_list', 10), now)).toBe(true);
+        expect(markerHolds(auto('forbidden', 29), now)).toBe(true);
+        expect(markerHolds(auto('ip_allow_list', 31), now)).toBe(false);
+    });
+
+    it('never expires a marker set by hand', () => {
+        expect(
+            markerHolds(
+                {
+                    required: true,
+                    source: 'manual',
+                    detectedAt: '2020-01-01T00:00:00Z',
+                },
+                now,
+            ),
+        ).toBe(true);
+    });
+
+    it('drops an automatic marker whose date cannot be read', () => {
+        expect(
+            markerHolds(
+                {
+                    required: true,
+                    source: 'clone_fallback',
+                    reason: 'ip_allow_list',
+                },
+                now,
+            ),
+        ).toBe(false);
+    });
+});
+
+describe('SandboxEgressPolicyService under Nest', () => {
+    it('gets the process cache injected, so a marker is read once per team', async () => {
+        const cache = memoryCache();
+        const findOne = jest.fn(async () => null);
+        const moduleRef = await Test.createTestingModule({
+            providers: [
+                SandboxEgressPolicyService,
+                { provide: CacheService, useValue: cache },
+                {
+                    provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
+                    useValue: { findOne, createOrUpdateConfig: jest.fn() },
+                },
+                {
+                    provide: GLOBAL_PARAMETERS_SERVICE_TOKEN,
+                    useValue: {
+                        findByKey: async () => ({
+                            configValue: { directByDefault: true },
+                        }),
+                    },
+                },
+            ],
+        }).compile();
+        const service = moduleRef.get(SandboxEgressPolicyService);
+
+        await service.route(scope);
+        await service.route(scope);
+
+        expect(cache.addToCache).toHaveBeenCalled();
+        expect(findOne).toHaveBeenCalledTimes(1);
     });
 });
 

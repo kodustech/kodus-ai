@@ -79,6 +79,21 @@ const OFF: EgressRollout = {
     directOrganizationIds: [],
 };
 
+const DAY_MS = 24 * 60 * 60_000;
+/**
+ * How long a marker the clone fallback wrote holds. A refusal that names
+ * the IP (allow list, 403) is strong evidence; an unreachable host or an
+ * unreadable error may have been a blip. Past this, the team is tried
+ * direct again: a false marker heals itself, a true one is written again
+ * after one failed attempt. Manual markers never expire.
+ */
+export const FIXED_IP_MARKER_TTL_MS: Record<FixedIpReason, number> = {
+    ip_allow_list: 30 * DAY_MS,
+    forbidden: 30 * DAY_MS,
+    unreachable: DAY_MS,
+    other: DAY_MS,
+};
+
 const markerCacheKey = (scope: EgressScope) =>
     `sandbox-egress:fixed-ip:${scope.organizationId}:${scope.teamId}`;
 
@@ -111,7 +126,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             IIntegrationConfigService,
             'findOne' | 'createOrUpdateConfig'
         >,
+        // Explicit token: a Pick<> type is emitted as `Object` in the
+        // constructor metadata, which Nest would never resolve.
         @Optional()
+        @Inject(CacheService)
         private readonly cache?: Pick<
             CacheService,
             'getFromCache' | 'addToCache'
@@ -215,9 +233,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             team: { uuid: scope.teamId },
             configKey: IntegrationConfigKey.EGRESS_FIXED_IP,
         });
-        const required =
-            (config?.configValue as EgressFixedIpMarker | undefined)
-                ?.required === true;
+        const required = markerHolds(
+            config?.configValue as EgressFixedIpMarker | undefined,
+            Date.now(),
+        );
         await this.cacheMarker(scope, required);
         return required;
     }
@@ -274,4 +293,18 @@ export function parseEgressRollout(value: unknown): EgressRollout {
         directByDefault: v.directByDefault === true,
         directOrganizationIds: ids,
     };
+}
+
+/** Whether a stored marker still sends the team through the fixed IP. */
+export function markerHolds(
+    marker: EgressFixedIpMarker | undefined,
+    now: number,
+): boolean {
+    if (marker?.required !== true) return false;
+    if (marker.source !== 'clone_fallback') return true;
+    const detectedAt = Date.parse(marker.detectedAt ?? '');
+    const ttl =
+        FIXED_IP_MARKER_TTL_MS[marker.reason as FixedIpReason] ??
+        FIXED_IP_MARKER_TTL_MS.other;
+    return Number.isFinite(detectedAt) && now - detectedAt < ttl;
 }
