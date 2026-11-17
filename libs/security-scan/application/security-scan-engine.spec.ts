@@ -1936,6 +1936,53 @@ describe('SecurityScanEngine: failures that must not pass for a clean scan', () 
         expect(result.finished).toBe(true);
     });
 
+    describe('a test the slice deadline cuts short', () => {
+        // Ten seconds of slice left: less than the test's own timeout.
+        const cutAt = async (testRun: { exitCode: number; takesMs: number }) => {
+            let now = 0;
+            const sandbox = fakeSandbox('e2b');
+            const run = sandbox.run.getMockImplementation()!;
+            sandbox.run.mockImplementation(async (command: string) => {
+                if (!command.includes('npx jest')) return run(command);
+                now += testRun.takesMs;
+                return { stdout: '', exitCode: testRun.exitCode };
+            });
+            const engine = new SecurityScanEngine({
+                runLens: fakeLens((file, cls) =>
+                    file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                ),
+                llm: fakeLlm({ units: [] }),
+                collectSurface: jest.fn(async () => SURFACE),
+                now: () => now,
+            });
+            const result = await engine.run({
+                ...baseParams({ reproduce: true }),
+                sandbox,
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+                deadlineAt: 10_000,
+            } as any);
+            return result.findings[0].reproduction;
+        };
+
+        it('is not recorded as run when it had not finished', async () => {
+            await expect(cutAt({ exitCode: 124, takesMs: 10_000 })).resolves.toEqual(
+                expect.objectContaining({ executed: false }),
+            );
+        });
+
+        it('is recorded as run when it failed before the slice ended', async () => {
+            await expect(cutAt({ exitCode: 1, takesMs: 2_000 })).resolves.toEqual(
+                expect.objectContaining({ executed: true, reproduced: false }),
+            );
+        });
+
+        it('is recorded as reproduced when it passed in the time left', async () => {
+            await expect(cutAt({ exitCode: 0, takesMs: 10_000 })).resolves.toEqual(
+                expect.objectContaining({ executed: true, reproduced: true }),
+            );
+        });
+    });
+
     it('never starts a queued reproduction test once the slice deadline passed', async () => {
         let now = 0;
         const sandbox = fakeSandbox('e2b');

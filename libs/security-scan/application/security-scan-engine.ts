@@ -1579,18 +1579,17 @@ export class SecurityScanEngine {
         const work = shellQuote(workdir);
         const target = `${workdir}/${record.path}`;
         const quoted = shellQuote(target);
+        // What a command may take: its own timeout, or what is left of the
+        // slice when that is less.
+        const allowed = (timeoutMs: number) =>
+            params.deadlineAt === undefined
+                ? timeoutMs
+                : Math.min(timeoutMs, params.deadlineAt - this.now());
         const run = (command: string, timeoutMs: number) => {
             params.signal?.throwIfAborted();
-            const left =
-                params.deadlineAt === undefined
-                    ? timeoutMs
-                    : params.deadlineAt - this.now();
+            const left = allowed(timeoutMs);
             if (left <= 0) throw new Error('slice deadline');
-            return asReproUser(
-                sandbox,
-                command,
-                Math.max(1, Math.min(timeoutMs, left)),
-            );
+            return asReproUser(sandbox, command, Math.max(1, left));
         };
 
         // Without the scanned commit and the checkout's state, nothing could
@@ -1649,10 +1648,22 @@ export class SecurityScanEngine {
             if (written.exitCode !== 0) {
                 return;
             }
+            const testTimeoutMs = 180_000;
+            const limit = allowed(testTimeoutMs);
+            const startedAt = this.now();
             const result = await run(
                 `cd ${work} && ${record.command}`,
-                180_000,
+                testTimeoutMs,
             );
+            // Cut short by the slice, not by its own timeout: a test that had
+            // not finished did not fail. Only a pass is an outcome then.
+            if (
+                result.exitCode !== 0 &&
+                limit < testTimeoutMs &&
+                this.now() - startedAt >= limit
+            ) {
+                return;
+            }
             Object.assign(record, {
                 executed: true,
                 exitCode: result.exitCode,
