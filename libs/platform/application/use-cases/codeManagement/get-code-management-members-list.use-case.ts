@@ -49,7 +49,7 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
                     >(cacheKey);
 
                 if (cached?.length > 0) {
-                    return { status: 'ok', members: cached };
+                    return { status: 'ok', complete: true, members: cached };
                 }
             } catch (error) {
                 // Not fatal — the fetch below still serves the request — but a
@@ -69,7 +69,9 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
             options,
         );
 
-        if (result.status === 'ok') {
+        // Only a complete list is cached: a partial one served for the full TTL
+        // would keep showing members as missing after the provider recovers.
+        if (result.status === 'ok' && result.complete) {
             await this.cacheService
                 .addToCache(
                     cacheKey,
@@ -96,8 +98,9 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
     }
 
     private buildCacheKey(organizationId: string, teamId?: string): string {
+        // v2: entries written before `complete` existed may hold a partial list.
         return teamId !== undefined
-            ? `org_members_${organizationId}_${teamId}`
-            : `org_members_${organizationId}`;
+            ? `org_members_v2_${organizationId}_${teamId}`
+            : `org_members_v2_${organizationId}`;
     }
 }

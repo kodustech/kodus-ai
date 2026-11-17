@@ -15,9 +15,13 @@ export type OrganizationMemberSummary = {
  * An `unavailable` result means we could not confirm who belongs to the git
  * organization. Callers must never read it as "the organization is empty" —
  * seat revocation in particular has to be skipped entirely in that case.
+ *
+ * `complete` is true only when both the member list and the PR authors were
+ * read in full. A partial list is still worth showing, but somebody missing
+ * from it has not necessarily left the organization.
  */
 export type OrganizationMemberListResult =
-    | { status: 'ok'; members: OrganizationMemberSummary[] }
+    | { status: 'ok'; complete: boolean; members: OrganizationMemberSummary[] }
     | { status: 'unavailable'; members: [] };
 
 type RawMember = {
@@ -71,7 +75,7 @@ export class OrganizationMemberListService {
             this.codeManagementService.getListMembers({
                 organizationAndTeamData,
                 determineBots: true,
-                requireComplete: options.requireAuthors === true,
+                requireComplete: true,
             }),
             this.fetchPullRequestAuthors(organizationAndTeamData, options),
         ]);
@@ -134,7 +138,13 @@ export class OrganizationMemberListService {
             return unavailable();
         }
 
-        return { status: 'ok', members: normalized };
+        return {
+            status: 'ok',
+            complete:
+                memberResult.status === 'fulfilled' &&
+                authorResult.status === 'fulfilled',
+            members: normalized,
+        };
     }
 
     /**
@@ -147,7 +157,8 @@ export class OrganizationMemberListService {
         organizationAndTeamData: OrganizationAndTeamData,
         options: { skipCache?: boolean; requireAuthors?: boolean },
     ): Promise<RawMember[]> {
-        const cacheKey = `org_member_pr_authors_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
+        // v2: entries written before the adapters read strictly may be partial.
+        const cacheKey = `org_member_pr_authors_v2_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
 
         if (!options.skipCache) {
             try {
@@ -171,7 +182,7 @@ export class OrganizationMemberListService {
         const authors = await this.codeManagementService.getPullRequestAuthors({
             organizationAndTeamData,
             determineBots: true,
-            requireLoaded: options.requireAuthors === true,
+            requireLoaded: true,
         });
 
         if (authors?.length) {

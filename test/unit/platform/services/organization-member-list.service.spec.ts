@@ -71,6 +71,7 @@ describe('OrganizationMemberListService', () => {
 
             expect(result).toEqual({
                 status: 'ok',
+                complete: true,
                 members: [
                     { id: 1, name: 'Alice', type: 'user' },
                     { id: 2, name: 'Bob', type: 'user' },
@@ -124,6 +125,7 @@ describe('OrganizationMemberListService', () => {
 
             expect(result).toEqual({
                 status: 'ok',
+                complete: true,
                 members: [
                     { id: 1, name: 'Alice', type: 'user' },
                     { id: '99', name: 'ci-agent', type: 'bot' },
@@ -134,7 +136,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
-                requireLoaded: false,
+                requireLoaded: true,
             });
         });
 
@@ -153,7 +155,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
-                requireComplete: false,
+                requireComplete: true,
             });
         });
 
@@ -167,8 +169,10 @@ describe('OrganizationMemberListService', () => {
 
             const result = await service.fetch(organizationAndTeamData);
 
+            // Shown, but incomplete: absence from it proves nothing.
             expect(result).toEqual({
                 status: 'ok',
+                complete: false,
                 members: [{ id: '4242', name: 'personal-owner', type: 'user' }],
             });
         });
@@ -185,6 +189,7 @@ describe('OrganizationMemberListService', () => {
 
             expect(result).toEqual({
                 status: 'ok',
+                complete: false,
                 members: [{ id: 1, name: 'Alice', type: 'user' }],
             });
         });
@@ -220,13 +225,16 @@ describe('OrganizationMemberListService', () => {
             const lenient = await service.fetch(organizationAndTeamData);
 
             expect(strict).toEqual({ status: 'unavailable', members: [] });
-            expect(lenient.status).toBe('ok');
-            // Only the strict caller asks the provider to fail on "not loaded yet"
+            expect(lenient).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+            // Every caller asks for a trustworthy read; the page keeps the
+            // other source as partial data instead of dropping it.
             expect(
                 mockCodeManagementService.getPullRequestAuthors.mock.calls.map(
                     ([params]) => params.requireLoaded,
                 ),
-            ).toEqual([true, false]);
+            ).toEqual([true, true]);
         });
 
         it('is unavailable when the member read fails, even with stored authors', async () => {
@@ -243,13 +251,14 @@ describe('OrganizationMemberListService', () => {
             const lenient = await service.fetch(organizationAndTeamData);
 
             expect(strict).toEqual({ status: 'unavailable', members: [] });
-            expect(lenient.status).toBe('ok');
-            // Only the strict caller asks the provider for a complete list
+            expect(lenient).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
             expect(
                 mockCodeManagementService.getListMembers.mock.calls.map(
                     ([params]) => params.requireComplete,
                 ),
-            ).toEqual([true, false]);
+            ).toEqual([true, true]);
         });
 
         it('stays ok when the lookup succeeds with no recent authors', async () => {
@@ -357,7 +366,7 @@ describe('OrganizationMemberListService', () => {
             await service.fetch(organizationAndTeamData);
 
             expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-                'org_member_pr_authors_org-uuid-123_team-uuid-456',
+                'org_member_pr_authors_v2_org-uuid-123_team-uuid-456',
                 [{ id: '99', name: 'ci-agent', type: 'bot' }],
                 10 * 60 * 1000,
             );
