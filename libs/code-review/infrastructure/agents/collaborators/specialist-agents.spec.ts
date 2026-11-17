@@ -24,4 +24,32 @@ describe('finishedSpecialists', () => {
         expect(entry.error).toBeTruthy();
         expect(entry.error).not.toContain('sk-live-123');
     });
+
+    it('keeps the provider text out of a refused request too', () => {
+        const [entry] = finishedSpecialists(
+            [
+                {
+                    label: 'lens-data-exposure',
+                    status: 'failed',
+                    found: 0,
+                    ms: 10,
+                    steps: 1,
+                    toolCalls: 0,
+                    error: {
+                        status: 400,
+                        message: 'invalid request',
+                        responseBody:
+                            '{"error":{"message":"bad input near sk-live-123"}}',
+                    },
+                },
+            ],
+            {},
+            undefined,
+            'openai_compatible',
+        );
+
+        expect(entry.error).toBe(
+            'The provider (openai_compatible) refused the request for this model.',
+        );
+    });
 });

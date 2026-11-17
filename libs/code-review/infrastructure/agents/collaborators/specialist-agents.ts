@@ -3,7 +3,7 @@
  * entry per review, listing each lens. Built from how each lens ended and from
  * the findings of each that survived verify.
  */
-import { classifyLLMError } from '@libs/llm/error-classifier';
+import { classifyLLMError, LlmErrorCategory } from '@libs/llm/error-classifier';
 
 import type { HeavyLensOutcome } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import type { SpecialistAgentEntry } from '@libs/code-review/infrastructure/agents/review-agent.contract';
@@ -53,9 +53,13 @@ function lensErrorText(o: HeavyLensOutcome, provider?: string): string {
         errorStatus: o.error?.status,
         errorResponseBody: o.error?.responseBody,
     });
-    // Only the classified sentence: the provider's raw text can carry anything
-    // it echoed back, and this lands in the dashboard.
-    return classifyLLMError(error, provider).friendlyMessage || 'Failed';
+    // Never the provider's own text: it can carry anything it echoed back, and
+    // this lands in the dashboard. A refused request's sentence quotes it.
+    const classified = classifyLLMError(error, provider);
+    if (classified.category === LlmErrorCategory.REQUEST_REJECTED) {
+        return `The provider${provider ? ` (${provider})` : ''} refused the request for this model.`;
+    }
+    return classified.friendlyMessage || 'Failed';
 }
 
 /** Findings the lenses kept, to take out of the generalist's own count. */
