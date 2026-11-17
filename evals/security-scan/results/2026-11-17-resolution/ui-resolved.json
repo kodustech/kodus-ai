@@ -1,0 +1,9 @@
+{
+  "browserErrors": [],
+  "pages": {
+    "deep-scan": "D\nDeep scan resolution owner - team\nSearch\n⌘K\nReviews\nCockpit\nDeep scan\nALPHA\nRepositories\nAI providers\nCODE REVIEW\nGlobal\nGeneral\nRisk assessment\nRouting\nWhat to review\nKody Rules\nWhat Kody writes\nORGANIZATION\nStar\n1621\nNO PLAN\nChoose a plan\nCollapse\n<test-account>\nDeep scan\nAlpha\n\nFinds broken access control, injection, XSS, SSRF, data exposure, leaked secrets and unsafe settings in a repository's default branch, with your organization's model, within a spend limit if you set one.\n\nDeep scan is an experimental alpha, free on every plan while it is: it changes often, and some findings will not be exploitable. Check each before acting on it.\n\nScan history\n3\nRun deep scan\n\nkodustech/scan-e2e-1794869683954-vulnerable was scanned 4 minutes ago\n\n1 resolved · $0.11 of $0.5\n\nCritical\n0\nopen\nHigh\n0\nopen\nMedium\n0\nopen\nLow\n0\nopen\nFindings\nOpen0\nResolved1\nDismissed0\nAll1\n\nNo finding matches this filter.",
+    "issues": "D\nDeep scan resolution owner - team\nSearch\n⌘K\nReviews\nCockpit\nDeep scan\nALPHA\nRepositories\nAI providers\nCODE REVIEW\nGlobal\nGeneral\nRisk assessment\nRouting\nWhat to review\nKody Rules\nWhat Kody writes\nORGANIZATION\nStar\n1621\nNO PLAN\nChoose a plan\nCollapse\n<test-account>\n👋 Good morning!\nKodus Review\nDelivered as asked\nProductivity\nCode hotspots\nIssues\n0\nIssues\nFilters (1)\nShowing\n0\nof 1 issues\nAuto-create issues\n\nNo open issues. All 1 filed issue is resolved.\n\nShow resolved"
+  },
+  "issuesListShowsTarget": false,
+  "deepScanShowsResolved": true
+}

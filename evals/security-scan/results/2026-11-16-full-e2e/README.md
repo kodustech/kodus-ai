@@ -25,7 +25,7 @@ fixes the duplicated `@` in CODEOWNERS display, verified in Chromium.
 | Seven CLI list/filter/prompt/isolation cases | Pass | [CLI](cli.json) |
 | Two actual duplicate RabbitMQ deliveries | Pass | [Replay](replay.json): same inbox, issue/miss counter and spend |
 | Complete coverage of vulnerable/unchanged repository | Fail | Both retained one incomplete resource-exhaustion area |
-| Two complete scans after fixing the vulnerable code | Unvalidated | [Completion attempts](completion.json), [provider error](provider-failure.json) |
+| Two complete scans after fixing the vulnerable code | Unvalidated here; passed on 2026-11-17 | [Completion attempts](completion.json), [provider error](provider-failure.json), [2026-11-17 resolution](../2026-11-17-resolution/README.md) |
 
 The first scan created one reproducible issue for $0.148912968. The unchanged
 scan created zero, kept the same issue open and resolved zero for $0.081047364.

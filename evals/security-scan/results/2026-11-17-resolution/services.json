@@ -1,0 +1,36 @@
+{
+  "startedAt": "2026-11-17T11:10:28.627Z",
+  "sourceCommit": "50721715a554bcb15203ecea0e410c2fd06f8682",
+  "services": [
+    {
+      "name": "kodus_scan_e2e_api",
+      "id": "856cf2732bf668ade470ccc635f1ca4db0d90505aa81b2946ce4114705894de8",
+      "role": "api"
+    },
+    {
+      "name": "kodus_scan_e2e_relay",
+      "id": "33846a56296e4a953d56fcd42dd7892680ecbdfd60150c899601971f97cf74a6",
+      "role": "code-review"
+    },
+    {
+      "name": "kodus_scan_e2e_worker",
+      "id": "7cf042c8c382103dab61a2368bdb77ee61d238b81c0a288c2a13f4265cbf9aae",
+      "role": "security-scan"
+    },
+    {
+      "name": "kodus_scan_e2e_web",
+      "id": "c849a4d4f586b88aed9647fd9cce95c4588eb191ad550d34f25e9c5066bae48b",
+      "role": "web"
+    }
+  ],
+  "api": "http://127.0.0.1:48701",
+  "web": "http://127.0.0.1:48700",
+  "normalProductionEntrypoints": true,
+  "compiled": {
+    "api": "fc215fa4ccd809619d7b4854807184f3a7a091fb1af0986819164a34b19e76cf",
+    "worker": "8dad6e2047549dce5abe24386059c89813c6b07d68cdfd8728d3e05d6ff5234f"
+  },
+  "database": "kodus_scan_e2e_20261117",
+  "rabbitVhost": "kodus_scan_e2e_20261117",
+  "existingServicesReplaced": false
+}
