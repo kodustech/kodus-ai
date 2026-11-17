@@ -363,6 +363,12 @@ the eval executable/matcher, targets or cases.
 
 ## Contracts and scope
 
+The later [full-stack functional run](../2026-11-16-full-e2e/README.md) exercises
+real REST, NextAuth, PostgreSQL/outbox, RabbitMQ/inbox, Mongo, GitHub and E2B on
+the final backend. Its UI/CLI/isolation/budget checks pass, but partial coverage
+and a failed fixed-code scan prevent a passing two-clean-scan resolution proof.
+It does not supersede the failed or unmeasured quality results above.
+
 `contracts/` contains the E2B isolation result, validation logs, graph probe,
 and deliberate-failure probes. E2B actually executed the test; the separate
 network namespace blocked loopback, the shared proxy and external traffic,

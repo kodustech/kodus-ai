@@ -1,0 +1,1268 @@
+{
+  "at": "2026-11-17T10:48:03.739Z",
+  "jobs": [
+    {
+      "uuid": "b014ce6a-4dd6-411b-8e8f-bf9c1aa6a660",
+      "workflowType": "SECURITY_SCAN",
+      "status": "COMPLETED",
+      "currentStage": "DONE",
+      "retryCount": 0,
+      "lastError": null,
+      "createdAt": "2026-11-16T23:10:49.307Z",
+      "completedAt": "2026-11-16T23:17:52.945Z",
+      "scanId": "6afb8d79abab3ddb5c71b6ad"
+    },
+    {
+      "uuid": "0b802c1d-de38-4d66-a6d9-2d9c23edc8b2",
+      "workflowType": "SECURITY_SCAN",
+      "status": "COMPLETED",
+      "currentStage": "DONE",
+      "retryCount": 0,
+      "lastError": null,
+      "createdAt": "2026-11-16T23:22:57.885Z",
+      "completedAt": "2026-11-16T23:28:06.936Z",
+      "scanId": "6afb9051abab3ddb5c71b7bb"
+    },
+    {
+      "uuid": "1edcfa43-ecdf-4c1e-a78f-8fc0e7b4b7d2",
+      "workflowType": "SECURITY_SCAN",
+      "status": "COMPLETED",
+      "currentStage": "DONE",
+      "retryCount": 0,
+      "lastError": null,
+      "createdAt": "2026-11-16T23:28:08.929Z",
+      "completedAt": "2026-11-16T23:28:18.975Z",
+      "scanId": "6afb9188abab3ddb5c71b877"
+    },
+    {
+      "uuid": "a98cb6fb-83d2-412c-aef3-81120d9e9887",
+      "workflowType": "SECURITY_SCAN",
+      "status": "FAILED",
+      "currentStage": "SCANNING",
+      "retryCount": 0,
+      "lastError": "The scan could not finish examining any area. Findings and coverage are preserved; run it again to retry failed or incomplete areas.",
+      "createdAt": "2026-11-16T23:28:22.292Z",
+      "completedAt": null,
+      "scanId": "6afb9196abab3ddb5c71b88f"
+    },
+    {
+      "uuid": "46fd7258-7699-475f-88f1-142f167d24db",
+      "workflowType": "SECURITY_SCAN",
+      "status": "FAILED",
+      "currentStage": "SCANNING",
+      "retryCount": 0,
+      "lastError": "The scan could not finish examining any area. Findings and coverage are preserved; run it again to retry failed or incomplete areas.",
+      "createdAt": "2026-11-16T23:46:17.249Z",
+      "completedAt": null,
+      "scanId": "6afb95c9abab3ddb5c71b9e3"
+    }
+  ],
+  "outbox": [
+    {
+      "uuid": "eed09b13-e835-4bd6-af1b-3111a2010269",
+      "status": "SENT",
+      "attempts": 1,
+      "routingKey": "workflow.jobs.created.SECURITY_SCAN",
+      "processedAt": "2026-11-16T23:10:51.684Z",
+      "job_id": "b014ce6a-4dd6-411b-8e8f-bf9c1aa6a660"
+    },
+    {
+      "uuid": "c6f0eff6-1057-4ad3-96e4-58b522177505",
+      "status": "SENT",
+      "attempts": 1,
+      "routingKey": "workflow.jobs.created.SECURITY_SCAN",
+      "processedAt": "2026-11-16T23:22:58.247Z",
+      "job_id": "0b802c1d-de38-4d66-a6d9-2d9c23edc8b2"
+    },
+    {
+      "uuid": "1c0c810a-e99e-4298-a54a-f347d06be051",
+      "status": "SENT",
+      "attempts": 1,
+      "routingKey": "workflow.jobs.created.SECURITY_SCAN",
+      "processedAt": "2026-11-16T23:28:10.564Z",
+      "job_id": "1edcfa43-ecdf-4c1e-a78f-8fc0e7b4b7d2"
+    },
+    {
+      "uuid": "7ff386f9-f59c-4fd3-9ad0-f3ed626b5648",
+      "status": "SENT",
+      "attempts": 1,
+      "routingKey": "workflow.jobs.created.SECURITY_SCAN",
+      "processedAt": "2026-11-16T23:28:22.686Z",
+      "job_id": "a98cb6fb-83d2-412c-aef3-81120d9e9887"
+    },
+    {
+      "uuid": "8b561575-5aa1-4e99-b955-ad810a04a786",
+      "status": "SENT",
+      "attempts": 1,
+      "routingKey": "workflow.jobs.created.SECURITY_SCAN",
+      "processedAt": "2026-11-16T23:46:17.578Z",
+      "job_id": "46fd7258-7699-475f-88f1-142f167d24db"
+    }
+  ],
+  "inbox": [
+    {
+      "uuid": "0d146f9c-56f3-48b6-b919-b2116d9dcf8f",
+      "status": "PROCESSED",
+      "attempts": 1,
+      "consumerId": "workflow-job-consumer.security_scan",
+      "messageId": "eed09b13-e835-4bd6-af1b-3111a2010269",
+      "processedAt": "2026-11-16T23:17:52.955Z",
+      "job_id": "b014ce6a-4dd6-411b-8e8f-bf9c1aa6a660"
+    },
+    {
+      "uuid": "81c72cca-e867-46df-85e7-f41ed59ed3e1",
+      "status": "PROCESSED",
+      "attempts": 1,
+      "consumerId": "workflow-job-consumer.security_scan",
+      "messageId": "c6f0eff6-1057-4ad3-96e4-58b522177505",
+      "processedAt": "2026-11-16T23:28:06.946Z",
+      "job_id": "0b802c1d-de38-4d66-a6d9-2d9c23edc8b2"
+    },
+    {
+      "uuid": "178ebbb9-d2a2-4601-8ffa-93f502aaafff",
+      "status": "PROCESSED",
+      "attempts": 1,
+      "consumerId": "workflow-job-consumer.security_scan",
+      "messageId": "1c0c810a-e99e-4298-a54a-f347d06be051",
+      "processedAt": "2026-11-16T23:28:18.984Z",
+      "job_id": "1edcfa43-ecdf-4c1e-a78f-8fc0e7b4b7d2"
+    },
+    {
+      "uuid": "a6e5f9aa-bdb4-4915-8ed6-39bc406e91dd",
+      "status": "PROCESSED",
+      "attempts": 1,
+      "consumerId": "workflow-job-consumer.security_scan",
+      "messageId": "7ff386f9-f59c-4fd3-9ad0-f3ed626b5648",
+      "processedAt": "2026-11-16T23:46:15.383Z",
+      "job_id": "a98cb6fb-83d2-412c-aef3-81120d9e9887"
+    },
+    {
+      "uuid": "46b4768c-c7a8-4d4a-baf9-74e29683d946",
+      "status": "PROCESSED",
+      "attempts": 1,
+      "consumerId": "workflow-job-consumer.security_scan",
+      "messageId": "8b561575-5aa1-4e99-b955-ad810a04a786",
+      "processedAt": "2026-11-16T23:46:27.707Z",
+      "job_id": "46fd7258-7699-475f-88f1-142f167d24db"
+    }
+  ],
+  "scans": [
+    {
+      "_id": "6afb8d79abab3ddb5c71b6ad",
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "teamId": "fc399a06-24fc-4947-af20-0ff8c6ce7133",
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "fullName": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com",
+        "defaultBranch": "main"
+      },
+      "status": "completed",
+      "budget": {
+        "maxUsd": 1
+      },
+      "spend": {
+        "usd": 0.14891296799999995,
+        "inputTokens": 314053,
+        "outputTokens": 94992,
+        "requests": 59
+      },
+      "units": [
+        {
+          "id": "13e00d296f20c951",
+          "file": "src/server.js",
+          "relatedFiles": [
+            "package.json",
+            "test/lookup.test.js"
+          ],
+          "language": "typescript",
+          "classes": [
+            "authz",
+            "injection",
+            "misconfiguration",
+            "resource_exhaustion"
+          ],
+          "priority": 95,
+          "reasons": [
+            "Only externally reachable entry point in the candidate set (process entry guard at line 21). It is the server module, so it likely exposes routes or handlers that touch lookups or external data. Auditors should check for injection in query/command construction, missing authorization on reachable operations, insecure configuration or error exposure, and unbounded input leading to resource exhaustion."
+          ]
+        },
+        {
+          "id": "7030d0b2f71b999f",
+          "file": "package.json",
+          "relatedFiles": [
+            "src/server.js"
+          ],
+          "language": "unknown",
+          "classes": [
+            "misconfiguration"
+          ],
+          "priority": 25,
+          "reasons": [
+            "added by the planner: the pattern scan missed it",
+            "Dependency and script manifest for the server. It can reveal vulnerable dependencies, insecure start/test scripts, or engine/configuration choices that affect the only entry point; lower priority because it is not directly reachable from outside."
+          ]
+        }
+      ],
+      "progress": [
+        {
+          "unitId": "13e00d296f20c951",
+          "state": "failed",
+          "findings": 1,
+          "examinedByClass": [
+            {
+              "vulnerabilityClass": "authz",
+              "filePaths": [
+                "src/server.js"
+              ]
+            },
+            {
+              "vulnerabilityClass": "injection",
+              "filePaths": [
+                "src/server.js"
+              ]
+            },
+            {
+              "vulnerabilityClass": "misconfiguration",
+              "filePaths": [
+                "src/server.js"
+              ]
+            }
+          ],
+          "error": "not read to the end: resource_exhaustion"
+        },
+        {
+          "unitId": "7030d0b2f71b999f",
+          "state": "done",
+          "findings": 0,
+          "examinedByClass": [
+            {
+              "vulnerabilityClass": "misconfiguration",
+              "filePaths": [
+                "package.json"
+              ]
+            }
+          ]
+        }
+      ],
+      "reported": [
+        {
+          "fingerprint": "af4e782addadd0ea5b9b136662ef9d013eae6d61568d082fa7da3e3d3037e6e6",
+          "vulnerabilityClass": "authz",
+          "cwe": "CWE-78",
+          "title": "Unauthenticated RCE via host param in /lookup (shell command injection)",
+          "description": "Entry: src/server.js:15 (the GET /lookup handler reads url.searchParams.get('host') and passes it straight to lookupHost). Attacker: an unauthenticated network caller, crossing the boundary from an untrusted HTTP request into arbitrary OS command execution as the user running the server. The path is: line 12 parses req.url, line 13 only checks the pathname, line 15 reads the caller-controlled host parameter, line 6 forwards it to lookupHost, and line 7 concatenates it into 'getent hosts ' + host before passing the string to child_process.exec, which always runs the string through a shell (/bin/sh -c). Nothing on the path stops it: a repo-wide search finds no authentication, authorization, session, role, guard or middleware code at all, host is never validated, escaped or checked against an allow-list, URL query decoding leaves shell metacharacters such as ;, |, &&, $(), backticks and newlines intact, the '|| localhost' fallback only replaces missing or empty values, and exec (unlike execFile or spawn without a shell) invokes a shell by design. A request such as /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd) executes arbitrary commands, and lines 16-17 return the command stdout inside the JSON body, so the attacker reads the output directly. Impact: unauthenticated remote code execution on the server host, enabling file and credential theft, access to internal networks, and full machine compromise. Fix: replace exec with execFile('getent', ['hosts', host]) so no shell is involved, validate host against a strict hostname/IP allow-list, and require authentication plus an authorization check before the lookup runs (or bind the listener to loopback).",
+          "severity": "critical",
+          "filePath": "src/server.js",
+          "startLine": 7,
+          "endLine": 7,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "Entry: unauthenticated HTTP request is parsed; req.url becomes a URL object."
+            },
+            {
+              "file": "src/server.js",
+              "line": 13,
+              "note": "Only the pathname is checked; no authentication, authorization or rate limiting exists anywhere on this route."
+            },
+            {
+              "file": "src/server.js",
+              "line": 15,
+              "note": "The caller-controlled query parameter host is read from url.searchParams and passed to lookupHost unchanged (URL decoding leaves ;, |, &&, $(), backticks and newlines intact); the '|| localhost' fallback only covers missing/empty values."
+            },
+            {
+              "file": "src/server.js",
+              "line": 6,
+              "note": "lookupHost forwards the untrusted host string without validation, escaping or allow-list check."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "String concatenation into 'getent hosts ' + host, handed to child_process.exec, which always runs through a shell (/bin/sh -c) — arbitrary OS command execution, e.g. /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd)."
+            },
+            {
+              "file": "src/server.js",
+              "line": 17,
+              "note": "Command stdout is returned in the JSON response body, giving the attacker direct read-back of executed command output."
+            }
+          ]
+        }
+      ],
+      "modelName": "openai_compatible:accounts/fireworks/models/deepseek-v4p1-flash",
+      "createdAt": "2026-11-16T23:10:49.298Z",
+      "updatedAt": "2026-11-16T23:17:52.637Z",
+      "__v": 0,
+      "startedAt": "2026-11-16T23:10:51.730Z",
+      "commitSha": "231a8815832ca83c0c58092f9441077909773d0c",
+      "coverage": {
+        "examinedFiles": [
+          "src/server.js",
+          "package.json",
+          "test/lookup.test.js"
+        ],
+        "examinedByClass": [
+          {
+            "vulnerabilityClass": "authz",
+            "filePaths": [
+              "src/server.js"
+            ]
+          },
+          {
+            "vulnerabilityClass": "injection",
+            "filePaths": [
+              "src/server.js"
+            ]
+          },
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "src/server.js",
+              "package.json"
+            ]
+          }
+        ],
+        "inheritedExaminedByClass": [],
+        "unitsTotal": 2,
+        "unitsDone": 1,
+        "unitsFailed": 1,
+        "unitsSkippedByBudget": 0,
+        "languages": [
+          "typescript"
+        ],
+        "mapFailedLanguages": [],
+        "filesBeyondPlan": 0
+      },
+      "outcome": {
+        "created": 1,
+        "stillOpen": 0,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "finishedAt": "2026-11-16T23:17:52.637Z"
+    },
+    {
+      "_id": "6afb9051abab3ddb5c71b7bb",
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "teamId": "fc399a06-24fc-4947-af20-0ff8c6ce7133",
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "fullName": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com",
+        "defaultBranch": "main"
+      },
+      "status": "completed",
+      "budget": {
+        "maxUsd": 0.5
+      },
+      "spend": {
+        "usd": 0.08104736399999998,
+        "inputTokens": 225533,
+        "outputTokens": 51837,
+        "requests": 45
+      },
+      "planCommitSha": "231a8815832ca83c0c58092f9441077909773d0c",
+      "units": [
+        {
+          "id": "13e00d296f20c951",
+          "file": "src/server.js",
+          "relatedFiles": [
+            "package.json",
+            "test/lookup.test.js"
+          ],
+          "language": "typescript",
+          "classes": [
+            "authz",
+            "injection",
+            "misconfiguration",
+            "resource_exhaustion"
+          ],
+          "priority": 95,
+          "reasons": [
+            "Only externally reachable entry point in the candidate set (process entry guard at line 21). It is the server module, so it likely exposes routes or handlers that touch lookups or external data. Auditors should check for injection in query/command construction, missing authorization on reachable operations, insecure configuration or error exposure, and unbounded input leading to resource exhaustion."
+          ]
+        },
+        {
+          "id": "7030d0b2f71b999f",
+          "file": "package.json",
+          "relatedFiles": [
+            "src/server.js"
+          ],
+          "language": "unknown",
+          "classes": [
+            "misconfiguration"
+          ],
+          "priority": 25,
+          "reasons": [
+            "added by the planner: the pattern scan missed it",
+            "Dependency and script manifest for the server. It can reveal vulnerable dependencies, insecure start/test scripts, or engine/configuration choices that affect the only entry point; lower priority because it is not directly reachable from outside."
+          ]
+        }
+      ],
+      "progress": [
+        {
+          "unitId": "13e00d296f20c951",
+          "state": "failed",
+          "findings": 0,
+          "examinedByClass": [
+            {
+              "vulnerabilityClass": "authz",
+              "filePaths": [
+                "src/server.js"
+              ]
+            },
+            {
+              "vulnerabilityClass": "injection",
+              "filePaths": [
+                "src/server.js"
+              ]
+            },
+            {
+              "vulnerabilityClass": "misconfiguration",
+              "filePaths": [
+                "src/server.js"
+              ]
+            }
+          ],
+          "error": "not read to the end: resource_exhaustion"
+        },
+        {
+          "unitId": "7030d0b2f71b999f",
+          "state": "done",
+          "findings": 0,
+          "examinedByClass": [
+            {
+              "vulnerabilityClass": "misconfiguration",
+              "filePaths": [
+                "package.json"
+              ]
+            }
+          ]
+        }
+      ],
+      "reported": [
+        {
+          "fingerprint": "af4e782addadd0ea5b9b136662ef9d013eae6d61568d082fa7da3e3d3037e6e6",
+          "vulnerabilityClass": "authz",
+          "cwe": "CWE-78",
+          "title": "Unauthenticated RCE via host param in /lookup (shell command injection)",
+          "description": "Entry: src/server.js:15 (the GET /lookup handler reads url.searchParams.get('host') and passes it straight to lookupHost). Attacker: an unauthenticated network caller, crossing the boundary from an untrusted HTTP request into arbitrary OS command execution as the user running the server. The path is: line 12 parses req.url, line 13 only checks the pathname, line 15 reads the caller-controlled host parameter, line 6 forwards it to lookupHost, and line 7 concatenates it into 'getent hosts ' + host before passing the string to child_process.exec, which always runs the string through a shell (/bin/sh -c). Nothing on the path stops it: a repo-wide search finds no authentication, authorization, session, role, guard or middleware code at all, host is never validated, escaped or checked against an allow-list, URL query decoding leaves shell metacharacters such as ;, |, &&, $(), backticks and newlines intact, the '|| localhost' fallback only replaces missing or empty values, and exec (unlike execFile or spawn without a shell) invokes a shell by design. A request such as /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd) executes arbitrary commands, and lines 16-17 return the command stdout inside the JSON body, so the attacker reads the output directly. Impact: unauthenticated remote code execution on the server host, enabling file and credential theft, access to internal networks, and full machine compromise. Fix: replace exec with execFile('getent', ['hosts', host]) so no shell is involved, validate host against a strict hostname/IP allow-list, and require authentication plus an authorization check before the lookup runs (or bind the listener to loopback).",
+          "severity": "critical",
+          "filePath": "src/server.js",
+          "startLine": 7,
+          "endLine": 7,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "Entry: unauthenticated HTTP request is parsed; req.url becomes a URL object."
+            },
+            {
+              "file": "src/server.js",
+              "line": 13,
+              "note": "Only the pathname is checked; no authentication, authorization or rate limiting exists anywhere on this route."
+            },
+            {
+              "file": "src/server.js",
+              "line": 15,
+              "note": "The caller-controlled query parameter host is read from url.searchParams and passed to lookupHost unchanged (URL decoding leaves ;, |, &&, $(), backticks and newlines intact); the '|| localhost' fallback only covers missing/empty values."
+            },
+            {
+              "file": "src/server.js",
+              "line": 6,
+              "note": "lookupHost forwards the untrusted host string without validation, escaping or allow-list check."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "String concatenation into 'getent hosts ' + host, handed to child_process.exec, which always runs through a shell (/bin/sh -c) — arbitrary OS command execution, e.g. /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd)."
+            },
+            {
+              "file": "src/server.js",
+              "line": 17,
+              "note": "Command stdout is returned in the JSON response body, giving the attacker direct read-back of executed command output."
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "examinedFiles": [
+          "src/server.js",
+          "package.json",
+          "test/lookup.test.js"
+        ],
+        "examinedByClass": [
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "package.json",
+              "src/server.js"
+            ]
+          },
+          {
+            "vulnerabilityClass": "authz",
+            "filePaths": [
+              "src/server.js"
+            ]
+          },
+          {
+            "vulnerabilityClass": "injection",
+            "filePaths": [
+              "src/server.js"
+            ]
+          }
+        ],
+        "inheritedExaminedByClass": [
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "package.json"
+            ]
+          }
+        ],
+        "unitsTotal": 2,
+        "unitsDone": 1,
+        "unitsFailed": 1,
+        "unitsSkippedByBudget": 0,
+        "languages": [
+          "typescript"
+        ],
+        "mapFailedLanguages": [],
+        "filesBeyondPlan": 0
+      },
+      "modelName": "openai_compatible:accounts/fireworks/models/deepseek-v4p1-flash",
+      "createdAt": "2026-11-16T23:22:57.823Z",
+      "updatedAt": "2026-11-16T23:28:06.774Z",
+      "__v": 0,
+      "startedAt": "2026-11-16T23:22:58.269Z",
+      "commitSha": "231a8815832ca83c0c58092f9441077909773d0c",
+      "outcome": {
+        "created": 0,
+        "stillOpen": 1,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "finishedAt": "2026-11-16T23:28:06.774Z"
+    },
+    {
+      "_id": "6afb9188abab3ddb5c71b877",
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "teamId": "fc399a06-24fc-4947-af20-0ff8c6ce7133",
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "fullName": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com",
+        "defaultBranch": "main"
+      },
+      "status": "stopped_by_budget",
+      "budget": {
+        "maxTokens": 1
+      },
+      "spend": {
+        "usd": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "requests": 0
+      },
+      "planCommitSha": "231a8815832ca83c0c58092f9441077909773d0c",
+      "units": [
+        {
+          "id": "13e00d296f20c951",
+          "file": "src/server.js",
+          "relatedFiles": [
+            "package.json",
+            "test/lookup.test.js"
+          ],
+          "language": "typescript",
+          "classes": [
+            "authz",
+            "injection",
+            "misconfiguration",
+            "resource_exhaustion"
+          ],
+          "priority": 95,
+          "reasons": [
+            "Only externally reachable entry point in the candidate set (process entry guard at line 21). It is the server module, so it likely exposes routes or handlers that touch lookups or external data. Auditors should check for injection in query/command construction, missing authorization on reachable operations, insecure configuration or error exposure, and unbounded input leading to resource exhaustion."
+          ]
+        },
+        {
+          "id": "7030d0b2f71b999f",
+          "file": "package.json",
+          "relatedFiles": [
+            "src/server.js"
+          ],
+          "language": "unknown",
+          "classes": [
+            "misconfiguration"
+          ],
+          "priority": 25,
+          "reasons": [
+            "added by the planner: the pattern scan missed it",
+            "Dependency and script manifest for the server. It can reveal vulnerable dependencies, insecure start/test scripts, or engine/configuration choices that affect the only entry point; lower priority because it is not directly reachable from outside."
+          ]
+        }
+      ],
+      "progress": [
+        {
+          "unitId": "13e00d296f20c951",
+          "state": "skipped_budget",
+          "findings": 0
+        },
+        {
+          "unitId": "7030d0b2f71b999f",
+          "state": "done",
+          "findings": 0,
+          "examinedByClass": [
+            {
+              "vulnerabilityClass": "misconfiguration",
+              "filePaths": [
+                "package.json"
+              ]
+            }
+          ]
+        }
+      ],
+      "reported": [
+        {
+          "fingerprint": "af4e782addadd0ea5b9b136662ef9d013eae6d61568d082fa7da3e3d3037e6e6",
+          "vulnerabilityClass": "authz",
+          "cwe": "CWE-78",
+          "title": "Unauthenticated RCE via host param in /lookup (shell command injection)",
+          "description": "Entry: src/server.js:15 (the GET /lookup handler reads url.searchParams.get('host') and passes it straight to lookupHost). Attacker: an unauthenticated network caller, crossing the boundary from an untrusted HTTP request into arbitrary OS command execution as the user running the server. The path is: line 12 parses req.url, line 13 only checks the pathname, line 15 reads the caller-controlled host parameter, line 6 forwards it to lookupHost, and line 7 concatenates it into 'getent hosts ' + host before passing the string to child_process.exec, which always runs the string through a shell (/bin/sh -c). Nothing on the path stops it: a repo-wide search finds no authentication, authorization, session, role, guard or middleware code at all, host is never validated, escaped or checked against an allow-list, URL query decoding leaves shell metacharacters such as ;, |, &&, $(), backticks and newlines intact, the '|| localhost' fallback only replaces missing or empty values, and exec (unlike execFile or spawn without a shell) invokes a shell by design. A request such as /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd) executes arbitrary commands, and lines 16-17 return the command stdout inside the JSON body, so the attacker reads the output directly. Impact: unauthenticated remote code execution on the server host, enabling file and credential theft, access to internal networks, and full machine compromise. Fix: replace exec with execFile('getent', ['hosts', host]) so no shell is involved, validate host against a strict hostname/IP allow-list, and require authentication plus an authorization check before the lookup runs (or bind the listener to loopback).",
+          "severity": "critical",
+          "filePath": "src/server.js",
+          "startLine": 7,
+          "endLine": 7,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "Entry: unauthenticated HTTP request is parsed; req.url becomes a URL object."
+            },
+            {
+              "file": "src/server.js",
+              "line": 13,
+              "note": "Only the pathname is checked; no authentication, authorization or rate limiting exists anywhere on this route."
+            },
+            {
+              "file": "src/server.js",
+              "line": 15,
+              "note": "The caller-controlled query parameter host is read from url.searchParams and passed to lookupHost unchanged (URL decoding leaves ;, |, &&, $(), backticks and newlines intact); the '|| localhost' fallback only covers missing/empty values."
+            },
+            {
+              "file": "src/server.js",
+              "line": 6,
+              "note": "lookupHost forwards the untrusted host string without validation, escaping or allow-list check."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "String concatenation into 'getent hosts ' + host, handed to child_process.exec, which always runs through a shell (/bin/sh -c) — arbitrary OS command execution, e.g. /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd)."
+            },
+            {
+              "file": "src/server.js",
+              "line": 17,
+              "note": "Command stdout is returned in the JSON response body, giving the attacker direct read-back of executed command output."
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "examinedFiles": [],
+        "examinedByClass": [
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "package.json"
+            ]
+          }
+        ],
+        "inheritedExaminedByClass": [
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "package.json"
+            ]
+          }
+        ],
+        "unitsTotal": 2,
+        "unitsDone": 1,
+        "unitsFailed": 0,
+        "unitsSkippedByBudget": 1,
+        "languages": [
+          "typescript"
+        ],
+        "mapFailedLanguages": [],
+        "filesBeyondPlan": 0
+      },
+      "modelName": "openai_compatible:accounts/fireworks/models/deepseek-v4p1-flash",
+      "createdAt": "2026-11-16T23:28:08.926Z",
+      "updatedAt": "2026-11-16T23:28:18.832Z",
+      "__v": 0,
+      "startedAt": "2026-11-16T23:28:10.583Z",
+      "commitSha": "231a8815832ca83c0c58092f9441077909773d0c",
+      "outcome": {
+        "created": 0,
+        "stillOpen": 1,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "finishedAt": "2026-11-16T23:28:18.832Z"
+    },
+    {
+      "_id": "6afb9196abab3ddb5c71b88f",
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "teamId": "fc399a06-24fc-4947-af20-0ff8c6ce7133",
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "fullName": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com",
+        "defaultBranch": "main"
+      },
+      "status": "failed",
+      "budget": {
+        "maxUsd": 0.5
+      },
+      "spend": {
+        "usd": 0.2781409919999999,
+        "inputTokens": 512001,
+        "outputTokens": 190975,
+        "requests": 70
+      },
+      "planCommitSha": "231a8815832ca83c0c58092f9441077909773d0c",
+      "units": [
+        {
+          "id": "13e00d296f20c951",
+          "file": "src/server.js",
+          "relatedFiles": [
+            "test/lookup.test.js",
+            "package.json"
+          ],
+          "language": "typescript",
+          "classes": [
+            "authz",
+            "injection",
+            "ssrf",
+            "misconfiguration",
+            "resource_exhaustion"
+          ],
+          "priority": 90,
+          "reasons": [
+            "Only externally reachable entry point in the repo (line 22 guards direct execution, so it is the runnable HTTP/service entry). It is the sole non-test source file, so any route/handler, auth check and dangerous operation the pattern scan found lives here. Injection is plausible for a 'lookup' endpoint whose test file (test/lookup.test.js) indicates user-controlled input flows into a lookup/query path; if the lookup is network- or DNS-based, that same input makes SSRF plausible. Authz is flagged because the scan found an entry point but no authentication checks, so any privileged operation may be reachable unauthenticated. Resource exhaustion is plausible for an unbounded lookup loop/query. Misconfiguration is flagged because startup/configuration (port, bind address, debug flags) appears to be handled inline in this same module rather than a separate settings/factory module."
+          ]
+        }
+      ],
+      "progress": [
+        {
+          "unitId": "13e00d296f20c951",
+          "state": "failed",
+          "findings": 2,
+          "examinedByClass": [
+            {
+              "vulnerabilityClass": "authz",
+              "filePaths": [
+                "src/server.js"
+              ]
+            },
+            {
+              "vulnerabilityClass": "injection",
+              "filePaths": [
+                "src/server.js"
+              ]
+            },
+            {
+              "vulnerabilityClass": "ssrf",
+              "filePaths": [
+                "src/server.js"
+              ]
+            }
+          ],
+          "error": "not read to the end: misconfiguration, resource_exhaustion"
+        }
+      ],
+      "reported": [
+        {
+          "fingerprint": "10902d4589d050100c2ec4ff23f8324da4708dd88de233fa4df3517c111f99e6",
+          "vulnerabilityClass": "authz",
+          "cwe": "CWE-306",
+          "title": "Unauthenticated /lookup endpoint lets any network caller drive server-side host lookups",
+          "description": "Entry: src/server.js:14\nAttacker: an unauthenticated remote caller who can reach the listening port, crossing the authentication/authorization boundary of the service's privileged server-side lookup operation — the handler runs a host-resolution command for anyone who connects, with no credential, role, tenant or ownership check anywhere in the code.\nPath: GET /lookup?host=<value> reaches the createServer callback (src/server.js:12); line 14 only compares url.pathname to '/lookup'; line 16 reads the caller-controlled host parameter (defaulting to 'localhost' when absent) and passes it directly to lookupHost; lookupHost applies only the character-class regex at line 7 and then executes execAsync('getent', ['hosts', host]) at line 8, returning the command's stdout to the caller at lines 17-18.\nWhy nothing on the path stops it: the service contains no authentication or authorization logic at all — no token/cookie/header check, no caller allow-list, no role or ownership check — and the only rejection branch (404) applies to paths other than /lookup. The regex at line 7 validates the shape of the string, not who sent it, and the server is started with listen(Number(process.env.PORT || 3000)) at line 23 without a bind address, so Node listens on all interfaces and the unauthenticated endpoint is reachable from the network by default; there is also no rate limit constraining the caller.\nImpact for this application: any unauthenticated network user can drive the server's own host/DNS resolution as a proxy — enumerate internal hostnames that resolve from the server's network position, read back the resolved addresses (and the server's hosts database), force DNS traffic to originate from the server (blind SSRF), and spawn one getent process per request (2s timeout, no throttling) for a cheap denial of service against the service host.\nFix: require authentication and authorization before handling /lookup (reject requests without a valid credential prior to reading host), bind the listener to loopback or a protected interface if the endpoint is internal-only, and reject host values with a leading '-' so the value cannot be interpreted as a getent option.",
+          "severity": "high",
+          "filePath": "src/server.js",
+          "startLine": 14,
+          "endLine": 16,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "createServer callback accepts every incoming request with no credential, token, role or ownership check anywhere."
+            },
+            {
+              "file": "src/server.js",
+              "line": 14,
+              "note": "The only gate is a pathname comparison to '/lookup'; any other path 404s, but /lookup passes straight through."
+            },
+            {
+              "file": "src/server.js",
+              "line": 16,
+              "note": "Caller-controlled 'host' query parameter (defaulting to 'localhost') is read and handed to lookupHost."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "Only a character-class regex validates the string shape, not the caller's identity or entitlement."
+            },
+            {
+              "file": "src/server.js",
+              "line": 8,
+              "note": "execFile('getent', ['hosts', host]) runs the privileged server-side lookup on the attacker's behalf."
+            },
+            {
+              "file": "src/server.js",
+              "line": 18,
+              "note": "Command stdout (resolved addresses / hosts database entries) is returned to the unauthenticated caller."
+            },
+            {
+              "file": "src/server.js",
+              "line": 23,
+              "note": "listen() without a bind address exposes the endpoint on all interfaces by default; no rate limit constrains repeated getent process spawns."
+            }
+          ]
+        },
+        {
+          "fingerprint": "af4e782addadd0ea5b9b136662ef9d013eae6d61568d082fa7da3e3d3037e6e6",
+          "vulnerabilityClass": "injection",
+          "cwe": "CWE-78",
+          "title": "Option injection in getent lookup leaks /etc/hosts to unauthenticated clients",
+          "description": "Entry: src/server.js:16 (handler at src/server.js:12-14; the only route is GET /lookup?host=..., and there is no authentication or authorization check anywhere in the file).\nAttacker: an unauthenticated network client that can reach the port (createLookupServer().listen(...) at line 23 binds all interfaces), crossing the boundary that the caller's value is a hostname to be looked up rather than an option for the program the server spawns.\nPath: line 13 parses req.url, line 16 takes url.searchParams.get('host'), line 7 is the only validation (/^[a-zA-Z0-9._:-]{1,253}$/), and line 8 hands the value straight into the child process argv: execAsync('getent', ['hosts', host], ...).\nWhy nothing stops it: the allow-list still permits a value that begins with '-' (the hyphen is the final member of the character class, so it is literal and legal in any position), and the argv contains no '--' terminator, so getent's getopt_long parses the caller's value as an option instead of the lookup key. ?host=-- ends option parsing and leaves no key, so glibc's getent enumerates the entire hosts database (sethostent/gethostent loop) and line 18 returns every entry of the server's /etc/hosts, i.e. internal hostnames and their IP addresses, to the caller; ?host=--help, ?host=--version, ?host=-4, ?host=-6, ?host=-i, ?host=-w and ?host=-a are likewise consumed as options and change the mode of the invoked tool. No shell is involved, so shell metacharacters are irrelevant here, but nothing rejects a leading hyphen, no '--' is inserted, and the route requires no credentials.\nImpact: an outsider with no account obtains server-local host data (the hosts table, i.e. an internal name-to-address map) and can force the lookup tool into modes it was never meant to expose, which is direct internal-network reconnaissance from the server's own network position; the same value also drives the server's resolver, so internal-only names resolve from inside and their addresses come back.\nFix: pass the terminator and constrain the first character, e.g. execAsync('getent', ['hosts', '--', host], ...) together with a check such as /^(?![.-])[a-zA-Z0-9._:-]{1,253}$/, and preferably drop the subprocess entirely in favour of dns.lookup/net.isIP so no option parsing can occur.",
+          "severity": "medium",
+          "filePath": "src/server.js",
+          "startLine": 7,
+          "endLine": 8,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 23,
+              "note": "Server listens on all interfaces with no authentication anywhere in the file, so any network client can reach the route."
+            },
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "Request handler for the only route has no auth/authz check; req.url is parsed and passed straight through."
+            },
+            {
+              "file": "src/server.js",
+              "line": 16,
+              "note": "Attacker-controlled query parameter host=... is taken from the URL and handed to lookupHost."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "The only validation, /^[a-zA-Z0-9._:-]{1,253}$/, permits a leading '-' because the hyphen is a literal member of the class."
+            },
+            {
+              "file": "src/server.js",
+              "line": 8,
+              "note": "Value is placed in the child process argv without a '--' terminator: execFile('getent', ['hosts', host]). getent's getopt_long treats it as an option, so '--' enumerates the whole hosts database (returned at line 18) and --help/--version/-4/-6/-i/-w/-a change the tool's mode."
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "inheritedExaminedByClass": [],
+        "examinedFiles": [
+          "src/server.js"
+        ],
+        "unitsTotal": 1,
+        "unitsDone": 0,
+        "unitsFailed": 1,
+        "unitsSkippedByBudget": 0,
+        "languages": [
+          "typescript"
+        ],
+        "examinedByClass": [
+          {
+            "vulnerabilityClass": "authz",
+            "filePaths": [
+              "src/server.js"
+            ]
+          },
+          {
+            "vulnerabilityClass": "injection",
+            "filePaths": [
+              "src/server.js"
+            ]
+          },
+          {
+            "vulnerabilityClass": "ssrf",
+            "filePaths": [
+              "src/server.js"
+            ]
+          }
+        ]
+      },
+      "modelName": "openai_compatible:accounts/fireworks/models/deepseek-v4p1-flash",
+      "createdAt": "2026-11-16T23:28:22.290Z",
+      "updatedAt": "2026-11-16T23:46:15.234Z",
+      "__v": 0,
+      "startedAt": "2026-11-16T23:28:22.703Z",
+      "commitSha": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "outcome": {
+        "created": 1,
+        "stillOpen": 1,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "error": "The scan could not finish examining any area. Findings and coverage are preserved; run it again to retry failed or incomplete areas.",
+      "finishedAt": "2026-11-16T23:46:15.233Z"
+    },
+    {
+      "_id": "6afb95c9abab3ddb5c71b9e3",
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "teamId": "fc399a06-24fc-4947-af20-0ff8c6ce7133",
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "fullName": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com",
+        "defaultBranch": "main"
+      },
+      "status": "failed",
+      "budget": {
+        "maxUsd": 0.5
+      },
+      "spend": {
+        "usd": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "requests": 0
+      },
+      "planCommitSha": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "units": [
+        {
+          "id": "13e00d296f20c951",
+          "file": "src/server.js",
+          "relatedFiles": [
+            "test/lookup.test.js",
+            "package.json"
+          ],
+          "language": "typescript",
+          "classes": [
+            "authz",
+            "injection",
+            "ssrf",
+            "misconfiguration",
+            "resource_exhaustion"
+          ],
+          "priority": 90,
+          "reasons": [
+            "Only externally reachable entry point in the repo (line 22 guards direct execution, so it is the runnable HTTP/service entry). It is the sole non-test source file, so any route/handler, auth check and dangerous operation the pattern scan found lives here. Injection is plausible for a 'lookup' endpoint whose test file (test/lookup.test.js) indicates user-controlled input flows into a lookup/query path; if the lookup is network- or DNS-based, that same input makes SSRF plausible. Authz is flagged because the scan found an entry point but no authentication checks, so any privileged operation may be reachable unauthenticated. Resource exhaustion is plausible for an unbounded lookup loop/query. Misconfiguration is flagged because startup/configuration (port, bind address, debug flags) appears to be handled inline in this same module rather than a separate settings/factory module."
+          ]
+        }
+      ],
+      "progress": [
+        {
+          "unitId": "13e00d296f20c951",
+          "state": "failed",
+          "findings": 0,
+          "examinedByClass": [],
+          "error": "every lens failed"
+        }
+      ],
+      "reported": [
+        {
+          "fingerprint": "10902d4589d050100c2ec4ff23f8324da4708dd88de233fa4df3517c111f99e6",
+          "vulnerabilityClass": "authz",
+          "cwe": "CWE-306",
+          "title": "Unauthenticated /lookup endpoint lets any network caller drive server-side host lookups",
+          "description": "Entry: src/server.js:14\nAttacker: an unauthenticated remote caller who can reach the listening port, crossing the authentication/authorization boundary of the service's privileged server-side lookup operation — the handler runs a host-resolution command for anyone who connects, with no credential, role, tenant or ownership check anywhere in the code.\nPath: GET /lookup?host=<value> reaches the createServer callback (src/server.js:12); line 14 only compares url.pathname to '/lookup'; line 16 reads the caller-controlled host parameter (defaulting to 'localhost' when absent) and passes it directly to lookupHost; lookupHost applies only the character-class regex at line 7 and then executes execAsync('getent', ['hosts', host]) at line 8, returning the command's stdout to the caller at lines 17-18.\nWhy nothing on the path stops it: the service contains no authentication or authorization logic at all — no token/cookie/header check, no caller allow-list, no role or ownership check — and the only rejection branch (404) applies to paths other than /lookup. The regex at line 7 validates the shape of the string, not who sent it, and the server is started with listen(Number(process.env.PORT || 3000)) at line 23 without a bind address, so Node listens on all interfaces and the unauthenticated endpoint is reachable from the network by default; there is also no rate limit constraining the caller.\nImpact for this application: any unauthenticated network user can drive the server's own host/DNS resolution as a proxy — enumerate internal hostnames that resolve from the server's network position, read back the resolved addresses (and the server's hosts database), force DNS traffic to originate from the server (blind SSRF), and spawn one getent process per request (2s timeout, no throttling) for a cheap denial of service against the service host.\nFix: require authentication and authorization before handling /lookup (reject requests without a valid credential prior to reading host), bind the listener to loopback or a protected interface if the endpoint is internal-only, and reject host values with a leading '-' so the value cannot be interpreted as a getent option.",
+          "severity": "high",
+          "filePath": "src/server.js",
+          "startLine": 14,
+          "endLine": 16,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "createServer callback accepts every incoming request with no credential, token, role or ownership check anywhere."
+            },
+            {
+              "file": "src/server.js",
+              "line": 14,
+              "note": "The only gate is a pathname comparison to '/lookup'; any other path 404s, but /lookup passes straight through."
+            },
+            {
+              "file": "src/server.js",
+              "line": 16,
+              "note": "Caller-controlled 'host' query parameter (defaulting to 'localhost') is read and handed to lookupHost."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "Only a character-class regex validates the string shape, not the caller's identity or entitlement."
+            },
+            {
+              "file": "src/server.js",
+              "line": 8,
+              "note": "execFile('getent', ['hosts', host]) runs the privileged server-side lookup on the attacker's behalf."
+            },
+            {
+              "file": "src/server.js",
+              "line": 18,
+              "note": "Command stdout (resolved addresses / hosts database entries) is returned to the unauthenticated caller."
+            },
+            {
+              "file": "src/server.js",
+              "line": 23,
+              "note": "listen() without a bind address exposes the endpoint on all interfaces by default; no rate limit constrains repeated getent process spawns."
+            }
+          ]
+        },
+        {
+          "fingerprint": "af4e782addadd0ea5b9b136662ef9d013eae6d61568d082fa7da3e3d3037e6e6",
+          "vulnerabilityClass": "injection",
+          "cwe": "CWE-78",
+          "title": "Option injection in getent lookup leaks /etc/hosts to unauthenticated clients",
+          "description": "Entry: src/server.js:16 (handler at src/server.js:12-14; the only route is GET /lookup?host=..., and there is no authentication or authorization check anywhere in the file).\nAttacker: an unauthenticated network client that can reach the port (createLookupServer().listen(...) at line 23 binds all interfaces), crossing the boundary that the caller's value is a hostname to be looked up rather than an option for the program the server spawns.\nPath: line 13 parses req.url, line 16 takes url.searchParams.get('host'), line 7 is the only validation (/^[a-zA-Z0-9._:-]{1,253}$/), and line 8 hands the value straight into the child process argv: execAsync('getent', ['hosts', host], ...).\nWhy nothing stops it: the allow-list still permits a value that begins with '-' (the hyphen is the final member of the character class, so it is literal and legal in any position), and the argv contains no '--' terminator, so getent's getopt_long parses the caller's value as an option instead of the lookup key. ?host=-- ends option parsing and leaves no key, so glibc's getent enumerates the entire hosts database (sethostent/gethostent loop) and line 18 returns every entry of the server's /etc/hosts, i.e. internal hostnames and their IP addresses, to the caller; ?host=--help, ?host=--version, ?host=-4, ?host=-6, ?host=-i, ?host=-w and ?host=-a are likewise consumed as options and change the mode of the invoked tool. No shell is involved, so shell metacharacters are irrelevant here, but nothing rejects a leading hyphen, no '--' is inserted, and the route requires no credentials.\nImpact: an outsider with no account obtains server-local host data (the hosts table, i.e. an internal name-to-address map) and can force the lookup tool into modes it was never meant to expose, which is direct internal-network reconnaissance from the server's own network position; the same value also drives the server's resolver, so internal-only names resolve from inside and their addresses come back.\nFix: pass the terminator and constrain the first character, e.g. execAsync('getent', ['hosts', '--', host], ...) together with a check such as /^(?![.-])[a-zA-Z0-9._:-]{1,253}$/, and preferably drop the subprocess entirely in favour of dns.lookup/net.isIP so no option parsing can occur.",
+          "severity": "medium",
+          "filePath": "src/server.js",
+          "startLine": 7,
+          "endLine": 8,
+          "attackPath": [
+            {
+              "file": "src/server.js",
+              "line": 23,
+              "note": "Server listens on all interfaces with no authentication anywhere in the file, so any network client can reach the route."
+            },
+            {
+              "file": "src/server.js",
+              "line": 12,
+              "note": "Request handler for the only route has no auth/authz check; req.url is parsed and passed straight through."
+            },
+            {
+              "file": "src/server.js",
+              "line": 16,
+              "note": "Attacker-controlled query parameter host=... is taken from the URL and handed to lookupHost."
+            },
+            {
+              "file": "src/server.js",
+              "line": 7,
+              "note": "The only validation, /^[a-zA-Z0-9._:-]{1,253}$/, permits a leading '-' because the hyphen is a literal member of the class."
+            },
+            {
+              "file": "src/server.js",
+              "line": 8,
+              "note": "Value is placed in the child process argv without a '--' terminator: execFile('getent', ['hosts', host]). getent's getopt_long treats it as an option, so '--' enumerates the whole hosts database (returned at line 18) and --help/--version/-4/-6/-i/-w/-a change the tool's mode."
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "examinedFiles": [],
+        "examinedByClass": [],
+        "inheritedExaminedByClass": [],
+        "unitsTotal": 1,
+        "unitsDone": 0,
+        "unitsFailed": 1,
+        "unitsSkippedByBudget": 0,
+        "languages": [
+          "typescript"
+        ],
+        "mapFailedLanguages": [],
+        "filesBeyondPlan": 0
+      },
+      "modelName": "anthropic:claude-haiku-4-5-20251001",
+      "createdAt": "2026-11-16T23:46:17.246Z",
+      "updatedAt": "2026-11-16T23:46:27.563Z",
+      "__v": 0,
+      "startedAt": "2026-11-16T23:46:17.599Z",
+      "commitSha": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "outcome": {
+        "created": 0,
+        "stillOpen": 0,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "error": "The scan could not finish examining any area. Findings and coverage are preserved; run it again to retry failed or incomplete areas.",
+      "finishedAt": "2026-11-16T23:46:27.562Z"
+    }
+  ],
+  "issues": [
+    {
+      "_id": "6afb8f202d896c56160ed3da",
+      "title": "Option injection in getent lookup leaks /etc/hosts to unauthenticated clients",
+      "description": "Entry: src/server.js:16 (handler at src/server.js:12-14; the only route is GET /lookup?host=..., and there is no authentication or authorization check anywhere in the file).\nAttacker: an unauthenticated network client that can reach the port (createLookupServer().listen(...) at line 23 binds all interfaces), crossing the boundary that the caller's value is a hostname to be looked up rather than an option for the program the server spawns.\nPath: line 13 parses req.url, line 16 takes url.searchParams.get('host'), line 7 is the only validation (/^[a-zA-Z0-9._:-]{1,253}$/), and line 8 hands the value straight into the child process argv: execAsync('getent', ['hosts', host], ...).\nWhy nothing stops it: the allow-list still permits a value that begins with '-' (the hyphen is the final member of the character class, so it is literal and legal in any position), and the argv contains no '--' terminator, so getent's getopt_long parses the caller's value as an option instead of the lookup key. ?host=-- ends option parsing and leaves no key, so glibc's getent enumerates the entire hosts database (sethostent/gethostent loop) and line 18 returns every entry of the server's /etc/hosts, i.e. internal hostnames and their IP addresses, to the caller; ?host=--help, ?host=--version, ?host=-4, ?host=-6, ?host=-i, ?host=-w and ?host=-a are likewise consumed as options and change the mode of the invoked tool. No shell is involved, so shell metacharacters are irrelevant here, but nothing rejects a leading hyphen, no '--' is inserted, and the route requires no credentials.\nImpact: an outsider with no account obtains server-local host data (the hosts table, i.e. an internal name-to-address map) and can force the lookup tool into modes it was never meant to expose, which is direct internal-network reconnaissance from the server's own network position; the same value also drives the server's resolver, so internal-only names resolve from inside and their addresses come back.\nFix: pass the terminator and constrain the first character, e.g. execAsync('getent', ['hosts', '--', host], ...) together with a check such as /^(?![.-])[a-zA-Z0-9._:-]{1,253}$/, and preferably drop the subprocess entirely in favour of dns.lookup/net.isIP so no option parsing can occur.\n\n**Fix**\nInsert the end-of-options terminator and reject a leading hyphen or dot, e.g. validate with /^(?![.-])[a-zA-Z0-9._:-]{1,253}$/ and call execFile('getent', ['hosts', '--', host], ...). Better still, drop the subprocess entirely and resolve the name with dns.lookup/net.isIP so no option parsing can occur.\n\nCWE-78 · found at 7839663a128f",
+      "filePath": "src/server.js",
+      "language": "typescript",
+      "label": "security",
+      "severity": "medium",
+      "status": "open",
+      "contributingSuggestions": [],
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "full_name": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com"
+      },
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "owner": {
+        "gitId": "",
+        "username": "@malinosqui",
+        "origin": "codeowners"
+      },
+      "reporter": {
+        "gitId": "kodus",
+        "username": "Kodus"
+      },
+      "source": "security_scan",
+      "fingerprint": "af4e782addadd0ea5b9b136662ef9d013eae6d61568d082fa7da3e3d3037e6e6",
+      "cwe": "CWE-78",
+      "vulnerabilityClass": "injection",
+      "symbol": "lookupHost",
+      "startLine": 7,
+      "endLine": 8,
+      "evidence": {
+        "attackPath": [
+          {
+            "file": "src/server.js",
+            "line": 23,
+            "note": "Server listens on all interfaces with no authentication anywhere in the file, so any network client can reach the route."
+          },
+          {
+            "file": "src/server.js",
+            "line": 12,
+            "note": "Request handler for the only route has no auth/authz check; req.url is parsed and passed straight through."
+          },
+          {
+            "file": "src/server.js",
+            "line": 16,
+            "note": "Attacker-controlled query parameter host=... is taken from the URL and handed to lookupHost."
+          },
+          {
+            "file": "src/server.js",
+            "line": 7,
+            "note": "The only validation, /^[a-zA-Z0-9._:-]{1,253}$/, permits a leading '-' because the hyphen is a literal member of the class."
+          },
+          {
+            "file": "src/server.js",
+            "line": 8,
+            "note": "Value is placed in the child process argv without a '--' terminator: execFile('getent', ['hosts', host]). getent's getopt_long treats it as an option, so '--' enumerates the whole hosts database (returned at line 18) and --help/--version/-4/-6/-i/-w/-a change the tool's mode."
+          }
+        ]
+      },
+      "lastSeenScanId": "6afb9196abab3ddb5c71b88f",
+      "lastSeenCommitSha": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "lastSeenAt": "2026-11-16T23:46:15.200Z",
+      "consecutiveScanMisses": 0,
+      "createdAt": "2026-11-16T23:17:52.600Z",
+      "updatedAt": "2026-11-16T23:46:15.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "6afb95c72d896c56160ed4ff",
+      "title": "Unauthenticated /lookup endpoint lets any network caller drive server-side host lookups",
+      "description": "Entry: src/server.js:14\nAttacker: an unauthenticated remote caller who can reach the listening port, crossing the authentication/authorization boundary of the service's privileged server-side lookup operation — the handler runs a host-resolution command for anyone who connects, with no credential, role, tenant or ownership check anywhere in the code.\nPath: GET /lookup?host=<value> reaches the createServer callback (src/server.js:12); line 14 only compares url.pathname to '/lookup'; line 16 reads the caller-controlled host parameter (defaulting to 'localhost' when absent) and passes it directly to lookupHost; lookupHost applies only the character-class regex at line 7 and then executes execAsync('getent', ['hosts', host]) at line 8, returning the command's stdout to the caller at lines 17-18.\nWhy nothing on the path stops it: the service contains no authentication or authorization logic at all — no token/cookie/header check, no caller allow-list, no role or ownership check — and the only rejection branch (404) applies to paths other than /lookup. The regex at line 7 validates the shape of the string, not who sent it, and the server is started with listen(Number(process.env.PORT || 3000)) at line 23 without a bind address, so Node listens on all interfaces and the unauthenticated endpoint is reachable from the network by default; there is also no rate limit constraining the caller.\nImpact for this application: any unauthenticated network user can drive the server's own host/DNS resolution as a proxy — enumerate internal hostnames that resolve from the server's network position, read back the resolved addresses (and the server's hosts database), force DNS traffic to originate from the server (blind SSRF), and spawn one getent process per request (2s timeout, no throttling) for a cheap denial of service against the service host.\nFix: require authentication and authorization before handling /lookup (reject requests without a valid credential prior to reading host), bind the listener to loopback or a protected interface if the endpoint is internal-only, and reject host values with a leading '-' so the value cannot be interpreted as a getent option.\n\n**Fix**\nAdd authentication and authorization in front of the handler: reject any request to /lookup that lacks a valid credential (and required role/tenant) before reading the host parameter, e.g. an auth middleware in the createServer callback that returns 401/403. If the endpoint is internal-only, bind the listener to loopback or a protected interface with listen(port, '127.0.0.1'). Also reject host values starting with '-' so they cannot be parsed as getent options, and apply a per-caller rate limit to bound getent process spawns.\n\nCWE-306 · found at 7839663a128f",
+      "filePath": "src/server.js",
+      "language": "typescript",
+      "label": "security",
+      "severity": "high",
+      "status": "open",
+      "contributingSuggestions": [],
+      "repository": {
+        "id": "1460666155",
+        "name": "scan-e2e-1794869683954-vulnerable",
+        "full_name": "kodustech/scan-e2e-1794869683954-vulnerable",
+        "platform": "GITHUB",
+        "host": "github.com"
+      },
+      "organizationId": "4625c4e5-5270-4ef4-8486-e51eb6c3ee42",
+      "owner": {
+        "gitId": "",
+        "username": "@malinosqui",
+        "origin": "codeowners"
+      },
+      "reporter": {
+        "gitId": "kodus",
+        "username": "Kodus"
+      },
+      "source": "security_scan",
+      "fingerprint": "10902d4589d050100c2ec4ff23f8324da4708dd88de233fa4df3517c111f99e6",
+      "cwe": "CWE-306",
+      "vulnerabilityClass": "authz",
+      "symbol": "createLookupServer",
+      "startLine": 14,
+      "endLine": 16,
+      "evidence": {
+        "attackPath": [
+          {
+            "file": "src/server.js",
+            "line": 12,
+            "note": "createServer callback accepts every incoming request with no credential, token, role or ownership check anywhere."
+          },
+          {
+            "file": "src/server.js",
+            "line": 14,
+            "note": "The only gate is a pathname comparison to '/lookup'; any other path 404s, but /lookup passes straight through."
+          },
+          {
+            "file": "src/server.js",
+            "line": 16,
+            "note": "Caller-controlled 'host' query parameter (defaulting to 'localhost') is read and handed to lookupHost."
+          },
+          {
+            "file": "src/server.js",
+            "line": 7,
+            "note": "Only a character-class regex validates the string shape, not the caller's identity or entitlement."
+          },
+          {
+            "file": "src/server.js",
+            "line": 8,
+            "note": "execFile('getent', ['hosts', host]) runs the privileged server-side lookup on the attacker's behalf."
+          },
+          {
+            "file": "src/server.js",
+            "line": 18,
+            "note": "Command stdout (resolved addresses / hosts database entries) is returned to the unauthenticated caller."
+          },
+          {
+            "file": "src/server.js",
+            "line": 23,
+            "note": "listen() without a bind address exposes the endpoint on all interfaces by default; no rate limit constrains repeated getent process spawns."
+          }
+        ],
+        "reproduction": {
+          "path": "test/lookup-auth.test.js",
+          "content": "// Demonstrates the unauthenticated privileged-lookup vulnerability in\n// src/server.js: GET /lookup runs the server-side host-resolution command\n// (execFile('getent', ['hosts', host])) for any caller that can reach the\n// port, with no credential, role, tenant or ownership check anywhere on the\n// request path.\n//\n// The test PASSES while the endpoint is unauthenticated (the attacker gets the\n// lookup result back) and FAILS once authorization is enforced before the\n// handler reads `host`.\n//\n// It runs fully offline: the `getent` binary is replaced by a local stub on\n// PATH, so no DNS or network traffic is generated, and the server is started\n// in-process on an ephemeral loopback port.\n\nimport { after, test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';\nimport { tmpdir } from 'node:os';\nimport { join } from 'node:path';\n\nimport { createLookupServer } from '../src/server.js';\n\n// The stub echoes the host argument it receives (getent hosts <host> -> $2),\n// proving the caller-controlled query parameter reaches the spawned command.\nconst EXPECTED_RESULT = '10.0.0.7 internal.example.com\\n';\n\nconst fakeBinDir = mkdtempSync(join(tmpdir(), 'fake-getent-'));\nconst originalPath = process.env.PATH ?? '';\nconst fakeGetent = join(fakeBinDir, 'getent');\nwriteFileSync(fakeGetent, '#!/bin/sh\\necho \"10.0.0.7 $2\"\\n');\nchmodSync(fakeGetent, 0o755);\nprocess.env.PATH = `${fakeBinDir}:${originalPath}`;\n\nafter(() => {\n  process.env.PATH = originalPath;\n  rmSync(fakeBinDir, { recursive: true, force: true });\n});\n\ntest('unauthenticated GET /lookup returns the privileged host lookup result', async (t) => {\n  const server = createLookupServer();\n  await new Promise((resolve, reject) => {\n    server.once('error', reject);\n    server.listen(0, '127.0.0.1', resolve);\n  });\n  t.after(() => new Promise((resolve) => server.close(resolve)));\n\n  const { port } = server.address();\n\n  // No token, cookie, header, role or ownership claim of any kind.\n  const response = await fetch(\n    `http://127.0.0.1:${port}/lookup?host=internal.example.com`,\n  );\n\n  assert.equal(\n    response.status,\n    200,\n    'the unauthenticated caller was served instead of rejected',\n  );\n\n  const body = await response.json();\n  assert.equal(body.result, EXPECTED_RESULT);\n});\n",
+          "command": "node --test test/lookup-auth.test.js",
+          "executed": true,
+          "exitCode": 1,
+          "reproduced": false,
+          "output": "TAP version 13\n# Subtest: unauthenticated GET /lookup returns the privileged host lookup result\nnot ok 1 - unauthenticated GET /lookup returns the privileged host lookup result\n  ---\n  duration_ms: 49.352964\n  location: 'file:///home/kodus-repro/repo/test/lookup-auth.test.js:39:1'\n  failureType: 'testCodeFailure'\n  error: 'fetch failed'\n  code: 'ERR_TEST_FAILURE'\n  name: 'TypeError'\n  stack: |-\n    Object.fetch (node:internal/deps/undici/undici:11372:11)\n    process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    async TestContext.<anonymous> (file:///home/kodus-repro/repo/test/lookup-auth.test.js:50:20)\n    async Test.run (node:internal/test_runner/test:632:9)\n    async startSubtest (node:internal/test_runner/harness:208:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 167.162142"
+        }
+      },
+      "lastSeenScanId": "6afb9196abab3ddb5c71b88f",
+      "lastSeenCommitSha": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "lastSeenAt": "2026-11-16T23:46:15.192Z",
+      "consecutiveScanMisses": 0,
+      "createdAt": "2026-11-16T23:46:15.197Z",
+      "updatedAt": "2026-11-16T23:46:15.197Z",
+      "__v": 0
+    }
+  ]
+}

@@ -1,0 +1,331 @@
+{
+  "steps": [
+    "opened-live-scan-page",
+    "finding-visible-without-reload"
+  ],
+  "polls": [
+    {
+      "at": "2026-11-16T23:12:26.832Z",
+      "path": "/api/proxy/api/issues",
+      "status": 200,
+      "count": 0
+    },
+    {
+      "at": "2026-11-16T23:12:26.906Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:12:36.964Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:12:47.055Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:12:57.150Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:13:07.234Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:13:17.322Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:13:27.403Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:13:37.508Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:13:47.596Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:13:57.670Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:14:07.756Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:14:17.858Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:14:27.942Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:14:38.023Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:14:48.111Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:14:58.242Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:15:08.338Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:15:18.439Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:15:28.593Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:15:38.672Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:15:48.771Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:15:58.852Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:16:08.969Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:16:19.053Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:16:29.138Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:16:39.232Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:16:49.321Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:16:59.418Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:17:09.565Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:17:19.642Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:17:29.721Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:17:39.804Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:17:49.918Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "running"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:18:00.105Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 1,
+      "scanStates": [
+        "completed"
+      ]
+    },
+    {
+      "at": "2026-11-16T23:18:00.196Z",
+      "path": "/api/proxy/api/issues",
+      "status": 200,
+      "count": 1
+    }
+  ],
+  "browserErrors": [],
+  "url": "http://localhost:48700/deep-scan?peek=6afb8f202d896c56160ed3da",
+  "text": "D\nDeep scan E2E owner - team\nSearch\n⌘K\nReviews\nCockpit\nDeep scan\nALPHA\nRepositories\nAI providers\nCODE REVIEW\nGlobal\nGeneral\nRisk assessment\nRouting\nWhat to review\nKody Rules\nWhat Kody writes\nORGANIZATION\nStar\n1621\nNO PLAN\nChoose a plan\nCollapse\n<test-account>\n1\nDeep scan\nAlpha\n\nFinds broken access control, injection, XSS, SSRF, data exposure, leaked secrets and unsafe settings in a repository's default branch, with your organization's model, within a spend limit if you set one.\n\nDeep scan is an experimental alpha, free on every plan while it is: it changes often, and some findings will not be exploitable. Check each before acting on it.\n\nScan history\n1\nRun deep scan\n\nkodustech/scan-e2e-1794869683954-vulnerable was scanned less than a minute ago\n\n1 new · $0.15 of $1 · 1 area failed; run it again to retry\n\nCritical\n1\nopen\nHigh\n0\nopen\nMedium\n0\nopen\nLow\n0\nopen\nFindings\nCopy fix prompt\nOpen1\nResolved0\nDismissed0\nAll1\nCRITICAL\nUnauthenticated RCE via host param in /lookup (shell command injection)\nscan-e2e-1794869683954-vulnerable · src/server.js · CWE-78\n@malinosqui · CODEOWNERS\nOPEN\nless than a minute ago\nEsc\nCopy fix prompt\nShare\nOpen\nUnauthenticated RCE via host param in /lookup (shell command injection)\n\nOpened 1 day ago\n\nCRITICAL\nSECURITY SCAN\nkodustech/scan-e2e-1794869683954-vulnerable\nsrc/server.js\nCWE-78 · Authorization\nlookupHost (line 7)\n@@malinosqui (from CODEOWNERS)\nAttack path\nsrc/server.js:12 — Entry: unauthenticated HTTP request is parsed; req.url becomes a URL object.\nsrc/server.js:13 — Only the pathname is checked; no authentication, authorization or rate limiting exists anywhere on this route.\nsrc/server.js:15 — The caller-controlled query parameter host is read from url.searchParams and passed to lookupHost unchanged (URL decoding leaves ;, |, &&, $(), backticks and newlines intact); the '|| localhost' fallback only covers missing/empty values.\nsrc/server.js:6 — lookupHost forwards the untrusted host string without validation, escaping or allow-list check.\nsrc/server.js:7 — String concatenation into 'getent hosts ' + host, handed to child_process.exec, which always runs through a shell (/bin/sh -c) — arbitrary OS command execution, e.g. /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd).\nsrc/server.js:17 — Command stdout is returned in the JSON response body, giving the attacker direct read-back of executed command output.\nReproduction\n\nReproduced in an isolated sandbox\n\nnode --test test/lookup-security.test.js\nTest file\ntest/lookup-security.test.js\nOutput\nDescription\nEntry: src/server.js:15 (the GET /lookup handler reads url.searchParams.get('host') and passes it straight to lookupHost). Attacker: an unauthenticated network caller, crossing the boundary from an untrusted HTTP request into arbitrary OS command execution as the user running the server. The path is: line 12 parses req.url, line 13 only checks the pathname, line 15 reads the caller-controlled host parameter, line 6 forwards it to lookupHost, and line 7 concatenates it into 'getent hosts ' + host before passing the string to child_process.exec, which always runs the string through a shell (/bin/sh -c). Nothing on the path stops it: a repo-wide search finds no authentication, authorization, session, role, guard or middleware code at all, host is never validated, escaped or checked against an allow-list, URL query decoding leaves shell metacharacters such as ;, |, &&, $(), backticks and newlines intact, the '|| localhost' fallback only replaces missing or empty values, and exec (unlike execFile or spawn without a shell) invokes a shell by design. A request such as /lookup?host=;id or /lookup?host=$(cat%20/etc/passwd) executes arbitrary commands, and lines 16-17 return the command stdout inside the JSON body, so the attacker reads the output directly. Impact: unauthenticated remote code execution on the server host, enabling file and credential theft, access to internal networks, and full machine compromise. Fix: replace exec with execFile('getent', ['hosts', host]) so no shell is involved, validate host against a strict hostname/IP allow-list, and require authentication plus an authorization check before the lookup runs (or bind the listener to loopback).\nFix Replace exec with execFile('getent', ['hosts', host]) (or spawn without a shell) so the host value can never be interpreted as shell syntax. Validate host against a strict hostname/IP allow-list before use, rejecting anything with shell metacharacters. Also require authentication plus an authorization check before the lookup runs, or bind the listener to loopback only.\nCWE-78 · found at 231a8815832c",
+  "error": "locator.waitFor: Error: strict mode violation: getByRole('button', { name: 'Copy fix prompt', exact: true }) resolved to 2 elements:\n    1) <button class=\"inline-flex overflow-hidden select-none relative items-center justify-center h-auto rounded-xl font-semibold transition text-start shrink-0 text-sm w-fit bg-(--button-background) text-(--button-foreground) [&_svg]:size-(--icon-size) ring-card-lv3 [&[aria-haspopup=dialog]]:ring-1 button-focused:ring-3! button-focused:ring-ring button-hover:brightness-120 button-active:brightness-120 cursor-pointer button-loading:cursor-wait button-disabled:cursor-not-allowed group-disabled/link:cursor-no…>…</button> aka locator('section').getByRole('button', { name: 'Copy fix prompt' })\n    2) <button class=\"inline-flex overflow-hidden select-none relative items-center justify-center h-auto font-semibold transition text-start shrink-0 w-fit bg-(--button-background) text-(--button-foreground) [&_svg]:size-(--icon-size) ring-card-lv3 [&[aria-haspopup=dialog]]:ring-1 button-focused:ring-3! button-focused:ring-ring button-hover:brightness-120 button-active:brightness-120 cursor-pointer button-loading:cursor-wait button-disabled:cursor-not-allowed group-disabled/link:cursor-not-allowed group-dis…>…</button> aka getByLabel('Unauthenticated RCE via host').getByRole('button', { name: 'Copy fix prompt' })\n\nCall log:\n  - waiting for getByRole('button', { name: 'Copy fix prompt', exact: true }) to be visible\n",
+  "passed": false
+}

@@ -1,0 +1,64 @@
+{
+  "repository": {
+    "id": "1460666155",
+    "full_name": "kodustech/scan-e2e-1794869683954-vulnerable",
+    "name": "scan-e2e-1794869683954-vulnerable",
+    "default_branch": "main",
+    "http_url": "https://github.com/kodustech/scan-e2e-1794869683954-vulnerable",
+    "organizationName": "kodustech",
+    "createdForThisTest": true
+  },
+  "defaultBranch": "main",
+  "originalCommit": "231a8815832ca83c0c58092f9441077909773d0c",
+  "fixedCommit": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+  "files": [
+    {
+      "label": "vulnerable",
+      "commit": "231a8815832ca83c0c58092f9441077909773d0c",
+      "path": "src/server.js",
+      "content": "import { createServer } from 'node:http';\nimport { exec } from 'node:child_process';\nimport { promisify } from 'node:util';\nimport { pathToFileURL } from 'node:url';\nconst execAsync = promisify(exec);\nexport async function lookupHost(host) {\n  const { stdout } = await execAsync('getent hosts ' + host);\n  return stdout;\n}\nexport function createLookupServer() {\n  return createServer(async (req, res) => {\n    const url = new URL(req.url, 'http://localhost');\n    if (url.pathname !== '/lookup') { res.writeHead(404); res.end(); return; }\n    try {\n      const result = await lookupHost(url.searchParams.get('host') || 'localhost');\n      res.writeHead(200, { 'content-type': 'application/json' });\n      res.end(JSON.stringify({ result }));\n    } catch { res.writeHead(500); res.end('lookup failed'); }\n  });\n}\nif (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {\n  createLookupServer().listen(Number(process.env.PORT || 3000));\n}\n"
+    },
+    {
+      "label": "vulnerable",
+      "commit": "231a8815832ca83c0c58092f9441077909773d0c",
+      "path": "package.json",
+      "content": "{\n  \"name\": \"deep-scan-e2e-fixture\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test test/*.test.js\"\n  }\n}\n"
+    },
+    {
+      "label": "vulnerable",
+      "commit": "231a8815832ca83c0c58092f9441077909773d0c",
+      "path": "test/lookup.test.js",
+      "content": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { lookupHost } from '../src/server.js';\ntest('exports lookup API', () => assert.equal(typeof lookupHost, 'function'));\n"
+    },
+    {
+      "label": "vulnerable",
+      "commit": "231a8815832ca83c0c58092f9441077909773d0c",
+      "path": ".github/CODEOWNERS",
+      "content": "* @malinosqui\n"
+    },
+    {
+      "label": "fixed",
+      "commit": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "path": "src/server.js",
+      "content": "import { createServer } from 'node:http';\nimport { execFile } from 'node:child_process';\nimport { promisify } from 'node:util';\nimport { pathToFileURL } from 'node:url';\nconst execAsync = promisify(execFile);\nexport async function lookupHost(host) {\n  if (!/^[a-zA-Z0-9._:-]{1,253}$/.test(host)) throw new Error('Invalid hostname');\n  const { stdout } = await execAsync('getent', ['hosts', host], { timeout: 2000, maxBuffer: 65536 });\n  return stdout;\n}\nexport function createLookupServer() {\n  return createServer(async (req, res) => {\n    const url = new URL(req.url, 'http://localhost');\n    if (url.pathname !== '/lookup') { res.writeHead(404); res.end(); return; }\n    try {\n      const result = await lookupHost(url.searchParams.get('host') || 'localhost');\n      res.writeHead(200, { 'content-type': 'application/json' });\n      res.end(JSON.stringify({ result }));\n    } catch { res.writeHead(500); res.end('lookup failed'); }\n  });\n}\nif (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {\n  createLookupServer().listen(Number(process.env.PORT || 3000));\n}\n"
+    },
+    {
+      "label": "fixed",
+      "commit": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "path": "package.json",
+      "content": "{\n  \"name\": \"deep-scan-e2e-fixture\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test test/*.test.js\"\n  }\n}\n"
+    },
+    {
+      "label": "fixed",
+      "commit": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "path": "test/lookup.test.js",
+      "content": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { lookupHost } from '../src/server.js';\ntest('exports lookup API', () => assert.equal(typeof lookupHost, 'function'));\n"
+    },
+    {
+      "label": "fixed",
+      "commit": "7839663a128f08fba6ea1d14fe349ac99fa2beda",
+      "path": ".github/CODEOWNERS",
+      "content": "* @malinosqui\n"
+    }
+  ]
+}

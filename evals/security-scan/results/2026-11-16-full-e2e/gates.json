@@ -1,0 +1,149 @@
+{
+  "checks": [
+    {
+      "port": 48701,
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 201,
+      "expected": 201
+    },
+    {
+      "port": 48701,
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 201,
+      "expected": 201
+    },
+    {
+      "port": 48702,
+      "method": "GET",
+      "path": "/security-scans",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "port": 48702,
+      "method": "GET",
+      "path": "/security-scans",
+      "status": 403,
+      "expected": 403,
+      "reason": "outside-private-alpha"
+    },
+    {
+      "port": 48702,
+      "method": "GET",
+      "path": "/security-scans/6afb8d79abab3ddb5c71b6ad",
+      "status": 403,
+      "expected": 403,
+      "reason": "outside-private-alpha"
+    },
+    {
+      "port": 48702,
+      "method": "POST",
+      "path": "/security-scans",
+      "status": 403,
+      "expected": 403,
+      "reason": "outside-private-alpha"
+    },
+    {
+      "port": 48702,
+      "method": "POST",
+      "path": "/issues/fix-prompt",
+      "status": 403,
+      "expected": 403,
+      "reason": "outside-private-alpha"
+    },
+    {
+      "port": 48703,
+      "method": "GET",
+      "path": "/security-scans",
+      "status": 403,
+      "expected": 403,
+      "reason": "selfhost-even-with-wildcard"
+    },
+    {
+      "port": 48703,
+      "method": "GET",
+      "path": "/security-scans/6afb8d79abab3ddb5c71b6ad",
+      "status": 403,
+      "expected": 403,
+      "reason": "selfhost-even-with-wildcard"
+    },
+    {
+      "port": 48703,
+      "method": "POST",
+      "path": "/security-scans",
+      "status": 403,
+      "expected": 403,
+      "reason": "selfhost-even-with-wildcard"
+    },
+    {
+      "port": 48703,
+      "method": "POST",
+      "path": "/issues/fix-prompt",
+      "status": 403,
+      "expected": 403,
+      "reason": "selfhost-even-with-wildcard"
+    },
+    {
+      "port": 48701,
+      "method": "GET",
+      "path": "/team/",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "port": 48701,
+      "method": "POST",
+      "path": "/code-management/auth-integration",
+      "status": 201,
+      "expected": 201
+    },
+    {
+      "port": 48701,
+      "method": "GET",
+      "path": "/code-management/repositories/org?teamId=fc79e6ab-1f5e-4a0a-bf29-eba0c31c2904",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "port": 48701,
+      "method": "POST",
+      "path": "/code-management/repositories",
+      "status": 201,
+      "expected": 201
+    },
+    {
+      "port": 48701,
+      "method": "GET",
+      "path": "/team/",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "port": 48701,
+      "method": "GET",
+      "path": "/parameters/find-by-key?key=platform_configs&teamId=fc79e6ab-1f5e-4a0a-bf29-eba0c31c2904",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "port": 48701,
+      "method": "POST",
+      "path": "/parameters/create-or-update",
+      "status": 201,
+      "expected": 201
+    }
+  ],
+  "browserErrors": [],
+  "webSessionViaRealNextAuth": true,
+  "ui": {
+    "responseStatus": 200,
+    "url": "http://localhost:48704/deep-scan",
+    "text": "D\nDeep scan E2E foreign - team\nSearch\n⌘K\nReviews\nCockpit\nRepositories\nAI providers\nPlugins\nBETA\nCODE REVIEW\nGlobal\nGeneral\nRisk assessment\nRouting\nWhat to review\nKody Rules\nWhat Kody writes\nORGANIZATION\nStar\nNO PLAN\nChoose a plan\nCollapse\n<test-account>\n404\nThis page could not be found.",
+    "alphaPageHidden": true,
+    "alphaNavigationHidden": true
+  },
+  "passed": true,
+  "at": "2026-11-16T23:35:30.577Z"
+}

@@ -1,0 +1,99 @@
+{
+  "at": "2026-11-16T23:04:49.545Z",
+  "checks": [
+    {
+      "method": "GET",
+      "path": "/security-scans",
+      "status": 401,
+      "expected": 401
+    },
+    {
+      "method": "POST",
+      "path": "/security-scans",
+      "status": 400,
+      "expected": 400
+    },
+    {
+      "method": "POST",
+      "path": "/security-scans",
+      "status": 400,
+      "expected": 400
+    },
+    {
+      "method": "POST",
+      "path": "/security-scans",
+      "status": 404,
+      "expected": 404
+    },
+    {
+      "method": "GET",
+      "path": "/security-scans",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "method": "POST",
+      "path": "/organization-parameters/create-or-update",
+      "status": 201,
+      "expected": 201
+    },
+    {
+      "method": "GET",
+      "path": "/organization-parameters/llm-config/status",
+      "status": 200,
+      "expected": 200
+    }
+  ],
+  "byokConfigured": true,
+  "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+  "maxTotalAuthorizedUsd": 4,
+  "providerConfigStatus": {
+    "source": "byok",
+    "models": [
+      {
+        "modelId": "e2e-deepseek",
+        "credentialId": "e2e-fireworks",
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "providerId": "openai_compatible",
+        "baseUrl": "https://api.fireworks.ai/inference/v1",
+        "resolvable": true,
+        "capabilities": {
+          "structuredOutput": "json_object",
+          "toolCalling": "native"
+        }
+      }
+    ],
+    "byok": {
+      "configured": true,
+      "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+      "providerId": "openai_compatible",
+      "baseUrl": "https://api.fireworks.ai/inference/v1"
+    },
+    "env": {
+      "configured": false
+    },
+    "reviewModels": {
+      "balanced": {
+        "modelId": "e2e-deepseek",
+        "inherited": true
+      },
+      "heavy": {
+        "modelId": "e2e-deepseek",
+        "inherited": true
+      }
+    },
+    "reviewModelsByOverride": {
+      "e2e-deepseek": {
+        "balanced": "e2e-deepseek",
+        "heavy": "e2e-deepseek"
+      }
+    },
+    "modelRouting": {
+      "defaultModelId": "e2e-deepseek",
+      "riskAssessment": {
+        "modelId": "e2e-deepseek",
+        "inherited": true
+      }
+    }
+  }
+}

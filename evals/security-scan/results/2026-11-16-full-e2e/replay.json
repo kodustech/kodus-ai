@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "at": "2026-11-17T10:44:27.064Z",
+  "published": {
+    "brokerConfirmed": 2,
+    "route": "workflow.jobs.created.SECURITY_SCAN",
+    "messageId": "eed09b13-e835-4bd6-af1b-3111a2010269"
+  },
+  "inboxUnchanged": true,
+  "scansAndSpendUnchanged": true,
+  "issueIncludingMissCounterUnchanged": true,
+  "inbox": {
+    "messageId": "eed09b13-e835-4bd6-af1b-3111a2010269",
+    "status": "PROCESSED",
+    "attempts": 1
+  },
+  "queue": {
+    "name": "workflow.jobs.security_scan.queue",
+    "messages_ready": 0,
+    "messages_unacknowledged": 0,
+    "consumers": 1
+  }
+}

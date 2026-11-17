@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-17T10:45:36.357Z",
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "selectedErrorLines": [
+    "WARN [2026-11-16 23:46:27.254 +0000]: SYS:[ModelFailover] warn - runWithModelFailover - [LLM-ERROR] security-scan-authz: \"claude-haiku-4-5-20251001\" failed (AUTH_INVALID) — invalid x-api-key",
+    "WARN [2026-11-16 23:46:27.334 +0000]: SYS:[ModelFailover] warn - runWithModelFailover - [LLM-ERROR] security-scan-injection: \"claude-haiku-4-5-20251001\" failed (AUTH_INVALID) — invalid x-api-key",
+    "WARN [2026-11-16 23:46:27.409 +0000]: SYS:[ModelFailover] warn - runWithModelFailover - [LLM-ERROR] security-scan-ssrf: \"claude-haiku-4-5-20251001\" failed (AUTH_INVALID) — invalid x-api-key",
+    "WARN [2026-11-16 23:46:27.480 +0000]: SYS:[ModelFailover] warn - runWithModelFailover - [LLM-ERROR] security-scan-misconfiguration: \"claude-haiku-4-5-20251001\" failed (AUTH_INVALID) — invalid x-api-key",
+    "WARN [2026-11-16 23:46:27.550 +0000]: SYS:[ModelFailover] warn - runWithModelFailover - [LLM-ERROR] security-scan-resource_exhaustion: \"claude-haiku-4-5-20251001\" failed (AUTH_INVALID) — invalid x-api-key"
+  ]
+}

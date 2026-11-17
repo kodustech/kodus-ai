@@ -1,0 +1,34 @@
+{
+  "steps": [
+    "opened-live-scan-page",
+    "finding-visible-without-reload",
+    "finding-details-visible",
+    "codeowners-handle-shows-one-at-sign",
+    "ui-copy-fix-prompt-api",
+    "actual-clipboard-matches-prompt",
+    "scan-history-opened"
+  ],
+  "polls": [
+    {
+      "at": "2026-11-16T23:26:04.257Z",
+      "path": "/api/proxy/api/issues",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "at": "2026-11-16T23:26:04.308Z",
+      "path": "/api/proxy/api/security-scans",
+      "status": 200,
+      "count": 2,
+      "scanStates": [
+        "running",
+        "completed"
+      ]
+    }
+  ],
+  "browserErrors": [],
+  "url": "http://localhost:48700/deep-scan",
+  "text": "D\nDeep scan E2E owner - team\nSearch\n⌘K\nReviews\nCockpit\nDeep scan\nALPHA\nRepositories\nAI providers\nCODE REVIEW\nGlobal\nGeneral\nRisk assessment\nRouting\nWhat to review\nKody Rules\nWhat Kody writes\nORGANIZATION\nStar\n1621\nNO PLAN\nChoose a plan\nCollapse\n<test-account>\n1\nDeep scan\nAlpha\n\nFinds broken access control, injection, XSS, SSRF, data exposure, leaked secrets and unsafe settings in a repository's default branch, with your organization's model, within a spend limit if you set one.\n\nDeep scan is an experimental alpha, free on every plan while it is: it changes often, and some findings will not be exploitable. Check each before acting on it.\n\nScan history\n2\nRun deep scan\n\nScanning kodustech/scan-e2e-1794869683954-vulnerable\n\n1 of 2 areas · $0 of $0.5\nCritical\n1\nopen\nHigh\n0\nopen\nMedium\n0\nopen\nLow\n0\nopen\nFindings\nCopy fix prompt\nOpen1\nResolved0\nDismissed0\nAll1\nCRITICAL\nUnauthenticated RCE via host param in /lookup (shell command injection)\nscan-e2e-1794869683954-vulnerable · src/server.js · CWE-78\n@malinosqui · CODEOWNERS\nOPEN\n8 minutes ago\nScan history\n\nThe most recent deep scans of the repositories you can see, newest first.\n\nkodustech/scan-e2e-1794869683954-vulnerable · Running\n$0 of $0.5 · 1/2 areas examined\n3 minutes ago\nkodustech/scan-e2e-1794869683954-vulnerable · Completed\n$0.15 of $1 · 1/2 areas examined · 1 failed · 1 new\n15 minutes ago",
+  "promptContainsReproduction": true,
+  "passed": true
+}

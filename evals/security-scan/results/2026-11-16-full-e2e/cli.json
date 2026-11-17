@@ -1,0 +1,106 @@
+{
+  "checks": [
+    {
+      "args": [
+        "issues",
+        "list",
+        "--security",
+        "--repo",
+        "1460666155",
+        "--json"
+      ],
+      "who": "owner",
+      "exit": 0,
+      "expectedExit": 0,
+      "stdoutBytes": 571,
+      "stderr": ""
+    },
+    {
+      "args": [
+        "issues",
+        "show",
+        "6afb8f202d896c56160ed3da",
+        "--json"
+      ],
+      "who": "owner",
+      "exit": 0,
+      "expectedExit": 0,
+      "stdoutBytes": 6026,
+      "stderr": ""
+    },
+    {
+      "args": [
+        "issues",
+        "show",
+        "6afb8f202d896c56160ed3da",
+        "--prompt-only"
+      ],
+      "who": "owner",
+      "exit": 0,
+      "expectedExit": 0,
+      "stdoutBytes": 5852,
+      "stderr": ""
+    },
+    {
+      "args": [
+        "issues",
+        "list",
+        "--security",
+        "--repo",
+        "1460666155",
+        "--prompt-only"
+      ],
+      "who": "owner",
+      "exit": 0,
+      "expectedExit": 0,
+      "stdoutBytes": 5852,
+      "stderr": ""
+    },
+    {
+      "args": [
+        "issues",
+        "list",
+        "--security",
+        "--json"
+      ],
+      "who": "foreign",
+      "exit": 0,
+      "expectedExit": 0,
+      "stdoutBytes": 3,
+      "stderr": ""
+    },
+    {
+      "args": [
+        "issues",
+        "show",
+        "6afb8f202d896c56160ed3da",
+        "--json"
+      ],
+      "who": "foreign",
+      "exit": 0,
+      "expectedExit": 0,
+      "stdoutBytes": 88,
+      "stderr": ""
+    },
+    {
+      "args": [
+        "issues",
+        "show",
+        "6afb8f202d896c56160ed3da",
+        "--prompt-only"
+      ],
+      "who": "foreign",
+      "exit": 1,
+      "expectedExit": 1,
+      "stdoutBytes": 0,
+      "stderr": "None of these issues can be read with your account (unknown id, or a repository you have no access to).\n"
+    }
+  ],
+  "issueIds": [
+    "6afb8f202d896c56160ed3da"
+  ],
+  "promptSha256": "080852379176f8cab1fda5457d3cba88456216141ddb16c00271c7bf668d2600",
+  "passed": true,
+  "at": "2026-11-16T23:22:36.850Z",
+  "lockSha256": "cd84192d1c50e9d4993914b4e1ca70a4f33cd854c674aafd99510f9046fab99a"
+}
