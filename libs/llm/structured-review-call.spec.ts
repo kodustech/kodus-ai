@@ -1738,7 +1738,11 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             runName: 'drop-log-context-run',
             organizationId: 'org-log-context',
-            attrs: { prNumber: 42, teamId: 'team-1' },
+            attrs: {
+                prNumber: 42,
+                teamId: 'team-1',
+                note: 'free text from the caller',
+            },
             user,
             byokConfig: claude,
             promptCache: { userPrefix: head },
@@ -1757,6 +1761,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             prNumber: 42,
             teamId: 'team-1',
         });
+        expect(logged?.metadata).not.toHaveProperty('note');
     });
 
     it('records a declared head the turn does not start with', async () => {

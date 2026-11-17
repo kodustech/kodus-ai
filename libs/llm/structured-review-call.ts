@@ -91,6 +91,13 @@ const logger = createLogger('StructuredReviewCall');
 
 const AUTO_CACHE_LOG_INTERVAL_MS = 60 * 60 * 1000;
 const autoCacheLoggedAt = new Map<string, number>();
+/** Caller attrs that identify where a call came from; nothing free-form. */
+const AUTO_CACHE_LOG_ATTRS = [
+    'teamId',
+    'repositoryId',
+    'prNumber',
+    'agentName',
+] as const;
 
 /** A slot whose custom provider options turn on Anthropic's automatic cache
  *  makes every call write its whole prompt; a call carrying its own marker
@@ -108,7 +115,15 @@ function logAutomaticCacheDropped(
     logger.log({
         message: `[prompt-cache] dropped an automatic cacheControl from the provider options of ${runName}; the call carries its own breakpoint`,
         context: 'runReviewCall',
-        metadata: { ...callerContext, runName, organizationId },
+        metadata: {
+            ...Object.fromEntries(
+                AUTO_CACHE_LOG_ATTRS.filter(
+                    (k) => callerContext[k] !== undefined,
+                ).map((k) => [k, callerContext[k]]),
+            ),
+            runName,
+            organizationId,
+        },
     });
 }
 
