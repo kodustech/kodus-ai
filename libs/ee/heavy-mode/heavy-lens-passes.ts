@@ -228,7 +228,7 @@ export async function runHeavyLensPasses(
                 label: passes[i].label,
                 status: 'failed',
                 found: 0,
-                ms: (endedAt[i] ?? Date.now()) - (startedAt[i] ?? t0),
+                ms: endedAt[i] - startedAt[i],
                 steps: 0,
                 toolCalls: 0,
                 error: { message: reason.message, name: reason.name },

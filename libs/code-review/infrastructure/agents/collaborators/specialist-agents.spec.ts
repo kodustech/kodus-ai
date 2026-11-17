@@ -11,9 +11,10 @@ describe('finishedSpecialists', () => {
                     ms: 10,
                     steps: 1,
                     toolCalls: 0,
+                    // No status: nothing to classify by, so the text is
+                    // all the classifier has.
                     error: {
-                        message: 'invalid key sk-live-123 for org acme',
-                        status: 401,
+                        message: 'upstream said: key sk-live-123 for org acme',
                     },
                 },
             ],

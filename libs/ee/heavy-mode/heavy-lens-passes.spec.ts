@@ -247,21 +247,46 @@ describe('runFinderWithVerify in heavy mode', () => {
     });
 
     it('times a lens that threw by its own run, not the whole block', async () => {
-        markLensStarted();
-        const real = new AiSdkAgentRunner(undefined);
+        const tools = new InMemoryToolRegistry([]);
+        const pass = (label: string) => ({
+            label,
+            findingLabel: 'bug' as const,
+            prompt: label,
+            spec: buildFinderAgentSpec({
+                systemPrompt: label,
+                modelId: 'mock',
+                tools,
+                maxSteps: 3,
+            }),
+        });
         const runner = {
-            run: async (spec: any, input: any, c: ToolContext) => {
-                if (spec.systemPrompt === HEAVY_LENS_SYSTEM_PROMPT) {
+            run: async (spec: any) => {
+                if (spec.systemPrompt === 'lens-fast-fail') {
                     throw new Error('lens down');
                 }
-                await new Promise((r) => setTimeout(r, 80));
-                return real.run(spec, input, c);
+                await new Promise((r) => setTimeout(r, 120));
+                return {
+                    runId: 'slow',
+                    agentId: 'slow',
+                    status: 'stopped',
+                    steps: [],
+                    artifacts: [],
+                    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                    trace: [],
+                };
             },
         } as unknown as AiSdkAgentRunner;
 
-        const r = await run(runner);
+        const r = await runHeavyLensPasses(
+            [pass('lens-fast-fail'), pass('lens-slow')],
+            { runner, modelId: 'mock' } as any,
+            ctx,
+        );
 
-        expect(r.lensOutcomes?.[0].ms).toBeLessThan(50);
+        const failed = r.outcomes.find((o) => o.label === 'lens-fast-fail');
+        expect(failed?.status).toBe('failed');
+        // The whole block took ~120ms, waiting on the slow lens.
+        expect(failed?.ms).toBeLessThan(60);
     });
 
     it('goes on without a lens that fails', async () => {
