@@ -40,10 +40,13 @@ export default async function SubscriptionTabs() {
             userWithLicense.status !== "inactive",
     );
 
-    const seatHolderLabels = await getOrganizationMemberLabels({
-        teamId,
-        ids: unlistedSeatHolders.map((u) => u.git_id),
-    }).catch(() => ({}) as Record<string, string>);
+    const seatHolderLabels: Record<string, string> =
+        unlistedSeatHolders.length > 0
+            ? await getOrganizationMemberLabels({
+                  teamId,
+                  ids: unlistedSeatHolders.map((u) => u.git_id),
+              }).catch(() => ({}))
+            : {};
 
     const usersWithLicenseByGitId = new Map(
         usersWithLicense.map((u) => [u.git_id, u]),
