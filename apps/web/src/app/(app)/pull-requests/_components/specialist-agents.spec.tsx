@@ -1,0 +1,81 @@
+/** @jest-environment jsdom */
+// @ts-nocheck
+import "@testing-library/jest-dom";
+
+import { render, screen } from "@testing-library/react";
+
+import { getSpecialists, SpecialistAgentsTable } from "./specialist-agents";
+
+describe("getSpecialists", () => {
+    it("adds up a lens's batches and keeps its worst status", () => {
+        const rows = getSpecialists({
+            specialists: [
+                {
+                    label: "lens-data-exposure",
+                    status: "success",
+                    batchIndex: 1,
+                    kept: 1,
+                    durationMs: 1000,
+                    toolCalls: 2,
+                },
+                {
+                    label: "lens-data-exposure",
+                    status: "failed",
+                    batchIndex: 2,
+                    kept: 0,
+                    durationMs: 500,
+                    toolCalls: 1,
+                    error: "Rate limited",
+                },
+            ],
+        });
+
+        expect(rows).toEqual([
+            {
+                label: "lens-data-exposure",
+                name: "Data exposure",
+                status: "failed",
+                kept: 1,
+                durationMs: 1500,
+                toolCalls: 3,
+                error: "Rate limited",
+            },
+        ]);
+    });
+
+    it("is null for an entry that is not the specialists one", () => {
+        expect(getSpecialists({ agentTrace: {} })).toBeNull();
+    });
+});
+
+describe("SpecialistAgentsTable", () => {
+    it("lists every agent and says why one failed", () => {
+        render(
+            <SpecialistAgentsTable
+                rows={getSpecialists({
+                    specialists: [
+                        {
+                            label: "lens-text-that-ships",
+                            status: "success",
+                            kept: 2,
+                            durationMs: 58000,
+                            toolCalls: 3,
+                        },
+                        {
+                            label: "lens-changed-files-disagree",
+                            status: "failed",
+                            error: "Rate limited by the provider",
+                        },
+                    ],
+                })}
+            />,
+        );
+
+        expect(screen.getByText("2 agents (1 failed)")).toBeInTheDocument();
+        expect(screen.getByText("Text that ships")).toBeInTheDocument();
+        expect(screen.getByText("58s")).toBeInTheDocument();
+        expect(
+            screen.getByText("Rate limited by the provider"),
+        ).toBeInTheDocument();
+    });
+});

@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
+import { latestReviewMode, ReviewModeTag } from "./review-mode-tag";
+import { getSpecialists, SpecialistAgentsTable } from "./specialist-agents";
 import type { PullRequestExecutionGroup } from "./types";
 
 interface PrListItemProps {
@@ -390,6 +392,7 @@ const getStageDisplay = (item: CodeReviewTimelineItem) => {
     const partialErrors = getPartialErrors(item.metadata);
     const fileTimings = getFileTimings(item.metadata);
     const agentTrace = getAgentTrace(item.metadata);
+    const specialists = getSpecialists(item.metadata);
 
     return {
         label,
@@ -398,6 +401,7 @@ const getStageDisplay = (item: CodeReviewTimelineItem) => {
         partialErrors,
         fileTimings,
         agentTrace,
+        specialists,
         visibility:
             item.metadata && typeof item.metadata === "object"
                 ? (item.metadata as Record<string, any>).visibility
@@ -587,6 +591,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                 Source branch
                             </TooltipContent>
                         </Tooltip>
+                        <ReviewModeTag mode={latestReviewMode(executions)} />
                         {/* "opened" already carries its own label + the
                             TimeAgoDisplay tooltip shows the exact date. */}
                         <span className="flex items-center gap-1 tabular-nums">
@@ -701,8 +706,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                 </NextLink>
 
                 {/* The approval notice is separate from review execution status.
-                    Keep it visible even if the PR has since been merged.
-                    "Heavy" (review ran in heavy mode) shows in either case. */}
+                    Keep it visible even if the PR has since been merged. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     {latest.approvalReasonDeliveryFailure && (
                         <Tooltip>
@@ -737,11 +741,6 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                             latest.automationExecution?.status || "pending",
                             latest.automationExecution?.errorMessage,
                         )
-                    )}
-                    {latest.heavy && (
-                        <Badge variant="helper" title="Reviewed in heavy mode">
-                            Heavy
-                        </Badge>
                     )}
                 </div>
             </div>
@@ -838,6 +837,11 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                     {getStatusBadge(
                                                         executionStatus,
                                                     )}
+                                                    <ReviewModeTag
+                                                        mode={
+                                                            execution.reviewMode
+                                                        }
+                                                    />
                                                     {executionDuration && (
                                                         <span className="text-text-tertiary text-xs tabular-nums">
                                                             {executionStatus ===
@@ -1011,6 +1015,13 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                                                             )}
                                                                                         </p>
                                                                                     )}
+                                                                                {stageInfo.specialists && (
+                                                                                    <SpecialistAgentsTable
+                                                                                        rows={
+                                                                                            stageInfo.specialists
+                                                                                        }
+                                                                                    />
+                                                                                )}
                                                                                 {stageInfo.agentTrace &&
                                                                                     stageInfo
                                                                                         .agentTrace
@@ -1262,7 +1273,8 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
         "Skill or doc edited in this PR (target-branch version used)",
     DOC_NOT_FOUND: "Linked doc not found on the target branch",
     KNOWLEDGE_TRUNCATED: "Skills or docs cut to fit their budget",
-    KNOWLEDGE_UNAVAILABLE: "Reviewed without skills and docs (could not be read)",
+    KNOWLEDGE_UNAVAILABLE:
+        "Reviewed without skills and docs (could not be read)",
     SKILL_COMPATIBILITY: "Skill requirements may not be met by the reviewer",
     CLI_INSTALL_FAILED: "Custom agent ran without a CLI",
     CROSS_REPO_UNAVAILABLE:
