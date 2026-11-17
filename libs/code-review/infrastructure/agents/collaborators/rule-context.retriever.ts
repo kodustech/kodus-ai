@@ -225,6 +225,38 @@ const isTestLikePath = (filePath: string): boolean =>
 const diffOf = (file: FileChange): string =>
     file.patch ?? (file as { patchWithLinesStr?: string }).patchWithLinesStr ?? '';
 
+// Wider than the extractor on purpose: a false hit only skips one rule on one
+// hunk, the old behavior; a miss judges a rule without its lookup.
+const DEFINITION_KEYWORD =
+    /\b(?:function|def|func|fn|fun|class|interface|struct|enum|trait|impl|module)\b|=>/;
+// A method head with no keyword: `name(args) {` or `Type name(args) {`.
+const METHOD_HEAD =
+    /^\s*(?:[\w<>[\],.?]+\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{=;]*)?\{\s*$/;
+const CONTROL_KEYWORDS = new Set([
+    'if',
+    'for',
+    'while',
+    'switch',
+    'catch',
+    'with',
+    'return',
+    'else',
+]);
+
+function addsDefinitionLikeLine(patch: string): boolean {
+    return patch.split('\n').some((line) => {
+        if (!line.startsWith('+') || line.startsWith('+++')) {
+            return false;
+        }
+        const content = line.slice(1);
+        if (DEFINITION_KEYWORD.test(content)) {
+            return true;
+        }
+        const head = METHOD_HEAD.exec(content);
+        return !!head && !CONTROL_KEYWORDS.has(head[1]);
+    });
+}
+
 /**
  * Repository occurrences of the symbols this hunk defines (KRC-14).
  *
@@ -232,6 +264,11 @@ const diffOf = (file: FileChange): string =>
  * is retrieved and the rule is judged on the diff. That is not the #1724 case
  * (a lookup that FAILED and left the model inventing an answer): nothing was
  * looked up, so nothing is missing.
+ *
+ * The extractor misses some definitions (async and arrow functions, methods
+ * without a modifier, Rust `pub fn`). When it names nothing but an added line
+ * still reads like a definition, the question exists and went unasked, so the
+ * need stays unmet and the rule is not judged.
  */
 async function retrieveSymbolReferences(
     file: FileChange,
@@ -244,6 +281,11 @@ async function retrieveSymbolReferences(
         .slice(0, MAX_SYMBOLS_PER_FILE);
 
     if (symbols.length === 0) {
+        if (addsDefinitionLikeLine(diffOf(file))) {
+            throw new UnmetContextNeedError(
+                'the hunk adds a definition the symbol extractor cannot name',
+            );
+        }
         return [];
     }
 

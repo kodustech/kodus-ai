@@ -203,6 +203,51 @@ describe('retrieveForShard — symbol-references (KRC-14)', () => {
         expect(warn).not.toHaveBeenCalled();
     });
 
+    it.each([
+        ['an async function', '+export async function charge(amount) {'],
+        ['an arrow function', '+const charge = async (amount) => {'],
+        ['a method with no modifier', '+  charge(amount: number): void {'],
+        ['a Rust function', '+pub fn charge(amount: u64) {'],
+    ])(
+        'reports the rule unmet when the hunk adds %s the extractor cannot name',
+        async (_label, added) => {
+            const rules = [rule('symbol-references')];
+            const grep = jest.fn(async () => '');
+
+            const result = await retrieveForShard({
+                file: {
+                    ...file(),
+                    patch: ['@@ -10,2 +10,3 @@', ' const a = 1;', added].join(
+                        '\n',
+                    ),
+                },
+                rules,
+                lookup: lookup({ grep }),
+            });
+
+            expect(result.unmet).toEqual(rules);
+            expect(grep).not.toHaveBeenCalled();
+        },
+    );
+
+    it('judges on the diff a hunk whose added lines are only statements', async () => {
+        const result = await retrieveForShard({
+            file: {
+                ...file(),
+                patch: [
+                    '@@ -10,2 +10,4 @@',
+                    ' const a = 1;',
+                    '+  if (a > 0) {',
+                    '+    total += charge(a);',
+                ].join('\n'),
+            },
+            rules: [rule('symbol-references')],
+            lookup: lookup({ grep: jest.fn(async () => '') }),
+        });
+
+        expect(result.unmet).toEqual([]);
+    });
+
     it('reports the rule unmet when the repository cannot be grepped', async () => {
         const rules = [rule('symbol-references')];
 
