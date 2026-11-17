@@ -295,4 +295,42 @@ describe('GitlabService member and author lists', () => {
             ).not.toHaveBeenCalled();
         });
     });
+
+    describe('getPullRequestsByRepository', () => {
+        // The PR backfill reads the GitHub-shaped fields; without them every
+        // GitLab merge request was stored with no author, title or dates.
+        it('emits author, title and dates in the shape shared code reads', async () => {
+            gitlabAPI.MergeRequests.all.mockResolvedValue([
+                {
+                    id: 500,
+                    iid: 3,
+                    project_id: 10,
+                    title: 'Fix login',
+                    state: 'merged',
+                    author: { id: 7, username: 'bob', name: 'Bob' },
+                    created_at: '2026-10-01T10:00:00Z',
+                    updated_at: '2026-10-02T10:00:00Z',
+                    merged_at: '2026-10-02T09:00:00Z',
+                    closed_at: null,
+                    web_url: 'https://gitlab.example/g/r/-/merge_requests/3',
+                },
+            ]);
+
+            const [pr] = await service.getPullRequestsByRepository({
+                organizationAndTeamData,
+                repository: { id: '10', name: 'r' },
+            });
+
+            expect(pr).toEqual(
+                expect.objectContaining({
+                    number: 3,
+                    title: 'Fix login',
+                    user: { id: '7', login: 'bob', name: 'Bob' },
+                    created_at: '2026-10-01T10:00:00Z',
+                    merged_at: '2026-10-02T09:00:00Z',
+                    closed_at: '2026-10-02T09:00:00Z',
+                }),
+            );
+        });
+    });
 });

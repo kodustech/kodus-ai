@@ -5303,6 +5303,21 @@ export class GitlabService implements Omit<
                     author_id: pr.author?.id.toString(),
                     author_name: pr.author?.name,
                     author_created_at: pr.created_at,
+                    // The GitHub-shaped fields shared code reads. The PR
+                    // backfill only reads these, so without them every GitLab
+                    // merge request was stored with no author, title or dates,
+                    // and stored authors are what the member list unions in.
+                    title: pr.title,
+                    user: pr.author
+                        ? {
+                              id: String(pr.author.id),
+                              login: pr.author.username,
+                              name: pr.author.name,
+                          }
+                        : undefined,
+                    created_at: pr.created_at,
+                    closed_at: pr.closed_at ?? pr.merged_at ?? null,
+                    merged_at: pr.merged_at ?? null,
                     updated_at: pr.updated_at,
                     repository: repository.name,
                     repositoryId: repository.id,
