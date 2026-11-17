@@ -363,11 +363,13 @@ export class CodeManagementController {
         description: 'Comma-separated git ids',
     })
     public async getOrganizationMemberLabels(
-        @Query() query: { teamId: string; ids?: string },
+        @Query() query: { teamId: string; ids?: string | string[] },
     ) {
+        const ids = [query.ids ?? []].flat().join(',');
+
         return this.getMemberLabelsUseCase.execute(
             query.teamId,
-            (query.ids ?? '').split(','),
+            ids.split(','),
         );
     }
 
