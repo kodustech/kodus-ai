@@ -1,0 +1,15 @@
+services:
+  api:
+    image: example/api:2
+    ports:
+      - "3000"
+      - "127.0.0.1:9229:9229"
+      - "5000-5002:5000-5002/udp"
+      - target: 8443
+        published: "443"
+        protocol: tcp
+    expose:
+      - "9090"
+      - 3000
+    platform: linux/arm64
+    pull_policy: always

@@ -20,6 +20,8 @@ export interface RuntimeRunSummary {
     prNumber: number;
     headSha: string;
     baseBranch?: string;
+    /** The PR's title as the Run recorded it (untrusted, one clean line); absent on older Runs. */
+    prTitle?: string;
     state: RuntimeRunProjection['state'];
     verdictState?: RuntimeRunProjection['verdictState'];
     phase?: string;
@@ -39,6 +41,7 @@ export const toRunSummary = (r: RuntimeRunProjection, cost?: RuntimeRunCost): Ru
     prNumber: r.prNumber,
     headSha: r.headSha,
     ...(r.baseBranch === undefined ? {} : { baseBranch: r.baseBranch }),
+    ...(r.prTitle === undefined ? {} : { prTitle: r.prTitle }),
     state: r.state,
     verdictState: r.verdictState,
     phase: r.phase,

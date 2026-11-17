@@ -33,6 +33,13 @@ export interface RuntimeRunProjection {
     baseSha: string;
     /** PR target ref recorded at admission; legacy Runs remain absent, never backfilled. */
     baseBranch?: string;
+    /**
+     * The PR's title when the Run was requested, one clean line of untrusted
+     * text (pr-title.ts displayPrTitle), shown as text only: the Runs list
+     * names the Run by it. In `report` (not a column: nothing filters or sorts
+     * on it). Older Runs and requests without a title have none, never backfilled.
+     */
+    prTitle?: string;
     environmentId: string;
     imageId: string;
     state: RunState;

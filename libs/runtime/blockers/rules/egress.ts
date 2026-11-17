@@ -56,7 +56,7 @@ function credentialCard(c: { host?: string; secretName?: string; line: string })
                 ...(c.host ? { host: c.host } : {}),
                 ...(name ? { secretName: name } : {}),
                 label: name ? `Create the secret ${name} for ${where}` : `Create a secret for ${where}`,
-                detail: `Allowing the host fixes nothing: it answered without a credential. Add an org secret${name ? ` named ${name}` : ''} with ${where} as its host in Settings, Secrets; the machine gets a placeholder and the cell puts the value on the wire to that host only. A fork's code never gets it.`,
+                detail: `Allowing the host fixes nothing: it answered without a credential. Add an org secret${name ? ` named ${name}` : ''} with ${where} as its host in Settings, Secrets; the machine gets a placeholder and Kodus puts the value on the wire to that host only. A fork's code never gets it.`,
             },
         ],
     };
@@ -86,15 +86,15 @@ function buildEgressCard(hosts: string[], unresolved: string[]): ClassifiedBlock
                       id: `use_mirror:${host}`,
                       action: 'fix_recipe',
                       who: 'dev',
-                      label: "Install through the cell's read-only mirror",
-                      detail: `The cell passes its mirror to every build: declare ARG npm_config_registry (npm, pnpm), ARG PIP_INDEX_URL and ARG PIP_TRUSTED_HOST (pip) or ARG GOPROXY (Go) in the Dockerfile, before the install, and the packages come from mirror.cell.internal, which serves reads only. ${host} itself is never reached from a build: a publish from a RUN step would go out unseen.`,
+                      label: "Install through the Kodus read-only mirror",
+                      detail: `Kodus passes its mirror to every build: declare ARG npm_config_registry (npm, pnpm), ARG PIP_INDEX_URL and ARG PIP_TRUSTED_HOST (pip) or ARG GOPROXY (Go) in the Dockerfile, before the install, and the packages come from mirror.cell.internal, which serves reads only. ${host} itself is never reached from a build: a publish from a RUN step would go out unseen.`,
                   }
                 : {
                       id: `fetch_at_run:${host}`,
                       action: 'fix_recipe',
                       who: 'dev',
                       label: 'Fetch it when the app starts, not in the build',
-                      detail: `The app's machines trust the cell, which lets only downloads from ${host} out once it is allowed; a build's RUN steps do not. Move the download to the service's start, or vendor the file into the repository.`,
+                      detail: `The app's machines trust the server that runs them, which lets only downloads from ${host} out once it is allowed; a build's RUN steps do not. Move the download to the service's start, or vendor the file into the repository.`,
                   },
             {
                 id: `${FULL_ACCESS_FIX_PREFIX}${host}`,
@@ -228,8 +228,8 @@ export const platformDeniedRule: BlockerRule = {
                     id: `use_mirror:${host}`,
                     action: 'fix_recipe',
                     who: 'dev',
-                    label: "Install through the cell's registry mirror",
-                    detail: `${host} is on the Kodus deny list (cloud storage, paste and file-sharing sites), and no approval opens it. A build that installs packages reaches them through the cell's mirror: declare ARG GOPROXY in the Dockerfile (the cell passes it), and the modules come from mirror.cell.internal. An app that calls ${host} at boot needs a fake.`,
+                    label: "Install through the Kodus registry mirror",
+                    detail: `${host} is on the Kodus deny list (cloud storage, paste and file-sharing sites), and no approval opens it. A build that installs packages reaches them through the Kodus mirror: declare ARG GOPROXY in the Dockerfile (Kodus passes it), and the modules come from mirror.cell.internal. An app that calls ${host} at boot needs a fake.`,
                 },
             ],
         };

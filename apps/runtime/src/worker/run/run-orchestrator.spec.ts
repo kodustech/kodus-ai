@@ -623,6 +623,20 @@ describe('intent', () => {
         expect(finalOnly(published).find((p) => p.kind === 'comment')!.report!.paths.find((p) => p.probeId === 'orders-empty-cart')!.intent).toBe('intended');
     });
 
+    it('does not hand the pull request title to the intent classifier, whose eval has not run with one', async () => {
+        const { env } = envWithTests({ base: 0, pr: 0 });
+        const { deps, projection } = inMemoryRunDeps({ env, turns: turnsWith([ORDERS_SPEC], '{"intent":"intended","testId":"orders-spec"}') });
+        const classify = jest.spyOn(deps.intent, 'classify');
+        const base = shopRunRequest();
+        const req = { ...base, pullRequest: { ...base.pullRequest, title: 'Return 500 on empty cart' } };
+        await seed(projection, req);
+
+        await runRuntimeRun(req, deps);
+
+        expect(classify).toHaveBeenCalled();
+        for (const [, ctx] of classify.mock.calls) expect(ctx.title).toBeUndefined();
+    });
+
     it('a test the PR changes keeps the regression', async () => {
         const { env } = envWithTests({ base: 0, pr: 0 });
         const { deps, projection } = inMemoryRunDeps({ env, turns: turnsWith([ORDERS_SPEC], '{"intent":"intended","testId":"orders-spec"}') });

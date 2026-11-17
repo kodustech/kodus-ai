@@ -7,6 +7,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 - The Run's states and verdict: `run-state.ts` `canTransition`, `assertTransition`, `decideRunVerdict`, `checkConclusionFor`.
 - What the product shows: `run-report.ts` (`RuntimeRunReportSchema`, `RuntimeRunProgressSchema`), `replay-lanes.ts` `replayLanesOf`, `response-diff.ts` `responseDiffOf`, `boot-failure.ts` `bootFailureOf`, `reproduction.ts` `reproductionFor`, `reproductionManifest`.
 - The projection and stream contracts: `run-projection.ts` (`RunProjectionReader`, `RunProjectionStore`, `LIVE_RUN_STATES`), `run-stream.ts` (`RunStreamStore`, opaque offsets).
+- The PR title a Run keeps for display: `pr-title.ts` `displayPrTitle` (one line, no control or bidi characters, at most 256 characters; the projection's `prTitle`, in `report`).
 - Sealed tokens: `sealed-secret.ts` `sealSecret`, `openSecret`, `isSealedSecret`, `sealingKeyFrom` (AES-256-GCM, bound by AAD to the Run id or the setup command key).
 - The setup and its recipe: `environment-setup.ts`, `recipe.ts` `parseRecipeSummary`, `recipe-inference.ts` `inferRecipe` (a recipe from root files, no LLM), `recipe-resources.ts`, `recipe-author-version.ts` `RECIPE_AUTHOR_VERSION`, `run-workspace.ts` (the repositories of a multi-repo claim), `setup-repo-tokens.ts`.
 - Postgres stores and the file stream: `adapters/` ([its AGENTS.md](adapters/AGENTS.md)); in-memory doubles: `testing/`.
@@ -20,6 +21,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 - `repoToken` and `runToken` are refused unless sealed; a token is opened only inside the step that uses it.
 - No agent or app prose reaches the PR through the report; values in lanes, diffs and boot failures are redacted and cut.
 - The diff is capped at 16 MiB and carries `diffTruncated`.
+- `pullRequest.title` is the author's untrusted text: the intent classifier reads it as data, and the projection keeps only `displayPrTitle` of it, shown as text and never interpreted.
 - `decideRunVerdict` `identityMismatch`: the two sides' claims did not carry the same drawn identity (S-36); the Run is partly tested at best, as with `diffTruncated`.
 - `index.ts` re-exports `adapters/file-run-stream.store.ts` (`fs`) from the barrel of this pure module, and the API module takes `FileRunStreamStore` from it.
 - `run-stream.ts`'s header says the hub writes the stream to an object store; the hub writes Postgres (`adapters/pg-run-stream.store.ts`) or a local file.
@@ -35,7 +37,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 
 ## Module map
 
-Files (18, tests apart): `boot-failure.ts`, `environment-setup.ts`, `index.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`
+Files (19, tests apart): `boot-failure.ts`, `environment-setup.ts`, `index.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`
 
 Imports these Runtime modules:
 

@@ -6,9 +6,12 @@
 // cell's proxy and resolver only. The cell's Role is pods (and pods/exec)
 // in that namespace; the driver never creates a namespace or a policy.
 //
-// It runs code sandboxes (its Parts: Sandboxes and Sweeper). Environment
-// Runs (compose, observers, builds) are refused with driver.ErrUnsupported
-// (NoRuns); it has no bake and no reset part.
+// It runs code sandboxes (its Parts: Sandboxes and Sweeper) and, with
+// Config.Env, environment Runs from prebuilt images, one pod per compose
+// service in the cell's environment namespace (env.go; Parts gains
+// Composer, Recipes, Resetter and ServiceLogs). Without Config.Env every
+// Run is refused with driver.ErrUnsupported (NoRuns); builds, observers,
+// previews, bakes and snapshots are refused either way.
 package k8ssandbox
 
 import (
@@ -70,12 +73,15 @@ type Config struct {
 	// with org secrets trusts it (sandboxTrust). Empty: such a sandbox is
 	// refused (Capabilities SandboxCellTrust false).
 	CellCA []byte
+	// Env, set, runs environment Runs (env.go); nil: code sandboxes only.
+	Env *EnvConfig
 }
 
 type Driver struct {
 	k    KubeAPI
 	exec Execer
 	cfg  Config
+	envs envStates
 }
 
 // New checks the configuration only; the preflight (Preflight) is what
@@ -109,6 +115,13 @@ func New(k KubeAPI, exec Execer, cfg Config) (*Driver, error) {
 		}
 		cfg.CellCA = ca
 	}
+	if cfg.Env != nil {
+		env := *cfg.Env
+		if err := env.defaults(cfg); err != nil {
+			return nil, err
+		}
+		cfg.Env = &env
+	}
 	return &Driver{k: k, exec: exec, cfg: cfg}, nil
 }
 
@@ -123,9 +136,15 @@ func (d *Driver) Capabilities() driver.Capabilities {
 	}
 }
 
-// Parts returns code sandboxes and the sweep of pods past their ceiling.
+// Parts returns code sandboxes and the sweep of pods past their ceiling,
+// and with Config.Env the compose boot, the recipe's steps, the reset of
+// compose volumes and the services' logs.
 func (d *Driver) Parts() driver.Parts {
-	return driver.Parts{Sandboxes: d, Sweeper: d}
+	p := driver.Parts{Sandboxes: d, Sweeper: d}
+	if d.cfg.Env != nil {
+		p.Composer, p.Recipes, p.Resetter, p.ServiceLogs = d, d, envResetter{d}, d
+	}
+	return p
 }
 
 // Label values cannot hold ':' or timestamps; ids go in labels, times in
@@ -146,7 +165,7 @@ func (d *Driver) PrepareClaim(_ context.Context, spec driver.ClaimNetworkSpec) (
 		return driver.ClaimNetwork{}, err
 	}
 	if len(spec.Expose) > 0 {
-		return driver.ClaimNetwork{}, fmt.Errorf("%w: k8ssandbox exposes no claim port (no Runs)", driver.ErrUnsupported)
+		return driver.ClaimNetwork{}, fmt.Errorf("%w: k8ssandbox exposes no claim port: the observer pod and previews are not wired on Kubernetes yet", driver.ErrUnsupported)
 	}
 	return driver.ClaimNetwork{WorkloadGroupID: spec.ClaimID, ObserverGroupID: spec.ClaimID, EgressAddress: d.cfg.EgressAddress}, nil
 }
@@ -172,6 +191,9 @@ func (d *Driver) ReleaseClaim(ctx context.Context, n driver.ClaimNetwork) error 
 		if err := ignoreNotFound(d.k.DeletePod(ctx, d.cfg.Namespace, str(meta(p)["name"]))); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if err := d.cleanupEnv(ctx, n.WorkloadGroupID); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }
@@ -464,13 +486,20 @@ func (d *Driver) DialGuest(ctx context.Context, ref driver.MachineRef) (io.ReadW
 	return d.exec.Exec(ctx, d.cfg.Namespace, name, containerSandbox, GuestCommand)
 }
 
-// Destroy deletes the pod only when it carries this cell's label.
+// Destroy deletes the pod only when it carries this cell's label, and the
+// claim's objects in the environment namespace with it.
 func (d *Driver) Destroy(ctx context.Context, ref driver.MachineRef) error {
 	p, name, err := d.ownPod(ctx, ref)
 	if err != nil || p == nil {
 		return err
 	}
-	return ignoreNotFound(d.k.DeletePod(ctx, d.cfg.Namespace, name))
+	labels, _ := meta(p)["labels"].(map[string]any)
+	err = ignoreNotFound(d.k.DeletePod(ctx, d.cfg.Namespace, name))
+	if role := str(labels[label(driver.TagRole)]); role == string(driver.RoleWorkload) {
+		err = errors.Join(err, d.cleanupEnv(ctx, str(labels[label(driver.TagClaim)])))
+	}
+	d.envs.forget(ref.MachineID)
+	return err
 }
 
 // List asks the cluster for this cell's pods only: a selector naming
@@ -559,7 +588,8 @@ func (d *Driver) Sweep(ctx context.Context, now time.Time) ([]string, error) {
 		}
 		gone = append(gone, r.MachineID)
 	}
-	return gone, errors.Join(errs...)
+	orphans, err := d.ReapOrphans(ctx)
+	return append(gone, orphans...), errors.Join(append(errs, err)...)
 }
 
 // NewForReaper is a driver that can only list and destroy this cell's pods

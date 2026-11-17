@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import {
+    displayPrTitle,
     RuntimeEventName,
     RuntimeRunCancelRequestedSchema,
     type RuntimeRunProjection,
@@ -38,6 +39,12 @@ async function expirePreviews(previews: PullRequestPreviews | undefined, logger:
         logger.warn({ msg: 'preview.expire_failed', organizationId: input.organizationId, prNumber: input.prNumber, why: input.why, error: (e as Error).message.slice(0, 200) });
     }
 }
+
+/** The request's PR title as the Run keeps it for display (pr-title.ts), or nothing. */
+const prTitleOf = (req: RuntimeRunRequested): Pick<RuntimeRunProjection, 'prTitle'> => {
+    const prTitle = displayPrTitle(req.pullRequest.title);
+    return prTitle ? { prTitle } : {};
+};
 
 /** One lock per PR: the start/supersede decision runs on one worker at a time, cluster-wide. */
 export const prLockKey = (r: { organizationId: string; repositoryId: string; prNumber: number }) => `run:${r.organizationId}:${r.repositoryId}:${r.prNumber}`;
@@ -121,6 +128,7 @@ export class RunRequestedHandler implements CommandHandler {
             repositoryId: req.repository.id, repositoryName: req.repository.name, prNumber: req.pullRequest.number,
             trigger: req.trigger, headSha: req.pullRequest.headSha, baseSha: req.pullRequest.baseSha,
             ...(req.pullRequest.baseBranch === undefined ? {} : { baseBranch: req.pullRequest.baseBranch }),
+            ...prTitleOf(req),
             environmentId: req.environment.environmentId, imageId: req.environment.imageId,
             state: 'skipped', reason, requestedAt: req.requestedAt, finishedAt: new Date().toISOString(),
         });
@@ -139,6 +147,7 @@ export class RunRequestedHandler implements CommandHandler {
                     repositoryName: req.repository.name, prNumber: req.pullRequest.number, headSha: req.pullRequest.headSha,
                     baseSha: req.pullRequest.baseSha, environmentId: req.environment.environmentId, imageId: req.environment.imageId,
                     ...(req.pullRequest.baseBranch === undefined ? {} : { baseBranch: req.pullRequest.baseBranch }),
+                    ...prTitleOf(req),
                     correlationId: req.correlationId, attempt: req.attempt, trigger: req.trigger, requestedAt: req.requestedAt,
                     state, reason: `pr_admission_${refusal.reason}`, finishedAt: new Date().toISOString(),
                 });
@@ -197,6 +206,7 @@ export class RunRequestedHandler implements CommandHandler {
                         headSha: req.pullRequest.headSha,
                         baseSha: req.pullRequest.baseSha,
                         ...(req.pullRequest.baseBranch === undefined ? {} : { baseBranch: req.pullRequest.baseBranch }),
+                        ...prTitleOf(req),
                         environmentId: req.environment.environmentId,
                         imageId: req.environment.imageId,
                         ...(recipe ? { recipe } : {}),

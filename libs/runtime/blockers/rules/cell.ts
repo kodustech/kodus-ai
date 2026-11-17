@@ -12,12 +12,12 @@ import { bySignature, evidenceOf, largerMachine, retry, SELF_HOSTED_MEMORY, useO
 export const environmentNotPreparedRule = bySignature('environment_not_prepared', ({ input }) => ({
     kind: 'platform',
     signature: 'environment_not_prepared',
-    title: 'The cell that ran this has no prepared image of the environment',
+    title: 'The host that ran this has no prepared image of the environment',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
             ...retry,
-            detail: 'Your repository is not the cause. The environment was set up on another cell, or before this one was replaced. Run the setup again; pull requests run once it is active.',
+            detail: 'Your repository is not the cause. The environment was set up on another host, or before this one was replaced. Run the setup again; pull requests run once it is active.',
         },
     ],
 }));
@@ -29,7 +29,7 @@ export const environmentNotPreparedRule = bySignature('environment_not_prepared'
 export const buildStateEvictedRule = bySignature('build_state_evicted', ({ input }) => ({
     kind: 'platform',
     signature: 'build_state_evicted',
-    title: "The cell removed this environment's build cache to free disk",
+    title: "The host removed this environment's build cache to free disk",
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
@@ -43,12 +43,12 @@ export const buildStateEvictedRule = bySignature('build_state_evicted', ({ input
 export const cellUnavailableRule = bySignature('cell_unavailable', ({ input }) => ({
     kind: 'platform',
     signature: 'cell_unavailable',
-    title: 'No cell was connected to boot this environment',
+    title: 'No host was connected to boot this environment',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
             ...retry,
-            detail: 'Nothing booted and your repository is not the cause. On your own cell, check that it runs and shows as connected under Cells; then run the setup again.',
+            detail: 'Nothing booted and your repository is not the cause. On your own host, check that it runs and shows as connected under Hosts; then run the setup again.',
         },
     ],
 }));
@@ -63,8 +63,8 @@ export const orgCapacityRule = bySignature('org_capacity', ({ input }) => {
         kind: 'resources',
         signature: 'org_capacity',
         title: cap
-            ? `Your organization is using all ${cap} machines it may hold on shared Kodus cells`
-            : 'Your organization is using all the machines it may hold on shared Kodus cells',
+            ? `Your organization is using all ${cap} machines it may hold on shared Kodus hosts`
+            : 'Your organization is using all the machines it may hold on shared Kodus hosts',
         evidence: evidenceOf({ text: input.message }),
         fixes: [
             {
@@ -98,7 +98,7 @@ export const machineMinutesExhaustedRule = bySignature('machine_minutes_exhauste
 export const noCapacityRule = bySignature('no_capacity', ({ input }) => ({
     kind: 'resources',
     signature: 'no_capacity',
-    title: 'Every cell that can run this environment is full',
+    title: 'Every host that can run this environment is full',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
@@ -123,7 +123,7 @@ export const builderFailedRule = bySignature('builder_failed', ({ input }) => ({
     fixes: [
         {
             ...retry,
-            detail: 'No build step failed and your repository is not the cause: the builder on the cell stopped. Run the setup again.',
+            detail: 'No build step failed and your repository is not the cause: the builder on the host stopped. Run the setup again.',
         },
     ],
 }));
@@ -135,12 +135,12 @@ export const builderFailedRule = bySignature('builder_failed', ({ input }) => ({
 export const imageLoadRule = bySignature('image_load', ({ input }) => ({
     kind: 'platform',
     signature: 'image_load',
-    title: 'The cell could not load the image the build produced',
+    title: 'The host could not load the image the build produced',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
             ...retry,
-            detail: 'The build finished, but its image was refused or could not be loaded on the cell. Run the setup again; if it repeats, the build output is malformed and the recipe needs a look.',
+            detail: 'The build finished, but its image was refused or could not be loaded on the host. Run the setup again; if it repeats, the build output is malformed and the recipe needs a look.',
         },
     ],
 }));
@@ -155,14 +155,14 @@ export const imageLoadRule = bySignature('image_load', ({ input }) => ({
 export const sizeUnavailableRule = bySignature('size_unavailable', ({ input }) => ({
     kind: 'resources',
     signature: 'size_unavailable',
-    title: 'No cell grants this machine size',
+    title: 'No host grants this machine size',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
             ...largerMachine(
-                `In the environment's Machine size, choose a size within what the cell grants and run the setup again. ${SELF_HOSTED_MEMORY} A cell of a build older than machine sizes grants none until it is updated.`,
+                `In the environment's Machine size, choose a size within what the host grants and run the setup again. ${SELF_HOSTED_MEMORY} A host of a build older than machine sizes grants none until it is updated.`,
             ),
-            label: 'Choose a machine size a cell grants',
+            label: 'Choose a machine size a host grants',
         },
         useOwnCell,
     ],
@@ -175,13 +175,13 @@ export const sizeUnavailableRule = bySignature('size_unavailable', ({ input }) =
 export const isolationUnavailableRule = bySignature('isolation_unavailable', ({ input }) => ({
     kind: 'capacity',
     signature: 'isolation_unavailable',
-    title: 'No cell gives the isolation this environment asks for',
+    title: 'No host gives the isolation this environment asks for',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
             ...useOwnCell,
-            label: 'Run it on a cell that gives that isolation',
-            detail: 'Nothing booted and your repository is not the cause. A claim that asks for a virtual machine runs only on a cell with a microVM backend (a host with KVM), never on a lower isolation. Register such a cell under Cells, or run the setup again once one is connected.',
+            label: 'Run it on a host that gives that isolation',
+            detail: 'Nothing booted and your repository is not the cause. A claim that asks for a virtual machine runs only on a host with a microVM backend (one with KVM), never on a lower isolation. Register such a host under Hosts, or run the setup again once one is connected.',
         },
     ],
 }));
@@ -193,7 +193,7 @@ export const isolationUnavailableRule = bySignature('isolation_unavailable', ({ 
 export const backendUnavailableRule = bySignature('backend_unavailable', ({ input }) => ({
     kind: 'capacity',
     signature: 'backend_unavailable',
-    title: 'No cell runs the backend the other side of this Run ran on',
+    title: 'No host runs the backend the other side of this Run ran on',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
@@ -210,13 +210,13 @@ export const backendUnavailableRule = bySignature('backend_unavailable', ({ inpu
 export const authoredFilesUnsupportedRule = bySignature('authored_files_unsupported', ({ input }) => ({
     kind: 'platform',
     signature: 'authored_files_unsupported',
-    title: 'This cell is too old for the build files Kody wrote',
+    title: 'This host is too old for the build files Kody wrote',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         {
             ...retry,
-            label: 'Update the cell, then run it again',
-            detail: "Nothing booted and your repository is not the cause. Kody's recipe builds from a Dockerfile or compose file it wrote under .kodus/, which only a newer cell writes into the checkout. On your own cell, update it to the current build; on Kodus cells, run the setup again once they are updated.",
+            label: 'Update the host, then run it again',
+            detail: "Nothing booted and your repository is not the cause. Kody's recipe builds from a Dockerfile or compose file it wrote under .kodus/, which only a newer host writes into the checkout. On your own host, update it to the current build; on Kodus hosts, run the setup again once they are updated.",
         },
     ],
 }));

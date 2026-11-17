@@ -1,0 +1,49 @@
+x-common: &common
+  restart: unless-stopped
+services:
+  app:
+    <<: *common
+    image: ghcr.io/example/app:1.4.2
+    command: node server.js --port "${PORT:-3000}"
+    working_dir: /srv/app
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/app
+      REDIS_URL: redis://cache:6379
+      PRICE: "$$5"
+      SUBSHELL: "$$(date)"
+    env_file: ./.env.app
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    labels:
+      com.example.team: core
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 1s
+      retries: 30
+    stop_grace_period: 20s
+  cache:
+    image: redis:7-alpine
+    user: "999:999"
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+volumes:
+  pgdata: {}

@@ -222,7 +222,7 @@ describe('classifyBlocker', () => {
 
     it('a recipe the cell refused for services.needs is a recipe card for the dev, never a retry', () => {
         const c = classifyBlocker({ kind: 'other_repo', signature: 'recipe_needs', message: 'recipe_needs: services.needs (other repositories) is not supported by this cell yet' });
-        expect(c).toMatchObject({ kind: 'other_repo', signature: 'recipe_needs', title: 'The recipe needs other repositories, which a cell does not boot yet' });
+        expect(c).toMatchObject({ kind: 'other_repo', signature: 'recipe_needs', title: 'The recipe needs other repositories, which a host does not boot yet' });
         expect(c.fixes.map((f) => [f.id, f.who])).toEqual([['fix_recipe', 'dev']]);
     });
 
@@ -326,7 +326,7 @@ describe('a denied package registry', () => {
 describe('a cell with no prepared image of the environment', () => {
     it('asks for the setup again and blames nothing in the repository', () => {
         const r = classifyBlocker({ kind: 'platform', signature: 'environment_not_prepared', message: 'the cell that took this Run has no prepared image of the environment; the environment has to be set up again' });
-        expect(r).toMatchObject({ kind: 'platform', signature: 'environment_not_prepared', title: 'The cell that ran this has no prepared image of the environment' });
+        expect(r).toMatchObject({ kind: 'platform', signature: 'environment_not_prepared', title: 'The host that ran this has no prepared image of the environment' });
         expect(r.fixes.map((f) => f.action)).toEqual(['retry_setup']);
     });
 });
@@ -335,7 +335,7 @@ describe("a PR not started because its cell evicted the environment's build cach
     // Behavior: the Run page says the cache is gone and that a setup restores it, never that the repository failed.
     it('asks for the setup again and blames nothing in the repository', () => {
         const r = classifyBlocker({ kind: 'platform', signature: 'build_state_evicted', message: "the cell removed this environment's build cache to free disk at 2026-11-13T07:31:31.000Z" });
-        expect(r).toMatchObject({ kind: 'platform', signature: 'build_state_evicted', title: "The cell removed this environment's build cache to free disk" });
+        expect(r).toMatchObject({ kind: 'platform', signature: 'build_state_evicted', title: "The host removed this environment's build cache to free disk" });
         expect(r.fixes.map((f) => f.action)).toEqual(['retry_setup']);
         expect(r.fixes[0].detail).toContain('Your repository is not the cause');
     });
@@ -368,7 +368,7 @@ describe('an entry the cell refuses to unpack', () => {
         expect(slow.fixes.map((f) => f.action)).toEqual(['fix_recipe']);
         expect(slow.fixes[0].detail).toContain('development build');
         const lost = classifyBlocker({ kind: 'platform', signature: 'cell_lost', message: 'the cell disconnected while the claim was booting' });
-        expect(lost.title).toBe('Kodus failed while keeping the cell connected during the boot');
+        expect(lost.title).toBe('Kodus failed while keeping the host connected during the boot');
         expect(lost.fixes.map((f) => f.action)).toEqual(['retry_setup']);
     });
 
@@ -400,8 +400,8 @@ describe('an entry the cell refuses to unpack', () => {
             signature: 'authored_files_unsupported',
             message: "this cell's build is older than the build files Kody writes with its recipe (its hello names no authoredFiles); the claim was not started",
         });
-        expect(old).toMatchObject({ kind: 'platform', signature: 'authored_files_unsupported', title: 'This cell is too old for the build files Kody wrote' });
-        expect(old.fixes.map((f) => [f.action, f.label])).toEqual([['retry_setup', 'Update the cell, then run it again']]);
+        expect(old).toMatchObject({ kind: 'platform', signature: 'authored_files_unsupported', title: 'This host is too old for the build files Kody wrote' });
+        expect(old.fixes.map((f) => [f.action, f.label])).toEqual([['retry_setup', 'Update the host, then run it again']]);
         expect(old.fixes[0].detail).toContain('your repository is not the cause');
     });
 
@@ -427,11 +427,11 @@ describe('an entry the cell refuses to unpack', () => {
             signature: 'size_unavailable',
             message: 'size_unavailable: driver: the machine size is above what this cell grants: asked 16384 MB / 8 CPUs, this cell grants at most 8192 MB / 4 CPUs',
         });
-        expect(big).toMatchObject({ kind: 'resources', signature: 'size_unavailable', title: 'No cell grants this machine size' });
+        expect(big).toMatchObject({ kind: 'resources', signature: 'size_unavailable', title: 'No host grants this machine size' });
         expect(big.evidence?.lines?.join(' ')).toContain('asked 16384 MB / 8 CPUs, this cell grants at most 8192 MB / 4 CPUs');
         expect(big.fixes.map((f) => [f.action, f.label])).toEqual([
-            ['bump_machine', 'Choose a machine size a cell grants'],
-            ['use_own_cell', 'Run it on a cell of your own'],
+            ['bump_machine', 'Choose a machine size a host grants'],
+            ['use_own_cell', 'Run it on a host of your own'],
         ]);
         expect(big.fixes[0].detail).toContain('Machine size');
         expect(big.fixes[0].detail).toContain('-gvisor-mem-max');
@@ -444,20 +444,20 @@ describe('an entry the cell refuses to unpack', () => {
             signature: 'size_unavailable',
             message: 'asked 16384 MB / 8 CPUs, and no connected cell that may serve this organization grants it: the largest any of them grants is 8192 MB / 4 CPUs; the claim was not started',
         });
-        expect(routed).toMatchObject({ kind: 'resources', signature: 'size_unavailable', title: 'No cell grants this machine size' });
+        expect(routed).toMatchObject({ kind: 'resources', signature: 'size_unavailable', title: 'No host grants this machine size' });
         expect(routed.evidence?.lines?.join(' ')).toContain('the largest any of them grants is 8192 MB / 4 CPUs');
         expect(routed.fixes.map((f) => f.action)).toEqual(['bump_machine', 'use_own_cell']);
     });
 
     it("a Run side whose other side's backend no cell runs now is a capacity card that says to run it again, not to change the repository", () => {
         const card = classifyBlocker({ kind: 'capacity', signature: 'backend_unavailable', message: "the Run's other side ran on firecracker (microvm)" });
-        expect(card).toMatchObject({ kind: 'capacity', signature: 'backend_unavailable', title: 'No cell runs the backend the other side of this Run ran on' });
+        expect(card).toMatchObject({ kind: 'capacity', signature: 'backend_unavailable', title: 'No host runs the backend the other side of this Run ran on' });
         expect(card.fixes[0].detail).toContain('one backend');
     });
 
     it('an isolation no connected cell gives is a capacity card that points at a cell that gives it, never at a retry on a lower one', () => {
         const vm = classifyBlocker(isolationUnavailable('vm').blockers[0]);
-        expect(vm).toMatchObject({ kind: 'capacity', signature: 'isolation_unavailable', title: 'No cell gives the isolation this environment asks for' });
+        expect(vm).toMatchObject({ kind: 'capacity', signature: 'isolation_unavailable', title: 'No host gives the isolation this environment asks for' });
         expect(vm.evidence?.lines?.join(' ')).toContain('virtual machine');
         expect(vm.fixes.map((f) => f.action)).toEqual(['use_own_cell']);
     });
@@ -468,12 +468,12 @@ describe('an entry the cell refuses to unpack', () => {
         expect(died.fixes.map((f) => f.action)).toEqual(['retry_setup']);
         expect(classifyBlocker({ kind: 'platform', signature: 'image_load', message: 'image names another tag' })).toMatchObject({ kind: 'platform' });
         expect(classifyBlocker({ kind: 'resources', signature: 'image_too_large', message: 'image is 40 GB' })).toMatchObject({ kind: 'resources' });
-        expect(classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message: 'services.db.container_name refused' })).toMatchObject({ kind: 'toolchain', title: 'The cell refused the compose project before building it' });
+        expect(classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message: 'services.db.container_name refused' })).toMatchObject({ kind: 'toolchain', title: 'The host refused the compose project before building it' });
     });
 
     it('a boot no cell took is a platform card: nothing booted, check the cell, run it again', () => {
         const none = classifyBlocker({ kind: 'cell_unavailable', signature: 'cell_unavailable', message: 'no cell is connected for this organization' });
-        expect(none).toMatchObject({ kind: 'platform', title: 'No cell was connected to boot this environment' });
+        expect(none).toMatchObject({ kind: 'platform', title: 'No host was connected to boot this environment' });
         expect(none.fixes.map((f) => f.action)).toEqual(['retry_setup']);
         expect(none.fixes[0].detail).toContain('Nothing booted');
     });
@@ -484,15 +484,15 @@ describe('an entry the cell refuses to unpack', () => {
             signature: 'org_capacity',
             message: 'this organization already holds 8 machines on shared Kodus cells, the most it may hold at once (cap 8); the claim was not started',
         });
-        expect(capped).toMatchObject({ kind: 'resources', signature: 'org_capacity', title: 'Your organization is using all 8 machines it may hold on shared Kodus cells' });
+        expect(capped).toMatchObject({ kind: 'resources', signature: 'org_capacity', title: 'Your organization is using all 8 machines it may hold on shared Kodus hosts' });
         expect(capped.fixes.map((f) => [f.action, f.who])).toEqual([
             ['retry_setup', 'one_click'],
             ['use_own_cell', 'settings'],
         ]);
         expect(capped.fixes[0].label).toBe('Wait, then run it again');
-        expect(capped.fixes[1].detail).toContain('cell of your organization');
+        expect(capped.fixes[1].detail).toContain('host of your organization');
         expect(classifyBlocker({ kind: 'resources', signature: 'org_capacity', message: 'capped' }).title).toBe(
-            'Your organization is using all the machines it may hold on shared Kodus cells',
+            'Your organization is using all the machines it may hold on shared Kodus hosts',
         );
     });
 
@@ -510,7 +510,7 @@ describe('an entry the cell refuses to unpack', () => {
 
     it('every eligible cell full is its own card, not a full cell nor a Kodus step that failed', () => {
         const full = classifyBlocker({ kind: 'resources', signature: 'no_capacity', message: 'every cell that may serve this organization is full; the claim was not started' });
-        expect(full).toMatchObject({ kind: 'resources', signature: 'no_capacity', title: 'Every cell that can run this environment is full' });
+        expect(full).toMatchObject({ kind: 'resources', signature: 'no_capacity', title: 'Every host that can run this environment is full' });
         expect(full.fixes.map((f) => f.action)).toEqual(['retry_setup', 'use_own_cell']);
         expect(full.fixes[0].detail).toContain('Nothing booted');
     });

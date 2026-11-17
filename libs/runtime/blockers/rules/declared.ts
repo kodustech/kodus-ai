@@ -14,7 +14,7 @@ const PLATFORM_STEPS: Record<string, string> = {
     repo_upload: 'copying the repository to the machine',
     workdir: 'preparing the work directory',
     egress_policy: 'applying the outbound policy',
-    cell_lost: 'keeping the cell connected during the boot',
+    cell_lost: 'keeping the host connected during the boot',
 };
 
 /** Kodus's own steps: nothing in the repository to change. */
@@ -72,7 +72,7 @@ export const recipeNeedsRule: BlockerRule = {
             ? {
                   kind: 'other_repo',
                   signature: input.signature,
-                  title: 'The recipe needs other repositories, which a cell does not boot yet',
+                  title: 'The recipe needs other repositories, which a host does not boot yet',
                   evidence: evidenceOf({ text: input.message }),
                   fixes: [
                       fixRecipe(

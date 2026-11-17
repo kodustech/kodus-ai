@@ -213,7 +213,7 @@ export function buildRuntimeHealth(input: RuntimeHealthInput): RuntimeHealth {
                       const s = live.get(c.cellId);
                       return { ...c, connected: !!s && !s.disconnectedAt, lastHeartbeatAt: s?.lastHeartbeatAt ?? c.lastHeartbeatAt };
                   }),
-                  pool: notMeasured('The cell keeps its warm pool count to itself (cell_pool_ready); the Runtime database does not record it.'),
+                  pool: notMeasured('The host keeps its warm pool count to itself (cell_pool_ready); the Runtime database does not record it.'),
               }
             : notMeasured(UNREADABLE),
         cost: { today, usagePath: '/runtime/settings/usage' },

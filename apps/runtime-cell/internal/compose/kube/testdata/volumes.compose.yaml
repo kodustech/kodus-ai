@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16
+    volumes:
+      - type: volume
+        source: data
+        target: /var/lib/postgresql/data
+        volume:
+          subpath: pg
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./db/conf:/etc/postgresql/conf.d
+      - /var/run/postgresql
+    shm_size: 256m
+    init: true
+    hostname: db-host
+    networks:
+      default:
+        aliases: [database, pg.internal]
+volumes:
+  data:
+    labels:
+      com.example: keep

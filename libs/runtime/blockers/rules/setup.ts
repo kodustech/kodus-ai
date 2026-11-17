@@ -103,7 +103,7 @@ export const recipeStepRule: BlockerRule = {
             evidence: evidenceOf({ text: input.message }),
             fixes: [
                 fixRecipe(
-                    `Fix ${recipeStep} in .kodus/workspace.yaml on the default branch. A cell runs it in the public service's container once the project is up (a data.seed mapping in the service it names); its output is in the setup's progress.`,
+                    `Fix ${recipeStep} in .kodus/workspace.yaml on the default branch. A host runs it in the public service's container once the project is up (a data.seed mapping in the service it names); its output is in the setup's progress.`,
                 ),
                 retry,
             ],

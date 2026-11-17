@@ -59,8 +59,8 @@ export const useOwnCell: BlockerFixView = {
     id: 'use_own_cell',
     action: 'use_own_cell',
     who: 'settings',
-    label: 'Run it on a cell of your own',
-    detail: 'Register a cell of your organization under Cells: its machines serve only your environments, and no limit of the shared Kodus cells applies there.',
+    label: 'Run it on a host of your own',
+    detail: 'Register a host of your organization under Hosts: its machines serve only your environments, and no limit of the shared Kodus hosts applies there.',
 };
 
 /** The environment's Machine size setting (contracts/machine-size.ts), and a self-hosted cell's own bounds. */
@@ -73,7 +73,7 @@ export const largerMachine = (detail: string): BlockerFixView => ({
 });
 
 export const SELF_HOSTED_MEMORY =
-    'On your own cell, a claim gets at most -gvisor-mem-max and -gvisor-cpus-max, and -gvisor-mem-limit when it asks no size: raise them on a machine that has the memory.';
+    'On your own host, a claim gets at most -gvisor-mem-max and -gvisor-cpus-max, and -gvisor-mem-limit when it asks no size: raise them on a machine that has the memory.';
 
 export const fixRecipe = (detail: string): BlockerFixView => ({
     id: 'fix_recipe',

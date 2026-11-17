@@ -143,6 +143,8 @@ export class RuntimeRunRequestBuilder {
                 // Every path that starts a Run comes here: in an environment of several repositories a fork always waits for a maintainer.
                 ...(head.fork && input.forkApprovalRequired === false && forkMayRunUnheld(Math.max(1, members.length)) ? { forkApprovalRequired: false } : {}),
                 ...(head.authorId ? { authorId: head.authorId } : {}),
+                // Untrusted: the intent classifier reads it as data, and the Run keeps one clean line of it for display.
+                ...(head.title ? { title: head.title } : {}),
             },
             environment: {
                 environmentId: env.environmentId,

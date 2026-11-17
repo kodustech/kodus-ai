@@ -1,0 +1,166 @@
+ignored: []
+objects:
+    - apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: workload
+            kodus.io/side: pr
+        name: env-claim-1
+        namespace: kodus-runtime-environments
+      spec:
+        egress:
+            - to:
+                - podSelector:
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+            - ports:
+                - port: 5353
+                  protocol: UDP
+                - port: 5353
+                  protocol: TCP
+                - port: 8080
+                  protocol: TCP
+                - port: 8443
+                  protocol: TCP
+              to:
+                - namespaceSelector:
+                    matchLabels:
+                        kubernetes.io/metadata.name: kodus-runtime
+                  podSelector:
+                    matchLabels:
+                        app.kubernetes.io/component: cell
+        ingress:
+            - from:
+                - podSelector:
+                    matchLabels:
+                        kodus.io/cell: cell-a
+                        kodus.io/claim: claim-1
+        podSelector:
+            matchLabels:
+                kodus.io/cell: cell-a
+                kodus.io/claim: claim-1
+        policyTypes:
+            - Ingress
+            - Egress
+    - apiVersion: v1
+      kind: Pod
+      metadata:
+        annotations:
+            kodus.io/compose-service: web
+            kodus.io/hard-expires: "2026-11-17T12:00:00Z"
+        labels:
+            kodus.io/cell: cell-a
+            kodus.io/claim: claim-1
+            kodus.io/org: org-1
+            kodus.io/role: workload
+            kodus.io/service: web
+            kodus.io/side: pr
+        name: env-claim-1-web
+        namespace: kodus-runtime-environments
+      spec:
+        activeDeadlineSeconds: 3600
+        automountServiceAccountToken: false
+        containers:
+            - image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+              name: web
+              ports:
+                - containerPort: 80
+              resources:
+                limits:
+                    cpu: 2000m
+                    memory: 2048Mi
+                requests:
+                    cpu: 2000m
+                    memory: 2048Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                    add:
+                        - CHOWN
+                        - DAC_OVERRIDE
+                        - FOWNER
+                        - FSETID
+                        - KILL
+                        - MKNOD
+                        - NET_BIND_SERVICE
+                        - SETFCAP
+                        - SETGID
+                        - SETPCAP
+                        - SETUID
+                        - SYS_CHROOT
+                    drop:
+                        - ALL
+                privileged: false
+              volumeMounts:
+                - mountPath: /etc/hosts
+                  name: kodus-hosts
+                  readOnly: true
+                  subPath: hosts
+        dnsConfig:
+            nameservers:
+                - 10.96.12.34
+        dnsPolicy: None
+        enableServiceLinks: false
+        hostIPC: false
+        hostNetwork: false
+        hostPID: false
+        initContainers:
+            - command:
+                - /bin/sh
+                - -c
+                - trap 'exit 143' TERM INT; until [ -e /kodus/gate/open ]; do sleep 0.2; done
+              image: registry.example/kodus-helper@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: IfNotPresent
+              name: kodus-init
+              resources:
+                limits:
+                    cpu: 100m
+                    memory: 64Mi
+                requests:
+                    cpu: 100m
+                    memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                    add:
+                        - CHOWN
+                        - DAC_OVERRIDE
+                        - FOWNER
+                        - FSETID
+                    drop:
+                        - ALL
+                privileged: false
+                runAsUser: 0
+              volumeMounts:
+                - mountPath: /kodus/gate
+                  name: kodus-gate
+                - mountPath: /kodus/hosts
+                  name: kodus-hosts
+        restartPolicy: Never
+        runtimeClassName: gvisor
+        securityContext:
+            seccompProfile:
+                type: RuntimeDefault
+        terminationGracePeriodSeconds: 10
+        volumes:
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: kodus-gate
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+              name: kodus-hosts
+services:
+    - name: web
+      podname: env-claim-1-web
+      container: web
+      wave: 0
+      hostnames:
+        - web
+      healthcheck: false

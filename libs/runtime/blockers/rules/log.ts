@@ -242,7 +242,7 @@ const goModuleNotPinned: LineRule = ({ text }) => {
         title: `${m[1]}@${m[2]} is not in the repository's go.sum`,
         fixes: [
             fixRecipe(
-                `Run go mod tidy on the default branch and commit go.sum. The cell's registry mirror serves only the modules go.sum pins, so a build that needs another one (or runs go get) stops here.`,
+                `Run go mod tidy on the default branch and commit go.sum. The Kodus registry mirror serves only the modules go.sum pins, so a build that needs another one (or runs go get) stops here.`,
             ),
         ],
     };
@@ -304,7 +304,7 @@ const caUntrusted: LineRule = ({ text }) => {
                 id: 'trust_cell_ca',
                 action: 'fix_recipe',
                 who: 'dev',
-                label: "Point the tool at the cell's certificates",
+                label: "Point the tool at the host's certificates",
                 detail: `Kody checks what the build downloads and hands each step its certificates in SSL_CERT_FILE and NODE_EXTRA_CA_CERTS. A tool with a trust store of its own needs its CA option pointed at "$SSL_CERT_FILE" in the Dockerfile${bun ? ' (for bun install: --cafile "$SSL_CERT_FILE", or cafile under [install] in a bunfig)' : ''}. Setting it up again without that fails the same way.`,
             },
         ],

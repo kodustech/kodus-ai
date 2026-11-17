@@ -58,7 +58,7 @@ export const outOfMemoryRule = bySignature('out_of_memory', ({ input }) => {
 export const imageTooLargeRule = bySignature('image_too_large', ({ input }) => ({
     kind: 'resources',
     signature: 'image_too_large',
-    title: 'The image the build produced is larger than a cell keeps',
+    title: 'The image the build produced is larger than a host keeps',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         fixRecipe(
@@ -71,11 +71,11 @@ export const imageTooLargeRule = bySignature('image_too_large', ({ input }) => (
 export const composeRefusedRule = bySignature('compose_refused', ({ input }) => ({
     kind: 'toolchain',
     signature: 'compose_refused',
-    title: 'The cell refused the compose project before building it',
+    title: 'The host refused the compose project before building it',
     evidence: evidenceOf({ text: input.message }),
     fixes: [
         fixRecipe(
-            'The message names the key the sandbox refuses (privileges, host paths, container names, variables the cell would fill in). Remove it from the compose file the recipe names, or name an overlay without it, and run the setup again.',
+            'The message names the key the sandbox refuses (privileges, host paths, container names, variables the host would fill in). Remove it from the compose file the recipe names, or name an overlay without it, and run the setup again.',
         ),
     ],
 }));
@@ -111,7 +111,7 @@ export const repoRefusedRule = bySignature('repo_refused', ({ input }) => {
         evidence: { lines: [m ? `${entry}: ${m[2]}` : input.message.slice(0, 300)] },
         fixes: [
             fixRecipe(
-                `The cell never unpacks a symlink that leaves the repository, a .git entry, a hard link or a device (S-05). Make ${entry} a regular file or a link inside the repository; nothing else in it needs to change.`,
+                `The host never unpacks a symlink that leaves the repository, a .git entry, a hard link or a device (S-05). Make ${entry} a regular file or a link inside the repository; nothing else in it needs to change.`,
             ),
         ],
     };

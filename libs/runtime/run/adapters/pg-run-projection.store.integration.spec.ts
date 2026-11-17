@@ -114,4 +114,22 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect(ids(await store.list({ organizationId: o, limit: 1 }))).toEqual([runs[1].runId]);
         expect((await store.get(runs[0].runId))?.requestedAt).toBe(at(1));
     });
+
+    it("keeps the PR title in the Run's report, read back by the list and the detail; an older Run has none", async () => {
+        const o = org();
+        const titled = queued(o, 'env-a', { prTitle: "fix(orders): coupon total, 'quoted' \"too\" 🚀", state: 'no_regressions' });
+        const older = queued(o, 'env-b', { state: 'no_regressions' });
+        await titled.write();
+        await older.write();
+        // A later transition keeps it.
+        await store.upsert(titled.runId, { state: 'no_regressions', finishedAt: new Date().toISOString() });
+
+        expect((await store.get(titled.runId, { organizationId: o }))?.prTitle).toBe("fix(orders): coupon total, 'quoted' \"too\" 🚀");
+        const listed = await store.list({ organizationId: o });
+        expect(listed.find((r) => r.runId === titled.runId)?.prTitle).toBe("fix(orders): coupon total, 'quoted' \"too\" 🚀");
+        expect(listed.find((r) => r.runId === older.runId)).not.toHaveProperty('prTitle');
+        // Not a column: it is display text, never filtered or sorted on.
+        const row = await pool.query(`SELECT report->>'prTitle' AS title FROM runtime.runtime_runs WHERE run_id = $1`, [titled.runId]);
+        expect(row.rows[0].title).toBe("fix(orders): coupon total, 'quoted' \"too\" 🚀");
+    });
 });

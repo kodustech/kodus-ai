@@ -188,6 +188,8 @@ export interface PullRequestHead {
     baseBranch?: string;
     /** The branch the PR comes from, when the Git API answers it: what a paired repository's PR is found by. */
     headBranch?: string;
+    /** The PR's title as the Git API answers it: the author's untrusted text, at most the Run request's 1024. */
+    title?: string;
     fork: boolean;
     authorId?: string;
     authorLogin?: string;

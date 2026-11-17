@@ -14,6 +14,16 @@ import type { TestRun } from './test-runs';
 // is at most `uncertain`. A finding the PR's diff spells out arrives already
 // intended (gate/intended-change.ts) and is not classified again.
 
+
+/**
+ * Whether a Run hands the pull request title to the classifier. The product
+ * started sending the title for the Runs list; the classifier read none
+ * before, and a change to an agent's input ships with eval evidence
+ * (AGENTS.md "Issues"). Turn it on with a runtime-intent eval run that shows
+ * the title does not move verdicts the wrong way.
+ */
+export const INTENT_READS_PR_TITLE = false;
+
 export type Intent = NonNullable<ProbeVerdict['intent']>;
 
 const RANK: Record<Intent, number> = { unintended: 0, uncertain: 1, intended: 2 };

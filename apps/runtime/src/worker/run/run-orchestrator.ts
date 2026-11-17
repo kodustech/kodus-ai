@@ -32,7 +32,7 @@ import { LlmBudgetExceededError, LlmUnavailableError } from '../agent/llm-gatewa
 import type { AgentPlan } from '../agent/runtime-agent';
 import { Canary, canaryLeakSite, containsCanary, LeakSite, redactCanaries, redactDeep } from '../canary/canary';
 import { acquireWaitingForRoom, capacityWaitReason } from '../env/capacity-wait';
-import { classifyIntents } from '../intent/intent-classifier';
+import { classifyIntents, INTENT_READS_PR_TITLE } from '../intent/intent-classifier';
 import { runPlannedTests, TestRun } from '../intent/test-runs';
 import { buildComment } from './comment';
 import { changesOnlyTheRecipe, memberNotBootedOf, recipeChangedInPr } from './recipe-change';
@@ -1401,7 +1401,7 @@ async function classifyFindings(run: RunScope, ready: ReadySides, t: TestedRun, 
                     organizationId: req.organizationId,
                     runToken: req.runToken,
                     diff: req.diff.map((d) => ({ path: d.path, patch: d.patch })),
-                    title: req.pullRequest.title,
+                    title: INTENT_READS_PR_TITLE ? req.pullRequest.title : undefined,
                     description: req.pullRequest.description,
                     tests: t.testRuns,
                 },

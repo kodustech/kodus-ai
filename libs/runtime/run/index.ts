@@ -12,3 +12,4 @@ export * from './reproduction';
 export * from './sealed-secret';
 export * from './adapters/file-run-stream.store';
 export * from './setup-repo-tokens';
+export * from './pr-title';

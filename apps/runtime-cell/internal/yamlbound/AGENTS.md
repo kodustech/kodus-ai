@@ -28,6 +28,7 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime-cell/internal/compose`](../compose/AGENTS.md)
+- [`apps/runtime-cell/internal/compose/kube`](../compose/kube/AGENTS.md)
 - [`apps/runtime-cell/internal/compose/sandbox`](../compose/sandbox/AGENTS.md)
 - [`apps/runtime-cell/internal/recipe`](../recipe/AGENTS.md)
 

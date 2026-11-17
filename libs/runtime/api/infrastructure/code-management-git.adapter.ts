@@ -40,6 +40,18 @@ const splitFullName = (name: string) => {
     const i = name.lastIndexOf('/');
     return i > 0 ? { owner: name.slice(0, i), name: name.slice(i + 1) } : { name };
 };
+/** The Run request's bound on the PR title (run-messages.ts pullRequest.title), in UTF-16 units as the schema counts. */
+const MAX_TITLE = 1_024;
+/** The PR title as the Git API answered it, cut to the request's bound on a whole character; none when it did not answer one. */
+const titleOf = (title: unknown): { title?: string } => {
+    if (typeof title !== 'string' || !title) return {};
+    let cut = '';
+    for (const ch of title) {
+        if (cut.length + ch.length > MAX_TITLE) break;
+        cut += ch;
+    }
+    return cut ? { title: cut } : {};
+};
 const MAX_PATCH = 1_000_000;
 /** A full commit SHA (SHA-1 or SHA-256). */
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
@@ -95,6 +107,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
             baseSha: pr.base.sha,
             ...(baseBranch.success ? { baseBranch: baseBranch.data } : {}),
             ...(typeof pr.head.ref === 'string' && pr.head.ref.length > 0 && pr.head.ref.length <= 256 ? { headBranch: pr.head.ref } : {}),
+            ...titleOf(pr.title),
             // Unknown repos count as a fork: approval is the safe side.
             fork: !headRepo || !baseRepo || String(headRepo) !== String(baseRepo),
             authorId: pr.user?.id !== undefined ? String(pr.user.id) : undefined,

@@ -12,7 +12,7 @@ The reaper binary: destroys this cell's machines past `kodus:hard-expires`, with
 ## Rules and limits
 - No fake driver: a reaper over memory reaps nothing and would look healthy (`TestNoFakeReaper`).
 - No cell id or an unknown `-driver` is `lifecycle.Usage` (exit 2).
-- k8s-sandbox needs `-k8s-namespace`: its Role reaches that namespace only.
+- k8s-sandbox needs `-k8s-namespace`: its Role reaches that namespace only. With `-k8s-env-namespace` (a cell that runs environment Runs) it also ends a reaped machine's objects in the environment namespace and runs the orphan pass there (`k8ssandbox.NewForReaperWithEnv`, `ReapOrphans`).
 - The ceiling and ownership rules are in [`apps/runtime-cell/AGENTS.md`](../../AGENTS.md) "Untrusted input".
 
 ## Where new code goes
