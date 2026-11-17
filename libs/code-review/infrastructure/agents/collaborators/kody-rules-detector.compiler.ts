@@ -32,6 +32,7 @@ import {
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { extensionScopeAppliesToFile } from '@libs/common/utils/kody-rules/file-patterns';
+import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 
 // ── the LLM side of the compiler (runs once at authoring) ────────────────────
 
@@ -479,11 +480,14 @@ export function runDetector(
 }
 
 /**
- * Where a compiled detector fired: ruleUuid → filename → ascending line numbers.
- * This is the whole T0 review-time output now (issue #1831). It answers both
- * questions the judge needs: which files a mechanical rule must be judged on
- * (only the ones its regex fired in — everything else stays free), and which
+ * Where a compiled detector fired: review unit key → filename → ascending line
+ * numbers. This is the whole T0 review-time output now (issue #1831). It answers
+ * both questions the judge needs: which files a mechanical rule must be judged
+ * on (only the ones its regex fired in — everything else stays free), and which
  * lines to put in front of the model as candidates.
+ *
+ * Keyed by `reviewUnitKey`, not by `uuid`: a long rule reaches review as one
+ * unit per atom, all carrying the parent's `uuid` (#2509).
  */
 export type DetectorHitIndex = Map<string, Map<string, number[]>>;
 
@@ -538,15 +542,17 @@ export function buildDetectorCandidates(
 ): DetectorHitIndex {
     const index: DetectorHitIndex = new Map();
     for (const rule of rules) {
-        if (!rule.detector || !rule.uuid) continue;
+        if (!rule.detector) continue;
+        const key = reviewUnitKey(rule);
+        if (!key) continue;
         const files = changedFiles.filter(
             (f) =>
                 ruleAppliesToFile(f.filename, rule.path) &&
                 detectorAppliesToFile(f.filename, rule.detector!),
         );
         for (const h of runDetector(rule.detector, files)) {
-            let perFile = index.get(rule.uuid);
-            if (!perFile) index.set(rule.uuid, (perFile = new Map()));
+            let perFile = index.get(key);
+            if (!perFile) index.set(key, (perFile = new Map()));
             const lines = perFile.get(h.filename);
             if (lines) lines.push(h.line);
             else perFile.set(h.filename, [h.line]);
