@@ -125,6 +125,26 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
             expect(await model.countDocuments()).toBe(1);
         });
 
+        it('resolves at once the findings of a file the branch no longer tracks', async () => {
+            await repository.upsertScanFinding(finding);
+            await expect(
+                repository.resolveUnseenScanFindings({
+                    organizationId: finding.organizationId,
+                    repositoryPlatform: PlatformType.GITHUB,
+                    repositoryHost: 'github.com',
+                    repositoryId: '123',
+                    scanId: 'scan-2',
+                    examined: [],
+                    trackedFiles: ['src/other.ts'],
+                    scanStartedAt: new Date(Date.now() + 60_000).toISOString(),
+                }),
+            ).resolves.toBe(1);
+            expect(await model.findOne().lean()).toMatchObject({
+                status: IssueStatus.RESOLVED,
+                lastMissedScanId: 'scan-2',
+            });
+        });
+
         it('isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records', async () => {
             const foreignRepositories = [
                 { ...finding.repository, host: 'other.example.com' },

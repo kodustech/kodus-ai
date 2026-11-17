@@ -432,10 +432,11 @@ describe('IssuesRepository — security-scan findings', () => {
         });
 
         expect(model.distinct).toHaveBeenCalledWith('filePath', unseen);
+        // Not a model miss: no earlier miss is needed.
+        expect(model.updateMany.mock.calls).toHaveLength(1);
         expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
             ...unseen,
-            consecutiveScanMisses: { $gte: 1 },
-            $or: [{ filePath: { $in: ['src/gone.ts'] } }],
+            filePath: { $in: ['src/gone.ts'] },
         });
     });
 

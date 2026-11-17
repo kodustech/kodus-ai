@@ -587,12 +587,7 @@ export class IssuesRepository implements IIssuesRepository {
             'lastMissedScanId': { $ne: params.scanId },
         };
 
-        const where: Record<string, unknown>[] = params.examined
-            .filter((e) => e.filePaths.length)
-            .map((e) => ({
-                vulnerabilityClass: e.vulnerabilityClass,
-                filePath: { $in: e.filePaths.map(normalizeScanPath) },
-            }));
+        let resolved = 0;
         if (params.trackedFiles?.length) {
             const tracked = new Set(params.trackedFiles.map(normalizeScanPath));
             const open: string[] = await this.issuesModel
@@ -601,12 +596,32 @@ export class IssuesRepository implements IIssuesRepository {
             const gone = open.filter(
                 (path) => !!path && !tracked.has(normalizeScanPath(path)),
             );
+            // A file that left the branch is not a model miss: what it held
+            // is gone with it, on this scan.
             if (gone.length) {
-                where.push({ filePath: { $in: gone } });
+                const result = await this.issuesModel.updateMany(
+                    { ...unseen, filePath: { $in: gone } },
+                    {
+                        $set: {
+                            status: IssueStatus.RESOLVED,
+                            resolvedAt: new Date().toISOString(),
+                            lastMissedScanId: params.scanId,
+                        },
+                        $inc: { consecutiveScanMisses: 1 },
+                    },
+                );
+                resolved += result?.modifiedCount ?? 0;
             }
         }
+
+        const where: Record<string, unknown>[] = params.examined
+            .filter((e) => e.filePaths.length)
+            .map((e) => ({
+                vulnerabilityClass: e.vulnerabilityClass,
+                filePath: { $in: e.filePaths.map(normalizeScanPath) },
+            }));
         if (!where.length) {
-            return 0;
+            return resolved;
         }
 
         // A single model miss is not a fix. Two distinct completed scans
@@ -643,7 +658,7 @@ export class IssuesRepository implements IIssuesRepository {
             },
         );
 
-        return result?.modifiedCount ?? 0;
+        return resolved + (result?.modifiedCount ?? 0);
     }
 }
 
