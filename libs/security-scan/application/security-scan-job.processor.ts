@@ -688,7 +688,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 'No source files could be planned for examination. This scan provides no security coverage.',
             );
         }
-        if (!coverage.unitsDone && coverage.unitsFailed) {
+        // Resolution goes by class and file: a failed unit whose other lenses
+        // read to the end examined those classes, and they resolve.
+        if (
+            !coverage.examinedByClass.some((e) => e.filePaths.length) &&
+            coverage.unitsFailed
+        ) {
             throw new ScanFailure(SCAN_NO_AREA_EXAMINED_MESSAGE);
         }
 

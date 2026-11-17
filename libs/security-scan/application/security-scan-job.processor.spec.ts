@@ -927,6 +927,41 @@ describe('SecurityScanJobProcessor', () => {
         );
     });
 
+    it('completes, resolving in the classes it read, a scan whose only unit failed in other lenses', async () => {
+        const examinedByClass = [
+            { vulnerabilityClass: 'authz', filePaths: ['src/server.js'] },
+            { vulnerabilityClass: 'injection', filePaths: ['src/server.js'] },
+        ];
+        const { processor, scans, issuesService } = setup({
+            result: finishedResult({
+                progress: [
+                    {
+                        unitId: 'u1',
+                        state: 'failed',
+                        findings: 0,
+                        examinedByClass,
+                        error: 'not read to the end: resource_exhaustion',
+                    },
+                ],
+                findings: [],
+                examinedFiles: ['src/server.js'],
+                examinedByClass,
+            }),
+        });
+
+        await processor.process('job-1');
+
+        expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(
+            expect.objectContaining({ examined: examinedByClass }),
+        );
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.COMPLETED,
+                coverage: expect.objectContaining({ unitsDone: 0, unitsFailed: 1 }),
+            }),
+        );
+    });
+
     it('records a failure on the scan, without the internal error', async () => {
         const { processor, scans } = setup({ result: finishedResult() });
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
