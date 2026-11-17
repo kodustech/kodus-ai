@@ -122,6 +122,20 @@ describe('cron snapshot validation', () => {
         snapshot: { ...expected, assessmentKey: 'key' },
     };
 
+    it('invalidates an assessment from the previous diff-budget policy', () => {
+        // Captured from prRiskConfigurationKey({}) with configuration version 10.
+        const previous = {
+            ...result,
+            snapshot: {
+                ...result.snapshot,
+                configurationKey:
+                    '649169d73a217f0b29c27bd7bdb2a3577d92e980fd4f0a45bfa124cedc340a35',
+            },
+        };
+
+        expect(isCurrentRiskAssessment(previous, expected)).toBe(false);
+    });
+
     it('accepts a judgment only for this exact PR, base/head and configuration', () => {
         expect(isCurrentRiskAssessment(result, expected)).toBe(true);
     });

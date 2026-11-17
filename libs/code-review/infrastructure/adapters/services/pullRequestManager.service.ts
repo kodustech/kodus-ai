@@ -40,7 +40,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         prNumber: number,
     ): Promise<any> {
         try {
@@ -66,7 +66,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getChangedFiles(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         ignorePaths?: string[],
         lastCommit?: string,
@@ -84,6 +84,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     lastCommit,
                     reviewedBaseBranch,
                     options?.onDiffSource,
+                    // Removed files leave the list below; only a caller that
+                    // reads them asks for the ones the PR no longer lists.
+                    !!options?.onRemovedFiles,
                 );
             } else {
                 options?.onDiffSource?.('none');
@@ -109,6 +112,11 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             // ref — wasting two GitHub requests for content we'll never
             // review. Real impact: ~10-20% of /contents calls on PRs with
             // file deletions.
+            options?.onRemovedFiles?.(
+                (changedFiles ?? [])
+                    .filter((file) => file.status === 'removed')
+                    .map((file) => file.filename),
+            );
             const filteredFiles = changedFiles?.filter((file) => {
                 if (file.status === 'removed') return false;
                 return !isFileMatchingGlob(file.filename, ignorePaths);
@@ -239,7 +247,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: any,
     ): Promise<Commit[]> {
@@ -304,7 +312,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async getChangedFilesMetadata(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: string,
         reviewedBaseBranch?: string,
@@ -360,11 +368,17 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     private async getChangedFilesSinceLastCommit(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         lastCommit: string | Commit,
         reviewedBaseBranch?: string,
         onDiffSource?: (source: ChangedFilesSource) => void,
+        keepRemovedFiles = false,
     ): Promise<FileChange[]> {
         const lastCommitSha =
             typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
@@ -378,6 +392,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     typeof lastCommit === 'string'
                         ? { sha: lastCommit }
                         : lastCommit,
+                ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
             });
         if (changedFiles) {
             onDiffSource?.('incremental');
@@ -452,7 +467,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getRebaseInterdiff(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         previousHeadSha: string,
     ): Promise<
@@ -491,7 +511,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async enrichFilesWithContent(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         files: FileChange[],
     ): Promise<FileChange[]> {

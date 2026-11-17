@@ -79,6 +79,182 @@ describe("GTM first-touch tag", () => {
         expect(first?.utm_source).toBe("google");
     });
 
+    describe("creator links", () => {
+        const DAY = 24 * 60 * 60;
+        const CREATOR =
+            "https://kodus.io/?utm_medium=creator&utm_campaign=joao123";
+
+        const cookieOn = (jar: CookieJar) =>
+            jar
+                .getCookiesSync("https://app.kodus.io/")
+                .find((c) => c.key === FIRST_TOUCH_COOKIE);
+
+        afterEach(() => jest.useRealTimers());
+
+        it("replaces an earlier first touch and lasts 90 days", () => {
+            const jar = new CookieJar();
+            visit(jar, "https://kodus.io/", "https://www.google.com/");
+            expect(cookieOn(jar)?.maxAge).toBe(365 * DAY);
+
+            visit(jar, CREATOR, "https://www.youtube.com/");
+
+            expect(firstTouchOn(jar, "https://app.kodus.io/")).toEqual({
+                utm_medium: "creator",
+                utm_campaign: "joao123",
+                referrer: "https://www.youtube.com/",
+                landing_page:
+                    "https://kodus.io/?utm_medium=creator&utm_campaign=joao123",
+                captured_at: expect.any(String),
+            });
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
+        });
+
+        it("is kept when the visitor comes back another way", () => {
+            const jar = new CookieJar();
+            visit(jar, CREATOR);
+
+            visit(jar, "https://kodus.io/", "https://www.google.com/");
+            visit(jar, "https://kodus.io/?utm_source=fb&utm_medium=paid");
+
+            expect(
+                firstTouchOn(jar, "https://app.kodus.io/")?.utm_campaign,
+            ).toBe("joao123");
+        });
+
+        it("gives way to the next creator link clicked", () => {
+            const jar = new CookieJar();
+            visit(jar, CREATOR);
+            visit(
+                jar,
+                "https://app.kodus.io/sign-up?utm_medium=Creator&utm_campaign=ana456",
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBe("ana456");
+            // Stored in the form the commission query matches.
+            expect(touch?.utm_medium).toBe("creator");
+            expect(touch?.landing_page).toBe(
+                "https://app.kodus.io/sign-up?utm_medium=creator&utm_campaign=ana456",
+            );
+        });
+
+        it("stores the creator id in the lowercase form the creators table holds", () => {
+            const jar = new CookieJar();
+            visit(
+                jar,
+                "https://kodus.io/?utm_medium=creator&utm_campaign=Joao123",
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBe("joao123");
+            expect(touch?.landing_page).toBe(
+                "https://kodus.io/?utm_medium=creator&utm_campaign=joao123",
+            );
+        });
+
+        it("keeps the whole creator id when the cookie has to shrink", () => {
+            const jar = new CookieJar();
+            const id = "a".repeat(40);
+            const big = encodeURIComponent("é".repeat(100));
+            visit(
+                jar,
+                `https://kodus.io/?utm_medium=creator&utm_campaign=${id}&utm_source=${big}&utm_term=${big}&utm_content=${big}`,
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            // The shrunk cookie drops the landing page's query.
+            expect(touch?.landing_page).toBe("https://kodus.io/");
+            expect(touch?.utm_campaign).toBe(id);
+            // 365 days before creator links existed.
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
+        });
+
+        // The API strips them before storing and would credit the creator, so
+        // the tag has to treat the link as theirs too.
+        it("reads a creator id through the invisible characters the API strips", () => {
+            const jar = new CookieJar();
+            visit(jar, "https://kodus.io/", "https://www.google.com/");
+            visit(
+                jar,
+                "https://kodus.io/?utm_medium=creator&utm_campaign=joao123%E2%80%8B",
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBe("joao123");
+            expect(touch?.landing_page).toBe(CREATOR);
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
+        });
+
+        // Moves the jar's clock with no read in between: tough-cookie counts
+        // Max-Age from the last access, where a browser fixes the expiry when
+        // the cookie is written, so a read here would push the expiry out.
+        it("expires after 90 days, and the next visit records how they came back", () => {
+            jest.useFakeTimers({ now: new Date("2026-01-01T12:00:00Z") });
+            const jar = new CookieJar();
+            visit(jar, CREATOR);
+
+            jest.setSystemTime(new Date("2026-04-02T12:00:00Z")); // day 91
+            visit(jar, "https://kodus.io/", "https://www.google.com/");
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBeUndefined();
+            expect(touch?.referrer).toBe("https://www.google.com/");
+            expect(cookieOn(jar)?.maxAge).toBe(365 * DAY);
+        });
+
+        it("is written again, with a new 90 days, when a creator link is clicked again", () => {
+            const jar = new CookieJar();
+            visit(jar, CREATOR);
+            visit(
+                jar,
+                "https://kodus.io/pricing/?utm_medium=creator&utm_campaign=joao123",
+            );
+
+            expect(
+                firstTouchOn(jar, "https://app.kodus.io/")?.landing_page,
+            ).toBe(
+                "https://kodus.io/pricing/?utm_medium=creator&utm_campaign=joao123",
+            );
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
+        });
+
+        it.each([
+            ["no creator id", "https://kodus.io/?utm_medium=creator"],
+            [
+                "an email as the creator id",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=jane%40acme.com",
+            ],
+            // Cut to fit the cookie, it would credit an id no creator has.
+            [
+                "an id longer than a creator id can be",
+                `https://kodus.io/?utm_medium=creator&utm_campaign=${"a".repeat(41)}`,
+            ],
+            [
+                "an id that is only an invisible character",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=%E2%80%8B",
+            ],
+            [
+                "an id with a letter outside a-z",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=joao%C5%BF23",
+            ],
+            [
+                "a one-character id, shorter than a creator id can be",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=a",
+            ],
+        ])("counts a link with %s as any other visit", (_label, url) => {
+            const jar = new CookieJar();
+            visit(jar, CREATOR);
+            visit(jar, url);
+
+            // The real creator link is kept, with its 90 days (365 before
+            // creator links existed).
+            expect(
+                firstTouchOn(jar, "https://app.kodus.io/")?.landing_page,
+            ).toBe(CREATOR);
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
+        });
+    });
+
     it("records only referrer and landing page for a visit without parameters", () => {
         const jar = new CookieJar();
         visit(

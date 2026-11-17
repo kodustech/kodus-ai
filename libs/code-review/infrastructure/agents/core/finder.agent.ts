@@ -35,6 +35,8 @@ import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifi
 import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
 import {
     checkConventionQuotes,
+    isCodeFileSource,
+    checkCodeFileQuotes,
     isTeamSystemSource,
     isToolSource,
     isProvenByAstGrep,
@@ -1450,57 +1452,58 @@ async function routeByKind(
     sectionOf: Map<FinderSuggestion, string>;
     rejected: ConventionCheckRejected[];
 }> {
-    // A "convention" sourced from a tool's output (e.g. a CLI) or from a
-    // record in one of the team's systems quotes no rule, so the quote gate
-    // would drop it: it is checked as a bug instead.
-    const notAGuide = (s: FinderSuggestion) =>
+    // A "convention" sourced from a tool's output (e.g. a CLI), from a
+    // record in one of the team's systems or from a code file (a line shown
+    // as the pattern to follow) quotes no rule, so the quote gate would drop
+    // it: it is checked as a bug instead, a code file only when the quoted
+    // pattern is in it on the target branch.
+    const fromToolOrSystem = (s: FinderSuggestion) =>
         isToolSource(s, check.guideFiles) ||
         isTeamSystemSource(s, teamSystemTools);
-    const toolSourced = suggestions.filter(
-        (s) => s.kind === 'convention' && notAGuide(s),
+    const fromCode = (s: FinderSuggestion) =>
+        !fromToolOrSystem(s) &&
+        isCodeFileSource(s, check.guideFiles, check.teamInstructions);
+    const conventions = suggestions.filter((s) => s.kind === 'convention');
+    // The pattern a code-file citation shows must be in that file.
+    const code = await checkCodeFileQuotes(
+        conventions.filter(fromCode),
+        check.readGuide,
     );
     const bugs = [
         ...suggestions.filter((s) => s.kind !== 'convention'),
-        ...toolSourced.map((s) => ({
-            ...s,
-            kind: 'bug' as const,
-            source: undefined,
-        })),
+        ...[...conventions.filter(fromToolOrSystem), ...code.passed].map(
+            (s) => ({ ...s, kind: 'bug' as const, source: undefined }),
+        ),
     ];
-    const candidates = suggestions.filter(
-        (s) => s.kind === 'convention' && !notAGuide(s),
+    const candidates = conventions.filter(
+        (s) => !fromToolOrSystem(s) && !fromCode(s),
     );
-    if (candidates.length === 0) {
-        return {
-            bugs,
-            proven: [],
-            conventions: [],
-            sectionOf: new Map(),
-            rejected: [],
-        };
-    }
     const astGrepOutputs = check.astGrepLog?.outputs ?? [];
     const proven = candidates.filter((s) =>
         isProvenByAstGrep(s, astGrepOutputs),
     );
     const provenSet = new Set(proven);
-    const quoted = await checkConventionQuotes(
-        candidates.filter((s) => !provenSet.has(s)),
-        check.readGuide,
-        check.guideFiles ?? [],
-        check.listGuideDir,
-        check.teamInstructions,
-        check.instructionFiles,
-    );
-    if (quoted.rejected.length > 0) {
+    const unproven = candidates.filter((s) => !provenSet.has(s));
+    const quoted = unproven.length
+        ? await checkConventionQuotes(
+              unproven,
+              check.readGuide,
+              check.guideFiles ?? [],
+              check.listGuideDir,
+              check.teamInstructions,
+              check.instructionFiles,
+          )
+        : { passed: [], rejected: [] };
+    const rejected = [...code.rejected, ...quoted.rejected];
+    if (rejected.length > 0) {
         finderLogger.log({
-            message: `[quote-check] dropped ${quoted.rejected.length} convention finding(s) whose quote is not in the guide on the target branch`,
+            message: `[quote-check] dropped ${rejected.length} convention finding(s) whose quote is not in the guide on the target branch`,
             context: 'finder',
             serviceName: 'finder',
             metadata: {
                 ...logContext,
                 // Counts by why: the detail names the guide, never the quote.
-                byReason: quoted.rejected.reduce<Record<string, number>>(
+                byReason: rejected.reduce<Record<string, number>>(
                     (counts, r) => {
                         const why = quoteRejectReason(r.detail);
                         counts[why] = (counts[why] ?? 0) + 1;
@@ -1508,7 +1511,7 @@ async function routeByKind(
                     },
                     {},
                 ),
-                rejected: quoted.rejected.map((r) => ({
+                rejected: rejected.map((r) => ({
                     file: r.finding.relevantFile,
                     guide: r.finding.source?.file,
                     detail: r.detail,
@@ -1523,7 +1526,7 @@ async function routeByKind(
         sectionOf: new Map(
             quoted.passed.map((p) => [p.finding, p.sectionText]),
         ),
-        rejected: quoted.rejected,
+        rejected,
     };
 }
 
@@ -1531,6 +1534,8 @@ async function routeByKind(
  *  counts rejections by why. */
 function quoteRejectReason(detail: string): string {
     if (detail.startsWith('quote not found in ')) return 'quote not in guide';
+    if (detail.startsWith('quoted code not found in '))
+        return 'code not in cited file';
     if (detail.endsWith(' is not a guide linked to this review'))
         return 'guide not linked';
     if (detail.endsWith(' not found on the target branch'))

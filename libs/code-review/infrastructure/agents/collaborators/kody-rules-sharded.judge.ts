@@ -28,6 +28,7 @@ import {
     extensionScopeAppliesToFile,
     fileMatchesRulePath,
 } from '@libs/common/utils/kody-rules/file-patterns';
+import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     IKodyRule,
@@ -487,7 +488,15 @@ function ruleBlock(
 ): string {
     return rules
         .map((r, i) => {
-            const parts = [`[${i + 1}] ${r.title}`, `  description: ${r.rule}`];
+            const parts = [`[${i + 1}] ${r.title}`];
+            // An atom unit's title is the atom's, and an earlier decision names
+            // the RULE it came from (`ruleTitleByUuid` -> `parentTitle`). Without
+            // this line the two blocks name the same unit differently and the
+            // judge cannot tell that a decision already covers it (#2509).
+            if (r.parentTitle && r.parentTitle !== r.title) {
+                parts.push(`  part of rule: ${r.parentTitle}`);
+            }
+            parts.push(`  description: ${r.rule}`);
             const ids = referenceIds?.[i];
             if (ids?.length) parts.push(`  references: ${ids.join(', ')}`);
             if (r.examples?.length) {
@@ -546,8 +555,11 @@ function candidateLines(
     if (!detectorHits?.size) return [];
     const entries: string[] = [];
     rules.forEach((r, i) => {
-        if (!r.uuid) return;
-        const lines = detectorHits.get(r.uuid)?.get(file.filename);
+        // The unit's key, not the rule's uuid: atoms of one rule share the uuid
+        // and would all list the same lines (#2509).
+        const key = reviewUnitKey(r);
+        if (!key) return;
+        const lines = detectorHits.get(key)?.get(file.filename);
         if (lines?.length)
             entries.push(`- rule [${i + 1}] -> line(s) ${lines.join(', ')}`);
     });
@@ -950,8 +962,16 @@ function rulesForFile(
         // A rule carrying a compiled detector is judged only where the detector
         // fired. Without this the T0 pre-filter would buy nothing — a mechanical
         // rule would shard every file, exactly like a semantic one.
-        if (r.detector && r.uuid) {
-            return !!detectorHits?.get(r.uuid)?.has(file.filename);
+        if (r.detector) {
+            const key = reviewUnitKey(r);
+            // No identity to look hits up with (a rule that was never stored, so
+            // it has no uuid and is no atom either): judge it everywhere, as
+            // before. Dropping it would lose the rule silently, and `judgeable`
+            // takes the same branch.
+            if (!key) return true;
+            // An atom is judged where ITS detector fired, not where a sibling's
+            // did (#2509).
+            return !!detectorHits?.get(key)?.has(file.filename);
         }
         return true;
     });
@@ -1220,9 +1240,13 @@ export async function judgeKodyRulesSharded(
     // A rule whose detector fired NOWHERE in this PR is not judged at all —
     // that is the entire cost saving of the T0 pre-filter (issue #1831), and it
     // covers PR-scope detector rules too, which `rulesForFile` never sees.
-    const judgeable = rules.filter(
-        (r) => !r.detector || !r.uuid || !!detectorHits?.get(r.uuid)?.size,
-    );
+    const judgeable = rules.filter((r) => {
+        if (!r.detector) return true;
+        const key = reviewUnitKey(r);
+        // Same per-unit read as `rulesForFile`: a sibling atom's hits must not
+        // keep an atom whose own detector fired nowhere in the sweep (#2509).
+        return !key || !!detectorHits?.get(key)?.size;
+    });
 
     const fileRules = judgeable.filter((r) => !isPrLevel(r));
     const prRules = judgeable.filter(isPrLevel);
@@ -1235,7 +1259,15 @@ export async function judgeKodyRulesSharded(
     const ruleTitleByUuid = new Map(
         rules
             .filter((r): r is Partial<IKodyRule> & { uuid: string } => !!r.uuid)
-            .map((r) => [r.uuid, r.title ?? r.uuid] as const),
+            .map(
+                (r) =>
+                    [
+                        r.uuid,
+                        // An atom unit's `title` is the atom's; the decision
+                        // names the customer's rule (#2509).
+                        r.parentTitle ?? r.title ?? r.uuid,
+                    ] as const,
+            ),
     );
 
     let shardsRun = 0;

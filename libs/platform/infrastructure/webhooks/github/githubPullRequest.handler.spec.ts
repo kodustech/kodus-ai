@@ -160,6 +160,30 @@ describe('GitHubPullRequestHandler', () => {
         );
     });
 
+    it('keeps the repository owner on the calls a synchronize makes', async () => {
+        codeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
+            [{ sha: 'new-head-sha' }],
+        );
+
+        await handler.execute({
+            event: 'pull_request',
+            platformType: PlatformType.GITHUB,
+            payload: makeGitHubPullRequestWebhookPayload('synchronize'),
+        } as any);
+
+        // GitHub addresses a repository by its own owner; without the full
+        // name a token integration falls back to its recorded account.
+        const withOwner = expect.objectContaining({
+            repository: expect.objectContaining({ fullName: 'org/test-repo' }),
+        });
+        expect(
+            codeManagementService.getCommitsForPullRequestForCodeReview,
+        ).toHaveBeenCalledWith(withOwner);
+        expect(enqueueImplementationCheckUseCase.execute).toHaveBeenCalledWith(
+            withOwner,
+        );
+    });
+
     it('writes force_pushed invalidation when synchronize removes previous head from PR commits', async () => {
         codeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
             [{ sha: 'new-head-sha' }],
@@ -286,6 +310,18 @@ describe('GitHubPullRequestHandler', () => {
                 enqueueCodeReviewJobUseCase.execute.mock.calls[0];
             expect(codeManagementPayload.onlyCustomAgent).toBeUndefined();
         });
+
+        it('reads the commented pull request from the repository owner', async () => {
+            await handler.execute(comment('@kody start-review') as any);
+
+            expect(codeManagementService.getPullRequest).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({
+                        fullName: 'org/test-repo',
+                    }),
+                }),
+            );
+        });
     });
     describe('merge queue pushes', () => {
         const queueRef =
@@ -397,7 +433,13 @@ describe('GitHubPullRequestHandler', () => {
                 codeManagementService.getReviewStatusByPullRequest,
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
-                repository: { id: '12345', name: 'test-repo' },
+                // The owner comes from the repository, not the integration
+                // account: a token integration can review other owners' repos.
+                repository: {
+                    id: '12345',
+                    name: 'test-repo',
+                    fullName: expect.stringMatching(/^[^/]+\/test-repo$/),
+                },
                 prNumber: 42,
             });
             // Saved as the event it is; only the review job is a command.

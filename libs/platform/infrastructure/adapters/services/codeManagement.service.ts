@@ -356,7 +356,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createPullRequestWithFiles(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
             sourceBranch?: string;
             targetBranch?: string;
             baseBranch?: string;
@@ -387,7 +387,7 @@ export class CodeManagementService implements ICodeManagementService {
     async uploadFiles(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
             branchName?: string;
             baseBranch?: string;
             files: PullRequestFileChange[];
@@ -675,7 +675,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getFilesByPullRequestId(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             // Cache identity requires both PR refs. A retarget can change the
             // full file list without changing the head.
@@ -730,7 +730,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createCommentInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             overallComment: any;
             lineComments?: any;
@@ -752,7 +752,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getRepositoryContentFile(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             file: any;
             pullRequest: any;
             suppressNotFoundLogs?: boolean;
@@ -774,7 +774,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getRepositoryContentBatch(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: any };
+            repository: { name: string; id: any; fullName?: string };
             files: Array<{ filename: string; sha?: string }>;
             pullRequest?: any;
         },
@@ -814,7 +814,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getPullRequestByNumber(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
         },
         type?: PlatformType,
@@ -834,7 +834,12 @@ export class CodeManagementService implements ICodeManagementService {
     async createReviewComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string; language: string };
+            repository: {
+                name: string;
+                id: string;
+                language: string;
+                fullName?: string;
+            };
             prNumber: number;
             lineComment: any;
             commit: any;
@@ -858,7 +863,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getCommitsForPullRequestForCodeReview(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             // Same pattern as getFilesByPullRequestId — optional cache key.
             headSha?: string;
@@ -882,7 +887,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createIssueComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             body: string;
             suggestion?: ISuggestionByPR;
@@ -904,7 +909,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createSingleIssueComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             body: string;
         },
@@ -928,7 +933,7 @@ export class CodeManagementService implements ICodeManagementService {
     async updateIssueComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             body: string;
             commentId: number;
@@ -1060,7 +1065,7 @@ export class CodeManagementService implements ICodeManagementService {
     async updateDescriptionInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             summary: string;
         },
@@ -1183,7 +1188,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getLanguageRepository(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
         },
         type?: PlatformType,
     ) {
@@ -1202,7 +1207,7 @@ export class CodeManagementService implements ICodeManagementService {
     async mergePullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
         },
         type?: PlatformType,
@@ -1253,7 +1258,7 @@ export class CodeManagementService implements ICodeManagementService {
     async approvePullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             headSha?: string;
         },
@@ -1274,7 +1279,7 @@ export class CodeManagementService implements ICodeManagementService {
     async requestChangesPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             criticalComments: CommentResult[];
         },
@@ -1295,7 +1300,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getAllCommentsInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             failOnError?: boolean;
         },
@@ -1454,7 +1459,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getPullRequestsByRepository(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
             filters?: {
                 startDate: string;
                 endDate: string;
@@ -1543,7 +1548,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
             prNumber: number;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
         },
         type?: PlatformType,
     ): Promise<any | null> {
@@ -1743,7 +1748,7 @@ export class CodeManagementService implements ICodeManagementService {
         parentId: string;
         commentId: string;
         body: string;
-        repository: { id: string; name: string };
+        repository: { id: string; name: string; fullName?: string };
         prNumber: number;
     }): Promise<any | null> {
         const type = await this.getTypeIntegration(

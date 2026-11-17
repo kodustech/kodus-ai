@@ -199,6 +199,14 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getOrganizations(params: any): Promise<Organization[]>;
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
+    /**
+     * The PR's files changed since `lastCommit`. `keepRemovedFiles` also
+     * keeps the files deleted since then that the PR no longer lists (one it
+     * added and later deleted), with status `removed`. Honored by GitHub,
+     * GitLab and Bitbucket Data Center; Azure Repos, Bitbucket Cloud and
+     * Forgejo ignore it and leave such a file out, so a grouped suggestion
+     * with a location in it stays partial there.
+     */
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
     /**
      * The PR's diff as it stood when `headSha` was its head: from the merge

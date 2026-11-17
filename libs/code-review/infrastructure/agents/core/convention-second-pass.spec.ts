@@ -252,6 +252,8 @@ function tools() {
 async function run(
     withConventionPath: boolean,
     extra: Record<string, unknown> = {},
+    // Other files of the target branch, besides the guide.
+    onTarget: Record<string, string> = {},
 ) {
     const astGrepLog = new AstGrepOutputLog();
     const registry = withConventionPath
@@ -266,7 +268,7 @@ async function run(
     });
     finderStep = 0;
     const readGuide = jest.fn(async (file: string) =>
-        file === GUIDE ? GUIDE_TEXT : null,
+        file === GUIDE ? GUIDE_TEXT : (onTarget[file] ?? null),
     );
     const r = await runFinderWithVerify(
         {
@@ -408,6 +410,131 @@ describe('convention findings sourced from a tool', () => {
         expect(tool.kind).toBe('bug');
         expect(tool.source).toBeUndefined();
         expect(readGuide).not.toHaveBeenCalled();
+    });
+});
+
+describe('convention findings sourced from a code file', () => {
+    // Production shape: the model marked a finding "convention" and cited a
+    // line of the repository's code as the pattern to follow. That is not a
+    // team rule, so the quote gate dropped it as "not a guide linked to this
+    // review"; it is a claim about the code, checked as a bug.
+    const CODE = {
+        relevantFile: 'src/valves/drain-valve.handler.ts',
+        suggestionContent:
+            'CODE-PATTERN: drain returns a bare status while open wraps it in ValveResult.',
+        existingCode: 'return status;',
+        improvedCode: 'return { status } as ValveResult;',
+        oneSentenceSummary: 'Return ValveResult like the open handler does',
+        kind: 'convention',
+        source: {
+            file: 'src/valves/open-valve.handler.ts',
+            quote: 'return { status: result.status } as ValveResult;',
+        },
+    };
+
+    const OPEN_HANDLER = `export async function openValve(zone: string): Promise<ValveResult> {
+    const result = await valve.open(zone);
+    return { status: result.status } as ValveResult;
+}
+`;
+
+    it('checks it as a bug instead of dropping it at the quote gate', async () => {
+        submitted = { reasoning: 'one pattern', suggestions: [CODE, BUG] };
+        const { r, readGuide } = await run(
+            true,
+            {},
+            { 'src/valves/open-valve.handler.ts': OPEN_HANDLER },
+        );
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        expect(r.kept.map(tagOf)).toEqual(['BUG', 'CODE-PATTERN']);
+        const code = r.kept.find((f) => tagOf(f) === 'CODE-PATTERN')!;
+        expect(code.kind).toBe('bug');
+        expect(code.source).toBeUndefined();
+        // The pattern it shows is read where the gate reads guides.
+        expect(readGuide).toHaveBeenCalledWith(
+            'src/valves/open-valve.handler.ts',
+        );
+    });
+
+    // Code holds "..." (spread, rest): that is code, not a shortened quote.
+    it('checks a quoted pattern holding a spread as a bug', async () => {
+        const SPREAD = {
+            ...CODE,
+            source: {
+                file: 'src/valves/open-valve.handler.ts',
+                quote: 'return { ...result, zone } as ValveResult;',
+            },
+        };
+        submitted = { reasoning: 'one pattern', suggestions: [SPREAD, BUG] };
+        const { r } = await run(
+            true,
+            {},
+            {
+                'src/valves/open-valve.handler.ts':
+                    'export async function openValve(zone: string) {\n    const result = await valve.open(zone);\n    return { ...result, zone } as ValveResult;\n}\n',
+            },
+        );
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        expect(r.kept.map(tagOf)).toEqual(['BUG', 'CODE-PATTERN']);
+    });
+
+    // Markdown marks alone normalize to nothing, which every file "holds".
+    it('drops it when the quote is only markdown marks', async () => {
+        const MARKS = {
+            ...CODE,
+            source: { file: 'src/valves/open-valve.handler.ts', quote: '**' },
+        };
+        submitted = { reasoning: 'one pattern', suggestions: [MARKS, BUG] };
+        const { r } = await run(
+            true,
+            {},
+            { 'src/valves/open-valve.handler.ts': OPEN_HANDLER },
+        );
+        expect(r.kept.map(tagOf)).toEqual(['BUG']);
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'CODE-PATTERN',
+        ]);
+    });
+
+    // A pattern the model made up has nothing for the verifier to compare.
+    it.each([
+        [
+            'the cited file does not hold the quoted code',
+            {
+                'src/valves/open-valve.handler.ts':
+                    'export async function openValve(zone: string) {\n    return valve.open(zone);\n}\n',
+            },
+        ],
+        ['the cited file is not on the target branch', {}],
+    ])('drops it when %s', async (_label, onTarget) => {
+        submitted = { reasoning: 'one pattern', suggestions: [CODE, BUG] };
+        const { r } = await run(true, {}, onTarget);
+        expect(r.kept.map(tagOf)).toEqual(['BUG']);
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'CODE-PATTERN',
+        ]);
+        expect(r.droppedByQuoteCheck[0].detail).toBe(
+            'quoted code not found in src/valves/open-valve.handler.ts on the target branch',
+        );
+    });
+
+    it('still drops a document that is not linked', async () => {
+        const DOC = {
+            ...CODE,
+            suggestionContent: 'DOC-RULE: drain returns a bare status.',
+            source: {
+                file: 'docs/valves/unlinked.md',
+                quote: 'Handlers return ValveResult, never a bare status.',
+            },
+        };
+        submitted = { reasoning: 'one rule', suggestions: [DOC, BUG] };
+        const { r } = await run(true);
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'DOC-RULE',
+        ]);
+        expect(r.droppedByQuoteCheck[0].detail).toBe(
+            'docs/valves/unlinked.md is not a guide linked to this review',
+        );
     });
 });
 

@@ -90,3 +90,20 @@ it('exposes the actual full PR count from the normalized GitHub response', async
         base: { sha: 'base' },
     });
 });
+
+it('keeps the link GitHub gives for each changed file', async () => {
+    const { service, octokit, input } = setup();
+    octokit.paginate.mockResolvedValue([
+        {
+            filename: 'docs/guide.md',
+            status: 'modified',
+            blob_url: 'https://github.com/acme/api/blob/head/docs/guide.md',
+        },
+    ]);
+
+    const [file] = await service.getFilesByPullRequestId(input);
+
+    expect(file.blob_url).toBe(
+        'https://github.com/acme/api/blob/head/docs/guide.md',
+    );
+});

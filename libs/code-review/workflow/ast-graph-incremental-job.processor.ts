@@ -174,6 +174,9 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                     branch,
                     platform: payload.platform as PlatformType,
                     sandboxMetadata: { stage: 'graph-incremental' },
+                    organizationId:
+                        payload.organizationAndTeamData?.organizationId,
+                    teamId: payload.organizationAndTeamData?.teamId,
                 },
             );
             sandbox = acquired.sandbox;

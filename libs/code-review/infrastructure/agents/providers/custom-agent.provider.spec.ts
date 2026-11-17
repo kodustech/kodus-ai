@@ -567,6 +567,56 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         },
     );
 
+    // A convention citing a code file is checked against that file on the
+    // target branch; with no skill or doc linked there is no knowledge
+    // reader, and the local sandbox refuses git on its command channel.
+    it('gives the convention check a target-branch reader when no knowledge is linked', async () => {
+        const repoDir = targetBranchCheckout({
+            onTarget: 'rule: merged\n',
+            inCheckout: 'rule: from the pull request\n',
+        });
+        const sandbox = {
+            type: 'local',
+            run: jest.fn(async (command: string) => {
+                try {
+                    const stdout = execSync(command, {
+                        cwd: repoDir,
+                        encoding: 'utf8',
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                    return { stdout, stderr: '', exitCode: 0 };
+                } catch (error: any) {
+                    return {
+                        stdout: String(error.stdout ?? ''),
+                        stderr: '',
+                        exitCode: error.status ?? 1,
+                    };
+                }
+            }),
+            repoDir,
+            remoteCommands: {
+                exec: async () => ({
+                    stdout: 'Program "git" is not allowed in local sandbox.',
+                    stderr: '',
+                    exitCode: 1,
+                }),
+            },
+        };
+
+        await provider().execute(
+            input({
+                baseBranch: 'main',
+                remoteCommands: sandbox.remoteCommands,
+                customAgentTooling: { sandbox },
+            }),
+        );
+
+        const [loopParams] = runLoopMock.mock.calls[0];
+        await expect(
+            loopParams.conventionGuideReader.readFile('rules/no-console.yml'),
+        ).resolves.toEqual({ status: 'ok', content: 'rule: merged\n' });
+    });
+
     it('runs an MCP call once per review and agent, and again in another review', async () => {
         const mcpManager = {
             getConnections: jest.fn(async (_org: any, format?: boolean) =>

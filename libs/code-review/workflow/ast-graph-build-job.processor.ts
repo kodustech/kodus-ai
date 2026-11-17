@@ -176,6 +176,9 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                     branch,
                     platform: payload.platform as PlatformType,
                     sandboxMetadata: { stage: 'graph-build' },
+                    organizationId:
+                        payload.organizationAndTeamData?.organizationId,
+                    teamId: payload.organizationAndTeamData?.teamId,
                 },
             );
             sandbox = acquired.sandbox;

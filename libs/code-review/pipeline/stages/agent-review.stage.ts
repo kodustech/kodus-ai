@@ -1,3 +1,4 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -166,6 +167,7 @@ import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engi
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import {
     mergeKodyRuleFindings,
+    OTHER_LOCATIONS_HEADING,
     otherLocationsToRender,
 } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
@@ -345,6 +347,14 @@ function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
         !isAnalyzerSuggestion(s) &&
         !isCustomAgentFinding(s)
     );
+}
+
+function isGithubDotCom(cloneUrl: string | undefined): boolean {
+    try {
+        return new URL(cloneUrl ?? '').hostname.toLowerCase() === 'github.com';
+    } catch {
+        return false;
+    }
 }
 
 @Injectable()
@@ -976,20 +986,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 String(context.repository?.id || ''),
                             );
 
+                        const baseBranch =
+                            context.sandboxHandle?.baseBranch ||
+                            context.pullRequest?.base?.ref ||
+                            context.repository?.defaultBranch;
+
                         if (repo?.astGraphStatus === AstGraphStatus.READY) {
                             callGraph = await this.graphContext.generateContext(
                                 context.sandboxHandle,
                                 changedFiles,
                                 repo.uuid,
+                                baseBranch,
                             );
                         } else {
                             callGraph =
                                 await this.graphContext.generateContextLegacy(
                                     context.sandboxHandle,
                                     changedFiles,
-                                    context.sandboxHandle?.baseBranch ||
-                                        context.pullRequest?.base?.ref ||
-                                        context.repository?.defaultBranch,
+                                    baseBranch,
                                 );
                         }
                     }
@@ -1340,6 +1354,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // and an agent-level one for the same (model, window) fold
             // into a single bullet in the user-facing notice.
             const allWarnings = dedupReviewWarnings([
+                // Recorded by earlier stages (e.g. a diff cut at the patch
+                // line limit in FetchChangedFilesStage).
+                ...(context.reviewWarnings ?? []),
                 ...(context.customAgentClis?.warnings ?? []),
                 ...stageWarnings,
                 ...(result.warnings ?? []),
@@ -1741,7 +1758,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const locationsList = otherLocations
                     .map((loc) => `- \`${loc}\``)
                     .join('\n');
-                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                const otherLocationsSection = `\n\n${OTHER_LOCATIONS_HEADING}\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
                 // llmPrompt is built from fullExplanation below; without the
                 // list an agent working from the prompt fixes only the kept
@@ -1843,12 +1860,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // it (KRC-20) instead of leaking out as an unanchored PR-level
             // comment. `changedFilesByName` (built above for the diff-snap
             // step) tells the two cases apart.
+            //
+            // An analyzer finding on a file whose diff the host withheld takes
+            // no line comment either: GitHub rejects it with 422 "diff is too
+            // large". The analyzers read such a file from a hunk they
+            // recovered, so a lockfile advisory would never reach the PR.
+            const withheldDiffs = new Set(
+                [...changedFiles, ...(context.ignoredFileChanges ?? [])]
+                    .filter((f) => f.filename && !f.patch)
+                    .map((f) => f.filename),
+            );
             const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-                s.label === 'kody_rules' &&
-                (!s.relevantFile ||
-                    s.fileAnchored === true ||
-                    (!s.relevantLinesStart &&
-                        changedFilesByName.has(s.relevantFile)));
+                (isAnalyzerSuggestion(s) &&
+                    withheldDiffs.has(s.relevantFile)) ||
+                (s.label === 'kody_rules' &&
+                    (!s.relevantFile ||
+                        s.fileAnchored === true ||
+                        (!s.relevantLinesStart &&
+                            changedFilesByName.has(s.relevantFile))));
             // Agents set to `single-comment` publish one PR-level comment
             // gathering their findings instead of inline comments (#2172).
             const singleComments = collectSingleComments(
@@ -2012,6 +2041,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     if (!draft.validSuggestionsByPR) {
                         draft.validSuggestionsByPR = [];
                     }
+                    // An analyzer body opens with its own title, which the
+                    // PR-level comment already shows as its heading, and
+                    // continues with a list that cannot follow a dash.
+                    const withoutTitle = (text: string, title?: string) =>
+                        title && text.startsWith(title)
+                            ? text.slice(title.length).replace(/^[.:]?\s*/, '')
+                            : text;
+                    const cite = (
+                        s: Partial<CodeSuggestion>,
+                        text: string,
+                    ): string => {
+                        const where = s.relevantLinesStart
+                            ? `\`${s.relevantFile}:${s.relevantLinesStart}\``
+                            : `\`${s.relevantFile}\``;
+                        return isAnalyzerSuggestion(s)
+                            ? `${where}\n\n${withoutTitle(text, s.oneSentenceSummary)}`
+                            : `${where} — ${text}`;
+                    };
                     draft.validSuggestionsByPR.push(
                         ...prLevelSuggestions.map((s) => ({
                             id: crypto.randomUUID(),
@@ -2026,15 +2073,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             // empty/unparseable-patch case — would point at
                             // a line that need not exist in the diff at all.
                             suggestionContent: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
+                                ? cite(s, s.suggestionContent || '')
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             fullExplanation: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                ? cite(
+                                      s,
+                                      s.fullExplanation ||
+                                          s.suggestionContent ||
+                                          '',
+                                  )
                                 : s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
@@ -3376,15 +3424,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * Resolve GitHub token for cross-repo file reading (readReference tool).
-     * Uses the same token that was used to clone the repo for the sandbox.
+     * Uses the same token that was used to clone the repo for the sandbox,
+     * and only on a GitHub review: readReference calls api.github.com.
      */
     private async resolveGitHubToken(
         context: CodeReviewPipelineContext,
     ): Promise<string | undefined> {
+        if (context.platformType !== PlatformType.GITHUB) return undefined;
         try {
             if (context.getFreshCloneParams) {
                 const params = await context.getFreshCloneParams();
-                return params?.authToken;
+                // readReference calls api.github.com: a GitHub Enterprise
+                // Server token belongs to its own host.
+                return isGithubDotCom(params?.cloneUrl)
+                    ? params?.authToken
+                    : undefined;
             }
         } catch {
             // Best effort — tool just won't be available

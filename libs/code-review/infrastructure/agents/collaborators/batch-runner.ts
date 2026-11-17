@@ -220,6 +220,13 @@ export async function runChunkedReview(
             throw batchErrors[0];
         }
 
+        // A batch that threw never reviewed its files, so the aggregate is as
+        // incomplete as one whose batch hit a limit. Its findings-less result
+        // must not read as a clean review (#2204).
+        if (batchErrors.length > 0 && !cutShort) {
+            cutShort = 'no-result';
+        }
+
         const durationMs = Date.now() - startTime;
 
         logger.log({

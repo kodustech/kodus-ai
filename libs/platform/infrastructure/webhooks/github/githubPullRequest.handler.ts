@@ -10,7 +10,7 @@ import {
     isReviewCommand,
     parseReviewDirective,
     requestedReviewModeOf,
-    parseCustomAgentCommand
+    parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
@@ -177,6 +177,9 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         const repository = {
             id: String(payload?.repository?.id),
             name: payload?.repository?.name,
+            // GitHub addresses the repository by its own owner, which a
+            // token integration's recorded account may not be.
+            fullName: payload?.repository?.full_name,
         };
         const metadata = { prNumber, repositoryId: repository.id };
 
@@ -345,6 +348,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                         repository: {
                             id: repository.id,
                             name: repository.name,
+                            fullName: repository.fullName,
                         },
                         platformType: PlatformType.GITHUB,
                         pullRequestNumber: payload?.pull_request?.number,
@@ -384,15 +388,13 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                     repository: {
                                         id: repository.id,
                                         name: repository.name,
+                                        fullName: repository.fullName,
                                     },
-                                    prNumber:
-                                        payload?.pull_request?.number,
+                                    prNumber: payload?.pull_request?.number,
                                 },
                             );
 
-                        const stillContainsPreviousHead = (
-                            commits ?? []
-                        ).some(
+                        const stillContainsPreviousHead = (commits ?? []).some(
                             (commit) => commit?.sha === previousHeadSha,
                         );
 
@@ -410,7 +412,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                         }
                     } catch (err) {
                         this.logger.warn({
-                            message: '[SBX-05] Failed to evaluate GitHub force-push heuristic',
+                            message:
+                                '[SBX-05] Failed to evaluate GitHub force-push heuristic',
                             context: GitHubPullRequestHandler.name,
                             error: err instanceof Error ? err : undefined,
                             metadata: {
@@ -431,22 +434,25 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
                 const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.pull_request?.number}`;
-                await this.outboxRepository.create({
-                    jobId: undefined,
-                    exchange: 'sandbox.events',
-                    routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
-                    payload: {
-                        prKey,
-                        reason: 'pr_closed',
-                    } satisfies SandboxInvalidatePayload,
-                }).catch((err) => {
-                    this.logger.warn({
-                        message: '[SBX-05] Failed to write sandbox invalidation outbox message',
-                        context: GitHubPullRequestHandler.name,
-                        error: err instanceof Error ? err : undefined,
-                        metadata: { prKey },
+                await this.outboxRepository
+                    .create({
+                        jobId: undefined,
+                        exchange: 'sandbox.events',
+                        routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                        payload: {
+                            prKey,
+                            reason: 'pr_closed',
+                        } satisfies SandboxInvalidatePayload,
+                    })
+                    .catch((err) => {
+                        this.logger.warn({
+                            message:
+                                '[SBX-05] Failed to write sandbox invalidation outbox message',
+                            context: GitHubPullRequestHandler.name,
+                            error: err instanceof Error ? err : undefined,
+                            metadata: { prKey },
+                        });
                     });
-                });
 
                 // GitHub does not expose a first-class force-push flag on synchronize.
                 // A best-effort heuristic now runs in the synchronize path by checking
@@ -473,6 +479,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                 repository: {
                                     id: repository.id,
                                     name: repository.name,
+                                    fullName: repository.fullName,
                                 },
                             });
                         if (baseRef !== defaultBranch) {
@@ -486,6 +493,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                         repository: {
                                             id: repository.id,
                                             name: repository.name,
+                                            fullName: repository.fullName,
                                         },
                                         prNumber: payload?.pull_request?.number,
                                     },
@@ -498,9 +506,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                     repoName: repository.name,
                                     platform: PlatformType.GITHUB,
                                     baseBranch: baseRef,
-                                    newSha:
-                                        payload?.pull_request
-                                            ?.merge_commit_sha,
+                                    newSha: payload?.pull_request
+                                        ?.merge_commit_sha,
                                     organizationAndTeamData:
                                         context.organizationAndTeamData,
                                 })
@@ -602,7 +609,6 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             const customAgentSlug = parseCustomAgentCommand(comment.body);
 
             const isStartCommand =
-
                 isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
@@ -630,6 +636,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     const repository = {
                         id: payload.repository.id,
                         name: payload.repository.name,
+                        fullName: payload.repository.full_name,
                     };
 
                     const userGitId = payload?.sender?.id?.toString();
@@ -680,6 +687,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                 repository: {
                                     id: repository.id,
                                     name: repository.name,
+                                    fullName: repository.fullName,
                                 },
                                 head: {
                                     ref: data?.head?.ref,
@@ -715,10 +723,14 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                         payload: {
                             ...payload,
                             action: 'synchronize',
-                            origin: isForceCommand ? 'command-force' : 'command',
+                            origin: isForceCommand
+                                ? 'command-force'
+                                : 'command',
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
-                            requestedReviewMode: requestedReviewModeOf(comment.body),
+                            requestedReviewMode: requestedReviewModeOf(
+                                comment.body,
+                            ),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

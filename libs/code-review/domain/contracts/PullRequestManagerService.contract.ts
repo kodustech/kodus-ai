@@ -18,18 +18,25 @@ export type ChangedFilesSource = 'incremental' | 'interdiff' | 'full' | 'none';
 
 export type ChangedFilesOptions = {
     onDiffSource?: (source: ChangedFilesSource) => void;
+    /** The files the diff deleted; they are left out of the files returned. */
+    onRemovedFiles?: (filenames: string[]) => void;
 };
 
 export interface IPullRequestManagerService {
     getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         prNumber: number,
     ): Promise<any>;
 
     getChangedFiles(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         ignorePaths: string[],
         lastCommit?: string,
@@ -43,7 +50,12 @@ export interface IPullRequestManagerService {
      */
     getChangedFilesMetadata(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         lastCommit?: string,
         /** Base branch of the last review; a retargeted PR is read whole. */
@@ -56,7 +68,12 @@ export interface IPullRequestManagerService {
      */
     enrichFilesWithContent(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         files: FileChange[],
     ): Promise<FileChange[]>;
@@ -72,7 +89,12 @@ export interface IPullRequestManagerService {
      */
     getRebaseInterdiff(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         previousHeadSha: string,
     ): Promise<
@@ -85,7 +107,7 @@ export interface IPullRequestManagerService {
 
     getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: string,
     ): Promise<Commit[]>;

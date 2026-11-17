@@ -2340,8 +2340,13 @@ export class GitlabService implements Omit<
     }
 
     async getChangedFilesSinceLastCommit(params: any) {
-        const { organizationAndTeamData, repository, prNumber, lastCommit } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            lastCommit,
+            keepRemovedFiles,
+        } = params;
 
         const gitlabAuthDetail = await this.getAuthDetails(
             organizationAndTeamData,
@@ -2425,9 +2430,15 @@ export class GitlabService implements Omit<
 
         const mrFileNames = new Set(mrDiffs.map((f) => f.new_path));
 
-        // 5. Keep only files that exist in both compare AND MR diffs list
+        // 5. Keep only files that exist in both compare AND MR diffs list.
+        // A file the MR added and a later push deleted is no longer in the
+        // MR's diffs; a caller that asks for removed files gets it too.
         return diffs
-            .filter((file) => mrFileNames.has(file.new_path))
+            .filter(
+                (file) =>
+                    mrFileNames.has(file.new_path) ||
+                    (keepRemovedFiles && file.deleted_file),
+            )
             .map((file) => {
                 const changeCount = this.countChanges(file.diff);
 

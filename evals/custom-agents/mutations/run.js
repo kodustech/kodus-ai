@@ -57,7 +57,7 @@ const SPEC = {
         'libs/code-review/infrastructure/agents/core/convention-check.local-sandbox.spec.ts',
     instructionQuote:
         'libs/code-review/infrastructure/agents/core/convention-check.repo-instructions.spec.ts',
-    instructionRouting:
+    secondPass:
         'libs/code-review/infrastructure/agents/core/convention-second-pass.spec.ts',
 };
 
@@ -68,6 +68,7 @@ const MODEL_CASES = {
     P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
     P12: 'instructions-rule-violated,instructions-rule-followed',
     P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-imports-controller,architecture-shared-component-uses-ui-primitive',
+    P14: 'code-pattern-departed,code-pattern-followed',
 };
 
 const MUTATIONS = [
@@ -172,7 +173,7 @@ const MUTATIONS = [
         patch: 'P12-instruction-files-unquotable.patch',
         break: 'the quote gate takes no repository instruction file as a source, so a rule quoted from the CLAUDE.md or AGENTS.md the review loaded is dropped as not a linked guide',
         checks: [
-            { jest: [SPEC.instructionQuote, SPEC.instructionRouting] },
+            { jest: [SPEC.instructionQuote, SPEC.secondPass] },
             { model: MODEL_CASES.P12 },
         ],
     },
@@ -184,6 +185,12 @@ const MUTATIONS = [
             { jest: [SPEC.architectureTemplate] },
             { model: MODEL_CASES.P13 },
         ],
+    },
+    {
+        property: 'P14',
+        patch: 'P14-code-file-citation-dropped.patch',
+        break: 'a convention citing a code file as the pattern goes to the quote gate again, which drops it as not a linked guide',
+        checks: [{ jest: [SPEC.secondPass] }, { model: MODEL_CASES.P14 }],
     },
 ];
 

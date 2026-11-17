@@ -107,6 +107,7 @@ export function finderRunEnvironment(
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
         linkedRepoAccess: secrets.linkedRepoAccess,
+        referenceRepositories: secrets.referenceRepositories,
         extraTools: secrets.extraTools,
     });
     // Without a sandbox or tools of the agent's own there are no repository

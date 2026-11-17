@@ -37,11 +37,24 @@ export function bearerHeaders(apiKey?: string): Record<string, string> {
 /** Parse an OpenAI-style `{ data: [{ id }] }` list into plain `{id, name}`
  *  entries (no reasoning derivation — used by gateways that just proxy ids). The
  *  OpenAI `/models` shape carries only ids, so the label is derived from the id
- *  rather than shown raw. */
+ *  rather than shown raw. Some OpenAI-compatible gateways (e.g. Together)
+ *  return the list as a bare top-level array instead, so both are read. */
 export function parseOpenAiIds(body: unknown): CatalogModel[] {
-    const data =
-        (body as { data?: Array<{ id: string }> } | undefined)?.data ?? [];
-    return data.map((m) => ({ id: m.id, name: formatModelLabel(m.id) }));
+    const data = Array.isArray(body)
+        ? body
+        : (body as { data?: unknown } | undefined)?.data;
+    if (data === undefined || data === null) return [];
+    // A `data` field that is not a list is a malformed body. Throw so the
+    // caller reports a failed listing instead of an empty model list.
+    if (!Array.isArray(data)) {
+        throw new Error('Malformed /models response: `data` is not an array');
+    }
+    return data
+        .filter(
+            (m): m is { id: string } =>
+                typeof (m as { id?: unknown } | null)?.id === 'string',
+        )
+        .map((m) => ({ id: m.id, name: formatModelLabel(m.id) }));
 }
 
 /** Build a `/models` URL from a self-hosted / proxy baseURL, mirroring the

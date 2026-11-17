@@ -50,12 +50,16 @@ const makeGet = (
         return Promise.reject(new Error(`unexpected ${url}`));
     });
 
-const read = (service: BitbucketDataCenterService) =>
+const read = (
+    service: BitbucketDataCenterService,
+    keepRemovedFiles?: boolean,
+) =>
     service.getChangedFilesSinceLastCommit({
         organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
         repository: { id: 'r1', name: 'api' },
         prNumber: 7,
         lastCommit: { sha: 'reviewed-sha' },
+        ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
     });
 
 /** #2268: after the target branch is merged into the PR. */
@@ -175,5 +179,37 @@ describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit', () => {
         const { service } = makeService(get);
 
         await expect(read(service)).resolves.toBeNull();
+    });
+
+    // A file the PR added and a later push deleted: the PR's changes no
+    // longer name it, but the compare since the review shows it deleted.
+    it('keeps a file deleted since the review when the caller asks for removed files', async () => {
+        const get = makeGet({
+            0: {
+                values: [
+                    { path: { toString: 'src/new-in-pr.ts' }, type: 'DELETE' },
+                    change('merged/a.ts'),
+                    change('zz/own.ts'),
+                ],
+                isLastPage: true,
+            },
+        });
+        const { service } = makeService(get);
+
+        const kept = await read(service, true);
+        const plain = await read(service);
+
+        expect(
+            kept.map((f: { filename: string; status: string }) => [
+                f.filename,
+                f.status,
+            ]),
+        ).toEqual([
+            ['src/new-in-pr.ts', 'removed'],
+            ['zz/own.ts', 'modified'],
+        ]);
+        expect(plain.map((f: { filename: string }) => f.filename)).toEqual([
+            'zz/own.ts',
+        ]);
     });
 });

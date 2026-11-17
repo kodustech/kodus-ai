@@ -21,6 +21,7 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import { isIdeRuleSource } from '@libs/common/utils/kody-rules/file-patterns';
 import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /** Reads a guide file as it is on the PR's target branch. `null` when the
@@ -33,6 +34,8 @@ export type GuideDirLister = (dir: string) => Promise<string[]>;
 
 /** Skill files a rule can be quoted from: prose, not scripts or data. */
 const SKILL_TEXT_FILE = /\.(md|mdx|markdown|txt)$/i;
+/** Files a team writes rules in: prose, whatever the location. */
+const DOC_FILE = /\.(md|mdc|mdx|markdown|txt|rst|adoc)$/i;
 /** Files a missing quote is looked up in, per cited skill: one `git show`
  *  each, so a reference-heavy skill cannot turn one finding into hundreds. */
 const MAX_SKILL_FALLBACK_FILES = 40;
@@ -468,6 +471,78 @@ export function isToolSource(
         !isLinkedGuide(file, guideFiles) &&
         astGrepRuleIdOf(finding) == null
     );
+}
+
+/**
+ * A convention finding whose source is a file of the repository's code: the
+ * quote is a line of code shown as the pattern to follow, not a rule the team
+ * wrote, so the quote gate would drop it as "not a guide linked to this
+ * review". It is a finding about the code and is checked as one, by the
+ * verifier. A document (linked or not), an agent or Kody rule file, a linked
+ * guide and the agent's instructions stay on the quote gate; so does a quote
+ * found in the instructions, which the gate re-points at them.
+ */
+export function isCodeFileSource(
+    finding: FinderSuggestion,
+    guideFiles: readonly string[] = [],
+    teamInstructions?: string,
+): boolean {
+    const file = stripLeading((finding.source?.file ?? '').trim());
+    const quote = finding.source?.quote ?? '';
+    return (
+        /^[^\s:]+\.[a-z0-9]{1,10}$/i.test(file) &&
+        !DOC_FILE.test(file) &&
+        !isIdeRuleSource(file) &&
+        !isLinkedGuide(canonicalGuideCitation(file, guideFiles), guideFiles) &&
+        astGrepRuleIdOf(finding) == null &&
+        // The gate re-points a quote the instructions hold, but rejects one
+        // too short to identify a rule before it looks there.
+        !(
+            teamInstructions?.trim() &&
+            normalizeQuoteText(quote).length >= MIN_QUOTE_LENGTH &&
+            findQuoteSection(teamInstructions, quote) != null
+        )
+    );
+}
+
+/**
+ * The code-file citations (`isCodeFileSource`) whose quoted code is in the
+ * cited file on the target branch, read with the reader the quote gate uses
+ * for guides. The verifier compares the finding with that pattern; a quote
+ * the file does not hold (a made-up line, a wrong file) is dropped.
+ */
+export async function checkCodeFileQuotes(
+    findings: readonly FinderSuggestion[],
+    readGuide: GuideFileReader,
+): Promise<{
+    passed: FinderSuggestion[];
+    rejected: ConventionCheckRejected[];
+}> {
+    const passed: FinderSuggestion[] = [];
+    const rejected: ConventionCheckRejected[] = [];
+    for (const finding of findings) {
+        const file = stripLeading((finding.source?.file ?? '').trim());
+        const quote = finding.source?.quote ?? '';
+        // A quote of markdown marks alone normalizes to nothing: no pattern.
+        const needle = normalizeQuoteText(quote);
+        const content = needle ? await readGuide(file).catch(() => null) : null;
+        // Code holds "..." (spread, rest), so the whole quote is looked up
+        // first; a quote the model shortened with "..." still matches by parts.
+        const holds =
+            content != null &&
+            (normalizeQuoteText(content).includes(needle) ||
+                findQuoteSection(content, quote) != null);
+        if (holds) {
+            passed.push(finding);
+        } else {
+            rejected.push({
+                finding,
+                reason: QUOTE_NOT_FOUND,
+                detail: `quoted code not found in ${file} on the target branch`,
+            });
+        }
+    }
+    return { passed, rejected };
 }
 
 /**

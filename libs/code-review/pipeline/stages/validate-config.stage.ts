@@ -44,8 +44,9 @@ import {
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
+    CUSTOM_AGENTS_BETA_REQUIRED,
     CUSTOM_AGENTS_PLAN_REQUIRED,
-    isCustomAgentsPlanAllowed,
+    customAgentsBlockedBy,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import {
     ILicenseService,
@@ -103,34 +104,43 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             }
 
             // Custom agents and their skills and docs run on Teams and above
-            // (#2172). On another plan the saved config is left as it is and
+            // (#2172), and on a self-hosted install only with beta features
+            // on (#2425). Otherwise the saved config is left as it is and
             // this review runs without it; `@kody -v` says why and stops.
-            if (
-                (context.onlyCustomAgent ||
-                    context.codeReviewConfig.customAgents?.length ||
-                    context.codeReviewConfig.knowledge?.length) &&
-                !(await isCustomAgentsPlanAllowed(
-                    this.licenseService,
-                    context.organizationAndTeamData,
-                    this.stageName,
-                ))
-            ) {
+            const customAgentsBlocker =
+                context.onlyCustomAgent ||
+                context.codeReviewConfig.customAgents?.length ||
+                context.codeReviewConfig.knowledge?.length
+                    ? await customAgentsBlockedBy(
+                          this.licenseService,
+                          context.organizationAndTeamData,
+                          this.stageName,
+                      )
+                    : null;
+            if (customAgentsBlocker) {
+                const byBeta = customAgentsBlocker === 'beta';
                 if (context.onlyCustomAgent) {
                     await this.replyToReviewCommand(
                         context,
-                        `\`@kody -v ${context.onlyCustomAgent}\` did not run. ${CUSTOM_AGENTS_PLAN_REQUIRED}`,
+                        `\`@kody -v ${context.onlyCustomAgent}\` did not run. ${
+                            byBeta
+                                ? CUSTOM_AGENTS_BETA_REQUIRED
+                                : CUSTOM_AGENTS_PLAN_REQUIRED
+                        }`,
                     );
                     return this.updateContext(context, (draft) => {
                         draft.statusInfo = {
                             status: AutomationStatus.SKIPPED,
-                            message:
-                                AutomationMessage.CUSTOM_AGENTS_PLAN_REQUIRED,
+                            message: byBeta
+                                ? AutomationMessage.CUSTOM_AGENTS_BETA_REQUIRED
+                                : AutomationMessage.CUSTOM_AGENTS_PLAN_REQUIRED,
                         };
                     });
                 }
                 this.logger.log({
-                    message:
-                        'customAgents configured but plan is not Teams/Enterprise — custom agents disabled',
+                    message: byBeta
+                        ? 'customAgents configured but BETA_FEATURES is off on this self-hosted install — custom agents disabled'
+                        : 'customAgents configured but plan is not Teams/Enterprise — custom agents disabled',
                     context: this.stageName,
                     metadata: {
                         prNumber: context.pullRequest?.number,
