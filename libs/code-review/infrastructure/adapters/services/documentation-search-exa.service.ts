@@ -4,6 +4,7 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
+import { unwrapMarkdownFence } from '@libs/common/utils/unwrap-markdown-fence';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import {
@@ -453,7 +454,7 @@ export class DocumentationSearchExaService {
                 }),
             });
 
-            return (response ?? '').trim();
+            return unwrapMarkdownFence(response ?? '');
         } catch (error) {
             this.logger.warn({
                 message:

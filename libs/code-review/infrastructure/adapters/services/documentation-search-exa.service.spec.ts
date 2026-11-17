@@ -119,7 +119,7 @@ describe('DocumentationSearchExaService — pure query/response transforms', () 
 });
 
 describe('DocumentationSearchExaService — documentation formatter', () => {
-    // Prod 16-17/11: 55 runs in 13 orgs fell back to raw truncation with
+    // Prod 16-17/11: 55 runs in 9 orgs fell back to raw truncation with
     // "reroute-json produced no valid object" — a whole markdown document
     // escaped inside a JSON string is what models without native structured
     // output get wrong. The formatter's answer IS the markdown.
@@ -144,5 +144,19 @@ describe('DocumentationSearchExaService — documentation formatter', () => {
         });
 
         expect(formatted).toBe('## lodash debounce\n\n- `wait` defaults to 0');
+    });
+
+    it('drops a markdown fence the model wraps the document in', async () => {
+        jest.spyOn(LLM, 'run').mockResolvedValue(
+            '```markdown\n## lodash debounce\n```',
+        );
+
+        const formatted = await (svc as any).formatDocumentationForPrompt({
+            packageName: 'lodash',
+            query: 'debounce default wait',
+            rawSearchContent: 'raw search output',
+        });
+
+        expect(formatted).toBe('## lodash debounce');
     });
 });
