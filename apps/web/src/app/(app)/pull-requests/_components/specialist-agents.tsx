@@ -96,9 +96,9 @@ const formatMs = (ms?: number) => {
 
 const DOT: Record<SpecialistEntry["status"], string> = {
     "success": "bg-success",
-    "failed": "bg-error",
-    "no-result": "bg-error",
-    "running": "bg-in-progress",
+    "failed": "bg-danger",
+    "no-result": "bg-danger",
+    "running": "bg-info",
 };
 
 export const SpecialistAgentsTable = ({ rows }: { rows: SpecialistRow[] }) => {
