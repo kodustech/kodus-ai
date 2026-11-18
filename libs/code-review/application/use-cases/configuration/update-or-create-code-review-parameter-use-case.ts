@@ -13,7 +13,7 @@ import { produce } from 'immer';
 import { v4 as uuidv4 } from 'uuid';
 import { DeepPartial } from 'typeorm';
 
-import { createLogger } from '@libs/core/log/logger';
+import { createLogger, extractErrorProps } from '@libs/core/log/logger';
 import {
     CentralizedConfigPrService,
     CentralizedPrMetadata,
@@ -1367,15 +1367,28 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             try {
                 centralizedPr = await createCentralizedMutation();
             } catch (error) {
+                const { code, status, statusCode } =
+                    error instanceof Error ? extractErrorProps(error) : {};
                 this.logger.warn({
                     message:
                         'Saved code review settings, but could not create the centralized config pull request',
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,
-                    error,
+                    error:
+                        error instanceof Error
+                            ? new Error(error.message)
+                            : undefined,
                     metadata: {
                         organizationAndTeamData,
                         repositoryId,
                         directoryId,
+                        providerErrorCode:
+                            typeof code === 'string' ? code : undefined,
+                        providerStatus:
+                            typeof status === 'number'
+                                ? status
+                                : typeof statusCode === 'number'
+                                  ? statusCode
+                                  : undefined,
                     },
                 });
             }

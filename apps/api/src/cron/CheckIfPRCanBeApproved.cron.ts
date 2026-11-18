@@ -1720,8 +1720,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     ? riskApprovalVeto(
                           codeReviewConfig?.riskAssessmentActive === true,
                           lastExecution.dataExecution.riskAssessment,
-                          currentHeadSha,
-                          currentPullRequest,
+                          {
+                              headSha: currentHeadSha,
+                              baseSha: currentPullRequest?.base?.sha,
+                              description: currentPullRequest ?? undefined,
+                          },
                       )
                     : undefined;
                 if (sharedVeto) {

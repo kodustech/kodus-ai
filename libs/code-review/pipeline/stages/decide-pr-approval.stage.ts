@@ -305,7 +305,11 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
         const sharedVeto =
             config.riskAssessmentActive === true
-                ? riskApprovalVeto(true, sharedRisk, headSha, livePr)
+                ? riskApprovalVeto(true, sharedRisk, {
+                      headSha,
+                      baseSha: livePr.base?.sha,
+                      description: livePr,
+                  })
                 : undefined;
         const decision = sharedVeto
             ? { kind: 'hold' as const, reason: sharedVeto }

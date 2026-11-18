@@ -22,6 +22,7 @@ const run = (over: Partial<ApprovalPolicyInput> = {}) =>
         reviewClean: true,
         riskEnabled: false,
         currentHeadSha: 'head',
+        currentBaseSha: 'base',
         policies: [policy('Docs', { includedFiles: ['docs/**'] })],
         files: [file('docs/readme.md')],
         ...over,

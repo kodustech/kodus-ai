@@ -59,6 +59,7 @@ export interface ApprovalPolicyInput {
     riskEnabled: boolean;
     risk?: RiskAssessmentResult;
     currentHeadSha: string;
+    currentBaseSha: string;
     platformType?: PlatformType;
     author?: string;
     labels?: string[];
@@ -195,11 +196,10 @@ export async function evaluateApprovalPolicies(
         };
     if (!input.reviewClean)
         return hold('The review is not clean or did not complete.');
-    const veto = riskApprovalVeto(
-        input.riskEnabled,
-        input.risk,
-        input.currentHeadSha,
-    );
+    const veto = riskApprovalVeto(input.riskEnabled, input.risk, {
+        headSha: input.currentHeadSha,
+        baseSha: input.currentBaseSha,
+    });
     if (veto) return hold(veto);
     if (input.sensitivePaths?.length) {
         if (!input.files?.length || input.files.some((file) => !file.filename))

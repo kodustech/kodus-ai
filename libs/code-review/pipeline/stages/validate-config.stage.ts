@@ -259,7 +259,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             riskAssessment?.status === 'assessed' &&
             !!riskSnapshotMismatch(riskAssessment, {
                 headSha: pullRequest.head?.sha,
-                baseSha: pullRequest.base?.sha ?? '',
+                baseSha: pullRequest.base?.sha,
                 description: pullRequest,
             });
         const risk = staleRisk ? undefined : riskAssessment;

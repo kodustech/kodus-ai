@@ -86,14 +86,16 @@ export function matchesRiskSnapshot(
     );
 }
 
+interface CurrentRiskSnapshot {
+    headSha: string | undefined;
+    baseSha: string | undefined;
+    description?: { title?: string; body?: string };
+}
+
 /** Compare the PR fields available to a consumer after the assessment runs. */
 export function riskSnapshotMismatch(
     risk: RiskAssessmentResult | undefined,
-    current: {
-        headSha?: string;
-        baseSha?: string;
-        description?: { title?: string; body?: string };
-    },
+    current: CurrentRiskSnapshot,
 ): string | undefined {
     if (
         risk?.status !== 'assessed' ||
@@ -102,10 +104,7 @@ export function riskSnapshotMismatch(
     ) {
         return 'Risk assessment is unavailable for the current PR head.';
     }
-    if (
-        current.baseSha !== undefined &&
-        (!current.baseSha || risk.snapshot.baseSha !== current.baseSha)
-    )
+    if (!current.baseSha?.trim() || risk.snapshot.baseSha !== current.baseSha)
         return 'Risk assessment is unavailable for the current PR base.';
     if (current.description && !risk.snapshot.descriptionKey)
         return 'Risk assessment is unavailable for the current PR context.';
@@ -122,16 +121,11 @@ export function riskSnapshotMismatch(
 export function riskApprovalVeto(
     riskEnabled: boolean,
     risk: RiskAssessmentResult | undefined,
-    currentHeadSha: string,
-    currentPr?: { title?: string; body?: string; base?: { sha?: string } },
+    current: CurrentRiskSnapshot,
 ): string | undefined {
     if (!riskEnabled) return undefined;
     return (
-        riskSnapshotMismatch(risk, {
-            headSha: currentHeadSha,
-            baseSha: currentPr?.base?.sha,
-            description: currentPr,
-        }) ??
+        riskSnapshotMismatch(risk, current) ??
         (hasConfirmedRisk(risk) ? 'Risk was identified in this PR.' : undefined)
     );
 }

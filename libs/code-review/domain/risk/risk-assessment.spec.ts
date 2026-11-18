@@ -23,6 +23,7 @@ const assessed = (riskIdentified: boolean): RiskAssessmentResult => ({
     reason: 'Assessment reason.',
     snapshot,
 });
+const current = { headSha: 'head', baseSha: 'base' };
 
 describe('shared PR risk contract', () => {
     it.each([
@@ -76,15 +77,25 @@ describe('shared PR risk contract', () => {
         { status: 'unavailable', reason: 'Failed.' },
         assessed(true),
     ] as const)('vetoes approval for %j when assessment is enabled', (risk) => {
-        expect(riskApprovalVeto(true, risk, 'head')).toBeDefined();
+        expect(riskApprovalVeto(true, risk, current)).toBeDefined();
     });
 
     it('requires verified no-risk on the reviewed head for approval', () => {
-        expect(riskApprovalVeto(true, assessed(false), 'head')).toBeUndefined();
         expect(
-            riskApprovalVeto(true, assessed(false), 'new-head'),
+            riskApprovalVeto(true, assessed(false), current),
+        ).toBeUndefined();
+        expect(
+            riskApprovalVeto(true, assessed(false), {
+                ...current,
+                headSha: 'new-head',
+            }),
         ).toBeDefined();
-        expect(riskApprovalVeto(true, assessed(false), '')).toBeDefined();
+        expect(
+            riskApprovalVeto(true, assessed(false), {
+                ...current,
+                headSha: '',
+            }),
+        ).toBeDefined();
     });
 
     it('shares base and description checks between routing and approval', () => {
@@ -118,16 +129,32 @@ describe('shared PR risk contract', () => {
             });
             expect(mismatch).toBeDefined();
             expect(
-                riskApprovalVeto(true, result, 'head', {
-                    ...description,
-                    base: { sha: baseSha },
+                riskApprovalVeto(true, result, {
+                    headSha: 'head',
+                    baseSha,
+                    description,
                 }),
             ).toBe(mismatch);
         }
     });
 
     it('removes only the risk veto when the engine is switched off', () => {
-        expect(riskApprovalVeto(false, assessed(true), 'head')).toBeUndefined();
-        expect(riskApprovalVeto(false, undefined, 'head')).toBeUndefined();
+        expect(
+            riskApprovalVeto(false, assessed(true), current),
+        ).toBeUndefined();
+        expect(riskApprovalVeto(false, undefined, current)).toBeUndefined();
     });
+
+    it.each([undefined, '', '   '])(
+        'holds approval when the current base is %j',
+        (baseSha) => {
+            const identity = { ...current, baseSha };
+            expect(riskSnapshotMismatch(assessed(false), identity)).toContain(
+                'current PR base',
+            );
+            expect(riskApprovalVeto(true, assessed(false), identity)).toContain(
+                'current PR base',
+            );
+        },
+    );
 });

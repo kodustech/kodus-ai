@@ -82,6 +82,12 @@ beforeEach(() => {
 it.each([true, false])(
     'consumes shared risk=%s without another risk model call',
     async (riskIdentified) => {
+        codeManagement.getPullRequest.mockResolvedValueOnce({
+            labels: ['ready'],
+            head: { sha: 'head-1' },
+            base: { sha: 'base' },
+            user: { login: 'alice' },
+        });
         const ctx = {
             ...context({ riskAssessmentActive: true }),
             riskAssessment: {

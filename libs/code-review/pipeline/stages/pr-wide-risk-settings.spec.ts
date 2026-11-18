@@ -149,7 +149,10 @@ it.each([false, true])(
                 riskIdentified: true,
             });
             expect(
-                riskApprovalVeto(true, result.riskAssessment, 'head'),
+                riskApprovalVeto(true, result.riskAssessment, {
+                    headSha: 'head',
+                    baseSha: 'base',
+                }),
             ).toBeDefined();
             expect(
                 resolveRiskReviewMode({
@@ -181,7 +184,7 @@ it('keeps the incremental review available when complete risk settings cannot be
         riskApprovalVeto(
             result.codeReviewConfig.riskAssessmentActive,
             result.riskAssessment,
-            'head',
+            { headSha: 'head', baseSha: 'base' },
         ),
     ).toBeDefined();
     expect(LLM.run).not.toHaveBeenCalled();
