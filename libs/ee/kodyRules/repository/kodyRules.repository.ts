@@ -346,7 +346,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         // which Mongo rejects. Return the current doc unchanged.
         if (!setFields) {
             const current = await this.kodyRulesModel
-                .findOne({ '_id': uuid, 'rules.uuid': { $eq: ruleId } }, projection)
+                .findOne(
+                    { '_id': uuid, 'rules.uuid': { $eq: ruleId } },
+                    projection,
+                )
                 .lean()
                 .exec();
             return current
@@ -385,8 +388,11 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         updateData: Partial<IKodyRule>,
     ): Promise<Partial<IKodyRule> | null> {
         const setFields = ruleFieldSet(updateData);
-        const filter = { organizationId, 'rules.uuid': ruleId };
-        const projection = { rules: { $elemMatch: { uuid: ruleId } } };
+        const filter = {
+            'organizationId': { $eq: organizationId },
+            'rules.uuid': { $eq: ruleId },
+        };
+        const projection = { rules: { $elemMatch: { uuid: { $eq: ruleId } } } };
 
         // All-undefined patch: Mongo rejects an empty $set, so read instead.
         const doc = !setFields
@@ -432,7 +438,11 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
     async deleteRule(uuid: string, ruleId: string): Promise<boolean> {
         const deleted = await this.kodyRulesModel
-            .updateOne({ _id: uuid }, { $pull: { rules: { uuid: ruleId } } })
+            .updateOne(
+                { _id: { $eq: uuid } },
+                // `$eq`: an object ruleId would otherwise pull every rule.
+                { $pull: { rules: { uuid: { $eq: ruleId } } } },
+            )
             .exec();
 
         return deleted.acknowledged;
@@ -447,7 +457,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         const result = await this.kodyRulesModel
             .updateOne(
                 {
-                    organizationId: { $eq: organizationId },
+                    'organizationId': { $eq: organizationId },
                     'rules.uuid': { $eq: ruleId },
                 },
                 { $set: { 'rules.$.status': KodyRulesStatus.DELETED } },
