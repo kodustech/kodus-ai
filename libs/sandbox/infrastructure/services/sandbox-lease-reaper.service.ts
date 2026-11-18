@@ -163,7 +163,8 @@ export class SandboxLeaseReaperService {
                                     this.logger.error({
                                         message:
                                             '[SANDBOX-REAPER] Giving up on Sandbox.kill after the hard retry limit — deleting lease, sandbox may be orphaned',
-                                        context: SandboxLeaseReaperService.name,
+                                        context:
+                                            SandboxLeaseReaperService.name,
                                         metadata: {
                                             sandboxId: lease.sandboxId,
                                             error: String(err),
@@ -313,7 +314,8 @@ export class SandboxLeaseReaperService {
                                     this.logger.error({
                                         message:
                                             '[SANDBOX-IDLE-KILL] Giving up on Sandbox.kill after the hard retry limit — deleting lease, sandbox may be orphaned',
-                                        context: SandboxLeaseReaperService.name,
+                                        context:
+                                            SandboxLeaseReaperService.name,
                                         metadata: {
                                             sandboxId: lease.sandboxId,
                                             error: String(err),

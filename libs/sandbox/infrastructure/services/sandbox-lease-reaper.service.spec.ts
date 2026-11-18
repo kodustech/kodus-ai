@@ -90,9 +90,7 @@ describe('SandboxLeaseReaperService', () => {
                 { _id: 'org:repo:1', sandboxId: 'sbx-1', state: 'READY' },
             ]);
             mockKill.mockRejectedValue(
-                new Error(
-                    'TimeoutError: The operation was aborted due to timeout',
-                ),
+                new Error('TimeoutError: The operation was aborted due to timeout'),
             );
 
             await service.reapExpiredLeases();

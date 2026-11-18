@@ -46,10 +46,6 @@ export const NULL_SANDBOX_INSTANCE: SandboxInstance = {
     sandboxId: '',
     repoDir: '',
     run: async () => ({ stdout: '', stderr: '', exitCode: 1 }),
-    readFile: async () => {
-        throw new Error('No sandbox configured');
-    },
-    writeFile: async () => {
-        throw new Error('No sandbox configured');
-    },
+    readFile: async () => { throw new Error('No sandbox configured'); },
+    writeFile: async () => { throw new Error('No sandbox configured'); },
 };

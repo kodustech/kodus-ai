@@ -21,16 +21,9 @@ describe('LocalSandboxService exec — symlink escape', () => {
     let rc: any;
 
     beforeAll(() => {
-        repo = fs.mkdtempSync(
-            path.join(os.tmpdir(), 'kodus-exec-symlink-repo-'),
-        );
-        outside = fs.mkdtempSync(
-            path.join(os.tmpdir(), 'kodus-exec-symlink-out-'),
-        );
-        fs.writeFileSync(
-            path.join(outside, 'secret.env'),
-            'DB_PASSWORD=hunter2\n',
-        );
+        repo = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-exec-symlink-repo-'));
+        outside = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-exec-symlink-out-'));
+        fs.writeFileSync(path.join(outside, 'secret.env'), 'DB_PASSWORD=hunter2\n');
         fs.writeFileSync(path.join(repo, 'real.txt'), 'in-repo content\n');
 
         // A symlink committed in the repo pointing at a file outside it.
@@ -41,9 +34,7 @@ describe('LocalSandboxService exec — symlink escape', () => {
         // A symlinked directory pointing outside the repo.
         fs.symlinkSync(outside, path.join(repo, 'linkdir'));
 
-        rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(
-            repo,
-        );
+        rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(repo);
     });
 
     afterAll(() => {
@@ -100,9 +91,7 @@ describe('LocalSandboxService exec — blocks executor flags', () => {
     beforeAll(() => {
         repo = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-exec-flags-repo-'));
         fs.writeFileSync(path.join(repo, 'real.txt'), 'ok\n');
-        rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(
-            repo,
-        );
+        rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(repo);
     });
 
     afterAll(() => {
@@ -118,7 +107,9 @@ describe('LocalSandboxService exec — blocks executor flags', () => {
     };
 
     it('blocks find -exec', async () => {
-        await expectBlocked("find . -maxdepth 0 -exec sh -c 'echo PWNED' {} +");
+        await expectBlocked(
+            "find . -maxdepth 0 -exec sh -c 'echo PWNED' {} +",
+        );
     });
 
     it('blocks find -execdir', async () => {
