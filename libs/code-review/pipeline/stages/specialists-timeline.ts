@@ -88,8 +88,9 @@ export function summarizeSpecialists(
         list.every((e) => e.status === 'success'),
     ).length;
     const findings = live.reduce((sum, e) => sum + (e.kept ?? 0), 0);
+    // A stopped batch's files went without lenses: never a full success.
     const status =
-        ran === total
+        ran === total && stoppedBatches.size === 0
             ? AutomationStatus.SUCCESS
             : ran === 0
               ? AutomationStatus.ERROR

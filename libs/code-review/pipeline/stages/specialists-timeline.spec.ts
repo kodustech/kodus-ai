@@ -111,6 +111,7 @@ describe('summarizeSpecialists', () => {
             'stopped',
             'success',
         ]);
+        expect(row.status).toBe(AutomationStatus.PARTIAL_ERROR);
     });
 
     it('never reads an entry with no lens as a success', () => {
@@ -202,7 +203,7 @@ describe('SpecialistsTimeline', () => {
         });
     });
 
-    it('keeps the batches that ran when the generalist failed on another', async () => {
+    it('keeps the batches that ran, as a partial error, when the generalist failed on another', async () => {
         const { writer, calls } = fakeWriter();
         const t = new SpecialistsTimeline(writer);
 
@@ -229,7 +230,7 @@ describe('SpecialistsTimeline', () => {
         );
 
         expect(calls[calls.length - 1]).toMatchObject({
-            status: AutomationStatus.SUCCESS,
+            status: AutomationStatus.PARTIAL_ERROR,
             label: 'Specialist Agents — 1 ran · 2 findings · 1 batch stopped because the Generalist Agent failed',
         });
     });

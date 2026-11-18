@@ -58,6 +58,20 @@ describe("getSpecialists", () => {
         ]);
     });
 
+    it("leaves a stopped batch's findings and unknown statuses out", () => {
+        const rows = getSpecialists({
+            specialists: [
+                { label: "lens-a", status: "success", batchIndex: 1, kept: 1 },
+                { label: "lens-a", status: "stopped", batchIndex: 2, kept: 4 },
+                { label: "lens-b", status: "bogus", batchIndex: 1, kept: 9 },
+            ],
+        });
+
+        expect(rows?.map((r) => [r.label, r.status, r.kept])).toEqual([
+            ["lens-a", "success", 1],
+        ]);
+    });
+
     it("is null for an entry that is not the specialists one", () => {
         expect(getSpecialists({ agentTrace: {} })).toBeNull();
     });

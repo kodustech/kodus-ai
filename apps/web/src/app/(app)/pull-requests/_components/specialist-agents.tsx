@@ -63,11 +63,12 @@ export const getSpecialists = (metadata?: unknown): SpecialistRow[] | null => {
 
     const byLens = new Map<string, SpecialistEntry[]>();
     for (const entry of raw as SpecialistEntry[]) {
-        if (!entry?.label) continue;
+        if (!entry?.label || !(entry.status in STATUS_RANK)) continue;
         byLens.set(entry.label, [...(byLens.get(entry.label) ?? []), entry]);
     }
 
     return [...byLens.entries()].map(([label, entries]) => {
+        const counted = entries.filter((e) => e.status !== "stopped");
         const status = entries.reduce<SpecialistEntry["status"]>(
             (worst, e) =>
                 STATUS_RANK[e.status] > STATUS_RANK[worst] ? e.status : worst,
@@ -78,9 +79,9 @@ export const getSpecialists = (metadata?: unknown): SpecialistRow[] | null => {
             name: nameOf(label),
             status,
             kept:
-                status === "running" || status === "stopped"
+                status === "running"
                     ? undefined
-                    : sum(entries.map((e) => e.kept)),
+                    : sum(counted.map((e) => e.kept)),
             durationMs: sum(entries.map((e) => e.durationMs)),
             toolCalls: sum(entries.map((e) => e.toolCalls)),
             error: entries.find((e) => e.error)?.error,
