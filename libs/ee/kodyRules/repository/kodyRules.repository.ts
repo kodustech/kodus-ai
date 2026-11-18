@@ -337,14 +337,16 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         // organization.
         const projection = {
             organizationId: 1,
-            rules: { $elemMatch: { uuid: ruleId } },
+            // `$eq`: a ruleId that arrives as an object (`{ $ne: null }`)
+            // must not turn into an operator that matches any rule.
+            rules: { $elemMatch: { uuid: { $eq: ruleId } } },
         };
 
         // Nothing concrete to set (all-undefined patch) — avoid an empty $set,
         // which Mongo rejects. Return the current doc unchanged.
         if (!setFields) {
             const current = await this.kodyRulesModel
-                .findOne({ '_id': uuid, 'rules.uuid': ruleId }, projection)
+                .findOne({ '_id': uuid, 'rules.uuid': { $eq: ruleId } }, projection)
                 .lean()
                 .exec();
             return current
@@ -354,7 +356,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
         const updated = await this.kodyRulesModel
             .findOneAndUpdate(
-                { '_id': uuid, 'rules.uuid': ruleId },
+                { '_id': uuid, 'rules.uuid': { $eq: ruleId } },
                 { $set: setFields },
                 { new: true, projection },
             )
@@ -444,7 +446,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     ): Promise<boolean> {
         const result = await this.kodyRulesModel
             .updateOne(
-                { organizationId, 'rules.uuid': ruleId },
+                {
+                    organizationId: { $eq: organizationId },
+                    'rules.uuid': { $eq: ruleId },
+                },
                 { $set: { 'rules.$.status': KodyRulesStatus.DELETED } },
             )
             .exec();

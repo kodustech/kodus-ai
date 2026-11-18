@@ -279,7 +279,10 @@ describe('KodyRulesRepository.updateRule (field-level merge)', () => {
         } as any);
 
         const [filter, update] = findOneAndUpdate.mock.calls[0];
-        expect(filter).toEqual({ '_id': 'doc-1', 'rules.uuid': 'rule-1' });
+        expect(filter).toEqual({
+            '_id': 'doc-1',
+            'rules.uuid': { $eq: 'rule-1' },
+        });
         // Per-field $set — NOT { 'rules.$': {...} } which would wipe omitted fields.
         expect(update).toEqual({
             $set: {
@@ -312,7 +315,7 @@ describe('KodyRulesRepository.updateRule (field-level merge)', () => {
         // Empty $set is rejected by Mongo — must fall back to a read.
         expect(findOneAndUpdate).not.toHaveBeenCalled();
         expect(findOne).toHaveBeenCalledWith(
-            { '_id': 'doc-1', 'rules.uuid': 'rule-1' },
+            { '_id': 'doc-1', 'rules.uuid': { $eq: 'rule-1' } },
             expect.anything(),
         );
     });
@@ -324,7 +327,20 @@ describe('KodyRulesRepository.updateRule (field-level merge)', () => {
 
         const [, , options] = findOneAndUpdate.mock.calls[0];
         expect(options.projection.rules).toEqual({
-            $elemMatch: { uuid: 'rule-1' },
+            $elemMatch: { uuid: { $eq: 'rule-1' } },
+        });
+    });
+
+    it('matches a ruleId sent as an object literally, never as an operator', async () => {
+        const { repo, findOneAndUpdate } = buildRepo();
+        const injected = { $ne: null } as unknown as string;
+
+        await repo.updateRule('doc-1', injected, { title: 'New' } as any);
+
+        const [filter, , options] = findOneAndUpdate.mock.calls[0];
+        expect(filter['rules.uuid']).toEqual({ $eq: injected });
+        expect(options.projection.rules.$elemMatch.uuid).toEqual({
+            $eq: injected,
         });
     });
 });
