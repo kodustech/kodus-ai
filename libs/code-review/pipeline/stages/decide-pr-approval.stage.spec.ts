@@ -197,24 +197,29 @@ it('does not count a failed shared assessment as an unclean review for named pol
 });
 
 it('records the exact posted comment IDs and missing delivery evidence for named approval', async () => {
+    const decision = { kind: 'hold', reason: 'The review is not clean.' };
+    const evaluate = jest.fn().mockResolvedValue({ decision, eligibility: {} });
     const policyStage = new DecidePrApprovalStage(
         codeManagement as unknown as CodeManagementService,
         areaMaps as unknown as CodeAreaRiskMapService,
         conditionalApprovalAccess as any,
-        {
-            evaluate: jest
-                .fn()
-                .mockResolvedValue({
-                    decision: { kind: 'hold' },
-                    eligibility: {},
-                }),
-        } as any,
+        { evaluate } as any,
     );
     const result = await policyStage.execute({
         ...context({ approvalPolicies: [] }),
         lineComments: [
             {
-                comment: { path: 'src/auth/login.ts', body: 'Finding' },
+                comment: {
+                    path: 'src/auth/login.ts',
+                    body: 'Replaced finding',
+                },
+                deliveryStatus: DeliveryStatus.REPLACED,
+            },
+            {
+                comment: {
+                    path: 'src/auth/login.ts',
+                    body: 'Fallback finding',
+                },
                 deliveryStatus: DeliveryStatus.SENT,
                 codeReviewFeedbackData: {
                     commentId: 42,
@@ -225,14 +230,30 @@ it('records the exact posted comment IDs and missing delivery evidence for named
             {
                 comment: { path: 'src/auth/login.ts', body: 'Another finding' },
                 deliveryStatus: DeliveryStatus.FAILED,
+                codeReviewFeedbackData: {
+                    commentId: 71,
+                    pullRequestReviewId: 1,
+                    suggestionId: 'failed',
+                },
+            },
+            {
+                comment: {
+                    path: 'src/auth/login.ts',
+                    body: 'Untracked finding',
+                },
+                deliveryStatus: DeliveryStatus.SENT,
             },
         ],
     });
     expect(result.approvalReviewSummary).toMatchObject({
         complete: true,
-        lineFindings: 2,
-        lineCommentIds: ['42', null],
+        lineFindings: 3,
+        lineCommentIds: ['42', null, null],
     });
+    expect(evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ reviewClean: false }),
+    );
+    expect(result.approvalDecision).toEqual(decision);
 });
 
 it('holds a saved conditional policy when beta or paid access is unavailable', async () => {

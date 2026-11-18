@@ -86,6 +86,10 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             });
         }
         if (usesNamedApprovalPolicies(config)) {
+            // The comment manager records REPLACED only alongside a SENT fallback.
+            const lineFindings = (context.lineComments ?? []).filter(
+                (finding) => finding.deliveryStatus !== DeliveryStatus.REPLACED,
+            );
             const result = await this.approvalPolicies.evaluate({
                 organizationAndTeamData: context.organizationAndTeamData,
                 repository: context.repository,
@@ -93,7 +97,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 config,
                 platformType: context.platformType,
                 reviewClean:
-                    (context.lineComments?.length ?? 0) === 0 &&
+                    lineFindings.length === 0 &&
                     (context.prLevelCommentResults?.length ?? 0) === 0 &&
                     !hasBlockingFailure,
                 risk: context.riskAssessment,
@@ -106,14 +110,13 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 draft.approvalDecision = result.decision;
                 draft.approvalPolicyEligibility = result.eligibility;
                 draft.approvalReviewSummary = {
-                    lineFindings: context.lineComments?.length ?? 0,
-                    lineCommentIds: (context.lineComments ?? []).map(
-                        (finding) =>
-                            finding.deliveryStatus === DeliveryStatus.SENT
-                                ? (normalizeReviewFindingId(
-                                      finding.codeReviewFeedbackData?.commentId,
-                                  ) ?? null)
-                                : null,
+                    lineFindings: lineFindings.length,
+                    lineCommentIds: lineFindings.map((finding) =>
+                        finding.deliveryStatus === DeliveryStatus.SENT
+                            ? (normalizeReviewFindingId(
+                                  finding.codeReviewFeedbackData?.commentId,
+                              ) ?? null)
+                            : null,
                     ),
                     prFindings: context.prLevelCommentResults?.length ?? 0,
                     complete:

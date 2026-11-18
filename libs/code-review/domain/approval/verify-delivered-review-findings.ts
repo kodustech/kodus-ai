@@ -42,12 +42,16 @@ export async function deliveredReviewFindingsHoldReason(
         ) {
             return REVIEW_FINDINGS_UNVERIFIED;
         }
+        const verifiedRecordedIds = new Set<string>();
         for (const rawId of lineCommentIds) {
             const id = normalizeReviewFindingId(rawId);
             if (!id) {
                 return 'Some review findings have no verifiable publication. Run a complete PR review before automatic approval.';
             }
-            if (!distinctCommentIds.has(id)) return REVIEW_FINDINGS_UNVERIFIED;
+            if (!distinctCommentIds.has(id) || verifiedRecordedIds.has(id)) {
+                return REVIEW_FINDINGS_UNVERIFIED;
+            }
+            verifiedRecordedIds.add(id);
         }
     } else if (distinctCommentIds.size < lineFindings) {
         // Older summaries record the total without the comment identities.

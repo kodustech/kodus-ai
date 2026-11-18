@@ -435,20 +435,28 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         {
             name: 'an older comment instead of the current finding',
             commentIds: ['finding-1', 'old'],
+            recordedIds: ['finding-1', 'finding-2'],
+            expectedHold: 'Review findings could not be verified.',
+        },
+        {
+            name: 'duplicates in the recorded IDs',
+            commentIds: ['finding-1', 'old'],
+            recordedIds: ['finding-1', ' finding-1 '],
             expectedHold: 'Review findings could not be verified.',
         },
         {
             name: 'both current comments',
             commentIds: [' finding-1 ', 'finding-2'],
+            recordedIds: ['finding-1', 'finding-2'],
             expectedHold: undefined,
         },
     ])(
         'verifies exact recorded comment IDs with $name',
-        async ({ commentIds, expectedHold }) => {
+        async ({ commentIds, recordedIds, expectedHold }) => {
             const { input, deps, execution, run } = namedPolicyCase();
             Object.assign(execution.dataExecution.approvalReviewSummary, {
-                lineFindings: 2,
-                lineCommentIds: ['finding-1', 'finding-2'],
+                lineFindings: recordedIds.length,
+                lineCommentIds: recordedIds,
             });
             Object.assign(input.pr, {
                 suggestions: commentIds.map((id) => ({ comment: { id } })),
