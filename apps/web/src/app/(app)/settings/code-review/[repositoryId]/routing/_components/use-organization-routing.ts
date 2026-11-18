@@ -123,6 +123,7 @@ export function useOrganizationRouting({
             slots[index] = id ?? "";
             return { ...current, ultraModelIds: slots };
         });
+    const modelOf = ultraModelResolver(query.data?.models);
     const validationError =
         dirty &&
         !pool.some(
@@ -130,11 +131,7 @@ export function useOrganizationRouting({
         )
             ? "Select a connected default model."
             : dirty
-              ? ultraTrioError(
-                    routing.ultraModelIds,
-                    ultraInUse,
-                    ultraModelResolver(query.data?.models),
-                )
+              ? ultraTrioError(routing.ultraModelIds, ultraInUse, modelOf)
               : undefined;
 
     useUnsavedChangesGuard({
@@ -231,10 +228,11 @@ export function useOrganizationRouting({
         },
         routing,
         /** The saved trio is being broken by this edit. */
+        // Counted as the API counts a trio: one model through two providers once.
         breaksUltraTrio:
             dirty &&
-            isUltraTrioSet(saved.ultraModelIds) &&
-            !isUltraTrioSet(routing.ultraModelIds),
+            isUltraTrioSet(saved.ultraModelIds, modelOf) &&
+            !isUltraTrioSet(routing.ultraModelIds, modelOf),
         pool,
         dirty,
         validationError,

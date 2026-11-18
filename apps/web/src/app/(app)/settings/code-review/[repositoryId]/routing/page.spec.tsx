@@ -882,6 +882,26 @@ describe("Ultra review mode", () => {
         );
     });
 
+    it("a saved trio that is one model twice is not a trio: models save first, as without one", async () => {
+        mockByok.models.push({
+            id: "a2",
+            credentialId: "cred",
+            model: mockByok.models.find((m) => m.id === "a")!.model,
+        });
+        mockByok.routing!.ultraModelIds = ["c", "a", "a2"];
+        mount(false, false, { reviewMode: leaf("heavy") });
+        await chooseReviewMode("All PRs", "Balanced");
+        for (const n of [1, 2, 3]) {
+            await chooseOrgModel(`Ultra Model ${n}`, /^None$/);
+        }
+        await waitFor(() => expect(saveButton()).toBeEnabled());
+        fireEvent.click(saveButton());
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+        expect(saveModels.mock.invocationCallOrder[0]).toBeLessThan(
+            save.mock.invocationCallOrder[0],
+        );
+    });
+
     it("a risk route saved on Ultra shows with risk assessment off, so it can be changed", () => {
         mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
         mount(false, false, {
@@ -892,7 +912,7 @@ describe("Ultra review mode", () => {
         });
         expect(
             screen.getByRole("combobox", { name: "Risk found" }),
-        ).toBeInTheDocument();
+        ).toBeEnabled();
         expect(
             screen.getAllByText("Runs when risk assessment is on.").length,
         ).toBe(2);
