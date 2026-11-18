@@ -58,20 +58,27 @@ export class MongooseFactory implements MongooseOptionsFactory {
         // members a process keeps 3x min connections even when it reads only
         // from the primary. API and webhook tasks are many and mostly idle
         // between requests, so they keep one; workers keep more warm.
-        const envInt = (key: string, fallback: number) =>
-            parseInt(process.env[key] || String(fallback), 10);
+        // A blank, unparseable or below-minimum value falls back to the
+        // default: `0` would disable a pool cap or a timeout, and NaN would
+        // reach the driver as an invalid option. Only a pool's `min` may be 0.
+        const envInt = (key: string, fallback: number, minimum = 1) => {
+            const parsed = Number.parseInt(process.env[key] ?? '', 10);
+            return Number.isFinite(parsed) && parsed >= minimum
+                ? parsed
+                : fallback;
+        };
         const poolConfigs = {
             webhook: {
                 max: envInt('MG_POOL_MAX_WEBHOOK', 30),
-                min: envInt('MG_POOL_MIN_WEBHOOK', 1),
+                min: envInt('MG_POOL_MIN_WEBHOOK', 1, 0),
             },
             api: {
                 max: envInt('MG_POOL_MAX_API', 30),
-                min: envInt('MG_POOL_MIN_API', 1),
+                min: envInt('MG_POOL_MIN_API', 1, 0),
             },
             worker: {
                 max: envInt('MG_POOL_MAX_WORKER', 60),
-                min: envInt('MG_POOL_MIN_WORKER', 5),
+                min: envInt('MG_POOL_MIN_WORKER', 5, 0),
             },
             default: { max: 50, min: 5 },
         };

@@ -278,6 +278,9 @@ export class KodyRulesService implements IKodyRulesService {
                     error: result.reason,
                     metadata: { organizationId: orgId },
                 });
+                // A sync can fail after it wrote: read again rather than
+                // serve what was there before it.
+                changed = true;
                 return;
             }
             if (result.value !== staleEntities.get(orgId)) changed = true;

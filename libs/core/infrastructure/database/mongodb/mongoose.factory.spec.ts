@@ -1,7 +1,13 @@
 import { MongooseFactory } from './mongoose.factory';
 
 describe('MongooseFactory connection options', () => {
-    const KEYS = ['COMPONENT_TYPE', 'MONGO_AUTO_INDEX', 'MG_POOL_MIN_API'];
+    const KEYS = [
+        'COMPONENT_TYPE',
+        'MONGO_AUTO_INDEX',
+        'MG_POOL_MIN_API',
+        'MG_POOL_MAX_API',
+        'MG_WAIT_QUEUE_TIMEOUT_MS',
+    ];
     let saved: Record<string, string | undefined>;
 
     const options = () =>
@@ -39,5 +45,21 @@ describe('MongooseFactory connection options', () => {
     it('fails a request that cannot get a connection instead of queueing it forever', () => {
         expect(options().waitQueueTimeoutMS).toBeGreaterThan(0);
         expect(options().serverSelectionTimeoutMS).toBeGreaterThan(0);
+    });
+
+    it('falls back to the default for a zero, blank or unparseable limit', () => {
+        process.env.COMPONENT_TYPE = 'api';
+        for (const value of ['0', '', 'abc']) {
+            process.env.MG_POOL_MAX_API = value;
+            process.env.MG_WAIT_QUEUE_TIMEOUT_MS = value;
+            expect(options().maxPoolSize).toBe(30);
+            expect(options().waitQueueTimeoutMS).toBe(30_000);
+        }
+    });
+
+    it('accepts a pool minimum of zero, which keeps no idle connection', () => {
+        process.env.COMPONENT_TYPE = 'api';
+        process.env.MG_POOL_MIN_API = '0';
+        expect(options().minPoolSize).toBe(0);
     });
 });
