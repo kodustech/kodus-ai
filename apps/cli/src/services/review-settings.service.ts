@@ -10,12 +10,14 @@ import {
 } from './user-context.service.js';
 import type { CentralizedPrMetadata } from '../types/config.js';
 import type {
+    ApprovalPolicy,
     CodeReviewScope,
     FormattedCodeReviewParameter,
     FormattedConfigLeaf,
     FormattedConfigLevel,
     FormattedConfigNode,
     LLMConfigStatus,
+    SaveCodeReviewConfigParams,
     TestByokModelResult,
 } from '../types/review-settings.js';
 import { CommandError } from '../utils/command-errors.js';
@@ -398,7 +400,10 @@ class ReviewSettingsService {
         ctx: UserContext,
         scope: SettingsScope,
         configValue: Record<string, unknown>,
-        inheritFields?: string[],
+        options: Pick<
+            SaveCodeReviewConfigParams,
+            'inheritFields' | 'expectedConfigId'
+        > = {},
     ) {
         return api.config.saveCodeReviewConfig(ctx.accessToken, {
             teamId: ctx.teamId,
@@ -409,7 +414,130 @@ class ReviewSettingsService {
                 scope.level === 'directory' && !scope.directoryId
                     ? [scope.directoryPath as string]
                     : undefined,
-            ...(inheritFields ? { inheritFields } : {}),
+            ...options,
+        });
+    }
+
+    private async readApprovalPolicies(
+        ctx: UserContext,
+        target: SettingsTarget,
+    ) {
+        const scope = await this.resolveScope(ctx, target);
+        const parameter = await api.config.getFormattedCodeReviewParameter(
+            ctx.accessToken,
+            ctx.teamId,
+            {},
+        );
+        const { configs } = this.scopeConfigs(parameter, scope);
+        const leaf = readLeaf(configs, 'approvalPolicies');
+        const policies = Array.isArray(leaf?.value)
+            ? (leaf.value as ApprovalPolicy[])
+            : [];
+        return {
+            scope,
+            policies,
+            level: leaf?.level ?? 'default',
+            configId: parameter?.uuid,
+            leaf,
+        } as const;
+    }
+
+    async listApprovalPolicies(target: SettingsTarget) {
+        const ctx = await this.context(target);
+        const { scope, policies, level } = await this.readApprovalPolicies(
+            ctx,
+            target,
+        );
+        return { scope, policies, level };
+    }
+
+    async setApprovalPolicyEnabled(
+        target: SettingsTarget,
+        policyId: string,
+        enabled: boolean,
+    ) {
+        const ctx = await this.context(target);
+        const { scope, policies, configId, leaf } =
+            await this.readApprovalPolicies(ctx, target);
+        const policy = policies.find((entry) => entry.id === policyId);
+        if (!policy) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                `Approval policy '${policyId}' was not found at this scope.`,
+            );
+        }
+        if (policy.enabled === enabled) {
+            return { scope, policy, changed: false };
+        }
+        if (this.fileOverride(leaf, scope)) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                'This scope uses approval policies from kodus-config.yml. Edit the policy in that file.',
+            );
+        }
+        if (!configId) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                'The active configuration could not be verified. Reload it and try again.',
+            );
+        }
+
+        const next = { ...policy, enabled };
+        const saved = await this.save(
+            ctx,
+            scope,
+            {
+                approvalPolicies: policies.map((entry) =>
+                    entry.id === policyId ? next : entry,
+                ),
+            },
+            { expectedConfigId: configId },
+        );
+        return {
+            scope,
+            policy: next,
+            changed: true,
+            ...(isCentralizedPr(saved) && { centralized: saved }),
+        };
+    }
+
+    async previewApproval(
+        target: Pick<SettingsTarget, 'repository' | 'team'>,
+        input: {
+            prNumber: number;
+            rawPolicies?: string;
+            assumeClean?: boolean;
+            assumeEnabled?: boolean;
+        },
+    ) {
+        if (!Number.isSafeInteger(input.prNumber) || input.prNumber < 1) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                'Enter a positive PR number.',
+            );
+        }
+        const policies =
+            input.rawPolicies === undefined
+                ? undefined
+                : (parseReviewSettingValue(
+                      resolveReviewSetting('approvalPolicies'),
+                      input.rawPolicies,
+                  ) as unknown[]);
+        const ctx = await this.context(target);
+        const scope = await this.resolveScope(ctx, target);
+        if (!scope.repositoryId) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                'Approval preview needs a repository.',
+            );
+        }
+        return api.config.previewPrApproval(ctx.accessToken, {
+            teamId: ctx.teamId,
+            repositoryId: scope.repositoryId,
+            prNumber: input.prNumber,
+            policies,
+            assumeClean: input.assumeClean,
+            assumeEnabled: input.assumeEnabled,
         });
     }
 
@@ -571,7 +699,7 @@ class ReviewSettingsService {
             setting.inheritField
                 ? {}
                 : buildConfigDelta(setting.key, leaf.overriddenValue),
-            setting.inheritField ? [setting.key] : undefined,
+            setting.inheritField ? { inheritFields: [setting.key] } : undefined,
         );
 
         // Same check as set: on a plan below Teams the API answers success

@@ -1,4 +1,7 @@
-import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
+import type {
+    RequestedReviewMode,
+    ReviewRoutingReason,
+} from '@libs/code-review/domain/review-mode';
 import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
@@ -92,6 +95,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** The mode the review command asked for (`@kody review --heavy` /
      *  `--balanced`), over the review mode set in settings. */
     requestedReviewMode?: RequestedReviewMode;
+    reviewRoutingReason?: ReviewRoutingReason;
 
     /**
      * Whether this review runs heavy: the requested mode, else the review mode

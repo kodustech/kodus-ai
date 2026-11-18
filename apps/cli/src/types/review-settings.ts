@@ -60,6 +60,7 @@ export interface SaveCodeReviewConfigParams {
     directoryId?: string;
     directoryPaths?: string[];
     inheritFields?: string[];
+    expectedConfigId?: string;
 }
 
 export type SaveCodeReviewConfigResult =
@@ -79,6 +80,41 @@ export interface PreviewPrRiskResult {
         | { status: 'assessed'; riskIdentified: boolean; reason: string }
         | { status: 'unavailable'; reason: string };
     files: Array<{ path: string; previousPath?: string; status: string }>;
+}
+
+export interface ApprovalPolicy {
+    id: string;
+    name: string;
+    enabled: boolean;
+}
+
+export interface PreviewPrApprovalParams {
+    teamId: string;
+    repositoryId: string;
+    prNumber: number;
+    policies?: unknown[];
+    assumeClean?: boolean;
+    assumeEnabled?: boolean;
+}
+
+export interface PreviewPrApprovalResult {
+    snapshot: { headSha?: string; baseSha?: string };
+    assumptions: {
+        cleanReview: boolean;
+        automaticApproval: boolean;
+        draftPolicies: boolean;
+    };
+    decision: {
+        kind: 'approve' | 'hold' | 'out-of-scope' | 'disabled';
+        reason: string;
+        matchedPolicy?: Pick<ApprovalPolicy, 'id' | 'name'>;
+        policies?: Array<{
+            policyId: string;
+            policyName: string;
+            status: string;
+            reason: string;
+        }>;
+    };
 }
 
 /** GET /organization-parameters/llm-config/status (never carries a key). */

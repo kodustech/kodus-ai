@@ -18,6 +18,8 @@ import type {
     SaveCodeReviewConfigResult,
     PreviewPrRiskParams,
     PreviewPrRiskResult,
+    PreviewPrApprovalParams,
+    PreviewPrApprovalResult,
     TestByokModelResult,
 } from '../../types/review-settings.js';
 import type {
@@ -179,6 +181,10 @@ export interface IConfigApi {
         accessToken: string,
         params: PreviewPrRiskParams,
     ): Promise<PreviewPrRiskResult>;
+    previewPrApproval(
+        accessToken: string,
+        params: PreviewPrApprovalParams,
+    ): Promise<PreviewPrApprovalResult>;
     getLLMConfigStatus(accessToken: string): Promise<LLMConfigStatus>;
     testByokModel(
         accessToken: string,

@@ -182,6 +182,13 @@ describe('ValidateConfigStage — v2 routing', () => {
                 },
             });
             expect(result.heavy).toBe(heavy);
+            expect(result.reviewRoutingReason).toBe(
+                requestedReviewMode
+                    ? 'requested'
+                    : riskIdentified
+                      ? 'risk-found'
+                      : 'no-risk-found',
+            );
             expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
                 model,
             );

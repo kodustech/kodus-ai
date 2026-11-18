@@ -19,6 +19,7 @@ vi.mock('../api/index.js', () => ({
             getFormattedCodeReviewParameter: vi.fn(),
             saveCodeReviewConfig: vi.fn(),
             previewPrRisk: vi.fn(),
+            previewPrApproval: vi.fn(),
             getLLMConfigStatus: vi.fn(),
             testByokModel: vi.fn(),
         },
@@ -97,6 +98,7 @@ const leaf = (
 });
 
 const FORMATTED = {
+    uuid: 'config-1',
     configValue: {
         configs: {
             runOnDraft: leaf(true, 'default'),
@@ -115,6 +117,18 @@ const FORMATTED = {
                 configs: {
                     runOnDraft: leaf(false, 'repository', [true, 'default']),
                     riskCriteria: leaf([RISK_CRITERION], 'repository'),
+                    approvalPolicies: leaf(
+                        [
+                            {
+                                id: 'docs',
+                                name: 'Docs',
+                                enabled: false,
+                                includedFiles: ['docs/**'],
+                            },
+                            { id: 'ops', name: 'Operations', enabled: true },
+                        ],
+                        'repository',
+                    ),
                     riskReviewRouting: {
                         riskFound: leaf('heavy', 'repository', [
                             'balanced',
@@ -731,6 +745,52 @@ describe('reviewSettingsService', () => {
             expect(result.changed).toBe(false);
             expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
         });
+    });
+
+    it('changes one named policy and sends the active config revision', async () => {
+        await reviewSettingsService.setApprovalPolicyEnabled(
+            { repository: 'kodus-ai' },
+            'docs',
+            true,
+        );
+        expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+            CTX.accessToken,
+            expect.objectContaining({
+                expectedConfigId: 'config-1',
+                repositoryId: 'repo-1',
+                configValue: {
+                    approvalPolicies: [
+                        {
+                            id: 'docs',
+                            name: 'Docs',
+                            enabled: true,
+                            includedFiles: ['docs/**'],
+                        },
+                        { id: 'ops', name: 'Operations', enabled: true },
+                    ],
+                },
+            }),
+        );
+    });
+
+    it('forwards preview assumptions and draft policies without saving', async () => {
+        await reviewSettingsService.previewApproval(
+            { repository: 'kodus-ai' },
+            {
+                prNumber: 42,
+                rawPolicies: '[]',
+                assumeClean: true,
+            },
+        );
+        expect(configApi.previewPrApproval).toHaveBeenCalledWith(
+            CTX.accessToken,
+            expect.objectContaining({
+                repositoryId: 'repo-1',
+                policies: [],
+                assumeClean: true,
+            }),
+        );
+        expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
     });
 
     describe('risk preview', () => {

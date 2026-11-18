@@ -15,6 +15,11 @@ import { PULL_REQUEST_AUTHOR_POLICIES } from './pull-request-author-policy.const
 
 export class EnrichedPullRequestsQueryDto {
     @IsOptional()
+    @IsIn(['true'])
+    @ApiPropertyOptional()
+    explain?: 'true';
+
+    @IsOptional()
     @IsString()
     @ApiPropertyOptional()
     repositoryId?: string;

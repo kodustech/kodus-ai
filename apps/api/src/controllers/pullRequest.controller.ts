@@ -166,7 +166,32 @@ export class PullRequestController implements OnApplicationShutdown {
     public async getPullRequestExecutions(
         @Query() query: EnrichedPullRequestsQueryDto,
     ): Promise<PaginatedEnrichedPullRequestsResponse> {
-        return await this.getEnrichedPullRequestsUseCase.execute(query);
+        const result = await this.getEnrichedPullRequestsUseCase.execute(query);
+        const first = result.data[0];
+        if (
+            query.explain === 'true' &&
+            query.teamId &&
+            query.pullRequestNumber &&
+            first &&
+            (query.repositoryId || query.repositoryName) &&
+            result.data.every((run) => run.repositoryId === first.repositoryId)
+        ) {
+            const pullRequest = await this.codeManagementService
+                .getPullRequest({
+                    organizationAndTeamData: {
+                        organizationId: this.request.user.organization.uuid,
+                        teamId: query.teamId,
+                    },
+                    repository: {
+                        id: first.repositoryId,
+                        name: first.repositoryName,
+                    },
+                    prNumber: query.pullRequestNumber,
+                })
+                .catch(() => null);
+            result.currentHeadSha = pullRequest?.head?.sha;
+        }
+        return result;
     }
 
     @Get('/executions/totals')

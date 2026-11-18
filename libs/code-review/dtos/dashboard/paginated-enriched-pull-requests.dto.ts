@@ -28,6 +28,7 @@ export class PaginationMetadata {
 export class PaginatedEnrichedPullRequestsResponse {
     data: EnrichedPullRequestResponse[];
     pagination: PaginationMetadata;
+    currentHeadSha?: string;
 }
 
 /** Answer of GET /pull-requests/executions/totals. */

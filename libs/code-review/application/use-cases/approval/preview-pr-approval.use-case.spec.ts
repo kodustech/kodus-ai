@@ -1,0 +1,142 @@
+import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PreviewPrApprovalUseCase } from './preview-pr-approval.use-case';
+
+describe(PreviewPrApprovalUseCase.name, () => {
+    const input = {
+        organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+        repositoryId: 'repo',
+        prNumber: 42,
+    };
+    const policy = { id: 'docs', name: 'Docs', enabled: true };
+    const files = [{ filename: 'docs/changelog.mdx', status: 'modified' }];
+
+    function setup(reviewedHeadSha = 'head') {
+        const parameters = {
+            findByKey: jest.fn().mockResolvedValue({
+                configValue: {
+                    repositories: [{ id: 'repo', name: 'example' }],
+                },
+            }),
+        };
+        const configs = {
+            getDefaultBranch: jest.fn().mockResolvedValue('main'),
+            getMergedCodeReviewConfigs: jest.fn().mockResolvedValue({
+                approvalPolicies: [policy],
+                approvalPolicySource: 'canonical',
+                pullRequestApprovalActive: true,
+                riskAssessmentActive: false,
+            }),
+        };
+        const executions = {
+            findPullRequestExecutionsByOrganizationAndTeam: jest
+                .fn()
+                .mockResolvedValue({
+                    data: [
+                        {
+                            status: AutomationStatus.SUCCESS,
+                            dataExecution: {
+                                approvalDecision: {
+                                    reviewedHeadSha,
+                                    reviewedBaseSha: 'base',
+                                },
+                                approvalReviewSummary: {
+                                    complete: true,
+                                    lineFindings: 0,
+                                    prFindings: 0,
+                                },
+                                lastAnalyzedCommit: { sha: reviewedHeadSha },
+                            },
+                        },
+                    ],
+                }),
+        };
+        const codeManagement = {
+            getTypeIntegration: jest
+                .fn()
+                .mockResolvedValue(PlatformType.GITHUB),
+            getPullRequest: jest.fn().mockResolvedValue({
+                head: { sha: 'head' },
+                base: { sha: 'base' },
+                changedFilesCount: 1,
+            }),
+            getFilesByPullRequestId: jest.fn().mockResolvedValue(files),
+        };
+        const evaluate = jest.fn().mockResolvedValue({
+            decision: {
+                kind: 'approve',
+                reason: 'Policy matched.',
+                matchedPolicy: policy,
+            },
+        });
+        const useCase = new PreviewPrApprovalUseCase(
+            parameters as never,
+            configs as never,
+            executions as never,
+            {} as never,
+            codeManagement as never,
+            {} as never,
+            { evaluate } as never,
+        );
+        return { useCase, evaluate, executions, codeManagement };
+    }
+
+    it('uses only the matching recorded clean snapshot and delegates to the real policy service', async () => {
+        const { useCase, evaluate, executions } = setup();
+        const result = await useCase.execute(input);
+        expect(result.decision).toMatchObject({
+            kind: 'approve',
+            matchedPolicy: { id: 'docs' },
+        });
+        expect(
+            executions.findPullRequestExecutionsByOrganizationAndTeam,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: input.organizationAndTeamData,
+                repositoryIds: ['repo'],
+                take: 1,
+            }),
+        );
+        expect(evaluate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                reviewClean: true,
+                fullPrFiles: files,
+                config: expect.objectContaining({ approvalPolicies: [policy] }),
+            }),
+        );
+    });
+
+    it('holds a stale recorded review and evaluates draft policies only with the explicit assumption', async () => {
+        const { useCase, evaluate } = setup('old');
+        expect((await useCase.execute(input)).decision).toEqual({
+            kind: 'hold',
+            reason: 'The PR changed after its latest recorded review.',
+        });
+        expect(evaluate).not.toHaveBeenCalled();
+
+        const result = await useCase.execute({
+            ...input,
+            policies: [],
+            assumeClean: true,
+        });
+        expect(result.assumptions).toMatchObject({
+            cleanReview: true,
+            draftPolicies: true,
+        });
+        expect(evaluate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                config: expect.objectContaining({ approvalPolicies: [] }),
+            }),
+        );
+    });
+
+    it('holds when the provider returns an incomplete file list', async () => {
+        const { useCase, evaluate, codeManagement } = setup();
+        codeManagement.getFilesByPullRequestId.mockResolvedValue([]);
+        expect(
+            (await useCase.execute({ ...input, assumeClean: true })).decision
+                .kind,
+        ).toBe('hold');
+        expect(evaluate).not.toHaveBeenCalled();
+    });
+});

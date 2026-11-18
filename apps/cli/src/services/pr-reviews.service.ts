@@ -13,6 +13,7 @@ export type PullRequestReviewsInput = {
     team?: string;
     /** Most recent runs to return. */
     limit?: number;
+    explain?: boolean;
 };
 
 export type PullRequestReviewsResult = {
@@ -22,6 +23,7 @@ export type PullRequestReviewsResult = {
     runs: PullRequestReviewRun[];
     /** True when more runs exist than `limit` returned. */
     truncated: boolean;
+    currentHeadSha?: string;
 };
 
 const PAGE_SIZE = 20;
@@ -65,6 +67,7 @@ class PullRequestReviewsService {
         const runs: PullRequestReviewRun[] = [];
         let cursor: string | undefined;
         let hasMore = true;
+        let currentHeadSha: string | undefined;
 
         // Cursor paging, as the web PR page does: a page can return fewer rows
         // than it read, so `nextCursor` (not the page number) is the resume point.
@@ -76,7 +79,9 @@ class PullRequestReviewsService {
                 pullRequestNumber: input.prNumber,
                 limit: PAGE_SIZE,
                 cursor,
+                ...(input.explain && runs.length === 0 && { explain: true }),
             });
+            currentHeadSha ??= page?.currentHeadSha;
             runs.push(
                 ...(page?.data ?? []).filter(
                     (run) => run.prNumber === input.prNumber,
@@ -87,6 +92,7 @@ class PullRequestReviewsService {
         }
 
         runs.sort((a, b) => runTime(b) - runTime(a));
+        const singleRepository = new Set(runs.map((run) => run.repositoryId)).size === 1;
 
         return {
             prNumber: input.prNumber,
@@ -94,6 +100,7 @@ class PullRequestReviewsService {
             team: ctx.teamName,
             runs: runs.slice(0, limit),
             truncated: runs.length > limit || hasMore,
+            ...(currentHeadSha && singleRepository && { currentHeadSha }),
         };
     }
 

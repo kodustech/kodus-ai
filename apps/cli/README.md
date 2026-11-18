@@ -641,6 +641,20 @@ Use `set . riskCriteria '<JSON array>'` and `set . approvalPolicies '<JSON array
 
 Risk preview uses the effective criteria for the scope. Pass `--criteria '<JSON array>'` to try different criteria for that run. The preview doesn't save settings, post a comment or approve the PR.
 
+```bash
+kodus agents update ciclo-de-vida-do-pr --repo kodus-ai --run-when risk-found
+kodus pr reviews 123 --explain
+kodus config remote approvals list .
+kodus config remote approvals show . changelog
+kodus config remote approvals test . --pr 123 --assume-clean --assume-enabled
+kodus config remote approvals enable . changelog
+kodus config remote approvals disable . changelog
+```
+
+`--run-when always` runs the agent on each matching PR. `risk-found` requires a confirmed risk result. `pr reviews --explain` compares recorded review commits with the current PR head and shows approval decisions, routing reasons and failed specialists where recorded.
+
+Policy enable and disable target one ID at a time. At a child scope, toggling an inherited policy creates a local policy list. `approvals test` uses a recorded clean review for the current snapshot by default. Pass `--assume-clean`, `--assume-enabled` or `--policies '<JSON array>'` to test hypothetical settings. The output identifies the assumptions. The preview never publishes an approval or updates settings.
+
 Use `--json` with `show`, `set`, `open`, `add-pattern`, `remove-pattern`, and the pattern aliases when you need stable machine-readable output for scripts or AI agents.
 
 When targeting a repository that is different from your current working directory, pass `owner/repo` explicitly instead of `.`:

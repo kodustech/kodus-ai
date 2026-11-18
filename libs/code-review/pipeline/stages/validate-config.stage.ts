@@ -251,15 +251,16 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         // The mode the command asked for, else the one in settings. Heavy
         // runs on Teams and Enterprise only; elsewhere the review runs
         // Balanced, and a command that asked for heavy is told why.
+        const selectedMode = resolveRiskReviewMode({
+            requested: context.requestedReviewMode,
+            configured: context.codeReviewConfig?.reviewMode,
+            routing: context.codeReviewConfig?.riskReviewRouting,
+            risk: context.riskAssessment,
+            currentHeadSha: context.pullRequest.head?.sha ?? '',
+            heavyAllowed: true,
+        });
         const heavy =
-            resolveRiskReviewMode({
-                requested: context.requestedReviewMode,
-                configured: context.codeReviewConfig?.reviewMode,
-                routing: context.codeReviewConfig?.riskReviewRouting,
-                risk: context.riskAssessment,
-                currentHeadSha: context.pullRequest.head?.sha ?? '',
-                heavyAllowed: true,
-            }) === 'heavy' && (await this.heavyModeAllowed(context));
+            selectedMode === 'heavy' && (await this.heavyModeAllowed(context));
 
         // The review's routed slot, or none → the env/managed default
         // resolves downstream, matching a missing config.
@@ -304,6 +305,28 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
         context = this.updateContext(context, (draft) => {
             draft.heavy = heavy;
+            const risk = context.riskAssessment;
+            if (selectedMode === 'heavy' && !heavy) {
+                draft.reviewRoutingReason = 'heavy-unavailable';
+            } else if (context.codeReviewConfig?.reviewMode === 'fast') {
+                draft.reviewRoutingReason = 'default';
+            } else if (context.requestedReviewMode) {
+                draft.reviewRoutingReason = 'requested';
+            } else if (
+                risk?.status === 'assessed' &&
+                risk.snapshot.headSha &&
+                risk.snapshot.headSha === context.pullRequest.head?.sha
+            ) {
+                draft.reviewRoutingReason = risk.riskIdentified
+                    ? 'risk-found'
+                    : 'no-risk-found';
+            } else {
+                draft.reviewRoutingReason =
+                    risk?.status === 'unavailable' ||
+                    risk?.status === 'assessed'
+                        ? 'risk-unavailable'
+                        : 'default';
+            }
             // Materialize the routed model into the resolved slot the pipeline
             // threads downstream (the handle stages read their limit/telemetry
             // metadata off).

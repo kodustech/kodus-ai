@@ -644,15 +644,26 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             continue;
                         }
 
+                        const executionData = execution.dataExecution;
+                        const approval = executionData?.approvalReviewSummary
+                            ? executionData.approvalDecision
+                            : undefined;
                         const enrichedPR: EnrichedPullRequestResponse = {
                             prId: pullRequest.uuid!,
                             prNumber: pullRequest.number,
                             title: pullRequest.title,
                             status: pullRequest.status,
                             merged: pullRequest.merged,
-                            reviewMode: reviewModeOfExecution(
-                                execution.dataExecution,
-                            ),
+                            reviewMode: reviewModeOfExecution(executionData),
+                            reviewRoutingReason:
+                                executionData?.reviewRoutingReason,
+                            ...(approval && {
+                                approvalDecision: {
+                                    kind: approval.kind,
+                                    reason: approval.reason,
+                                    matchedPolicy: approval.matchedPolicy,
+                                },
+                            }),
                             url: pullRequest.url,
                             baseBranchRef: pullRequest.baseBranchRef,
                             headBranchRef: pullRequest.headBranchRef,
@@ -670,6 +681,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             },
                             isDraft: pullRequest.isDraft,
                             reviewedCommitSha: commitInfo.reviewedCommitSha,
+                            recordedReviewedHeadSha:
+                                commitInfo.recordedReviewedHeadSha,
                             reviewedCommitUrl: commitInfo.reviewedCommitUrl,
                             compareUrl: commitInfo.compareUrl,
                             executionId: execution.uuid,
@@ -1167,16 +1180,18 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         execution: any,
     ): {
         reviewedCommitSha?: string;
+        recordedReviewedHeadSha?: string;
         reviewedCommitUrl?: string;
         compareUrl?: string;
     } {
         const lastAnalyzedCommit = execution?.dataExecution?.lastAnalyzedCommit;
-        const reviewedCommitSha =
+        const recordedReviewedHeadSha =
             typeof lastAnalyzedCommit === 'string'
                 ? lastAnalyzedCommit
-                : lastAnalyzedCommit?.sha ||
-                  lastAnalyzedCommit?.commitSha ||
-                  pullRequest?.commits?.[pullRequest.commits.length - 1]?.sha;
+                : lastAnalyzedCommit?.sha || lastAnalyzedCommit?.commitSha;
+        const reviewedCommitSha =
+            recordedReviewedHeadSha ||
+            pullRequest?.commits?.[pullRequest.commits.length - 1]?.sha;
 
         const repoUrl = pullRequest?.repository?.url;
         const provider = pullRequest?.provider;
@@ -1191,7 +1206,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 ? this.buildCompareUrl(provider, repoUrl, baseRef, headRef)
                 : undefined;
 
-        return { reviewedCommitSha, reviewedCommitUrl, compareUrl };
+        return {
+            reviewedCommitSha,
+            recordedReviewedHeadSha,
+            reviewedCommitUrl,
+            compareUrl,
+        };
     }
 
     private buildCommitUrl(

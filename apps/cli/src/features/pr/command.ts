@@ -51,6 +51,7 @@ type PrReviewsOptions = {
     team?: string;
     limit?: string;
     json?: boolean;
+    explain?: boolean;
 };
 
 type BusinessValidationOptions = {
@@ -95,6 +96,10 @@ export function createPrCommand(): Command {
             'Team name or id (logged-in users with more than one team)',
         )
         .option('--limit <n>', 'Most recent runs to return (default 20)')
+        .option(
+            '--explain',
+            'Show commit freshness, routing, approval and specialist failures',
+        )
         .option('--json', 'Output the review runs as JSON')
         .action(prReviewsAction);
 
@@ -273,7 +278,19 @@ async function prSuggestionsAction(
     }
 }
 
-function printReviewRuns(result: PullRequestReviewsResult): void {
+const ROUTING_REASONS: Record<string, string> = {
+    'requested': 'explicit review command',
+    'risk-found': 'risk found',
+    'no-risk-found': 'no risk found',
+    'risk-unavailable': 'risk unavailable, configured fallback used',
+    'default': 'configured default',
+    'heavy-unavailable': 'Heavy unavailable for this workspace',
+};
+
+function printReviewRuns(
+    result: PullRequestReviewsResult,
+    explain = false,
+): void {
     if (result.runs.length === 0) {
         cliInfo(
             chalk.yellow(
@@ -286,6 +303,9 @@ function printReviewRuns(result: PullRequestReviewsResult): void {
     const [latest] = result.runs;
     cliInfo(chalk.bold(`PR #${result.prNumber} · ${latest.title}`));
     cliInfo(chalk.dim(`${latest.repositoryName} · ${latest.url}`));
+    if (explain) {
+        cliInfo(`Current PR head: ${result.currentHeadSha ?? 'unavailable'}`);
+    }
     cliInfo('');
 
     for (const run of result.runs) {
@@ -312,6 +332,49 @@ function printReviewRuns(result: PullRequestReviewsResult): void {
             cliInfo(
                 chalk.red(`  ${execution?.errorMessage ? '' : stage}${reason}`),
             );
+        }
+        if (explain) {
+            if (run.recordedReviewedHeadSha) {
+                const freshness = result.currentHeadSha
+                    ? run.recordedReviewedHeadSha === result.currentHeadSha
+                        ? 'current head'
+                        : 'older or different head'
+                    : 'current head unavailable';
+                cliInfo(
+                    `  Reviewed commit: ${run.recordedReviewedHeadSha} (${freshness})`,
+                );
+            } else {
+                cliInfo('  Reviewed commit: unavailable');
+            }
+            if (run.reviewMode) {
+                const route =
+                    run.reviewRoutingReason &&
+                    ROUTING_REASONS[run.reviewRoutingReason];
+                cliInfo(
+                    `  Routing: ${run.reviewMode} (${route || 'reason unavailable'})`,
+                );
+            }
+            if (run.approvalDecision) {
+                const { kind, reason, matchedPolicy } = run.approvalDecision;
+                cliInfo(
+                    `  Recorded approval decision: ${kind}${matchedPolicy ? ` (${matchedPolicy.name})` : ''}. ${reason}`,
+                );
+            }
+            for (const stage of run.codeReviewTimeline ?? []) {
+                for (const lens of stage.metadata?.specialists ?? []) {
+                    if (
+                        ['failed', 'stopped', 'no-result'].includes(lens.status)
+                    ) {
+                        const batch =
+                            lens.batchIndex === undefined
+                                ? ''
+                                : `, batch ${lens.batchIndex + 1}`;
+                        cliInfo(
+                            `  Specialist ${lens.label}${batch}: ${lens.status}${lens.error ? ` (${lens.error})` : ''}`,
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -343,6 +406,7 @@ async function prReviewsAction(
             repositoryId: options.repoId,
             team: options.team,
             limit,
+            ...(options.explain && { explain: true }),
         });
 
         if (ctx.isAgent) {
@@ -358,7 +422,7 @@ async function prReviewsAction(
             return;
         }
 
-        printReviewRuns(result);
+        printReviewRuns(result, options.explain);
     } catch (error) {
         const normalized = normalizeCommandError(error);
 

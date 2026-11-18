@@ -16,6 +16,8 @@ import type {
     SaveCodeReviewConfigResult,
     PreviewPrRiskParams,
     PreviewPrRiskResult,
+    PreviewPrApprovalParams,
+    PreviewPrApprovalResult,
     TestByokModelResult,
 } from '../../types/review-settings.js';
 import type { IConfigApi } from './api.interface.js';
@@ -277,6 +279,7 @@ export class RealConfigApi implements IConfigApi {
                     directoryId: params.directoryId,
                     directoryPaths: params.directoryPaths,
                     inheritFields: params.inheritFields,
+                    expectedConfigId: params.expectedConfigId,
                 }),
             },
         );
@@ -288,6 +291,20 @@ export class RealConfigApi implements IConfigApi {
     ): Promise<PreviewPrRiskResult> {
         return this.requester<PreviewPrRiskResult>(
             '/code-review/risk/preview',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(params),
+            },
+        );
+    }
+
+    async previewPrApproval(
+        accessToken: string,
+        params: PreviewPrApprovalParams,
+    ): Promise<PreviewPrApprovalResult> {
+        return this.requester<PreviewPrApprovalResult>(
+            '/code-review/risk/approval-preview',
             {
                 method: 'POST',
                 headers: this.buildAuthHeaders(accessToken),
