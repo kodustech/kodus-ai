@@ -175,4 +175,41 @@ describe('MongoDBExporter (log flush resilience)', () => {
 
         expect((exporter as any).logBuffer).toHaveLength(0);
     });
+
+    it('waits for a flush already writing, then writes what arrived meanwhile, before dispose goes on', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        let releaseFirst!: () => void;
+        const insertMany = jest
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<void>((resolve) => {
+                        releaseFirst = resolve;
+                    }),
+            )
+            .mockResolvedValue(undefined);
+        (exporter as any).collections = {
+            logs: { insertMany },
+            telemetry: { insertMany: jest.fn() },
+        };
+        (exporter as any).logBuffer = [buildLog('first')];
+
+        const running = (exporter as any).flushLogs();
+        (exporter as any).logBuffer.push(buildLog('arrived during write'));
+        let flushed = false;
+        const flushing = exporter.flush().then(() => (flushed = true));
+
+        await new Promise((r) => setTimeout(r, 20));
+        expect(flushed).toBe(false);
+
+        releaseFirst();
+        await running;
+        await flushing;
+
+        expect(insertMany).toHaveBeenCalledTimes(2);
+        expect((exporter as any).logBuffer).toHaveLength(0);
+    });
 });
