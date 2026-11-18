@@ -194,8 +194,12 @@ describe('GithubService.getPullRequestAuthors', () => {
     it('keeps the authors of pages already read when a later page fails', async () => {
         const github = githubServing({
             app: {
-                pages: [newest100(), [pr(800, daysAgo(10), dependabot)]],
-                fail: { page: 2, status: 403 },
+                pages: [
+                    newest100(),
+                    [pr(800, daysAgo(10), dependabot)],
+                    [pr(700, daysAgo(20), formerDev)],
+                ],
+                fail: { page: 3, status: 403 },
             },
         });
 
@@ -203,7 +207,10 @@ describe('GithubService.getPullRequestAuthors', () => {
             'app',
         ]).getPullRequestAuthors({ organizationAndTeamData });
 
-        expect(authors.map((a) => a.name)).toEqual(['dev']);
+        expect(authors.map((a) => a.name).sort()).toEqual([
+            'dependabot[bot]',
+            'dev',
+        ]);
     });
 
     it('fails for the seat prune when a repository could not be read, instead of passing for no authors', async () => {
@@ -223,17 +230,22 @@ describe('GithubService.getPullRequestAuthors', () => {
         ).rejects.toThrow('1 of the configured GitHub repositories');
     });
 
-    it('does not fail the seat prune for a configured repository that no longer exists', async () => {
+    // GitHub answers 404 both for a deleted repository and for a private one
+    // the token can no longer see, so a 404 cannot pass for "no authors".
+    it('fails for the seat prune on a repository answering 404, and lists the rest otherwise', async () => {
         const github = githubServing({ app: { pages: [newest100()] } });
+        const service = makeService(github.octokit, ['app', 'hidden']);
 
-        const authors = await makeService(github.octokit, [
-            'app',
-            'deleted',
-        ]).getPullRequestAuthors({
+        await expect(
+            service.getPullRequestAuthors({
+                organizationAndTeamData,
+                requireLoaded: true,
+            }),
+        ).rejects.toThrow('1 of the configured GitHub repositories');
+
+        const authors = await service.getPullRequestAuthors({
             organizationAndTeamData,
-            requireLoaded: true,
         });
-
         expect(authors.map((a) => a.name)).toEqual(['dev']);
     });
 

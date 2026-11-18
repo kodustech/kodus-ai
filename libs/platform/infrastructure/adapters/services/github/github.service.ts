@@ -2781,11 +2781,10 @@ export class GithubService
                             },
                         );
                     } catch (error) {
-                        // A configured repository that no longer exists has no
-                        // authors to lose; only an unread list is a failure.
-                        if (error?.status !== 404) {
-                            failedRepositories += 1;
-                        }
+                        // A 404 is no proof the repository is gone: GitHub
+                        // answers 404 for a private repository the token
+                        // can no longer see, whose authors are still real.
+                        failedRepositories += 1;
                         this.logger.error({
                             message: 'Error in getPullRequestAuthors',
                             context: GithubService.name,
