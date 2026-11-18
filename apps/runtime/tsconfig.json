@@ -1,0 +1,14 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "../../dist/apps/runtime",
+        "tsBuildInfoFile": "../../dist/apps/runtime/.tsbuildinfo",
+        "baseUrl": ".",
+        "resolveJsonModule": true,
+        "paths": {
+            "@libs/*": ["../../libs/*"]
+        }
+    },
+    "include": ["src/**/*", "../../libs/runtime/{probe,protocol,gate,entry-points,environment,run,telemetry}/**/*"],
+    "exclude": ["node_modules", "dist"]
+}

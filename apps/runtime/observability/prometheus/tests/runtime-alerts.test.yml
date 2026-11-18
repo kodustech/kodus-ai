@@ -1,0 +1,342 @@
+# promtool unit tests: one test per alert rule of ../runtime-alerts.rules.yml, each
+# crossing its threshold and staying under it. Run with scripts/runtime/test-alert-rules.sh.
+# Annotations are the rules' text with the labels filled in.
+rule_files:
+  - ../runtime-alerts.rules.yml
+  - settings.test-values.rules.yml
+evaluation_interval: 1m
+tests:
+  - name: a stuck Run alerts after 5 minutes; a cell is left to RuntimeCellSilent
+    interval: 1m
+    input_series:
+      - series: runtime_stuck_items{kodus_runtime_stuck_subject="run",kodus_runtime_stuck_state="queued",instance="w1"}
+        values: 0 1x15
+      - series: runtime_stuck_items{kodus_runtime_stuck_subject="run",kodus_runtime_stuck_state="queued",instance="w2"}
+        values: "0x15"
+      - series: runtime_maintenance_pass_total{outcome="ran"}
+        values: 0+4x30
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RuntimeItemStuck
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: RuntimeItemStuck
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+              kodus_runtime_stuck_subject: run
+              kodus_runtime_stuck_state: queued
+            exp_annotations:
+              summary: A run is past its bound in queued
+              description: The hang detector found items longer in their state than the code lets them stay. The runtime.stuck log line names each one.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimeitemstuck
+      - eval_time: 8m
+        alertname: RuntimeHangDetectorNotRunning
+        exp_alerts: []
+  - name: no maintenance pass for 10 minutes alerts; passes that run do not
+    interval: 1m
+    input_series:
+      - series: runtime_maintenance_pass_total{outcome="ran"}
+        values: 0+4x5 20x30
+      - series: runtime_maintenance_pass_total{outcome="skipped"}
+        values: 0+4x35
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RuntimeHangDetectorNotRunning
+        exp_alerts: []
+      - eval_time: 26m
+        alertname: RuntimeHangDetectorNotRunning
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+            exp_annotations:
+              summary: No maintenance pass ran in 10 minutes
+              description: The sweep, the reap and the hang detector run in the maintenance pass; none ran, so nothing past its limit is ended or reported.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimehangdetectornotrunning
+  - name: "claims released past their hard expiry: more than 3 in 30 minutes"
+    interval: 1m
+    input_series:
+      - series: runtime_claim_hard_expired_total{reason="hard_expired"}
+        values: 0 1 2 3 3 3 3 3 3 3 5 5 5 5 5
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RuntimeClaimsPastHardExpiry
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: RuntimeClaimsPastHardExpiry
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+            exp_annotations:
+              summary: More than 3 claims were released past their hard expiry in 30 minutes
+              description: The lease and the cell's dead-man both failed to end them first.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimeclaimspasthardexpiry
+  - name: one blocker signature 5 times in an hour alerts, 4 do not
+    interval: 5m
+    input_series:
+      - series: runtime_blocker_total{kodus_runtime_blocker_signature="missing_env",kodus_runtime_claim_consumer="setup",kodus_runtime_blocker_kind="missing_env",kodus_organization_id="o1"}
+        values: 0 1 2 3 4 4 4 6 8
+      - series: runtime_blocker_total{kodus_runtime_blocker_signature="boot_timeout",kodus_runtime_claim_consumer="runtime",kodus_runtime_blocker_kind="resources",kodus_organization_id="o1"}
+        values: 0 1 2 3 4 4 4 4 4
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RuntimeBlockerSignatureSpike
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: RuntimeBlockerSignatureSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+              kodus_runtime_blocker_signature: missing_env
+              kodus_runtime_claim_consumer: setup
+            exp_annotations:
+              summary: Blocker missing_env 5 times or more in an hour (setup)
+              description: One cause stopped setups or Runs again and again; across orgs it is usually ours.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimeblockersignaturespike
+  - name: "setups: under half active over 6 h with at least 4 alerts; few setups or a good rate do not"
+    interval: 30m
+    input_series:
+      - series: runtime_setup_outcome_total{kodus_runtime_setup_outcome="active",kodus_runtime_recipe_origin="committed",kodus_organization_id="o1"}
+        values: 0 1 2 3 4 5 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6
+      - series: runtime_setup_outcome_total{kodus_runtime_setup_outcome="blocked",kodus_runtime_recipe_origin="committed",kodus_organization_id="o1"}
+        values: 0 0 0 0 0 0 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 30 32 34 36 38
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: RuntimeSetupSuccessRateLow
+        exp_alerts: []
+      - eval_time: 11h
+        alertname: RuntimeSetupSuccessRateLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+            exp_annotations:
+              summary: Fewer than half of the setups of the last 6 h became active
+              description: Split by kodus_runtime_recipe_origin to see whether committed, inferred or authored recipes dropped.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimesetupsuccessratelow
+  - name: Run boot p95 1.5 times a day before and above 2 minutes alerts
+    interval: 10m
+    input_series:
+      - series: runtime_claim_ready_wait_bucket{outcome="ready",kodus_runtime_claim_consumer="runtime",kodus_runtime_driver="docker-gvisor",le="60000"}
+        values: 0+6x144 864x20
+      - series: runtime_claim_ready_wait_bucket{outcome="ready",kodus_runtime_claim_consumer="runtime",kodus_runtime_driver="docker-gvisor",le="120000"}
+        values: 0+6x144 864x20
+      - series: runtime_claim_ready_wait_bucket{outcome="ready",kodus_runtime_claim_consumer="runtime",kodus_runtime_driver="docker-gvisor",le="300000"}
+        values: 0+6x144 864+6x20
+      - series: runtime_claim_ready_wait_bucket{outcome="ready",kodus_runtime_claim_consumer="runtime",kodus_runtime_driver="docker-gvisor",le="+Inf"}
+        values: 0+6x144 864+6x20
+    alert_rule_test:
+      - eval_time: 23h
+        alertname: RuntimeBootP95Regression
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: RuntimeBootP95Regression
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+            exp_annotations:
+              summary: Run boot p95 is 1.5 times what it was a day ago
+              description: p95 of claim.acquire to claim.ready for Runs over the last hour against the same hour a day ago. runtime_claim_boot_phase shows the phase that grew.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimebootp95regression
+  - name: no Kodus cell connected for 5 minutes pages
+    interval: 1m
+    input_series:
+      - series: runtime_cell_connected{kodus_runtime_cell_owner="kodus",instance="hub-1"}
+        values: 1 1 1 0x10
+      - series: runtime_cell_connected{kodus_runtime_cell_owner="kodus",instance="hub-2"}
+        values: "0x13"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RuntimeNoKodusCellConnected
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: RuntimeNoKodusCellConnected
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              component: kody-runtime
+            exp_annotations:
+              summary: No Kodus cell is connected to the hub
+              description: Every Run on Kodus cloud waits for room, then fails with cell_unavailable.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimenokoduscellconnected
+  - name: a connected cell silent past a minute, or the detector naming one, warns
+    interval: 1m
+    input_series:
+      - series: runtime_cell_heartbeat_age{kodus_runtime_cell_owner="customer",instance="hub-1"}
+        values: 5000 8000 70000x6
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: RuntimeCellSilent
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: RuntimeCellSilent
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+              kodus_runtime_cell_owner: customer
+            exp_annotations:
+              summary: A connected cell has sent no heartbeat for more than a minute
+              description: The hub drops a cell silent for 45 s; one still connected past it is a hub or session that did not notice.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimecellsilent
+  - name: every connected cell of an owner full for 15 minutes warns
+    interval: 1m
+    input_series:
+      - series: runtime_cell_free_slots{kodus_runtime_cell_owner="kodus",instance="hub-1"}
+        values: 2 0x20
+      - series: runtime_cell_full{kodus_runtime_cell_owner="kodus",instance="hub-1"}
+        values: 0 2x20
+      - series: runtime_cell_free_slots{kodus_runtime_cell_owner="customer",instance="hub-1"}
+        values: 1x20
+      - series: runtime_cell_full{kodus_runtime_cell_owner="customer",instance="hub-1"}
+        values: 1x20
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RuntimeCellsFull
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: RuntimeCellsFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+              kodus_runtime_cell_owner: kodus
+            exp_annotations:
+              summary: Every connected kodus cell is full
+              description: New claims wait for room (capacity waits); Runs queue behind them.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimecellsfull
+  - name: a cell that abandoned its machines pages at once; lost (1) does not
+    interval: 1m
+    input_series:
+      - series: cell_deadman_state{instance="cell-a:9466"}
+        values: 0 1 1 2 2
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RuntimeCellDeadman
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: RuntimeCellDeadman
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              component: kody-runtime
+              instance: cell-a:9466
+            exp_annotations:
+              summary: Cell cell-a:9466 abandoned its machines (dead-man state 2)
+              description: The cell lost the hub for 15 minutes and destroyed every machine. Check that cleanup succeeded before calling them gone.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimecelldeadman
+  - name: the oldest admission request past 20 minutes for 10 more warns
+    interval: 1m
+    input_series:
+      - series: runtime_admission_oldest_wait{kind="run",instance="w1"}
+        values: 0+60000x40
+      - series: runtime_admission_oldest_wait{kind="setup",instance="w1"}
+        values: 60000x40
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: RuntimeAdmissionNotDraining
+        exp_alerts: []
+      - eval_time: 32m
+        alertname: RuntimeAdmissionNotDraining
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+              kind: run
+            exp_annotations:
+              summary: The oldest run admission request has waited more than 20 minutes
+              description: A request ends at 30 minutes (ADMISSION_WAIT_MS). Nothing leaves the queue.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimeadmissionnotdraining
+  - name: a canary or an exfiltration pages at once
+    interval: 1m
+    input_series:
+      - series: runtime_security_event_total{kind="canary",where="egress",kodus_organization_id="o1",instance="w1"}
+        values: 0 0 1 1 1 1 1 1 1 1
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: RuntimeSecurityEvent
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: RuntimeSecurityEvent
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              component: kody-runtime
+              kind: canary
+              where: egress
+            exp_annotations:
+              summary: A canary or a credential crossed a boundary (canary, egress)
+              description: The Run was halted. Keep the ids; never copy the canary value.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimesecurityevent
+      - eval_time: 9m
+        alertname: RuntimeSecurityEvent
+        exp_alerts: []
+  - name: an injector alert on a cell pages
+    interval: 1m
+    input_series:
+      - series: cell_injector_alerts_total{instance="cell-a:9467",kind="credential_exfiltration"}
+        values: 0 0 1 1
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: RuntimeCellExfiltrationAlert
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: RuntimeCellExfiltrationAlert
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              component: kody-runtime
+              instance: cell-a:9467
+              kind: credential_exfiltration
+            exp_annotations:
+              summary: The cell's injector saw a credential or a placeholder leave for a host it was not for (credential_exfiltration)
+              description: The claim was compromised and runs nothing more.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimecellexfiltrationalert
+  - name: OpenBao sealed or unreachable for 2 minutes pages
+    interval: 1m
+    input_series:
+      - series: cell_openbao_up{instance="cell-a:9467"}
+        values: 1 1 0 0 0 0
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: RuntimeOpenBaoDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: RuntimeOpenBaoDown
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              component: kody-runtime
+              instance: cell-a:9467
+            exp_annotations:
+              summary: OpenBao is sealed or unreachable from the injector on cell-a:9467
+              description: No secret reaches a claim's hosts; requests that need one are refused.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimeopenbaodown
+  - name: the day above the cost threshold warns; below it does not
+    interval: 1h
+    input_series:
+      - series: runtime_machine_gb_minutes_total{kodus_runtime_claim_consumer="runtime",kodus_runtime_cell_owner="kodus",kodus_organization_id="o1"}
+        values: 0+1000x30
+      - series: runtime_machine_vcpu_minutes_total{kodus_runtime_claim_consumer="runtime",kodus_runtime_cell_owner="kodus",kodus_organization_id="o1"}
+        values: 0+100x30
+      - series: runtime_llm_tokens_total{kodus_llm_task="run_agent",gen_ai_token_type="input",kodus_organization_id="o1"}
+        values: 0+50000x30
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: RuntimeDailyCostHigh
+        exp_alerts: []
+      - eval_time: 10h
+        alertname: RuntimeDailyCostHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: kody-runtime
+            exp_annotations:
+              summary: Kody Runtime cost more than the daily threshold in the last 24 h
+              description: Machine time and LLM tokens of the last 24 h at the prices of runtime-settings.rules.yml. The Usage screen has the exact figure per org.
+              runbook_url: https://github.com/kodustech/kodus-ai/blob/main/docs/runtime/alerts.md#runtimedailycosthigh

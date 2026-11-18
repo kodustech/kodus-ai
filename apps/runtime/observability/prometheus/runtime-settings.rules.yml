@@ -1,0 +1,16 @@
+# Kody Runtime alert settings: the one rules file an operator edits per
+# deployment (docs/runtime/alerts.md#runtimedailycosthigh). 0 disables the
+# daily cost alert; the prices are the usage report's unit prices.
+groups:
+  - name: kody-runtime-settings
+    rules:
+      - record: kodus_runtime:daily_cost_threshold_usd
+        expr: vector(0)
+      # RUNTIME_MACHINE_USD_PER_GB_MINUTE and RUNTIME_MACHINE_USD_PER_VCPU_MINUTE of the API.
+      - record: kodus_runtime:price_usd_per_gb_minute
+        expr: vector(0)
+      - record: kodus_runtime:price_usd_per_vcpu_minute
+        expr: vector(0)
+      # A blended price per LLM token, for this alert only: an estimate. The Usage screen prices every model exactly.
+      - record: kodus_runtime:price_usd_per_llm_token
+        expr: vector(0)

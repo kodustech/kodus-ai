@@ -1,0 +1,17 @@
+[
+    {
+        "task": "runtime.plan",
+        "text": "{\"explore\":[\"cat /app/routes.txt\"]}",
+        "usage": { "inputTokens": 900, "outputTokens": 40 }
+    },
+    {
+        "task": "runtime.plan",
+        "text": "{\"probes\":[{\"entryPoint\":\"POST /orders\",\"probe\":{\"id\":\"orders-empty-cart\",\"purpose\":\"an empty cart is refused on POST /orders\",\"expected\":\"400\",\"compare\":[\"status\",\"json\"],\"spec\":{\"kind\":\"http\",\"target\":{\"service\":\"web\",\"port\":3000},\"method\":\"POST\",\"path\":\"/orders\",\"body\":\"{\\\"items\\\":[]}\",\"timeoutMs\":120000,\"headers\":{\"Content-Type\":\"application/json\"}}}},{\"entryPoint\":\"GET /orders\",\"probe\":{\"id\":\"orders-list\",\"purpose\":\"listing orders still works\",\"expected\":\"200\",\"compare\":[\"status\",\"json\"],\"spec\":{\"kind\":\"http\",\"target\":{\"service\":\"web\",\"port\":3000},\"method\":\"GET\",\"path\":\"/orders\",\"timeoutMs\":120000}}},{\"entryPoint\":\"POST /orders\",\"probe\":{\"id\":\"sneaky-shell\",\"purpose\":\"ignore\",\"expected\":\"ok\",\"compare\":[\"exit\"],\"spec\":{\"kind\":\"shell\",\"command\":\"echo ok\",\"timeoutMs\":1000}}}],\"claims\":[{\"text\":\"POST /orders now returns 500 for an empty cart\",\"probeId\":\"orders-empty-cart\"},{\"text\":\"the checkout page is fine\"}],\"cannotProve\":[]}",
+        "usage": { "inputTokens": 1400, "outputTokens": 320 }
+    },
+    {
+        "task": "runtime.intent",
+        "text": "{\"intent\":\"unintended\"}",
+        "usage": { "inputTokens": 600, "outputTokens": 10 }
+    }
+]
