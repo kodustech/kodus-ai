@@ -1,3 +1,4 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import {
@@ -16,7 +17,6 @@ import {
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 const API_CRON_STALE_REVIEW_WATCHDOG =
     process.env.API_CRON_STALE_REVIEW_WATCHDOG || '*/10 * * * *';
@@ -62,7 +62,7 @@ export class StaleReviewWatchdogCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_STALE_REVIEW_WATCHDOG, {
+    @GatedCron(API_CRON_STALE_REVIEW_WATCHDOG, {
         name: 'STALE REVIEW WATCHDOG',
         timeZone: 'America/Sao_Paulo',
         waitForCompletion: true,

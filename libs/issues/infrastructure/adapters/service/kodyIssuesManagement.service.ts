@@ -500,7 +500,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
-                    // Only an issue it was shown: the id is model output.
+                    // The id comes back from the model, and updateStatus
+                    // looks it up by _id alone: accept only issues this
+                    // file's prompt showed. A mangled id failed the whole
+                    // batch with a CastError; a made-up valid one would
+                    // resolve an issue that was never checked.
                     const shownIssueIds = new Set(
                         openIssues.map((issue) => issue.uuid),
                     );
@@ -509,10 +513,28 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     // Promise.all below then runs every updateStatus
                     // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
-                        if (
-                            !resolution.isIssuePresentInCode &&
-                            shownIssueIds.has(resolution.issueId)
-                        ) {
+                        if (!shownIssueIds.has(resolution.issueId)) {
+                            this.logger.warn({
+                                message:
+                                    'Ignoring an issue id the model returned that was not in its prompt',
+                                context: KodyIssuesManagementService.name,
+                                metadata: {
+                                    organizationId:
+                                        context.organizationAndTeamData
+                                            .organizationId,
+                                    teamId: context.organizationAndTeamData
+                                        .teamId,
+                                    repositoryId: context.repository?.id,
+                                    prNumber: context.pullRequest?.number,
+                                    filePath: file.path,
+                                    // An issue id, not a secret: tells a
+                                    // truncated id from a made-up one.
+                                    rejectedIssueId: resolution.issueId,
+                                },
+                            });
+                            continue;
+                        }
+                        if (!resolution.isIssuePresentInCode) {
                             updatePromises.push(
                                 this.issuesService.updateStatus(
                                     resolution.issueId,
