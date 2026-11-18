@@ -196,7 +196,24 @@ describe('CreateSandboxStage lease on an Ultra review', () => {
         leaseManager.release.mockRejectedValueOnce(new Error('mongo blip'));
         const sandbox = await stage.acquireRunSandbox(context, 'ultra-1', 1);
         await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
-        await sandbox!.cleanup!();
+        await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
+        expect(leaseManager.release).toHaveBeenCalledTimes(1);
+    });
+
+    it('a cleanup called while the release is in flight waits for that release', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        let settle!: () => void;
+        leaseManager.release.mockReturnValueOnce(
+            new Promise<void>((resolve) => (settle = resolve)),
+        );
+        const sandbox = await stage.acquireRunSandbox(context, 'ultra-1', 1);
+        let secondDone = false;
+        void sandbox!.cleanup!();
+        const second = sandbox!.cleanup!().then(() => (secondDone = true));
+        await Promise.resolve();
+        expect(secondDone).toBe(false);
+        settle();
+        await second;
         expect(leaseManager.release).toHaveBeenCalledTimes(1);
     });
 });

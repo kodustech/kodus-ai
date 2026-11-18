@@ -75,21 +75,18 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
     }
 
     /**
-     * A cleanup that releases the lease the first time it is called. Not
-     * retried: the release frees the worker slot first and then decrements
+     * A cleanup that releases the lease the first time it is called; later
+     * calls share that release's outcome. Not retried: the release frees the worker slot first and then decrements
      * the lease, which is not idempotent, so a retry after a failure whose
      * write may have landed could drop the count under a consumer still
      * using the sandbox. A lease left held is reaped at its expiry.
      */
     private releaseOnce(leaseId: string): () => Promise<void> {
-        let released = false;
-        return async () => {
-            if (released) return;
-            released = true;
-            await this.leaseManager.release(leaseId, {
+        let release: Promise<void> | undefined;
+        return () =>
+            (release ??= this.leaseManager.release(leaseId, {
                 idleMs: REVIEW_IDLE_TIMEOUT_MS,
-            });
-        };
+            }));
     }
 
     /**

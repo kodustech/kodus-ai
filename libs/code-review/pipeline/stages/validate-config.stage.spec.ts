@@ -639,6 +639,24 @@ describe('ValidateConfigStage — v2 routing', () => {
             gate.mockResolvedValue(null);
         });
 
+        it('a credits comment that threw leaves the notification to the usual skip', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createIssueComment.mockRejectedValueOnce({
+                status: 404,
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBeFalsy();
+            gate.mockResolvedValue(null);
+        });
+
         it('with the three out of credits, the merge runs on the fallback', async () => {
             const gate = (stage as any).permissionValidationService
                 .gateKodusCreditsForSlot as jest.Mock;
