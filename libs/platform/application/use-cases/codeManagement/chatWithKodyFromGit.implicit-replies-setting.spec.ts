@@ -244,6 +244,7 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
             expect.objectContaining({
                 repository: expect.anything(),
                 overrideConfig: true,
+                tolerateReviewSettingsErrors: true,
             }),
         );
         expect(classify).not.toHaveBeenCalled();

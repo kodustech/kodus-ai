@@ -2292,11 +2292,13 @@ export class ChatWithKodyFromGitUseCase {
      * Kody answers an unmentioned reply in its own review thread only when
      * someone writes `@kody`.
      *
-     * Read through the config cascade, so an organization that turned it off
-     * can be overridden per repository or per directory. It is read after the
-     * free gate, never before: the gate silences most replies at no cost, and
-     * the read only happens for a reply that would otherwise reach the
-     * classifier, which costs a model call.
+     * Read through the config cascade at repository scope: the stored deltas
+     * merge with the repository's `kodus-config.yml`, which only applies when
+     * the repository enabled `kodusConfigFileOverridesWebPreferences`. The
+     * reply is not tied to a file, so a directory-scoped value is out of scope
+     * here. It is read after the free gate, never before: the gate silences
+     * most replies at no cost, and the read only happens for a reply that would
+     * otherwise reach the classifier, which costs a model call.
      *
      * A config that cannot be read keeps today's behaviour: the classifier
      * decides, as it did before this setting existed.
@@ -2334,6 +2336,10 @@ export class ChatWithKodyFromGitUseCase {
                         overrideConfig:
                             config?.kodusConfigFileOverridesWebPreferences ??
                             false,
+                        // An invalid risk/approval block must not discard the
+                        // whole file: the pipeline isolates those fields and
+                        // keeps the rest, and `conversation` is one of them.
+                        tolerateReviewSettingsErrors: true,
                     });
                 fileValue = fileConfig?.conversation?.implicitReplies;
             } catch (error) {
