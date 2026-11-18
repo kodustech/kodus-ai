@@ -6,6 +6,8 @@ import {
     SlicePreemptedError,
 } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 
+import { SECURITY_SCAN_SLICE_EXIT_PREEMPTED } from '@libs/core/workflow/infrastructure/security-scan-runtime';
+
 import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
 
 describe('runSecurityScanSliceProcess', () => {
@@ -29,7 +31,7 @@ describe('runSecurityScanSliceProcess', () => {
         expect(appContext.close).toHaveBeenCalled();
     });
 
-    it('aborts the processor on SIGTERM and returns 1 after close', async () => {
+    it('aborts the processor on SIGTERM and returns the preempted exit after close', async () => {
         const processor = {
             process: jest.fn(
                 (_jobId: string, signal: AbortSignal) =>
@@ -56,7 +58,7 @@ describe('runSecurityScanSliceProcess', () => {
             onError,
         });
         fakeProcess.emit('SIGTERM');
-        await expect(done).resolves.toBe(1);
+        await expect(done).resolves.toBe(SECURITY_SCAN_SLICE_EXIT_PREEMPTED);
         expect(onError).toHaveBeenCalledWith(expect.any(SlicePreemptedError));
         expect(appContext.close).toHaveBeenCalled();
     });

@@ -17,6 +17,7 @@ import {
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import {
     isSliceChildNonZeroExit,
+    isSliceChildPreemptedExit,
     runSecurityScanSliceChild,
 } from './security-scan-slice.runner';
 import {
@@ -24,6 +25,8 @@ import {
     SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
     SECURITY_SCAN_HEARTBEAT_STALE_MS,
 } from './security-scan-runtime';
+import { INBOX_RELEASE_TIMEOUT_MS } from './drain-timeout';
+import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 
 /** The deep scan worker's one queue (#2451), on a worker of its own. */
 @Injectable()
@@ -49,6 +52,14 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
         for (const abort of this.sliceAborts) {
             abort.abort();
         }
+    }
+
+    private sliceAbortedError(abortReason?: string): ClaimConflictError {
+        return new ClaimConflictError(
+            abortReason
+                ? `Security-scan slice aborted: ${abortReason}`
+                : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
+        );
     }
 
     /**
@@ -113,20 +124,33 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
             });
         } catch (error) {
             if (abort.signal.aborted) {
-                throw new ClaimConflictError(
-                    abortReason
-                        ? `Security-scan slice aborted: ${abortReason}`
-                        : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
-                );
+                throw this.sliceAbortedError(abortReason);
             }
             if (isSliceChildNonZeroExit(error)) {
-                const job = await this.jobRepository.findOne(jobId);
+                let job: { status?: string } | undefined;
+                try {
+                    job = await runWithBoundedTimeout(
+                        this.jobRepository.findOne(jobId),
+                        INBOX_RELEASE_TIMEOUT_MS,
+                        'security-scan.job.findOne',
+                    );
+                } catch {
+                    throw error;
+                }
+                if (abort.signal.aborted) {
+                    throw this.sliceAbortedError(abortReason);
+                }
                 if (
                     job?.status === JobStatus.FAILED ||
                     job?.status === JobStatus.COMPLETED ||
                     job?.status === JobStatus.CANCELLED
                 ) {
                     throw error;
+                }
+                if (isSliceChildPreemptedExit(error)) {
+                    throw this.sliceAbortedError(
+                        abortReason ?? 'child preempted',
+                    );
                 }
                 throw new Error(
                     `Security-scan slice child left job ${jobId} unrecorded`,

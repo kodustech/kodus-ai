@@ -8,6 +8,7 @@ import {
     SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
     SECURITY_SCAN_HEARTBEAT_STALE_MS,
     SECURITY_SCAN_JOB_QUEUE,
+    SECURITY_SCAN_SLICE_EXIT_PREEMPTED,
 } from './security-scan-runtime';
 
 jest.mock('./security-scan-slice.runner', () => ({
@@ -269,6 +270,73 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
     it('marks FAILED when the slice child exits 1 without recording', async () => {
         runChild.mockRejectedValue(
             new Error('Security scan slice child exited 1 for job job-1'),
+        );
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockResolvedValue({ status: JobStatus.PROCESSING }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/left job job-1 unrecorded/);
+
+        expect(jobRepository.update).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({ status: JobStatus.FAILED }),
+        );
+    });
+
+    it('requeues a preempted child exit without failing the job', async () => {
+        runChild.mockRejectedValue(
+            new Error(
+                `Security scan slice child exited ${SECURITY_SCAN_SLICE_EXIT_PREEMPTED} for job job-1`,
+            ),
+        );
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockResolvedValue({ status: JobStatus.PROCESSING }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toBeInstanceOf(ClaimConflictError);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('does not overwrite a terminal job when the child is SIGKILL-ed', async () => {
+        runChild.mockRejectedValue(
+            new Error('Security scan slice child exited SIGKILL for job job-1'),
+        );
+        const { consumer, jobRepository } = makeScanConsumer();
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/exited SIGKILL for job/);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('marks FAILED when SIGKILL leaves the job unrecorded', async () => {
+        runChild.mockRejectedValue(
+            new Error('Security scan slice child exited SIGKILL for job job-1'),
         );
         const { consumer, jobRepository } = makeScanConsumer({
             findJob: jest

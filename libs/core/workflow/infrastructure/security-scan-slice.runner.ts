@@ -4,6 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
 
 import {
     SECURITY_SCAN_PARENT_WAIT_MS,
+    SECURITY_SCAN_SLICE_EXIT_PREEMPTED,
     SECURITY_SCAN_SLICE_JOB_ID_ENV,
 } from './security-scan-runtime';
 
@@ -50,9 +51,23 @@ function killChild(child: ChildProcess): void {
     killTimer.unref();
 }
 
-/** Child exited with a numeric code: the engine already wrote job FAILED. */
+const SLICE_CHILD_EXIT_RE = /exited (\d+|SIG[A-Z]+) for job/;
+
+export function parseSliceChildExit(error: unknown): string | undefined {
+    if (!(error instanceof Error)) return undefined;
+    return error.message.match(SLICE_CHILD_EXIT_RE)?.[1];
+}
+
+/** Child process ended with a code or signal the parent must classify. */
 export function isSliceChildNonZeroExit(error: unknown): boolean {
-    return error instanceof Error && /exited \d+ for job/.test(error.message);
+    return parseSliceChildExit(error) !== undefined;
+}
+
+export function isSliceChildPreemptedExit(error: unknown): boolean {
+    return (
+        parseSliceChildExit(error) ===
+        String(SECURITY_SCAN_SLICE_EXIT_PREEMPTED)
+    );
 }
 
 /**

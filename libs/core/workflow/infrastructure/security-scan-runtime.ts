@@ -41,6 +41,12 @@ export const SECURITY_SCAN_CLAIM_HEARTBEAT_MS = 30_000;
  */
 export const SECURITY_SCAN_HEARTBEAT_STALE_MS = 2 * 60 * 1000;
 
+/**
+ * Child exit when the slice was preempted (SIGTERM / lost claim). sysexits
+ * EX_TEMPFAIL, so the parent requeues instead of writing job FAILED.
+ */
+export const SECURITY_SCAN_SLICE_EXIT_PREEMPTED = 75;
+
 export { CLAIM_CONFLICT_REQUEUE_DELAY_MS } from '../domain/errors/claim-conflict.error';
 
 /**

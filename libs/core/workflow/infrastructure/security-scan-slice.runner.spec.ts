@@ -1,10 +1,15 @@
 import { EventEmitter } from 'events';
 
 import {
+    isSliceChildPreemptedExit,
+    parseSliceChildExit,
     runSecurityScanSliceChild,
     type SpawnSliceChild,
 } from './security-scan-slice.runner';
-import { SECURITY_SCAN_SLICE_JOB_ID_ENV } from './security-scan-runtime';
+import {
+    SECURITY_SCAN_SLICE_EXIT_PREEMPTED,
+    SECURITY_SCAN_SLICE_JOB_ID_ENV,
+} from './security-scan-runtime';
 
 class FakeChild extends EventEmitter {
     killed = false;
@@ -161,5 +166,29 @@ describe('runSecurityScanSliceChild', () => {
         expect(child.kill).toHaveBeenCalledWith('SIGKILL');
         await assertion;
         jest.useRealTimers();
+    });
+});
+
+describe('parseSliceChildExit', () => {
+    it('reads numeric and signal exits', () => {
+        expect(
+            parseSliceChildExit(
+                new Error('Security scan slice child exited 1 for job job-1'),
+            ),
+        ).toBe('1');
+        expect(
+            parseSliceChildExit(
+                new Error(
+                    'Security scan slice child exited SIGKILL for job job-1',
+                ),
+            ),
+        ).toBe('SIGKILL');
+        expect(
+            isSliceChildPreemptedExit(
+                new Error(
+                    `Security scan slice child exited ${SECURITY_SCAN_SLICE_EXIT_PREEMPTED} for job job-1`,
+                ),
+            ),
+        ).toBe(true);
     });
 });

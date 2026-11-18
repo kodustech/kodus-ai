@@ -1,8 +1,12 @@
-import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
+import {
+    isSlicePreemptedError,
+    SlicePreemptedError,
+} from '@libs/core/workflow/domain/errors/slice-preempted.error';
 import {
     IJobProcessorService,
     JOB_PROCESSOR_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
+import { SECURITY_SCAN_SLICE_EXIT_PREEMPTED } from '@libs/core/workflow/infrastructure/security-scan-runtime';
 
 type SliceAppContext = {
     get<T>(token: unknown): T;
@@ -48,7 +52,9 @@ export async function runSecurityScanSliceProcess(
         } catch {
             // exit below
         }
-        return 1;
+        return isSlicePreemptedError(err)
+            ? SECURITY_SCAN_SLICE_EXIT_PREEMPTED
+            : 1;
     } finally {
         proc.removeListener('SIGTERM', onStop);
         proc.removeListener('SIGINT', onStop);
