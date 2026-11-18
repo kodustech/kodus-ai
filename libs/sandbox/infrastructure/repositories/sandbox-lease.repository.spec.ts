@@ -66,6 +66,16 @@ describe('SandboxLeaseRepository.upsertAcquire', () => {
         },
     );
 
+    it('a READY lease in use gets the whole TTL its joiner asks for, however old it is', async () => {
+        const { repo, docs } = setup({
+            state: 'READY',
+            expiresInMs: minute,
+            createdAgoMs: MAX_LEASE_LIFETIME_MS - 5 * minute,
+        });
+        await repo.upsertAcquire(PR_KEY, 80 * minute, 'review');
+        expect(expiresIn(docs)).toBeGreaterThan(79 * minute);
+    });
+
     it('a shorter joiner never pulls it in', async () => {
         const { repo, docs } = setup({
             state: 'READY',

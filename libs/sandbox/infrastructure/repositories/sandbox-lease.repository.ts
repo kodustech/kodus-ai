@@ -56,8 +56,8 @@ function decomposePrKey(prKey: string): {
  */
 const EXTENDABLE_LEASE_STATES = ['READY', 'CREATING'];
 /**
- * No join pushes a lease past this long after it was created, so a lease
- * stuck CREATING (its worker died) is still reaped, however often it is
+ * No join pushes a lease still CREATING past this long after it was created,
+ * so one stuck there (its worker died) is still reaped, however often it is
  * joined. Above the longest lease asked for (an Ultra run's, 80 min).
  */
 export const MAX_LEASE_LIFETIME_MS = 90 * 60 * 1000;
@@ -114,16 +114,19 @@ export class SandboxLeaseRepository {
         );
 
         // A joiner that needs longer (an Ultra review's Kody Rules on the
-        // PR's lease) pushes the expiry out, up to MAX_LEASE_LIFETIME_MS after
-        // the lease was created; the reaper kills by this date, in use or not.
-        const createdAt = doc?.createdAt
-            ? new Date(doc.createdAt).getTime()
-            : now.getTime();
+        // PR's lease) pushes the expiry out; the reaper kills by this date, in
+        // use or not. A lease still CREATING goes no further than
+        // MAX_LEASE_LIFETIME_MS after it was created, so one stuck there is
+        // still reaped.
         const target = new Date(
-            Math.min(expiresAt.getTime(), createdAt + MAX_LEASE_LIFETIME_MS),
+            doc.state === 'CREATING'
+                ? Math.min(
+                      expiresAt.getTime(),
+                      new Date(doc.createdAt).getTime() + MAX_LEASE_LIFETIME_MS,
+                  )
+                : expiresAt.getTime(),
         );
         if (
-            doc &&
             EXTENDABLE_LEASE_STATES.includes(doc.state) &&
             doc.expiresAt < target
         ) {
