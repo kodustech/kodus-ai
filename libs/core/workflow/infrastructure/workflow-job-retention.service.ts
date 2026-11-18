@@ -1,8 +1,10 @@
-import { BeforeApplicationShutdown, Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { sleep } from '@libs/common/utils/helpers';
-import { CronRunGate } from '@libs/core/infrastructure/services/cron-run-gate';
+import {
+    cronRunGate,
+    GatedCron,
+} from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import {
@@ -35,9 +37,8 @@ const RUN_BUDGET_MS = 30 * 60 * 1000;
  * back to the operating system.
  */
 @Injectable()
-export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
+export class WorkflowJobRetentionService {
     private readonly logger = createLogger(WorkflowJobRetentionService.name);
-    private readonly runGate = new CronRunGate();
 
     constructor(
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
@@ -46,13 +47,12 @@ export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
     ) {}
 
     // 06:00 UTC: night in the Americas, before the European morning.
-    @Cron('0 6 * * *', { name: 'workflow-job-retention' })
+    @GatedCron('0 6 * * *', {
+        name: 'workflow-job-retention',
+        timeZone: 'UTC',
+    })
     async purgeFinishedJobs(): Promise<void> {
-        await this.runGate.run(() => this.purge());
-    }
-
-    beforeApplicationShutdown(): Promise<void> {
-        return this.runGate.stop();
+        await this.purge();
     }
 
     private async purge(): Promise<void> {
@@ -83,7 +83,7 @@ export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
             this.logger.error({
                 message: 'Workflow job retention run failed',
                 context: WorkflowJobRetentionService.name,
-                error: error instanceof Error ? error : undefined,
+                error: error as Error,
             });
         } finally {
             await lock.release().catch(() => undefined);
@@ -114,8 +114,13 @@ export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
 
         let referenceRaces = 0;
 
-        while (now() < deadline && !this.runGate.stopping) {
-            let batch: { deleted: number; lastUpdatedAt?: string };
+        while (now() < deadline && !cronRunGate.stopping) {
+            let batch: {
+                deleted: number;
+                candidates: number;
+                lastUpdatedAt?: string;
+            };
+            const startedAt = now();
             try {
                 batch = await this.jobRepository.deleteFinishedOlderThan({
                     olderThan: params.olderThan,
@@ -143,7 +148,23 @@ export class WorkflowJobRetentionService implements BeforeApplicationShutdown {
             batches += 1;
             after = batch.lastUpdatedAt ?? after;
 
-            if (batch.deleted < WORKFLOW_JOB_RETENTION_BATCH_SIZE) {
+            // One line per batch: a run cut short still shows how far it
+            // got, and the first prod run shows what a batch costs there.
+            this.logger.log({
+                message: 'Workflow job retention batch',
+                context: WorkflowJobRetentionService.name,
+                metadata: {
+                    batch: batches,
+                    candidates: batch.candidates,
+                    deleted: batch.deleted,
+                    after,
+                    durationMs: now() - startedAt,
+                },
+            });
+
+            // Read fewer than a full batch: nothing older is left. Rows read
+            // but kept (updated meanwhile) do not end the scan.
+            if (batch.candidates < WORKFLOW_JOB_RETENTION_BATCH_SIZE) {
                 return { deleted, batches, finished: true };
             }
 

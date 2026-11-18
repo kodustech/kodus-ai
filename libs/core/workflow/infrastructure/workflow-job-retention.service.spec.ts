@@ -17,8 +17,10 @@ describe('WorkflowJobRetentionService.run', () => {
         let batch = 0;
         const deleteFinishedOlderThan = jest.fn(async () => {
             batch += 1;
+            const deleted = batches.shift() ?? 0;
             return {
-                deleted: batches.shift() ?? 0,
+                deleted,
+                candidates: deleted,
                 lastUpdatedAt: `2026-01-01 00:00:0${batch}`,
             };
         });
@@ -83,6 +85,40 @@ describe('WorkflowJobRetentionService.run', () => {
         ]);
     });
 
+    it('keeps scanning past a full batch whose rows were partly kept', async () => {
+        // Rows updated while the DELETE waited are kept; that must not read
+        // as "nothing older is left".
+        const deleteFinishedOlderThan = jest
+            .fn()
+            .mockResolvedValueOnce({
+                deleted: FULL - 3,
+                candidates: FULL,
+                lastUpdatedAt: 't1',
+            })
+            .mockResolvedValueOnce({
+                deleted: 5,
+                candidates: 5,
+                lastUpdatedAt: 't2',
+            });
+        const service = new WorkflowJobRetentionService(
+            { deleteFinishedOlderThan } as any,
+            {} as any,
+        );
+
+        await expect(
+            service.run({
+                olderThan: new Date(),
+                budgetMs: 60_000,
+                pauseMs: 0,
+                sleep: async () => undefined,
+            }),
+        ).resolves.toEqual({
+            deleted: FULL - 3 + 5,
+            batches: 2,
+            finished: true,
+        });
+    });
+
     describe('when a message lands on a doomed job mid-batch', () => {
         const fkViolation = () =>
             Object.assign(new Error('violates foreign key constraint'), {
@@ -93,7 +129,11 @@ describe('WorkflowJobRetentionService.run', () => {
             const deleteFinishedOlderThan = jest
                 .fn()
                 .mockRejectedValueOnce(fkViolation())
-                .mockResolvedValueOnce({ deleted: 7, lastUpdatedAt: 't1' });
+                .mockResolvedValueOnce({
+                    deleted: 7,
+                    candidates: 7,
+                    lastUpdatedAt: 't1',
+                });
             const service = new WorkflowJobRetentionService(
                 { deleteFinishedOlderThan } as any,
                 {} as any,
