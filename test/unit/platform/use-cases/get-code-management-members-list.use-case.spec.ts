@@ -138,12 +138,18 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
         it('should populate cache after fetching from code integration', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
+            mockMemberListService.fetch.mockResolvedValue({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+                absentSeatHolderIds: ['77'],
+            });
 
             await useCase.execute();
 
             expect(mockCacheService.addToCache).toHaveBeenCalledWith(
                 'org_members_v3_org-uuid-123',
-                { members: mockMembers, absentSeatHolderIds: undefined },
+                { members: mockMembers, absentSeatHolderIds: ['77'] },
                 30 * 60 * 1000,
             );
         });
