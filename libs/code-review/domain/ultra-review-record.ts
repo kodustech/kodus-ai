@@ -5,6 +5,7 @@ import type {
 
 /** An Ultra model as stored: the slot (and its key ciphertext) left out. */
 export interface UltraModelRecord {
+    position: UltraModel['position'];
     modelId: string;
     modelName: string;
 }
@@ -19,6 +20,7 @@ export type UltraReviewRecord = Omit<
 };
 
 const record = (m: UltraModel): UltraModelRecord => ({
+    position: m.position,
     modelId: m.modelId,
     modelName: m.modelName,
 });

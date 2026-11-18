@@ -5,8 +5,12 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
  * live here; deciding, running and merging Ultra is in libs/ee/ultra-review.
  */
 
+/** Which place a run took: one of the three models, or the org fallback. */
+export type UltraRunPosition = 1 | 2 | 3 | 'fallback';
+
 /** One model of an Ultra review: its BYOK model id, label and routed slot. */
 export interface UltraModel {
+    position: UltraRunPosition;
     /** The BYOK `models[]` id. */
     modelId: string;
     /** `provider:model`, for logs, the timeline and the PR notice. */
@@ -14,9 +18,6 @@ export interface UltraModel {
     /** The slot the run calls, with no runtime fallback attached. */
     slot: NormalizedModel;
 }
-
-/** Which place a run took: one of the three models, or the org fallback. */
-export type UltraRunPosition = 1 | 2 | 3 | 'fallback';
 
 /** What one model's heavy run ended as. */
 export interface UltraRunOutcome {
@@ -54,8 +55,17 @@ export interface UltraMergeOutcome {
 }
 
 export interface UltraReviewState {
-    /** The three models, in the order the team set them. */
+    /** The three models that can run, in the order the team set them. */
     models: UltraModel[];
+    /**
+     * A model of the three the config no longer resolves (deleted, its key
+     * removed): it counts as failed when the review runs.
+     */
+    unavailable?: Array<{
+        position: 1 | 2 | 3;
+        modelId: string;
+        reason: string;
+    }>;
     /** The org fallback, when one is set. */
     fallback?: UltraModel;
     /** The model the merge runs on (the best ranked of the three). */

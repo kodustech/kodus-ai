@@ -1,0 +1,178 @@
+/**
+ * Enterprise Code — see `license_ee.md`. What Kody says on a pull request
+ * about an Ultra review.
+ */
+import type {
+    UltraReviewState,
+    UltraRunOutcome,
+} from '@libs/code-review/domain/ultra-review-state';
+import type { UltraTrioRefusal } from './ultra-review-plan';
+
+const appUrl = (): string =>
+    (process.env.API_USER_INVITE_BASE_URL || 'https://app.kodus.io').replace(
+        /\/+$/,
+        '',
+    );
+
+/** Where the team picks the three Ultra models. */
+export const ultraRoutingSettingsUrl = (): string =>
+    `${appUrl()}/settings/code-review/global/routing`;
+
+/** This pull request on the Pull Requests screen, where each run shows. */
+export function ultraPullRequestScreenUrl(input: {
+    repositoryName?: string;
+    prNumber?: number;
+}): string {
+    const params = new URLSearchParams();
+    if (input.repositoryName) params.set('repo', input.repositoryName);
+    if (input.prNumber) {
+        params.set('q', String(input.prNumber));
+        params.set('by', 'number');
+    }
+    const query = params.toString();
+    return `${appUrl()}/pull-requests${query ? `?${query}` : ''}`;
+}
+
+const NOT_REVIEWED =
+    'This pull request was not reviewed. `@kody start-review --heavy` or `--balanced` reviews it on one model.';
+
+/** Why an Ultra review was refused on the plan. */
+export const ULTRA_REVIEW_PLAN_REQUIRED =
+    'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not confirm this organization is on one. This pull request was not reviewed. `@kody start-review --balanced` reviews it in Balanced mode.';
+
+/** Why an Ultra review was refused on the org's models. */
+export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
+    const settings = `[Settings › Code review › Routing](${ultraRoutingSettingsUrl()})`;
+    switch (refusal.reason) {
+        case 'too_few_models':
+            return `Ultra review runs on three of your own models, and this organization has ${refusal.ownModels} configured. Add models with your own keys in AI providers and pick three for Ultra in ${settings}. ${NOT_REVIEWED}`;
+        case 'not_configured':
+            return `Ultra review runs on three different models set for it, and none are set for this organization. Pick them under Ultra models in ${settings}. ${NOT_REVIEWED}`;
+        case 'unavailable_models':
+            return `None of the three models set for Ultra review can run any more: they were removed, or their keys were. Pick three again under Ultra models in ${settings}. ${NOT_REVIEWED}`;
+    }
+}
+
+/** Why a saved Ultra mode was refused. */
+export function ultraSaveRefusalMessage(
+    refusal: UltraTrioRefusal | 'plan',
+): string {
+    if (refusal === 'plan') {
+        return 'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not confirm this organization is on one, so the review mode was not changed.';
+    }
+    switch (refusal.reason) {
+        case 'too_few_models':
+            return `Ultra review needs three of your own models, and this organization has ${refusal.ownModels}, so the review mode was not changed.`;
+        case 'not_configured':
+            return 'Ultra review needs three different models set under Ultra models in Routing, so the review mode was not changed.';
+        case 'unavailable_models':
+            return 'None of the three models set for Ultra review can run any more, so the review mode was not changed.';
+    }
+}
+
+const label = (run: { position: UltraRunOutcome['position'] }): string =>
+    run.position === 'fallback' ? 'Fallback' : `Model ${run.position}`;
+
+const code = (text: string): string => `\`${text.replace(/`/g, "'")}\``;
+
+/** What each model run ended as, one line per model, for the notice. */
+function runLines(state: UltraReviewState): string[] {
+    const lines: string[] = [];
+    for (const missing of state.unavailable ?? []) {
+        lines.push(
+            `- Model ${missing.position} (${code(missing.modelId)}) did not run: ${missing.reason}`,
+        );
+    }
+    const runs = state.runs ?? [];
+    const byModelId = new Map(runs.map((r) => [r.modelId, r]));
+    for (const run of runs) {
+        if (run.position === 'fallback') continue;
+        if (run.status === 'completed') {
+            lines.push(`- ${label(run)} (${code(run.modelName)}) completed.`);
+            continue;
+        }
+        const why = run.failureReason ? `: ${run.failureReason}` : '.';
+        const replacement = run.replacedBy
+            ? byModelId.get(run.replacedBy)
+            : undefined;
+        let then = ' It was not replaced: the fallback was already used, or none is set.';
+        if (run.reusedRun) {
+            then = ` The fallback, ${code(replacement?.modelName ?? run.replacedBy ?? '')}, is one of the three models, so its review counted once.`;
+        } else if (replacement) {
+            then =
+                replacement.status === 'completed'
+                    ? ` The fallback ${code(replacement.modelName)} took its place and completed.`
+                    : ` The fallback ${code(replacement.modelName)} took its place and failed too${replacement.failureReason ? `: ${replacement.failureReason}` : '.'}`;
+        }
+        lines.push(`- ${label(run)} (${code(run.modelName)}) failed${why}${then}`);
+    }
+    return lines;
+}
+
+function mergeLine(state: UltraReviewState): string | undefined {
+    const merge = state.merge;
+    if (!merge) return undefined;
+    switch (merge.status) {
+        case 'success':
+            return undefined;
+        case 'fallback':
+            return `- The merge model failed; the comments were merged on the fallback ${code(merge.modelName ?? '')}.`;
+        case 'failed':
+            return '- The comments were posted without the final merge: the merge model and the fallback failed, so some comments may repeat.';
+        case 'skipped':
+            return '- Only one model completed, so there was nothing to merge.';
+    }
+}
+
+/**
+ * The system notice a degraded Ultra review posts on the pull request, whatever
+ * the final comment's settings: what ran, what failed, and where to see it.
+ */
+export function ultraDegradedNotice(
+    state: UltraReviewState,
+    link: { repositoryName?: string; prNumber?: number },
+): string {
+    const completed = completedModelCount(state);
+    const lines = [
+        '## Ultra review did not run as configured',
+        '',
+        ...runLines(state),
+    ];
+    const merge = mergeLine(state);
+    if (merge) lines.push(merge);
+    lines.push(
+        '',
+        completed > 0
+            ? `${completed} of 3 models completed, and their comments were posted. Automatic approval is held for this review.`
+            : 'No model completed, so no comments were posted.',
+        '',
+        `[See this review on the Pull Requests screen](${ultraPullRequestScreenUrl(link)})`,
+        '',
+        '<!-- kody-ultra-review-notice -->',
+    );
+    return lines.join('\n');
+}
+
+/**
+ * The line a successful Ultra review that needed its fallback adds to the
+ * final comment.
+ */
+export function ultraFallbackInfoLine(state: UltraReviewState): string | undefined {
+    const replaced = (state.runs ?? []).find(
+        (r) => r.position !== 'fallback' && r.replacedBy && !r.reusedRun,
+    );
+    if (!replaced) return undefined;
+    const fallback = (state.runs ?? []).find(
+        (r) => r.position === 'fallback',
+    );
+    return `> Ultra review: ${code(replaced.modelName)} failed, and the fallback ${code(fallback?.modelName ?? replaced.replacedBy ?? '')} took its place.`;
+}
+
+/** Distinct models whose heavy review completed. */
+export function completedModelCount(state: UltraReviewState): number {
+    return new Set(
+        (state.runs ?? [])
+            .filter((r) => r.status === 'completed')
+            .map((r) => r.modelId),
+    ).size;
+}
