@@ -149,6 +149,18 @@ describe('ImplementationVerificationProcessor', () => {
         );
     });
 
+    it("reads the job organization's PR, and only its suggestions", async () => {
+        await processor.process('job-1');
+
+        const [filter, projection] = pullRequestsService.findOne.mock.calls[0];
+        expect(filter).toMatchObject({
+            'number': 42,
+            'repository.id': 'repo-1',
+            'organizationId': 'org-1',
+        });
+        expect(projection).toEqual({ 'files.suggestions': 1 });
+    });
+
     it('tells the check which files the push deleted', async () => {
         pullRequestManagerService.getChangedFiles.mockImplementation(
             async (...args: any[]) => {

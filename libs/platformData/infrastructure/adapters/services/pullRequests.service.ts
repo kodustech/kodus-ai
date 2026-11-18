@@ -193,8 +193,9 @@ export class PullRequestsService implements IPullRequestsService {
 
     async findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
-        return this.pullRequestsRepository.findOne(filter);
+        return this.pullRequestsRepository.findOne(filter, projection);
     }
 
     async find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]> {
@@ -485,12 +486,14 @@ export class PullRequestsService implements IPullRequestsService {
     async findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],
-        status: string,
+        status: string | string[],
+        repositoryIds?: string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
             prNumbers,
             status,
+            repositoryIds,
         );
     }
 

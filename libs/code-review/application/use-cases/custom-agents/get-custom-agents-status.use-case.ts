@@ -12,6 +12,7 @@ import {
     PULL_REQUESTS_REPOSITORY_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 export const CUSTOM_AGENT_STATUS_WINDOW_DAYS = 30;
 
@@ -200,6 +201,16 @@ const unfollowedCitationsPipeline = (match: Record<string, unknown>) => [
             'files.suggestions.customAgent.id': { $exists: true },
         },
     },
+    // Only what the stages below read: each `$unwind` copies the document
+    // once per element, and the whole PR (patches, every suggestion's text)
+    // is most of what it weighs.
+    {
+        $project: {
+            'number': 1,
+            'files.suggestions.customAgent.id': 1,
+            'files.suggestions.discardReason': 1,
+        },
+    },
     { $unwind: '$files' },
     { $unwind: '$files.suggestions' },
     {
@@ -236,6 +247,15 @@ const suggestionRowsPipeline = (
     path: 'files.suggestions' | 'prLevelSuggestions',
 ) => [
     { $match: { ...match, [`${path}.customAgent.id`]: { $exists: true } } },
+    // Only what the stages below read, before the `$unwind` copies.
+    {
+        $project: {
+            number: 1,
+            [`${path}.customAgent.id`]: 1,
+            [`${path}.deliveryStatus`]: 1,
+            [`${path}.priorityStatus`]: 1,
+        },
+    },
     ...(path === 'files.suggestions'
         ? [{ $unwind: '$files' }, { $unwind: '$files.suggestions' }]
         : [{ $unwind: '$prLevelSuggestions' }]),
@@ -321,6 +341,7 @@ export class GetCustomAgentsStatusUseCase {
                         suggestionRowsPipeline(match, 'files.suggestions'),
                         {
                             allowDiskUse: true,
+                            readPreference: ANALYTICS_READ_PREFERENCE,
                         },
                     )
                     .toArray(),
@@ -329,12 +350,14 @@ export class GetCustomAgentsStatusUseCase {
                         suggestionRowsPipeline(match, 'prLevelSuggestions'),
                         {
                             allowDiskUse: true,
+                            readPreference: ANALYTICS_READ_PREFERENCE,
                         },
                     )
                     .toArray(),
                 collection
                     .aggregate(unfollowedCitationsPipeline(match), {
                         allowDiskUse: true,
+                        readPreference: ANALYTICS_READ_PREFERENCE,
                     })
                     .toArray(),
                 // A page that cannot read the runs still shows the findings.

@@ -267,9 +267,10 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     async findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
         const doc = await this.pullRequestsModel
-            .findOne(filter as any)
+            .findOne(filter as any, projection)
             .lean()
             .exec();
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
@@ -601,10 +602,16 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             return result;
         }
 
-        const orConditions = criteria.map((c) => ({
-            'number': c.number,
-            'repository.id': c.repositoryId,
-        }));
+        // `$in` x `$in` instead of one `$or` branch per pair, for the reason
+        // in findManyByNumbersAndRepositoryIds; the rows of pairs nobody asked
+        // for are dropped when the map is built.
+        const numbers = [...new Set(criteria.map((c) => c.number))];
+        const repositoryIds = [
+            ...new Set(criteria.map((c) => String(c.repositoryId))),
+        ];
+        const wanted = new Set(
+            criteria.map((c) => `${c.repositoryId}_${c.number}`),
+        );
 
         const aggregationResult = await this.pullRequestsModel
             .aggregate([
@@ -612,7 +619,23 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 {
                     $match: {
                         organizationId,
-                        $or: orConditions,
+                        'number': { $in: numbers },
+                        'repository.id': { $in: repositoryIds },
+                    },
+                },
+                // Only what the counts read. Each `$unwind` below copies the
+                // document once per suggestion, and the whole PR (patches,
+                // every suggestion's text) is most of what it weighs.
+                {
+                    $project: {
+                        'number': 1,
+                        'repository.id': 1,
+                        'files.path': 1,
+                        'files.suggestions.id': 1,
+                        'files.suggestions.deliveryStatus': 1,
+                        'files.suggestions.implementationStatus': 1,
+                        'files.suggestions.label': 1,
+                        'files.suggestions.severity': 1,
                     },
                 },
                 // Unwind files array
@@ -920,6 +943,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         // Build the result map
         for (const row of aggregationResult) {
             const key = `${row.repositoryId}_${row.prNumber}`;
+            if (!wanted.has(key)) {
+                continue;
+            }
             result.set(key, {
                 sent: row.sent || 0,
                 filtered: row.filtered || 0,
@@ -1732,6 +1758,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         prNumbers: number[],
         status: string | string[],
+        repositoryIds?: string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         const statusFilter = Array.isArray(status) ? { $in: status } : status;
 
@@ -1741,6 +1768,14 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     $match: {
                         organizationId: organizationId,
                         number: { $in: prNumbers },
+                        // A PR number alone also matches every other
+                        // repository's PR with that number, each one a whole
+                        // document fetched and unwound for nothing. With the
+                        // repositories the caller knows, the match walks the
+                        // unique (number, repository.id, organizationId) index.
+                        ...(repositoryIds?.length
+                            ? { 'repository.id': { $in: repositoryIds } }
+                            : {}),
                         status: statusFilter,
                     },
                 },
@@ -1847,16 +1882,33 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         // page of 100 references can match at most 100 whole PR documents.
         for (let offset = 0; offset < uniqueRefs.length; offset += 100) {
             const page = uniqueRefs.slice(offset, offset + 100);
+            // `$in` on both keys walks the unique index in one pass; one `$or`
+            // branch per reference is the shape that hit
+            // maxIndexedOrSolutionsReached (see findManyByNumbersAndRepositoryIds).
+            // The pairs it also admits across repositories are dropped below.
+            const pageKeys = new Set(
+                page.map(
+                    (ref) => `${ref.repositoryId}:${ref.pullRequestNumber}`,
+                ),
+            );
             const docs = await this.pullRequestsModel
                 .find(
                     {
                         organizationId,
                         status,
-                        $or: page.map((ref) => ({
-                            'repository.id': ref.repositoryId,
-                            'number': ref.pullRequestNumber,
-                        })),
-                        $nor: [
+                        'number': {
+                            $in: [
+                                ...new Set(
+                                    page.map((ref) => ref.pullRequestNumber),
+                                ),
+                            ],
+                        },
+                        'repository.id': {
+                            $in: [
+                                ...new Set(page.map((ref) => ref.repositoryId)),
+                            ],
+                        },
+                        '$nor': [
                             {
                                 files: {
                                     $elemMatch: {
@@ -1891,25 +1943,28 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 )
                 .sort({ _id: 1 })
-                .limit(page.length)
                 .lean()
                 .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
                 .exec();
             matches.push(
-                ...docs.map((doc) => ({
-                    _id: String(doc._id),
-                    number: doc.number,
-                    organizationId: doc.organizationId,
-                    status: doc.status,
-                    provider: doc.provider,
-                    approvalReasonDeliveryFailure:
-                        doc.approvalReasonDeliveryFailure,
-                    repository: {
-                        id: doc.repository.id,
-                        name: doc.repository.name,
-                    },
-                    suggestions: [],
-                })),
+                ...docs
+                    .filter((doc) =>
+                        pageKeys.has(`${doc.repository?.id}:${doc.number}`),
+                    )
+                    .map((doc) => ({
+                        _id: String(doc._id),
+                        number: doc.number,
+                        organizationId: doc.organizationId,
+                        status: doc.status,
+                        provider: doc.provider,
+                        approvalReasonDeliveryFailure:
+                            doc.approvalReasonDeliveryFailure,
+                        repository: {
+                            id: doc.repository.id,
+                            name: doc.repository.name,
+                        },
+                        suggestions: [],
+                    })),
             );
         }
         return matches;

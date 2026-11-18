@@ -477,8 +477,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 .mockResolvedValue([]);
             const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
             const lean = jest.fn().mockReturnValue({ maxTimeMS });
-            const limit = jest.fn().mockReturnValue({ lean });
-            const sort = jest.fn().mockReturnValue({ limit });
+            const sort = jest.fn().mockReturnValue({ lean });
             model.find = jest.fn().mockReturnValue({ sort });
             const refs = Array.from({ length: 101 }, (_, index) => ({
                 repositoryId: index % 2 ? 'repo-b' : 'repo-a',
@@ -498,18 +497,21 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 organizationId: 'org-A',
                 status: 'open',
             });
-            expect(filter.$or).toHaveLength(100);
-            expect(filter.$or[0]).toEqual({
-                'repository.id': 'repo-a',
-                'number': 1,
-            });
+            // `$in` on both keys of the unique index, not one `$or` branch
+            // per reference; the exact pairs are kept in memory.
+            expect(filter.$or).toBeUndefined();
+            expect(filter.number.$in).toHaveLength(100);
+            expect(filter['repository.id'].$in.sort()).toEqual([
+                'repo-a',
+                'repo-b',
+            ]);
             expect(filter.$nor).toHaveLength(1);
             expect(projection.files).toBeUndefined();
             expect(projection.approvalReasonDeliveryFailure).toBe(1);
             expect(results[0].approvalReasonDeliveryFailure).toEqual(failure);
             expect(sort).toHaveBeenCalledWith({ _id: 1 });
-            expect(limit).toHaveBeenNthCalledWith(1, 100);
-            expect(limit).toHaveBeenNthCalledWith(2, 1);
+            // The second page holds the 101st reference alone.
+            expect(model.find.mock.calls[1][0].number.$in).toEqual([101]);
         });
     });
 

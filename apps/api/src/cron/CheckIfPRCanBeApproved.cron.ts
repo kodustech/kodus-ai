@@ -489,6 +489,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 organizationId,
                                 automationExecutionsPRs,
                                 PullRequestState.OPENED,
+                                [
+                                    ...new Set(
+                                        eligiblePullRequestRefs
+                                            .map((ref) => ref.repositoryId)
+                                            .filter(Boolean),
+                                    ),
+                                ],
                             );
                         // Conditional policies can finish with no suggestions,
                         // including a sensitive-path hold. Only executions

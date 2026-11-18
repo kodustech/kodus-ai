@@ -84,6 +84,7 @@ export interface IPullRequestsRepository {
     findById(uuid: string): Promise<PullRequestsEntity | null>;
     findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]>;
     findPRNumbersByTitleAndOrganization(
@@ -301,6 +302,8 @@ export interface IPullRequestsRepository {
         organizationId: string,
         prNumbers: number[],
         status: string | string[],
+        /** The repositories the PRs belong to, when the caller knows them. */
+        repositoryIds?: string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]>;
     findPullRequestsWithoutDeliveredSuggestionsForApproval(
         organizationId: string,

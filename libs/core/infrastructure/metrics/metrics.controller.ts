@@ -22,6 +22,7 @@ import {
     MetricsResponseTimeResponseDto,
     MetricsSummaryResponseDto,
 } from './metrics-response.dto';
+import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 @ApiTags('Internal Metrics')
 @ApiBearerAuth('jwt')
@@ -80,7 +81,9 @@ export class MetricsController {
                 },
             ];
 
-            const results = await this.metricsModel.aggregate(pipeline);
+            const results = await this.metricsModel
+                .aggregate(pipeline)
+                .read(ANALYTICS_READ_PREFERENCE);
 
             const componentMap = new Map<
                 string,
@@ -237,7 +240,9 @@ export class MetricsController {
                 },
             ];
 
-            const results = await this.metricsModel.aggregate(pipeline);
+            const results = await this.metricsModel
+                .aggregate(pipeline)
+                .read(ANALYTICS_READ_PREFERENCE);
 
             return results.map((r) => ({
                 pipeline: r._id.pipeline ?? 'unknown',

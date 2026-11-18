@@ -1564,7 +1564,10 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 count: { $sum: 1 },
             }),
         });
-        expect(aggregate.mock.calls[0][1]).toEqual({ allowDiskUse: true });
+        expect(aggregate.mock.calls[0][1]).toEqual({
+            allowDiskUse: true,
+            readPreference: expect.anything(),
+        });
         const [firstMatch] = aggregate.mock.calls[0][0];
         expect(firstMatch.$match).toEqual({
             'organizationId': 'org-1',
