@@ -2339,7 +2339,11 @@ describe('SandboxLeaseManager', () => {
                 '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:cli:release#RC1';
             expect(() => assertValidPrKey(cliKey)).not.toThrow();
             leaseRepo.findByPrKey.mockResolvedValue(null);
+            // A CLI key has no runs, '#' in its branch or not.
             await manager.invalidate(cliKey);
+            await manager.invalidate(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:cli:feature',
+            );
             expect((leaseRepo as any).findRunKeys).not.toHaveBeenCalled();
         });
 
