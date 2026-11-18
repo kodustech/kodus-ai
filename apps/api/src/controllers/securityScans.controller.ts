@@ -37,6 +37,7 @@ import {
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { StartSecurityScanUseCase } from '@libs/security-scan/application/start-security-scan.use-case';
 import { GetSecurityScansUseCase } from '@libs/security-scan/application/get-security-scans.use-case';
+import { CancelSecurityScanUseCase } from '@libs/security-scan/application/cancel-security-scan.use-case';
 import {
     DEEP_SCAN_NOT_ENABLED_MESSAGE,
     DeepScanGate,
@@ -100,6 +101,7 @@ export class SecurityScansController {
         private readonly request: UserRequest,
         private readonly startSecurityScan: StartSecurityScanUseCase,
         private readonly getSecurityScans: GetSecurityScansUseCase,
+        private readonly cancelSecurityScan: CancelSecurityScanUseCase,
         private readonly authorizationService: AuthorizationService,
         private readonly deepScanGate: DeepScanGate,
     ) {}
@@ -175,6 +177,33 @@ export class SecurityScansController {
             (await this.visibleRepositories()) ?? undefined,
             Number.isInteger(asked) && asked > 0 ? asked : undefined,
         );
+    }
+
+    @Post(':id/cancel')
+    @ApiOperation({
+        summary: 'Cancel a security scan',
+        description:
+            'Stops a queued or running scan so another can start on the same repository.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canReadScans)
+    async cancel(@Param('id') id: string) {
+        const organizationId = await this.organizationId();
+        const scan = await this.getSecurityScans.get(
+            organizationId,
+            id,
+            (await this.visibleRepositories()) ?? undefined,
+        );
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [scan.repository.id],
+        });
+        return this.cancelSecurityScan.execute({
+            organizationId,
+            scanId: id,
+        });
     }
 
     @Get(':id')

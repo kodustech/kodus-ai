@@ -438,6 +438,18 @@ describe('SecurityScanJobProcessor', () => {
         expect(scans.update).not.toHaveBeenCalled();
     });
 
+    it('does nothing for a scan that was cancelled', async () => {
+        const { processor, scans } = setup(
+            { result: finishedResult() },
+            scanRecord({ status: SecurityScanStatus.CANCELLED }),
+        );
+
+        await processor.process('job-1');
+
+        expect(scans.update).not.toHaveBeenCalled();
+        expect(scans.claim).not.toHaveBeenCalled();
+    });
+
     it('reads the commit the first slice read when it continues a scan', async () => {
         const { processor, leaseManager } = setup(
             { result: finishedResult() },

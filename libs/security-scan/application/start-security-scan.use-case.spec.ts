@@ -10,7 +10,10 @@ jest.mock('./scan-model', () => ({
 }));
 
 import { SecurityScanStatus } from '../domain/security-scan.types';
-import { StartSecurityScanUseCase } from './start-security-scan.use-case';
+import {
+    SCAN_QUEUE_UNAVAILABLE_MESSAGE,
+    StartSecurityScanUseCase,
+} from './start-security-scan.use-case';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 
 const unit = (id: string) => ({
@@ -37,6 +40,7 @@ function useCaseWith(
         update: jest.fn(async () => null),
     };
     const jobQueue = { enqueue: jest.fn() };
+    const queueProbe = { consumerCount: jest.fn(async () => 1) };
     const useCase = new StartSecurityScanUseCase(
         scans as any,
         jobQueue as any,
@@ -66,6 +70,7 @@ function useCaseWith(
         } as any,
         {} as any,
         { getConfig: jest.fn(async () => null) } as any,
+        queueProbe as any,
     );
     const start = () =>
         useCase.execute({
@@ -73,7 +78,13 @@ function useCaseWith(
             repositoryId: 'repo-1',
             budget: { maxUsd: 5 },
         } as any);
-    return { scans, start, jobQueue, codeManagement: (useCase as any).codeManagementService };
+    return {
+        scans,
+        start,
+        jobQueue,
+        queueProbe,
+        codeManagement: (useCase as any).codeManagementService,
+    };
 }
 
 describe('StartSecurityScanUseCase — running again continues', () => {
@@ -124,11 +135,18 @@ describe('StartSecurityScanUseCase — running again continues', () => {
     });
 
     it('carries a finished unit without what it examined, so it never supplies a miss of the new scan', async () => {
-        const examined = [{ vulnerabilityClass: 'injection', filePaths: ['src/a.ts'] }];
+        const examined = [
+            { vulnerabilityClass: 'injection', filePaths: ['src/a.ts'] },
+        ];
         const { scans, start } = useCaseWith({
             ...stopped,
             progress: [
-                { unitId: 'a', state: 'done', findings: 0, examinedByClass: examined },
+                {
+                    unitId: 'a',
+                    state: 'done',
+                    findings: 0,
+                    examinedByClass: examined,
+                },
                 { unitId: 'b', state: 'failed', findings: 0 },
             ],
         });
@@ -136,7 +154,9 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         await start();
 
         const created = scans.create.mock.calls[0][0];
-        expect(created.progress).toEqual([{ unitId: 'a', state: 'done', findings: 0 }]);
+        expect(created.progress).toEqual([
+            { unitId: 'a', state: 'done', findings: 0 },
+        ]);
         expect(created.coverage.examinedByClass).toEqual([]);
         expect(created.coverage.inheritedExaminedByClass).toEqual(
             expect.arrayContaining([
@@ -169,12 +189,19 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
 
         expect(scans.create.mock.calls[0][0].repository).toEqual(
-            expect.objectContaining({ defaultBranch: 'trunk', host: 'github.com' }),
+            expect.objectContaining({
+                defaultBranch: 'trunk',
+                host: 'github.com',
+            }),
         );
     });
 
     it('starts nothing when the provider cannot say which branch is the default', async () => {
-        const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', new Error('502'));
+        const { scans, start, jobQueue } = useCaseWith(
+            null,
+            'GITHUB',
+            new Error('502'),
+        );
 
         const error = await start().catch((e) => e);
         expect(error.message).toMatch(/Try again/);
@@ -187,30 +214,41 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         const { scans, start } = useCaseWith(null, 'GITHUB', '');
 
         const error = await start().catch((e) => e);
-        expect(error.message).toMatch(/gave no default branch.*empty.*try again/);
+        expect(error.message).toMatch(
+            /gave no default branch.*empty.*try again/,
+        );
         // Retryable: Bitbucket Cloud answers empty on its own errors too.
         expect(error.getStatus()).toBe(503);
         expect(scans.create).not.toHaveBeenCalled();
     });
 
     it('refuses to start without an active code integration, writing nothing', async () => {
-        const { scans, start, jobQueue } = useCaseWith(null, null);
+        const { scans, start, jobQueue, queueProbe } = useCaseWith(null, null);
 
-        await expect(start()).rejects.toThrow(/no active code management integration/);
+        await expect(start()).rejects.toThrow(
+            /no active code management integration/,
+        );
         expect(scans.findActive).not.toHaveBeenCalled();
         expect(scans.create).not.toHaveBeenCalled();
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
+        expect(queueProbe.consumerCount).not.toHaveBeenCalled();
     });
 
     it.each([undefined, '', 'not a URL'])(
         'refuses a repository without a confirmed host (%s) before writing or queuing a scan',
         async (http_url) => {
-            const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', 'trunk', { http_url });
+            const { scans, start, jobQueue, queueProbe } = useCaseWith(
+                null,
+                'GITHUB',
+                'trunk',
+                { http_url },
+            );
             await expect(start()).rejects.toThrow(/Git host.*reconnect/i);
             expect(scans.failStale).not.toHaveBeenCalled();
             expect(scans.findActive).not.toHaveBeenCalled();
             expect(scans.create).not.toHaveBeenCalled();
             expect(jobQueue.enqueue).not.toHaveBeenCalled();
+            expect(queueProbe.consumerCount).not.toHaveBeenCalled();
         },
     );
 
@@ -234,7 +272,10 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         await start();
 
         expect(scans.create.mock.calls[0][0].coverage).toEqual(
-            expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+            expect.objectContaining({
+                mapFailedLanguages: ['python'],
+                filesBeyondPlan: 1,
+            }),
         );
     });
 
@@ -266,27 +307,53 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(created.progress).toEqual([]);
     });
 
-    it("carries what the finished areas read, so this scan resolves what they no longer hold", async () => {
+    it('carries what the finished areas read, so this scan resolves what they no longer hold', async () => {
         const { scans, start } = useCaseWith({
             ...stopped,
-            units: [unit('a'), unit('b'), { ...unit('d'), classes: ['injection'] }],
+            units: [
+                unit('a'),
+                unit('b'),
+                { ...unit('d'), classes: ['injection'] },
+            ],
             progress: [
                 { unitId: 'a', state: 'done', findings: 1 },
                 { unitId: 'b', state: 'skipped_budget', findings: 0 },
                 { unitId: 'd', state: 'done', findings: 0 },
             ],
             reported: [
-                { vulnerabilityClass: 'authz', title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-a' },
+                {
+                    vulnerabilityClass: 'authz',
+                    title: 'IDOR',
+                    filePath: 'src/a.ts',
+                    fingerprint: 'fp-a',
+                },
                 // Unsightable: its area is left out, so it is not resolved as unseen.
-                { vulnerabilityClass: 'injection', title: 'SQLi', filePath: 'src/d.ts' },
+                {
+                    vulnerabilityClass: 'injection',
+                    title: 'SQLi',
+                    filePath: 'src/d.ts',
+                },
             ],
         });
 
         await start();
 
-        expect(scans.create.mock.calls[0][0].coverage.inheritedExaminedByClass).toEqual([
-            { vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] },
-        ]);
+        expect(
+            scans.create.mock.calls[0][0].coverage.inheritedExaminedByClass,
+        ).toEqual([{ vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] }]);
+    });
+
+    it('carries on a cancelled scan that had started', async () => {
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            status: SecurityScanStatus.CANCELLED,
+        });
+
+        await start();
+
+        expect(
+            scans.create.mock.calls[0][0].units.map((u: any) => u.id),
+        ).toEqual(['a', 'b', 'c']);
     });
 
     it('runs again the areas a provider outage failed', async () => {
@@ -352,7 +419,7 @@ describe('StartSecurityScanUseCase — running again continues', () => {
 });
 
 describe('StartSecurityScanUseCase — own model only', () => {
-    it("refuses to scan on the managed model when the organization has none of its own", async () => {
+    it('refuses to scan on the managed model when the organization has none of its own', async () => {
         (resolveScanModel as jest.Mock).mockResolvedValueOnce({
             model: { modelName: 'managed:default', slot: undefined },
             rates: null,
@@ -361,6 +428,34 @@ describe('StartSecurityScanUseCase — own model only', () => {
 
         await expect(start()).rejects.toThrow(SCAN_NEEDS_BYOK_MESSAGE);
         expect(scans.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('StartSecurityScanUseCase — queue must be taking jobs', () => {
+    it.each([0, null])(
+        'starts nothing when the security-scan queue has no consumer (%s)',
+        async (consumers) => {
+            const { scans, start, jobQueue, queueProbe } = useCaseWith(null);
+            queueProbe.consumerCount.mockResolvedValue(consumers);
+
+            const error = await start().catch((e) => e);
+            expect(error.message).toBe(SCAN_QUEUE_UNAVAILABLE_MESSAGE);
+            expect(error.getStatus()).toBe(503);
+            expect(scans.create).not.toHaveBeenCalled();
+            expect(scans.failStale).not.toHaveBeenCalled();
+            expect(jobQueue.enqueue).not.toHaveBeenCalled();
+        },
+    );
+
+    it('starts nothing when the broker cannot be reached', async () => {
+        const { scans, start, jobQueue, queueProbe } = useCaseWith(null);
+        queueProbe.consumerCount.mockRejectedValue(new Error('ECONNREFUSED'));
+
+        const error = await start().catch((e) => e);
+        expect(error.message).toBe(SCAN_QUEUE_UNAVAILABLE_MESSAGE);
+        expect(error.getStatus()).toBe(503);
+        expect(scans.create).not.toHaveBeenCalled();
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 });
 

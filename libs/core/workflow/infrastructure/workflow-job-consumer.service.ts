@@ -28,7 +28,10 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
-import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
+import {
+    SECURITY_SCAN_JOB_QUEUE,
+    WORKFLOW_JOB_QUEUE_ARGUMENTS,
+} from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 import {
     ITaskProtectionService,
@@ -88,7 +91,7 @@ export abstract class WorkflowJobConsumerBase
             return 15;
         if (queueName === 'workflow.jobs.webhook.queue') return 20;
         if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
-        if (queueName === 'workflow.jobs.security_scan.queue') return 45;
+        if (queueName === SECURITY_SCAN_JOB_QUEUE) return 45;
         return 150;
     }
 

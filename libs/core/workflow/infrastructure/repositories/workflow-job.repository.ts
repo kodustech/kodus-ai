@@ -236,6 +236,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         workflowType?: WorkflowType;
         organizationId?: string;
         teamId?: string;
+        correlationId?: string;
         limit?: number;
         offset?: number;
     }): Promise<{ data: IWorkflowJob[]; total?: number }> {
@@ -247,6 +248,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             if (query.organizationId)
                 where.organizationId = query.organizationId;
             if (query.teamId) where.teamId = query.teamId;
+            if (query.correlationId) where.correlationId = query.correlationId;
 
             const [models, total] = await this.repository.findAndCount({
                 where,
