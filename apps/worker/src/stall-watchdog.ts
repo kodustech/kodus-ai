@@ -1,0 +1,502 @@
+import { Worker } from 'worker_threads';
+import { createLogger } from '@libs/core/log/logger';
+
+/**
+ * Catches a stalled main thread in the act.
+ *
+ * The EventLoopMonitor runs on the thread it measures, so a worker frozen in
+ * synchronous code reports nothing until it recovers, and nothing at all when
+ * it never does (ECS kills it first). This watchdog runs in its own thread,
+ * which keeps running while the main thread is stuck. When the main thread
+ * stops ticking for `thresholdMs` it connects to the main thread's inspector
+ * (in-process, no port), samples a short CPU profile and pauses the main
+ * thread for one instant to read its JavaScript stack, then resumes it. The
+ * report goes straight to stdout (fd 1, so CloudWatch gets it even if the main
+ * thread never runs again) and, when a heartbeat URL is set, to BetterStack
+ * as an incident that names the code the worker is stuck in.
+ *
+ * Inspector commands are serviced through V8 interrupts, which a busy
+ * JavaScript loop honours; that is how DevTools pauses an infinite loop. Code
+ * that never checks interrupts (a long synchronous native call) yields no
+ * stack, and the report says so instead of hanging: every inspector call is
+ * bounded.
+ */
+
+export interface StallFrame {
+    fn: string;
+    file: string;
+    line: number;
+    col: number;
+}
+
+export interface StallReport {
+    kind: 'stall' | 'recovered' | 'error';
+    stalledMs: number;
+    capture?: number;
+    stack?: StallFrame[] | null;
+    hottest?: Array<{ fn: string; file: string; line: number; pct: number }>;
+    hottestPath?: StallFrame[];
+    error?: string;
+}
+
+export interface StallWatchdogOptions {
+    /** Main thread silent for this long counts as a stall. */
+    thresholdMs?: number;
+    /** How often the watchdog thread checks the main thread's last tick. */
+    checkIntervalMs?: number;
+    /** How often the main thread ticks. */
+    tickIntervalMs?: number;
+    /** CPU profile length per capture; 0 skips the profile. */
+    profileMs?: number;
+    /** Captures per stall: one at the threshold, then every `recaptureMs`. */
+    maxCapturesPerStall?: number;
+    recaptureMs?: number;
+    /** BetterStack heartbeat; empty disables alerting (reports still log). */
+    heartbeatUrl?: string;
+    /** Healthy ping cadence for the heartbeat, so it does not alert on silence. */
+    pingIntervalMs?: number;
+    /** Labels copied into every report (role, instance). */
+    identity?: Record<string, string>;
+    /** File descriptor for the immediate JSON report line; null disables. */
+    writeFd?: number | null;
+    /** Main-thread callback, delivered once the main thread runs again. */
+    onReport?: (report: StallReport) => void;
+}
+
+type WatchdogLogger = Pick<ReturnType<typeof createLogger>, 'warn' | 'error'>;
+
+/**
+ * Body of the watchdog thread. Serialized with Function#toString and run with
+ * `eval: true`, because the worker app is a single webpack bundle and has no
+ * separate file to point a Worker at. It must stay self-contained: no imports,
+ * no closure over module scope, and Node built-ins only through
+ * process.getBuiltinModule (webpack rewrites `require`).
+ */
+/* istanbul ignore next -- runs inside the worker thread */
+export function stallWatchdogThread(): void {
+    const wt = process.getBuiltinModule(
+        'node:worker_threads',
+    ) as typeof import('worker_threads');
+    const inspector = process.getBuiltinModule(
+        'node:inspector',
+    ) as typeof import('inspector');
+    const fs = process.getBuiltinModule('node:fs') as typeof import('fs');
+    const nodeModule = process.getBuiltinModule(
+        'node:module',
+    ) as typeof import('module');
+
+    const { sab, cfg } = wt.workerData as {
+        sab: SharedArrayBuffer;
+        cfg: Required<
+            Omit<StallWatchdogOptions, 'onReport' | 'identity' | 'writeFd'>
+        > & { identity: Record<string, string>; writeFd: number | null };
+    };
+    const lastTick = new BigInt64Array(sab);
+    const parent = wt.parentPort;
+
+    let stallStart: number | null = null;
+    let captures = 0;
+    let capturing = false;
+    let lastPing = 0;
+
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    function post(
+        session: InstanceType<typeof inspector.Session>,
+        method: string,
+        params: object = {},
+        timeoutMs = 5_000,
+    ): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error(`${method} timed out`)),
+                timeoutMs,
+            );
+            session.post(method, params, (err: Error | null, res: unknown) => {
+                clearTimeout(timer);
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    // Bundle positions -> source positions, through the hidden source map
+    // shipped next to the bundle. Best effort: raw positions when absent.
+    const maps = new Map<string, any>();
+    function sourceMapFor(url: string): any {
+        if (maps.has(url)) return maps.get(url);
+        let sm: any = null;
+        try {
+            const file = url.startsWith('file://')
+                ? decodeURIComponent(new URL(url).pathname)
+                : url;
+            if (file && fs.existsSync(`${file}.map`)) {
+                sm = new (nodeModule as any).SourceMap(
+                    JSON.parse(fs.readFileSync(`${file}.map`, 'utf8')),
+                );
+            }
+        } catch {
+            sm = null;
+        }
+        maps.set(url, sm);
+        return sm;
+    }
+    function frame(fn: string, url: string, line0: number, col0: number) {
+        const sm = url ? sourceMapFor(url) : null;
+        if (sm) {
+            try {
+                const e = sm.findEntry(line0, col0);
+                if (e && e.originalSource) {
+                    return {
+                        fn: fn || e.name || '(anonymous)',
+                        file: String(e.originalSource).replace(
+                            /^webpack:\/\/[^/]*\//,
+                            '',
+                        ),
+                        line: e.originalLine + 1,
+                        col: e.originalColumn + 1,
+                    };
+                }
+            } catch {
+                // fall through to the raw position
+            }
+        }
+        return {
+            fn: fn || '(anonymous)',
+            file: url || '(native)',
+            line: line0 + 1,
+            col: col0 + 1,
+        };
+    }
+
+    function summarize(profile: any) {
+        const byId = new Map<number, any>();
+        const parentOf = new Map<number, number>();
+        for (const n of profile.nodes) {
+            byId.set(n.id, n);
+            for (const c of n.children ?? []) parentOf.set(c, n.id);
+        }
+        const self = new Map<number, number>();
+        const deltas: number[] = profile.timeDeltas ?? [];
+        let total = 0;
+        (profile.samples ?? []).forEach((id: number, i: number) => {
+            const d = deltas[i] ?? 0;
+            self.set(id, (self.get(id) ?? 0) + d);
+            total += d;
+        });
+        const IDLE = new Set(['(idle)', '(program)', '(garbage collector)']);
+        const byFn = new Map<string, { n: any; t: number }>();
+        for (const [id, t] of self) {
+            const n = byId.get(id);
+            const cf = n.callFrame;
+            const key = `${cf.functionName}|${cf.url}|${cf.lineNumber}`;
+            const cur = byFn.get(key) ?? { n, t: 0 };
+            cur.t += t;
+            byFn.set(key, cur);
+        }
+        const ranked = [...byFn.values()]
+            .filter((x) => !IDLE.has(x.n.callFrame.functionName))
+            .sort((a, b) => b.t - a.t);
+        const hottest = ranked.slice(0, 10).map(({ n, t }) => {
+            const cf = n.callFrame;
+            const f = frame(
+                cf.functionName,
+                cf.url,
+                cf.lineNumber,
+                cf.columnNumber,
+            );
+            return {
+                fn: f.fn,
+                file: f.file,
+                line: f.line,
+                pct: total ? Math.round((1000 * t) / total) / 10 : 0,
+            };
+        });
+        // Root-to-leaf path of the single hottest node: who called it.
+        const hottestPath: ReturnType<typeof frame>[] = [];
+        if (ranked[0]) {
+            let id: number | undefined = ranked[0].n.id;
+            while (id !== undefined && hottestPath.length < 40) {
+                const cf = byId.get(id).callFrame;
+                if (cf.functionName !== '(root)')
+                    hottestPath.push(
+                        frame(
+                            cf.functionName,
+                            cf.url,
+                            cf.lineNumber,
+                            cf.columnNumber,
+                        ),
+                    );
+                id = parentOf.get(id);
+            }
+        }
+        return { hottest, hottestPath };
+    }
+
+    function pausedStack(
+        session: InstanceType<typeof inspector.Session>,
+    ): Promise<ReturnType<typeof frame>[] | null> {
+        return new Promise((resolve) => {
+            let done = false;
+            // CallFrame.url is deprecated and often empty; the script's url
+            // comes from the scriptParsed events Debugger.enable replays.
+            const scripts = new Map<string, string>();
+            const onScript = (msg: any) => {
+                if (msg.params?.scriptId)
+                    scripts.set(msg.params.scriptId, msg.params.url ?? '');
+            };
+            const finish = (frames: ReturnType<typeof frame>[] | null) => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                session.removeListener('Debugger.paused', onPaused);
+                session.removeListener('Debugger.scriptParsed', onScript);
+                resolve(frames);
+            };
+            const timer = setTimeout(() => finish(null), 5_000);
+            function onPaused(msg: any) {
+                const frames = (msg.params?.callFrames ?? [])
+                    .slice(0, 40)
+                    .map((f: any) =>
+                        frame(
+                            f.functionName,
+                            f.url || scripts.get(f.location?.scriptId) || '',
+                            f.location.lineNumber,
+                            f.location.columnNumber ?? 0,
+                        ),
+                    );
+                // Resume first: the main thread must never stay paused.
+                session.post('Debugger.resume', () =>
+                    session.post('Debugger.disable', () => finish(frames)),
+                );
+            }
+            session.on('Debugger.scriptParsed', onScript);
+            session.on('Debugger.paused', onPaused);
+            session.post('Debugger.enable', (err: Error | null) => {
+                if (err) return finish(null);
+                session.post('Debugger.pause', (e2: Error | null) => {
+                    if (e2) finish(null);
+                });
+            });
+        });
+    }
+
+    async function capture() {
+        const session = new inspector.Session();
+        session.connectToMainThread();
+        try {
+            let summary: ReturnType<typeof summarize> | null = null;
+            if (cfg.profileMs > 0) {
+                try {
+                    await post(session, 'Profiler.enable');
+                    await post(session, 'Profiler.setSamplingInterval', {
+                        interval: 1_000,
+                    });
+                    await post(session, 'Profiler.start');
+                    await sleep(cfg.profileMs);
+                    const { profile } = await post(session, 'Profiler.stop');
+                    summary = summarize(profile);
+                    await post(session, 'Profiler.disable').catch(() => {});
+                } catch {
+                    summary = null;
+                }
+            }
+            const stack = await pausedStack(session);
+            return { stack, ...(summary ?? {}) };
+        } finally {
+            try {
+                session.disconnect();
+            } catch {
+                // already gone
+            }
+        }
+    }
+
+    function emit(level: string, msg: string, report: StallReport) {
+        if (cfg.writeFd !== null) {
+            try {
+                fs.writeSync(
+                    cfg.writeFd,
+                    JSON.stringify({
+                        level,
+                        time: new Date().toISOString(),
+                        context: 'StallWatchdog',
+                        ...cfg.identity,
+                        metadata: { ...cfg.identity, ...report },
+                        msg,
+                    }) + '\n',
+                );
+            } catch {
+                // stdout gone; nothing else to do from here
+            }
+        }
+        try {
+            parent?.postMessage(report);
+        } catch {
+            // main thread side closed
+        }
+    }
+
+    async function heartbeat(path: '' | '/fail', body?: object) {
+        if (!cfg.heartbeatUrl) return;
+        try {
+            await fetch(`${cfg.heartbeatUrl}${path}`, {
+                method: path ? 'POST' : 'GET',
+                headers: body ? { 'content-type': 'application/json' } : {},
+                body: body ? JSON.stringify(body) : undefined,
+                signal: AbortSignal.timeout(10_000),
+            });
+        } catch {
+            // alerting is best effort; the report is already in the logs
+        }
+    }
+
+    function describe(f?: { fn: string; file: string; line: number }) {
+        return f ? `${f.fn} (${f.file}:${f.line})` : 'unknown location';
+    }
+
+    setInterval(() => {
+        const now = Date.now();
+        const lag = now - Number(Atomics.load(lastTick, 0));
+
+        if (lag >= cfg.thresholdMs) {
+            if (stallStart === null) {
+                stallStart = now - lag;
+                captures = 0;
+            }
+            const due = cfg.thresholdMs + captures * cfg.recaptureMs;
+            if (
+                !capturing &&
+                captures < cfg.maxCapturesPerStall &&
+                lag >= due
+            ) {
+                capturing = true;
+                captures += 1;
+                const n = captures;
+                capture()
+                    .then(({ stack, hottest, hottestPath }) => {
+                        const stalledMs = Date.now() - (stallStart ?? now);
+                        const where = stack?.[0] ?? hottest?.[0];
+                        emit(
+                            'error',
+                            `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${describe(where)}`,
+                            {
+                                kind: 'stall',
+                                stalledMs,
+                                capture: n,
+                                stack,
+                                hottest,
+                                hottestPath,
+                            },
+                        );
+                        if (n === 1) {
+                            void heartbeat('/fail', {
+                                message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${describe(where)}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
+                                    cfg.identity,
+                                )
+                                    .map(([k, v]) => `${k}=${v}`)
+                                    .join(' ')}`,
+                                context: {
+                                    monitor: 'worker_stall',
+                                    ...cfg.identity,
+                                    stalledMs,
+                                    stack: (stack ?? []).slice(0, 12),
+                                    hottest: (hottest ?? []).slice(0, 5),
+                                },
+                            });
+                        }
+                    })
+                    .catch((e: Error) =>
+                        emit('error', 'Stall capture failed', {
+                            kind: 'error',
+                            stalledMs: Date.now() - (stallStart ?? now),
+                            error: String(e?.message ?? e),
+                        }),
+                    )
+                    .finally(() => {
+                        capturing = false;
+                    });
+            }
+        } else if (stallStart !== null && !capturing) {
+            emit(
+                'warn',
+                `Main thread recovered after a ${Math.round((now - lag - stallStart) / 1000)}s stall`,
+                { kind: 'recovered', stalledMs: now - lag - stallStart },
+            );
+            stallStart = null;
+        }
+
+        if (
+            cfg.heartbeatUrl &&
+            cfg.pingIntervalMs > 0 &&
+            stallStart === null &&
+            now - lastPing >= cfg.pingIntervalMs
+        ) {
+            lastPing = now;
+            void heartbeat('');
+        }
+    }, cfg.checkIntervalMs);
+}
+
+/**
+ * Starts the watchdog thread and the main-thread tick it watches. Returns a
+ * stop function. Never throws: a watchdog that fails to start only logs.
+ */
+export function startStallWatchdog(
+    opts: StallWatchdogOptions = {},
+    logger: WatchdogLogger = createLogger('StallWatchdog'),
+): () => void {
+    const cfg = {
+        thresholdMs: opts.thresholdMs ?? 20_000,
+        checkIntervalMs: opts.checkIntervalMs ?? 1_000,
+        profileMs: opts.profileMs ?? 3_000,
+        maxCapturesPerStall: opts.maxCapturesPerStall ?? 3,
+        recaptureMs: opts.recaptureMs ?? 60_000,
+        heartbeatUrl: opts.heartbeatUrl ?? '',
+        pingIntervalMs: opts.pingIntervalMs ?? 30 * 60_000,
+        identity: opts.identity ?? {},
+        writeFd: opts.writeFd === undefined ? 1 : opts.writeFd,
+        tickIntervalMs: opts.tickIntervalMs ?? 500,
+    };
+
+    const sab = new SharedArrayBuffer(8);
+    const lastTick = new BigInt64Array(sab);
+    const tick = () => Atomics.store(lastTick, 0, BigInt(Date.now()));
+    tick();
+    const ticker = setInterval(tick, cfg.tickIntervalMs);
+    ticker.unref();
+
+    let worker: Worker | undefined;
+    try {
+        worker = new Worker(`(${stallWatchdogThread.toString()})()`, {
+            eval: true,
+            workerData: { sab, cfg },
+            resourceLimits: { maxOldGenerationSizeMb: 256 },
+        });
+        worker.unref();
+        worker.on('error', (error: unknown) =>
+            logger.error({
+                message:
+                    'Stall watchdog thread failed; stalls will not be captured',
+                context: 'StallWatchdog',
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+            }),
+        );
+        if (opts.onReport) worker.on('message', opts.onReport);
+    } catch (error) {
+        clearInterval(ticker);
+        logger.warn({
+            message:
+                'Stall watchdog could not start; stalls will not be captured',
+            context: 'StallWatchdog',
+            error: error instanceof Error ? error : undefined,
+        });
+        return () => undefined;
+    }
+
+    return () => {
+        clearInterval(ticker);
+        void worker?.terminate();
+    };
+}
