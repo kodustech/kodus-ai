@@ -212,4 +212,33 @@ describe('MongoDBExporter (log flush resilience)', () => {
         expect(insertMany).toHaveBeenCalledTimes(2);
         expect((exporter as any).logBuffer).toHaveLength(0);
     });
+
+    it('keeps the running flush when a flush is asked for from inside its own start', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        let release!: () => void;
+        let nested: Promise<void> | undefined;
+        let calls = 0;
+        (exporter as any).writeLogs = jest.fn(() => {
+            calls += 1;
+            if (calls === 1) {
+                // A log written while the flush starts asks for a flush.
+                nested = (exporter as any).flushLogs();
+                return new Promise<void>((resolve) => (release = resolve));
+            }
+            return Promise.resolve();
+        });
+
+        const running = (exporter as any).flushLogs();
+        await nested;
+        let settled = false;
+        void (exporter as any).flushLogs().then(() => (settled = true));
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(settled).toBe(false);
+        release();
+        await running;
+    });
 });

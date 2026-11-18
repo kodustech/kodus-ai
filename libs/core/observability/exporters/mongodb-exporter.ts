@@ -1435,12 +1435,18 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      * write instead of returning before it lands.
      */
     private flushLogs(): Promise<void> {
-        if (!this.activeLogFlush) {
-            this.activeLogFlush = this.writeLogs().finally(() => {
-                this.activeLogFlush = null;
-            });
+        if (this.activeLogFlush) {
+            return this.activeLogFlush;
         }
-        return this.activeLogFlush;
+        // Cleared only by the flush it holds: a call made from inside
+        // writeLogs before the field is set must not clear the running one.
+        const running = this.writeLogs().finally(() => {
+            if (this.activeLogFlush === running) {
+                this.activeLogFlush = null;
+            }
+        });
+        this.activeLogFlush = running;
+        return running;
     }
 
     private async writeLogs(): Promise<void> {
@@ -1648,12 +1654,16 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      */
     /** Same contract as flushLogs. */
     private flushTelemetry(): Promise<void> {
-        if (!this.activeTelemetryFlush) {
-            this.activeTelemetryFlush = this.writeTelemetry().finally(() => {
-                this.activeTelemetryFlush = null;
-            });
+        if (this.activeTelemetryFlush) {
+            return this.activeTelemetryFlush;
         }
-        return this.activeTelemetryFlush;
+        const running = this.writeTelemetry().finally(() => {
+            if (this.activeTelemetryFlush === running) {
+                this.activeTelemetryFlush = null;
+            }
+        });
+        this.activeTelemetryFlush = running;
+        return running;
     }
 
     private async writeTelemetry(): Promise<void> {
