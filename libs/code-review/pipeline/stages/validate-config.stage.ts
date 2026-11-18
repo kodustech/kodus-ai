@@ -378,7 +378,9 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             // platform did not take is not recorded as told either.
             let recorded = message;
             if (askedByCommand) {
-                await this.replyToReviewCommand(context, message);
+                if (!(await this.replyToReviewCommand(context, message))) {
+                    recorded = ULTRA_REFUSAL_NOT_POSTED;
+                }
             } else if (!(await this.wasSkippedFor(context, message))) {
                 const cadence = await this.evaluateReviewCadence(context);
                 if (!cadence.shouldProcess) {

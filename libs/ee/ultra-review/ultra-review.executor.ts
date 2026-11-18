@@ -464,6 +464,18 @@ export async function executeUltraReview(
             const release = () =>
                 sandbox?.cleanup?.().catch(releaseFailed(tag));
             const left = Math.max(0, window - (Date.now() - startedAt));
+            // The deadline came while the run waited for a slot: it reviewed
+            // nothing, and no review starts with no time left.
+            if (stop.signal.aborted) {
+                stop.clear();
+                void release();
+                return {
+                    completed: false,
+                    failureReason: context.parentSignal?.aborted
+                        ? 'The review was cancelled.'
+                        : `No sandbox was free within ${minutes(window)} minutes.`,
+                };
+            }
             // Whether the deadline stopped the review loop. Read when the loop
             // ends: the later steps have the grace, and a deadline that fires
             // during them stops nothing.

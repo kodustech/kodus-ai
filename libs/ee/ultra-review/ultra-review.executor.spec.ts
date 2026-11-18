@@ -503,7 +503,7 @@ describe('executeUltraReview', () => {
             expect(out.ultra?.outcome).toBe('success');
         });
 
-        it('a run still waiting for a sandbox slot at its deadline gives up, and the others post', async () => {
+        it('a run still waiting for a sandbox slot at its deadline gives up without reviewing, and the others post', async () => {
             const { calls, context, host } = setup({
                 passes: {
                     a: collected(['a1']),
@@ -515,10 +515,19 @@ describe('executeUltraReview', () => {
                 state: { fallback: undefined },
             });
             const out = await executeUltraReview(context, host, LIMITS);
+            expect(
+                out.ultra?.runs?.find((r) => r.modelId === 'b'),
+            ).toMatchObject({
+                status: 'failed',
+                failureReason: expect.stringMatching(/No sandbox was free/),
+            });
+            // No review started for it.
+            expect(calls.passes.some((p) => p.model === 'b')).toBe(false);
             expect(out.ultra?.outcome).toBe('degraded');
-            expect(calls.published.deduped.map((f: any) => f.id)).toEqual(
-                expect.arrayContaining(['a1', 'c2']),
-            );
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+            ]);
         });
 
         it('the fallback does not start without time left to review', async () => {

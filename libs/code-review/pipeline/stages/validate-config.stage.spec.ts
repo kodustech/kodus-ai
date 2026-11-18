@@ -550,6 +550,20 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(result.statusInfo?.message).toContain('could not post why');
         });
 
+        it('a command refusal the platform did not take is not recorded as told either', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.message).toContain('could not post why');
+        });
+
         it('a plain start-review on settings that ask for Ultra is always answered', async () => {
             validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
             mockOrganizationParametersService.findByKey.mockResolvedValue({
