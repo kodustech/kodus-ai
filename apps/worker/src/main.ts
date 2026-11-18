@@ -22,7 +22,10 @@ import { ObservabilityService } from '@libs/core/log/observability.service';
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
 import { startEventLoopMonitor } from './event-loop-monitor';
-import { startHealthProbe } from './health-probe';
+import {
+    SECURITY_SCAN_WORKER_CHANNELS,
+    startHealthProbe,
+} from './health-probe';
 
 declare const module: any;
 
@@ -106,15 +109,19 @@ async function bootstrap() {
             process.env.WORKER_HEALTH_PORT ?? '3334',
             10,
         );
-        // Only the code-review role subscribes to AMQP; the analytics
-        // role has no RabbitMQ consumers, so checking AMQP health there
-        // would flap the task unhealthy permanently.
+        // The code-review and security-scan roles subscribe to AMQP, each
+        // on its own channels; the analytics role has no RabbitMQ consumers,
+        // so checking AMQP health there would flap the task unhealthy
+        // permanently.
         const healthServer = startHealthProbe({
             port: healthPort,
             appContext,
             requireAmqp:
-                role === 'code-review' &&
+                role !== 'analytics' &&
                 process.env.API_RABBITMQ_ENABLED !== 'false',
+            ...(role === 'security-scan'
+                ? { requiredChannels: SECURITY_SCAN_WORKER_CHANNELS }
+                : {}),
         });
         // Kept running through shutdown (unref'd): the drain is when we most
         // need to see whether the thread is blocked.

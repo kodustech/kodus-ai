@@ -17,6 +17,8 @@ export enum IntegrationConfigKey {
     WEBHOOK_CREATION_FAILURES = 'webhook_creation_failures',
     REPOSITORY_SELECTION = 'repository_selection',
     REPOSITORY_SYNC_STATE = 'repository_sync_state',
+    /** Sandboxes of this team must leave through the fixed egress IP. */
+    EGRESS_FIXED_IP = 'egress_fixed_ip',
 }
 
 export enum IntegrationConfigKeyProjectManagement {

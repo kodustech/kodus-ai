@@ -99,3 +99,36 @@ describe('openAiModelListing — native OpenAI keeps chat models only', () => {
         ]);
     });
 });
+
+/**
+ * Together's `/v1/models` returns the model list as a bare top-level array, not
+ * as `{ data: [...] }`. Reading only `body.data` gave an empty list that came
+ * back as a success, so the connect form showed an empty dropdown and never
+ * reached its manual-entry fallback (#2430).
+ */
+describe('openAiModelListing — openai_compatible bare-array /models body', () => {
+    const compatible = openAiModelListing('openai_compatible')!;
+    const ids = (body: unknown) =>
+        (compatible as any).parse(body).map((m: { id: string }) => m.id);
+
+    it('lists the models of a bare-array body', () => {
+        expect(
+            ids([
+                { id: 'deepseek-ai/DeepSeek-V4.1-Flash-1017', object: 'model' },
+                { id: 'my-model', object: 'model' },
+            ]),
+        ).toEqual(['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'my-model']);
+    });
+
+    it('skips entries without a string id', () => {
+        expect(
+            ids([{ id: 'my-model' }, { object: 'model' }, null, 'x']),
+        ).toEqual(['my-model']);
+    });
+
+    it('rejects a body whose data field is not a list', () => {
+        expect(() => ids({ data: 'not-a-list' })).toThrow(
+            'Malformed /models response: `data` is not an array',
+        );
+    });
+});

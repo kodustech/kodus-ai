@@ -89,6 +89,7 @@ export const INBOX_REAPER_CONSUMER_TIMEOUTS = {
     'workflow-job-consumer.code_review': 2.5 * 60 * 60 * 1000,
     'workflow-job-consumer.ast_graph_build': 30 * 60 * 1000,
     'workflow-job-consumer.ast_graph_incremental': 15 * 60 * 1000,
+    'workflow-job-consumer.security_scan': 45 * 60 * 1000,
     'workflow-events-stage-completed': 20 * 60 * 1000,
     'workflow-events-ast': 20 * 60 * 1000,
 } as const;

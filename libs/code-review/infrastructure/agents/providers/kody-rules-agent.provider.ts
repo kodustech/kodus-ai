@@ -34,6 +34,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-references';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import {
@@ -190,9 +191,13 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             mechanicalRules,
             input.changedFiles,
         );
-        const rulesWithHits = mechanicalRules.filter(
-            (r) => r.uuid && detectorHits.get(r.uuid)?.size,
-        ).length;
+        // Read through `reviewUnitKey`: the atoms of one decomposed rule share
+        // the parent uuid, so a uuid-keyed read counts (and judges) a sibling's
+        // hits as this unit's own (#2509).
+        const rulesWithHits = mechanicalRules.filter((r) => {
+            const key = reviewUnitKey(r);
+            return !!key && !!detectorHits.get(key)?.size;
+        }).length;
         const candidateCount = [...detectorHits.values()].reduce(
             (n, perFile) =>
                 n +
@@ -208,9 +213,10 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         // created for it — which is what keeps T0's cost argument intact.
         const judgeRules = [
             ...semanticRules,
-            ...mechanicalRules.filter(
-                (r) => r.uuid && detectorHits.get(r.uuid)?.size,
-            ),
+            ...mechanicalRules.filter((r) => {
+                const key = reviewUnitKey(r);
+                return !!key && !!detectorHits.get(key)?.size;
+            }),
         ];
 
         // ONE lookup for the whole review (issue #1826, KRC-22). The empty-read

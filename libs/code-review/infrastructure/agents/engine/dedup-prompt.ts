@@ -1,6 +1,6 @@
 /**
- * Shared dedup prompt + schema + model, extracted from
- * `agent-review.stage.ts#deduplicateSuggestions`. Behavior-preserving:
+ * Shared dedup prompt + schema + model, extracted from the dedup pass
+ * (`finding-dedup.ts#deduplicateFindings`). Behavior-preserving:
  * production imports these and keeps its own group→kept mapping; the evals
  * (evals/funnel/dedup) run the stage itself.
  */

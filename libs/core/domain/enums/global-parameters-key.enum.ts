@@ -5,4 +5,5 @@ export enum GlobalParametersKey {
     IP_E2B = 'ip_e2b',
     TELEMETRY_STATE = 'telemetry_state',
     SANDBOX_CONCURRENCY = 'sandbox_concurrency',
+    SANDBOX_EGRESS = 'sandbox_egress',
 }

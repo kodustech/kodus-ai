@@ -33,6 +33,12 @@ export const WorkflowQueueLoader = registerAs(
             process.env.WORKFLOW_QUEUE_FEEDBACK_PREFETCH,
             20,
         ),
+        // AMQP interprets zero as unlimited. Only an explicit positive whole
+        // number may replace the bounded default for long-running scans.
+        WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH: (() => {
+            const count = Number(process.env.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH);
+            return Number.isSafeInteger(count) && count > 0 ? count : 5;
+        })(),
         WORKFLOW_QUEUE_WORKER_MAX_RETRIES: parseIntOrDefault(
             process.env.WORKFLOW_QUEUE_WORKER_MAX_RETRIES,
             5,

@@ -7,6 +7,7 @@ import {
     rmSync,
     writeFileSync,
 } from 'node:fs';
+import * as net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -115,9 +116,65 @@ const fenceStubs = (ip: string) => ({
     setsid: '"$@"',
 });
 
+// Outside the ephemeral range (49152 on macOS, 32768 by default on Linux)
+// and below the Mongo port docker-compose.test.yml publishes on the host
+// (27017): no `listen(0)`, no outbound connection and no service the test
+// job starts can be handed a port the fence is about to use.
+const FENCE_PORT_MIN = 20_000;
+const FENCE_PORT_MAX = 27_000;
+
+/**
+ * A port outside the ephemeral range that nothing is listening on, taken
+ * again before every fence run.
+ *
+ * The identity's port is a hash of the agent, so every run of the suite
+ * computed the same one: a proxy left behind by an interrupted run still
+ * held it, and the `finally` that would have killed it never runs when
+ * jest itself is killed, so every later run then died where the fence
+ * waits for the proxy (`listen EADDRINUSE` in the proxy's log, then
+ * `egress proxy did not start` and exit 4), until the leftover process
+ * was found and killed by hand (#2390).
+ *
+ * The identity keeps its own port in production. Here a fresh one is
+ * taken before each run because the fence starts its proxy well after
+ * the run begins: taking it once for the whole suite would leave the
+ * port free from the first test to the one that finally binds it, which
+ * is ten `it.each` cases wide. What is left between the probe releasing
+ * the port and the proxy binding it is this test's own set-up and the
+ * script's start-up.
+ */
+const freePort = (): Promise<number> =>
+    new Promise((resolve, reject) => {
+        let attempts = 0;
+        const tryNext = () => {
+            if (++attempts > 50) {
+                reject(new Error('no free port for the fence tests'));
+                return;
+            }
+            const probe = net.createServer();
+            probe.once('error', tryNext);
+            const span = FENCE_PORT_MAX - FENCE_PORT_MIN;
+            probe.listen(
+                FENCE_PORT_MIN + Math.floor(Math.random() * span),
+                '127.0.0.1',
+                () => {
+                    const { port } = probe.address() as net.AddressInfo;
+                    probe.close(() => resolve(port));
+                },
+            );
+        };
+        tryNext();
+    });
+
 describe('network fence script', () => {
     const identity = cliSandboxIdentity('agent-1', 'lintkit');
-    const port = identity.proxyPort;
+    // The fence is generated with the identity's port: see `freePort`.
+    let port = identity.proxyPort;
+
+    beforeEach(async () => {
+        identity.proxyPort = await freePort();
+        port = identity.proxyPort;
+    });
 
     it.each([
         '127.0.0.1',

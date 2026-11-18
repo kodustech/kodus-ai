@@ -102,6 +102,7 @@ const TASK_LABEL: Record<LlmTask, string> = {
     prSummary: 'the PR Summary model',
     conversation: 'the Chat model',
     customAgent: 'the Custom Agents model',
+    securityScan: 'the Deep scan model',
 };
 
 /**
