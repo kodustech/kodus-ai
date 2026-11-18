@@ -1,3 +1,4 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import * as os from 'os';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -10,7 +11,7 @@ import {
     OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { CronExpression } from '@nestjs/schedule';
 
 import {
     IOutboxMessageRepository,
@@ -271,7 +272,7 @@ export class OutboxRelayService
     /**
      * Reaper to reclaim messages stuck in PROCESSING (Outbox)
      */
-    @Cron(CronExpression.EVERY_5_MINUTES)
+    @GatedCron(CronExpression.EVERY_5_MINUTES)
     async reclaimStaleOutbox(): Promise<void> {
         const lock = await this.acquireCronLock(
             'CRON:BETTERSTACK:OUTBOX_RECLAIM',
@@ -339,7 +340,7 @@ export class OutboxRelayService
      *     WHERE consumerId = 'workflow-job-consumer.code_review' AND status = 'PROCESSING';
      *   Add equivalent partial indexes for AST/event consumers if reclaim volume grows.
      */
-    @Cron(CronExpression.EVERY_5_MINUTES)
+    @GatedCron(CronExpression.EVERY_5_MINUTES)
     async reclaimStaleInbox(): Promise<void> {
         const lock = await this.acquireCronLock(
             'CRON:BETTERSTACK:INBOX_RECLAIM',
@@ -497,7 +498,7 @@ export class OutboxRelayService
      * layer, which also covers workflow types that have no automation
      * execution row (check_implementation, AST graph builds).
      */
-    @Cron(STALE_JOB_REAPER_CRON, { name: 'workflow-stale-job-reaper' })
+    @GatedCron(STALE_JOB_REAPER_CRON, { name: 'workflow-stale-job-reaper' })
     async reapStaleProcessingJobs(): Promise<void> {
         const lock = await this.acquireCronLock(
             'CRON:WORKFLOW:STALE_JOB_REAPER',
@@ -588,7 +589,7 @@ export class OutboxRelayService
      * Data Hygiene: Cleans up processed messages older than 7 days.
      * Runs daily at midnight.
      */
-    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+    @GatedCron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     async cleanupOldMessages(): Promise<void> {
         if (this.isCleaning) return;
         this.isCleaning = true;

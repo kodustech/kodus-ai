@@ -1,7 +1,9 @@
-import { CronRunGate } from '@libs/core/infrastructure/services/cron-run-gate';
+import {
+    cronRunGate,
+    GatedCron,
+} from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
-import { BeforeApplicationShutdown, Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
@@ -43,10 +45,8 @@ const CRON_KODY_LEARNING = process.env.API_CRON_KODY_LEARNING;
 export const BACKFILL_LOCK_CHUNK_SIZE = 5;
 
 @Injectable()
-export class KodyLearningCronProvider implements BeforeApplicationShutdown {
+export class KodyLearningCronProvider {
     private readonly logger = createLogger(KodyLearningCronProvider.name);
-    // Shutdown closes the database while a run is still going: see CronRunGate.
-    private readonly runGate = new CronRunGate();
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService: ITeamService,
@@ -57,16 +57,12 @@ export class KodyLearningCronProvider implements BeforeApplicationShutdown {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(CRON_KODY_LEARNING, {
+    @GatedCron(CRON_KODY_LEARNING, {
         name: 'Kody Learning',
         timeZone: 'America/Sao_Paulo',
     })
     async handleCron() {
-        await this.runGate.run(() => this.runCron());
-    }
-
-    beforeApplicationShutdown(): Promise<void> {
-        return this.runGate.stop();
+        await this.runCron();
     }
 
     private async runCron() {
@@ -128,7 +124,7 @@ export class KodyLearningCronProvider implements BeforeApplicationShutdown {
             }
 
             for (const team of teams) {
-                if (this.runGate.stopping) break;
+                if (cronRunGate.stopping) break;
                 const organizationId = team.organization?.uuid;
                 const teamId = team.uuid;
 
@@ -388,6 +384,8 @@ export class KodyLearningCronProvider implements BeforeApplicationShutdown {
                 offset < backfillRepoIds.length;
                 offset += BACKFILL_LOCK_CHUNK_SIZE
             ) {
+                // Shutdown began: the rest is picked up on the next run.
+                if (cronRunGate.stopping) break;
                 const repoIdsChunk = backfillRepoIds.slice(
                     offset,
                     offset + BACKFILL_LOCK_CHUNK_SIZE,

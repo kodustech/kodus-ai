@@ -1,3 +1,4 @@
+import { CronShutdownService } from '@libs/core/infrastructure/services/cron-run-gate';
 import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -102,6 +103,7 @@ export class WorkerModule {
                     SelfHostedBeaconModule,
                 ],
                 providers: [
+                    CronShutdownService,
                     WorkerDrainService,
                     WorkerHealthGuardService,
                     OutboxRelayService,

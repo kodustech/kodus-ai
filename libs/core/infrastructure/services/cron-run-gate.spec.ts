@@ -1,4 +1,7 @@
-import { CronRunGate } from './cron-run-gate';
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { join } from 'path';
+
+import { CronRunGate, gatedCron } from './cron-run-gate';
 
 /**
  * A cron run that outlives shutdown kept querying after TypeORM closed its
@@ -35,6 +38,13 @@ describe('CronRunGate', () => {
         expect(elapsed).toBeLessThan(300);
     });
 
+    it('reports how many runs were still going when the budget ran out', async () => {
+        const gate = new CronRunGate();
+        void gate.run(() => new Promise<void>(() => undefined));
+
+        await expect(gate.stop(10)).resolves.toBe(1);
+    });
+
     it('waits for an older run still going when a newer tick started', async () => {
         const gate = new CronRunGate();
         let releaseOlder!: () => void;
@@ -60,5 +70,83 @@ describe('CronRunGate', () => {
         await gate.run(work);
 
         expect(work).not.toHaveBeenCalled();
+    });
+
+    describe('gatedCron', () => {
+        const scheduled = (gate: CronRunGate, work: jest.Mock) => {
+            class Job {
+                @gatedCron(gate, '*/5 * * * *', { name: 'job' })
+                async tick() {
+                    return work(this);
+                }
+            }
+            return new Job();
+        };
+
+        it('keeps the schedule Nest reads, on the function Nest calls', () => {
+            const job = scheduled(new CronRunGate(), jest.fn());
+
+            expect(
+                Reflect.getMetadata('SCHEDULE_CRON_OPTIONS', job.tick),
+            ).toEqual(expect.objectContaining({ cronTime: '*/5 * * * *' }));
+            expect(Reflect.getMetadata('SCHEDULER_NAME', job.tick)).toBe('job');
+        });
+
+        it('runs the method on its instance until shutdown, then not at all', async () => {
+            const gate = new CronRunGate();
+            const work = jest.fn();
+            const job = scheduled(gate, work);
+
+            await job.tick();
+            await gate.stop(10);
+            await job.tick();
+
+            expect(work).toHaveBeenCalledTimes(1);
+            expect(work).toHaveBeenCalledWith(job);
+        });
+
+        it('makes shutdown wait for a scheduled run in progress', async () => {
+            const gate = new CronRunGate();
+            let release!: () => void;
+            const job = scheduled(
+                gate,
+                jest.fn(() => new Promise<void>((r) => (release = r))),
+            );
+            let stopped = false;
+
+            void job.tick();
+            const stopping = gate.stop(1_000).then(() => (stopped = true));
+            await new Promise((r) => setTimeout(r, 20));
+            expect(stopped).toBe(false);
+
+            release();
+            await stopping;
+        });
+    });
+
+    it('is the only way the repository schedules a cron', () => {
+        // A bare @Cron outlives the database on shutdown (#2589, row 11).
+        const root = join(__dirname, '../../../..');
+        const offenders: string[] = [];
+        const walk = (dir: string) => {
+            for (const name of readdirSync(dir)) {
+                if (name === 'node_modules' || name.startsWith('.')) continue;
+                const path = join(dir, name);
+                if (statSync(path).isDirectory()) {
+                    walk(path);
+                } else if (
+                    path.endsWith('.ts') &&
+                    !path.endsWith('.spec.ts') &&
+                    !path.endsWith('cron-run-gate.ts') &&
+                    /@Cron\(/.test(readFileSync(path, 'utf8'))
+                ) {
+                    offenders.push(path.slice(root.length + 1));
+                }
+            }
+        };
+        walk(join(root, 'apps'));
+        walk(join(root, 'libs'));
+
+        expect(offenders).toEqual([]);
     });
 });

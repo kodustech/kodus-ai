@@ -1,3 +1,4 @@
+import { CronShutdownService } from '@libs/core/infrastructure/services/cron-run-gate';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
@@ -72,6 +73,7 @@ import { OrganizationParametersModule } from '@libs/organization/modules/organiz
         forwardRef(() => OrganizationModule),
     ],
     providers: [
+        CronShutdownService,
         {
             provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
             useClass: ConditionalApprovalAccessService,

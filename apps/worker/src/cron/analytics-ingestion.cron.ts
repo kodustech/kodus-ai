@@ -1,5 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { CronExpression } from '@nestjs/schedule';
 
 import {
     FeedbackIngestionService,
@@ -58,7 +59,7 @@ export class AnalyticsIngestionCron implements OnApplicationBootstrap {
     // as an empty string when unset (`${VAR:-}`), which would slip
     // through and crash the cron lib with "Too few fields". Use `||` so
     // empty strings also fall back to the default.
-    @Cron(
+    @GatedCron(
         process.env.ANALYTICS_INGESTION_CRON ||
             CronExpression.EVERY_30_MINUTES,
         { name: 'analytics-ingestion' },

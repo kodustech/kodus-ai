@@ -2,13 +2,11 @@ import { calculateBackoffIntervalExact } from '@libs/common/utils/polling/expone
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { createLogger } from '@libs/core/log/logger';
-import { CronRunGate } from '@libs/core/infrastructure/services/cron-run-gate';
 import {
-    BeforeApplicationShutdown,
-    Inject,
-    Injectable,
-    Optional,
-} from '@nestjs/common';
+    cronRunGate,
+    GatedCron,
+} from '@libs/core/infrastructure/services/cron-run-gate';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
     IOrganizationParametersService,
@@ -32,7 +30,6 @@ import {
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
-import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
 import {
@@ -169,7 +166,7 @@ const SHARED_RISK_STALE_REASON =
     'The risk assessment does not match the current PR or risk settings. Run a new review before automatic approval.';
 
 @Injectable()
-export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShutdown {
+export class CheckIfPRCanBeApprovedCronProvider {
     private readonly directoryFilesByReviewedHead = new Map<
         string,
         { files: Array<Pick<FileChange, 'filename'>>; fetchedAt: number }
@@ -182,8 +179,6 @@ export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShut
         IPullRequestMessages | null
     >();
     private reasonWriteDeadline = Number.POSITIVE_INFINITY;
-    // Shutdown closes the database while a run is still going: see CronRunGate.
-    private readonly runGate = new CronRunGate();
 
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
@@ -267,17 +262,13 @@ export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShut
         }
     }
 
-    @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
+    @GatedCron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
         name: 'CHECK IF PR SHOULD BE APPROVED',
         timeZone: 'America/Sao_Paulo',
         waitForCompletion: true,
     })
     async handleCron() {
-        await this.runGate.run(() => this.runCron());
-    }
-
-    beforeApplicationShutdown(): Promise<void> {
-        return this.runGate.stop();
+        await this.runCron();
     }
 
     private async runCron() {
@@ -437,7 +428,7 @@ export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShut
             await Promise.allSettled(
                 teams.map((team) =>
                     teamLimit(async () => {
-                        if (this.runGate.stopping) return;
+                        if (cronRunGate.stopping) return;
                         const organizationId = team.organization?.uuid;
                         const teamId = team.uuid;
 
@@ -569,7 +560,7 @@ export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShut
                         await Promise.allSettled(
                             eligibleOpenPullRequests.map((pr) =>
                                 prLimit(async () => {
-                                    if (this.runGate.stopping) return;
+                                    if (cronRunGate.stopping) return;
                                     const repository = pr?.repository;
 
                                     const codeReviewConfigFromRepo =
@@ -909,7 +900,7 @@ export class CheckIfPRCanBeApprovedCronProvider implements BeforeApplicationShut
             // the findings behind it are resolved, approved by Kody or not.
             // Skipped whole, never cut short: it reads a missing organization
             // as one with no change request. The next run does it.
-            if (this.ownChangeRequest && !this.runGate.stopping) {
+            if (this.ownChangeRequest && !cronRunGate.stopping) {
                 await this.withdrawResolvedChangeRequests(
                     teams,
                     parametersByTeam,
