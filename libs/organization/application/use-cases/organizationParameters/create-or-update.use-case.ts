@@ -179,8 +179,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             const picked = (config?.routing?.ultraModelIds ?? []).filter(
                 Boolean,
             );
+            const modelById = new Map(
+                (config?.models ?? []).map((m) => [m?.id, m?.model]),
+            );
             const models = picked.map((id) => {
-                const model = config?.models?.find((m) => m?.id === id)?.model;
+                const model = modelById.get(id);
                 return model ? normalizeModelId(model) : id;
             });
             return picked.length === 3 && new Set(models).size === 3;

@@ -35,8 +35,8 @@ export const normalizeUltraModel = (modelId: string): string => {
 };
 
 /**
- * id → provider model for `isUltraTrioSet`, from config models (`id`) or
- * status models (`modelId`), indexed once.
+ * id → provider model for `isUltraTrioSet`, from status models (`modelId`,
+ * the routing key) or config models (`id`), indexed once.
  */
 export const ultraModelResolver = (
     models:
@@ -44,7 +44,7 @@ export const ultraModelResolver = (
         | undefined,
 ): ((id: string) => string | undefined) => {
     const byId = new Map(
-        (models ?? []).map((m) => [m.id ?? m.modelId, m.model] as const),
+        (models ?? []).map((m) => [m.modelId ?? m.id, m.model] as const),
     );
     return (id) => byId.get(id);
 };
