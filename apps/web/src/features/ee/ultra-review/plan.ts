@@ -35,6 +35,21 @@ export const normalizeUltraModel = (modelId: string): string => {
 };
 
 /**
+ * id → provider model for `isUltraTrioSet`, from config models (`id`) or
+ * status models (`modelId`), indexed once.
+ */
+export const ultraModelResolver = (
+    models:
+        | ReadonlyArray<{ id?: string; modelId?: string; model?: string }>
+        | undefined,
+): ((id: string) => string | undefined) => {
+    const byId = new Map(
+        (models ?? []).map((m) => [m.id ?? m.modelId, m.model] as const),
+    );
+    return (id) => byId.get(id);
+};
+
+/**
  * Three different models picked, the only trio Ultra runs on. With
  * `modelOf` (id → provider model), two ids for the same model count once,
  * as the server does.

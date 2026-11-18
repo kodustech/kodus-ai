@@ -552,6 +552,9 @@ describe("Ultra models", () => {
                 screen.getByRole("button", { name: "Save models" }),
             );
             await waitFor(() => expect(put).toHaveBeenCalled());
+            // The stored routing no longer holds a trio.
+            const saved = put.mock.calls[0][1] as BYOKConfig;
+            expect(saved.routing?.ultraModelIds).toBeUndefined();
         });
     });
 

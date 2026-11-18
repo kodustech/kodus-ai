@@ -17,6 +17,7 @@ import { useSubscriptionContext } from "src/features/ee/subscription/_providers/
 import {
     isUltraReviewPlan,
     isUltraTrioSet,
+    ultraModelResolver,
 } from "src/features/ee/ultra-review/plan";
 
 import type { CodeReviewFormType } from "../../../_types";
@@ -77,7 +78,7 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         : status?.modelRouting?.ultraModelIds;
     const ultraSet = isUltraTrioSet(
         ultraModelIds,
-        (id) => status?.models?.find((model) => model.modelId === id)?.model,
+        ultraModelResolver(status?.models),
     );
     const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
     const selectedScope = useWatch({ control, name: "byokModelId.value" });
@@ -163,6 +164,10 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         configuredDefault,
         noRisk,
         riskFound,
+        /** A risk route saved on Ultra: shown even with risk assessment off. */
+        ultraRouteSaved:
+            config?.riskReviewRouting?.noRisk?.value === "ultra" ||
+            config?.riskReviewRouting?.riskFound?.value === "ultra",
         effectiveMode,
         modelFor,
         scopeModel,

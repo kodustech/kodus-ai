@@ -22,7 +22,10 @@ import {
 } from "src/features/ee/byok/_components/routing/routing-state";
 import { ModelCombobox } from "src/features/ee/byok/_components/routing/task-override-grid";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
-import { isUltraTrioSet } from "src/features/ee/ultra-review/plan";
+import {
+    isUltraTrioSet,
+    ultraModelResolver,
+} from "src/features/ee/ultra-review/plan";
 
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
 
@@ -77,6 +80,7 @@ export const BYOKModelSelectorSection = ({
     );
     const ultraSet = isUltraTrioSet(
         llmConfigStatus?.modelRouting?.ultraModelIds,
+        ultraModelResolver(llmConfigStatus?.models),
     );
     const modelFor = indexRoutingModels(models);
     const labels = routingModelLabels(models);

@@ -657,6 +657,39 @@ function RoutingSettings() {
                                 />
                             )}
                         </div>
+                        {/* A route stored on Ultra with risk assessment off
+                            still counts (the API refuses clearing the trio
+                            over it), so it shows here and can be changed. */}
+                        {!routing.active && routing.ultraRouteSaved && (
+                            <div className="border-card-lv3 divide-card-lv3 divide-y border-t">
+                                <ModeRow
+                                    routing={routing}
+                                    label="No risk found"
+                                    description="Runs when risk assessment is on."
+                                    name="riskReviewRouting.noRisk.value"
+                                    fallback="balanced"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                                <ModeRow
+                                    routing={routing}
+                                    label="Risk found"
+                                    description="Runs when risk assessment is on."
+                                    name="riskReviewRouting.riskFound.value"
+                                    fallback="heavy"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                            </div>
+                        )}
                         {routing.active && (
                             <div className="border-card-lv3 border-t">
                                 <ModeRow

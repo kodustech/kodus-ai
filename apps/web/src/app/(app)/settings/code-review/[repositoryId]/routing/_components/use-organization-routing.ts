@@ -28,6 +28,7 @@ import {
 } from "src/features/ee/byok/_utils";
 import {
     ULTRA_MODEL_COUNT,
+    ultraModelResolver,
     ultraTrioError,
 } from "src/features/ee/ultra-review/plan";
 
@@ -131,9 +132,7 @@ export function useOrganizationRouting({
               ? ultraTrioError(
                     routing.ultraModelIds,
                     ultraInUse,
-                    (id) =>
-                        query.data?.models?.find((model) => model.id === id)
-                            ?.model,
+                    ultraModelResolver(query.data?.models),
                 )
               : undefined;
 
