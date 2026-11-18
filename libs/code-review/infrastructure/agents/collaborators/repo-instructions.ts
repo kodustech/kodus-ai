@@ -527,8 +527,18 @@ export function isRepoInstructionFile(
 // The file as the authority for a claim: its subject ("CLAUDE.md says",
 // "CLAUDE.md, added in this PR, requires") or the direct object of one
 // ("per CLAUDE.md", "violates the CLAUDE.md rule", "breaks `AGENTS.md`").
+//
+// Words and separators are matched atomically (`(?=(X))\N`, the JavaScript
+// emulation of an atomic group): a word is the longest `\w+(?:-+\w+)*`, a
+// separator the longest `\W+`. The previous `\W*(?:[\w-]+\W+){0,4}?` let a
+// hyphen be either, so a run of hyphens could be split between words and
+// separators in exponentially many ways before the match failed: a markdown
+// table row or a `----` rule after a citation took minutes (60 hyphens: 74s;
+// one 8-column table separator row: 191s) and froze the worker running
+// verifyFindings. Atomic pieces leave a single way to read the text, so the
+// match is linear and finds the same citations.
 const CITED_AS_SUBJECT =
-    /\u00a7F[`'"]?\W*(?:[\w-]+\W+){0,4}?(?:says|said|states|stated|requires|required|asks|forbids|mandates|prescribes|instructs|demands)\b/i;
+    /\u00a7F[`'"]?(?=(\W*))\1(?:(?=(\w+(?:-+\w+)*))\2(?=(\W+))\3){0,4}?(?:says|said|states|stated|requires|required|asks|forbids|mandates|prescribes|instructs|demands)\b/i;
 const CITED_AS_OBJECT =
     /\b(?:per|according to|violates|violated|violating|violation of|breaks|breaking|contradicts|stated in|defined in|rule in|rules in)\s+(?:the\s+)?[`'"]?\u00a7F/i;
 

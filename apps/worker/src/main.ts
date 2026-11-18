@@ -13,6 +13,7 @@ configureLongFetchTimeouts();
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-worker' });
 
+import { hostname } from 'os';
 import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
@@ -117,8 +118,16 @@ async function bootstrap() {
                 process.env.API_RABBITMQ_ENABLED !== 'false',
         });
         // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked.
-        startEventLoopMonitor();
+        // need to see whether the thread is blocked. The stall watchdog
+        // captures where a stall is stuck and alerts while it happens.
+        startEventLoopMonitor({
+            stallWatchdog: {
+                heartbeatUrl:
+                    process.env.API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL ??
+                    '',
+                identity: { role, instanceId: hostname() },
+            },
+        });
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks
         // (enableShutdownHooks) fire after this on the same signal.
