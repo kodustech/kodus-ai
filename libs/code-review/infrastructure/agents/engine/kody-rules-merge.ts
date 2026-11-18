@@ -98,9 +98,13 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
             keep.kodyRuleOtherLocations = otherLocations;
         }
 
+        // The kept finding can itself be the line-less in-PR one (#2420), in
+        // which case the comment is routed PR-level although its group holds
+        // files. The telemetry has to name the scope that is delivered, not the
+        // shape of the group.
         onMerge?.({
             ruleUuid,
-            scope: 'file',
+            scope: keptLocation ? 'file' : 'pr',
             collapsed: group.length,
             otherLocations: otherLocations.length,
         });

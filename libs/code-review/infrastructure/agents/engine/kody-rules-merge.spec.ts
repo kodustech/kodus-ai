@@ -108,6 +108,12 @@ describe('mergeKodyRuleFindings', () => {
                 },
                 {
                     brokenKodyRulesIds: ['rule-1'],
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    suggestionContent: 'lines but no file',
+                },
+                {
+                    brokenKodyRulesIds: ['rule-1'],
                     relevantFile: 'c.ts',
                     relevantLinesStart: 5,
                     relevantLinesEnd: 6,
@@ -122,24 +128,30 @@ describe('mergeKodyRuleFindings', () => {
         expect(merges[0].otherLocations).toBe(1);
     });
 
-    it('does not name a location for a duplicate that cites lines but no file', () => {
-        const [kept] = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
-            {
-                brokenKodyRulesIds: ['rule-1'],
-                relevantFile: 'a.ts',
-                relevantLinesStart: 1,
-                relevantLinesEnd: 2,
-                suggestionContent: 'the longest content wins',
-            },
-            {
-                brokenKodyRulesIds: ['rule-1'],
-                relevantLinesStart: 3,
-                relevantLinesEnd: 3,
-                suggestionContent: 'lines but no file',
-            },
-        ]);
+    it('reports the scope of the kept finding, not of the group', () => {
+        const merges: Array<{ scope: 'pr' | 'file' }> = [];
 
-        expect(kept.kodyRuleOtherLocations).toBeUndefined();
-        expect(otherLocationsToRender(kept)).toEqual([]);
+        mergeKodyRuleFindings<Partial<CodeSuggestion>>(
+            [
+                {
+                    brokenKodyRulesIds: ['rule-1'],
+                    relevantFile: 'a.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 2,
+                    suggestionContent: 'short',
+                },
+                {
+                    // A rule about the PR itself: the longest text, so it is
+                    // the finding the comment is written from.
+                    brokenKodyRulesIds: ['rule-1'],
+                    relevantFile: 'b.ts',
+                    suggestionContent:
+                        'the title must name the affected module and the change',
+                },
+            ],
+            (merge) => merges.push(merge),
+        );
+
+        expect(merges[0].scope).toBe('pr');
     });
 });

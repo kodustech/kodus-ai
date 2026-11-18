@@ -653,7 +653,17 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             async (location) => {
                 answerAll(ImplementationStatus.IMPLEMENTED);
 
-                await check([grouped({ alsoFoundIn: [location] })], [fileA]);
+                // No list in the text either: the point is that an unparsable
+                // entry does not turn the comment into a group of two.
+                await check(
+                    [
+                        grouped({
+                            alsoFoundIn: [location],
+                            suggestionContent: 'Escape the query.',
+                        }),
+                    ],
+                    [fileA],
+                );
 
                 expect(statusWritten()).toEqual([
                     ImplementationStatus.IMPLEMENTED,
@@ -664,6 +674,24 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         it('does not check a comment with no file of its own, whatever it lists', async () => {
             const result = await check(
                 [grouped({ relevantFile: undefined })],
+                [fileA, fileB],
+            );
+
+            expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+            expect(
+                aiAnalysisService.checkSuggestionImplementation,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('does not measure a line-less Kody Rule against a file diff (#2420)', async () => {
+            const result = await check(
+                [
+                    grouped({
+                        label: 'kody_rules',
+                        relevantLinesStart: undefined,
+                        relevantLinesEnd: undefined,
+                    }),
+                ],
                 [fileA, fileB],
             );
 
