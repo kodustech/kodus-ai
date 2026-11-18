@@ -229,9 +229,13 @@ const diffOf = (file: FileChange): string =>
 // hunk, the old behavior; a miss judges a rule without its lookup.
 const DEFINITION_KEYWORD =
     /\b(?:function|def|func|fn|fun|class|interface|struct|enum|trait|impl|module)\b|=>/;
-// A method head with no keyword: `name(args) {` or `Type name(args) {`.
+// A method head with no keyword: `name(args) {`, `Type name(args) throws X {`,
+// or a signature split across lines that stops at `name(`.
 const METHOD_HEAD =
-    /^\s*(?:[\w<>[\],.?]+\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{=;]*)?\{\s*$/;
+    /^\s*(?:[\w<>[\],.?]+\s+)*([A-Za-z_$][\w$]*)\s*\((?:[^)]*\)\s*(?::[^{=;]*)?(?:throws\s+[\w.,\s]+)?\{\s*|\s*)$/;
+// A member declared with an access modifier: Java and C# methods, fields and
+// properties (`public int X { get; set; }`).
+const MEMBER_MODIFIER = /^\s*(?:public|private|protected|internal)\s/;
 const CONTROL_KEYWORDS = new Set([
     'if',
     'for',
@@ -249,7 +253,7 @@ function addsDefinitionLikeLine(patch: string): boolean {
             return false;
         }
         const content = line.slice(1);
-        if (DEFINITION_KEYWORD.test(content)) {
+        if (DEFINITION_KEYWORD.test(content) || MEMBER_MODIFIER.test(content)) {
             return true;
         }
         const head = METHOD_HEAD.exec(content);
@@ -266,9 +270,10 @@ function addsDefinitionLikeLine(patch: string): boolean {
  * looked up, so nothing is missing.
  *
  * The extractor misses some definitions (async and arrow functions, methods
- * without a modifier, Rust `pub fn`). When it names nothing but an added line
- * still reads like a definition, the question exists and went unasked, so the
- * need stays unmet and the rule is not judged.
+ * without a modifier, Rust `pub fn`, a `throws` clause, C# properties). When
+ * it names nothing but an added line still reads like a definition, the
+ * question exists and went unasked, so the need stays unmet and the rule is
+ * not judged.
  */
 async function retrieveSymbolReferences(
     file: FileChange,

@@ -208,6 +208,12 @@ describe('retrieveForShard — symbol-references (KRC-14)', () => {
         ['an arrow function', '+const charge = async (amount) => {'],
         ['a method with no modifier', '+  charge(amount: number): void {'],
         ['a Rust function', '+pub fn charge(amount: u64) {'],
+        [
+            'a method with a throws clause',
+            '+  public void x() throws IOException {',
+        ],
+        ['a signature split across lines', '+  charge('],
+        ['a C# property', '+  public int X { get; set; }'],
     ])(
         'reports the rule unmet when the hunk adds %s the extractor cannot name',
         async (_label, added) => {
