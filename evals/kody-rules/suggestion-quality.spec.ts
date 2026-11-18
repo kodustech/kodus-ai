@@ -157,14 +157,12 @@ describe('judgeRoute — the judge runs as itself, whatever the reviewed model i
         process.env = OLD_ENV;
     });
 
-    it('ignores the reviewed model and its reasoning effort', () => {
+    it('ignores the reviewed model and its reasoning effort, and leaves both set for the review', () => {
         const route = judgeRoute('eval-fake');
-        expect(route.modelId).toBe('eval-fake');
-        expect(route.reasoningEffort).toBeNull();
-    });
-
-    it('leaves both settings as they were for the reviewed model', () => {
-        judgeRoute('eval-fake');
+        expect(route).toMatchObject({
+            modelId: 'eval-fake',
+            reasoningEffort: null,
+        });
         expect(process.env.RECALL_MODEL).toBe('claude-sonnet-5-5');
         expect(process.env.RECALL_REASONING_EFFORT).toBe('high');
     });
