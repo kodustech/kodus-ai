@@ -157,4 +157,64 @@ describe('startStallWatchdog (real worker thread)', () => {
         // No healthy ping configured (pingIntervalMs: 0).
         expect(hits.filter((h) => !h.path.endsWith('/fail'))).toEqual([]);
     });
+
+    it('alerts on a stall inside synchronous native code, without blaming the wrong code', async () => {
+        const http = await import('http');
+        const { execSync } = await import('child_process');
+        const hits: Array<{ path: string; body: string }> = [];
+        const server = http.createServer((req, res) => {
+            let body = '';
+            req.on('data', (c) => (body += c));
+            req.on('end', () => {
+                hits.push({ path: req.url ?? '', body });
+                res.end('ok');
+            });
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        const { port } = server.address() as { port: number };
+
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 300,
+                maxCapturesPerStall: 1,
+                heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
+                pingIntervalMs: 0,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: (r) => reports.push(r),
+            },
+            logger,
+        );
+        await settle(200);
+
+        // The inspector cannot interrupt a synchronous native call: the
+        // main thread answers only after it returns.
+        execSync('sleep 2');
+
+        const fail = await waitFor(
+            () => hits.find((h) => h.path.endsWith('/fail')),
+            15_000,
+        );
+        server.close();
+
+        const stall = reports.find((r) => r.kind === 'stall');
+        expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
+        // Either the stack shows the native call itself, or no location is
+        // claimed: never code that merely ran after the stall.
+        const top = stall?.stack?.[0]?.fn ?? '';
+        const message = JSON.parse(fail.body).message as string;
+        if (stall?.stack?.length) {
+            expect(stall.stack.map((f) => f.fn).join(' ')).toMatch(
+                /execSync|spawnSync/,
+            );
+        } else {
+            expect(top).toBe('');
+            expect(message).toContain('no JavaScript stack');
+        }
+        expect(message).toContain('stalled');
+    });
 });
