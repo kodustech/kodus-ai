@@ -230,22 +230,20 @@ describe('GithubService.getPullRequestAuthors', () => {
         ).rejects.toThrow('1 of the configured GitHub repositories');
     });
 
-    // GitHub answers 404 both for a deleted repository and for a private one
-    // the token can no longer see, so a 404 cannot pass for "no authors".
-    it('fails for the seat prune on a repository answering 404, and lists the rest otherwise', async () => {
+    // A repository the credential cannot see gets no review, so its authors
+    // need no seat; the selection never drops it, so it must not hold the
+    // prune either.
+    it('reads a repository answering 404 as having no authors, also for the seat prune', async () => {
         const github = githubServing({ app: { pages: [newest100()] } });
-        const service = makeService(github.octokit, ['app', 'hidden']);
 
-        await expect(
-            service.getPullRequestAuthors({
-                organizationAndTeamData,
-                requireLoaded: true,
-            }),
-        ).rejects.toThrow('1 of the configured GitHub repositories');
-
-        const authors = await service.getPullRequestAuthors({
+        const authors = await makeService(github.octokit, [
+            'app',
+            'gone',
+        ]).getPullRequestAuthors({
             organizationAndTeamData,
+            requireLoaded: true,
         });
+
         expect(authors.map((a) => a.name)).toEqual(['dev']);
     });
 

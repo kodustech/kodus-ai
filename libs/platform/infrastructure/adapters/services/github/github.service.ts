@@ -2781,10 +2781,15 @@ export class GithubService
                             },
                         );
                     } catch (error) {
-                        // A 404 is no proof the repository is gone: GitHub
-                        // answers 404 for a private repository the token
-                        // can no longer see, whose authors are still real.
-                        failedRepositories += 1;
+                        // A 404 means the credential cannot see the
+                        // repository (deleted, dropped from the install,
+                        // made private), so no review runs there and none
+                        // of its authors needs a seat for it. The selection
+                        // never drops a repository, so failing on it would
+                        // stop the seat prune for good.
+                        if (error?.status !== 404) {
+                            failedRepositories += 1;
+                        }
                         this.logger.error({
                             message: 'Error in getPullRequestAuthors',
                             context: GithubService.name,
