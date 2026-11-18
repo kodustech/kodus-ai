@@ -1,3 +1,5 @@
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+
 export interface StaleWorkflowJobReapResult {
     uuid: string;
     workflowType: string;
@@ -28,9 +30,12 @@ export interface IWorkflowJobRepository {
      * FAILED only while the row is still PROCESSING. Returns whether a row
      * was updated. A COMPLETED / CANCELLED / FAILED job is left alone.
      */
-    failIfProcessing?(
+    failIfProcessing(
         id: string,
-        data: { lastError: string; errorClassification: unknown },
+        data: {
+            lastError: string;
+            errorClassification: ErrorClassification;
+        },
     ): Promise<boolean>;
 }
 

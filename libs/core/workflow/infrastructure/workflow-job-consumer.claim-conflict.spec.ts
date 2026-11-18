@@ -1,4 +1,5 @@
 import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { WorkflowJobConsumer } from './workflow-job-consumer.service';
@@ -295,6 +296,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
             'job-1',
             expect.objectContaining({
                 lastError: expect.stringMatching(/exited 1/),
+                errorClassification: ErrorClassification.PERMANENT,
             }),
         );
     });
@@ -367,6 +369,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
             'job-1',
             expect.objectContaining({
                 lastError: expect.stringMatching(/exited SIGKILL/),
+                errorClassification: ErrorClassification.PERMANENT,
             }),
         );
     });
@@ -395,6 +398,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
             'job-1',
             expect.objectContaining({
                 lastError: expect.stringMatching(/exited 1/),
+                errorClassification: ErrorClassification.PERMANENT,
             }),
         );
     });

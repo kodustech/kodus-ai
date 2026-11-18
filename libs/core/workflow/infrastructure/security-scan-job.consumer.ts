@@ -71,10 +71,10 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
             error instanceof Error ? error.message : String(error);
         try {
             await runWithBoundedTimeout(
-                this.jobRepository.failIfProcessing?.(jobId, {
+                this.jobRepository.failIfProcessing(jobId, {
                     lastError,
                     errorClassification: ErrorClassification.PERMANENT,
-                }) ?? Promise.resolve(false),
+                }),
                 INBOX_RELEASE_TIMEOUT_MS,
                 'security-scan.job.failIfProcessing',
             );
