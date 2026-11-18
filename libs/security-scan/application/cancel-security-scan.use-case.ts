@@ -62,17 +62,16 @@ export class CancelSecurityScanUseCase {
             throw new ConflictException(SCAN_NOT_CANCELLABLE_MESSAGE);
         }
 
-        // The scan record is what locks the repository. A job left PENDING
-        // is skipped by the processor once it arrives; marking it cancelled
-        // keeps it from looking stuck. One UPDATE so a job that finished
-        // in between is not overwritten, and every matching row is hit.
-        const cancelJobs = this.jobs.cancelActiveByCorrelation;
-        if (cancelJobs) {
-            await cancelJobs({
+        // The scan row already released the lock. A job left PENDING is
+        // skipped by the processor; this write is bookkeeping so it does
+        // not look stuck. A throw here would 500 a cancel that happened
+        // and a retry would 409.
+        await this.jobs
+            .cancelActiveByCorrelation({
                 correlationId: scan.uuid,
                 workflowType: WorkflowType.SECURITY_SCAN,
-            }).catch(() => undefined);
-        }
+            })
+            .catch(() => undefined);
         return updated;
     }
 }

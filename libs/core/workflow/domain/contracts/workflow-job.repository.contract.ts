@@ -29,7 +29,7 @@ export interface IWorkflowJobRepository {
      * filter is in the UPDATE itself, so a job that finished between the
      * scan cancel and this write is left alone.
      */
-    cancelActiveByCorrelation?(params: {
+    cancelActiveByCorrelation(params: {
         correlationId: string;
         workflowType: string;
     }): Promise<number>;
