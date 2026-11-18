@@ -785,12 +785,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith(
-            'org-1',
-            [2],
-            expect.anything(),
-            expect.any(Array),
-        );
+        ).toHaveBeenCalledWith('org-1', [2], expect.anything(), ['repo-b']);
         expect(
             deps.pullRequestService
                 .findPullRequestsWithoutDeliveredSuggestionsForApproval,
@@ -2329,12 +2324,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith(
-            'org-1',
-            [123],
-            expect.anything(),
-            expect.any(Array),
-        );
+        ).toHaveBeenCalledWith('org-1', [123], expect.anything(), ['repo-b']);
         expect(shouldApproveSpy).toHaveBeenCalledTimes(1);
         expect(shouldApproveSpy).toHaveBeenCalledWith(
             expect.objectContaining({

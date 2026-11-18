@@ -24,143 +24,162 @@ import {
 } from './read-preference';
 
 const TEST_DB = 'kodus_read_preference_it';
+// Needs a replica set with a secondary tagged workload=analytics, which CI
+// does not start: reported as skipped, not passed, without MONGO_RS_IT_URI.
 const uri = process.env.MONGO_RS_IT_URI;
 
-describe('analytics read preference (real replica set)', () => {
-    let connection: Connection;
-    let analyticsMember: string;
-    let primary: string;
-    const servedBy: Array<{
-        command: string;
-        collection: string;
-        address: string;
-    }> = [];
+(uri ? describe : describe.skip)(
+    'analytics read preference (real replica set)',
+    () => {
+        let connection: Connection;
+        let analyticsMember: string;
+        let primary: string;
+        const servedBy: Array<{
+            command: string;
+            collection: string;
+            address: string;
+        }> = [];
 
-    beforeAll(async () => {
-        if (!uri) return;
-        connection = await mongoose
-            .createConnection(uri, { dbName: TEST_DB, monitorCommands: true })
-            .asPromise();
-        const status: any = await connection
-            .db!.admin()
-            .command({ replSetGetStatus: 1 });
-        const config: any = await connection
-            .db!.admin()
-            .command({ replSetGetConfig: 1 });
-        primary = port(
-            status.members.find((m: any) => m.stateStr === 'PRIMARY').name,
-        )!;
-        analyticsMember = port(
-            config.config.members.find(
-                (m: any) => m.tags?.workload === 'analytics',
-            ).host,
-        )!;
-        connection.getClient().on('commandStarted', (event) => {
-            servedBy.push({
-                command: event.commandName,
-                collection: String(event.command[event.commandName]),
-                address: event.address,
+        beforeAll(async () => {
+            connection = await mongoose
+                .createConnection(uri!, {
+                    dbName: TEST_DB,
+                    monitorCommands: true,
+                })
+                .asPromise();
+            const status: any = await connection
+                .db!.admin()
+                .command({ replSetGetStatus: 1 });
+            const config: any = await connection
+                .db!.admin()
+                .command({ replSetGetConfig: 1 });
+            primary = port(
+                status.members.find((m: any) => m.stateStr === 'PRIMARY').name,
+            )!;
+            analyticsMember = port(
+                config.config.members.find(
+                    (m: any) => m.tags?.workload === 'analytics',
+                ).host,
+            )!;
+            connection.getClient().on('commandStarted', (event) => {
+                servedBy.push({
+                    command: event.commandName,
+                    collection: String(event.command[event.commandName]),
+                    address: event.address,
+                });
             });
-        });
-        await connection.dropDatabase();
-        await connection.db!.collection('observability_telemetry').insertOne(
-            {
-                attributes: {
-                    organizationId: 'org-rs',
-                    tu: {
-                        isByok: true,
-                        sys: false,
-                        model: 'm',
-                        credentialId: 'c',
+            await connection.dropDatabase();
+            await connection
+                .db!.collection('observability_telemetry')
+                .insertOne(
+                    {
+                        attributes: {
+                            organizationId: 'org-rs',
+                            tu: {
+                                isByok: true,
+                                sys: false,
+                                model: 'm',
+                                credentialId: 'c',
+                            },
+                        },
+                        timestamp: new Date('2026-11-10T00:00:00Z'),
                     },
-                },
-                timestamp: new Date('2026-11-10T00:00:00Z'),
-            },
-            { writeConcern: { w: 2 } },
-        );
-    }, 60_000);
+                    { writeConcern: { w: 2 } },
+                );
+        }, 60_000);
 
-    afterAll(async () => {
-        if (!connection) return;
-        await connection.dropDatabase();
-        await connection.close();
-    });
+        afterAll(async () => {
+            if (!connection) return;
+            await connection.dropDatabase();
+            await connection.close();
+        });
 
-    // The driver reports the address it resolved (`[::1]:27102` for
-    // `localhost:27102`), so members are told apart by port.
-    const port = (address?: string) => address?.split(':').pop();
-    const lastRead = (collection: string, command: string) => {
-        const event = [...servedBy]
-            .reverse()
-            .find((e) => e.collection === collection && e.command === command);
-        return event && { address: port(event.address) };
-    };
+        // The driver reports the address it resolved (`[::1]:27102` for
+        // `localhost:27102`), so members are told apart by port.
+        const port = (address?: string) => address?.split(':').pop();
+        const lastRead = (collection: string, command: string) => {
+            const event = [...servedBy]
+                .reverse()
+                .find(
+                    (e) => e.collection === collection && e.command === command,
+                );
+            return event && { address: port(event.address) };
+        };
 
-    it('puts the analytics tag first and any secondary after it', () => {
-        expect(parseReadTags(undefined)).toEqual([
-            { workload: 'analytics' },
-            {},
-        ]);
-        expect(parseReadTags('dc:east,workload:bi;workload:analytics')).toEqual(
-            [{ dc: 'east', workload: 'bi' }, { workload: 'analytics' }, {}],
-        );
-    });
+        it('puts the analytics tag first and any secondary after it', () => {
+            expect(parseReadTags(undefined)).toEqual([
+                { workload: 'analytics' },
+                {},
+            ]);
+            expect(
+                parseReadTags('dc:east,workload:bi;workload:analytics'),
+            ).toEqual([
+                { dc: 'east', workload: 'bi' },
+                { workload: 'analytics' },
+                {},
+            ]);
+        });
 
-    it('sends token usage reads to the analytics member', async () => {
-        if (!uri) return;
-        const model = connection.model(
-            ObservabilityTelemetryModel.name,
-            ObservabilityTelemetryModelSchema,
-        );
-        const repository = new TokenUsageRepository(model as any, {} as any);
+        it('sends token usage reads to the analytics member', async () => {
+            const model = connection.model(
+                ObservabilityTelemetryModel.name,
+                ObservabilityTelemetryModelSchema,
+            );
+            const repository = new TokenUsageRepository(
+                model as any,
+                {} as any,
+            );
 
-        await repository.getModelCredentialPairs({
-            organizationId: 'org-rs',
-            start: new Date('2026-11-01T00:00:00Z'),
-            end: new Date('2026-11-30T00:00:00Z'),
-            byok: true,
-        } as any);
+            await repository.getModelCredentialPairs({
+                organizationId: 'org-rs',
+                start: new Date('2026-11-01T00:00:00Z'),
+                end: new Date('2026-11-30T00:00:00Z'),
+                byok: true,
+            } as any);
 
-        expect(lastRead('observability_telemetry', 'aggregate')?.address).toBe(
-            analyticsMember,
-        );
-    });
+            expect(
+                lastRead('observability_telemetry', 'aggregate')?.address,
+            ).toBe(analyticsMember);
+        });
 
-    it('applies to Mongoose queries, aggregations and the native driver alike', async () => {
-        if (!uri) return;
-        const probe = connection.model(
-            'ReadPreferenceProbe',
-            new Schema({ n: Number }),
-            'read_preference_probe',
-        );
-        await probe.collection.insertOne({ n: 1 }, { writeConcern: { w: 2 } });
+        it('applies to Mongoose queries, aggregations and the native driver alike', async () => {
+            const probe = connection.model(
+                'ReadPreferenceProbe',
+                new Schema({ n: Number }),
+                'read_preference_probe',
+            );
+            await probe.collection.insertOne(
+                { n: 1 },
+                { writeConcern: { w: 2 } },
+            );
 
-        await probe.find({}).read(ANALYTICS_QUERY_READ).lean().exec();
-        expect(lastRead('read_preference_probe', 'find')?.address).toBe(
-            analyticsMember,
-        );
+            await probe.find({}).read(ANALYTICS_QUERY_READ).lean().exec();
+            expect(lastRead('read_preference_probe', 'find')?.address).toBe(
+                analyticsMember,
+            );
 
-        await probe
-            .aggregate([{ $match: {} }])
-            .read(ANALYTICS_READ_PREFERENCE)
-            .exec();
-        expect(lastRead('read_preference_probe', 'aggregate')?.address).toBe(
-            analyticsMember,
-        );
+            await probe
+                .aggregate([{ $match: {} }])
+                .read(ANALYTICS_READ_PREFERENCE)
+                .exec();
+            expect(
+                lastRead('read_preference_probe', 'aggregate')?.address,
+            ).toBe(analyticsMember);
 
-        await probe.collection
-            .aggregate([{ $match: {} }], {
-                readPreference: ANALYTICS_READ_PREFERENCE,
-            })
-            .toArray();
-        expect(lastRead('read_preference_probe', 'aggregate')?.address).toBe(
-            analyticsMember,
-        );
+            await probe.collection
+                .aggregate([{ $match: {} }], {
+                    readPreference: ANALYTICS_READ_PREFERENCE,
+                })
+                .toArray();
+            expect(
+                lastRead('read_preference_probe', 'aggregate')?.address,
+            ).toBe(analyticsMember);
 
-        // A read that does not ask stays on the primary.
-        await probe.find({}).lean().exec();
-        expect(lastRead('read_preference_probe', 'find')?.address).toBe(
-            primary,
-        );
-    });
-});
+            // A read that does not ask stays on the primary.
+            await probe.find({}).lean().exec();
+            expect(lastRead('read_preference_probe', 'find')?.address).toBe(
+                primary,
+            );
+        });
+    },
+);
