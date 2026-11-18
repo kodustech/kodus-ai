@@ -331,7 +331,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
-        ).toHaveBeenCalledWith(2, stubRepository.id, stubOrg);
+        ).toHaveBeenCalledWith(
+            2,
+            stubRepository.id,
+            stubOrg,
+            expect.anything(),
+        );
         // A name match is what merged two repositories into one record.
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
@@ -354,7 +359,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
-        ).toHaveBeenCalledWith(2, stubRepository.name, stubOrg);
+        ).toHaveBeenCalledWith(
+            2,
+            stubRepository.name,
+            stubOrg,
+            expect.anything(),
+        );
         expect((service as any).update).toHaveBeenCalledWith(
             byName,
             expect.anything(),
@@ -366,7 +376,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
-        ).toHaveBeenCalledWith(2, 'kody-format-probe-1822', stubOrg);
+        ).toHaveBeenCalledWith(
+            2,
+            'kody-format-probe-1822',
+            stubOrg,
+            expect.anything(),
+        );
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
         ).not.toHaveBeenCalled();
@@ -393,7 +408,7 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
-        ).toHaveBeenCalledWith(2, '12345', stubOrg);
+        ).toHaveBeenCalledWith(2, '12345', stubOrg, expect.anything());
     });
 
     it('stays silent when both lookups miss, instead of warning about a foreign repository', async () => {
@@ -542,5 +557,85 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
             }),
         );
         expect((service as any).handleExistingPullRequest).toHaveBeenCalled();
+    });
+});
+
+describe('PullRequestsService.aggregateAndSaveDataStructure — an event that changes no file', () => {
+    const stubRepository = { id: 'repo-1', name: 'repo' };
+    const stubOrg = { organizationId: 'org-1', teamId: 'team-1' };
+    const storedPR = {
+        uuid: 'pr-uuid-1',
+        organizationId: 'org-1',
+        repository: { id: 'repo-1', name: 'repo' },
+    };
+    let service: PullRequestsService;
+    let pullRequestsRepository: any;
+
+    beforeEach(() => {
+        pullRequestsRepository = {
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(storedPR),
+            findByNumberAndRepositoryName: jest.fn().mockResolvedValue(null),
+            update: jest.fn().mockResolvedValue(storedPR),
+            appendPrLevelSuggestions: jest.fn(),
+        };
+        service = new PullRequestsService(
+            pullRequestsRepository as any,
+            {} as any,
+        );
+        jest.spyOn(
+            service as any,
+            'prefetchUsersForExtraction',
+        ).mockResolvedValue(undefined);
+        jest.spyOn(service as any, 'extractUser').mockResolvedValue(null);
+        jest.spyOn(service as any, 'extractUsers').mockResolvedValue([]);
+    });
+
+    const save = (options?: { filesUnchanged?: boolean }) =>
+        service.aggregateAndSaveDataStructure(
+            { number: 2, state: 'closed', user: { username: 'someone' } },
+            stubRepository,
+            [],
+            [],
+            [],
+            PlatformType.GITHUB,
+            stubOrg,
+            [],
+            undefined,
+            options,
+        );
+
+    it('writes the lifecycle once and leaves files and commits alone', async () => {
+        const handleExisting = jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        );
+
+        await save({ filesUnchanged: true });
+
+        expect(handleExisting).not.toHaveBeenCalled();
+        expect(pullRequestsRepository.update).toHaveBeenCalledTimes(1);
+        const [, written] = pullRequestsRepository.update.mock.calls[0];
+        expect(written).not.toHaveProperty('commits');
+        expect(written).toHaveProperty('status');
+    });
+
+    it('reads the stored PR without its files', async () => {
+        await save({ filesUnchanged: true });
+
+        const projection =
+            pullRequestsRepository.findByNumberAndRepositoryId.mock.calls[0][3];
+        expect(projection).toMatchObject({ files: 0 });
+    });
+
+    it('still writes the commits of an event that fetched them', async () => {
+        jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        ).mockResolvedValue(storedPR);
+
+        await save();
+
+        const [, written] = pullRequestsRepository.update.mock.calls[0];
+        expect(written).toHaveProperty('commits', []);
     });
 });

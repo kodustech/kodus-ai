@@ -44,7 +44,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
         /** The review's save: keep the stored status, merged and closedAt. */
-        options?: { keepStoredState?: boolean },
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null>;
 
     extractUser(

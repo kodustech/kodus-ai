@@ -359,13 +359,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryName: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
         const pullRequest = await this.pullRequestsModel
-            .findOne({
-                'number': pullRequestNumber,
-                'repository.name': repositoryName,
-                'organizationId': organizationAndTeamData.organizationId,
-            })
+            .findOne(
+                {
+                    'number': pullRequestNumber,
+                    'repository.name': repositoryName,
+                    'organizationId': organizationAndTeamData.organizationId,
+                },
+                projection,
+            )
             .lean();
 
         return pullRequest
@@ -377,13 +381,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryId: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
         const pullRequest = await this.pullRequestsModel
-            .findOne({
-                'number': pullRequestNumber,
-                'repository.id': repositoryId,
-                'organizationId': organizationAndTeamData.organizationId,
-            })
+            .findOne(
+                {
+                    'number': pullRequestNumber,
+                    'repository.id': repositoryId,
+                    'organizationId': organizationAndTeamData.organizationId,
+                },
+                projection,
+            )
             .lean();
 
         return pullRequest
@@ -2550,11 +2558,19 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         if (pullRequest.organizationId) {
             filter.organizationId = pullRequest.organizationId;
         }
-        const doc = await this.pullRequestsModel.findOneAndUpdate(
-            filter,
-            { $set: updateData },
-            { new: true },
-        );
+        // The PR comes back without its files, commits and PR-level
+        // suggestions: no caller reads them from here, and they are what makes
+        // the document weigh hundreds of KB to MB.
+        const doc = await this.pullRequestsModel
+            .findOneAndUpdate(
+                filter,
+                { $set: updateData },
+                {
+                    new: true,
+                    projection: { files: 0, commits: 0, prLevelSuggestions: 0 },
+                },
+            )
+            .lean();
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
     }
 

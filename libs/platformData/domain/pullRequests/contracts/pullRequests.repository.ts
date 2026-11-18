@@ -95,11 +95,13 @@ export interface IPullRequestsRepository {
         prNumber: number,
         repositoryName: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     findByNumberAndRepositoryId(
         prNumber: number,
         repositoryId: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     findByNumberAndRepositoryIdOptimized(
         prNumber: number,
