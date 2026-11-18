@@ -90,6 +90,14 @@ const canReadScans = checkPermissions({
     resource: ResourceType.SecurityScan,
 });
 
+// Same grant as start: the people who can run a scan can unstick one.
+// Repo assignment is checked after the scan is loaded (the id is the
+// scan, not the repository).
+const canCancelScan = checkPermissions({
+    action: Action.Create,
+    resource: ResourceType.SecurityScan,
+});
+
 @ApiTags('Security Scans')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
@@ -186,7 +194,7 @@ export class SecurityScansController {
             'Stops a queued or running scan so another can start on the same repository.',
     })
     @UseGuards(PolicyGuard)
-    @CheckPolicies(canReadScans)
+    @CheckPolicies(canCancelScan)
     async cancel(@Param('id') id: string) {
         const organizationId = await this.organizationId();
         const scan = await this.getSecurityScans.get(
