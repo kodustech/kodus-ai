@@ -66,9 +66,7 @@ O sandbox é selecionado por `SANDBOX_PROVIDER` no `.env`:
 sem contexto cross-file e sem code graph. Definir só `API_E2B_KEY` enquanto
 `SANDBOX_PROVIDER=local` mantém o sandbox local.
 
-Para desligar o sandbox, defina `SANDBOX_PROVIDER=null`. `none` não é um valor
-válido: qualquer valor diferente de `auto`, `local`, `e2b` ou `null` se comporta como `auto`.
-O `./scripts/doctor.sh` avisa enquanto o sandbox está desligado.
+Defina `SANDBOX_PROVIDER=null` para desligar o sandbox. O `./scripts/doctor.sh` emite um aviso quando ele está desligado. Se o `./scripts/validate-env.sh` rejeitar `null`, confira os valores aceitos no `.env.example` do instalador. Schemas antigos do instalador listam `none`, que o worker trata como `auto`.
 
 ## Migrando uma instalação self-hosted existente
 

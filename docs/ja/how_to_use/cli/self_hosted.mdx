@@ -68,13 +68,15 @@ description: "Kodus CLI をセルフホスト型の Kodus インスタンスに�
         kodus auth login
         ```
 
-        CLI がセルフホスト型 Web アプリの **Authorize Kodus CLI** ページを開きます。インスタンスに登録されたアカウントでサインインし（サインイン後はダッシュボードに移動するため、CLI が出力した URL をもう一度開いてください）、**Authorize CLI** をクリックします。ブラウザのないマシンでは、CLI は代わりに URL とコードを出力します（または `--device-code` を追加します）。ページにコードを入力するフィールドはありません。URL に `?code=<code>` を追加して開いてください。ログイン情報は、制限されたパーミッション（600）で `~/.kodus/credentials.json` に保存されます。
+        CLI がセルフホスト型 Web アプリの **Authorize Kodus CLI** ページを開きます。インスタンスに登録されたアカウントでサインインし（サインイン後はダッシュボードに移動するため、CLI が出力した URL をもう一度開いてください）、**Authorize CLI** をクリックします。ブラウザーのないマシンでは、他の人と共有していないターミナルで `kodus auth login --device-code` を実行します。CLI にインスタンスの認証 URL とワンタイムコードが表示されます。ブラウザーのアドレスバーで URL に `code` クエリパラメーターとしてコードを追加し、**Authorize CLI** をクリックします。コードやコード付きの URL は、ログや共有メッセージに含めないでください。
+
+        ログイン情報は、制限されたパーミッション（600）で `~/.kodus/credentials.json` に保存されます。
 
         <Info>
           そのページのアドレスは、Kodus API の `API_FRONTEND_URL` 設定から取得されます。Web アプリの URL を指定する必要があります。そうでないと、ログインページが誤ったホストで開きます。
         </Info>
 
-        ブラウザを使用できないスクリプトでは、`--legacy` と `--email`、`--password` を指定すると、メールアドレスとパスワードでサインインできます（[`auth login`](/ja/how_to_use/cli/commands#auth-login) を参照）。これは非推奨です。
+        CI では、チームキーをシークレット `KODUS_TEAM_KEY` に設定します。
       </Tab>
     </Tabs>
   </Step>

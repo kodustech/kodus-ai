@@ -88,7 +88,7 @@ kodus review --verbose    # or any command with --verbose
 
   <Accordion title="登录页面无法打开或登录超时">
     - 浏览器未打开时，CLI 会打印 URL。请将其粘贴到浏览器中。
-    - 在 SSH 会话、CI 或非交互式终端中，CLI 会改用代码。它会打印一个 URL 和一个代码，并提示输入代码，但页面上没有输入字段。请在 URL 后添加 `?code=<code>` 后打开（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`），然后点击 **Authorize CLI**。
+    - 在私用 SSH 会话或没有浏览器的机器上，请按照[设备代码登录步骤](/zh/how_to_use/cli/getting_started)操作。CI 中请将 `KODUS_TEAM_KEY` 配置为密文变量。
     - 如果您在该浏览器中尚未登录 Kodus，页面会把您带到登录页，登录后进入的是仪表板，而不是 **Authorize CLI**。请再次打开该 URL；CLI 会继续等待。
     - 登录最多等待 10 分钟。出现 "Authorization timed out"、"expired" 或 "denied" 表示您需要重新运行 `kodus auth login`。
     - 要强制使用代码流程，请运行 `kodus auth login --device-code`。

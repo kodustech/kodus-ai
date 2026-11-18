@@ -88,7 +88,7 @@ kodus review --verbose    # or any command with --verbose
 
   <Accordion title="ログインページが開かない、またはログインがタイムアウトする">
     - ブラウザが開かない場合、CLI は URL を出力します。それをブラウザに貼り付けてください。
-    - SSH セッション、CI、非インタラクティブなターミナルでは、CLI は代わりにコードを使用します。URL とコードを出力し、コードを入力するよう案内しますが、ページにコードを入力するフィールドはありません。コードを `?code=<code>` として追加した URL（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`）を開き、**Authorize CLI** をクリックしてください。
+    - 他の人と共有していない SSH セッションやブラウザーのないマシンでは、[デバイスコードでのサインイン手順](/ja/how_to_use/cli/getting_started)に従ってください。CI では `KODUS_TEAM_KEY` をシークレットとして設定します。
     - そのブラウザで Kodus にサインインしていない場合、ページはサインインページに移動し、サインイン後は **Authorize CLI** ではなくダッシュボードに移動します。もう一度 URL を開いてください。CLI は待機し続けます。
     - ログインは最大10分間待機します。"Authorization timed out"、"expired"、"denied" と表示された場合は、もう一度 `kodus auth login` を実行する必要があります。
     - コードによるフローを強制するには、`kodus auth login --device-code` を実行します。

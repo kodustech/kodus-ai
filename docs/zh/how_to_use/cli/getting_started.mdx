@@ -62,7 +62,7 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
 
         如果您在该浏览器中尚未登录 Kodus，会先进入登录页面，登录后进入仪表板。请再次打开终端中的 URL 以到达 **Authorize CLI**。CLI 最多等待 10 分钟。
 
-        在没有浏览器的机器上（SSH 会话、CI 或非交互式终端），CLI 会改为打印一个 URL 和一个代码。页面上没有输入代码的字段。请在任意设备上打开该 URL，并把代码作为 `code` 参数添加进去（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`），然后点击 **Authorize CLI**。代码 10 分钟后过期。添加 `--device-code` 可在任意机器上使用此流程。
+        在没有浏览器的机器上，请在私用终端中运行 `kodus auth login --device-code`。CLI 会显示授权页面（Kodus Cloud 使用 `https://app.kodus.io/cli/authorize`）和一次性代码。在浏览器地址栏中，将一次性代码作为 `code` 查询参数加入网址，然后点击 **Authorize CLI**。代码将在 10 分钟后过期。请勿将代码或含代码的完整链接写入日志或发到共享频道。CI 中使用密文变量 `KODUS_TEAM_KEY` 保存团队密钥。
 
         您的登录信息保存在 `~/.kodus/credentials.json`，并自动刷新。
       </Tab>

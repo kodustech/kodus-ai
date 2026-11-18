@@ -66,9 +66,7 @@ The sandbox is selected by `SANDBOX_PROVIDER` in `.env`:
 no cross-file context, and no code graph. Setting only `API_E2B_KEY` while
 `SANDBOX_PROVIDER=local` keeps the local sandbox.
 
-To turn the sandbox off, set `SANDBOX_PROVIDER=null`. `none` is not a valid
-value: any value other than `auto`, `local`, `e2b` or `null` behaves like `auto`.
-`./scripts/doctor.sh` warns while the sandbox is off.
+Set `SANDBOX_PROVIDER=null` to turn the sandbox off. `./scripts/doctor.sh` warns when it is off. If `./scripts/validate-env.sh` rejects `null`, check the allowed values in the installer's `.env.example`. Older installer schemas list `none`, which the worker treats as `auto`.
 
 ## Migrating an existing self-hosted install
 

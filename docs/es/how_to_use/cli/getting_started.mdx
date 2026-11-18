@@ -62,7 +62,7 @@ Esta guía te lleva de cero a un diff revisado en menos de cinco minutos.
 
         Si no has iniciado sesión en Kodus en ese navegador, primero llegas a la página de inicio de sesión y, tras iniciar sesión, al dashboard. Abre de nuevo la URL de la terminal para llegar a **Authorize CLI**. El CLI espera hasta 10 minutos.
 
-        En una máquina sin navegador (una sesión SSH, CI o una terminal no interactiva), el CLI imprime una URL y un código. La página no tiene un campo para escribir el código. Abre la URL en cualquier dispositivo con el código añadido como parámetro `code` (`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`) y haz clic en **Authorize CLI**. El código caduca a los 10 minutos. Añade `--device-code` para usar este flujo en cualquier máquina.
+        En una máquina sin navegador, ejecuta `kodus auth login --device-code` en una terminal privada. El CLI muestra la página de autorización (`https://app.kodus.io/cli/authorize` en Kodus Cloud) y un código de un solo uso. En la barra de direcciones del navegador, añade el código a la URL como parámetro `code` y haz clic en **Authorize CLI**. El código caduca a los 10 minutos. Mantén el código y el enlace completo fuera de los registros y los mensajes compartidos. Para CI, guarda una clave de equipo como secreto `KODUS_TEAM_KEY`.
 
         Tu inicio de sesión se almacena en `~/.kodus/credentials.json` y se actualiza automáticamente.
       </Tab>

@@ -65,9 +65,7 @@ Kodus 使用 [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-g
 没有 cross-file 上下文，也没有代码图。当 `SANDBOX_PROVIDER=local` 时
 只设置 `API_E2B_KEY`，仍会使用本地沙箱。
 
-要关闭沙箱，请设置 `SANDBOX_PROVIDER=null`。`none` 不是有效
-值：除 `auto`、`local`、`e2b` 或 `null` 之外的任何值，行为都与 `auto` 相同。
-沙箱关闭期间，`./scripts/doctor.sh` 会发出警告。
+将 `SANDBOX_PROVIDER` 设为 `null` 即可关闭沙箱。沙箱关闭时，`./scripts/doctor.sh` 会报告警告。如果 `./scripts/validate-env.sh` 拒绝 `null`，请检查安装器的 `.env.example` 中列出的允许值。较早的安装器配置架构列出的是 `none`，worker 会将它视为 `auto`。
 
 ## 迁移现有的自托管安装
 

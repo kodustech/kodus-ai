@@ -65,9 +65,7 @@ Kodus は [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-grap
 cross-file コンテキストもコードグラフもありません。`SANDBOX_PROVIDER=local` のまま
 `API_E2B_KEY` だけを設定した場合は、ローカルのサンドボックスが維持されます。
 
-サンドボックスをオフにするには、`SANDBOX_PROVIDER=null` を設定します。`none` は有効な
-値ではありません。`auto`、`local`、`e2b`、`null` 以外の値は、`auto` と同じ動作になります。
-サンドボックスがオフの間、`./scripts/doctor.sh` は警告を表示します。
+サンドボックスをオフにするには、`SANDBOX_PROVIDER=null` を設定します。オフの場合は `./scripts/doctor.sh` が警告を表示します。`./scripts/validate-env.sh` が `null` を拒否する場合は、インストーラーの `.env.example` に記載された有効値を確認してください。古いインストーラーのスキーマに記載されている `none` は、ワーカーでは `auto` として扱われます。
 
 ## 既存のセルフホスト環境の移行
 

@@ -68,13 +68,15 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
         kodus auth login
         ```
 
-        The CLI opens the **Authorize Kodus CLI** page of your self-hosted web app. Sign in with the account registered on your instance (after signing in you land on the dashboard, so open the URL the CLI printed again), then click **Authorize CLI**. On a machine with no browser, the CLI prints a URL and a code instead (or add `--device-code`). The page has no field for the code: open the URL with `?code=<code>` added. Your login is stored in `~/.kodus/credentials.json` with restricted permissions (600).
+        The CLI opens the **Authorize Kodus CLI** page of your self-hosted web app. Sign in with the account registered on your instance (after signing in you land on the dashboard, so open the URL the CLI printed again), then click **Authorize CLI**. On a machine without a browser, run `kodus auth login --device-code` in a private terminal. The CLI shows the authorization URL for your instance and a one-time code. In your browser's address bar, add the code as the `code` query parameter and click **Authorize CLI**. Keep the code and the full link out of logs and shared messages.
+
+        Your login is stored in `~/.kodus/credentials.json` with restricted permissions (600).
 
         <Info>
           The address of that page comes from the `API_FRONTEND_URL` setting of your Kodus API. It must be your web app's URL, or the login page opens on the wrong host.
         </Info>
 
-        For scripts that cannot use a browser, `--legacy` with `--email` and `--password` signs in with email and password (see [`auth login`](/en/how_to_use/cli/commands#auth-login)). It is deprecated.
+        For CI, store a team key as the `KODUS_TEAM_KEY` secret.
       </Tab>
     </Tabs>
   </Step>

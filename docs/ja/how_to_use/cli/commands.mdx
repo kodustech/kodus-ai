@@ -211,12 +211,12 @@ Kodus API の認証を管理します。
 ```bash
 kodus auth login                              # Browser login
 kodus auth login --device-code                # Code login, for SSH and headless machines
-kodus auth login --legacy -e user@mail.com -p password
+kodus auth login --legacy -e user@mail.com
 ```
 
 ログインすると、ブラウザで **Authorize Kodus CLI** ページが開き、その URL が出力されます。そこで **Authorize CLI** をクリックして完了します。そのブラウザで Kodus にサインインしていない場合は、サインイン後にダッシュボードが表示されます。その場合は、もう一度 URL を開いてください。
 
-SSH セッション、CI、またはインタラクティブでないターミナルでは、CLI は代わりにコードフローを使用します。URL とコードが出力されます。ページにはコードを入力するフィールドがありません。URL に `?code=<code>` を付けて（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`）、任意のデバイスから開いてください。どちらのフローも最大 10 分間待機します。
+他の人と共有していない SSH セッションやブラウザーのないマシンでは、`--device-code` を使用し、[サインイン手順](/ja/how_to_use/cli/getting_started)に従ってください。どちらのフローも最大 10 分待機します。CI では `KODUS_TEAM_KEY` をシークレットとして設定します。
 
 セルフホストのインスタンスでは、ページは API の `API_FRONTEND_URL` で設定されたホストにあります。
 

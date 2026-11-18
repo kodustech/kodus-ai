@@ -211,12 +211,12 @@ Administra la autenticación con la API de Kodus.
 ```bash
 kodus auth login                              # Browser login
 kodus auth login --device-code                # Code login, for SSH and headless machines
-kodus auth login --legacy -e user@mail.com -p password
+kodus auth login --legacy -e user@mail.com
 ```
 
 El inicio de sesión abre la página **Authorize Kodus CLI** en tu navegador e imprime su URL; haz clic en **Authorize CLI** allí para terminar. Si no tienes la sesión iniciada en Kodus en ese navegador, llegas al panel después de iniciar sesión: abre la URL de nuevo.
 
-En una sesión SSH, en CI o en una terminal que no es interactiva, el CLI usa el flujo de código en su lugar. Imprime una URL y un código. La página no tiene un campo para el código: abre la URL con `?code=<code>` agregado (`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`) desde cualquier dispositivo. Ambos flujos esperan hasta 10 minutos.
+En una sesión SSH privada o una máquina sin navegador, usa `--device-code` y sigue los [pasos para iniciar sesión](/es/how_to_use/cli/getting_started). Ambos flujos esperan hasta 10 minutos. Para CI, usa `KODUS_TEAM_KEY` como secreto.
 
 En una instancia con alojamiento autónomo, la página está en el host definido por `API_FRONTEND_URL` de la API.
 

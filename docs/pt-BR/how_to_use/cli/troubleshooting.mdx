@@ -88,7 +88,7 @@ kodus review --verbose    # or any command with --verbose
 
   <Accordion title="A página de login não abre ou o login expira">
     - O CLI imprime a URL quando o navegador não abre. Cole-a em um navegador.
-    - Em uma sessão SSH, no CI ou em um terminal que não é interativo, o CLI usa um código no lugar. Ele imprime uma URL e um código e diz para digitar o código, mas a página não tem campo para isso. Abra a URL com o código adicionado como `?code=<code>` (`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`) e clique em **Authorize CLI**.
+    - Em uma sessão SSH privada ou máquina sem navegador, siga as [etapas de login por código](/pt-BR/how_to_use/cli/getting_started). No CI, configure `KODUS_TEAM_KEY` como secret.
     - Quando você não está logado no Kodus nesse navegador, a página leva você à página de login e, depois de entrar, você cai no dashboard, não em **Authorize CLI**. Abra a URL novamente; o CLI continua esperando.
     - O login espera por até 10 minutos. "Authorization timed out", "expired" ou "denied" significa que você precisa executar `kodus auth login` novamente.
     - Para forçar o fluxo por código, execute `kodus auth login --device-code`.

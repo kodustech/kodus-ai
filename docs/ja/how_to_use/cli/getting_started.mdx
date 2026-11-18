@@ -62,7 +62,7 @@ description: "Kodus CLI をインストールし、認証し、最初のレビ�
 
         そのブラウザで Kodus にサインインしていない場合は、まずサインインページが表示され、サインイン後はダッシュボードに移動します。ターミナルに表示された URL をもう一度開くと、**Authorize CLI** に到達できます。CLI は最大10分間待機します。
 
-        ブラウザのないマシン（SSH セッション、CI、非インタラクティブなターミナル）では、CLI は代わりに URL とコードを出力します。ページにコードを入力するフィールドはありません。コードを `code` パラメータとして追加した URL（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`）を任意のデバイスで開き、**Authorize CLI** をクリックしてください。コードの有効期限は10分です。`--device-code` を追加すると、どのマシンでもこのフローを使用できます。
+        ブラウザーのないマシンでは、他の人と共有していないターミナルで `kodus auth login --device-code` を実行します。CLI に認証ページの URL（Kodus Cloud では `https://app.kodus.io/cli/authorize`）とワンタイムコードが表示されます。ブラウザーのアドレスバーで URL に `code` クエリパラメーターとしてコードを追加し、**Authorize CLI** をクリックします。コードは 10 分で期限切れになります。コードやコード付きの URL は、ログや共有メッセージに含めないでください。CI では、チームキーをシークレット `KODUS_TEAM_KEY` に設定します。
 
         ログイン情報は `~/.kodus/credentials.json` に保存され、自動的に更新されます。
       </Tab>
