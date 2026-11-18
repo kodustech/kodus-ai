@@ -29,7 +29,7 @@ export interface IWorkflowJobRepository {
      * that no inbox/outbox message references, except `keepWorkflowTypes`.
      * Returns how many went and where the next batch should resume.
      */
-    deleteFinishedOlderThan?(params: {
+    deleteFinishedOlderThan(params: {
         olderThan: Date;
         batchSize: number;
         after?: string;

@@ -406,10 +406,17 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
               }
             | undefined;
 
+        // The SELECT always answers one row; without it nothing is known
+        // about the batch, and a 0 would read as "nothing left".
+        if (!row) {
+            throw new Error(
+                'Workflow job retention batch returned no result row',
+            );
+        }
         return {
-            deleted: row?.deleted ?? 0,
-            candidates: row?.candidates ?? 0,
-            lastUpdatedAt: row?.lastUpdatedAt ?? undefined,
+            deleted: row.deleted,
+            candidates: row.candidates,
+            lastUpdatedAt: row.lastUpdatedAt ?? undefined,
         };
     }
 
