@@ -103,6 +103,8 @@ Alguns clusters espelham ou bloqueiam as imagens `library/*` do Docker Hub, ent�
 `mongo` embutida pode precisar de um override com a mesma tag que o chart fixa (`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8.3.13`)
 ou de um data store `external` / `operator`.
 
+Se os nós do MongoDB usarem Linux 6.19 ou mais recente, consulte as [instruções de inicialização do MongoDB](/pt-BR/how_to_deploy/deploy_kodus/troubleshooting#”mongodb-encerra-com-server-121912”) antes de escolher a tag da imagem.
+
 ## Serviços opcionais
 
 `mcp-manager` e `worker-analytics` vêm ambos habilitados por padrão. Desligue qualquer um para uma

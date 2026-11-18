@@ -57,12 +57,12 @@ Luego abre **Code review → Routing** (el botón **Configure routing** de la p�
 
 ### Opción 2 — Alojamiento autónomo (variables de entorno)
 
-Para darle un modelo a una instancia con alojamiento autónomo mediante `.env`, usa el proveedor compatible con OpenAI:
+En una instancia autohospedada, selecciona el proveedor compatible con OpenAI en `.env` y usa la misma URL base que el proveedor Novita integrado.
 
 ```env
 API_LLM_PROVIDER=openai_compatible
 API_LLM_PROVIDER_MODEL="deepseek/deepseek-v4-pro"
-API_LLM_BASE_URL="https://api.novita.ai/openai/v1"
+API_LLM_BASE_URL="https://api.novita.ai/v3/openai"
 API_LLM_API_KEY="your-novita-api-key"
 ```
 

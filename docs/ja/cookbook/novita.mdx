@@ -57,12 +57,12 @@ Novita のモデル ID は `org/model` 形式の文字列で、ほとんどが�
 
 ### オプション2 — セルフホスト（環境変数）
 
-セルフホスト環境で `.env` から 1 つのモデルを指定するには、OpenAI 互換プロバイダーを使用します。
+セルフホスト環境では、`.env` で OpenAI 互換プロバイダーを選び、組み込みの Novita プロバイダーと同じベース URL を使用します。
 
 ```env
 API_LLM_PROVIDER=openai_compatible
 API_LLM_PROVIDER_MODEL="deepseek/deepseek-v4-pro"
-API_LLM_BASE_URL="https://api.novita.ai/openai/v1"
+API_LLM_BASE_URL="https://api.novita.ai/v3/openai"
 API_LLM_API_KEY="your-novita-api-key"
 ```
 

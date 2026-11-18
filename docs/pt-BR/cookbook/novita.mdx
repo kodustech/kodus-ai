@@ -57,12 +57,12 @@ Em seguida, abra **Code review → Routing** (o botão **Configure routing** na 
 
 ### Opção 2 — Self-hosted (variáveis de ambiente)
 
-Para dar a uma instância self-hosted um modelo via `.env`, use o provedor compatível com OpenAI:
+Em uma instância self-hosted, selecione o provedor OpenAI-compatible no `.env` e use a mesma URL base do provedor Novita integrado.
 
 ```env
 API_LLM_PROVIDER=openai_compatible
 API_LLM_PROVIDER_MODEL="deepseek/deepseek-v4-pro"
-API_LLM_BASE_URL="https://api.novita.ai/openai/v1"
+API_LLM_BASE_URL="https://api.novita.ai/v3/openai"
 API_LLM_API_KEY="your-novita-api-key"
 ```
 

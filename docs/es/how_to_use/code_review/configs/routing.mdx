@@ -10,7 +10,7 @@ Balanced está disponible en todos los planes. Consulta [Heavy mode](/es/how_to_
 ## Modo de revisión
 
 - **Balanced:** la revisión estándar.
-- **Heavy (beta):** una revisión más profunda con revisores especialistas. Disponible en Teams y Enterprise, incluidas las pruebas. En otros planes **Heavy** no se puede seleccionar, y una revisión heavy (por ejemplo `--heavy`) se ejecuta en Balanced.
+- **Heavy (beta):** una revisión más profunda con revisores especialistas. Disponible en Teams y Enterprise, incluidas las pruebas. En otros planes, la opción Heavy está deshabilitada. Una solicitud explícita con `--heavy` se ejecuta en Balanced y avisa de que Heavy requiere Teams o Enterprise.
 
 Con la [evaluación de riesgo](/es/how_to_use/code_review/configs/risk) activada, **No risk found** usa Balanced por defecto y **Risk found** usa Heavy cuando el plan lo incluye. **Risk assessment unavailable** usa el modo predeterminado, `reviewMode` en YAML. Empieza en Balanced. Puedes elegir Heavy como alternativa si tu plan lo incluye.
 

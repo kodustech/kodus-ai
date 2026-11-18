@@ -10,7 +10,7 @@ description: "选择审查深度,并查看适用的模型。"
 ## 审查模式
 
 - **Balanced:** 标准审查。
-- **Heavy (beta):** 带有专家审查者的更深入审查。适用于 Teams 和 Enterprise,包括试用。在其他套餐上无法选择 **Heavy**,heavy 审查(例如 `--heavy`)会按 Balanced 运行。
+- **Heavy (beta):** 带有专家审查者的更深入审查。适用于 Teams 和 Enterprise,包括试用。在其他套餐中，设置中的 Heavy 选项不可用。显式指定 `--heavy` 会以 Balanced 模式运行，并提示 Heavy 需要 Teams 或 Enterprise 套餐。
 
 开启[风险评估](/zh/how_to_use/code_review/configs/risk)后，**No risk found** 默认使用 Balanced；套餐支持 Heavy 时，**Risk found** 默认使用 Heavy。**Risk assessment unavailable** 使用默认审查模式，即 YAML 中的 `reviewMode`。初始值为 Balanced，套餐支持 Heavy 时可将其设为回退模式。
 

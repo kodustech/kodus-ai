@@ -103,6 +103,8 @@ Some clusters mirror or block Docker Hub `library/*` images, so the bundled `mon
 image may need an override with the same tag the chart pins (`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8.3.13`)
 or an `external` / `operator` data store.
 
+If your MongoDB nodes run Linux 6.19 or later, check the [MongoDB startup guidance](/en/how_to_deploy/deploy_kodus/troubleshooting#”mongodb-exits-with-server-121912”) before choosing an image tag.
+
 ## Optional services
 
 `mcp-manager` and `worker-analytics` are both enabled by default. Turn either off for a

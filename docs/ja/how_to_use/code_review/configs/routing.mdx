@@ -10,7 +10,7 @@ Balanced はすべてのプランで利用できます。Heavy に対応する�
 ## レビューモード
 
 - **Balanced：** 標準のレビューです。
-- **Heavy (beta)：** 専門レビュアーによる、より深いレビューです。トライアルを含む Teams と Enterprise で利用できます。その他のプランでは **Heavy** を選択できず、Heavy レビュー（たとえば `--heavy`）は Balanced で実行されます。
+- **Heavy (beta)：** 専門レビュアーによる、より深いレビューです。トライアルを含む Teams と Enterprise で利用できます。その他のプランでは、設定で Heavy を選択できません。`--heavy` を明示的に指定すると、Balanced で実行され、Heavy には Teams または Enterprise が必要であることが通知されます。
 
 [リスク評価](/ja/how_to_use/code_review/configs/risk)を有効にすると、**No risk found** のデフォルトは Balanced、プランで利用できる場合は **Risk found** のデフォルトは Heavy です。**Risk assessment unavailable** は YAML の `reviewMode` で指定するデフォルトのモードを使用します。初期値は Balanced です。プランが対応していれば、フォールバックとして Heavy を選択できます。
 
