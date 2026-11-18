@@ -14,7 +14,7 @@ developer declined or fixed them.
 
 ## Does the whole change in #2597 improve review quality?
 
-Use `--set=review-quality-2597` on the base and the PR with the same eval files, model, judge, reasoning effort, concurrency and repetitions. Save both JSON outputs and run `node evals/review-rounds/compare-quality.js base.json pr.json` to see the result by contract, model usage and latency. The set scores the comments delivered by production. Compare each row of the table separately: suppressing every finding would look good on clean code alone.
+Use `--set=review-quality-2597` on the base and the PR with the same eval files, model, judge, reasoning effort, concurrency and repetitions. Save both JSON outputs and run `node evals/review-rounds/compare-quality.js base.json pr.json` to see the result by contract, model usage and latency. The set scores the comments delivered by any production agent. A correct finding from the general reviewer counts even when the case also exercises a team rule. A false claim from either reviewer also counts against the change. Compare each row of the table separately: suppressing every finding would look good on clean code alone.
 
 | Question | Cases | Expected delivery |
 | --- | --- | --- |

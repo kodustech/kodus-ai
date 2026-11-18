@@ -13,6 +13,8 @@ function compare(base, pr) {
         deepStrictEqual(base[field], pr[field], `different ${field}`);
     }
     for (const result of [base, pr]) {
+        if (!result.casesSourceDigest) throw new Error('missing case source digest');
+        if (result.deliveryScope !== 'all-agents') throw new Error('whole-review comparison requires scoring every agent');
         if (!result.complete || result.infra.errored || result.reps < 1) {
             throw new Error('comparison requires complete, measured runs on both sides');
         }
