@@ -9,7 +9,6 @@ import {
 } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createTwoFilesPatch } from 'diff';
 import pLimit from 'p-limit';
 import { v4 } from 'uuid';
 
@@ -124,6 +123,10 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import {
+    AZURE_FILE_DIFF_TIMEOUT_MS,
+    createFilePatchYielding,
+} from './azure-file-patch';
 import { listingFailed } from '../repository-listing';
 import {
     failWebhookSetupForAll,
@@ -4530,7 +4533,10 @@ export class AzureReposService implements Omit<
 
             // Generate unified diff only if we have something to compare
             if (originalFileContent || modifiedFileContent) {
-                patch = createTwoFilesPatch(
+                // Yields to the event loop while diffing and gives up on a
+                // pathological file (see createFilePatchYielding).
+                const startedAt = Date.now();
+                const computed = await createFilePatchYielding(
                     status === 'renamed' // Compare with string literal
                         ? params.filePath /* Use original path here if available and needed */
                         : filePath, // Adjust if original path is needed for renamed files
@@ -4539,8 +4545,22 @@ export class AzureReposService implements Omit<
                     modifiedFileContent,
                     baseCommitId ?? '',
                     targetCommitId,
-                    { context: 3 }, // Context lines around changes
                 );
+                if (computed === undefined) {
+                    this.logger.warn({
+                        message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; reviewing the file without a patch`,
+                        context: this._generateFileDiffForAzure.name,
+                        metadata: {
+                            filePath,
+                            baseCommitId,
+                            targetCommitId,
+                            elapsedMs: Date.now() - startedAt,
+                            originalChars: originalFileContent.length,
+                            modifiedChars: modifiedFileContent.length,
+                        },
+                    });
+                }
+                patch = computed ?? '';
 
                 // Calculate additions and deletions from the patch
                 const diffLines = patch.split('\n');
