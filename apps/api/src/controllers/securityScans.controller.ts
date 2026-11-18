@@ -91,7 +91,7 @@ const canReadScans = checkPermissions({
 });
 
 // Same grant as start: the people who can run a scan can unstick one.
-// Repo assignment is checked after the scan is loaded (the id is the
+// Repo assignment is checked when the scan is loaded (the id is the
 // scan, not the repository).
 const canCancelScan = checkPermissions({
     action: Action.Create,
@@ -197,31 +197,18 @@ export class SecurityScansController {
     @CheckPolicies(canCancelScan)
     async cancel(@Param('id') id: string) {
         const organizationId = await this.organizationId();
-        const scan = await this.getSecurityScans.get(
-            organizationId,
-            id,
-            undefined,
-        );
+        // Loaded within the repositories the caller may scan: one outside
+        // them is not found, as on GET /:id.
         const writeRepos = await this.authorizationService.getRepositoryScope({
             user: this.request.user,
             action: Action.Create,
             resource: ResourceType.SecurityScan,
         });
-        if (
-            !(await this.getSecurityScans.isInRepositoryScope(
-                organizationId,
-                scan,
-                writeRepos ?? undefined,
-            ))
-        ) {
-            throw new ForbiddenException();
-        }
-        await this.authorizationService.ensure({
-            user: this.request.user,
-            action: Action.Create,
-            resource: ResourceType.SecurityScan,
-            repoIds: [scan.repository.id],
-        });
+        await this.getSecurityScans.get(
+            organizationId,
+            id,
+            writeRepos ?? undefined,
+        );
         return this.cancelSecurityScan.execute({
             organizationId,
             scanId: id,

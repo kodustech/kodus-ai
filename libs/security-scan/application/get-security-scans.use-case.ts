@@ -103,21 +103,6 @@ export class GetSecurityScansUseCase {
         return scan;
     }
 
-    /**
-     * Whether the scan's (id, platform, host) is in the resolved write set.
-     * `undefined` repositoryIds is organization-wide. Ambiguous or host-less
-     * ids resolve to no match (fail closed) without 404ing the scan.
-     */
-    async isInRepositoryScope(
-        organizationId: string,
-        scan: SecurityScanRecord,
-        repositoryIds: string[] | undefined,
-    ): Promise<boolean> {
-        const scope = await this.repositoryScope(organizationId, repositoryIds);
-        if (scope === undefined) return true;
-        return scope.some((r) => this.matchesRepository(r, scan.repository));
-    }
-
     private matchesRepository(
         candidate: ScanRepositoryKey,
         repository: { id: string; platform: string; host: string },

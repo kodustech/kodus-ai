@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 import {
     Action,
@@ -76,26 +76,25 @@ describe('SecurityScansController.cancel', () => {
         repository: { id: 'repo-allowed' },
     };
 
-    const setup = (allowed: string[]) => {
+    const setup = (allowed: string[] | null) => {
         const getSecurityScans = {
-            get: jest.fn(async () => scan),
-            isInRepositoryScope: jest.fn(
+            get: jest.fn(
                 async (
                     _org: string,
-                    current: { repository: { id: string } },
+                    _id: string,
                     ids: string[] | undefined,
-                ) => ids === undefined || ids.includes(current.repository.id),
+                ) => {
+                    if (ids && !ids.includes(scan.repository.id)) {
+                        throw new NotFoundException('Security scan not found.');
+                    }
+                    return scan;
+                },
             ),
         };
         const cancelSecurityScan = {
             execute: jest.fn(async () => ({ ...scan, status: 'cancelled' })),
         };
         const authorizationService = {
-            ensure: jest.fn(async ({ repoIds }: { repoIds: string[] }) => {
-                if (!repoIds.every((id) => allowed.includes(id))) {
-                    throw new ForbiddenException();
-                }
-            }),
             getRepositoryScope: jest.fn(async () => allowed),
         };
         const controller = new SecurityScansController(
@@ -124,52 +123,40 @@ describe('SecurityScansController.cancel', () => {
 
         await controller.cancel(scan.uuid);
 
-        expect(getSecurityScans.get).toHaveBeenCalledWith(
-            'org-1',
-            scan.uuid,
-            undefined,
-        );
         expect(authorizationService.getRepositoryScope).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: Action.Create,
                 resource: ResourceType.SecurityScan,
             }),
         );
-        expect(getSecurityScans.isInRepositoryScope).toHaveBeenCalledWith(
-            'org-1',
-            scan,
-            ['repo-allowed'],
-        );
-        expect(authorizationService.ensure).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: Action.Create,
-                resource: ResourceType.SecurityScan,
-                repoIds: ['repo-allowed'],
-            }),
-        );
+        expect(getSecurityScans.get).toHaveBeenCalledWith('org-1', scan.uuid, [
+            'repo-allowed',
+        ]);
         expect(cancelSecurityScan.execute).toHaveBeenCalledWith({
             organizationId: 'org-1',
             scanId: scan.uuid,
         });
     });
 
-    it('cancels nothing when the caller may not scan that repository', async () => {
+    it('loads the scan organization-wide for an organization-wide grant', async () => {
+        const { controller, getSecurityScans, cancelSecurityScan } =
+            setup(null);
+
+        await controller.cancel(scan.uuid);
+
+        expect(getSecurityScans.get).toHaveBeenCalledWith(
+            'org-1',
+            scan.uuid,
+            undefined,
+        );
+        expect(cancelSecurityScan.execute).toHaveBeenCalled();
+    });
+
+    it('answers not found, cancelling nothing, when the caller may not scan that repository', async () => {
         const { controller, cancelSecurityScan } = setup(['repo-other']);
 
         await expect(controller.cancel(scan.uuid)).rejects.toThrow(
-            ForbiddenException,
-        );
-        expect(cancelSecurityScan.execute).not.toHaveBeenCalled();
-    });
-
-    it('cancels nothing when the resolved write set does not include the scan', async () => {
-        const { controller, getSecurityScans, cancelSecurityScan } = setup([
-            'repo-allowed',
-        ]);
-        getSecurityScans.isInRepositoryScope.mockResolvedValueOnce(false);
-
-        await expect(controller.cancel(scan.uuid)).rejects.toThrow(
-            ForbiddenException,
+            NotFoundException,
         );
         expect(cancelSecurityScan.execute).not.toHaveBeenCalled();
     });

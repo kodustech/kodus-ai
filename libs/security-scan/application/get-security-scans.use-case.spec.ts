@@ -55,47 +55,23 @@ describe('scan read scope', () => {
         expect(scans.findRecent).toHaveBeenCalledWith('org', undefined, 20);
     });
 
-    it('allows the granted instance and an organization-wide scope', async () => {
+    it('finds a scan on the granted instance, and anywhere with an organization-wide scope', async () => {
         const { useCase } = setup();
-        const scan = { organizationId: 'org', repository } as any;
-        await expect(
-            useCase.isInRepositoryScope('org', scan, ['123']),
-        ).resolves.toBe(true);
-        await expect(
-            useCase.isInRepositoryScope('org', scan, undefined),
-        ).resolves.toBe(true);
+        await expect(useCase.get('org', id, ['123'])).resolves.toMatchObject({ repository });
+        await expect(useCase.get('org', id, undefined)).resolves.toMatchObject({ repository });
     });
 
-    it('refuses the same id on another instance', async () => {
-        const { useCase } = setup();
-        const other = {
+    it('does not find the same id on another instance', async () => {
+        const { useCase, scans } = setup();
+        scans.findById.mockResolvedValue({
             organizationId: 'org',
             repository: { id: '123', platform: 'GITLAB', host: 'gitlab.com' },
-        } as any;
-        await expect(
-            useCase.isInRepositoryScope('org', other, ['123']),
-        ).resolves.toBe(false);
+        });
+        await expect(useCase.get('org', id, ['123'])).rejects.toThrow('Security scan not found');
     });
 
-    it('refuses the same id and platform on another host', async () => {
+    it('does not find the same id and platform on another host', async () => {
         const { useCase } = setup([config('GITHUB', 'github.enterprise')]);
-        const scan = {
-            organizationId: 'org',
-            repository: { id: '123', platform: 'GITHUB', host: 'github.com' },
-        } as any;
-        await expect(
-            useCase.isInRepositoryScope('org', scan, ['123']),
-        ).resolves.toBe(false);
-    });
-
-    it('does not match an ambiguous legacy id to another instance', async () => {
-        const { useCase } = setup([
-            config(),
-            config('GITLAB', 'gitlab.com'),
-        ] as any);
-        const scan = { organizationId: 'org', repository } as any;
-        await expect(
-            useCase.isInRepositoryScope('org', scan, ['123']),
-        ).resolves.toBe(false);
+        await expect(useCase.get('org', id, ['123'])).rejects.toThrow('Security scan not found');
     });
 });
