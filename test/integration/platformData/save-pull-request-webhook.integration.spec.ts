@@ -361,7 +361,7 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
         });
 
         describe('Webhook "closed" with PR in DB → uses cache', () => {
-            it('should NOT call Git API and pass DB data through the whole flow', async () => {
+            it('should NOT call Git API and tell the save the stored files did not change', async () => {
                 // PR exists in MongoDB from a previous "opened" event
                 await insertPRInDB();
 
@@ -371,12 +371,8 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
                     event: 'pull_request',
                 };
 
-                // Simulate webhook arriving at handler
                 await handler.execute(webhookParams);
 
-                // Git API must NOT be called by SavePullRequestUseCase
-                // Note: the handler itself may call getFilesByPullRequestId for Kody Rules sync on merge,
-                // but SavePullRequestUseCase should not call it for the "closed" action
                 expect(
                     mockPullRequestsService.aggregateAndSaveDataStructure,
                 ).toHaveBeenCalledTimes(1);
@@ -384,30 +380,13 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
                 const callArgs =
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0];
-                const filesArg = callArgs[2];
-                const commitsArg = callArgs[7];
 
-                // Data must come FROM THE DATABASE, mapped to API format
-                expect(filesArg).toHaveLength(2);
-
-                // 'filename' must be the FULL PATH (from DB 'path'), not the short name
-                expect(filesArg[0].filename).toBe('src/from-db.ts');
-                expect(filesArg[1].filename).toBe('src/from-db-2.ts');
-
-                // 'additions'/'deletions' must be mapped from DB 'added'/'deleted'
-                expect(filesArg[0].additions).toBe(10);
-                expect(filesArg[0].deletions).toBe(5);
-                expect(filesArg[1].additions).toBe(20);
-                expect(filesArg[1].deletions).toBe(0);
-
-                // Other fields must be preserved (including patch from MongoDB Mixed type)
-                expect(filesArg[0].patch).toBe('@@ cached');
-                expect(filesArg[0].sha).toBe('file-sha-1');
-                expect(filesArg[0].status).toBe('modified');
-
-                expect(commitsArg).toHaveLength(2);
-                expect(commitsArg[0].sha).toBe('db-sha-aaa');
-                expect(commitsArg[1].sha).toBe('db-sha-bbb');
+                // Nothing is read back to be re-saved: the save keeps the
+                // stored files and commits (proven against a real save in
+                // save.webhook-writes.integration.spec.ts).
+                expect(callArgs[2]).toEqual([]);
+                expect(callArgs[7]).toEqual([]);
+                expect(callArgs[9]).toEqual({ filesUnchanged: true });
             });
         });
 
