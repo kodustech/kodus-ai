@@ -137,8 +137,9 @@ describe('CronRunGate', () => {
                 } else if (
                     path.endsWith('.ts') &&
                     !path.endsWith('.spec.ts') &&
-                    !path.endsWith('cron-run-gate.ts') &&
-                    /@Cron\(/.test(readFileSync(path, 'utf8'))
+                    // A decorator at the start of a line, not a mention in
+                    // a comment or a string.
+                    /^\s*@Cron\(/m.test(readFileSync(path, 'utf8'))
                 ) {
                     offenders.push(path.slice(root.length + 1));
                 }

@@ -1,4 +1,7 @@
-import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
+import {
+    cronRunGate,
+    GatedCron,
+} from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { CronExpression } from '@nestjs/schedule';
 
@@ -50,8 +53,9 @@ export class AnalyticsIngestionCron implements OnApplicationBootstrap {
             return;
         }
 
+        // Through the gate like the cron ticks, so shutdown waits for it.
         setImmediate(() => {
-            void this.runAll('startup');
+            void cronRunGate.run(() => this.runAll('startup'));
         });
     }
 
