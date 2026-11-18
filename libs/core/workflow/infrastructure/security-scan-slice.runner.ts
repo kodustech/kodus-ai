@@ -38,10 +38,12 @@ function workerScriptPath(): string {
 }
 
 function killChild(child: ChildProcess): void {
-    if (child.exitCode !== null || child.killed) return;
+    if (child.exitCode !== null) return;
     child.kill('SIGTERM');
     const killTimer = setTimeout(() => {
-        if (child.exitCode === null && !child.killed) {
+        // `subprocess.killed` is true as soon as SIGTERM was *sent*, even
+        // if the child ignored it. Escalate off exit state only.
+        if (child.exitCode === null) {
             child.kill('SIGKILL');
         }
     }, 5_000);
@@ -65,7 +67,9 @@ export async function runSecurityScanSliceChild(
     };
     const execPath = options.execPath ?? process.execPath;
     const scriptPath = options.scriptPath ?? workerScriptPath();
-    const parentWaitMs = options.parentWaitMs ?? SECURITY_SCAN_PARENT_WAIT_MS;
+    const requestedWaitMs = options.parentWaitMs ?? 0;
+    const parentWaitMs =
+        requestedWaitMs > 0 ? requestedWaitMs : SECURITY_SCAN_PARENT_WAIT_MS;
 
     logger.log({
         message: `Spawning security-scan slice child for job ${jobId}`,

@@ -110,4 +110,55 @@ describe('runSecurityScanSliceChild', () => {
         expect(child.kill).toHaveBeenCalledWith('SIGTERM');
         jest.useRealTimers();
     });
+
+    it('falls back to the default wait when parentWaitMs is 0', async () => {
+        jest.useFakeTimers();
+        const child = new FakeChild();
+        child.kill = jest.fn(() => true);
+        const spawn = jest.fn(
+            () => child as unknown as ReturnType<SpawnSliceChild>,
+        );
+
+        const done = runSecurityScanSliceChild('job-1', {
+            spawn,
+            parentWaitMs: 0,
+            scriptPath: '/app/main.js',
+            execPath: '/usr/bin/node',
+        });
+        await jest.advanceTimersByTimeAsync(1);
+        expect(child.kill).not.toHaveBeenCalled();
+        child.emit('exit', 0, null);
+        await done;
+        jest.useRealTimers();
+    });
+
+    it('SIGKILLs a child that ignores SIGTERM', async () => {
+        jest.useFakeTimers();
+        const child = new FakeChild();
+        child.kill = jest.fn((signal?: string) => {
+            if (signal === 'SIGKILL') {
+                child.emit('exit', null, 'SIGKILL');
+            }
+            return true;
+        });
+        const spawn = jest.fn(
+            () => child as unknown as ReturnType<SpawnSliceChild>,
+        );
+        const abort = new AbortController();
+
+        const done = runSecurityScanSliceChild('job-1', {
+            spawn,
+            abortSignal: abort.signal,
+            scriptPath: '/app/main.js',
+            execPath: '/usr/bin/node',
+        });
+        const assertion = expect(done).rejects.toThrow(/exited SIGKILL/);
+        abort.abort();
+        expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+        expect(child.kill).not.toHaveBeenCalledWith('SIGKILL');
+        await jest.advanceTimersByTimeAsync(5_000);
+        expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+        await assertion;
+        jest.useRealTimers();
+    });
 });

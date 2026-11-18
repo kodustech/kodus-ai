@@ -122,12 +122,15 @@ async function bootstrap() {
             const processor = appContext.get<IJobProcessorService>(
                 JOB_PROCESSOR_SERVICE_TOKEN,
             );
-            const abort = new AbortController();
-            const onStop = () => abort.abort();
+            // SIGTERM's default terminate is overridden by Nest shutdown
+            // hooks; exit here so a parent abort does not leave the engine
+            // running until the 34-min router timeout. Do not abort the
+            // processor: JobAbortedError would mark the scan FAILED.
+            const onStop = () => process.exit(1);
             process.once('SIGTERM', onStop);
             process.once('SIGINT', onStop);
             try {
-                await processor.process(sliceJobId, abort.signal);
+                await processor.process(sliceJobId);
                 await appContext.close();
                 process.exit(0);
             } catch (error) {

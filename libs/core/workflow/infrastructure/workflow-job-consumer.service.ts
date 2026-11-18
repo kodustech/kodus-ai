@@ -36,6 +36,7 @@ import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 import { runSecurityScanSliceChild } from './security-scan-slice.runner';
 import {
+    isSecurityScanSliceProcess,
     SECURITY_SCAN_CLAIM_HEARTBEAT_MS,
     SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
     SECURITY_SCAN_JOB_QUEUE,
@@ -434,6 +435,14 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
      * (onApplicationShutdown), so running jobs can still ack.
      */
     async beforeApplicationShutdown(signal?: string): Promise<void> {
+        // Slice children share the parent's hostname and own no inbox
+        // claims. Their close() must not releaseAllByInstance the parent's
+        // live rows (completeIfHeldBy would then no-op and a duplicate
+        // would re-run the slice).
+        if (isSecurityScanSliceProcess()) {
+            return;
+        }
+
         for (const abort of this.sliceAborts) {
             abort.abort();
         }
