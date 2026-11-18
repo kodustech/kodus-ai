@@ -120,13 +120,38 @@ describe("monthly auto top-up limit", () => {
         );
     });
 
-    it("says a zero cap pauses purchases instead of pointing at the reset", () => {
+    // Billing buys whole packs only, so a cap below the $50 pack blocks every month.
+    it.each([0, 20])(
+        "says a $%i cap below the pack pauses purchases instead of pointing at the reset",
+        (cap) => {
+            render(
+                <AutoTopUpMonthlyLimit
+                    auto={{
+                        ...auto,
+                        monthlyLimitUsd: cap,
+                        monthlyPurchasedUsd: 0,
+                        monthlyRemainingUsd: cap,
+                        monthlyLimitReached: true,
+                    }}
+                    disabled={false}
+                    onSave={jest.fn()}
+                />,
+            );
+            const status = screen.getByRole("status");
+            expect(status).toHaveTextContent(
+                `Automatic purchases are paused: the $${cap} limit is below the $50 top-up. Raise the limit to at least $50 to resume them.`,
+            );
+            expect(status).not.toHaveTextContent("wait until");
+        },
+    );
+
+    it("points at the reset once the cap covers at least one pack", () => {
         render(
             <AutoTopUpMonthlyLimit
                 auto={{
                     ...auto,
-                    monthlyLimitUsd: 0,
-                    monthlyPurchasedUsd: 0,
+                    monthlyLimitUsd: 50,
+                    monthlyPurchasedUsd: 50,
                     monthlyRemainingUsd: 0,
                     monthlyLimitReached: true,
                 }}
@@ -134,11 +159,9 @@ describe("monthly auto top-up limit", () => {
                 onSave={jest.fn()}
             />,
         );
-        const status = screen.getByRole("status");
-        expect(status).toHaveTextContent(
-            "Automatic purchases are paused by a $0 limit. Raise the limit to resume them.",
+        expect(screen.getByRole("status")).toHaveTextContent(
+            "Increase the limit or wait until Jan 1 (UTC).",
         );
-        expect(status).not.toHaveTextContent("wait until");
     });
 
     it("does not offer an unenforced cap against an older billing deployment", () => {
