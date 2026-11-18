@@ -801,6 +801,37 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         );
     });
 
+    it('adds the fallback line when the final comment is a new one (start message off)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        await stage.execute(
+            context(
+                undefined,
+                ultra('success', [
+                    run(1, 'a', 'completed'),
+                    run(2, 'b', 'failed', { replacedBy: 'f' }),
+                    run(3, 'c', 'completed'),
+                    run('fallback', 'f', 'completed'),
+                ]),
+                {
+                    pullRequestMessagesConfig: {
+                        startReviewMessage: {
+                            status: PullRequestMessageStatus.OFF,
+                        },
+                        endReviewMessage: {
+                            status: PullRequestMessageStatus.ACTIVE,
+                            content: 'All good!',
+                        },
+                    },
+                },
+            ),
+        );
+
+        const args = commentManagerService.createComment.mock.calls[0];
+        expect(args.at(-1)).toBe(
+            '> Ultra review: `openai:b` failed, and the fallback `openai:f` took its place.',
+        );
+    });
+
     it('posts nothing for a review that is not Ultra', async () => {
         const { stage, codeManagementService, commentManagerService } =
             makeStage();

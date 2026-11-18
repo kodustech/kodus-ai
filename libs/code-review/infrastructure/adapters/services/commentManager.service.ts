@@ -3281,6 +3281,8 @@ ${reviewOptions}
         reviewErrorCustomMessage?: string,
         reviewWarnings?: ReviewWarning[],
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        /** A line under the body, e.g. an Ultra review's fallback notice. */
+        extraLine?: string,
     ): Promise<void> {
         let commentBody: string;
 
@@ -3349,6 +3351,10 @@ ${reviewOptions}
             commentBody = `${commentBody}\n\n**Automatic approval held:** ${approvalDecision.reason}`;
         } else if (approvalDecision?.kind === 'approve') {
             commentBody = `${commentBody}\n\n**Automatic approval eligible:** ${approvalDecision.reason}`;
+        }
+        // Same place as in updateOverallComment.
+        if (extraLine) {
+            commentBody = `${commentBody}\n\n${extraLine}`;
         }
 
         const comment = await this.codeManagementService.createIssueComment(

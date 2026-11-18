@@ -653,6 +653,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.reviewWarnings,
                 undefined,
+                ultraInfoLine,
             );
         }
 
