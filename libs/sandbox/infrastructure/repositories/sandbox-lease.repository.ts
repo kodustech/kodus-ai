@@ -235,8 +235,7 @@ export class SandboxLeaseRepository {
             .findOneAndDelete({ _id: prKey, sandboxId })
             .select('leaseCount')
             .lean();
-        const otherHolders =
-            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const otherHolders = (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
         const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
 
         const orgSegment = prKey.split(':')[0];
@@ -314,11 +313,7 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            | '_id'
-            | 'sandboxId'
-            | 'killAt'
-            | 'killRetryCount'
-            | 'organizationId'
+            '_id' | 'sandboxId' | 'killAt' | 'killRetryCount' | 'organizationId'
         >[]
     > {
         return this.leaseModel

@@ -88,7 +88,9 @@ export function validateByokConfigRefs(
         const ultra = routing.ultraModelIds;
         if (ultra !== undefined) {
             if (!Array.isArray(ultra) || ultra.length > 3) {
-                errors.push('routing.ultraModelIds must list up to three models');
+                errors.push(
+                    'routing.ultraModelIds must list up to three models',
+                );
             } else {
                 for (const modelId of ultra) {
                     if (modelId && !modelIds.has(modelId)) {

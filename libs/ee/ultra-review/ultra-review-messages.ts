@@ -95,7 +95,8 @@ function runLines(state: UltraReviewState): string[] {
         const replacement = run.replacedBy
             ? byModelId.get(run.replacedBy)
             : undefined;
-        let then = ' It was not replaced: the fallback was already used, or none is set.';
+        let then =
+            ' It was not replaced: the fallback was already used, or none is set.';
         if (run.reusedRun) {
             then = ` The fallback, ${code(replacement?.modelName ?? run.replacedBy ?? '')}, is one of the three models, so its review counted once.`;
         } else if (replacement) {
@@ -104,7 +105,9 @@ function runLines(state: UltraReviewState): string[] {
                     ? ` The fallback ${code(replacement.modelName)} took its place and completed.`
                     : ` The fallback ${code(replacement.modelName)} took its place and failed too${replacement.failureReason ? `: ${replacement.failureReason}` : '.'}`;
         }
-        lines.push(`- ${label(run)} (${code(run.modelName)}) failed${why}${then}`);
+        lines.push(
+            `- ${label(run)} (${code(run.modelName)}) failed${why}${then}`,
+        );
     }
     return lines;
 }
@@ -157,14 +160,14 @@ export function ultraDegradedNotice(
  * The line a successful Ultra review that needed its fallback adds to the
  * final comment.
  */
-export function ultraFallbackInfoLine(state: UltraReviewState): string | undefined {
+export function ultraFallbackInfoLine(
+    state: UltraReviewState,
+): string | undefined {
     const replaced = (state.runs ?? []).find(
         (r) => r.position !== 'fallback' && r.replacedBy && !r.reusedRun,
     );
     if (!replaced) return undefined;
-    const fallback = (state.runs ?? []).find(
-        (r) => r.position === 'fallback',
-    );
+    const fallback = (state.runs ?? []).find((r) => r.position === 'fallback');
     return `> Ultra review: ${code(replaced.modelName)} failed, and the fallback ${code(fallback?.modelName ?? replaced.replacedBy ?? '')} took its place.`;
 }
 

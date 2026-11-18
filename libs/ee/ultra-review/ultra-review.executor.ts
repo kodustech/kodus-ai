@@ -24,10 +24,7 @@ import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/gene
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
-import {
-    runUltraModels,
-    ultraReviewOutcome,
-} from './ultra-review-runner';
+import { runUltraModels, ultraReviewOutcome } from './ultra-review-runner';
 
 const logger = createLogger('UltraReview');
 
@@ -86,7 +83,9 @@ export interface UltraReviewHost {
             customAgentRuns: ReviewPassCollected['customAgentRuns'];
             mergedInDedup: Partial<CodeSuggestion>[];
             dedupTrace: DedupTraceSummary;
-            changedFiles: NonNullable<CodeReviewPipelineContext['changedFiles']>;
+            changedFiles: NonNullable<
+                CodeReviewPipelineContext['changedFiles']
+            >;
             prNumber: number;
         },
     ): CodeReviewPipelineContext;
@@ -153,9 +152,10 @@ async function mergeAcrossModels(
         };
     }
 
-    const candidates: Array<{ model: UltraModel; status: 'success' | 'fallback' }> = [
-        { model: state.mergeModel, status: 'success' },
-    ];
+    const candidates: Array<{
+        model: UltraModel;
+        status: 'success' | 'fallback';
+    }> = [{ model: state.mergeModel, status: 'success' }];
     if (state.fallback && state.fallback.modelId !== state.mergeModel.modelId) {
         candidates.push({ model: state.fallback, status: 'fallback' });
     }
@@ -279,7 +279,8 @@ export async function executeUltraReview(
                     },
                 );
                 runWarnings.push(...(after.reviewWarnings ?? []));
-                if (after.lastReviewError) runErrors.push(after.lastReviewError);
+                if (after.lastReviewError)
+                    runErrors.push(after.lastReviewError);
                 if (!collected) {
                     return {
                         completed: false,
@@ -397,8 +398,7 @@ export async function executeUltraReview(
         customAgentsById: await host.customAgentsById(main),
         customAgentRuns: auxiliary.customAgentRuns,
         mergedInDedup: auxiliary.mergedInDedup,
-        dedupTrace:
-            trace ??
+        dedupTrace: trace ??
             auxiliary.dedupTrace ?? {
                 status: 'skipped',
                 totalClassifiedCount: deduped.length,

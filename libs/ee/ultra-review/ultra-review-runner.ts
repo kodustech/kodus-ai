@@ -68,7 +68,8 @@ export async function runUltraModels<T>(input: {
             modelName: model.modelName,
             status: result.completed ? 'completed' : 'failed',
             ...(!result.completed && {
-                failureReason: result.failureReason ?? 'The review did not complete.',
+                failureReason:
+                    result.failureReason ?? 'The review did not complete.',
             }),
             ...(result.findings !== undefined && { findings: result.findings }),
             durationMs: now() - startedAt,

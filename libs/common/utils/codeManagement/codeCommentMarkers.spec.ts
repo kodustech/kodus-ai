@@ -530,9 +530,6 @@ describe('--ultra', () => {
         expect(
             parseReviewDirective('@kody review --ultra --force the auth flow'),
         ).toBe('the auth flow');
-        expect(isForceReviewCommand('@kody review --ultra --force')).toBe(
-            true,
-        );
+        expect(isForceReviewCommand('@kody review --ultra --force')).toBe(true);
     });
 });
-

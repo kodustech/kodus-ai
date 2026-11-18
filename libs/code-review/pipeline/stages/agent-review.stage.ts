@@ -540,19 +540,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     repositoryId: context.repository?.id,
                 }),
             crossDedupStreams: (nonRules, kodyRules, prNumber, context) =>
-                this.crossDedupStreams(
-                    nonRules,
-                    kodyRules,
-                    prNumber,
-                    context,
-                    {
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                        teamId: context.organizationAndTeamData?.teamId,
-                        pullRequestId: prNumber,
-                        repositoryId: context.repository?.id,
-                    },
-                ),
+                this.crossDedupStreams(nonRules, kodyRules, prNumber, context, {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    pullRequestId: prNumber,
+                    repositoryId: context.repository?.id,
+                }),
             customAgentsById: async (context) =>
                 indexCustomAgents(await this.resolveCustomAgents(context)),
             publishFindings: (context, input) =>
@@ -2225,8 +2219,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 .map((f) => f.filename),
         );
         const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-            (isAnalyzerSuggestion(s) &&
-                withheldDiffs.has(s.relevantFile)) ||
+            (isAnalyzerSuggestion(s) && withheldDiffs.has(s.relevantFile)) ||
             (s.label === 'kody_rules' &&
                 (!s.relevantFile ||
                     s.fileAnchored === true ||
@@ -2234,10 +2227,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         changedFilesByName.has(s.relevantFile))));
         // Agents set to `single-comment` publish one PR-level comment
         // gathering their findings instead of inline comments (#2172).
-        const singleComments = collectSingleComments(
-            deduped,
-            customAgentsById,
-        );
+        const singleComments = collectSingleComments(deduped, customAgentsById);
         deduped = singleComments.inline;
         const customAgentSummaries = summarizeCustomAgentRuns(
             customAgentRuns,
@@ -2283,10 +2273,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 return aIsRule - bIsRule;
             }
             // Then by severity
-            const aSeverity =
-                severityOrder[this.normalizeSeverity(a.severity)];
-            const bSeverity =
-                severityOrder[this.normalizeSeverity(b.severity)];
+            const aSeverity = severityOrder[this.normalizeSeverity(a.severity)];
+            const bSeverity = severityOrder[this.normalizeSeverity(b.severity)];
             return aSeverity - bSeverity;
         });
 
@@ -2332,10 +2320,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 changedFiles.map((f) => [f.filename, f]),
             );
             const ignoredByName = new Map(
-                (context.ignoredFileChanges ?? []).map((f) => [
-                    f.filename,
-                    f,
-                ]),
+                (context.ignoredFileChanges ?? []).map((f) => [f.filename, f]),
             );
 
             draft.fileAnalysisResults = [];
@@ -2347,8 +2332,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // dependency scan still has to report what it introduces.
                 // Resolving only against changedFiles discarded those.
                 const file =
-                    changedByName.get(filename) ??
-                    ignoredByName.get(filename);
+                    changedByName.get(filename) ?? ignoredByName.get(filename);
                 if (file) {
                     draft.fileAnalysisResults.push({
                         validSuggestionsToAnalyze: suggestions,

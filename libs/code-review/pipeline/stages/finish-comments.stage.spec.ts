@@ -689,7 +689,10 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         modelName: `openai:${modelId}`,
         slot: {} as any,
     });
-    const ultra = (outcome: 'success' | 'degraded' | 'failed', runs: any[]) => ({
+    const ultra = (
+        outcome: 'success' | 'degraded' | 'failed',
+        runs: any[],
+    ) => ({
         models: [model(1, 'a'), model(2, 'b'), model(3, 'c')],
         fallback: model('fallback', 'f'),
         mergeModel: model(1, 'a'),
@@ -749,7 +752,10 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
     it.each([
         ['off', PullRequestMessageStatus.OFF],
         ['inactive', PullRequestMessageStatus.INACTIVE],
-        ['only when opened, on a later push', PullRequestMessageStatus.ONLY_WHEN_OPENED],
+        [
+            'only when opened, on a later push',
+            PullRequestMessageStatus.ONLY_WHEN_OPENED,
+        ],
         ['a custom template', PullRequestMessageStatus.ACTIVE],
         ['the default message', undefined],
     ])(
@@ -758,7 +764,9 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
             const { stage, codeManagementService } = makeStage();
             await stage.execute(context(status as any, degraded));
 
-            expect(codeManagementService.createIssueComment).toHaveBeenCalledTimes(1);
+            expect(
+                codeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(1);
             const body: string =
                 codeManagementService.createIssueComment.mock.calls[0][0].body;
             expect(body).toContain('## Ultra review did not run as configured');
@@ -817,7 +825,9 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         );
         const body: string =
             codeManagementService.createIssueComment.mock.calls[0][0].body;
-        expect(body).toContain('No model completed, so no comments were posted.');
+        expect(body).toContain(
+            'No model completed, so no comments were posted.',
+        );
     });
 
     it('a failed notice post does not fail the stage', async () => {

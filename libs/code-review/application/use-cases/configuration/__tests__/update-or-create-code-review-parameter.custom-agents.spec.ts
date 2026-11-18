@@ -695,11 +695,14 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
         expect(configs.reviewMode).toBe('ultra');
     });
 
-    it('saves Ultra on a trial with three of the team\'s own models', async () => {
+    it("saves Ultra on a trial with three of the team's own models", async () => {
         const configs = await buildUseCase(
             {},
             { license: TRIAL, byok: trioConfig(['m1', 'm2', 'm3']) },
-        ).save({ riskReviewRouting: { riskFound: 'ultra' } }, { source: 'web' });
+        ).save(
+            { riskReviewRouting: { riskFound: 'ultra' } },
+            { source: 'web' },
+        );
         expect(configs.riskReviewRouting?.riskFound).toBe('ultra');
     });
 
@@ -713,7 +716,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
                     {},
                     { license: FREE, byok: trioConfig(['m1', 'm2', 'm3']) },
                 ).save(configValue, { source: 'web' }),
-            ).rejects.toThrow('Ultra review is available on the Teams and Enterprise plans');
+            ).rejects.toThrow(
+                'Ultra review is available on the Teams and Enterprise plans',
+            );
         }
     });
 
@@ -729,7 +734,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
                 { reviewMode: 'ultra' },
                 { source: 'web' },
             ),
-        ).rejects.toThrow('needs three of your own models, and this organization has 0');
+        ).rejects.toThrow(
+            'needs three of your own models, and this organization has 0',
+        );
     });
 
     it('refuses heavy on free when it comes through a risk route too', async () => {
@@ -738,7 +745,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
                 { riskReviewRouting: { riskFound: 'heavy' } },
                 { source: 'web' },
             ),
-        ).rejects.toThrow('Heavy mode is available on the Teams and Enterprise plans');
+        ).rejects.toThrow(
+            'Heavy mode is available on the Teams and Enterprise plans',
+        );
     });
 
     it('a kodus-config.yml sync on free leaves the locked routes out and keeps the rest', async () => {
@@ -753,4 +762,3 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
         expect(configs.summary).toEqual({ generatePRSummary: false });
     });
 });
-

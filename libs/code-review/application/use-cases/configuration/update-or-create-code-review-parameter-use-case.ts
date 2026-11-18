@@ -889,8 +889,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         const asks = (mode: 'heavy' | 'ultra') =>
             modes().some((m) => m.mode === mode);
 
-        const refusals: Array<{ mode: 'heavy' | 'ultra'; reason: string }> =
-            [];
+        const refusals: Array<{ mode: 'heavy' | 'ultra'; reason: string }> = [];
         if (
             asks('heavy') &&
             !(await isHeavyModePlanAllowed(

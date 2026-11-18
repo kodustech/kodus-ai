@@ -273,7 +273,8 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         if (mode === 'ultra' && !context.onlyCustomAgent) {
             return this.resolveUltraRouting(context, byokConfig?.configValue);
         }
-        const heavy = mode === 'heavy' && (await this.heavyModeAllowed(context));
+        const heavy =
+            mode === 'heavy' && (await this.heavyModeAllowed(context));
 
         // The review's routed slot, or none → the env/managed default
         // resolves downstream, matching a missing config.

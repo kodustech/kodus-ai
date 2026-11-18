@@ -202,4 +202,3 @@ export function ultraTrioRefusal(
     const { ok: _ok, ...refusal } = trio as { ok: false } & UltraTrioRefusal;
     return refusal as UltraTrioRefusal;
 }
-

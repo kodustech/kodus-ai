@@ -8,7 +8,10 @@ import {
     type UltraModelRunResult,
 } from './ultra-review-runner';
 
-const model = (position: UltraModel['position'], modelId: string): UltraModel => ({
+const model = (
+    position: UltraModel['position'],
+    modelId: string,
+): UltraModel => ({
     position,
     modelId,
     modelName: `p:${modelId}`,
@@ -87,7 +90,13 @@ describe('runUltraModels', () => {
             'c-finding',
             'f-finding',
         ]);
-        expect(ultraReviewOutcome(r.runs, { status: 'success', inputCount: 3, outputCount: 3 })).toBe('success');
+        expect(
+            ultraReviewOutcome(r.runs, {
+                status: 'success',
+                inputCount: 3,
+                outputCount: 3,
+            }),
+        ).toBe('success');
     });
 
     it('two models fail: the fallback runs once, for the first to fail; the other is not replaced and keeps its partial output', async () => {
@@ -100,14 +109,20 @@ describe('runUltraModels', () => {
         expect(r.runs.find((x) => x.modelId === 'b')).toMatchObject({
             replacedBy: 'f',
         });
-        expect(r.runs.find((x) => x.modelId === 'a')?.replacedBy).toBeUndefined();
+        expect(
+            r.runs.find((x) => x.modelId === 'a')?.replacedBy,
+        ).toBeUndefined();
         expect(r.outputs.map((o) => o.output[0]).sort()).toEqual([
             'a-partial',
             'c-finding',
             'f-finding',
         ]);
         expect(
-            ultraReviewOutcome(r.runs, { status: 'success', inputCount: 3, outputCount: 3 }),
+            ultraReviewOutcome(r.runs, {
+                status: 'success',
+                inputCount: 3,
+                outputCount: 3,
+            }),
         ).toBe('degraded');
     });
 
@@ -143,11 +158,15 @@ describe('runUltraModels', () => {
         expect(r.runs[1].replacedBy).toBeUndefined();
         expect(r.outputs.map((o) => o.output[0])).toContain('b-partial');
         expect(
-            ultraReviewOutcome(r.runs, { status: 'success', inputCount: 3, outputCount: 3 }),
+            ultraReviewOutcome(r.runs, {
+                status: 'success',
+                inputCount: 3,
+                outputCount: 3,
+            }),
         ).toBe('degraded');
     });
 
-    it('a failed fallback leaves the failed model\'s partial output in', async () => {
+    it("a failed fallback leaves the failed model's partial output in", async () => {
         const r = await run(
             { models: trio, fallback: fb },
             { a: ok('a'), b: fail('b'), c: ok('c'), f: fail('f', false) },
@@ -173,7 +192,11 @@ describe('runUltraModels', () => {
         });
         // Two distinct models completed: degraded.
         expect(
-            ultraReviewOutcome(r.runs, { status: 'success', inputCount: 2, outputCount: 2 }),
+            ultraReviewOutcome(r.runs, {
+                status: 'success',
+                inputCount: 2,
+                outputCount: 2,
+            }),
         ).toBe('degraded');
         expect(r.outputs.map((o) => o.output[0])).toEqual([
             'b-finding',
@@ -210,7 +233,11 @@ describe('runUltraModels', () => {
             replacedBy: 'f',
         });
         expect(
-            ultraReviewOutcome(r.runs, { status: 'success', inputCount: 3, outputCount: 3 }),
+            ultraReviewOutcome(r.runs, {
+                status: 'success',
+                inputCount: 3,
+                outputCount: 3,
+            }),
         ).toBe('success');
     });
 
@@ -241,7 +268,11 @@ describe('ultraReviewOutcome', () => {
         }));
 
     it('is a success only with three distinct models and a merge that ran', () => {
-        const merged = { status: 'success' as const, inputCount: 3, outputCount: 2 };
+        const merged = {
+            status: 'success' as const,
+            inputCount: 3,
+            outputCount: 2,
+        };
         expect(ultraReviewOutcome(runs(3), merged)).toBe('success');
         expect(
             ultraReviewOutcome(runs(3), { ...merged, status: 'fallback' }),

@@ -347,7 +347,10 @@ export const parseReviewDirective = (
             // otherwise pollute the <ReviewFocus> hint. A flag no word character or dash
             // touches keeps "forced", "--force-push" and "well-balanced" intact; the global flag handles
             // multiple flags in any order. Whitespace is collapsed downstream.
-            .replace(/\s*(?<![\w-])--?(?:heavy|balanced|ultra|force)(?![\w-])/gi, ''),
+            .replace(
+                /\s*(?<![\w-])--?(?:heavy|balanced|ultra|force)(?![\w-])/gi,
+                '',
+            ),
     );
 };
 

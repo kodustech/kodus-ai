@@ -156,7 +156,7 @@ describe('reviewModeOfExecution', () => {
 });
 
 describe('ultra mode', () => {
-    it('routes risk to Ultra when the team set it, the gate being the caller\'s', () => {
+    it("routes risk to Ultra when the team set it, the gate being the caller's", () => {
         const routing = { noRisk: 'heavy', riskFound: 'ultra' } as const;
         const snapshot = {
             organizationId: 'org',

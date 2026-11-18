@@ -316,8 +316,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             return { ...context, requestedReviewMode, ...extra } as any;
         };
         const comment = () =>
-            mockCodeManagementService.createSingleIssueComment.mock.calls[0]?.[0]
-                ?.body as string | undefined;
+            mockCodeManagementService.createSingleIssueComment.mock
+                .calls[0]?.[0]?.body as string | undefined;
 
         it('runs Ultra on the three models in order, each without a per-call fallback, and the review slot on the codeReview model', async () => {
             mockOrganizationParametersService.findByKey.mockResolvedValue({
@@ -344,7 +344,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(comment()).toBeUndefined();
         });
 
-        it('runs Ultra on a trial with three of the team\'s own models', async () => {
+        it("runs Ultra on a trial with three of the team's own models", async () => {
             validateOrganizationLicense.mockResolvedValue({
                 valid: true,
                 subscriptionStatus: 'trial',

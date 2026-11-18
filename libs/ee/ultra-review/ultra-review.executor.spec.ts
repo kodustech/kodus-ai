@@ -14,7 +14,10 @@ import {
     type UltraReviewHost,
 } from './ultra-review.executor';
 
-const model = (position: UltraModel['position'], modelId: string): UltraModel => ({
+const model = (
+    position: UltraModel['position'],
+    modelId: string,
+): UltraModel => ({
     position,
     modelId,
     modelName: `p:${modelId}`,
@@ -53,7 +56,11 @@ interface Fixture {
 
 function setup(fx: Fixture) {
     const calls = {
-        passes: [] as Array<{ scope?: string; model?: string; sandbox?: string }>,
+        passes: [] as Array<{
+            scope?: string;
+            model?: string;
+            sandbox?: string;
+        }>,
         sandboxes: [] as string[],
         released: [] as string[],
         merges: [] as string[],
@@ -130,7 +137,10 @@ function setup(fx: Fixture) {
             if (plan === 'fail') {
                 return {
                     suggestions: findings,
-                    trace: { status: 'failed-keep-all', errorMessage: '503' } as any,
+                    trace: {
+                        status: 'failed-keep-all',
+                        errorMessage: '503',
+                    } as any,
                 };
             }
             // Keeps the first finding of each id prefix: a1/b1 duplicates.
@@ -178,7 +188,9 @@ describe('executeUltraReview', () => {
             ['b', 'ultra-2'],
             ['c', 'ultra-3'],
         ]);
-        expect(calls.passes.filter((p) => p.scope === 'auxiliary')).toHaveLength(1);
+        expect(
+            calls.passes.filter((p) => p.scope === 'auxiliary'),
+        ).toHaveLength(1);
         // Each run's sandbox is released, and the PR's own once the rules ran.
         expect(calls.released.sort()).toEqual(
             ['base', 'ultra-1', 'ultra-2', 'ultra-3'].sort(),
@@ -207,7 +219,11 @@ describe('executeUltraReview', () => {
 
     it('skips the auxiliary pass when there are no rules, custom agents or analyzer findings', async () => {
         const { calls, context, host, baseCleanup } = setup({
-            passes: { a: collected(['a1']), b: collected(['b1']), c: collected(['c1']) },
+            passes: {
+                a: collected(['a1']),
+                b: collected(['b1']),
+                c: collected(['c1']),
+            },
             context: { codeReviewConfig: {} as any },
         });
         await executeUltraReview(context, host);
@@ -232,7 +248,9 @@ describe('executeUltraReview', () => {
             status: 'failed',
             replacedBy: 'f',
         });
-        expect(calls.published.deduped.map((f: any) => f.id)).not.toContain('b9');
+        expect(calls.published.deduped.map((f: any) => f.id)).not.toContain(
+            'b9',
+        );
         expect(out.errors ?? []).toHaveLength(0);
     });
 
@@ -277,7 +295,9 @@ describe('executeUltraReview', () => {
                 }),
             }),
         ]);
-        expect(calls.timeline[0].label).toMatch(/failed, 3 comments posted unmerged/);
+        expect(calls.timeline[0].label).toMatch(
+            /failed, 3 comments posted unmerged/,
+        );
     });
 
     it('no fallback set and a model fails: degraded, its partial findings published', async () => {
@@ -296,7 +316,7 @@ describe('executeUltraReview', () => {
         expect(out.errors?.[0]?.severity).toBe('partial');
     });
 
-    it('no model completes: the review fails with the first model\'s error, and the rules still post', async () => {
+    it("no model completes: the review fails with the first model's error, and the rules still post", async () => {
         const { calls, context, host } = setup({
             passes: {
                 a: collected([], false),
@@ -310,10 +330,17 @@ describe('executeUltraReview', () => {
         expect(out.ultra?.outcome).toBe('failed');
         expect(out.errors?.[0]).toMatchObject({ severity: 'critical' });
         expect(out.lastReviewError).toBeDefined();
-        expect(calls.published.deduped.map((f: any) => f.id)).toEqual(['rule1']);
+        expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+            'rule1',
+        ]);
         // Every sandbox released, the thrown run's included.
         expect(calls.released).toEqual(
-            expect.arrayContaining(['ultra-1', 'ultra-2', 'ultra-3', 'ultra-fallback']),
+            expect.arrayContaining([
+                'ultra-1',
+                'ultra-2',
+                'ultra-3',
+                'ultra-fallback',
+            ]),
         );
     });
 
@@ -323,6 +350,8 @@ describe('executeUltraReview', () => {
             context: { changedFiles: [] },
         });
         await executeUltraReview(context, host);
-        expect(calls.passes).toEqual([{ scope: undefined, model: undefined, sandbox: undefined }]);
+        expect(calls.passes).toEqual([
+            { scope: undefined, model: undefined, sandbox: undefined },
+        ]);
     });
 });

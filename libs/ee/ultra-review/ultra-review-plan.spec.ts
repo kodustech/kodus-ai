@@ -25,22 +25,46 @@ const license = (
 
 describe('isUltraReviewTierAllowed', () => {
     it.each([
-        ['cloud Teams', license(SubscriptionStatus.ACTIVE, 'teams_byok_monthly')],
-        ['cloud Enterprise', license(SubscriptionStatus.ACTIVE, 'enterprise_byok')],
+        [
+            'cloud Teams',
+            license(SubscriptionStatus.ACTIVE, 'teams_byok_monthly'),
+        ],
+        [
+            'cloud Enterprise',
+            license(SubscriptionStatus.ACTIVE, 'enterprise_byok'),
+        ],
         ['a trial', license(SubscriptionStatus.TRIAL, 'teams_managed_monthly')],
-        ['self-hosted with a Teams key', license(SubscriptionStatus.LICENSED_SELF_HOSTED, 'teams')],
-        ['self-hosted with an Enterprise key', license(SubscriptionStatus.LICENSED_SELF_HOSTED, 'enterprise')],
+        [
+            'self-hosted with a Teams key',
+            license(SubscriptionStatus.LICENSED_SELF_HOSTED, 'teams'),
+        ],
+        [
+            'self-hosted with an Enterprise key',
+            license(SubscriptionStatus.LICENSED_SELF_HOSTED, 'enterprise'),
+        ],
     ])('allows %s', (_, l) => {
         expect(isUltraReviewTierAllowed(l)).toBe(true);
     });
 
     it.each([
         // A trial that ended lands on free_byok: Ultra stops with it.
-        ['free with BYOK (a trial that ended)', license(SubscriptionStatus.ACTIVE, 'free_byok')],
-        ['self-hosted without a key', license(SubscriptionStatus.SELF_HOSTED, undefined)],
-        ['an expired plan', license(SubscriptionStatus.EXPIRED, 'teams_byok', false)],
+        [
+            'free with BYOK (a trial that ended)',
+            license(SubscriptionStatus.ACTIVE, 'free_byok'),
+        ],
+        [
+            'self-hosted without a key',
+            license(SubscriptionStatus.SELF_HOSTED, undefined),
+        ],
+        [
+            'an expired plan',
+            license(SubscriptionStatus.EXPIRED, 'teams_byok', false),
+        ],
         ['a canceled plan', license(SubscriptionStatus.CANCELED, 'teams_byok')],
-        ['a failed payment', license(SubscriptionStatus.PAYMENT_FAILED, 'teams_byok')],
+        [
+            'a failed payment',
+            license(SubscriptionStatus.PAYMENT_FAILED, 'teams_byok'),
+        ],
         ['no license', undefined],
     ])('refuses %s', (_, l) => {
         expect(isUltraReviewTierAllowed(l)).toBe(false);
@@ -69,7 +93,11 @@ describe('isUltraReviewPlanAllowed', () => {
     it('fails closed with no service or a license that cannot be read', async () => {
         expect(await isUltraReviewPlanAllowed(undefined, org, 't')).toBe(false);
         expect(
-            await isUltraReviewPlanAllowed(service(new Error('down')), org, 't'),
+            await isUltraReviewPlanAllowed(
+                service(new Error('down')),
+                org,
+                't',
+            ),
         ).toBe(false);
     });
 });
@@ -92,9 +120,17 @@ const config = (overrides: Partial<BYOKConfig> = {}): BYOKConfig => ({
     models: [
         { id: 'm-sol', credentialId: 'c-openai', model: 'gpt-6.1-sol' },
         { id: 'm-opus', credentialId: 'c-anthropic', model: 'claude-opus-5-5' },
-        { id: 'm-sonnet', credentialId: 'c-anthropic', model: 'claude-sonnet-5-5' },
+        {
+            id: 'm-sonnet',
+            credentialId: 'c-anthropic',
+            model: 'claude-sonnet-5-5',
+        },
         { id: 'm-luna', credentialId: 'c-openai', model: 'gpt-6-luna' },
-        { id: 'm-managed', credentialId: 'c-managed', model: 'deepseek-v4-flash' },
+        {
+            id: 'm-managed',
+            credentialId: 'c-managed',
+            model: 'deepseek-v4-flash',
+        },
     ],
     routing: {
         defaultModelId: 'm-sol',
@@ -114,7 +150,7 @@ describe('ownModelIds', () => {
         ]);
     });
 
-    it('counts a model on purchased Kodus credits as the team\'s own', () => {
+    it("counts a model on purchased Kodus credits as the team's own", () => {
         const withCredits = config();
         withCredits.models.push({
             id: 'm-credits',
@@ -135,7 +171,10 @@ describe('resolveUltraTrio', () => {
             [2, 'm-opus'],
             [3, 'm-sonnet'],
         ]);
-        expect(r.fallback).toMatchObject({ position: 'fallback', modelId: 'm-luna' });
+        expect(r.fallback).toMatchObject({
+            position: 'fallback',
+            modelId: 'm-luna',
+        });
         // Opus merges best on the benchmark, whatever its place.
         expect(r.mergeModel.modelId).toBe('m-opus');
         // Ultra spends its one fallback per review, never per call.
@@ -190,7 +229,7 @@ describe('resolveUltraTrio', () => {
         expect(r.mergeModel.modelId).toBe('m-sonnet');
     });
 
-    it('a managed model set for Ultra is not one of the team\'s: unavailable', () => {
+    it("a managed model set for Ultra is not one of the team's: unavailable", () => {
         const c = config();
         c.routing!.ultraModelIds = ['m-sol', 'm-managed', 'm-sonnet'];
         const r = resolveUltraTrio(c);
@@ -228,7 +267,11 @@ describe('resolveUltraTrio', () => {
         const r = resolveUltraTrio(c);
         // gpt-6-luna is ranked, so it wins over Model 1.
         expect(r.ok && r.mergeModel.modelId).toBe('m-luna');
-        c.models.push({ id: 'u3', credentialId: 'c-openai', model: 'my-tuned-3' });
+        c.models.push({
+            id: 'u3',
+            credentialId: 'c-openai',
+            model: 'my-tuned-3',
+        });
         c.routing!.ultraModelIds = ['u2', 'u1', 'u3'];
         const r2 = resolveUltraTrio(c);
         expect(r2.ok && r2.mergeModel.modelId).toBe('u2');
