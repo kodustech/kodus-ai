@@ -13,6 +13,7 @@ import { OTHER_LOCATIONS_HEADING } from '@libs/code-review/infrastructure/agents
 import {
     executeUltraReview,
     ULTRA_REVIEW_DEGRADED_REASON,
+    ULTRA_REVIEW_LIMITS,
     ULTRA_RUN_LEASE_TTL_MS,
     type UltraReviewHost,
     type UltraReviewLimits,
@@ -23,8 +24,10 @@ const LIMITS: UltraReviewLimits = {
     runDeadlineMs: 200,
     runGraceMs: 200,
     runsWindowMs: 2_000,
+    runsEndFromJobStartMs: 2_000,
     fallbackMinMs: 50,
     mergeDeadlineMs: 200,
+    crossDedupDeadlineMs: 200,
 };
 
 const model = (
@@ -70,7 +73,9 @@ type PassPlan =
     | 'hang'
     | { untilStopped: ReviewPassCollected }
     /** The loop ends in time; the later steps take `ms` more. */
-    | { slowAfterLoop: number; result: ReviewPassCollected };
+    | { slowAfterLoop: number; result: ReviewPassCollected }
+    /** Blocks the event loop for `ms` (sync work), then returns. */
+    | { syncWorkMs: number; result: ReviewPassCollected };
 
 interface Fixture {
     passes: Record<string, PassPlan>;
@@ -79,6 +84,7 @@ interface Fixture {
     noSandbox?: string[];
     /** Runs that wait for a sandbox slot until their deadline stops them. */
     waitForSlot?: string[];
+    crossDedupHangs?: boolean;
     context?: Partial<CodeReviewPipelineContext>;
     state?: Partial<UltraReviewState>;
 }
@@ -98,6 +104,7 @@ function setup(fx: Fixture) {
         published: undefined as any,
         timeline: [] as any[],
         crossDedup: undefined as any,
+        abandonSignals: {} as Record<string, AbortSignal | undefined>,
     };
     const baseCleanup = jest.fn(async () => {
         calls.released.push('base');
@@ -129,6 +136,7 @@ function setup(fx: Fixture) {
                 model: pass.model?.modelId,
                 sandbox: (ctx as any).sandboxHandle?.id,
             });
+            calls.abandonSignals[key] = pass.abandoned;
             const plan = fx.passes[key];
             if (plan === 'throw') throw new Error(`${key} threw`);
             if (plan === 'hang') {
@@ -143,6 +151,13 @@ function setup(fx: Fixture) {
                 );
                 pass.onLoopEnd?.();
                 result = plan.untilStopped;
+            } else if (plan && 'syncWorkMs' in plan) {
+                const until = Date.now() + plan.syncWorkMs;
+                while (Date.now() < until) {
+                    // Holds the event loop, as a slow synchronous step does.
+                }
+                pass.onLoopEnd?.();
+                result = plan.result;
             } else if (plan && 'slowAfterLoop' in plan) {
                 pass.onLoopEnd?.();
                 await new Promise((r) => setTimeout(r, plan.slowAfterLoop));
@@ -227,6 +242,7 @@ function setup(fx: Fixture) {
         },
         crossDedupStreams: async (nonRules, rules) => {
             calls.crossDedup = { nonRules, rules };
+            if (fx.crossDedupHangs) return new Promise(() => undefined);
             return [...nonRules, ...rules];
         },
         customAgentsById: async () => new Map(),
@@ -528,6 +544,70 @@ describe('executeUltraReview', () => {
                 'a1',
                 'c2',
             ]);
+        });
+
+        it('with the production limits, a model that hangs still gets the fallback, with lag in the review', async () => {
+            // The production limits at 1 minute = 10 ms.
+            const scaled = Object.fromEntries(
+                Object.entries(ULTRA_REVIEW_LIMITS).map(([k, v]) => [
+                    k,
+                    (v as number) / 6_000,
+                ]),
+            ) as unknown as UltraReviewLimits;
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: 'hang',
+                    c: collected(['c2']),
+                    f: collected(['f3']),
+                    // Three scaled minutes of synchronous work in Kody Rules.
+                    auxiliary: { syncWorkMs: 30, result: collected([]) },
+                },
+                context: { pipelineStartedAt: Date.now() } as any,
+            });
+            const out = await executeUltraReview(context, host, scaled);
+            expect(calls.sandboxes).toContain('ultra-fallback');
+            expect(out.ultra?.outcome).toBe('success');
+            // The run left behind is told to stop its later steps.
+            expect(calls.abandonSignals.b?.aborted).toBe(true);
+        });
+
+        it('the runs end by the budget counted from the job start, not this step', async () => {
+            const { context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: { untilStopped: collected(['b9']) },
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                state: { fallback: undefined },
+                // The job started 1.7 s ago: 300 ms of its 2 s budget left.
+                context: { pipelineStartedAt: Date.now() - 1_700 } as any,
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            const b = out.ultra?.runs?.find((r) => r.modelId === 'b');
+            expect(b?.status).toBe('failed');
+            // Stopped at 300 - 200 (grace) = 100 ms, not at the 200 ms deadline.
+            expect(b?.durationMs).toBeLessThan(180);
+        });
+
+        it('a dedup against Kody Rules that never answers lets the comments go out without it', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected(['rule1']),
+                },
+                crossDedupHangs: true,
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+                'rule1',
+            ]);
+            expect(out.ultra?.outcome).toBe('success');
         });
 
         it('the fallback does not start without time left to review', async () => {

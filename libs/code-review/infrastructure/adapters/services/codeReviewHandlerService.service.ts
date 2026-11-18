@@ -215,6 +215,7 @@ export class CodeReviewHandlerService {
                 correlationId,
                 workflowJobId,
                 parentSignal,
+                pipelineStartedAt: Date.now(),
                 statusInfo: {
                     status: AutomationStatus.IN_PROGRESS,
                     message: 'Pipeline started',

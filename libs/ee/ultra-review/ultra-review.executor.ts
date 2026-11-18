@@ -48,22 +48,30 @@ export interface UltraReviewLimits {
     runDeadlineMs: number;
     /** After its loop stops, how long a run gets to finish its later steps. */
     runGraceMs: number;
-    /** Every run, the fallback included, ends this long after the start. */
+    /** Every run, the fallback included, ends this long after this step starts. */
     runsWindowMs: number;
+    /** ...and this long after the review job started, whichever is first. */
+    runsEndFromJobStartMs: number;
     /** The fallback starts only with at least this long to review. */
     fallbackMinMs: number;
     /** Each merge attempt is dropped after this long. */
     mergeDeadlineMs: number;
+    /** The dedup against Kody Rules is dropped after this long. */
+    crossDedupDeadlineMs: number;
 }
 
-// Model runs end by minute 75 at the latest; two merge attempts take at most
-// 16 more, which leaves the cross-dedup and the comments well inside 105.
+// Counted from the job's start against its 105-minute ceiling: the runs end
+// by minute 72, two merge attempts take at most 16 more and the dedup against
+// Kody Rules 6, which leaves 11 for the comments. A model that hangs is left
+// behind at 45 minutes (35 + 10), with time for the fallback to start.
 export const ULTRA_REVIEW_LIMITS: UltraReviewLimits = {
-    runDeadlineMs: 40 * 60 * 1000,
+    runDeadlineMs: 35 * 60 * 1000,
     runGraceMs: 10 * 60 * 1000,
     runsWindowMs: 75 * 60 * 1000,
-    fallbackMinMs: 15 * 60 * 1000,
+    runsEndFromJobStartMs: 72 * 60 * 1000,
+    fallbackMinMs: 8 * 60 * 1000,
     mergeDeadlineMs: 8 * 60 * 1000,
+    crossDedupDeadlineMs: 6 * 60 * 1000,
 };
 
 /** A run's sandbox outlives the longest the run can take. */
@@ -375,7 +383,10 @@ export async function executeUltraReview(
     });
 
     const startedAt = Date.now();
-    const runsEndAt = startedAt + limits.runsWindowMs;
+    const runsEndAt = Math.min(
+        startedAt + limits.runsWindowMs,
+        (context.pipelineStartedAt ?? startedAt) + limits.runsEndFromJobStartMs,
+    );
     // A run's review loop gets the deadline or what is left of the window,
     // keeping the grace its later steps need.
     const runWindow = () =>
@@ -406,6 +417,8 @@ export async function executeUltraReview(
     if (hasAuxiliaryWork(context)) {
         const stop = deadlineSignal(context.parentSignal, runWindow());
         let abandoned = false;
+        // Left behind, its later steps stop before their next model call.
+        const leftBehind = new AbortController();
         auxiliaryRun = withDeadline(
             host
                 .reviewPass(
@@ -414,6 +427,7 @@ export async function executeUltraReview(
                     }),
                     {
                         scope: 'auxiliary',
+                        abandoned: leftBehind.signal,
                         collect: (collected) => {
                             if (!abandoned) auxiliary = collected;
                         },
@@ -427,6 +441,7 @@ export async function executeUltraReview(
         ).then((result) => {
             if (result !== TIMED_OUT) return result;
             abandoned = true;
+            leftBehind.abort();
             void releaseBase();
             logger.warn({
                 message: `[ULTRA] PR#${prNumber}: Kody Rules and custom agents did not finish in time; the review goes on without them`,
@@ -483,6 +498,7 @@ export async function executeUltraReview(
             // A run that outlives its grace is left behind: nothing it
             // reports afterwards reaches the review.
             let abandoned = false;
+            const leftBehind = new AbortController();
             let collected: ReviewPassCollected | undefined;
             const pass = host
                 .reviewPass(
@@ -491,6 +507,7 @@ export async function executeUltraReview(
                         scope: 'native',
                         model,
                         timelineTag: { key: tag, label: model.modelName },
+                        abandoned: leftBehind.signal,
                         onLoopEnd: () => {
                             loopStopped =
                                 stop.signal.aborted &&
@@ -509,6 +526,7 @@ export async function executeUltraReview(
             const result = await withDeadline(pass, left + limits.runGraceMs);
             if (result === TIMED_OUT) {
                 abandoned = true;
+                leftBehind.abort();
                 void release();
                 logger.warn({
                     message: `[ULTRA] PR#${prNumber}: ${model.modelName} did not finish in time; left behind`,
@@ -606,12 +624,20 @@ export async function executeUltraReview(
         metadata: { merge },
     });
 
-    const deduped = await host.crossDedupStreams(
-        merged,
-        auxRules,
-        prNumber,
-        main,
+    const crossDeduped = await withDeadline(
+        host.crossDedupStreams(merged, auxRules, prNumber, main),
+        limits.crossDedupDeadlineMs,
     );
+    // Past its deadline the comments go out without that dedup.
+    if (crossDeduped === TIMED_OUT) {
+        logger.warn({
+            message: `[ULTRA] PR#${prNumber}: the dedup against Kody Rules did not finish in time; comments posted without it`,
+            context: 'UltraReview',
+            metadata: logMeta,
+        });
+    }
+    const deduped =
+        crossDeduped === TIMED_OUT ? [...merged, ...auxRules] : crossDeduped;
     renderLocationsAddedAfterRuns(
         deduped,
         // A comment the runs did not hand over is left as it is.

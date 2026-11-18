@@ -393,7 +393,18 @@ export interface ReviewPass {
     collect?: (collected: ReviewPassCollected) => void;
     /** The agents' loop ended; the later steps (dedup, severity...) follow. */
     onLoopEnd?: () => void;
+    /**
+     * Fires when the caller gave up on the pass (an Ultra run left behind):
+     * the later steps stop before their next model call.
+     */
+    abandoned?: AbortSignal;
 }
+
+/** A pass its caller left behind stops at the next step. */
+class PassAbandonedError extends Error {}
+const throwIfPassAbandoned = (pass: ReviewPass) => {
+    if (pass.abandoned?.aborted) throw new PassAbandonedError('abandoned');
+};
 
 /**
  * A run's failure reason with no friendly message: it reaches the PR notice of
@@ -1726,6 +1737,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // them, a group was kept or dropped whole by whichever occurrence
             // had the longest text. Also before the severity and formatter
             // passes, so a repeat costs no further model call.
+            throwIfPassAbandoned(pass);
             const repeatCheck = await this.dropRepeatsOnCitedCode(
                 context,
                 severityNormalizedNonRules,
@@ -1768,6 +1780,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allDiscarded.push(...capped.overflow);
             }
 
+            throwIfPassAbandoned(pass);
             const dedup = await this.dedupSuggestionStreams(
                 severityNormalized,
                 prNumber,
@@ -1789,6 +1802,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // let the formatter LLM strip or reword the link when it
             // collapses WHAT/WHY/HOW into natural prose.
 
+            throwIfPassAbandoned(pass);
             deduped = await this.reclassifyAndFilterSeverity(
                 deduped,
                 context,
@@ -1800,6 +1814,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // suggestion still standing. After the severity step, so only what
             // reaches the team is enriched; before the title and the formatter,
             // which read what it writes.
+            throwIfPassAbandoned(pass);
             deduped = await this.enrichFinderSuggestions(
                 deduped,
                 context,
@@ -1866,6 +1881,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into
             // natural prose, then give each comment the shape it needs
             // (format-and-shape-suggestions.ts, also run by evals/format).
+            throwIfPassAbandoned(pass);
             const { formatted, formatTargets, formatError, shapeCounts } =
                 await formatAndShapeSuggestions(deduped, {
                     writingGuidelines,
@@ -2111,6 +2127,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 prNumber,
             });
         } catch (error) {
+            // Left behind by its caller: nothing it would report is read.
+            if (error instanceof PassAbandonedError) return context;
             const durationMs = Date.now() - startTime;
             // Terminal BYOK (suspended key / no credit) → warn: user's provider
             // config, not a Kodus fault. Real fault stays error.

@@ -381,6 +381,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      *  via the strategy payload, then plumbed into AgentReviewStage so the
      *  agent-loop's local AbortController is aborted when the router-level
      *  job timeout fires (instead of leaving an LLM call running ghost). */
+    /** When the review job's pipeline started (ms): budgets count from it. */
+    pipelineStartedAt?: number;
     parentSignal?: AbortSignal;
 
     /**
