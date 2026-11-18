@@ -3368,6 +3368,13 @@ export class BitbucketCloudService implements Omit<
                 throw new Error(
                     'Bitbucket Cloud authenticates with a token, not a username and password',
                 );
+            } else {
+                // Token auth with no token, or no auth mode at all: neither
+                // branch above ran, so nothing was authenticated and the
+                // initial success is not a connection (#2570).
+                throw new Error(
+                    'A token is required to connect Bitbucket Cloud',
+                );
             }
 
             this.mcpManagerService?.createKodusMCPIntegration(

@@ -1,9 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
+import axios from 'axios';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 
 import { BitbucketService } from '../bitbucket.service';
 import { BitbucketCloudService } from '../bitbucket/bitbucket-cloud.service';
+import { BitbucketDataCenterService } from '../bitbucket/bitbucket-data-center.service';
 
 const ORG = { organizationId: 'org-1', teamId: 't1' };
 const HOST = 'https://bitbucket.example.test';
@@ -89,6 +91,28 @@ describe('BitbucketService.createAuthIntegration', () => {
             svc.bitbucketDataCenterService.createAuthIntegration,
         ).not.toHaveBeenCalled();
         expect(result).toEqual({ success: true, impl: 'cloud' });
+    });
+
+    it('lets a submitted host win over a stored Cloud setup', async () => {
+        // The case the routing change is about: the integration row says
+        // Cloud (`host: ''`) because it was saved that way, and the setup form
+        // now submits a Data Center host. The request decides.
+        const svc = facade({ host: '' });
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.BASIC,
+            token: 'app-password',
+            username: 'acme',
+            host: HOST,
+        });
+
+        expect(
+            svc.bitbucketDataCenterService.createAuthIntegration,
+        ).toHaveBeenCalledWith(expect.objectContaining({ host: HOST }));
+        expect(
+            svc.bitbucketCloudService.createAuthIntegration,
+        ).not.toHaveBeenCalled();
     });
 
     it('keeps an already connected Data Center host on Data Center', async () => {
@@ -181,5 +205,78 @@ describe('BitbucketCloudService.createAuthIntegration', () => {
 
         expect(svc.authenticateWithToken).toHaveBeenCalled();
         expect(result).toEqual({ success: true });
+    });
+
+    it('refuses a token request with no token instead of reporting success', async () => {
+        const svc = cloud();
+
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                authMode: AuthMode.TOKEN,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(svc.authenticateWithToken).not.toHaveBeenCalled();
+    });
+});
+
+describe('BitbucketDataCenterService.createAuthIntegration', () => {
+    const dataCenter = () => {
+        const svc: any = Object.create(BitbucketDataCenterService.prototype);
+        svc.logger = {
+            error: jest.fn(),
+            warn: jest.fn(),
+            log: jest.fn(),
+            debug: jest.fn(),
+        };
+        svc.integrationService = {
+            findOne: jest.fn(async () => null),
+        };
+        svc.addAccessToken = jest.fn(async () => ({}));
+        return svc;
+    };
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('probes the repository list the setup reads next, not the project list', async () => {
+        const svc = dataCenter();
+        const get = jest.fn(async () => ({ status: 200 }));
+        const create = jest
+            .spyOn(axios, 'create')
+            .mockReturnValue({ get } as any);
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.TOKEN,
+            token: 'pat',
+            host: HOST,
+        });
+
+        expect(create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: `${HOST}/rest/api/1.0`,
+            }),
+        );
+        expect(get).toHaveBeenCalledWith('/repos?limit=1');
+        expect(svc.addAccessToken).toHaveBeenCalled();
+    });
+
+    it('refuses a probe that does not answer 200', async () => {
+        const svc = dataCenter();
+        jest.spyOn(axios, 'create').mockReturnValue({
+            get: jest.fn(async () => ({ status: 401 })),
+        } as any);
+
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                authMode: AuthMode.TOKEN,
+                token: 'pat',
+                host: HOST,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(svc.addAccessToken).not.toHaveBeenCalled();
     });
 });
