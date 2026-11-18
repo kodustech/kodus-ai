@@ -121,6 +121,11 @@ import {
     HEAVY_MODE_SAVE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    isUltraReviewPlanAllowed,
+    resolveUltraTrio,
+} from '@libs/ee/ultra-review/ultra-review-plan';
+import { ultraSaveRefusalMessage } from '@libs/ee/ultra-review/ultra-review-messages';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
@@ -848,49 +853,108 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         });
     }
 
+    /**
+     * The review modes a plan or the org's models lock: Heavy on a plan
+     * without it, Ultra without the plan or three of the team's own models
+     * set for it. Checked wherever a mode is saved, the review mode and both
+     * risk routes. A save from the web or the API is refused with the reason
+     * (400); a kodus-config.yml sync leaves the locked fields out and saves
+     * the rest.
+     */
     private async leaveHeavyOutIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue:
             CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
         source: string | undefined,
     ): Promise<void> {
-        if (configValue?.reviewMode !== 'heavy') {
-            return;
-        }
+        if (!configValue) return;
+        const modes = (): Array<{
+            mode: string | undefined;
+            clear: () => void;
+        }> => [
+            {
+                mode: configValue.reviewMode,
+                clear: () => delete configValue.reviewMode,
+            },
+            {
+                mode: configValue.riskReviewRouting?.noRisk,
+                clear: () => delete configValue.riskReviewRouting!.noRisk,
+            },
+            {
+                mode: configValue.riskReviewRouting?.riskFound,
+                clear: () => delete configValue.riskReviewRouting!.riskFound,
+            },
+        ];
+        const asks = (mode: 'heavy' | 'ultra') =>
+            modes().some((m) => m.mode === mode);
+
+        const refusals: Array<{ mode: 'heavy' | 'ultra'; reason: string }> =
+            [];
         if (
-            await isHeavyModePlanAllowed(
+            asks('heavy') &&
+            !(await isHeavyModePlanAllowed(
                 this.licenseService,
                 organizationAndTeamData,
                 UpdateOrCreateCodeReviewParameterUseCase.name,
-            )
+            ))
         ) {
-            return;
+            refusals.push({
+                mode: 'heavy',
+                reason: HEAVY_MODE_SAVE_PLAN_REQUIRED,
+            });
         }
+        if (asks('ultra')) {
+            if (
+                !(await isUltraReviewPlanAllowed(
+                    this.licenseService,
+                    organizationAndTeamData,
+                    UpdateOrCreateCodeReviewParameterUseCase.name,
+                ))
+            ) {
+                refusals.push({
+                    mode: 'ultra',
+                    reason: ultraSaveRefusalMessage('plan'),
+                });
+            } else {
+                const trio = resolveUltraTrio(
+                    await this.permissionValidationService.getBYOKConfig(
+                        organizationAndTeamData,
+                    ),
+                );
+                if (!trio.ok) {
+                    refusals.push({
+                        mode: 'ultra',
+                        reason: ultraSaveRefusalMessage(trio),
+                    });
+                }
+            }
+        }
+        if (!refusals.length) return;
 
+        const logMeta = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            source,
+            modes: refusals.map((r) => r.mode),
+        };
         if (source !== 'sync') {
             this.logger.log({
-                message:
-                    'Refused a save asking for heavy review mode — plan is not Teams/Enterprise',
+                message: `Refused a save asking for a locked review mode (${refusals.map((r) => r.mode).join(', ')})`,
                 context: UpdateOrCreateCodeReviewParameterUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                    source,
-                },
+                metadata: logMeta,
             });
             // 400, like the other refused saves: the web shows its reason.
-            throw new BadRequestException(HEAVY_MODE_SAVE_PLAN_REQUIRED);
+            throw new BadRequestException(refusals[0].reason);
         }
 
-        delete configValue.reviewMode;
+        const locked = new Set(refusals.map((r) => r.mode));
+        for (const m of modes()) {
+            if (m.mode && locked.has(m.mode as 'heavy' | 'ultra')) m.clear();
+        }
         this.logger.log({
-            message:
-                'Left heavy review mode out of the sync — plan is not Teams/Enterprise',
+            message: `Left a locked review mode out of the sync (${[...locked].join(', ')})`,
             context: UpdateOrCreateCodeReviewParameterUseCase.name,
-            metadata: {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            },
+            metadata: logMeta,
         });
     }
 
