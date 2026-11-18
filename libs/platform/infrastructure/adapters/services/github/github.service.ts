@@ -2787,16 +2787,21 @@ export class GithubService
                         // of its authors needs a seat for it. The selection
                         // never drops a repository, so failing on it would
                         // stop the seat prune for good.
-                        if (error?.status !== 404) {
+                        const hidden = error?.status === 404;
+                        if (!hidden) {
                             failedRepositories += 1;
                         }
-                        this.logger.error({
-                            message: 'Error in getPullRequestAuthors',
+                        this.logger[hidden ? 'warn' : 'error']({
+                            message: hidden
+                                ? 'Repository not visible to the credential; listed with no pull request authors'
+                                : 'Could not list the pull request authors of a repository',
                             context: GithubService.name,
                             error: error,
                             metadata: {
                                 organizationAndTeamData:
                                     params?.organizationAndTeamData,
+                                repository: repo.name,
+                                status: error?.status,
                             },
                         });
                     }

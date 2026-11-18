@@ -235,16 +235,67 @@ describe('GithubService.getPullRequestAuthors', () => {
     // prune either.
     it('reads a repository answering 404 as having no authors, also for the seat prune', async () => {
         const github = githubServing({ app: { pages: [newest100()] } });
+        const service = makeService(github.octokit, ['app', 'gone']);
 
-        const authors = await makeService(github.octokit, [
-            'app',
-            'gone',
-        ]).getPullRequestAuthors({
+        const authors = await service.getPullRequestAuthors({
             organizationAndTeamData,
             requireLoaded: true,
         });
 
         expect(authors.map((a) => a.name)).toEqual(['dev']);
+        // A valid answer, so a warning and no error on every refresh.
+        const logger = (service as any).logger;
+        expect(logger.error).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    repository: 'gone',
+                    status: 404,
+                }),
+            }),
+        );
+    });
+
+    it('names the repository and status that made the seat prune fail', async () => {
+        const github = githubServing({
+            app: { pages: [newest100()] },
+            api: { pages: [newest100()], fail: { page: 1, status: 403 } },
+        });
+        const service = makeService(github.octokit, ['app', 'api']);
+
+        await expect(
+            service.getPullRequestAuthors({
+                organizationAndTeamData,
+                requireLoaded: true,
+            }),
+        ).rejects.toThrow('1 of the configured GitHub repositories');
+
+        expect((service as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    repository: 'api',
+                    status: 403,
+                }),
+            }),
+        );
+    });
+
+    it('fails for the seat prune when the GitHub credential cannot be loaded, and answers [] otherwise', async () => {
+        const github = githubServing({ app: { pages: [newest100()] } });
+        const service = makeService(github.octokit, ['app']);
+        jest.spyOn(service as any, 'instanceOctokit').mockRejectedValue(
+            new Error('installation token unavailable'),
+        );
+
+        await expect(
+            service.getPullRequestAuthors({
+                organizationAndTeamData,
+                requireLoaded: true,
+            }),
+        ).rejects.toThrow('installation token unavailable');
+        await expect(
+            service.getPullRequestAuthors({ organizationAndTeamData }),
+        ).resolves.toEqual([]);
     });
 
     it('walks at most 10 repositories at once, under the 100 concurrent requests GitHub allows', async () => {
