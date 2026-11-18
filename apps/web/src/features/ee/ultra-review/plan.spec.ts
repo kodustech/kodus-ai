@@ -35,6 +35,17 @@ describe("the Ultra trio", () => {
         expect(ultraTrioError(["a", "a", "b"])).toBeDefined();
     });
 
+    it("while a review mode here is Ultra, clearing the trio is blocked too", () => {
+        const required =
+            "Ultra is a review mode here. Keep three models, or change the mode first.";
+        expect(ultraTrioError(undefined, true)).toBe(required);
+        expect(ultraTrioError(["", "", ""], true)).toBe(required);
+        expect(ultraTrioError(["a", "b", "c"], true)).toBeUndefined();
+        expect(ultraTrioError(["a", "", ""], true)).toBe(
+            "Select three different models to save Ultra.",
+        );
+    });
+
     it("survives the routing normalization every routing save goes through", () => {
         const routing = normalizeRouting({
             defaultModelId: "a",

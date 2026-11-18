@@ -38,11 +38,14 @@ export function useOrganizationRouting({
     enabled,
     canEdit,
     status,
+    ultraInUse = false,
 }: {
     teamId?: string;
     enabled: boolean;
     canEdit: boolean;
     status: LLMConfigStatus | null;
+    /** A review mode here is Ultra: the trio cannot be cleared. */
+    ultraInUse?: boolean;
 }) {
     const queryClient = useQueryClient();
     const queryKey = ["organization-routing", teamId, enabled] as const;
@@ -125,7 +128,7 @@ export function useOrganizationRouting({
         )
             ? "Select a connected default model."
             : dirty
-              ? ultraTrioError(routing.ultraModelIds)
+              ? ultraTrioError(routing.ultraModelIds, ultraInUse)
               : undefined;
 
     useUnsavedChangesGuard({

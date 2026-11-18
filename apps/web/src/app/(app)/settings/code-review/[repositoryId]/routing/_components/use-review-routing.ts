@@ -25,19 +25,10 @@ export type Mode = "balanced" | "heavy" | "ultra";
 export const modeLabel = (mode: Mode) =>
     mode === "ultra" ? "Ultra" : mode === "heavy" ? "Heavy" : "Balanced";
 
-/** The same effective plan fallback and scope override the review uses. */
-export function useReviewRouting(modelDraft?: BYOKRouting) {
-    const { control, getFieldState } = useFormContext<CodeReviewFormType>();
+/** The review modes this page's form holds: edited, else saved. */
+export function useReviewModes() {
+    const { control } = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
-    const { llmConfigStatus: status, hasConnectedProvider } =
-        useCodeReviewModelData();
-    const license = useSubscriptionContext().license;
-    const heavyAllowed = isHeavyModePlan(license);
-    const ultraAllowed = isUltraReviewPlan(license);
-    // The trio being edited on this page, else the one saved.
-    const ultraModelIds =
-        modelDraft?.ultraModelIds ?? status?.modelRouting?.ultraModelIds;
-    const ultraSet = isUltraTrioSet(ultraModelIds);
     const active =
         useWatch({ control, name: "riskAssessmentActive.value" }) ??
         config?.riskAssessmentActive?.value ??
@@ -54,6 +45,33 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         useWatch({ control, name: "riskReviewRouting.riskFound.value" }) ??
         config?.riskReviewRouting?.riskFound?.value ??
         "heavy";
+    return { active, configuredDefault, noRisk, riskFound };
+}
+
+/** Whether a review here runs Ultra: the default mode, or a risk route. */
+export function useUltraModeInUse(): boolean {
+    const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
+    return (
+        configuredDefault === "ultra" ||
+        (active && (noRisk === "ultra" || riskFound === "ultra"))
+    );
+}
+
+/** The same effective plan fallback and scope override the review uses. */
+export function useReviewRouting(modelDraft?: BYOKRouting) {
+    const { control, getFieldState } = useFormContext<CodeReviewFormType>();
+    const config = useCodeReviewConfig();
+    const { llmConfigStatus: status, hasConnectedProvider } =
+        useCodeReviewModelData();
+    const license = useSubscriptionContext().license;
+    const heavyAllowed = isHeavyModePlan(license);
+    const ultraAllowed = isUltraReviewPlan(license);
+    // The trio being edited on this page (cleared included), else the saved.
+    const ultraModelIds = modelDraft
+        ? modelDraft.ultraModelIds
+        : status?.modelRouting?.ultraModelIds;
+    const ultraSet = isUltraTrioSet(ultraModelIds);
+    const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
     const selectedScope = useWatch({ control, name: "byokModelId.value" });
     const scopeModel =
         selectedScope !== undefined

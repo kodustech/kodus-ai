@@ -26,9 +26,19 @@ export const isUltraTrioSet = (ids?: string[]): boolean => {
     );
 };
 
-/** What blocks saving the trio, or nothing: none picked, or three different. */
-export const ultraTrioError = (ids?: string[]): string | undefined => {
+/**
+ * What blocks saving the trio, or nothing: none picked, or three different.
+ * While a review mode here is Ultra (`required`), none picked blocks too: the
+ * reviews would stop.
+ */
+export const ultraTrioError = (
+    ids?: string[],
+    required = false,
+): string | undefined => {
+    if (isUltraTrioSet(ids)) return undefined;
     const picked = (ids ?? []).filter(Boolean);
-    if (!picked.length || isUltraTrioSet(ids)) return undefined;
-    return "Select three different models to save Ultra.";
+    if (picked.length) return "Select three different models to save Ultra.";
+    return required
+        ? "Ultra is a review mode here. Keep three models, or change the mode first."
+        : undefined;
 };

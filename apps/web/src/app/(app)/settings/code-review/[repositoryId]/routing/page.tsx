@@ -58,6 +58,7 @@ import { useOrganizationRouting } from "./_components/use-organization-routing";
 import {
     modeLabel,
     useReviewRouting,
+    useUltraModeInUse,
     type Mode,
 } from "./_components/use-review-routing";
 
@@ -216,7 +217,9 @@ function RoutingSettings() {
     );
     const canEditModels = canCreateModels && canReadModels;
     const globalScope = repositoryId === "global" && !directoryId;
+    const ultraInUse = useUltraModeInUse();
     const organization = useOrganizationRouting({
+        ultraInUse,
         teamId,
         enabled: globalScope && canReadModels && hasConnectedProvider,
         canEdit:
