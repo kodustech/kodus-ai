@@ -77,15 +77,18 @@ const makePrDoc = (prNumber: number) => ({
 
 const buildUseCase = () => {
     const findExecutions = jest.fn(async (params) => {
-        let rows = ALL_EXECUTIONS;
+        const matching = params.pullRequestNumber
+            ? ALL_EXECUTIONS.filter(
+                  (run) => run.pullRequestNumber === params.pullRequestNumber,
+              )
+            : ALL_EXECUTIONS;
+        let rows = matching;
 
         if (params.cursor) {
-            const at = ALL_EXECUTIONS.findIndex(
-                (e) => e.uuid === params.cursor.uuid,
-            );
-            rows = ALL_EXECUTIONS.slice(at + 1);
+            const at = matching.findIndex((e) => e.uuid === params.cursor.uuid);
+            rows = matching.slice(at + 1);
         } else {
-            rows = ALL_EXECUTIONS.slice(params.skip ?? 0);
+            rows = matching.slice(params.skip ?? 0);
         }
 
         return {
@@ -143,6 +146,45 @@ const idsOf = (response) =>
     response.data.map((row) => row.executionId ?? row.automationExecution?.uuid);
 
 describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', () => {
+    it('looks up the live head only for an explanation and logs provider failures without dropping history', async () => {
+        const { useCase } = buildUseCase();
+        const failure = new Error('provider unavailable');
+        const getPullRequest = jest
+            .fn()
+            .mockResolvedValueOnce({ head: { sha: 'latest' } })
+            .mockRejectedValueOnce(failure);
+        useCase.codeManagementService = { getPullRequest };
+        const query = {
+            teamId: 't1',
+            pullRequestNumber: 1000,
+            repositoryId: 'repo-1',
+        };
+        await useCase.execute(query);
+        expect(getPullRequest).not.toHaveBeenCalled();
+
+        const first = await useCase.execute({ ...query, explain: 'true' });
+        expect(first.currentHeadSha).toBe('latest');
+        expect(getPullRequest).toHaveBeenCalledWith({
+            organizationAndTeamData: { organizationId: 'org-1', teamId: 't1' },
+            repository: { id: 'repo-1', name: 'api' },
+            prNumber: 1000,
+        });
+
+        const failed = await useCase.execute({ ...query, explain: 'true' });
+        expect(failed.currentHeadSha).toBeUndefined();
+        expect(failed.data).toHaveLength(1);
+        expect(useCase.logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: failure,
+                metadata: {
+                    organizationId: 'org-1',
+                    teamId: 't1',
+                    repositoryId: 'repo-1',
+                    prNumber: 1000,
+                },
+            }),
+        );
+    });
     it('does not serve the same execution on two consecutive pages', async () => {
         const { useCase } = buildUseCase();
 

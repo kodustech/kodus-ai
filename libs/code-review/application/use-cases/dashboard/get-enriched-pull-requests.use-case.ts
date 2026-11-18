@@ -54,6 +54,7 @@ import {
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
 import { EnrichedPullRequestResponse } from '@libs/code-review/dtos/dashboard/enriched-pull-request-response.dto';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -144,6 +145,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         @Inject(REQUEST)
         private readonly request: UserRequest,
         private readonly authorizationService: AuthorizationService,
+        private readonly codeManagementService: CodeManagementService,
     ) {}
 
     async execute(
@@ -788,9 +790,15 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
             });
 
+            const currentHeadSha = await this.getCurrentHeadForExplanation(
+                query,
+                organizationAndTeamData,
+                paginatedData,
+            );
             return {
                 data: paginatedData,
                 pagination: paginationMetadata,
+                ...(currentHeadSha && { currentHeadSha }),
             };
         } catch (error) {
             this.logger.error({
@@ -800,6 +808,52 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 metadata: { repositoryId, repositoryName, organizationId },
             });
             throw error;
+        }
+    }
+
+    private async getCurrentHeadForExplanation(
+        query: EnrichedPullRequestsQueryDto,
+        organizationAndTeamData: OrganizationAndTeamData,
+        runs: EnrichedPullRequestResponse[],
+    ): Promise<string | undefined> {
+        const [first] = runs;
+        if (
+            query.explain !== 'true' ||
+            !query.teamId ||
+            !query.pullRequestNumber ||
+            !first ||
+            !(query.repositoryId || query.repositoryName) ||
+            runs.some((run) => run.repositoryId !== first.repositoryId)
+        ) {
+            return undefined;
+        }
+
+        const repository = {
+            id: first.repositoryId,
+            name: first.repositoryName,
+        };
+        const prNumber = query.pullRequestNumber;
+        try {
+            const pullRequest = await this.codeManagementService.getPullRequest(
+                {
+                    organizationAndTeamData,
+                    repository,
+                    prNumber,
+                },
+            );
+            return pullRequest?.head?.sha;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not fetch the current PR head for review history',
+                error,
+                metadata: {
+                    ...organizationAndTeamData,
+                    repositoryId: repository.id,
+                    prNumber,
+                },
+            });
+            return undefined;
         }
     }
 

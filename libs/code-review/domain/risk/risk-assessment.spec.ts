@@ -2,9 +2,11 @@ import {
     hasConfirmedRisk,
     matchesRiskSnapshot,
     riskApprovalVeto,
+    riskSnapshotMismatch,
     type RiskAssessmentResult,
     type RiskSnapshot,
 } from './risk-assessment';
+import { prRiskDescriptionKey } from './risk-configuration';
 
 export const snapshot: RiskSnapshot = {
     organizationId: 'org',
@@ -83,6 +85,45 @@ describe('shared PR risk contract', () => {
             riskApprovalVeto(true, assessed(false), 'new-head'),
         ).toBeDefined();
         expect(riskApprovalVeto(true, assessed(false), '')).toBeDefined();
+    });
+
+    it('shares base and description checks between routing and approval', () => {
+        const description = { title: 'Original', body: 'Context' };
+        const result = {
+            ...assessed(false),
+            snapshot: {
+                ...snapshot,
+                descriptionKey: prRiskDescriptionKey(description),
+            },
+        } as RiskAssessmentResult;
+        expect(
+            riskSnapshotMismatch(result, {
+                headSha: 'head',
+                baseSha: 'base',
+                description,
+            }),
+        ).toBeUndefined();
+        const changes = [
+            { baseSha: 'moved', description },
+            {
+                baseSha: 'base',
+                description: { ...description, title: 'Edited' },
+            },
+        ];
+        for (const { baseSha, description } of changes) {
+            const mismatch = riskSnapshotMismatch(result, {
+                headSha: 'head',
+                baseSha,
+                description,
+            });
+            expect(mismatch).toBeDefined();
+            expect(
+                riskApprovalVeto(true, result, 'head', {
+                    ...description,
+                    base: { sha: baseSha },
+                }),
+            ).toBe(mismatch);
+        }
     });
 
     it('removes only the risk veto when the engine is switched off', () => {

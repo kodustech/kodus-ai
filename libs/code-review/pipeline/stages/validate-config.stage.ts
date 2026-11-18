@@ -38,7 +38,7 @@ import {
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
 import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
-import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
+import { riskSnapshotMismatch } from '@libs/code-review/domain/risk/risk-assessment';
 import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
@@ -257,12 +257,11 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         // service before it reuses a result. Keep routing on that PR snapshot.
         const staleRisk =
             riskAssessment?.status === 'assessed' &&
-            (!pullRequest.head?.sha ||
-                riskAssessment.snapshot.headSha !== pullRequest.head.sha ||
-                !pullRequest.base.sha ||
-                riskAssessment.snapshot.baseSha !== pullRequest.base.sha ||
-                riskAssessment.snapshot.descriptionKey !==
-                    prRiskDescriptionKey(pullRequest));
+            !!riskSnapshotMismatch(riskAssessment, {
+                headSha: pullRequest.head?.sha,
+                baseSha: pullRequest.base?.sha ?? '',
+                description: pullRequest,
+            });
         const risk = staleRisk ? undefined : riskAssessment;
         const selectedMode = resolveRiskReviewMode({
             requested: context.requestedReviewMode,
