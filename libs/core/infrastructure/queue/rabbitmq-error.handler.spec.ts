@@ -3,6 +3,7 @@ import {
     RabbitMQErrorHandler,
 } from './rabbitmq-error.handler';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -242,6 +243,48 @@ describe('RabbitMQErrorHandler', () => {
                 msg.content,
                 expect.any(Object),
             );
+        });
+    });
+
+    describe('claim conflict', () => {
+        it('requeues without incrementing retry count', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 2 });
+            const channel = { ack: jest.fn() };
+            const msg = makeMessage({ 'x-retry-count': 2 });
+
+            await handler.handle(channel, msg, new ClaimConflictError(), {
+                dlqRoutingKey: 'workflow.job.failed',
+            });
+
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange.delayed',
+                'workflow.jobs.created.CODE_REVIEW',
+                msg.content,
+                expect.objectContaining({
+                    persistent: true,
+                    headers: expect.objectContaining({
+                        'x-retry-count': 2,
+                        'x-delay': 20_000,
+                    }),
+                }),
+            );
+            expect(channel.ack).toHaveBeenCalledWith(msg);
+        });
+
+        it('does not send a held claim to the DLQ even at max retries', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 0 });
+            const channel = { ack: jest.fn() };
+            const msg = makeMessage({ 'x-retry-count': 99 });
+
+            await handler.handle(channel, msg, new ClaimConflictError());
+
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange.delayed',
+                expect.any(String),
+                msg.content,
+                expect.any(Object),
+            );
+            expect(amqpConnection.publish.mock.calls[0][0]).not.toMatch(/dlx$/);
         });
     });
 
