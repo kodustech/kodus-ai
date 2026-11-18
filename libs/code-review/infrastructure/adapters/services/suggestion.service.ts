@@ -156,10 +156,11 @@ export class SuggestionService implements ISuggestionService {
             // is a Kody Rule that names a file but cites no line: that shape is
             // a rule about the PR itself, routed PR-level (#2420), and judging
             // it against a file's diff measures something the comment never
-            // pointed at.
+            // pointed at. `0` is no line either - the routing stage and the
+            // merge stage both read the field as falsy, so this check has to.
             const lineLessRule =
                 suggestion.label === 'kody_rules' &&
-                suggestion.relevantLinesStart == null;
+                !suggestion.relevantLinesStart;
             const locations =
                 suggestion.relevantFile && !lineLessRule
                     ? suggestionLocations(suggestion)

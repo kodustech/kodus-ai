@@ -683,23 +683,29 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             ).not.toHaveBeenCalled();
         });
 
-        it('does not measure a line-less Kody Rule against a file diff (#2420)', async () => {
-            const result = await check(
-                [
-                    grouped({
-                        label: 'kody_rules',
-                        relevantLinesStart: undefined,
-                        relevantLinesEnd: undefined,
-                    }),
-                ],
-                [fileA, fileB],
-            );
+        it.each([
+            { name: 'no line', start: undefined, end: undefined },
+            { name: 'line 0', start: 0, end: 0 },
+        ])(
+            'does not measure a line-less Kody Rule against a file diff ($name, #2420)',
+            async ({ start, end }) => {
+                const result = await check(
+                    [
+                        grouped({
+                            label: 'kody_rules',
+                            relevantLinesStart: start,
+                            relevantLinesEnd: end,
+                        }),
+                    ],
+                    [fileA, fileB],
+                );
 
-            expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
-            expect(
-                aiAnalysisService.checkSuggestionImplementation,
-            ).not.toHaveBeenCalled();
-        });
+                expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+                expect(
+                    aiAnalysisService.checkSuggestionImplementation,
+                ).not.toHaveBeenCalled();
+            },
+        );
 
         // A push that deletes a file deletes the problem in it: the file is
         // not in the changed files the check reads, which leave removed ones out.
