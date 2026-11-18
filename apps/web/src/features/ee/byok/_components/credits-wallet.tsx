@@ -521,6 +521,11 @@ const AutoTopUpRow = ({
                         : {}),
                 });
                 if (saved && "saveError" in saved) {
+                    // Snap the selects back to the saved values. A refused
+                    // amount left in local state would ride along on every
+                    // later save (even a limit-only one) and be refused again.
+                    setAmount(null);
+                    setThreshold(null);
                     toast({variant: "warning", title: "Previous top-up pending", description: saved.saveError});
                     return;
                 }

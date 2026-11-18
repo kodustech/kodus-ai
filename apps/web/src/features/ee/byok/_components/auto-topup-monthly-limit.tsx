@@ -20,7 +20,11 @@ export function AutoTopUpMonthlyLimit({
     if (auto.monthlyPurchasedUsd === undefined) return null;
 
     const value = draft ?? String(auto.monthlyLimitUsd ?? "");
-    const limit = value.trim() === "" ? null : Number(value);
+    // A text input, not type="number": a number input reports "-" or "1e" as
+    // an empty value, which would read as "no limit" and drop the cap.
+    const trimmed = value.trim();
+    const limit =
+        trimmed === "" ? null : /^\d+$/.test(trimmed) ? Number(trimmed) : NaN;
     const valid =
         limit === null ||
         (Number.isSafeInteger(limit) && limit >= 0 && limit <= 99999999);
@@ -46,10 +50,8 @@ export function AutoTopUpMonthlyLimit({
                 <Input
                     id="auto-topup-monthly-limit"
                     size="md"
-                    type="number"
-                    min={0}
-                    max={99999999}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="No limit"
                     value={value}
                     disabled={disabled}

@@ -31,7 +31,7 @@ describe("monthly auto top-up limit", () => {
                 onSave={save}
             />,
         );
-        const input = screen.getByRole("spinbutton", {
+        const input = screen.getByRole("textbox", {
             name: /monthly auto top-up limit/i,
         });
         expect(
@@ -48,7 +48,8 @@ describe("monthly auto top-up limit", () => {
         }
     });
 
-    it.each(["-1", "1.5", "100000000"])(
+    // "-" and "1e" are what a number input reported as empty, i.e. "no limit".
+    it.each(["-", "1e", "-1", "1.5", "100000000"])(
         "prevents saving invalid cap %s",
         (value) => {
             const save = jest.fn();
@@ -59,11 +60,11 @@ describe("monthly auto top-up limit", () => {
                     onSave={save}
                 />,
             );
-            fireEvent.change(screen.getByRole("spinbutton"), {
+            fireEvent.change(screen.getByRole("textbox"), {
                 target: { value },
             });
             expect(screen.getByRole("alert")).toHaveTextContent("whole dollar");
-            expect(screen.getByRole("spinbutton")).toHaveAttribute(
+            expect(screen.getByRole("textbox")).toHaveAttribute(
                 "aria-invalid",
                 "true",
             );
@@ -83,14 +84,14 @@ describe("monthly auto top-up limit", () => {
                 onSave={save}
             />,
         );
-        fireEvent.change(screen.getByRole("spinbutton"), {
+        fireEvent.change(screen.getByRole("textbox"), {
             target: { value: "200" },
         });
         expect(
             screen.getByRole("button", { name: "Save limit" }),
         ).toBeEnabled();
         rerender(<AutoTopUpMonthlyLimit auto={auto} disabled onSave={save} />);
-        expect(screen.getByRole("spinbutton")).toBeDisabled();
+        expect(screen.getByRole("textbox")).toBeDisabled();
         const button = screen.getByRole("button", { name: "Save limit" });
         expect(button).toBeDisabled();
         fireEvent.click(button);
@@ -127,7 +128,7 @@ describe("monthly auto top-up limit", () => {
                 onSave={jest.fn()}
             />,
         );
-        expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+        expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     });
 
     it("updates its saved value and usage from the server response", () => {
@@ -149,7 +150,7 @@ describe("monthly auto top-up limit", () => {
                 onSave={jest.fn()}
             />,
         );
-        expect(screen.getByRole("spinbutton")).toHaveValue(200);
+        expect(screen.getByRole("textbox")).toHaveValue("200");
         expect(screen.getByText(/This month:/)).toHaveTextContent(
             "$100 added automatically",
         );

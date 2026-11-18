@@ -59,6 +59,13 @@ jest.mock("src/features/ee/subscription/_actions/credits", () => ({
     listCreditLedgerAction: jest.fn(async () => []),
 }));
 
+beforeAll(() => {
+    // radix Select reaches for these DOM APIs that jsdom doesn't implement.
+    Element.prototype.scrollIntoView = jest.fn();
+    Element.prototype.hasPointerCapture = jest.fn(() => false);
+    Element.prototype.releasePointerCapture = jest.fn();
+});
+
 describe("wallet pending-charge feedback", () => {
     beforeEach(() => {
         toast.mockClear();
@@ -89,7 +96,7 @@ describe("wallet pending-charge feedback", () => {
     it("keeps the saved cap and warns instead of claiming a pending change succeeded", async () => {
         const client = wallet();
         fireEvent.change(
-            screen.getByRole("spinbutton", {
+            screen.getByRole("textbox", {
                 name: /monthly auto top-up limit/i,
             }),
             { target: { value: "200" } },
@@ -108,6 +115,36 @@ describe("wallet pending-charge feedback", () => {
         ).toEqual({ autoTopUp: credits.autoTopUp });
         expect(toast.mock.calls.some(([t]) => t.variant === "success")).toBe(
             false,
+        );
+        client.clear();
+    });
+
+    it("drops a refused amount so a later limit save sends the saved one", async () => {
+        const client = wallet();
+        fireEvent.click(
+            screen.getByRole("combobox", { name: "Auto top-up amount" }),
+        );
+        fireEvent.click(await screen.findByRole("option", { name: "$100" }));
+        await waitFor(() =>
+            expect(update).toHaveBeenLastCalledWith(
+                expect.objectContaining({ amountUsd: 100 }),
+            ),
+        );
+        await waitFor(() =>
+            expect(
+                screen.getByRole("combobox", { name: "Auto top-up amount" }),
+            ).toHaveTextContent("$50"),
+        );
+
+        fireEvent.change(
+            screen.getByRole("textbox", { name: /monthly auto top-up limit/i }),
+            { target: { value: "200" } },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save limit" }));
+        await waitFor(() =>
+            expect(update).toHaveBeenLastCalledWith(
+                expect.objectContaining({ monthlyLimitUsd: 200, amountUsd: 50 }),
+            ),
         );
         client.clear();
     });
