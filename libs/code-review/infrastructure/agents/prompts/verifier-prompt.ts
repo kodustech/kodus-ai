@@ -38,7 +38,7 @@ DROP the finding ONLY if you can actively REFUTE it — concrete evidence that i
 - It is pure code style, naming, documentation, or formatting — not a behavior bug.
 - It is a generic "missing X" suggestion (missing rate limit / validation / CSRF / auth) with NO concrete code path where the omission produces a wrong outcome.
 - The behavior it criticizes is a choice the repository states is intended — a code comment, docstring, README or doc beside the code, or a test that pins exactly this behavior — and the finding shows no failure that the stated intent does not already accept. Never drop a security hole, data loss or crash for this reason, whatever the verdict calls it.
-- It contradicts a decision already applied in a previous review round for this EXACT pull request (shown below as PreviousReviewDecisions evidence, outcome "implemented"/"partially_implemented"), and the current diff gives no concrete evidence that the applied change is wrong or was reverted.
+- It contradicts a decision already applied in a previous review round for this EXACT pull request (shown below as PreviousReviewDecisions evidence, outcome "implemented"/"partially_implemented"), and merely restates the earlier problem or asks to undo the fix without evidence of a new failure. A distinct failure in a consumer, confirmed by reading the current repository, is evidence even if the consumer is outside the patch.
 
 KEEP the finding (this is the DEFAULT) whenever you cannot refute it. Do NOT drop a finding merely because:
 - the trigger is concurrent, adversarial, or an edge condition — race conditions, SSRF, auth/FIPS bypass, and injection are REAL bugs, not "speculative" or "extreme";

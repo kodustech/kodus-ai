@@ -234,6 +234,17 @@ describe('occurrenceKeys', () => {
 });
 
 describe('buildRepeatCheckPrompt', () => {
+    it('gives the comparison the concrete downstream failure when a short title omits it', () => {
+        const prompt = buildRepeatCheckPrompt([{
+            finding: {
+                oneSentenceSummary: 'Handle offline inventory',
+                suggestionContent: 'Returning empty names during an outage removes the entire catalog.',
+            },
+            candidates: [ruleComment],
+        }]);
+        expect(prompt).toContain('Finding: Returning empty names during an outage removes the entire catalog.');
+    });
+
     it('names rules by title and shows each finding with its own earlier comments', () => {
         const prompt = buildRepeatCheckPrompt(
             [

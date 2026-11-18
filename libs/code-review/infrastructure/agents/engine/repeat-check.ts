@@ -256,7 +256,7 @@ export function buildRepeatCheckPrompt(
             `<Finding n="${n}">`,
             `Where: ${locationOf(finding)}`,
             `Kind: ${kindOf(finding, ruleTitleByUuid)}`,
-            `Finding: ${clip(finding.oneSentenceSummary || finding.suggestionContent || '', MAX_TEXT)}`,
+            `Finding: ${clip(finding.suggestionContent?.trim() || finding.oneSentenceSummary || '', MAX_TEXT)}`,
             finding.existingCode
                 ? `Code it points at:\n${clip(finding.existingCode, MAX_CODE)}`
                 : '',
@@ -275,7 +275,7 @@ Give every finding one verdict:
 - caused_by_earlier: a new problem that exists because the change an earlier comment asked for was made, or a finding that asks to undo that change. Give the comment's id.
 - different_problem: anything else. earlierId is null.
 
-Compare the code each one points at. A finding about different code is never the same occurrence, however alike the words.
+Compare the failure each comment describes. If the earlier fix worked but now causes a different failure in a consumer, use caused_by_earlier even when both comments point to the same line. Compare the code each one points at. A finding about different code is never the same occurrence, however alike the words.
 For PR-level comments, compare the behavior, resource or change each comment asks about. A shared rule is not enough; the comments must raise the same problem about the same subject.
 
 ${blocks.join('\n\n')}`;
