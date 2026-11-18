@@ -139,8 +139,14 @@ describe('CronRunGate', () => {
 
     it('has its shutdown hook provided by exactly one module', () => {
         // Every app imports NotificationModule; a second provider holds
-        // shutdown for its own budget again.
+        // shutdown for its own budget again. A module cannot provide the hook
+        // in any form (class, useClass, useExisting) without importing it,
+        // so the import is what is counted, with comments blanked first.
         const root = join(__dirname, '../../../..');
+        const importsHook =
+            /import\s*\{[^}]*\bCronShutdownService\b[^}]*\}\s*from\s*['"][^'"]*cron-run-gate['"]/;
+        const withoutComments = (text: string) =>
+            text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
         const providers: string[] = [];
         const walk = (dir: string) => {
             for (const name of readdirSync(dir)) {
@@ -150,7 +156,9 @@ describe('CronRunGate', () => {
                     walk(path);
                 } else if (
                     path.endsWith('.module.ts') &&
-                    /^\s*CronShutdownService,/m.test(readFileSync(path, 'utf8'))
+                    importsHook.test(
+                        withoutComments(readFileSync(path, 'utf8')),
+                    )
                 ) {
                     providers.push(path.slice(root.length + 1));
                 }
