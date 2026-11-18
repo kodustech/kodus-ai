@@ -290,6 +290,158 @@ describe('ValidateConfigStage — v2 routing', () => {
         });
     });
 
+    describe('ultra', () => {
+        const trioConfig = (ultraModelIds = ['m-C', 'm-A', 'm-B']) =>
+            v2(
+                {
+                    defaultModelId: 'm-A',
+                    fallbackModelId: 'm-D',
+                    ultraModelIds,
+                },
+                [
+                    { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+                    { id: 'm-B', credentialId: 'c-oa', model: 'gpt-5-mini' },
+                    { id: 'm-C', credentialId: 'c-oa', model: 'gpt-6.1-sol' },
+                    { id: 'm-D', credentialId: 'c-oa', model: 'gpt-6-luna' },
+                ],
+            );
+        const ultraContext = (
+            requestedReviewMode?: 'ultra',
+            extra: Record<string, unknown> = {},
+        ) => {
+            const context = buildContext(undefined);
+            if (!requestedReviewMode) {
+                (context.codeReviewConfig as any).reviewMode = 'ultra';
+            }
+            return { ...context, requestedReviewMode, ...extra } as any;
+        };
+        const comment = () =>
+            mockCodeManagementService.createSingleIssueComment.mock.calls[0]?.[0]
+                ?.body as string | undefined;
+
+        it('runs Ultra on the three models in order, each without a per-call fallback, and the review slot on the codeReview model', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(result.heavy).toBe(false);
+            expect(
+                result.ultra?.models.map((m) => [m.position, m.slot.model]),
+            ).toEqual([
+                [1, 'gpt-6.1-sol'],
+                [2, 'gpt-4o'],
+                [3, 'gpt-5-mini'],
+            ]);
+            expect(result.ultra?.models.every((m) => !m.slot.fallback)).toBe(
+                true,
+            );
+            expect(result.ultra?.fallback?.slot.model).toBe('gpt-6-luna');
+            expect(result.ultra?.mergeModel.slot.model).toBe('gpt-6.1-sol');
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(comment()).toBeUndefined();
+        });
+
+        it('runs Ultra on a trial with three of the team\'s own models', async () => {
+            validateOrganizationLicense.mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'trial',
+                planType: 'teams_managed',
+            });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const result = await stage.execute(ultraContext('ultra'));
+            expect(result.ultra?.models).toHaveLength(3);
+        });
+
+        it('on free, runs no review for --ultra and says why on the PR', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra).toBeUndefined();
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain(
+                'Ultra review is available on the Teams and Enterprise plans',
+            );
+            expect(comment()).toContain('was not reviewed');
+        });
+
+        it('a trio still set after the trial ended runs nothing; the PR is told on its first review only', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const first = await stage.execute(ultraContext());
+            expect(first.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain('Ultra review is available');
+
+            mockCodeManagementService.createSingleIssueComment.mockClear();
+            const later = await stage.execute(
+                ultraContext(undefined, {
+                    pipelineMetadata: { lastExecution: { uuid: 'e1' } },
+                }),
+            );
+            expect(later.statusInfo?.status).toBe('skipped');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('with fewer than three own models, runs no review and says how many there are', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({ defaultModelId: 'm-A' }),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain('this organization has 2 configured');
+        });
+
+        it('a model on Kodus credits with none left counts as unavailable, so the fallback takes its place', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-5-mini' ? { allowed: false } : null,
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models.map((m) => m.slot.model)).toEqual([
+                'gpt-6.1-sol',
+                'gpt-4o',
+            ]);
+            expect(result.ultra?.unavailable).toEqual([
+                expect.objectContaining({
+                    position: 3,
+                    reason: 'Its Kodus credits are exhausted.',
+                }),
+            ]);
+            gate.mockResolvedValue(null);
+        });
+
+        it('@kody -v runs its one custom agent, not Ultra', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const result = await stage.resolveReviewRouting(
+                ultraContext(undefined, { onlyCustomAgent: 'audit' }),
+            );
+            expect(result.ultra).toBeUndefined();
+        });
+    });
+
     it('does not crash when there is no BYOK config', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue(null);
 

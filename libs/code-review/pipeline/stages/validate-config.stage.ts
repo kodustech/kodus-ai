@@ -42,6 +42,15 @@ import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
+import type { UltraModel } from '@libs/code-review/domain/ultra-review-state';
+import {
+    isUltraReviewPlanAllowed,
+    resolveUltraTrio,
+} from '@libs/ee/ultra-review/ultra-review-plan';
+import {
+    ULTRA_REVIEW_PLAN_REQUIRED,
+    ultraTrioRefusalMessage,
+} from '@libs/ee/ultra-review/ultra-review-messages';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
     CUSTOM_AGENTS_BETA_REQUIRED,
@@ -251,15 +260,19 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         // The mode the command asked for, else the one in settings. Heavy
         // runs on Teams and Enterprise only; elsewhere the review runs
         // Balanced, and a command that asked for heavy is told why.
-        const heavy =
-            resolveRiskReviewMode({
-                requested: context.requestedReviewMode,
-                configured: context.codeReviewConfig?.reviewMode,
-                routing: context.codeReviewConfig?.riskReviewRouting,
-                risk: context.riskAssessment,
-                currentHeadSha: context.pullRequest.head?.sha ?? '',
-                heavyAllowed: true,
-            }) === 'heavy' && (await this.heavyModeAllowed(context));
+        const mode = resolveRiskReviewMode({
+            requested: context.requestedReviewMode,
+            configured: context.codeReviewConfig?.reviewMode,
+            routing: context.codeReviewConfig?.riskReviewRouting,
+            risk: context.riskAssessment,
+            currentHeadSha: context.pullRequest.head?.sha ?? '',
+            heavyAllowed: true,
+        });
+        // `@kody -v <slug>` runs one custom agent alone, whatever the mode.
+        if (mode === 'ultra' && !context.onlyCustomAgent) {
+            return this.resolveUltraRouting(context, byokConfig?.configValue);
+        }
+        const heavy = mode === 'heavy' && (await this.heavyModeAllowed(context));
 
         // The review's routed slot, or none → the env/managed default
         // resolves downstream, matching a missing config.
@@ -311,6 +324,110 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
         });
         return context;
+    }
+
+    /**
+     * An Ultra review: the plan and the org's three models, read on every
+     * review. Refused, no review runs and the PR is told why: always when a
+     * command asked for it, on the PR's first review when settings did (later
+     * pushes skip with the same reason on the Pull Requests screen). Allowed,
+     * the review's own slot is the org's `codeReview` model, which Kody Rules,
+     * the summary and the other single-model steps inherit; each Ultra model
+     * is forced on its own run (AgentReviewStage).
+     */
+    private async resolveUltraRouting(
+        context: CodeReviewPipelineContext,
+        storedConfig: unknown,
+    ): Promise<CodeReviewPipelineContext> {
+        const askedByCommand = context.requestedReviewMode === 'ultra';
+        const planAllowed = await isUltraReviewPlanAllowed(
+            this.licenseService,
+            context.organizationAndTeamData,
+            this.stageName,
+        );
+        const trio = planAllowed ? resolveUltraTrio(storedConfig) : undefined;
+        const refusal = !planAllowed
+            ? ULTRA_REVIEW_PLAN_REQUIRED
+            : trio && !trio.ok
+              ? ultraTrioRefusalMessage(trio)
+              : undefined;
+
+        if (refusal || !trio?.ok) {
+            const message = refusal ?? ULTRA_REVIEW_PLAN_REQUIRED;
+            this.logger.log({
+                message: 'Ultra review refused — the review does not run',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    repositoryId: context.repository?.id,
+                    askedByCommand,
+                    planAllowed,
+                    reason: trio && !trio.ok ? trio.reason : 'plan',
+                },
+            });
+            // Settings asking for it: told once per PR, and only when the
+            // review would otherwise have run (not a draft, a skipped branch).
+            const firstReview = !context.pipelineMetadata?.lastExecution;
+            const wouldRun =
+                askedByCommand ||
+                (firstReview &&
+                    (await this.evaluateReviewCadence(context)).shouldProcess);
+            if (wouldRun) {
+                await this.replyToReviewCommand(context, message);
+            }
+            return this.updateContext(context, (draft) => {
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message,
+                };
+                if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
+                draft.pipelineMetadata.notificationHandled = true;
+            });
+        }
+
+        // A model on Kodus credits with none left counts as failed: the
+        // fallback takes its place, like any model that cannot run.
+        const models: UltraModel[] = [];
+        const unavailable = [...(trio.unavailable ?? [])];
+        for (const model of trio.models) {
+            const gate =
+                await this.permissionValidationService.gateKodusCreditsForSlot(
+                    model.slot,
+                    context.organizationAndTeamData,
+                    this.stageName,
+                );
+            if (gate && model.position !== 'fallback') {
+                unavailable.push({
+                    position: model.position,
+                    modelId: model.modelId,
+                    reason: 'Its Kodus credits are exhausted.',
+                });
+            } else {
+                models.push(model);
+            }
+        }
+
+        const routed = routeCodeReviewModel(
+            storedConfig,
+            context.codeReviewConfig,
+            false,
+        );
+        return this.updateContext(context, (draft) => {
+            draft.heavy = false;
+            draft.ultra = {
+                models,
+                ...(unavailable.length && { unavailable }),
+                ...(trio.fallback && { fallback: trio.fallback }),
+                mergeModel: models.some(
+                    (m) => m.modelId === trio.mergeModel.modelId,
+                )
+                    ? trio.mergeModel
+                    : (models[0] ?? trio.mergeModel),
+            };
+            draft.codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+            draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
+        });
     }
 
     /**
