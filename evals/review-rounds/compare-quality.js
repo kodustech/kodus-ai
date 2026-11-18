@@ -57,9 +57,16 @@ function compare(base, pr) {
         console.log(`| ${label} | ${score(base, pattern)} | ${score(pr, pattern)} |`);
     }
     for (const [name, run] of [['Base', base], ['PR', pr]]) {
-        const times = run.rows.map((r) => r.ms).sort((a, b) => a - b);
-        const seconds = (q) => (times[Math.ceil(q * times.length) - 1] / 1000).toFixed(1);
-        console.log(`\n${name} ${run.engine.commit}: ${run.tokens.calls} calls; ${run.tokens.in} input / ${run.tokens.out} output tokens; median ${seconds(.5)} s, p95 ${seconds(.95)} s per review.`);
+        const times = run.rows.map((r) => r.reviewMs);
+        let timing = 'Review-only latency unavailable in this historical run.';
+        if (times.every(Number.isFinite)) {
+            times.sort((a, b) => a - b);
+            const mid = Math.floor(times.length / 2);
+            const median = (times[mid] + times[Math.floor((times.length - 1) / 2)]) / 2;
+            const p95 = times[Math.ceil(.95 * times.length) - 1];
+            timing = `Median ${(median / 1000).toFixed(1)} s, p95 ${(p95 / 1000).toFixed(1)} s per review.`;
+        }
+        console.log(`\n${name} ${run.engine.commit}: ${run.tokens.calls} calls; ${run.tokens.in} input / ${run.tokens.out} output tokens. ${timing}`);
     }
 }
 

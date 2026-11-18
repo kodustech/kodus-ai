@@ -472,6 +472,41 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         ...over,
     });
 
+    it('surfaces a partial review when a rule needs repository evidence and the sandbox is unavailable', async () => {
+        const { provider } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1,
+                        suggestionContent:
+                            'Missing implementation in another file',
+                        needsRepositoryEvidence: true,
+                        relevantLinesStart: 10,
+                        relevantLinesEnd: 10,
+                    },
+                ],
+            },
+        ]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'cross-file',
+                        title: 'Implementation',
+                        rule: 'Verify the implementation',
+                        scope: KodyRulesScope.FILE,
+                        status: 'active',
+                        severity: 'high',
+                    },
+                ],
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(0);
+        expect(out.warnings).toContainEqual(
+            expect.objectContaining({ kind: 'KODY_RULES_PARTIAL' }),
+        );
+    });
+
     it('reports a candidate skipped after the evidence budget separately from failed checks', async () => {
         const { provider, judge } = makeProvider([]);
         const candidate = {
@@ -482,10 +517,17 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         let now = Date.now();
         clock.mockImplementation(() => now);
         try {
+            let active = 0;
+            let peak = 0;
             judge
-                .mockResolvedValueOnce({ violations: [candidate, candidate] })
-                .mockImplementationOnce(async () => {
+                .mockResolvedValueOnce({
+                    violations: Array(15).fill(candidate),
+                })
+                .mockImplementation(async () => {
+                    peak = Math.max(peak, ++active);
+                    await new Promise((resolve) => setImmediate(resolve));
                     now += 180_001;
+                    active--;
                     return { verdict: 'satisfied' };
                 });
             const out = await provider.execute(
@@ -502,14 +544,15 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
                     ],
                 }) as any,
             );
-            expect(judge).toHaveBeenCalledTimes(2);
+            expect(peak).toBe(4);
+            expect(judge).toHaveBeenCalledTimes(5);
             expect(out.suggestions).toHaveLength(0);
             expect(
                 out.warnings?.filter((w) => w.kind === 'KODY_RULES_PARTIAL'),
             ).toEqual([
                 expect.objectContaining({
                     reason: 'evidence_deadline',
-                    detail: expect.stringContaining('1 Kody Rules candidate'),
+                    detail: expect.stringContaining('11 Kody Rules candidate'),
                 }),
             ]);
         } finally {

@@ -2989,6 +2989,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const result = await checkRepeats(findings, history, {
             byokConfig: context.codeReviewConfig?.resolvedModelSlot,
             ruleTitleByUuid,
+            teamId: context.organizationAndTeamData.teamId,
             organizationId: context.organizationAndTeamData.organizationId,
             telemetryMetadata: telemetryMeta,
             prNumber,
@@ -3005,7 +3006,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
                 prNumber,
-                withheld: result.withheld.length,
+                teamId: context.organizationAndTeamData.teamId,
+                withheld: result.withheld.map((finding) => ({
+                    file: finding.relevantFile,
+                    line: finding.relevantLinesStart,
+                    ruleIds: finding.brokenKodyRulesIds,
+                })),
                 repeats: result.repeats.map((r) => ({
                     file: r.finding.relevantFile,
                     line: r.finding.relevantLinesStart,

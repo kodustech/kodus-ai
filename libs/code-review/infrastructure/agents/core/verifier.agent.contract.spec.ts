@@ -1254,3 +1254,38 @@ describe('verifier contract — verdict written as TEXT (#1937)', () => {
         ]);
     });
 });
+
+describe('readFile range in verifier tools', () => {
+    it.each([
+        [100, 101, 80, 111],
+        [100, 200, 100, 200],
+    ])(
+        'preserves the requested tail for readFile(%i, %i)',
+        async (startLine, endLine, start, end) => {
+            const execute = jest.fn(async () => ({ output: '' }));
+            const tools = {
+                list: () => [
+                    {
+                        name: 'readFile',
+                        description: '',
+                        inputSchema: {},
+                        execute,
+                    },
+                ],
+            } as any;
+            const spec = buildVerifierAgentSpec({
+                systemPrompt: 's',
+                modelId: 'm',
+                tools,
+            });
+            await spec.tools
+                .get('readFile')!
+                .execute({ path: 'a', startLine, endLine }, {} as any);
+            expect(execute).toHaveBeenCalledWith(
+                { path: 'a', startLine: start, endLine: end },
+                {},
+            );
+        },
+    );
+
+});

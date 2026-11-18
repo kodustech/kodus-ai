@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { Injectable, Optional } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
@@ -299,8 +300,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             const verifyEvidence = kodyRuleEvidenceVerifier(
                 input,
                 byokConfig ?? undefined,
-                lookup.available,
+                lookup.available && !!input.remoteCommands,
             );
+            const scheduleEvidence = pLimit(4); // shared across all shards of this review
             let evidenceChecks = 0;
             let evidenceFailures = 0;
             let evidenceSkipped = 0;
@@ -341,71 +343,76 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         },
                     });
                     const candidates = parsed?.violations ?? [];
-                    const supported: RawShardViolation[] = [];
-                    // Bound serial model work per shard. Already verified findings and
-                    // local detector findings survive a slow evidence provider.
                     const evidenceDeadline = Date.now() + 180_000;
-                    for (const candidate of candidates) {
-                        const rule = ruleForCandidate(candidate, shard);
-                        if (
-                            filename !== null &&
-                            !candidate.needsRepositoryEvidence &&
-                            (!rule ||
-                                rule.detector ||
-                                !lookup.available ||
-                                !input.remoteCommands)
-                        ) {
-                            supported.push(candidate);
-                            continue;
-                        }
-                        if (Date.now() >= evidenceDeadline) {
-                            evidenceSkipped++;
-                            continue;
-                        }
-                        evidenceChecks++;
-                        try {
+                    const evaluated = await Promise.all(
+                        candidates.map(async (candidate: RawShardViolation) => {
+                            const rule = ruleForCandidate(candidate, shard);
                             if (
-                                await verifyEvidence(
-                                    candidate,
-                                    shard,
-                                    evidenceDeadline,
-                                )
+                                filename !== null &&
+                                !candidate.needsRepositoryEvidence &&
+                                (!rule ||
+                                    rule.detector ||
+                                    !lookup.available ||
+                                    !input.remoteCommands)
                             ) {
-                                supported.push({
-                                    ...candidate,
-                                    evidenceVerified: true,
-                                });
-                                continue;
+                                return candidate;
                             }
-                        } catch (error) {
-                            evidenceFailures++;
-                            this.shardLogger.warn({
-                                message: 'Kody Rule evidence check failed',
-                                context: this.getIdentity().name,
-                                error,
-                                metadata: {
-                                    organizationAndTeamData:
-                                        input.organizationAndTeamData,
+                            return scheduleEvidence(async () => {
+                                const metadata = {
+                                    ...input.organizationAndTeamData,
                                     prNumber: input.prNumber,
                                     filename,
-                                    ruleId: candidate.ruleId,
-                                },
+                                    line: candidate.relevantLinesStart,
+                                    ruleId: rule?.uuid,
+                                    shardRuleId: candidate.ruleId,
+                                };
+                                let reason: string;
+                                if (Date.now() >= evidenceDeadline) {
+                                    evidenceSkipped++;
+                                    reason = 'evidence_deadline';
+                                } else {
+                                    evidenceChecks++;
+                                    try {
+                                        reason = await verifyEvidence(
+                                            candidate,
+                                            shard,
+                                            evidenceDeadline,
+                                        );
+                                        if (reason === 'verified')
+                                            return {
+                                                ...candidate,
+                                                evidenceVerified: true,
+                                            };
+                                        if (
+                                            reason === 'sandbox_unavailable' ||
+                                            reason === 'no_excerpts'
+                                        )
+                                            evidenceFailures++;
+                                    } catch (error) {
+                                        evidenceFailures++;
+                                        reason = 'evidence_error';
+                                        this.shardLogger.warn({
+                                            message:
+                                                'Kody Rule evidence check failed',
+                                            context: this.getIdentity().name,
+                                            error,
+                                            metadata,
+                                        });
+                                    }
+                                }
+                                this.shardLogger.log({
+                                    message:
+                                        'Kody Rule candidate withheld without verified evidence',
+                                    context: this.getIdentity().name,
+                                    metadata: { ...metadata, reason },
+                                });
+                                return null;
                             });
-                        }
-                        this.shardLogger.log({
-                            message:
-                                'Kody Rule candidate withheld without verified evidence',
-                            context: this.getIdentity().name,
-                            metadata: {
-                                organizationAndTeamData:
-                                    input.organizationAndTeamData,
-                                prNumber: input.prNumber,
-                                filename,
-                                ruleId: candidate.ruleId,
-                            },
-                        });
-                    }
-                    return supported;
+                        }),
+                    );
+                    return evaluated.filter(
+                        (entry): entry is RawShardViolation => entry !== null,
+                    );
                 } finally {
                     if (reshapes.length > 0) {
                         this.shardLogger.warn({

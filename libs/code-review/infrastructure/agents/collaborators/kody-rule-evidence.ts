@@ -26,6 +26,11 @@ For "violated", put a decisive path and line showing the unmet requirement in pa
 
 export const kodyRuleEvidenceVerdictSchema = z.object({
     rationale: z.string(),
+    regressionCoverageClaim: z
+        .boolean()
+        .describe(
+            'Whether the unmet rule requirement is regression-test coverage',
+        ),
     existingRegressionPath: z.string(),
     existingRegressionLine: z.number(),
     verdict: z.enum([
@@ -82,6 +87,7 @@ export function hasRuleEvidence(
     // A contrast case can pass on both revisions. Its existing sibling's
     // assertion is a separate fact from the judge's final keep/drop decision.
     if (
+        verdict.regressionCoverageClaim &&
         readContainsLine(
             reads,
             verdict.existingRegressionPath,
@@ -184,10 +190,11 @@ export function kodyRuleEvidenceVerifier(
         const remainingMs = () =>
             Math.max(1, Math.min(90_000, deadline - Date.now()));
         const rule = ruleForCandidate(violation, shard);
-        if (!rule) return false;
+        if (!rule) return 'unknown_rule' as const;
         const metadataAllowed =
             shard.filename === null && !violation.needsRepositoryEvidence;
-        if (!repoAvailable && !metadataAllowed) return false;
+        if (!repoAvailable && !metadataAllowed)
+            return 'sandbox_unavailable' as const;
         const candidate = {
             rule: {
                 title: rule.title,
@@ -222,7 +229,7 @@ export function kodyRuleEvidenceVerifier(
             if (state.status === 'error')
                 throw new Error('Kody Rule evidence retrieval failed');
             if (hasSourceRefutation(extractVerdict(state), readEvidence)) {
-                return false;
+                return 'refuted' as const;
             }
         }
         // Only the excerpts actually shown to the judge may support its verdict.
@@ -236,7 +243,7 @@ export function kodyRuleEvidenceVerifier(
             remaining -= read.content.length;
             excerpts.push(read);
         }
-        if (!excerpts.length && !metadataAllowed) return false;
+        if (!excerpts.length && !metadataAllowed) return 'no_excerpts' as const;
         const relatedPatches = [
             ...new Set([shard.filename, ...excerpts.map(({ path }) => path)]),
         ]
@@ -259,6 +266,10 @@ export function kodyRuleEvidenceVerifier(
             timeoutMs: remainingMs(),
             attrs: { prNumber: input.prNumber, ruleId: rule.uuid },
         });
-        return hasRuleEvidence(verdict, metadataAllowed, excerpts);
+        if (hasRuleEvidence(verdict, metadataAllowed, excerpts))
+            return 'verified' as const;
+        return verdict.verdict === 'violated'
+            ? ('unsupported_citation' as const)
+            : verdict.verdict;
     };
 }

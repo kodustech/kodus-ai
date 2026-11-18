@@ -235,14 +235,19 @@ describe('occurrenceKeys', () => {
 
 describe('buildRepeatCheckPrompt', () => {
     it('gives the comparison the concrete downstream failure when a short title omits it', () => {
-        const prompt = buildRepeatCheckPrompt([{
-            finding: {
-                oneSentenceSummary: 'Handle offline inventory',
-                suggestionContent: 'Returning empty names during an outage removes the entire catalog.',
+        const prompt = buildRepeatCheckPrompt([
+            {
+                finding: {
+                    oneSentenceSummary: 'Handle offline inventory',
+                    suggestionContent:
+                        'Returning empty names during an outage removes the entire catalog.',
+                },
+                candidates: [ruleComment],
             },
-            candidates: [ruleComment],
-        }]);
-        expect(prompt).toContain('Finding: Returning empty names during an outage removes the entire catalog.');
+        ]);
+        expect(prompt).toContain(
+            'Finding: Returning empty names during an outage removes the entire catalog.',
+        );
     });
 
     it('names rules by title and shows each finding with its own earlier comments', () => {
@@ -739,6 +744,49 @@ describe('checkRepeats', () => {
 
         expect(result.kept).toEqual([bug]);
         expect(result.repeats).toEqual([]);
+    });
+
+    it('does not retry an invalid API key', async () => {
+        runSpy.mockRejectedValue(
+            Object.assign(new Error('invalid API key'), { status: 401 }),
+        );
+        await checkRepeats(
+            [{ label: 'bug', relevantFile: 'src/retry.ts' }],
+            [bugComment],
+            { organizationId: 'org-1', byokConfig: slot },
+        );
+        expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('limits both the initial batches and retries on a large review', async () => {
+        const peak = new Map<number, number>();
+        let active = 0;
+        runSpy.mockImplementation(async ({ timeoutMs, user }) => {
+            peak.set(timeoutMs, Math.max(peak.get(timeoutMs) ?? 0, ++active));
+            await new Promise((resolve) => setImmediate(resolve));
+            active--;
+            if (timeoutMs === 120_000)
+                throw new DOMException('timed out', 'TimeoutError');
+            return {
+                verdicts: [...user.matchAll(/<Finding n="(\d+)">/g)].map(
+                    ([, n]) => ({
+                        finding: Number(n),
+                        verdict: 'different_problem',
+                        earlierId: null,
+                    }),
+                ),
+            };
+        });
+        const findings = Array.from({ length: 60 }, () => ({
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+        }));
+        const result = await checkRepeats(findings, [bugComment], {
+            organizationId: 'org',
+            byokConfig: slot,
+        });
+        expect([...peak.values()]).toEqual([4, 4]);
+        expect(result.kept).toHaveLength(60);
     });
 
     it('judges ten findings per call', async () => {

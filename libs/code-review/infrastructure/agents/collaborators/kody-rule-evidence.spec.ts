@@ -13,6 +13,7 @@ const read = {
 
 const violation = {
     rationale: 'The route lacks the required check.',
+    regressionCoverageClaim: false,
     existingRegressionPath: '',
     existingRegressionLine: 0,
     verdict: 'violated' as const,
@@ -57,12 +58,20 @@ describe('Kody Rule evidence', () => {
         };
         const verdict = {
             ...violation,
+            regressionCoverageClaim: true,
             path: spec.path,
             line: 7,
             existingRegressionPath: spec.path,
             existingRegressionLine: 4,
         };
         expect(hasRuleEvidence(verdict, false, [spec])).toBe(false);
+        expect(
+            hasRuleEvidence(
+                { ...verdict, regressionCoverageClaim: false },
+                false,
+                [spec],
+            ),
+        ).toBe(true);
         expect(
             hasRuleEvidence({ ...verdict, existingRegressionLine: 99 }, false, [
                 spec,
@@ -155,7 +164,7 @@ describe('Kody Rule evidence deadline', () => {
             jest.spyOn(Date, 'now').mockReturnValue(now);
             await expect(
                 verify()(candidate, shard, now + remaining),
-            ).resolves.toBe(false);
+            ).resolves.toBe('satisfied');
             expect(judge).toHaveBeenCalledWith(
                 expect.objectContaining({ timeoutMs: expected }),
             );

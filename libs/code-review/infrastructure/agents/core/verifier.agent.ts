@@ -118,7 +118,8 @@ export function buildVerifierAgentSpec(
                         Number.isSafeInteger(start) &&
                             start > 0 &&
                             Number.isSafeInteger(end) &&
-                            end >= start
+                            end >= start &&
+                            end - start < 20
                             ? {
                                   ...args,
                                   startLine: Math.max(1, start - 20),

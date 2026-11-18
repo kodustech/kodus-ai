@@ -216,7 +216,10 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     message: 'Could not list the full PR for PR-level rules',
                     context: this.stageName,
                     error,
-                    metadata: { prNumber: context.pullRequest.number },
+                    metadata: {
+                        ...context.organizationAndTeamData,
+                        prNumber: context.pullRequest.number,
+                    },
                 });
             }
         }

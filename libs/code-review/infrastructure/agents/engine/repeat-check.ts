@@ -18,6 +18,12 @@
  * runs.
  */
 import { jsonSchema } from 'ai';
+import pLimit from 'p-limit';
+import {
+    classifyLLMError,
+    isAbortOrHardTimeout,
+    LlmErrorCategory,
+} from '@libs/llm/error-classifier';
 
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
@@ -63,6 +69,7 @@ export interface RepeatCheckResult<T> {
 }
 
 export interface RepeatCheckOptions {
+    teamId?: string;
     organizationId: string;
     byokConfig?: NormalizedModel;
     /** Renders a rule finding's or entry's rule by title. */
@@ -349,7 +356,7 @@ function plausibleRepeat(
             isRule(finding) &&
             sharesRule(finding, earlier) &&
             !!claim &&
-            claim === earlier.suggestionContent.trim()
+            claim === earlier.suggestionContent?.trim()
         );
     }
     const start = finding.relevantLinesStart;
@@ -417,6 +424,8 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
         if (!options.byokConfig && !hasManagedModelKey()) {
             result.model = 'no-model';
         } else {
+            const scheduleBatch = pLimit(4);
+            const retryable = new Set(toJudge);
             const judgeBatch = async (
                 batch: typeof toJudge,
                 timeoutMs: number,
@@ -453,6 +462,14 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
                     for (const n of verdicts.decided)
                         unresolved.delete(batch[n]);
                 } catch (error) {
+                    const { category } = classifyLLMError(error);
+                    if (
+                        !isAbortOrHardTimeout(error) &&
+                        category !== LlmErrorCategory.TRANSIENT &&
+                        category !== LlmErrorCategory.RATE_LIMIT
+                    ) {
+                        for (const entry of batch) retryable.delete(entry);
+                    }
                     logger.warn({
                         message: `[REPEAT-CHECK] PR#${options.prNumber}: no verdict for ${batch.length} finding(s)`,
                         context: 'RepeatCheck',
@@ -460,6 +477,7 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
                         metadata: {
                             organizationId: options.organizationId,
                             prNumber: options.prNumber,
+                            teamId: options.teamId,
                             batchSize: batch.length,
                             timeoutMs,
                         },
@@ -473,14 +491,33 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
             ) => {
                 const jobs: Promise<void>[] = [];
                 for (let i = 0; i < entries.length; i += size) {
+                    const batch = entries.slice(i, i + size);
                     jobs.push(
-                        judgeBatch(entries.slice(i, i + size), timeoutMs),
+                        scheduleBatch(() => judgeBatch(batch, timeoutMs)),
                     );
                 }
                 await Promise.all(jobs);
             };
             await judge(toJudge, BATCH_SIZE, REPEAT_CHECK_TIMEOUT_MS);
-            await judge([...unresolved], RETRY_BATCH_SIZE, RETRY_TIMEOUT_MS);
+            const retry = [...unresolved].filter((entry) =>
+                retryable.has(entry),
+            );
+            if (retry.length) {
+                await judge(retry, RETRY_BATCH_SIZE, RETRY_TIMEOUT_MS);
+                logger.log({
+                    message: '[REPEAT-CHECK] retry completed',
+                    context: 'RepeatCheck',
+                    metadata: {
+                        organizationId: options.organizationId,
+                        teamId: options.teamId,
+                        prNumber: options.prNumber,
+                        attempted: retry.length,
+                        decided: retry.filter((entry) => !unresolved.has(entry))
+                            .length,
+                        timeoutMs: RETRY_TIMEOUT_MS,
+                    },
+                });
+            }
             result.model = unresolved.size ? 'failed' : 'ok';
         }
     }

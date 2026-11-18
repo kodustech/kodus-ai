@@ -337,13 +337,13 @@ async function once(c, judgeKey) {
     phase.verify = false;
     phase.verdicts = [];
     const counter = { calls: 0, failed: 0 };
-    const t0 = Date.now();
     const { route, permissionService } = orgRoute();
     const checks = [];
     // The PR through production's review (evals/shared/review-stage.js):
     // the changed files, the earlier decisions loaded from the PR's decision
     // store, both agents, the anchoring, the repeat drop, dedup, severity, the
     // formatter, and what the stage hands to posting.
+    const t0 = Date.now();
     const review = await repeatChecks.run(checks, () =>
         reviewPullRequest({
             pr: prOf(c),
@@ -359,6 +359,7 @@ async function once(c, judgeKey) {
                     : dyingSandbox(c.sandbox || 'alive', counter),
         }),
     );
+    const reviewMs = Date.now() - t0;
     if (review.skipped) {
         throw new Error(`INFRA: production skipped the review: ${review.skipped}`);
     }
@@ -410,7 +411,9 @@ async function once(c, judgeKey) {
         ];
     });
 
+    const scoringStarted = Date.now();
     const claims = await scoreDeliveredClaims(c, delivered, judgeKey, SET !== 'review-quality-2597');
+    const scoringMs = Date.now() - scoringStarted;
     const { PriorityStatus } = require('../../libs/platformData/domain/pullRequests/enums/priorityStatus.enum.ts');
     const repeats = review.discarded.filter((s) => s.priorityStatus === PriorityStatus.DISCARDED_BY_REPEAT);
     const loop = review.loops[0]?.result;
@@ -419,6 +422,8 @@ async function once(c, judgeKey) {
         family: c.family,
         sandbox: c.sandbox,
         ms: Date.now() - t0,
+        reviewMs,
+        scoringMs,
         // #2039: a delivered finding pointed at an earlier one by its prompt index
         // ("previous decision #3"), which means nothing to the reader.
         indexRefs: delivered.filter(
