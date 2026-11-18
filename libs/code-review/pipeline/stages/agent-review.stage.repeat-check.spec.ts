@@ -172,21 +172,21 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
             relevantFile: undefined,
             brokenKodyRulesIds: ['rule-logger'],
             suggestionContent:
-                'The report exporter writes the report export to console.log instead of using the logger.',
+                'The CSV export has no regression test.',
         });
         const repeat = {
             label: 'kody_rules',
             severity: 'high',
             brokenKodyRulesIds: ['rule-logger'],
-            oneSentenceSummary: 'Report export bypasses the logger',
+            oneSentenceSummary: 'Missing export coverage',
             suggestionContent:
-                'The report exporter writes the report export to console.log without using the logger.',
+                'The CSV export has no regression test.',
         };
         const newFinding = {
             ...repeat,
-            oneSentenceSummary: 'Worker telemetry uses stderr',
+            oneSentenceSummary: 'Missing export coverage',
             suggestionContent:
-                'Send the billing worker heartbeat through structured telemetry instead of stderr.',
+                'The PDF export has no regression test.',
         };
         const { stage, reviewOrchestrator } = makeStage([old]);
         reviewOrchestrator.execute.mockResolvedValue(

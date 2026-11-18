@@ -580,26 +580,22 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
-    it('withholds a plausible PR-level repost after two timeouts and keeps a new violation of that rule', async () => {
+    it('after two timeouts withholds the repeated CSV claim and delivers the PDF claim under the same PR rule', async () => {
         const old = earlier({
             suggestionId: 'pr-comment-old',
             relevantFile: undefined,
             label: 'kody_rules',
-            brokenKodyRulesIds: ['policy'],
-            suggestionContent:
-                'The report export endpoint lacks the report export permission. Add the correct policy to its controller.',
+            brokenKodyRulesIds: ['export-tests'],
+            suggestionContent: 'The CSV export has no regression test.',
         });
         const repeat = {
             label: 'kody_rules',
-            brokenKodyRulesIds: ['policy'],
-            suggestionContent:
-                'The report export controller lacks the permission policy for the report export endpoint.',
+            brokenKodyRulesIds: ['export-tests'],
+            suggestionContent: old.suggestionContent,
         };
         const different = {
-            label: 'kody_rules',
-            brokenKodyRulesIds: ['policy'],
-            suggestionContent:
-                'Protect deleting a saved dashboard with the ManageDashboards permission.',
+            ...repeat,
+            suggestionContent: 'The PDF export has no regression test.',
         };
         runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
         const result = await checkRepeats([repeat, different], [old], {

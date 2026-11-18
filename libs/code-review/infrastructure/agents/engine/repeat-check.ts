@@ -341,10 +341,15 @@ function plausibleRepeat(
     if (isRule(finding) !== isRule(earlier)) return false;
     const file = normalizePath(finding.relevantFile);
     if (file !== normalizePath(earlier.relevantFile)) return false;
-    const similarity = contentSimilarity(finding, earlier);
     if (!file) {
+        // PR-level history has no source anchor. A paraphrase needs a model
+        // verdict: changing a single target can turn it into a new finding.
+        const claim = finding.suggestionContent?.trim();
         return (
-            isRule(finding) && sharesRule(finding, earlier) && similarity >= 0.3
+            isRule(finding) &&
+            sharesRule(finding, earlier) &&
+            !!claim &&
+            claim === earlier.suggestionContent.trim()
         );
     }
     const start = finding.relevantLinesStart;
@@ -354,7 +359,7 @@ function plausibleRepeat(
         oldStart != null &&
         start <= (earlier.relevantLinesEnd ?? oldStart) &&
         oldStart <= (finding.relevantLinesEnd ?? start) &&
-        similarity >= 0.4
+        contentSimilarity(finding, earlier) >= 0.4
     );
 }
 
