@@ -195,10 +195,21 @@ export function useOrganizationRouting({
             throw new RoutingSettingsError(
                 "A selected provider is unavailable. Reconnect it or choose another model.",
             );
-        await createOrUpdateOrganizationParameter(
-            OrganizationParametersConfigKey.BYOK_CONFIG,
-            buildByokBlob(fresh, { kind: "routing", routing: next }),
-        );
+        try {
+            await createOrUpdateOrganizationParameter(
+                OrganizationParametersConfigKey.BYOK_CONFIG,
+                buildByokBlob(fresh, { kind: "routing", routing: next }),
+            );
+        } catch (error) {
+            // The API's own refusal of a trio change: it names the scopes
+            // still on Ultra, which this page cannot see.
+            const message = (
+                error as { response?: { data?: { message?: unknown } } }
+            )?.response?.data?.message;
+            if (typeof message === "string" && message.startsWith("Ultra"))
+                throw new RoutingSettingsError(message);
+            throw error;
+        }
         queryClient.setQueryData(queryKey, { ...fresh, routing: next });
         setEdit(null);
         return true;

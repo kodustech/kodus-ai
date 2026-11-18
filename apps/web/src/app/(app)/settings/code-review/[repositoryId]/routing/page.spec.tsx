@@ -882,6 +882,32 @@ describe("Ultra review mode", () => {
         );
     });
 
+    it("when the mode saved first and the models were refused, says the mode saved and shows the API's reason", async () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mockByok.routing!.ultraModelIds = ["c", "a", "b"];
+        const reason =
+            'Ultra review is the review mode in repository "api". Keep three different Ultra models, or change that mode first.';
+        saveModels.mockRejectedValue({
+            response: { status: 400, data: { message: reason } },
+        });
+        mount(false, false, { reviewMode: leaf("ultra") });
+        await chooseReviewMode("All PRs", "Balanced");
+        for (const n of [1, 2, 3]) {
+            await chooseOrgModel(`Ultra Model ${n}`, /^None$/);
+        }
+        await waitFor(() => expect(saveButton()).toBeEnabled());
+        fireEvent.click(saveButton());
+        await waitFor(() =>
+            expect(mockToast).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    description: `Review mode saved. Models were not saved: ${reason}`,
+                    variant: "danger",
+                }),
+            ),
+        );
+        expect(save).toHaveBeenCalledTimes(1);
+    });
+
     it("a saved trio that is one model twice is not a trio: models save first, as without one", async () => {
         mockByok.models.push({
             id: "a2",

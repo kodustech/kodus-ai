@@ -288,6 +288,7 @@ function RoutingSettings() {
         let modelsSaved = false;
         let checkingSavedModels = false;
         let providerDisconnected = false;
+        let reviewSavedFirst = false;
         setSaving(true);
         try {
             const freshStatus = await refreshStatus();
@@ -340,6 +341,7 @@ function RoutingSettings() {
                       })
                     : Promise.resolve(undefined);
             let result = modeFirst ? await saveReview() : undefined;
+            if (modeFirst) reviewSavedFirst = true;
             if (modeFirst && result?.centralizedPr) {
                 toast(
                     getCentralizedPrToastPayload(
@@ -380,6 +382,21 @@ function RoutingSettings() {
             );
         } catch (error) {
             const reviewError = reviewSettingsSaveErrorMessage(error);
+            // The mode went first and is saved; only the models failed.
+            if (reviewSavedFirst && !modelsSaved) {
+                await queryClient.invalidateQueries({
+                    queryKey: ["routing-model-overrides", teamId],
+                });
+                toast({
+                    description: `Review mode saved. Models were not saved: ${
+                        error instanceof RoutingSettingsError
+                            ? error.message
+                            : "try again."
+                    }`,
+                    variant: "danger",
+                });
+                return;
+            }
             toast({
                 description: modelsSaved
                     ? providerDisconnected
