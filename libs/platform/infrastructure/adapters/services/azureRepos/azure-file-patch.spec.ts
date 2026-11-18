@@ -1,6 +1,12 @@
 import { createTwoFilesPatch } from 'diff';
 
-import { createFilePatchYielding } from './azure-file-patch';
+import {
+    AZURE_FILE_DIFF_SYNC_BUDGET_MS,
+    createFilePatchYielding,
+} from './azure-file-patch';
+
+// Longest the loop may be held: the synchronous attempt plus scheduling slack.
+const MAX_GAP_MS = AZURE_FILE_DIFF_SYNC_BUDGET_MS + 150;
 
 // A large file whose every line changed: Myers' O(N·D) worst case, the
 // shape that froze workers for minutes on Azure Repos PRs.
@@ -76,8 +82,49 @@ describe('createFilePatchYielding', () => {
         ).resolves.toBe(expected);
     });
 
+    it('keeps the latency of the synchronous call on a large added file', async () => {
+        // The yielding mode costs ~1ms per edit step: on its own it turned
+        // this ~15ms diff into ~11s.
+        const added = Array.from(
+            { length: 10_000 },
+            (_, i) => `line ${i}`,
+        ).join('\n');
+        const expected = createTwoFilesPatch(
+            'n.ts',
+            'n.ts',
+            '',
+            added,
+            'b',
+            'h',
+            {
+                context: 3,
+            },
+        );
+        const started = Date.now();
+        await expect(
+            createFilePatchYielding('n.ts', 'n.ts', '', added, 'b', 'h'),
+        ).resolves.toBe(expected);
+        expect(Date.now() - started).toBeLessThan(1_000);
+    });
+
+    it('treats a zero or invalid timeout as the default', async () => {
+        for (const timeout of [0, -1, Number.NaN]) {
+            await expect(
+                createFilePatchYielding(
+                    'f.ts',
+                    'f.ts',
+                    'a\n',
+                    'b\n',
+                    'x',
+                    'y',
+                    timeout,
+                ),
+            ).resolves.toEqual(expect.stringContaining('@@'));
+        }
+    });
+
     it('keeps the event loop responsive on a file the sync call blocks on', async () => {
-        const { before, after } = fullyChangedFile(3_000);
+        const { before, after } = fullyChangedFile(5_000);
 
         // Reference: the synchronous call holds the thread for the whole diff.
         const syncStart = Date.now();
@@ -100,9 +147,8 @@ describe('createFilePatchYielding', () => {
         expect(result).toEqual(expect.stringContaining('@@'));
         // The sync call blocks for its whole duration; the yielding one never
         // holds the loop for more than a small slice of it.
-        expect(syncMs).toBeGreaterThan(300);
-        expect(maxGapMs).toBeLessThan(syncMs / 3);
-        expect(maxGapMs).toBeLessThan(250);
+        expect(syncMs).toBeGreaterThan(3 * MAX_GAP_MS);
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
     });
 
     it('gives up on a pathological file instead of running unbounded', async () => {
@@ -123,6 +169,6 @@ describe('createFilePatchYielding', () => {
 
         expect(result).toBeUndefined();
         expect(Date.now() - started).toBeLessThan(5_000);
-        expect(maxGapMs).toBeLessThan(250);
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
     });
 });

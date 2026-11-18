@@ -33,11 +33,13 @@ describe('stripCodeFence', () => {
     });
 
     it('answers fast on a fenced reply that never closes', () => {
-        // A model reply cut at max tokens: open fence, indented JSON, no close.
+        // A model reply cut at max tokens: open fence, indented JSON, a long
+        // whitespace run, no close. The former regex is quadratic in that
+        // run: ~2.4s here (measured), against a few ms now.
         const truncated =
             '```json\n{\n' +
             '        "field": "value",\n'.repeat(400) +
-            ' '.repeat(4_000) +
+            ' '.repeat(40_000) +
             'x';
         const started = Date.now();
         expect(stripCodeFence(truncated)).toBe(truncated.trim());

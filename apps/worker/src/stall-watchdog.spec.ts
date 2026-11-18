@@ -217,4 +217,41 @@ describe('startStallWatchdog (real worker thread)', () => {
         }
         expect(message).toContain('stalled');
     });
+    it('closes a stall that recovers during its capture, so the next stall gets its own report', async () => {
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                // The capture outlives the first stall.
+                profileMs: 2_000,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: (r) => reports.push(r),
+            },
+            logger,
+        );
+        await settle(200);
+
+        burnCpuInATightLoopForTest(1_000); // stall 1, capture starts
+        await settle(200); // recovers while that capture is in flight
+        burnCpuInATightLoopForTest(2_500); // stall 2, same capture window
+
+        await waitFor(
+            () =>
+                reports.filter((r) => r.kind === 'stall').length >= 2
+                    ? true
+                    : undefined,
+            15_000,
+        );
+        const kinds = reports.map((r) => r.kind);
+        // Stall 1 is reported before its recovery, and stall 2 is a new one.
+        expect(kinds.indexOf('stall')).toBeLessThan(kinds.indexOf('recovered'));
+        const firstRecovery = reports.find((r) => r.kind === 'recovered');
+        // Its length is the stall's (~1s), not the capture's (~2.4s).
+        expect(firstRecovery?.stalledMs).toBeGreaterThanOrEqual(800);
+        expect(firstRecovery?.stalledMs).toBeLessThan(1_800);
+    });
 });

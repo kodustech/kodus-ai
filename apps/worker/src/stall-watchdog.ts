@@ -96,9 +96,16 @@ export function stallWatchdogThread(): void {
     const lastTick = new BigInt64Array(sab);
     const parent = wt.parentPort;
 
-    let stallStart: number | null = null;
-    let captures = 0;
-    let capturing = false;
+    // One record per stall. A capture keeps a reference to the stall it
+    // started for, so a recovery (or a new stall) while it is in flight
+    // never mixes the two.
+    let stall: {
+        start: number;
+        captures: number;
+        endedMs?: number;
+        recoveryPending?: boolean;
+    } | null = null;
+    let capturingFor: typeof stall = null;
     let lastPing = 0;
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -383,24 +390,32 @@ export function stallWatchdogThread(): void {
         return f ? `${f.fn} (${f.file}:${f.line})` : NO_STACK;
     }
 
+    function emitRecovered(stalledMs: number) {
+        emit(
+            'warn',
+            `Main thread recovered after a ${Math.round(stalledMs / 1000)}s stall`,
+            { kind: 'recovered', stalledMs },
+        );
+    }
+
     setInterval(() => {
         const now = Date.now();
         const lag = now - Number(Atomics.load(lastTick, 0));
 
         if (lag >= cfg.thresholdMs) {
-            if (stallStart === null) {
-                stallStart = now - lag;
-                captures = 0;
+            if (stall === null) {
+                stall = { start: now - lag, captures: 0 };
             }
-            const due = cfg.thresholdMs + captures * cfg.recaptureMs;
+            const s = stall;
+            const due = cfg.thresholdMs + s.captures * cfg.recaptureMs;
             if (
-                !capturing &&
-                captures < cfg.maxCapturesPerStall &&
+                capturingFor === null &&
+                s.captures < cfg.maxCapturesPerStall &&
                 lag >= due
             ) {
-                capturing = true;
-                captures += 1;
-                const n = captures;
+                capturingFor = s;
+                s.captures += 1;
+                const n = s.captures;
                 // Every stall is reported and alerted, with or without a
                 // stack: a capture that fails still means a stuck worker.
                 capture()
@@ -423,7 +438,9 @@ export function stallWatchdogThread(): void {
                             recoveredBeforeRead,
                             error,
                         }) => {
-                            const stalledMs = Date.now() - (stallStart ?? now);
+                            // A stall that ended during the capture keeps
+                            // its real length, not the capture's.
+                            const stalledMs = s.endedMs ?? Date.now() - s.start;
                             const where = stack?.[0] ?? hottest?.[0];
                             emit(
                                 'error',
@@ -460,22 +477,29 @@ export function stallWatchdogThread(): void {
                         },
                     )
                     .finally(() => {
-                        capturing = false;
+                        capturingFor = null;
+                        // The recovery is reported after this stall's own
+                        // report, never before it.
+                        if (s.recoveryPending) {
+                            s.recoveryPending = false;
+                            emitRecovered(s.endedMs ?? 0);
+                        }
                     });
             }
-        } else if (stallStart !== null && !capturing) {
-            emit(
-                'warn',
-                `Main thread recovered after a ${Math.round((now - lag - stallStart) / 1000)}s stall`,
-                { kind: 'recovered', stalledMs: now - lag - stallStart },
-            );
-            stallStart = null;
+        } else if (stall !== null) {
+            // Close the stall now, even with a capture in flight: a new
+            // stall must start its own record and its own captures.
+            const s = stall;
+            stall = null;
+            s.endedMs = now - lag - s.start;
+            if (capturingFor === s) s.recoveryPending = true;
+            else emitRecovered(s.endedMs);
         }
 
         if (
             cfg.heartbeatUrl &&
             cfg.pingIntervalMs > 0 &&
-            stallStart === null &&
+            stall === null &&
             now - lastPing >= cfg.pingIntervalMs
         ) {
             lastPing = now;
