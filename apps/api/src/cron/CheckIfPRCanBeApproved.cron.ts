@@ -1215,7 +1215,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     'PR-level findings require a new clean review before automatic approval.',
                 );
             const findingsHold = await deliveredReviewFindingsHoldReason(
-                pr.suggestions?.map(({ comment }) => String(comment?.id)) ?? [],
+                pr.suggestions?.map(({ comment }) => comment?.id) ?? [],
                 summary.lineFindings,
                 platformType,
                 () =>

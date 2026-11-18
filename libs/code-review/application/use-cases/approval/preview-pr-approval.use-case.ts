@@ -235,7 +235,7 @@ export class PreviewPrApprovalUseCase {
                         ],
                     );
                 const host = pullRequestHost(pr.prURL);
-                const commentIds: string[] = [];
+                const commentIds: Array<string | number | undefined> = [];
                 for (const candidate of candidates) {
                     const provider = parsePlatformType(candidate.provider);
                     if (
@@ -247,8 +247,10 @@ export class PreviewPrApprovalUseCase {
                     if (!host || !storedHost)
                         return hold(REVIEW_FINDINGS_UNVERIFIED);
                     if (storedHost !== host) continue;
+                    if (!candidate.suggestions?.length)
+                        return hold(REVIEW_FINDINGS_UNVERIFIED);
                     for (const { comment } of candidate.suggestions) {
-                        commentIds.push(String(comment?.id));
+                        commentIds.push(comment?.id);
                     }
                 }
                 const reason = await deliveredReviewFindingsHoldReason(

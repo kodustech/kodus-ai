@@ -394,6 +394,55 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         },
     );
 
+    it.each([
+        { name: 'one ID', commentIds: ['finding-1'] },
+        { name: 'duplicate IDs', commentIds: ['finding-1', 'finding-1'] },
+    ])(
+        'holds a named approval when $name cannot cover two findings',
+        async ({ commentIds }) => {
+            const { input, deps, execution, run } = namedPolicyCase();
+            execution.dataExecution.approvalReviewSummary.lineFindings = 2;
+            Object.assign(input.pr, {
+                suggestions: commentIds.map((id) => ({ comment: { id } })),
+            });
+            deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                [{ id: 'finding-1', isResolved: true }],
+            );
+
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Review findings could not be verified.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
+
+    it('allows named approval when every recorded finding has a resolved comment', async () => {
+        const { input, deps, execution, run } = namedPolicyCase();
+        execution.dataExecution.approvalReviewSummary.lineFindings = 2;
+        const commentIds = ['finding-1', 'finding-2'];
+        Object.assign(input.pr, {
+            suggestions: commentIds.map((id) => ({ comment: { id } })),
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            commentIds.map((id) => ({ id, isResolved: true })),
+        );
+        expect(await run()).toBe(true);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).toHaveBeenCalled();
+    });
+
     it('holds a named approval when a delivered finding cannot be verified', async () => {
         const { input, deps, run } = namedPolicyCase();
         Object.assign(input.pr, {

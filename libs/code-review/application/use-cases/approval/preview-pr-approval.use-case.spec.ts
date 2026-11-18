@@ -220,6 +220,38 @@ describe(PreviewPrApprovalUseCase.name, () => {
         },
     );
 
+    it.each([
+        { name: 'no suggestions', suggestions: [] },
+        {
+            name: 'a finding with no comment ID',
+            suggestions: [{ comment: {} }],
+        },
+    ])(
+        'holds a matching delivered record with $name after a clean review',
+        async ({ suggestions }) => {
+            const { useCase, evaluate, codeManagement, pullRequests } = setup();
+            pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [
+                    {
+                        repository: { id: 'repo' },
+                        provider: 'github',
+                        url: prURL,
+                        suggestions,
+                    },
+                ],
+            );
+
+            expect((await useCase.execute(input)).decision).toEqual({
+                kind: 'hold',
+                reason: 'Review findings could not be verified.',
+            });
+            expect(
+                codeManagement.getPullRequestReviewThreads,
+            ).not.toHaveBeenCalled();
+            expect(evaluate).not.toHaveBeenCalled();
+        },
+    );
+
     it('excludes findings from colliding IDs on other platforms and hosts', async () => {
         const { useCase, codeManagement, pullRequests } = setup();
         pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
