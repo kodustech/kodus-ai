@@ -486,11 +486,37 @@ function isAuthorityTerminator(char: string | undefined): boolean {
  * Returns the original reference when nothing was redacted.
  */
 function sanitizeString(value: string): string {
-    return redactDuplicateKeyValues(
-        redactKnownTokenFormats(
-            redactEmbeddedSecrets(redactUrlUserinfo(value)),
+    return redactPostgresInputValues(
+        redactDuplicateKeyValues(
+            redactKnownTokenFormats(
+                redactEmbeddedSecrets(redactUrlUserinfo(value)),
+            ),
         ),
     );
+}
+
+/**
+ * Postgres conversion errors repeat the rejected input in the message
+ * itself, not only in `detail`:
+ *   invalid input syntax for type uuid: "<value>"
+ *   invalid input value for enum status: "<value>"
+ *   malformed array literal: "<value>"
+ *   value "<value>" is out of range for type integer
+ * The message reaches stdout and the Mongo log sink through this function,
+ * so the value goes here; the type, enum and code stay. One quantifier per
+ * pattern, no nesting.
+ */
+const PG_INPUT_HINT = /invalid input|literal: "|out of range/;
+const PG_INPUT_AFTER_COLON =
+    /((?:invalid input (?:syntax|value) for (?:type|enum) [^:\n"]{1,100}|malformed (?:array|record|range) literal|date\/time field value out of range|invalid input syntax): )"[^\n]*/g;
+const PG_INPUT_OUT_OF_RANGE = /\bvalue "[^"\n]*"( is out of range for type)/g;
+function redactPostgresInputValues(value: string): string {
+    if (!PG_INPUT_HINT.test(value)) {
+        return value;
+    }
+    return value
+        .replace(PG_INPUT_AFTER_COLON, '$1"[REDACTED]"')
+        .replace(PG_INPUT_OUT_OF_RANGE, 'value "[REDACTED]"$1');
 }
 
 /**

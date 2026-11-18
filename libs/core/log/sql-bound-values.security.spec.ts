@@ -22,20 +22,18 @@ const SECRET = 'not-a-real-refresh-token-0123456789abcdef';
 const serialized = (err: unknown) =>
     JSON.stringify(deepSanitize(boundErrorForLog(err)));
 
-const queryFailed = (detail: string) =>
+const queryFailed = (
+    detail: string,
+    message = 'duplicate key value violates unique constraint "UQ_auth_refresh"',
+) =>
     new QueryFailedError(
         'INSERT INTO "auth"("uuid", "refreshToken") VALUES ($1, $2)',
         ['row-uuid', SECRET],
-        Object.assign(
-            new Error(
-                'duplicate key value violates unique constraint "UQ_auth_refresh"',
-            ),
-            {
-                code: '23505',
-                constraint: 'UQ_auth_refresh',
-                detail,
-            },
-        ),
+        Object.assign(new Error(message), {
+            code: '23505',
+            constraint: 'UQ_auth_refresh',
+            detail,
+        }),
     );
 
 describe('logger err serializer — SQL bound values', () => {
@@ -63,6 +61,57 @@ describe('logger err serializer — SQL bound values', () => {
 
         expect(line).not.toContain(SECRET);
         expect(line).toContain('[2 values]');
+    });
+});
+
+describe('logger err serializer — Postgres input in the error message', () => {
+    it.each([
+        `invalid input syntax for type uuid: "${SECRET}"`,
+        `invalid input value for enum status: "${SECRET}"`,
+        `malformed array literal: "${SECRET}"`,
+        `value "${SECRET}" is out of range for type integer`,
+    ])('keeps the type and drops the value of: %s', (message) => {
+        const line = serialized(queryFailed('irrelevant detail', message));
+
+        expect(line).not.toContain(SECRET);
+        expect(line).toContain('[REDACTED]');
+    });
+
+    it('keeps the value out of the Mongo log sink too', async () => {
+        // The exporter sanitizes with the real logger helpers, not the
+        // global test mock.
+        let MongoDBExporter: any;
+        jest.isolateModules(() => {
+            jest.doMock('@libs/core/log/logger', () =>
+                jest.requireActual('@libs/core/log/logger'),
+            );
+            ({ MongoDBExporter } = jest.requireActual(
+                '@libs/core/observability/exporters/mongodb-exporter',
+            ));
+        });
+        const previous = process.env.API_LOG_LEVEL;
+        process.env.API_LOG_LEVEL = 'info';
+        try {
+            const exporter = new MongoDBExporter({
+                batchSize: 500,
+                flushIntervalMs: 60_000,
+            });
+            await exporter.exportLog(
+                'error',
+                'Query Execution Failed',
+                { component: 'TypeORM' },
+                queryFailed(
+                    'irrelevant detail',
+                    `invalid input syntax for type uuid: "${SECRET}"`,
+                ),
+            );
+
+            const buffered = JSON.stringify((exporter as any).logBuffer);
+            expect(buffered).toContain('invalid input syntax for type uuid');
+            expect(buffered).not.toContain(SECRET);
+        } finally {
+            process.env.API_LOG_LEVEL = previous;
+        }
     });
 });
 
