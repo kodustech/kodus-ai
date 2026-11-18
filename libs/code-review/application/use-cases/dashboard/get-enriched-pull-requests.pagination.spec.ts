@@ -1,5 +1,9 @@
 // @ts-nocheck
 import { GetEnrichedPullRequestsUseCase } from './get-enriched-pull-requests.use-case';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 /**
  * A page must start where the previous page STOPPED READING, not where it
@@ -166,6 +170,12 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
             repositoryId: 'repo-1',
         };
         const history = await useCase.execute(query);
+        expect(useCase.authorizationService.ensure).toHaveBeenCalledWith({
+            user: useCase.request.user,
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+            repoIds: ['repo-1'],
+        });
         expect(history.reviewIdentity).toEqual({
             repositoryId: 'repo-1',
             location: makePrDoc(1000).url,
@@ -210,6 +220,29 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
         expect(unrelated.currentHeadSha).toBeUndefined();
         expect(getPullRequest).toHaveBeenCalledTimes(2);
     });
+
+    it.each([undefined, 'true'])(
+        'rejects history for an unauthorized repository with explain=%s',
+        async (explain) => {
+            const { useCase, findExecutions } = buildUseCase();
+            const getPullRequest = jest.fn();
+            useCase.codeManagementService = { getPullRequest };
+            useCase.authorizationService.ensure.mockRejectedValue(
+                new Error('Access denied to repository'),
+            );
+
+            await expect(
+                useCase.execute({
+                    teamId: 't1',
+                    pullRequestNumber: 1000,
+                    repositoryId: 'repo-1',
+                    explain,
+                }),
+            ).rejects.toThrow('Access denied to repository');
+            expect(findExecutions).not.toHaveBeenCalled();
+            expect(getPullRequest).not.toHaveBeenCalled();
+        },
+    );
 
     it.each([undefined, 'azure-repositories', 'AZUREDEVOPS'])(
         'checks provider aliases or legacy provider %s against the exact PR location',
