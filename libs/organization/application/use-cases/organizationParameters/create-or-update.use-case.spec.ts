@@ -56,7 +56,10 @@ function buildUseCase(
     const teamConfigs = options.teamConfigs ?? [];
     const teamService = {
         find: jest.fn(async () =>
-            teamConfigs.map((_, i) => ({ uuid: `team-${i}` })),
+            teamConfigs.map((_, i) => ({
+                uuid: `team-${i}`,
+                name: `Team ${i}`,
+            })),
         ),
     };
     const parametersService = {
@@ -1221,9 +1224,21 @@ describe('the Ultra trio while a review mode is Ultra', () => {
             },
         );
         await expect(saveByok(useCase, withTrio())).rejects.toThrow(
-            /Ultra review is the review mode in repository "api"/,
+            /Ultra review is the review mode in repository "api" of team "Team 1"/,
         );
         expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('reads only active teams: a removed team cannot hold the trio', async () => {
+        const { useCase, teamService } = buildUseCase(
+            withTrio(['a', 'b', 'c']),
+            { teamConfigs: [{ configs: { reviewMode: 'heavy' } }] },
+        );
+        await saveByok(useCase, withTrio());
+        expect(teamService.find).toHaveBeenCalledWith(
+            { organization: { uuid: expect.any(String) } },
+            ['active'],
+        );
     });
 
     it('refuses a trio that becomes one model through two providers while a scope runs Ultra', async () => {

@@ -36,6 +36,7 @@ import {
 } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { ultraModeScopes } from '@libs/code-review/domain/review-mode';
+import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { normalizeModelId } from '@libs/ee/ultra-review/ultra-merge-ranking';
 import {
     BadRequestException,
@@ -197,18 +198,27 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             return;
         }
         const organizationId = organizationAndTeamData.organizationId;
-        const teams = await this.teamService.find({
-            organization: { uuid: organizationId },
-        });
-        const configs = await Promise.all(
-            teams.map((team) =>
-                this.parametersService!.findByKey(
-                    ParametersKey.CODE_REVIEW_CONFIG,
-                    { organizationId, teamId: team.uuid },
-                ).then((p) => p?.configValue ?? null),
-            ),
+        // Active teams only: a removed team's settings cannot be opened to
+        // change its mode, so it must not hold the trio.
+        const teams = await this.teamService.find(
+            { organization: { uuid: organizationId } },
+            [STATUS.ACTIVE],
         );
-        const scopes = configs.flatMap((config) => ultraModeScopes(config));
+        const scopes = (
+            await Promise.all(
+                teams.map(async (team) => {
+                    const stored = await this.parametersService!.findByKey(
+                        ParametersKey.CODE_REVIEW_CONFIG,
+                        { organizationId, teamId: team.uuid },
+                    );
+                    return ultraModeScopes(stored?.configValue).map((scope) =>
+                        teams.length > 1
+                            ? `${scope} of team "${team.name}"`
+                            : scope,
+                    );
+                }),
+            )
+        ).flat();
         if (scopes.length) {
             throw new BadRequestException(
                 `Ultra review is the review mode in ${scopes.join('; ')}. ` +
