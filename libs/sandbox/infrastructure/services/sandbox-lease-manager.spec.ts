@@ -2408,8 +2408,8 @@ describe('SandboxLeaseManager', () => {
                     cloneUrl: 'https://github.com/org/repo.git',
                     branch: 'feature',
                     prNumber: 77,
-                    platform: 'GITHUB' as any,
-                },
+                    platform: 'GITHUB',
+                } as any,
             );
 
             expect(result.sandbox).toBeDefined();
