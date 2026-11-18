@@ -194,7 +194,10 @@ export function registerRepositoryConfigCommand(
             '--criteria <json>',
             'Use this JSON array of criteria for the preview only',
         )
-        .option('--json', 'Output the assessment and changed files as JSON')
+        .option(
+            '--json',
+            'Output the risk outcome and changed-file count as JSON',
+        )
         .action(
             (
                 repository: string | undefined,

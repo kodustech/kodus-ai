@@ -349,7 +349,9 @@ function printReviewRuns(
             if (run.reviewMode) {
                 const route =
                     run.reviewRoutingReason &&
-                    ROUTING_REASONS[run.reviewRoutingReason];
+                    Object.hasOwn(ROUTING_REASONS, run.reviewRoutingReason)
+                        ? ROUTING_REASONS[run.reviewRoutingReason]
+                        : undefined;
                 cliInfo(
                     `  Routing: ${run.reviewMode} (${route || 'reason unavailable'})`,
                 );

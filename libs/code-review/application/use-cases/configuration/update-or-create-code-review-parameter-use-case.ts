@@ -1364,7 +1364,20 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             ...precondition,
         );
         if (expectedConfigId !== undefined) {
-            centralizedPr = await createCentralizedMutation();
+            try {
+                centralizedPr = await createCentralizedMutation();
+            } catch {
+                this.logger.warn({
+                    message:
+                        'Saved code review settings, but could not create the centralized config pull request',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId,
+                        directoryId,
+                    },
+                });
+            }
         }
 
         await this.logConfigUpdate({

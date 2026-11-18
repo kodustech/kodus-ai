@@ -46,8 +46,9 @@ describe('createPrCommand', () => {
                         reviewMode: 'heavy',
                         reviewRoutingReason: 'risk-found',
                         approvalDecision: {
-                            kind: 'hold',
-                            reason: 'The PR changed.',
+                            kind: 'approve',
+                            reason: 'Policy matched.',
+                            matchedPolicy: { name: 'Docs only' },
                         },
                         codeReviewTimeline: [
                             {
@@ -86,7 +87,9 @@ describe('createPrCommand', () => {
             expect(output).toContain('heavy (risk found)');
             expect(output).toContain('lens-test: failed');
             expect(output).toContain('PR lifecycle: Agent failed.');
-            expect(output).toContain('The PR changed.');
+            expect(output).toContain(
+                'Recorded approval decision: approve (Docs only). Policy matched.',
+            );
             log.mockRestore();
         });
 

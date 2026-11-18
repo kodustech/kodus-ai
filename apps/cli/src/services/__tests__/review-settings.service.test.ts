@@ -794,6 +794,18 @@ describe('reviewSettingsService', () => {
     });
 
     describe('risk preview', () => {
+        it('rejects an unreadable scope rather than using standard criteria silently', async () => {
+            configApi.getFormattedCodeReviewParameter.mockResolvedValueOnce({
+                configValue: {},
+            });
+            await expect(
+                reviewSettingsService.previewRisk(
+                    { repository: 'kodus-ai' },
+                    42,
+                ),
+            ).rejects.toThrow(/Could not read risk criteria/);
+            expect(configApi.previewPrRisk).not.toHaveBeenCalled();
+        });
         it('previews the effective criteria for a PR without saving', async () => {
             await reviewSettingsService.previewRisk(
                 { repository: 'kodus-ai' },

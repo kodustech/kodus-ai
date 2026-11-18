@@ -9,6 +9,7 @@ import {
     type IAutomationExecutionService,
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
 import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
@@ -173,6 +174,7 @@ export class PreviewPrApprovalUseCase {
                     {
                         organizationAndTeamData,
                         repositoryIds: [repository.id],
+                        automationType: AutomationType.AUTOMATION_CODE_REVIEW,
                         pullRequestNumber: prNumber,
                         order: 'DESC',
                         take: 1,

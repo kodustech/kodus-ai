@@ -38,6 +38,7 @@ import {
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
 import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
@@ -251,11 +252,23 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         // The mode the command asked for, else the one in settings. Heavy
         // runs on Teams and Enterprise only; elsewhere the review runs
         // Balanced, and a command that asked for heavy is told why.
+        const { pullRequest, riskAssessment } = context;
+        // Exact configuration and diff identity are checked by the assessment
+        // service before it reuses a result. Keep routing on that PR snapshot.
+        const staleRisk =
+            riskAssessment?.status === 'assessed' &&
+            (!pullRequest.head?.sha ||
+                riskAssessment.snapshot.headSha !== pullRequest.head.sha ||
+                !pullRequest.base.sha ||
+                riskAssessment.snapshot.baseSha !== pullRequest.base.sha ||
+                riskAssessment.snapshot.descriptionKey !==
+                    prRiskDescriptionKey(pullRequest));
+        const risk = staleRisk ? undefined : riskAssessment;
         const selectedMode = resolveRiskReviewMode({
             requested: context.requestedReviewMode,
             configured: context.codeReviewConfig?.reviewMode,
             routing: context.codeReviewConfig?.riskReviewRouting,
-            risk: context.riskAssessment,
+            risk,
             currentHeadSha: context.pullRequest.head?.sha ?? '',
             heavyAllowed: true,
         });
@@ -305,25 +318,19 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
         context = this.updateContext(context, (draft) => {
             draft.heavy = heavy;
-            const risk = context.riskAssessment;
             if (selectedMode === 'heavy' && !heavy) {
                 draft.reviewRoutingReason = 'heavy-unavailable';
             } else if (context.codeReviewConfig?.reviewMode === 'fast') {
                 draft.reviewRoutingReason = 'default';
             } else if (context.requestedReviewMode) {
                 draft.reviewRoutingReason = 'requested';
-            } else if (
-                risk?.status === 'assessed' &&
-                risk.snapshot.headSha &&
-                risk.snapshot.headSha === context.pullRequest.head?.sha
-            ) {
+            } else if (risk?.status === 'assessed') {
                 draft.reviewRoutingReason = risk.riskIdentified
                     ? 'risk-found'
                     : 'no-risk-found';
             } else {
                 draft.reviewRoutingReason =
-                    risk?.status === 'unavailable' ||
-                    risk?.status === 'assessed'
+                    risk?.status === 'unavailable' || staleRisk
                         ? 'risk-unavailable'
                         : 'default';
             }

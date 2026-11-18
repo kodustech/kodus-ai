@@ -17,6 +17,7 @@ import {
     type ReviewSettingSection,
 } from '../../utils/review-settings-catalog.js';
 import type {
+    ApprovalPolicy,
     FormattedConfigLevel,
     TestByokModelResult,
 } from '../../types/review-settings.js';
@@ -218,12 +219,24 @@ export async function riskPreviewAction(
             /^\d+$/.test(options.pr) ? Number(options.pr) : NaN,
             options.criteria,
         );
+        const { assessment, files } = result;
         if (options.json) {
-            cliInfo(JSON.stringify(result, null, 2));
+            cliInfo(
+                JSON.stringify(
+                    {
+                        status: assessment.status,
+                        ...(assessment.status === 'assessed' && {
+                            riskIdentified: assessment.riskIdentified,
+                        }),
+                        changedFiles: files.length,
+                    },
+                    null,
+                    2,
+                ),
+            );
             return;
         }
 
-        const { assessment, files } = result;
         if (assessment.status === 'assessed') {
             cliInfo(assessment.riskIdentified ? 'Risk found' : 'No risk found');
         } else {
@@ -240,6 +253,22 @@ export async function riskPreviewAction(
     } catch (error) {
         fail(error);
     }
+}
+
+function approvalPolicyOutput(policy: ApprovalPolicy) {
+    return {
+        id: policy.id,
+        name: policy.name,
+        enabled: policy.enabled,
+        labels: policy.labels,
+        authors: policy.authors,
+        authorTeams: policy.authorTeams,
+        includedFiles: policy.includedFiles,
+        excludedFiles: policy.excludedFiles,
+        maxChangedLines: policy.maxChangedLines,
+        lineCountExcludedFiles: policy.lineCountExcludedFiles,
+        hasEligibilityInstruction: !!policy.instruction?.trim(),
+    };
 }
 
 export async function listApprovalsAction(
@@ -260,9 +289,19 @@ export async function listApprovalsAction(
                     `Approval policy '${policyId}' was not found at this scope.`,
                 );
             }
-            cliInfo(JSON.stringify(policy, null, 2));
+            cliInfo(JSON.stringify(approvalPolicyOutput(policy), null, 2));
         } else if (options.json) {
-            cliInfo(JSON.stringify(result, null, 2));
+            cliInfo(
+                JSON.stringify(
+                    {
+                        scope: result.scope,
+                        level: result.level,
+                        policies: result.policies.map(approvalPolicyOutput),
+                    },
+                    null,
+                    2,
+                ),
+            );
         } else {
             cliInfo(
                 `Approval policies for ${describeScope(result.scope)} ${formatOrigin(result.level, result.scope)}`,
@@ -293,13 +332,25 @@ export async function toggleApprovalAction(
             policyId,
             enabled,
         );
+        const { scope, policy, changed, centralized } = result;
         if (options.json) {
-            cliInfo(JSON.stringify(result, null, 2));
+            cliInfo(
+                JSON.stringify(
+                    {
+                        scope,
+                        policy: approvalPolicyOutput(policy),
+                        changed,
+                        prUrl: centralized?.prUrl,
+                    },
+                    null,
+                    2,
+                ),
+            );
             return;
         }
         const state = enabled ? 'enabled' : 'disabled';
         cliInfo(
-            `${policyId} ${result.changed ? state : `already ${state}`} at ${describeScope(result.scope)}.`,
+            `${policyId} ${changed === false ? `already ${state}` : state} at ${describeScope(scope)}.`,
         );
         if (result.centralized?.prUrl) {
             cliInfo(`Pull request: ${result.centralized.prUrl}`);

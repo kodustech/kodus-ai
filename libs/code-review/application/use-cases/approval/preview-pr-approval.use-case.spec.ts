@@ -1,4 +1,5 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PreviewPrApprovalUseCase } from './preview-pr-approval.use-case';
 
@@ -94,6 +95,7 @@ describe(PreviewPrApprovalUseCase.name, () => {
             expect.objectContaining({
                 organizationAndTeamData: input.organizationAndTeamData,
                 repositoryIds: ['repo'],
+                automationType: AutomationType.AUTOMATION_CODE_REVIEW,
                 take: 1,
             }),
         );
@@ -112,6 +114,9 @@ describe(PreviewPrApprovalUseCase.name, () => {
             kind: 'hold',
             reason: 'The PR changed after its latest recorded review.',
         });
+        expect(
+            (await useCase.execute({ ...input, policies: [] })).decision,
+        ).toMatchObject({ kind: 'hold' });
         expect(evaluate).not.toHaveBeenCalled();
 
         const result = await useCase.execute({

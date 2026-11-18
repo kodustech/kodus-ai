@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidateConfigStage } from './validate-config.stage';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -162,6 +163,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             const ctx = buildContext(undefined);
             ctx.codeReviewConfig.riskAssessmentActive = true;
             ctx.pullRequest.head.sha = 'head';
+            ctx.pullRequest.base.sha = 'base';
             const early = await stage.execute(ctx);
             expect(early.codeReviewConfig.resolvedModelSlot).toBeUndefined();
             const result = await stage.resolveReviewRouting({
@@ -178,6 +180,7 @@ describe('ValidateConfigStage — v2 routing', () => {
                         baseSha: 'base',
                         headSha: ctx.pullRequest.head.sha,
                         assessmentKey: 'key',
+                        descriptionKey: prRiskDescriptionKey(ctx.pullRequest),
                     },
                 },
             });
@@ -192,6 +195,17 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
                 model,
             );
+            if (riskIdentified && !requestedReviewMode) {
+                const stale = await stage.resolveReviewRouting({
+                    ...result,
+                    pullRequest: {
+                        ...result.pullRequest,
+                        base: { ...result.pullRequest.base, sha: 'new-base' },
+                    },
+                });
+                expect(stale.heavy).toBe(false);
+                expect(stale.reviewRoutingReason).toBe('risk-unavailable');
+            }
         },
     );
 

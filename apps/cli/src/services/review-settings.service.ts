@@ -430,9 +430,22 @@ class ReviewSettingsService {
         );
         const { configs } = this.scopeConfigs(parameter, scope);
         const leaf = readLeaf(configs, 'approvalPolicies');
-        const policies = Array.isArray(leaf?.value)
-            ? (leaf.value as ApprovalPolicy[])
-            : [];
+        if (
+            !Array.isArray(leaf?.value) ||
+            leaf.value.some(
+                (policy) =>
+                    !policy ||
+                    typeof policy.id !== 'string' ||
+                    typeof policy.name !== 'string' ||
+                    typeof policy.enabled !== 'boolean',
+            )
+        ) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                'Could not read approval policies for this scope.',
+            );
+        }
+        const policies = leaf.value as ApprovalPolicy[];
         return {
             scope,
             policies,
@@ -573,11 +586,17 @@ class ReviewSettingsService {
                 (await this.loadScopeConfigs(ctx, scope)).configs,
                 'riskCriteria',
             )?.value;
+        if (!Array.isArray(criteria)) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                'Could not read risk criteria for this scope. Pass --criteria to preview an explicit list.',
+            );
+        }
         return api.config.previewPrRisk(ctx.accessToken, {
             teamId: ctx.teamId,
             repositoryId: scope.repositoryId!,
             prNumber,
-            criteria: Array.isArray(criteria) ? criteria : [],
+            criteria,
         });
     }
 
