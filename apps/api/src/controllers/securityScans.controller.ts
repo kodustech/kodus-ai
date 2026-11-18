@@ -126,12 +126,10 @@ export class SecurityScansController {
         return organizationId;
     }
 
-    private visibleRepositories(
-        action: Action = Action.Read,
-    ): Promise<string[] | null> {
+    private visibleRepositories(): Promise<string[] | null> {
         return this.authorizationService.getRepositoryScope({
             user: this.request.user,
-            action,
+            action: Action.Read,
             resource: ResourceType.SecurityScan,
         });
     }
@@ -199,10 +197,12 @@ export class SecurityScansController {
     @CheckPolicies(canCancelScan)
     async cancel(@Param('id') id: string) {
         const organizationId = await this.organizationId();
+        // Id + org only. Create-scoped ids go through fail-closed
+        // host/platform resolution and 404 a scan ensure would allow.
         const scan = await this.getSecurityScans.get(
             organizationId,
             id,
-            (await this.visibleRepositories(Action.Create)) ?? undefined,
+            undefined,
         );
         await this.authorizationService.ensure({
             user: this.request.user,

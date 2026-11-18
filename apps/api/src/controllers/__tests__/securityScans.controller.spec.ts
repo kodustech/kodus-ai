@@ -1,10 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
 
-import {
-    Action,
-    ResourceType,
-} from '@libs/identity/domain/permissions/enums/permissions.enum';
-
 import { SecurityScansController } from '../securityScans.controller';
 
 describe('SecurityScansController.start', () => {
@@ -108,17 +103,19 @@ describe('SecurityScansController.cancel', () => {
     };
 
     it('cancels a scan of a repository the caller may scan', async () => {
-        const { controller, cancelSecurityScan, authorizationService } = setup([
-            'repo-allowed',
-        ]);
+        const {
+            controller,
+            getSecurityScans,
+            cancelSecurityScan,
+            authorizationService,
+        } = setup(['repo-allowed']);
 
         await controller.cancel(scan.uuid);
 
-        expect(authorizationService.getRepositoryScope).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: Action.Create,
-                resource: ResourceType.SecurityScan,
-            }),
+        expect(getSecurityScans.get).toHaveBeenCalledWith(
+            'org-1',
+            scan.uuid,
+            undefined,
         );
         expect(authorizationService.ensure).toHaveBeenCalledWith(
             expect.objectContaining({ repoIds: ['repo-allowed'] }),
