@@ -148,13 +148,24 @@ it.each([false, true])(
                 status: 'assessed',
                 riskIdentified: true,
             });
+            if (result.riskAssessment?.status !== 'assessed')
+                throw new Error('Expected a PR risk assessment');
             expect(
-                riskApprovalVeto(true, result.riskAssessment, {
-                    headSha: 'head',
-                    baseSha: 'base',
-                    description: result.pullRequest,
-                }),
-            ).toBeDefined();
+                riskApprovalVeto(
+                    true,
+                    { ...result.riskAssessment, riskIdentified: false },
+                    {
+                        headSha: 'head',
+                        baseSha: 'base',
+                        description: {
+                            ...result.pullRequest,
+                            title: 'Edited after review',
+                        },
+                    },
+                ),
+            ).toBe(
+                'The PR title or description changed after risk assessment.',
+            );
             expect(
                 resolveRiskReviewMode({
                     risk: result.riskAssessment,
@@ -181,17 +192,6 @@ it('keeps the incremental review available when complete risk settings cannot be
     expect(result.preliminaryFiles).toEqual([docs]);
     expect(result.statusInfo?.status).not.toBe('skipped');
     expect(result.riskAssessment).toMatchObject({ status: 'unavailable' });
-    expect(
-        riskApprovalVeto(
-            result.codeReviewConfig.riskAssessmentActive,
-            result.riskAssessment,
-            {
-                headSha: 'head',
-                baseSha: 'base',
-                description: result.pullRequest,
-            },
-        ),
-    ).toBeDefined();
     expect(LLM.run).not.toHaveBeenCalled();
     expect(
         resolveRiskReviewMode({

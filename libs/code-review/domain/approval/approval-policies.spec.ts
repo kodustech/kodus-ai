@@ -214,6 +214,16 @@ it('requires current no-risk evidence when assessment is enabled and removes onl
         'approve',
     );
     expect(
+        await run({
+            riskEnabled: true,
+            risk: risk(false),
+            currentDescription: { title: 'Edited after review' },
+        }),
+    ).toMatchObject({
+        kind: 'hold',
+        reason: 'The PR title or description changed after risk assessment.',
+    });
+    expect(
         (
             await run({
                 riskEnabled: true,

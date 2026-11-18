@@ -137,6 +137,31 @@ describe('pullRequestReviewsService', () => {
         expect(result.truncated).toBe(true);
     });
 
+    it('omits the live head when another page contains the same repository ID on a different host', async () => {
+        mockApi.getExecutions
+            .mockResolvedValueOnce({
+                ...page([run(42, '2026-10-03T10:00:00Z')], 'cursor-1'),
+                currentHeadSha: 'verified-head',
+            })
+            .mockResolvedValueOnce(
+                page([
+                    {
+                        ...run(42, '2026-10-01T10:00:00Z'),
+                        url: 'https://github.example/acme/api/pull/42',
+                    },
+                ]),
+            );
+
+        const result = await pullRequestReviewsService.list({
+            prNumber: 42,
+            repositoryId: 'repo-1',
+            explain: true,
+        });
+
+        expect(result.runs).toHaveLength(2);
+        expect(result.currentHeadSha).toBeUndefined();
+    });
+
     it('uses --repo over the git remote', async () => {
         mockApi.getExecutions.mockResolvedValue(page([]));
 

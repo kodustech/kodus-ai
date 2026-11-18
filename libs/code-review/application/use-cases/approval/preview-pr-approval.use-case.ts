@@ -19,11 +19,15 @@ import {
     type ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
+import { pullRequestLocation } from '@libs/code-review/domain/pull-request-identity';
 import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { PrRiskAssessmentService } from '@libs/code-review/pipeline/services/pr-risk-assessment.service';
 import { ParametersKey } from '@libs/core/domain/enums';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    PlatformType,
+    parsePlatformType,
+} from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -227,10 +231,24 @@ export class PreviewPrApprovalUseCase {
                             PullRequestState.MERGED,
                         ],
                     );
-                const stored = candidates.find(
-                    (candidate) => candidate.repository.id === repository.id,
-                );
-                if (stored?.suggestions.length) {
+                const location = pullRequestLocation(pr.prURL);
+                const commentIds: string[] = [];
+                for (const candidate of candidates) {
+                    const provider = parsePlatformType(candidate.provider);
+                    if (
+                        candidate.repository.id !== repository.id ||
+                        (provider && provider !== platformType)
+                    )
+                        continue;
+                    const storedLocation = pullRequestLocation(candidate.url);
+                    if (!location || !storedLocation)
+                        return hold('Review findings could not be verified.');
+                    if (storedLocation !== location) continue;
+                    for (const { comment } of candidate.suggestions) {
+                        commentIds.push(String(comment?.id));
+                    }
+                }
+                if (commentIds.length) {
                     const comments =
                         platformType === PlatformType.GITHUB
                             ? await this.codeManagement.getPullRequestReviewThreads(
@@ -241,16 +259,9 @@ export class PreviewPrApprovalUseCase {
                                   request,
                                   platformType,
                               );
-                    if (
-                        !Array.isArray(comments) ||
-                        hasOpenFinding(
-                            stored.suggestions.map(({ comment }) =>
-                                String(comment?.id),
-                            ),
-                            comments,
-                            platformType,
-                        )
-                    ) {
+                    if (!Array.isArray(comments))
+                        return hold('Review findings could not be verified.');
+                    if (hasOpenFinding(commentIds, comments, platformType)) {
                         return hold('Review findings remain unresolved.');
                     }
                 }

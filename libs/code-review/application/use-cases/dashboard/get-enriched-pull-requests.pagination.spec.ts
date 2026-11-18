@@ -153,7 +153,10 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
         });
         const getPullRequest = jest
             .fn()
-            .mockResolvedValueOnce({ head: { sha: 'latest' } })
+            .mockResolvedValueOnce({
+                head: { sha: 'latest' },
+                prURL: makePrDoc(1000).url,
+            })
             .mockRejectedValueOnce(failure);
         const getTypeIntegration = jest.fn().mockResolvedValue('GITHUB');
         useCase.codeManagementService = { getPullRequest, getTypeIntegration };
@@ -201,6 +204,40 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
         expect(unrelated.currentHeadSha).toBeUndefined();
         expect(getPullRequest).toHaveBeenCalledTimes(2);
     });
+
+    it.each([undefined, 'azure-repositories', 'AZUREDEVOPS'])(
+        'checks provider aliases or legacy provider %s against the exact PR location',
+        async (provider) => {
+            const { useCase } = buildUseCase();
+            const url =
+                'https://dev.azure.com/acme/project/_git/api/pullrequest/1000';
+            const result = { ...makePrDoc(1000), provider, url };
+            const getPullRequest = jest
+                .fn()
+                .mockResolvedValueOnce({ head: { sha: 'live' }, prURL: url })
+                .mockResolvedValueOnce({
+                    head: { sha: 'unrelated' },
+                    prURL: url.replace('dev.azure.com', 'azure.example'),
+                });
+            useCase.codeManagementService = {
+                getTypeIntegration: jest.fn().mockResolvedValue('AZURE_REPOS'),
+                getPullRequest,
+            };
+            useCase.pullRequestsService.findManyByNumbersAndRepositoryIds.mockResolvedValue(
+                [result],
+            );
+            const query = {
+                teamId: 't1',
+                pullRequestNumber: 1000,
+                repositoryId: 'repo-1',
+                explain: 'true',
+            };
+            expect((await useCase.execute(query)).currentHeadSha).toBe('live');
+            expect(
+                (await useCase.execute(query)).currentHeadSha,
+            ).toBeUndefined();
+        },
+    );
     it('does not serve the same execution on two consecutive pages', async () => {
         const { useCase } = buildUseCase();
 

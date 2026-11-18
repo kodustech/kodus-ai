@@ -34,7 +34,8 @@ import {
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { createLogger } from '@libs/core/log/logger';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { parsePlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { pullRequestLocation } from '@libs/code-review/domain/pull-request-identity';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import {
@@ -818,16 +819,18 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         runs: EnrichedPullRequestResponse[],
     ): Promise<string | undefined> {
         const [first] = runs;
+        const location = pullRequestLocation(first?.url);
         if (
             query.explain !== 'true' ||
             !query.teamId ||
             !query.pullRequestNumber ||
             !first ||
+            !location ||
             !(query.repositoryId || query.repositoryName) ||
             runs.some(
                 (run) =>
                     run.repositoryId !== first.repositoryId ||
-                    run.provider !== first.provider,
+                    pullRequestLocation(run.url) !== location,
             )
         ) {
             return undefined;
@@ -839,20 +842,18 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         };
         const prNumber = query.pullRequestNumber;
         try {
-            const provider =
+            const provider = parsePlatformType(
                 await this.codeManagementService.getTypeIntegration(
                     organizationAndTeamData,
-                );
-            const storedProvider = first.provider
-                ?.toUpperCase()
-                .replaceAll('-', '_');
+                ),
+            );
             if (
                 !provider ||
-                (storedProvider !== provider &&
-                    !(
-                        storedProvider === 'AZURE_DEVOPS' &&
-                        provider === PlatformType.AZURE_REPOS
-                    ))
+                runs.some(
+                    (run) =>
+                        run.provider &&
+                        parsePlatformType(run.provider) !== provider,
+                )
             ) {
                 return undefined;
             }
@@ -864,7 +865,9 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
                 provider,
             );
-            return pullRequest?.head?.sha;
+            return pullRequestLocation(pullRequest?.prURL) === location
+                ? pullRequest?.head?.sha
+                : undefined;
         } catch (error) {
             this.logger.warn({
                 message:

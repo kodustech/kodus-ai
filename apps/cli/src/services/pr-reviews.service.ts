@@ -98,7 +98,8 @@ class PullRequestReviewsService {
             runs.every(
                 (run) =>
                     run.repositoryId === first.repositoryId &&
-                    run.provider === first.provider,
+                    run.provider === first.provider &&
+                    run.url === first.url,
             );
 
         return {

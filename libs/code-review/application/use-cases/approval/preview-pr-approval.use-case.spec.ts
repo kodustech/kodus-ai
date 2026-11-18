@@ -10,6 +10,7 @@ describe(PreviewPrApprovalUseCase.name, () => {
         prNumber: 42,
     };
     const policy = { id: 'docs', name: 'Docs', enabled: true };
+    const prURL = 'https://github.com/acme/example/pull/42';
     const files = [{ filename: 'docs/changelog.mdx', status: 'modified' }];
 
     function setup(reviewedHeadSha = 'head') {
@@ -57,6 +58,7 @@ describe(PreviewPrApprovalUseCase.name, () => {
                 .fn()
                 .mockResolvedValue(PlatformType.GITHUB),
             getPullRequest: jest.fn().mockResolvedValue({
+                prURL,
                 head: { sha: 'head' },
                 base: { sha: 'base' },
                 changedFilesCount: 1,
@@ -148,6 +150,8 @@ describe(PreviewPrApprovalUseCase.name, () => {
             [
                 {
                     repository: { id: 'repo' },
+                    provider: 'github',
+                    url: prURL,
                     suggestions: [{ comment: { id: 'finding-1' } }],
                 },
             ],
@@ -160,10 +164,40 @@ describe(PreviewPrApprovalUseCase.name, () => {
             reason: 'Review findings remain unresolved.',
         });
         expect(evaluate).not.toHaveBeenCalled();
+        codeManagement.getPullRequestReviewThreads.mockResolvedValueOnce(
+            undefined,
+        );
+        expect((await useCase.execute(input)).decision.reason).toBe(
+            'Review findings could not be verified.',
+        );
         codeManagement.getPullRequestReviewThreads.mockResolvedValue([
             { id: 'finding-1', isResolved: true },
         ]);
         expect((await useCase.execute(input)).decision.kind).toBe('approve');
+    });
+
+    it('excludes findings from colliding IDs on other platforms and hosts', async () => {
+        const { useCase, codeManagement, pullRequests } = setup();
+        pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [
+                {
+                    repository: { id: 'repo' },
+                    provider: 'gitlab',
+                    url: prURL,
+                    suggestions: [{ comment: { id: 'other-platform' } }],
+                },
+                {
+                    repository: { id: 'repo' },
+                    provider: 'github',
+                    url: 'https://github.example/acme/example/pull/42',
+                    suggestions: [{ comment: { id: 'other-host' } }],
+                },
+            ],
+        );
+        expect((await useCase.execute(input)).decision.kind).toBe('approve');
+        expect(
+            codeManagement.getPullRequestReviewThreads,
+        ).not.toHaveBeenCalled();
     });
 
     it('holds when the provider returns an incomplete file list', async () => {
