@@ -35,6 +35,7 @@ function makeConsumer(overrides?: {
     heartbeat?: jest.Mock;
     updateJob?: jest.Mock;
     findJob?: jest.Mock;
+    failIfProcessing?: jest.Mock;
     Consumer?: typeof WorkflowJobConsumer | typeof SecurityScanJobConsumer;
 }) {
     const inboxRepository = {
@@ -58,6 +59,8 @@ function makeConsumer(overrides?: {
         findOne:
             overrides?.findJob ??
             jest.fn().mockResolvedValue({ status: JobStatus.FAILED }),
+        failIfProcessing:
+            overrides?.failIfProcessing ?? jest.fn().mockResolvedValue(true),
     };
     const observability = {
         setContext: jest.fn(),
@@ -264,6 +267,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         ).rejects.toThrow(/exited 1 for job/);
 
         expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
         expect(jobRepository.findOne).toHaveBeenCalledWith('job-1');
     });
 
@@ -284,11 +288,14 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
                 { jobId: 'job-1' },
                 amqpMsg('msg-1'),
             ),
-        ).rejects.toThrow(/left job job-1 unrecorded/);
+        ).rejects.toThrow(/exited 1 for job/);
 
-        expect(jobRepository.update).toHaveBeenCalledWith(
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).toHaveBeenCalledWith(
             'job-1',
-            expect.objectContaining({ status: JobStatus.FAILED }),
+            expect.objectContaining({
+                lastError: expect.stringMatching(/exited 1/),
+            }),
         );
     });
 
@@ -314,6 +321,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         ).rejects.toBeInstanceOf(ClaimConflictError);
 
         expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
     });
 
     it('does not overwrite a terminal job when the child is SIGKILL-ed', async () => {
@@ -332,6 +340,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         ).rejects.toThrow(/exited SIGKILL for job/);
 
         expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
     });
 
     it('marks FAILED when SIGKILL leaves the job unrecorded', async () => {
@@ -351,11 +360,14 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
                 { jobId: 'job-1' },
                 amqpMsg('msg-1'),
             ),
-        ).rejects.toThrow(/left job job-1 unrecorded/);
+        ).rejects.toThrow(/exited SIGKILL for job/);
 
-        expect(jobRepository.update).toHaveBeenCalledWith(
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).toHaveBeenCalledWith(
             'job-1',
-            expect.objectContaining({ status: JobStatus.FAILED }),
+            expect.objectContaining({
+                lastError: expect.stringMatching(/exited SIGKILL/),
+            }),
         );
     });
 
@@ -376,11 +388,14 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
                 { jobId: 'job-1' },
                 amqpMsg('msg-1'),
             ),
-        ).rejects.toThrow(/status unknown after slice child exit/);
+        ).rejects.toThrow(/exited 1 for job/);
 
-        expect(jobRepository.update).toHaveBeenCalledWith(
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).toHaveBeenCalledWith(
             'job-1',
-            expect.objectContaining({ status: JobStatus.FAILED }),
+            expect.objectContaining({
+                lastError: expect.stringMatching(/exited 1/),
+            }),
         );
     });
 
@@ -406,6 +421,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         ).rejects.toBeInstanceOf(ClaimConflictError);
 
         expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
     });
 
     it('does not abort a slice on a single heartbeat error', async () => {

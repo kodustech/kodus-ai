@@ -8,6 +8,7 @@ import { ConsumeMessage } from 'amqplib';
 import { MessagePayload } from '@libs/core/domain/contracts/message-broker.service.contracts';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
 import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 
 import {
@@ -60,6 +61,32 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                 ? `Security-scan slice aborted: ${abortReason}`
                 : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
         );
+    }
+
+    private async failJobIfStillProcessing(
+        jobId: string,
+        error: unknown,
+    ): Promise<void> {
+        const lastError =
+            error instanceof Error ? error.message : String(error);
+        try {
+            await runWithBoundedTimeout(
+                this.jobRepository.failIfProcessing?.(jobId, {
+                    lastError,
+                    errorClassification: ErrorClassification.PERMANENT,
+                }) ?? Promise.resolve(false),
+                INBOX_RELEASE_TIMEOUT_MS,
+                'security-scan.job.failIfProcessing',
+            );
+        } catch (writeError) {
+            this.logger.error({
+                message:
+                    'Security-scan failed to mark PROCESSING job FAILED after child exit',
+                context: 'SecurityScanJobConsumer',
+                error: writeError,
+                metadata: { jobId },
+            });
+        }
     }
 
     /**
@@ -150,9 +177,8 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                             abortReason ?? 'child preempted',
                         );
                     }
-                    throw new Error(
-                        `Security-scan job ${jobId} status unknown after slice child exit`,
-                    );
+                    await this.failJobIfStillProcessing(jobId, error);
+                    throw error;
                 }
                 if (abort.signal.aborted) {
                     throw this.sliceAbortedError(abortReason);
@@ -169,9 +195,8 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                         abortReason ?? 'child preempted',
                     );
                 }
-                throw new Error(
-                    `Security-scan slice child left job ${jobId} unrecorded`,
-                );
+                await this.failJobIfStillProcessing(jobId, error);
+                throw error;
             }
             throw error;
         } finally {
