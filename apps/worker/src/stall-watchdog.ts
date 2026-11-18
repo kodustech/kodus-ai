@@ -30,9 +30,11 @@ export interface StallFrame {
 }
 
 export interface StallReport {
-    kind: 'stall' | 'recovered' | 'error';
+    kind: 'stall' | 'recovered';
     stalledMs: number;
     capture?: number;
+    /** The stack was read after the main thread ran again: not the stall. */
+    stackReadAfterRecovery?: boolean;
     stack?: StallFrame[] | null;
     hottest?: Array<{ fn: string; file: string; line: number; pct: number }>;
     hottestPath?: StallFrame[];
@@ -235,9 +237,14 @@ export function stallWatchdogThread(): void {
 
     function pausedStack(
         session: InstanceType<typeof inspector.Session>,
-    ): Promise<ReturnType<typeof frame>[] | null> {
+        ranSinceStart: () => boolean,
+    ): Promise<{
+        frames: ReturnType<typeof frame>[];
+        recovered: boolean;
+    } | null> {
         return new Promise((resolve) => {
             let done = false;
+            let recovered = false;
             // CallFrame.url is deprecated and often empty; the script's url
             // comes from the scriptParsed events Debugger.enable replays.
             const scripts = new Map<string, string>();
@@ -251,10 +258,13 @@ export function stallWatchdogThread(): void {
                 clearTimeout(timer);
                 session.removeListener('Debugger.paused', onPaused);
                 session.removeListener('Debugger.scriptParsed', onScript);
-                resolve(frames);
+                resolve(frames ? { frames, recovered } : null);
             };
             const timer = setTimeout(() => finish(null), 5_000);
             function onPaused(msg: any) {
+                // Read while the main thread is paused: if it ticked since
+                // the capture began, the stall had already ended.
+                recovered = ranSinceStart();
                 const frames = (msg.params?.callFrames ?? [])
                     .slice(0, 40)
                     .map((f: any) =>
@@ -281,7 +291,15 @@ export function stallWatchdogThread(): void {
         });
     }
 
+    // A stack or profile read after the main thread ticked again shows
+    // whatever ran after the stall, not the stall: compare the main
+    // thread's tick at the start of the capture with its tick at the
+    // moment the stack is read (while it is paused) and when the profile
+    // ends. Code the inspector cannot interrupt (synchronous native calls)
+    // only answers once it has returned, so this is how that case shows.
     async function capture() {
+        const tickAtStart = Atomics.load(lastTick, 0);
+        const ranSinceStart = () => Atomics.load(lastTick, 0) !== tickAtStart;
         const session = new inspector.Session();
         session.connectToMainThread();
         try {
@@ -295,14 +313,19 @@ export function stallWatchdogThread(): void {
                     await post(session, 'Profiler.start');
                     await sleep(cfg.profileMs);
                     const { profile } = await post(session, 'Profiler.stop');
-                    summary = summarize(profile);
+                    summary = ranSinceStart() ? null : summarize(profile);
                     await post(session, 'Profiler.disable').catch(() => {});
                 } catch {
                     summary = null;
                 }
             }
-            const stack = await pausedStack(session);
-            return { stack, ...(summary ?? {}) };
+            const paused = await pausedStack(session, ranSinceStart);
+            const stack = paused && !paused.recovered ? paused.frames : null;
+            return {
+                stack,
+                ...(summary ?? {}),
+                recoveredBeforeRead: !!paused?.recovered,
+            };
         } finally {
             try {
                 session.disconnect();
@@ -351,8 +374,13 @@ export function stallWatchdogThread(): void {
         }
     }
 
+    // No JavaScript frame to name: the inspector only interrupts JavaScript,
+    // so the main thread was most likely inside a synchronous native call.
+    const NO_STACK =
+        'an unknown place (no JavaScript stack: likely a synchronous native call such as execSync, a *Sync fs/zlib/crypto call or a native addon)';
+
     function describe(f?: { fn: string; file: string; line: number }) {
-        return f ? `${f.fn} (${f.file}:${f.line})` : 'unknown location';
+        return f ? `${f.fn} (${f.file}:${f.line})` : NO_STACK;
     }
 
     setInterval(() => {
@@ -373,45 +401,63 @@ export function stallWatchdogThread(): void {
                 capturing = true;
                 captures += 1;
                 const n = captures;
+                // Every stall is reported and alerted, with or without a
+                // stack: a capture that fails still means a stuck worker.
                 capture()
-                    .then(({ stack, hottest, hottestPath }) => {
-                        const stalledMs = Date.now() - (stallStart ?? now);
-                        const where = stack?.[0] ?? hottest?.[0];
-                        emit(
-                            'error',
-                            `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${describe(where)}`,
-                            {
-                                kind: 'stall',
-                                stalledMs,
-                                capture: n,
-                                stack,
-                                hottest,
-                                hottestPath,
-                            },
-                        );
-                        if (n === 1) {
-                            void heartbeat('/fail', {
-                                message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${describe(where)}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
-                                    cfg.identity,
-                                )
-                                    .map(([k, v]) => `${k}=${v}`)
-                                    .join(' ')}`,
-                                context: {
-                                    monitor: 'worker_stall',
-                                    ...cfg.identity,
+                    .then((r) => ({
+                        ...r,
+                        error: undefined as string | undefined,
+                    }))
+                    .catch((e: Error) => ({
+                        stack: null,
+                        hottest: undefined,
+                        hottestPath: undefined,
+                        recoveredBeforeRead: false,
+                        error: String(e?.message ?? e),
+                    }))
+                    .then(
+                        ({
+                            stack,
+                            hottest,
+                            hottestPath,
+                            recoveredBeforeRead,
+                            error,
+                        }) => {
+                            const stalledMs = Date.now() - (stallStart ?? now);
+                            const where = stack?.[0] ?? hottest?.[0];
+                            emit(
+                                'error',
+                                `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${describe(where)}`,
+                                {
+                                    kind: 'stall',
                                     stalledMs,
-                                    stack: (stack ?? []).slice(0, 12),
-                                    hottest: (hottest ?? []).slice(0, 5),
+                                    capture: n,
+                                    stack,
+                                    hottest,
+                                    hottestPath,
+                                    ...(recoveredBeforeRead
+                                        ? { stackReadAfterRecovery: true }
+                                        : {}),
+                                    ...(error ? { error } : {}),
                                 },
-                            });
-                        }
-                    })
-                    .catch((e: Error) =>
-                        emit('error', 'Stall capture failed', {
-                            kind: 'error',
-                            stalledMs: Date.now() - (stallStart ?? now),
-                            error: String(e?.message ?? e),
-                        }),
+                            );
+                            if (n === 1) {
+                                void heartbeat('/fail', {
+                                    message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${describe(where)}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
+                                        cfg.identity,
+                                    )
+                                        .map(([k, v]) => `${k}=${v}`)
+                                        .join(' ')}`,
+                                    context: {
+                                        monitor: 'worker_stall',
+                                        ...cfg.identity,
+                                        stalledMs,
+                                        stack: (stack ?? []).slice(0, 12),
+                                        hottest: (hottest ?? []).slice(0, 5),
+                                    },
+                                });
+                            }
+                        },
                     )
                     .finally(() => {
                         capturing = false;
