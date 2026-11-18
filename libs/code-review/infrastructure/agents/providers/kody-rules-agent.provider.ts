@@ -383,10 +383,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                                                 ...candidate,
                                                 evidenceVerified: true,
                                             };
-                                        if (
-                                            reason === 'sandbox_unavailable' ||
-                                            reason === 'no_excerpts'
-                                        )
+                                        if (reason === 'sandbox_unavailable')
                                             evidenceFailures++;
                                     } catch (error) {
                                         evidenceFailures++;
