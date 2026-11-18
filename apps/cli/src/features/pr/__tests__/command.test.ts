@@ -61,6 +61,13 @@ describe('createPrCommand', () => {
                                     ],
                                 },
                             },
+                            {
+                                status: 'error',
+                                stageName:
+                                    'AgentReview::custom-agent-pr-lifecycle',
+                                stageLabel: 'PR lifecycle',
+                                message: 'Agent failed.',
+                            },
                         ],
                     },
                 ],
@@ -78,6 +85,7 @@ describe('createPrCommand', () => {
             expect(output).toContain('old-head (older or different head)');
             expect(output).toContain('heavy (risk found)');
             expect(output).toContain('lens-test: failed');
+            expect(output).toContain('PR lifecycle: Agent failed.');
             expect(output).toContain('The PR changed.');
             log.mockRestore();
         });

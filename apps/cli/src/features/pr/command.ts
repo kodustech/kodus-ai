@@ -361,6 +361,19 @@ function printReviewRuns(
                 );
             }
             for (const stage of run.codeReviewTimeline ?? []) {
+                if (
+                    stage.status === 'error' &&
+                    stage.stageName?.startsWith('AgentReview::custom-agent-') &&
+                    (stage !== failedStage || !!execution?.errorMessage)
+                ) {
+                    const agent =
+                        stage.stageLabel ??
+                        stage.stageName.replace(
+                            'AgentReview::custom-agent-',
+                            '',
+                        );
+                    cliInfo(`  ${agent}: ${stage.message ?? 'failed'}`);
+                }
                 for (const lens of stage.metadata?.specialists ?? []) {
                     if (
                         ['failed', 'stopped', 'no-result'].includes(lens.status)
