@@ -55,6 +55,17 @@ describe('scan read scope', () => {
         expect(scans.findRecent).toHaveBeenCalledWith('org', undefined, 20);
     });
 
+    it('allows the granted instance and an organization-wide scope', async () => {
+        const { useCase } = setup();
+        const scan = { organizationId: 'org', repository } as any;
+        await expect(
+            useCase.isInRepositoryScope('org', scan, ['123']),
+        ).resolves.toBe(true);
+        await expect(
+            useCase.isInRepositoryScope('org', scan, undefined),
+        ).resolves.toBe(true);
+    });
+
     it('refuses the same id on another instance', async () => {
         const { useCase } = setup();
         const other = {
