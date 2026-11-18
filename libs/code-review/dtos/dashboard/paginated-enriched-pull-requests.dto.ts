@@ -1,4 +1,11 @@
 import { EnrichedPullRequestResponse } from './enriched-pull-request-response.dto';
+import type { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+
+export type ReviewHistoryIdentity = {
+    repositoryId: string;
+    location: string;
+    provider?: PlatformType;
+};
 
 export class PaginationMetadata {
     currentPage: number;
@@ -28,6 +35,8 @@ export class PaginationMetadata {
 export class PaginatedEnrichedPullRequestsResponse {
     data: EnrichedPullRequestResponse[];
     pagination: PaginationMetadata;
+    /** The canonical identity of every run on a single-PR history page. */
+    reviewIdentity?: ReviewHistoryIdentity;
     currentHeadSha?: string;
 }
 

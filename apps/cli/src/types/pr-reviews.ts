@@ -56,6 +56,11 @@ export interface PullRequestReviewRun {
 
 export interface PullRequestExecutionsPage {
     data: PullRequestReviewRun[];
+    reviewIdentity?: {
+        repositoryId: string;
+        location: string;
+        provider?: string;
+    };
     currentHeadSha?: string;
     pagination: {
         currentPage: number;

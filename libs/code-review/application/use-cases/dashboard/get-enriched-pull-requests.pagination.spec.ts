@@ -211,7 +211,11 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
             const { useCase } = buildUseCase();
             const url =
                 'https://dev.azure.com/acme/project/_git/api/pullrequest/1000';
-            const result = { ...makePrDoc(1000), provider, url };
+            const result = {
+                ...makePrDoc(1000),
+                provider,
+                url: `${url}/?tab=files#discussion`,
+            };
             const getPullRequest = jest
                 .fn()
                 .mockResolvedValueOnce({ head: { sha: 'live' }, prURL: url })
@@ -232,7 +236,14 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
                 repositoryId: 'repo-1',
                 explain: 'true',
             };
-            expect((await useCase.execute(query)).currentHeadSha).toBe('live');
+            expect(await useCase.execute(query)).toMatchObject({
+                currentHeadSha: 'live',
+                reviewIdentity: {
+                    repositoryId: 'repo-1',
+                    location: url,
+                    provider: 'AZURE_REPOS',
+                },
+            });
             expect(
                 (await useCase.execute(query)).currentHeadSha,
             ).toBeUndefined();

@@ -17,6 +17,7 @@ const file = (filename: string) => ({
     deletions: 0,
     patch: '+change',
 });
+const assessedDescription = { title: 'Update docs', body: 'Fix examples' };
 const run = (over: Partial<ApprovalPolicyInput> = {}) =>
     evaluateApprovalPolicies({
         approvalActive: true,
@@ -24,7 +25,7 @@ const run = (over: Partial<ApprovalPolicyInput> = {}) =>
         riskEnabled: false,
         currentHeadSha: 'head',
         currentBaseSha: 'base',
-        currentDescription: {},
+        currentDescription: assessedDescription,
         policies: [policy('Docs', { includedFiles: ['docs/**'] })],
         files: [file('docs/readme.md')],
         ...over,
@@ -40,7 +41,7 @@ const risk = (riskIdentified: boolean) => ({
         baseSha: 'base',
         headSha: 'head',
         assessmentKey: 'key',
-        descriptionKey: prRiskDescriptionKey({}),
+        descriptionKey: prRiskDescriptionKey(assessedDescription),
     },
 });
 
@@ -209,20 +210,26 @@ it.each([
     expect(judgeEligibility).not.toHaveBeenCalled();
 });
 
+it.each([{ title: 'Edited title' }, { body: 'Edited body' }])(
+    'holds approval when only the PR %o changed after assessment',
+    async (edit) => {
+        expect(
+            await run({
+                riskEnabled: true,
+                risk: risk(false),
+                currentDescription: { ...assessedDescription, ...edit },
+            }),
+        ).toMatchObject({
+            kind: 'hold',
+            reason: 'The PR title or description changed after risk assessment.',
+        });
+    },
+);
+
 it('requires current no-risk evidence when assessment is enabled and removes only that veto when disabled', async () => {
     expect((await run({ riskEnabled: true, risk: risk(false) })).kind).toBe(
         'approve',
     );
-    expect(
-        await run({
-            riskEnabled: true,
-            risk: risk(false),
-            currentDescription: { title: 'Edited after review' },
-        }),
-    ).toMatchObject({
-        kind: 'hold',
-        reason: 'The PR title or description changed after risk assessment.',
-    });
     expect(
         (
             await run({

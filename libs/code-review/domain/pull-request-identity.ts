@@ -7,9 +7,7 @@ export function pullRequestLocation(
         const parsed = new URL(url);
         if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
             return undefined;
-        return (
-            parsed.origin + parsed.pathname.replace(/\/+$/, '') + parsed.search
-        );
+        return parsed.origin + parsed.pathname.replace(/\/+$/, '');
     } catch {
         return undefined;
     }

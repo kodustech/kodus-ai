@@ -1,4 +1,7 @@
-import type { PullRequestReviewRun } from '../types/pr-reviews.js';
+import type {
+    PullRequestExecutionsPage,
+    PullRequestReviewRun,
+} from '../types/pr-reviews.js';
 import { CommandError } from '../utils/command-errors.js';
 import { pullRequestsApi } from './api/pull-requests.api.js';
 import { gitService } from './git.service.js';
@@ -65,9 +68,11 @@ class PullRequestReviewsService {
             : await this.resolveRepositoryName(input.repository);
 
         const runs: PullRequestReviewRun[] = [];
+        const identities: PullRequestExecutionsPage['reviewIdentity'][] = [];
         let cursor: string | undefined;
         let hasMore = true;
         let currentHeadSha: string | undefined;
+        let headIdentity: PullRequestExecutionsPage['reviewIdentity'];
 
         // Cursor paging, as the web PR page does: a page can return fewer rows
         // than it read, so `nextCursor` (not the page number) is the resume point.
@@ -81,7 +86,13 @@ class PullRequestReviewsService {
                 cursor,
                 ...(input.explain && runs.length === 0 && { explain: true }),
             });
-            currentHeadSha ??= page?.currentHeadSha;
+            if (input.explain && page?.data?.length) {
+                identities.push(page.reviewIdentity);
+                if (page.currentHeadSha) {
+                    currentHeadSha = page.currentHeadSha;
+                    headIdentity = page.reviewIdentity;
+                }
+            }
             runs.push(
                 ...(page?.data ?? []).filter(
                     (run) => run.prNumber === input.prNumber,
@@ -92,14 +103,16 @@ class PullRequestReviewsService {
         }
 
         runs.sort((a, b) => runTime(b) - runTime(a));
-        const [first] = runs;
-        const singleRepository =
-            first &&
-            runs.every(
-                (run) =>
-                    run.repositoryId === first.repositoryId &&
-                    run.provider === first.provider &&
-                    run.url === first.url,
+        const verifiedIdentity = headIdentity;
+        const singlePullRequest =
+            verifiedIdentity?.location &&
+            verifiedIdentity.provider &&
+            identities.every(
+                (identity) =>
+                    identity?.repositoryId === verifiedIdentity.repositoryId &&
+                    identity.location === verifiedIdentity.location &&
+                    (!identity.provider ||
+                        identity.provider === verifiedIdentity.provider),
             );
 
         return {
@@ -108,7 +121,7 @@ class PullRequestReviewsService {
             team: ctx.teamName,
             runs: runs.slice(0, limit),
             truncated: runs.length > limit || hasMore,
-            ...(currentHeadSha && singleRepository && { currentHeadSha }),
+            ...(currentHeadSha && singlePullRequest && { currentHeadSha }),
         };
     }
 

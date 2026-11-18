@@ -51,6 +51,7 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import {
     PaginatedEnrichedPullRequestsResponse,
     PaginationMetadata,
+    ReviewHistoryIdentity,
     PullRequestExecutionsTotals,
 } from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
@@ -792,15 +793,30 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
             });
 
-            const currentHeadSha = await this.getCurrentHeadForExplanation(
-                query,
-                organizationAndTeamData,
-                paginatedData,
-            );
+            const reviewIdentity =
+                pullRequestNumber && (repositoryId || repositoryName)
+                    ? this.getReviewHistoryIdentity(paginatedData)
+                    : undefined;
+            const currentHead = reviewIdentity
+                ? await this.getCurrentHeadForExplanation(
+                      query,
+                      organizationAndTeamData,
+                      paginatedData[0].repositoryName,
+                      reviewIdentity,
+                  )
+                : undefined;
             return {
                 data: paginatedData,
                 pagination: paginationMetadata,
-                ...(currentHeadSha && { currentHeadSha }),
+                ...(reviewIdentity && { reviewIdentity }),
+                ...(currentHead &&
+                    reviewIdentity && {
+                        currentHeadSha: currentHead.sha,
+                        reviewIdentity: {
+                            ...reviewIdentity,
+                            provider: currentHead.provider,
+                        },
+                    }),
             };
         } catch (error) {
             this.logger.error({
@@ -813,32 +829,51 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         }
     }
 
+    private getReviewHistoryIdentity(
+        runs: EnrichedPullRequestResponse[],
+    ): ReviewHistoryIdentity | undefined {
+        const [first] = runs;
+        const location = pullRequestLocation(first?.url);
+        if (!first?.repositoryId || !location) return undefined;
+
+        let provider: ReviewHistoryIdentity['provider'];
+        for (const run of runs) {
+            if (
+                run.repositoryId !== first.repositoryId ||
+                pullRequestLocation(run.url) !== location
+            )
+                return undefined;
+            if (!run.provider) continue;
+            const platform = parsePlatformType(run.provider);
+            if (!platform || (provider && provider !== platform))
+                return undefined;
+            provider = platform;
+        }
+        return { repositoryId: first.repositoryId, location, provider };
+    }
+
     private async getCurrentHeadForExplanation(
         query: EnrichedPullRequestsQueryDto,
         organizationAndTeamData: OrganizationAndTeamData,
-        runs: EnrichedPullRequestResponse[],
-    ): Promise<string | undefined> {
-        const [first] = runs;
-        const location = pullRequestLocation(first?.url);
+        repositoryName: string,
+        identity: ReviewHistoryIdentity,
+    ): Promise<
+        | {
+              sha: string;
+              provider: NonNullable<ReviewHistoryIdentity['provider']>;
+          }
+        | undefined
+    > {
         if (
             query.explain !== 'true' ||
             !query.teamId ||
-            !query.pullRequestNumber ||
-            !first ||
-            !location ||
-            !(query.repositoryId || query.repositoryName) ||
-            runs.some(
-                (run) =>
-                    run.repositoryId !== first.repositoryId ||
-                    pullRequestLocation(run.url) !== location,
-            )
-        ) {
+            !query.pullRequestNumber
+        )
             return undefined;
-        }
 
         const repository = {
-            id: first.repositoryId,
-            name: first.repositoryName,
+            id: identity.repositoryId,
+            name: repositoryName,
         };
         const prNumber = query.pullRequestNumber;
         try {
@@ -849,11 +884,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             );
             if (
                 !provider ||
-                runs.some(
-                    (run) =>
-                        run.provider &&
-                        parsePlatformType(run.provider) !== provider,
-                )
+                (identity.provider && identity.provider !== provider)
             ) {
                 return undefined;
             }
@@ -865,8 +896,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
                 provider,
             );
-            return pullRequestLocation(pullRequest?.prURL) === location
-                ? pullRequest?.head?.sha
+            const sha = pullRequest?.head?.sha;
+            return sha &&
+                pullRequestLocation(pullRequest?.prURL) === identity.location
+                ? { sha, provider }
                 : undefined;
         } catch (error) {
             this.logger.warn({
