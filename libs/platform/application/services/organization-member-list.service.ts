@@ -25,7 +25,14 @@ export type OrganizationMemberSummary = {
  * from it has not necessarily left the organization.
  */
 export type OrganizationMemberListResult =
-    | { status: 'ok'; complete: boolean; members: OrganizationMemberSummary[] }
+    | {
+          status: 'ok';
+          complete: boolean;
+          members: OrganizationMemberSummary[];
+          // Seat holders checked with the provider and not found. Absent when
+          // the provider cannot check, so every unlisted seat is unconfirmed.
+          absentSeatHolderIds?: string[];
+      }
     | { status: 'unavailable'; members: [] };
 
 type RawMember = {
@@ -172,7 +179,10 @@ export class OrganizationMemberListService {
         return {
             status: 'ok',
             complete: true,
-            members: this.normalize([...normalized, ...confirmed]),
+            members: this.normalize([...normalized, ...confirmed.found]),
+            ...(confirmed.absent && {
+                absentSeatHolderIds: confirmed.absent,
+            }),
         };
     }
 
@@ -180,14 +190,15 @@ export class OrganizationMemberListService {
      * Stored PR authors can miss somebody (the backfill keeps only the most
      * recent PRs of each repository), so a seat holder missing from the list
      * is checked with the provider before the list calls them gone. Answers
-     * the seat holders found to be recent authors, or `null` when the check
-     * could not be made.
+     * the seat holders found to be recent authors and the ones confirmed
+     * absent (none listed when the provider cannot check), or `null` when the
+     * check failed.
      */
     private async confirmUnlistedSeatHolders(
         organizationAndTeamData: OrganizationAndTeamData,
         members: OrganizationMemberSummary[],
         seatHolderIds?: string[],
-    ): Promise<RawMember[] | null> {
+    ): Promise<{ found: RawMember[]; absent?: string[] } | null> {
         const listedIds = new Set(members.map((member) => String(member.id)));
 
         try {
@@ -196,7 +207,7 @@ export class OrganizationMemberListService {
                     organizationAndTeamData,
                 ))
             ) {
-                return [];
+                return { found: [] };
             }
 
             const seatIds =
@@ -212,7 +223,7 @@ export class OrganizationMemberListService {
                 .filter((gitId) => gitId && !listedIds.has(gitId));
 
             if (unlistedIds.length === 0) {
-                return [];
+                return { found: [], absent: [] };
             }
 
             const found =
@@ -222,7 +233,16 @@ export class OrganizationMemberListService {
                 });
 
             // null: the provider cannot answer after all.
-            return found;
+            if (!found) {
+                return null;
+            }
+
+            const foundIds = new Set(found.map((author) => String(author.id)));
+
+            return {
+                found,
+                absent: unlistedIds.filter((gitId) => !foundIds.has(gitId)),
+            };
         } catch (error) {
             this.logger.warn({
                 message:

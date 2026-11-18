@@ -72,7 +72,10 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
     describe('caching', () => {
         it('should return cached members on cache hit', async () => {
-            mockCacheService.getFromCache.mockResolvedValue(mockMembers);
+            mockCacheService.getFromCache.mockResolvedValue({
+                members: mockMembers,
+                absentSeatHolderIds: ['77'],
+            });
 
             const result = await useCase.execute();
 
@@ -80,9 +83,10 @@ describe('GetCodeManagementMemberListUseCase', () => {
                 status: 'ok',
                 complete: true,
                 members: mockMembers,
+                absentSeatHolderIds: ['77'],
             });
             expect(mockCacheService.getFromCache).toHaveBeenCalledWith(
-                'org_members_v2_org-uuid-123',
+                'org_members_v3_org-uuid-123',
             );
             expect(mockMemberListService.fetch).not.toHaveBeenCalled();
         });
@@ -138,8 +142,8 @@ describe('GetCodeManagementMemberListUseCase', () => {
             await useCase.execute();
 
             expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-                'org_members_v2_org-uuid-123',
-                mockMembers,
+                'org_members_v3_org-uuid-123',
+                { members: mockMembers, absentSeatHolderIds: undefined },
                 30 * 60 * 1000,
             );
         });
@@ -207,7 +211,7 @@ describe('GetCodeManagementMemberListUseCase', () => {
             await useCase.execute('team-1');
 
             expect(mockCacheService.getFromCache).toHaveBeenCalledWith(
-                'org_members_v2_org-uuid-123_team-1',
+                'org_members_v3_org-uuid-123_team-1',
             );
         });
     });
@@ -230,7 +234,7 @@ describe('GetCodeManagementMemberListUseCase', () => {
             await useCase.refreshMembers('team-1');
 
             expect(mockCacheService.removeFromCache).toHaveBeenCalledWith(
-                'org_members_v2_org-uuid-123_team-1',
+                'org_members_v3_org-uuid-123_team-1',
             );
             expect(mockMemberListService.fetch).toHaveBeenCalled();
         });

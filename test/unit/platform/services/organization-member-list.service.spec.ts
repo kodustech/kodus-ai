@@ -533,6 +533,7 @@ describe('OrganizationMemberListService', () => {
                     { id: 1, name: 'Alice', type: 'user' },
                     { id: '8', name: 'Dana', type: 'user' },
                 ],
+                absentSeatHolderIds: ['9'],
             });
         });
 
@@ -582,14 +583,30 @@ describe('OrganizationMemberListService', () => {
                 false,
             );
 
-            await expect(
-                service.fetch(organizationAndTeamData),
-            ).resolves.toEqual(
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result).toEqual(
                 expect.objectContaining({ status: 'ok', complete: true }),
             );
+            expect(result).not.toHaveProperty('absentSeatHolderIds');
             expect(
                 mockLicenseService.getAllUsersWithLicense,
             ).not.toHaveBeenCalled();
+        });
+
+        // The license services resolve [] on a timeout: nobody is confirmed
+        // absent, so the page badges nobody it did not check.
+        it('confirms nobody absent when the seat read comes back empty', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([]);
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({
+                    complete: true,
+                    absentSeatHolderIds: [],
+                }),
+            );
         });
     });
 });

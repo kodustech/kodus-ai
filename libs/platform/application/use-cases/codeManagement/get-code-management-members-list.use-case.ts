@@ -43,13 +43,13 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
 
         if (!options.skipCache) {
             try {
-                const cached =
-                    await this.cacheService.getFromCache<
-                        OrganizationMemberSummary[]
-                    >(cacheKey);
+                const cached = await this.cacheService.getFromCache<{
+                    members: OrganizationMemberSummary[];
+                    absentSeatHolderIds?: string[];
+                }>(cacheKey);
 
-                if (cached?.length > 0) {
-                    return { status: 'ok', complete: true, members: cached };
+                if (cached?.members?.length > 0) {
+                    return { status: 'ok', complete: true, ...cached };
                 }
             } catch (error) {
                 // Not fatal — the fetch below still serves the request — but a
@@ -75,7 +75,10 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
             await this.cacheService
                 .addToCache(
                     cacheKey,
-                    result.members,
+                    {
+                        members: result.members,
+                        absentSeatHolderIds: result.absentSeatHolderIds,
+                    },
                     GetCodeManagementMemberListUseCase.CACHE_TTL,
                 )
                 .catch(() => {});
@@ -98,9 +101,10 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
     }
 
     private buildCacheKey(organizationId: string, teamId?: string): string {
-        // v2: entries written before `complete` existed may hold a partial list.
+        // v3: entries hold the confirmed-absent seat ids beside the members;
+        // v1 entries may hold a partial list.
         return teamId !== undefined
-            ? `org_members_v2_${organizationId}_${teamId}`
-            : `org_members_v2_${organizationId}`;
+            ? `org_members_v3_${organizationId}_${teamId}`
+            : `org_members_v3_${organizationId}`;
     }
 }
