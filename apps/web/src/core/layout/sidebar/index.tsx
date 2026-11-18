@@ -65,7 +65,9 @@ import {
     ChevronRightIcon,
     ChevronsUpDownIcon,
     CogIcon,
+    ContainerIcon,
     CreditCardIcon,
+    FlaskConicalIcon,
     FolderGit2Icon,
     FolderIcon,
     FolderTreeIcon,
@@ -85,6 +87,8 @@ import {
 } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { ErrorBoundary } from "react-error-boundary";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { FEATURE_FLAGS, isReleasedTo } from "src/core/config/feature-flags";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
@@ -714,6 +718,8 @@ const CODE_REVIEW_PAGES: Array<{
     label: string;
     icon: LucideIcon;
     repoOnly?: boolean;
+    /** Shown only to an org the catalog feature is released to. */
+    release?: keyof typeof FEATURE_FLAGS;
 }> = [
     { href: "general", label: "General", icon: Settings2Icon },
     { href: "risk", label: "Risk assessment", icon: ShieldIcon },
@@ -732,15 +738,25 @@ const CODE_REVIEW_PAGES: Array<{
         // Relationships are directional and repo-scoped (#1576).
         repoOnly: true,
     },
+    {
+        // Kody Runtime (screen 2): set per repository, in the Runtime API.
+        href: "kody-runtime",
+        label: "Runtime",
+        icon: FlaskConicalIcon,
+        repoOnly: true,
+        release: "kodyRuntime",
+    },
 ];
 
 type Scope = ScopeTarget;
 
 /** The pages a scope can open: Linked repositories is repository-only. */
-const pagesAt = (scope: Scope) => {
+const pagesAt = (scope: Scope, flags: Parameters<typeof isReleasedTo>[1]) => {
     const isRepository = scope.repositoryId !== "global" && !scope.directoryId;
     return CODE_REVIEW_PAGES.filter(
-        (page) => !page.repoOnly || isRepository,
+        (page) =>
+            (!page.repoOnly || isRepository) &&
+            isReleasedTo(page.release, flags),
     ).map((page) => page.href);
 };
 
@@ -748,6 +764,7 @@ const CODE_REVIEW_PATH = /^\/settings\/code-review\/([^/]+)(?:\/([^/?#]+))?/;
 
 const CodeReviewGroup = () => {
     const pathname = usePathname();
+    const featureFlags = useFeatureFlags();
     const [queryDirectoryId] = useQueryState("directoryId");
     const collapsed = useRail();
     const scopeTools = useScopeTools();
@@ -803,7 +820,8 @@ const CodeReviewGroup = () => {
                                     (item) => item.href === currentPage,
                                 );
                                 return page &&
-                                    (!page.repoOnly || targetIsRepository)
+                                    (!page.repoOnly || targetIsRepository) &&
+                                    isReleasedTo(page.release, featureFlags)
                                     ? page.href
                                     : "general";
                             }}
@@ -829,7 +847,9 @@ const CodeReviewGroup = () => {
                 />
             </li>
             {CODE_REVIEW_PAGES.filter(
-                (page) => !page.repoOnly || isRepositoryLevel,
+                (page) =>
+                    (!page.repoOnly || isRepositoryLevel) &&
+                    isReleasedTo(page.release, featureFlags),
             ).map((page) => (
                 <SidebarItem
                     key={page.href}
@@ -868,11 +888,12 @@ const ScopeSelector = ({
     // and counting overrides need the full config those pages
     // load.
     const scopeTools = useScopeTools();
+    const featureFlags = useFeatureFlags();
     const addDirectory = scopeTools?.addDirectory;
     const countFor = (target: Scope) =>
         scopeTools?.renderOverrideCount?.({
             scope: target,
-            pages: pagesAt(target),
+            pages: pagesAt(target, featureFlags),
         });
     const canReadRepositories = usePermission(
         Action.Read,
@@ -1153,6 +1174,7 @@ const ScopeItem = ({
 );
 
 const OrganizationGroup = () => {
+    const featureFlags = useFeatureFlags();
     const pathname = usePathname();
     const { license } = useSubscriptionContext();
     const gates = useFeatureGates();
@@ -1166,6 +1188,10 @@ const OrganizationGroup = () => {
         Action.Read,
         ResourceType.TokenUsage,
     );
+    const canReadRuntimeRuns = usePermission(
+        Action.Read,
+        ResourceType.RuntimeRun,
+    );
     // Same rule as the organization sub-sidebar: listed on every plan, the
     // page shows the locked preview.
     const ssoLocked = !(
@@ -1178,6 +1204,8 @@ const OrganizationGroup = () => {
         icon: LucideIcon;
         visible: boolean;
         locked?: boolean;
+        /** Prefix that marks the item current, when wider than `href`. */
+        match?: string;
     }> = [
         {
             href: "/organization/general",
@@ -1212,6 +1240,14 @@ const OrganizationGroup = () => {
             visible: canEditOrg,
         },
         {
+            // Runs, environments, health and the Runtime's settings.
+            href: "/runtime/runs",
+            label: "Kody Runtime",
+            icon: ContainerIcon,
+            visible: canReadRuntimeRuns && featureFlags.kodyRuntime === true,
+            match: "/runtime",
+        },
+        {
             href: "/settings/subscription",
             label: "Subscription",
             icon: CreditCardIcon,
@@ -1236,7 +1272,11 @@ const OrganizationGroup = () => {
     const collapsed = useRail();
     if (visible.length === 0) return null;
 
-    const isActive = visible.some((item) => pathname.startsWith(item.href));
+    const isCurrent = (item: { href: string; match?: string }) =>
+        item.match
+            ? pathname === item.match || pathname.startsWith(`${item.match}/`)
+            : pathname.startsWith(item.href);
+    const isActive = visible.some(isCurrent);
 
     if (collapsed) {
         // Eight icons would outgrow a laptop screen; one opens them all.
@@ -1300,7 +1340,7 @@ const OrganizationGroup = () => {
                     icon={item.icon}
                     label={item.label}
                     locked={item.locked}
-                    active={pathname.startsWith(item.href)}
+                    active={isCurrent(item)}
                 />
             ))}
         </SidebarGroup>

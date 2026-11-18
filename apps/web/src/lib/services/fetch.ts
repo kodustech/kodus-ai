@@ -113,7 +113,13 @@ export const typedFetch = async <Data>(
             );
         }
 
-        return (await response.json()) as Data;
+        // A 204 (e.g. a DELETE) or an empty body is a success with no data.
+        if (response.status === 204 || response.status === 205) {
+            return undefined as Data;
+        }
+        const text = await response.text();
+        if (!text) return undefined as Data;
+        return JSON.parse(text) as Data;
     } catch (error) {
         // Re-throw the error with more context if it's a network error
         if (

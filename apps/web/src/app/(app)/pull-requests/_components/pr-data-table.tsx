@@ -13,7 +13,12 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { GitPullRequestIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { PR_ROW_GRID, PrListItem } from "./pr-list-item";
+import {
+    PR_ROW_GRID,
+    PR_ROW_GRID_WITH_RUNTIME,
+    PrListItem,
+    type PrRowRuntime,
+} from "./pr-list-item";
 import type { PullRequestExecutionGroup } from "./types";
 
 // How many pages the list may pull by itself, per scroll, to fill the window.
@@ -30,6 +35,13 @@ interface PrDataTableProps {
     fetchNextPageFailed?: boolean;
     hasActiveFilters?: boolean;
     onClearFilters?: () => void;
+    /**
+     * The Runtime column, for viewers who may read Runtime Runs: each row's
+     * state comes from one call per page of PRs, never one per row.
+     */
+    runtime?: { rowOf: (group: PullRequestExecutionGroup) => PrRowRuntime };
+    /** The team the list reads, for the expanded rows' commits. */
+    teamId?: string;
 }
 
 export const PrDataTable = ({
@@ -41,6 +53,8 @@ export const PrDataTable = ({
     fetchNextPageFailed,
     hasActiveFilters,
     onClearFilters,
+    runtime,
+    teamId,
 }: PrDataTableProps) => {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -219,14 +233,14 @@ export const PrDataTable = ({
             className="border-card-lv3/60 bg-card-lv1 min-h-0 flex-1 overflow-auto rounded-xl border">
             {/* Below 40rem the grid scrolls sideways inside this container
                 instead of crushing the title column. */}
-            <div className="min-w-[40rem]">
+            <div className={runtime ? "min-w-[52rem]" : "min-w-[40rem]"}>
                 {/* Sticky table header — labels the aligned columns each row lays
                 out via PR_ROW_GRID, so the signals (reviews / suggestions /
                 status) read as a table while each row keeps its card richness
                 and expandable timeline. */}
                 <div
                     className={cn(
-                        PR_ROW_GRID,
+                        runtime ? PR_ROW_GRID_WITH_RUNTIME : PR_ROW_GRID,
                         "border-card-lv3/40 bg-card-lv1/95 text-text-secondary text-2xs sticky top-0 z-10 border-b px-5 py-2.5 font-medium tracking-wide uppercase backdrop-blur",
                     )}>
                     {/* Column explanations. side="bottom" opens into the list (the
@@ -270,6 +284,21 @@ export const PrDataTable = ({
                             back by your review configuration (filter icon).
                         </TooltipContent>
                     </Tooltip>
+                    {runtime && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="w-fit cursor-help">
+                                    Runtime
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent
+                                side="bottom"
+                                className="max-w-xs text-xs normal-case">
+                                The latest Kody Runtime run: whether this PR
+                                behaves differently from main when it runs.
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <span className="w-fit cursor-help">Status</span>
@@ -299,7 +328,12 @@ export const PrDataTable = ({
                                 width: "100%",
                                 transform: `translateY(${virtualRow.start}px)`,
                             }}>
-                            <PrListItem group={data[virtualRow.index]} />
+                            <PrListItem
+                                group={data[virtualRow.index]}
+                                teamId={teamId}
+                                showRuntime={!!runtime}
+                                runtime={runtime?.rowOf(data[virtualRow.index])}
+                            />
                         </div>
                     ))}
                 </div>

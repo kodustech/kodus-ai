@@ -72,6 +72,9 @@ export const useInfinitePullRequestExecutions = (
         // default: counting walks every matching execution, so only a view
         // that is about to show the number should pay for it.
         withTotal?: boolean;
+        // False: ask nothing yet (a caller whose filters are not known yet
+        // would otherwise scan the whole org once with no filter).
+        enabled?: boolean;
     },
 ) => {
     const pageSize = options?.pageSize ?? filters?.limit ?? DEFAULT_PAGE_SIZE;
@@ -183,6 +186,7 @@ export const useInfinitePullRequestExecutions = (
         // view, which loads one.
         refetchInterval: poll ? 30_000 : false,
         refetchOnWindowFocus: poll ? "always" : false,
+        enabled: options?.enabled ?? true,
     });
 
     const items = useMemo(() => {

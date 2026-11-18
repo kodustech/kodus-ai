@@ -54,6 +54,7 @@
         "date-fns": "^4.4.0",
         "highlight.js": "^11.11.1",
         "jose": "^6.2.8",
+        "js-yaml": "^4.1.1",
         "lucide-react": "^1.29.0",
         "markdown-to-jsx": "^9.10.2",
         "next": "16.3.0",

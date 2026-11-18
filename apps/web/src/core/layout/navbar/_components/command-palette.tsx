@@ -27,6 +27,7 @@ import {
     BookOpenIcon,
     Building2Icon,
     ChartColumnIcon,
+    ContainerIcon,
     CreditCardIcon,
     FolderGit2Icon,
     FolderIcon,
@@ -48,6 +49,8 @@ import {
     TerminalIcon,
     TriangleAlertIcon,
 } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { FEATURE_FLAGS, isReleasedTo } from "src/core/config/feature-flags";
 import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
 import {
@@ -73,6 +76,8 @@ const PAGES: Array<{
     icon: ComponentType<{ className?: string }>;
     keywords: string;
     gate?: GatedFeatureKey;
+    /** Listed only to an org the catalog feature is released to. */
+    release?: keyof typeof FEATURE_FLAGS;
     /** RBAC for the destination. A plan `gate` decides whether the feature is
      *  SOLD to this organization; this decides whether this ROLE may open it.
      *  Without it the palette offered pages the navbar had already hidden. */
@@ -170,6 +175,37 @@ const PAGES: Array<{
         keywords: "audit history",
         gate: "activityLogs",
         permission: { action: Action.Read, resource: ResourceType.Logs },
+    },
+    {
+        label: "Kody Runtime · Runs",
+        release: "kodyRuntime",
+        href: "/runtime/runs",
+        icon: ContainerIcon,
+        keywords: "runtime runs regressions boot replay check @kody runtime",
+        permission: { action: Action.Read, resource: ResourceType.RuntimeRun },
+    },
+    {
+        label: "Kody Runtime · Environments",
+        release: "kodyRuntime",
+        href: "/runtime/environments",
+        icon: ContainerIcon,
+        keywords:
+            "runtime environment health blockers boot image pool egress hosts cells",
+        permission: {
+            action: Action.Read,
+            resource: ResourceType.RuntimeEnvironment,
+        },
+    },
+    {
+        label: "Kody Runtime · Settings",
+        release: "kodyRuntime",
+        href: "/runtime/settings",
+        icon: ContainerIcon,
+        keywords: "runtime pilot token budget stop who can ask",
+        permission: {
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        },
     },
     {
         label: "Organization · General",
@@ -367,19 +403,21 @@ export const CommandPalette = ({
     // Without this the palette was a way around the navbar's own filtering.
     const permissions = usePermissions();
     const { organizationId } = useAuth();
+    const featureFlags = useFeatureFlags();
     const visiblePages = useMemo(
         () =>
             PAGES.filter(
                 (page) =>
-                    !page.permission ||
-                    hasPermission({
-                        permissions,
-                        organizationId: organizationId!,
-                        action: page.permission.action,
-                        resource: page.permission.resource,
-                    }),
+                    isReleasedTo(page.release, featureFlags) &&
+                    (!page.permission ||
+                        hasPermission({
+                            permissions,
+                            organizationId: organizationId!,
+                            action: page.permission.action,
+                            resource: page.permission.resource,
+                        })),
             ),
-        [permissions, organizationId],
+        [permissions, organizationId, featureFlags],
     );
 
     // MCP plugins (Jira, Linear, …): each opens its own page. Empty when the

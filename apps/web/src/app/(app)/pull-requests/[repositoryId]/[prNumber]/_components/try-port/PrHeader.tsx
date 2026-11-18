@@ -3,7 +3,12 @@
 import { useState } from "react";
 import type { PrInfo } from "./types";
 
-export type PrTab = "description" | "review" | "discussion" | "commits";
+export type PrTab =
+    | "description"
+    | "review"
+    | "discussion"
+    | "commits"
+    | "runtime";
 
 export function PrHeader({
     pr,
@@ -12,6 +17,7 @@ export function PrHeader({
     onTabChange,
     toolbar,
     tabs,
+    runtimeRegressions,
 }: {
     pr: PrInfo;
     suggestionCount: number;
@@ -23,6 +29,8 @@ export function PrHeader({
     /** Which tabs to render. Defaults to all four (try parity); the web
      *  app only has data for some, so it passes a narrower list. */
     tabs?: PrTab[];
+    /** Regressions the latest Kody Runtime run found: the Runtime tab's badge. */
+    runtimeRegressions?: number;
 }) {
     return (
         <header className="mb-4 fade-up">
@@ -109,6 +117,7 @@ export function PrHeader({
                 onTabChange={onTabChange}
                 toolbar={toolbar}
                 show={tabs}
+                runtimeRegressions={runtimeRegressions}
             />
         </header>
     );
@@ -121,6 +130,7 @@ function Tabs({
     onTabChange,
     toolbar,
     show,
+    runtimeRegressions,
 }: {
     pr: PrInfo;
     suggestionCount: number;
@@ -128,12 +138,30 @@ function Tabs({
     onTabChange: (tab: PrTab) => void;
     toolbar?: React.ReactNode;
     show?: PrTab[];
+    runtimeRegressions?: number;
 }) {
-    const allTabs: { id: PrTab; label: string; count?: number }[] = [
+    const allTabs: {
+        id: PrTab;
+        label: string;
+        count?: number;
+        /** A count that is a problem to look at, not a size. */
+        alarming?: boolean;
+        countLabel?: string;
+    }[] = [
         { id: "description", label: "Description" },
         { id: "review", label: "Review", count: suggestionCount },
         { id: "discussion", label: "Discussion", count: pr.discussionCount },
         { id: "commits", label: "Commits", count: pr.commitsCount },
+        {
+            id: "runtime",
+            label: "Runtime",
+            count: runtimeRegressions,
+            alarming: true,
+            countLabel:
+                runtimeRegressions === 1
+                    ? "1 regression"
+                    : `${runtimeRegressions} regressions`,
+        },
     ];
     const tabs = show
         ? allTabs.filter((t) => show.includes(t.id))
@@ -170,15 +198,27 @@ function Tabs({
                     >
                         {tab.label}
                         {tab.count !== undefined && tab.count > 0 && (
-                            <span
-                                className={`text-3xs font-mono px-1.5 py-0.5 rounded transition-colors ${
-                                    active
-                                        ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                                        : "bg-[var(--bg-3)] text-[var(--text-muted)]"
-                                }`}
-                            >
-                                {tab.count}
-                            </span>
+                            <>
+                                <span
+                                    aria-hidden={tab.countLabel ? true : undefined}
+                                    title={tab.countLabel}
+                                    className={`text-3xs font-mono px-1.5 py-0.5 rounded transition-colors ${
+                                        tab.alarming
+                                            ? "bg-[var(--color-danger)]/15 text-[var(--color-danger)]"
+                                            : active
+                                              ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                                              : "bg-[var(--bg-3)] text-[var(--text-muted)]"
+                                    }`}
+                                >
+                                    {tab.count}
+                                </span>
+                                {/* A bare number reads as a size: say what it counts. */}
+                                {tab.countLabel && (
+                                    <span className="sr-only">
+                                        , {tab.countLabel}
+                                    </span>
+                                )}
+                            </>
                         )}
                     </button>
                 );

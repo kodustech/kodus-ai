@@ -37,6 +37,7 @@ import {
     createCLIKey,
     listCLIKeys,
     revokeCLIKey,
+    setCLIKeyRepositories,
     updateCLIKeyConfig,
 } from "@services/cliKeys/fetch";
 import {
@@ -44,6 +45,7 @@ import {
     type CLIKey,
     type CLIKeyCapability,
 } from "@services/cliKeys/types";
+import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { formatDistanceToNow } from "date-fns";
@@ -57,6 +59,14 @@ import {
 } from "lucide-react";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
+
+import {
+    repositoriesToSave,
+    RuntimeAccess,
+    sameRepositories,
+    usesRuntimeRepositories,
+    type RuntimeAccessDraft,
+} from "./_components/runtime-access";
 
 const createdAtFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -94,6 +104,15 @@ export const CliKeysPage = ({
         repositoryConfig: false,
         kodyRulesManage: false,
     });
+    const [runtimeDraft, setRuntimeDraft] = useState<RuntimeAccessDraft>({
+        runsRead: false,
+        repositoryIds: [],
+    });
+    // The team's repositories, fetched only while a key is being configured.
+    const teamRepositories = useGetSelectedRepositories(
+        teamId,
+        !!keyToConfigure,
+    );
     const [createdKey, setCreatedKey] = useState<string | null>(null);
     const [createdMessage, setCreatedMessage] = useState<string | undefined>();
     const [showKeyModal, setShowKeyModal] = useState(false);
@@ -164,6 +183,7 @@ export const CliKeysPage = ({
             repositoryConfig: boolean;
             kodyRulesManage: boolean;
         },
+        runtime: RuntimeAccessDraft,
     ) => {
         setUpdatingKeyId(cliKey.uuid);
         try {
@@ -172,7 +192,11 @@ export const CliKeysPage = ({
                     (capability) =>
                         capability !==
                             CLI_KEY_CAPABILITIES.CONFIG_REPO_MANAGE &&
-                        capability !== CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE,
+                        capability !== CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE &&
+                        capability !== CLI_KEY_CAPABILITIES.RUNS_READ &&
+                        capability !== CLI_KEY_CAPABILITIES.ENV_EXEC &&
+                        capability !== CLI_KEY_CAPABILITIES.ENV_FIX &&
+                        capability !== CLI_KEY_CAPABILITIES.FINDINGS_SUBMIT,
                 ) ?? [];
 
             const capabilities: CLIKeyCapability[] = [...otherCapabilities];
@@ -185,6 +209,35 @@ export const CliKeysPage = ({
                 capabilities.push(CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE);
             }
 
+            if (runtime.runsRead) {
+                capabilities.push(CLI_KEY_CAPABILITIES.RUNS_READ);
+            }
+
+            if (runtime.envExec) {
+                capabilities.push(CLI_KEY_CAPABILITIES.ENV_EXEC);
+            }
+
+            if (runtime.findingsSubmit) {
+                capabilities.push(CLI_KEY_CAPABILITIES.FINDINGS_SUBMIT);
+            }
+
+            if (runtime.envFix) {
+                capabilities.push(CLI_KEY_CAPABILITIES.ENV_FIX);
+            }
+
+            if (
+                usesRuntimeRepositories(runtime) &&
+                !teamRepositories.isSuccess &&
+                !sameRepositories(
+                    runtime.repositoryIds,
+                    cliKey.config?.repositoryIds,
+                )
+            ) {
+                throw new Error(
+                    "The team's repositories didn't load, so nothing was saved. Try again.",
+                );
+            }
+
             const updatedKey = await updateCLIKeyConfig({
                 teamId,
                 keyId: cliKey.uuid,
@@ -195,6 +248,29 @@ export const CliKeysPage = ({
 
             if (!updatedKey) {
                 throw new Error("The CLI key config could not be updated");
+            }
+
+            // The repository list has its own route. It is sent only when
+            // a Runtime capability is on and the list changed; switching the
+            // capabilities off keeps the list for when one is switched back on.
+            const repositoryIds = repositoriesToSave(
+                runtime.repositoryIds,
+                teamRepositories.data ?? [],
+            );
+            if (
+                usesRuntimeRepositories(runtime) &&
+                teamRepositories.isSuccess &&
+                !sameRepositories(repositoryIds, cliKey.config?.repositoryIds)
+            ) {
+                const saved = await setCLIKeyRepositories({
+                    teamId,
+                    keyId: cliKey.uuid,
+                    repositoryIds,
+                });
+                updatedKey.config = {
+                    ...updatedKey.config,
+                    repositoryIds: saved?.repositoryIds ?? repositoryIds,
+                };
             }
 
             setKeys((currentKeys) =>
@@ -231,12 +307,28 @@ export const CliKeysPage = ({
                 CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE,
             ),
         });
+        setRuntimeDraft({
+            runsRead: thisKeyHasCapability(
+                cliKey,
+                CLI_KEY_CAPABILITIES.RUNS_READ,
+            ),
+            envExec: thisKeyHasCapability(
+                cliKey,
+                CLI_KEY_CAPABILITIES.ENV_EXEC,
+            ),
+            envFix: thisKeyHasCapability(cliKey, CLI_KEY_CAPABILITIES.ENV_FIX),
+            findingsSubmit: thisKeyHasCapability(
+                cliKey,
+                CLI_KEY_CAPABILITIES.FINDINGS_SUBMIT,
+            ),
+            repositoryIds: cliKey.config?.repositoryIds ?? [],
+        });
     };
 
     const handleSaveKeyConfig = async () => {
         if (!keyToConfigure) return;
 
-        await handleUpdateKeyConfig(keyToConfigure, configDraft);
+        await handleUpdateKeyConfig(keyToConfigure, configDraft, runtimeDraft);
         setKeyToConfigure(null);
     };
 
@@ -667,6 +759,15 @@ export const CliKeysPage = ({
                                     }
                                 />
                             </div>
+
+                            <RuntimeAccess
+                                repositories={teamRepositories.data ?? []}
+                                isLoading={teamRepositories.isLoading}
+                                isError={teamRepositories.isError}
+                                draft={runtimeDraft}
+                                onChange={setRuntimeDraft}
+                                disabled={updatingKeyId === keyToConfigure.uuid}
+                            />
                         </div>
                     )}
 

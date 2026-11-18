@@ -53,6 +53,11 @@ export const TASK_META: Record<string, { label: string; description: string }> =
             description:
                 "Deep scans of whole repositories: the map, the lenses, the finding records and the reproduction tests.",
         },
+        "runtime": {
+            label: TASK_LABELS.runtime,
+            description:
+                "The Kody Runtime agent planning and checking runs that test a pull request in a live environment — the model set for Kody Runtime.",
+        },
         "": {
             label: "Unrouted",
             description:
