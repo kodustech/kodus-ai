@@ -48,6 +48,7 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
     type IPullRequestsService,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import type { IDeliveredSuggestion } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 @Injectable()
 export class PreviewPrApprovalUseCase {
@@ -235,7 +236,7 @@ export class PreviewPrApprovalUseCase {
                         ],
                     );
                 const host = pullRequestHost(pr.prURL);
-                const commentIds: Array<string | number | undefined> = [];
+                const deliveredSuggestions: IDeliveredSuggestion[] = [];
                 for (const candidate of candidates) {
                     const provider = parsePlatformType(candidate.provider);
                     if (
@@ -247,15 +248,18 @@ export class PreviewPrApprovalUseCase {
                     if (!host || !storedHost)
                         return hold(REVIEW_FINDINGS_UNVERIFIED);
                     if (storedHost !== host) continue;
-                    if (!candidate.suggestions?.length)
+                    if (
+                        !Array.isArray(candidate.suggestions) ||
+                        !candidate.suggestions.length
+                    )
                         return hold(REVIEW_FINDINGS_UNVERIFIED);
-                    for (const { comment } of candidate.suggestions) {
-                        commentIds.push(comment?.id);
+                    for (const suggestion of candidate.suggestions) {
+                        deliveredSuggestions.push(suggestion);
                     }
                 }
                 const reason = await deliveredReviewFindingsHoldReason(
-                    commentIds,
-                    summary.lineFindings,
+                    deliveredSuggestions,
+                    summary,
                     platformType,
                     () =>
                         platformType === PlatformType.GITHUB

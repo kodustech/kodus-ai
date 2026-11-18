@@ -34,6 +34,8 @@ import {
     SUMMARY_GENERATION_FAILED_REASON,
 } from '../constants/error-reasons';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
+import { normalizeReviewFindingId } from '@libs/code-review/domain/approval/verify-delivered-review-findings';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
 @Injectable()
 export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -105,6 +107,14 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 draft.approvalPolicyEligibility = result.eligibility;
                 draft.approvalReviewSummary = {
                     lineFindings: context.lineComments?.length ?? 0,
+                    lineCommentIds: (context.lineComments ?? []).map(
+                        (finding) =>
+                            finding.deliveryStatus === DeliveryStatus.SENT
+                                ? (normalizeReviewFindingId(
+                                      finding.codeReviewFeedbackData?.commentId,
+                                  ) ?? null)
+                                : null,
+                    ),
                     prFindings: context.prLevelCommentResults?.length ?? 0,
                     complete:
                         Array.isArray(context.lineComments) &&

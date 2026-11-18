@@ -275,6 +275,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     approvalPolicyEligibility?: import('../services/approval-policies.service').ApprovalEligibilityCache;
     approvalReviewSummary?: {
         lineFindings: number;
+        /** One entry per line finding. Null marks publication without a verifiable ID. */
+        lineCommentIds?: Array<string | null>;
         prFindings: number;
         complete: boolean;
     };

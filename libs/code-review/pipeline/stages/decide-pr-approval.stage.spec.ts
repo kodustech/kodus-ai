@@ -3,6 +3,7 @@ import { LLM } from '@libs/llm/llm';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/code-area-risk-map.service';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { DecidePrApprovalStage } from './decide-pr-approval.stage';
 
@@ -193,6 +194,45 @@ it('does not count a failed shared assessment as an unclean review for named pol
         expect.objectContaining({ reviewClean: true }),
     );
     expect(result.approvalReviewSummary.complete).toBe(true);
+});
+
+it('records the exact posted comment IDs and missing delivery evidence for named approval', async () => {
+    const policyStage = new DecidePrApprovalStage(
+        codeManagement as unknown as CodeManagementService,
+        areaMaps as unknown as CodeAreaRiskMapService,
+        conditionalApprovalAccess as any,
+        {
+            evaluate: jest
+                .fn()
+                .mockResolvedValue({
+                    decision: { kind: 'hold' },
+                    eligibility: {},
+                }),
+        } as any,
+    );
+    const result = await policyStage.execute({
+        ...context({ approvalPolicies: [] }),
+        lineComments: [
+            {
+                comment: { path: 'src/auth/login.ts', body: 'Finding' },
+                deliveryStatus: DeliveryStatus.SENT,
+                codeReviewFeedbackData: {
+                    commentId: 42,
+                    pullRequestReviewId: 1,
+                    suggestionId: 'posted',
+                },
+            },
+            {
+                comment: { path: 'src/auth/login.ts', body: 'Another finding' },
+                deliveryStatus: DeliveryStatus.FAILED,
+            },
+        ],
+    });
+    expect(result.approvalReviewSummary).toMatchObject({
+        complete: true,
+        lineFindings: 2,
+        lineCommentIds: ['42', null],
+    });
 });
 
 it('holds a saved conditional policy when beta or paid access is unavailable', async () => {
