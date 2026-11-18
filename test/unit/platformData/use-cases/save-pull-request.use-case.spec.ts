@@ -201,6 +201,10 @@ describe('SavePullRequestUseCase', () => {
                 expect(callArgs[2]).toEqual([]);
                 expect(callArgs[7]).toEqual([]);
                 expect(callArgs[9]).toEqual({ filesUnchanged: true });
+                // Nothing is read back from the database either.
+                expect(
+                    mockPullRequestsRepository.findByNumberAndRepositoryId,
+                ).not.toHaveBeenCalled();
             });
 
             it('should use empty arrays when action is "closed" and PR does not exist in DB', async () => {
@@ -330,6 +334,9 @@ describe('SavePullRequestUseCase', () => {
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0][9],
                 ).toEqual({ filesUnchanged: true });
+                expect(
+                    mockPullRequestsRepository.findByNumberAndRepositoryId,
+                ).not.toHaveBeenCalled();
             });
         });
 
