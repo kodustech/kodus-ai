@@ -136,6 +136,7 @@ describe('runSecurityScanSliceChild', () => {
         jest.useFakeTimers();
         const child = new FakeChild();
         child.kill = jest.fn((signal?: string) => {
+            child.killed = true;
             if (signal === 'SIGKILL') {
                 child.emit('exit', null, 'SIGKILL');
             }
