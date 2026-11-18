@@ -238,6 +238,35 @@ describe('resolveUltraTrio', () => {
         ]);
     });
 
+    it('refuses two ids that are the same model, through another provider', () => {
+        const c = config();
+        c.credentials.push(credential('c-or', 'open_router'));
+        c.models.push({
+            id: 'm-sol-or',
+            credentialId: 'c-or',
+            model: 'openai/gpt-6.1-sol',
+        });
+        c.routing!.ultraModelIds = ['m-sol', 'm-opus', 'm-sol-or'];
+        expect(resolveUltraTrio(c)).toMatchObject({
+            ok: false,
+            reason: 'same_model',
+        });
+    });
+
+    it('saving the mode asks for all three to run: a managed or removed one is refused', () => {
+        const c = config();
+        c.routing!.ultraModelIds = ['m-sol', 'm-managed', 'm-gone'];
+        expect(resolveUltraTrio(c, { forSave: true })).toEqual({
+            ok: false,
+            reason: 'some_unavailable',
+            ownModels: 4,
+            unavailable: 2,
+        });
+        // At review time the one left still runs.
+        expect(resolveUltraTrio(c).ok).toBe(true);
+        expect(resolveUltraTrio(config(), { forSave: true }).ok).toBe(true);
+    });
+
     it('refuses when none of the three resolves any more', () => {
         const c = config();
         c.routing!.ultraModelIds = ['x', 'y', 'z'];

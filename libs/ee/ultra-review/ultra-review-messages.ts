@@ -33,6 +33,8 @@ export function ultraPullRequestScreenUrl(input: {
     return `${appUrl()}/pull-requests${query ? `?${query}` : ''}`;
 }
 
+const code = (text: string): string => `\`${text.replace(/`/g, "'")}\``;
+
 const NOT_REVIEWED =
     'This pull request was not reviewed. `@kody start-review --heavy` or `--balanced` reviews it on one model.';
 
@@ -48,8 +50,12 @@ export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
             return `Ultra review runs on three of your own models, and this organization has ${refusal.ownModels} configured. Add models with your own keys in AI providers and pick three for Ultra in ${settings}. ${NOT_REVIEWED}`;
         case 'not_configured':
             return `Ultra review runs on three different models set for it, and this organization does not have three set. Pick them under Ultra models in ${settings}. ${NOT_REVIEWED}`;
+        case 'same_model':
+            return `Ultra review runs on three different models, and two of the three set for it are ${code(refusal.model)}. Pick another under Ultra models in ${settings}. ${NOT_REVIEWED}`;
         case 'unavailable_models':
             return `None of the three models set for Ultra review can run any more: they were removed, or their keys were. Pick three again under Ultra models in ${settings}. ${NOT_REVIEWED}`;
+        case 'some_unavailable':
+            return `${refusal.unavailable} of the three models set for Ultra review cannot run. Pick them again under Ultra models in ${settings}. ${NOT_REVIEWED}`;
     }
 }
 
@@ -65,15 +71,17 @@ export function ultraSaveRefusalMessage(
             return `Ultra review needs three of your own models, and this organization has ${refusal.ownModels}, so the review mode was not changed.`;
         case 'not_configured':
             return 'Ultra review needs three different models set under Ultra models in Routing, so the review mode was not changed.';
+        case 'same_model':
+            return `Ultra review needs three different models, and two of the three set for it are ${code(refusal.model)}, so the review mode was not changed.`;
         case 'unavailable_models':
             return 'None of the three models set for Ultra review can run any more, so the review mode was not changed.';
+        case 'some_unavailable':
+            return `${refusal.unavailable} of the three models set for Ultra review cannot run: each must be one of your own models, with its key. The review mode was not changed.`;
     }
 }
 
 const label = (run: { position: UltraRunOutcome['position'] }): string =>
     run.position === 'fallback' ? 'Fallback' : `Model ${run.position}`;
-
-const code = (text: string): string => `\`${text.replace(/`/g, "'")}\``;
 
 /** What each model run ended as, one line per model, for the notice. */
 function runLines(state: UltraReviewState): string[] {
@@ -151,7 +159,9 @@ export function ultraDegradedNotice(
         '',
         completed > 0
             ? `${completed} of 3 models completed, and their comments were posted. Automatic approval is held for this review.`
-            : "No model completed, so the models' comments were not posted.",
+            : (state.runs ?? []).some((r) => (r.findings ?? 0) > 0)
+              ? 'No model completed. The comments the models found before they stopped were posted. Automatic approval is held for this review.'
+              : 'No model completed, and none left comments to post.',
         '',
         `[See this review on the Pull Requests screen](${ultraPullRequestScreenUrl(link)})`,
         '',

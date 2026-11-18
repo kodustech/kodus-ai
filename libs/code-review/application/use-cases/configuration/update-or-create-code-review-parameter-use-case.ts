@@ -921,6 +921,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                         await this.permissionValidationService.getBYOKConfig(
                             organizationAndTeamData,
                         ),
+                        { forSave: true },
                     ),
                 );
                 if (refusal) {

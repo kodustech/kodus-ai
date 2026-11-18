@@ -22,7 +22,7 @@ import {
 import { getModelName } from '@libs/llm/managed-slot';
 import { resolveModelSlot } from '@libs/llm/resolve-model-slot';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
-import { pickMergeModelIndex } from './ultra-merge-ranking';
+import { normalizeModelId, pickMergeModelIndex } from './ultra-merge-ranking';
 
 const logger = createLogger('UltraReviewPlan');
 
@@ -90,8 +90,12 @@ export type UltraTrioRefusal =
     | { reason: 'too_few_models'; ownModels: number }
     /** Three own models, but no three different ones set for Ultra. */
     | { reason: 'not_configured'; ownModels: number }
+    /** Two of the three set are the same model, through any provider. */
+    | { reason: 'same_model'; ownModels: number; model: string }
     /** None of the three set resolves any more. */
-    | { reason: 'unavailable_models'; ownModels: number };
+    | { reason: 'unavailable_models'; ownModels: number }
+    /** Saving: some of the three set cannot run (managed, removed, no key). */
+    | { reason: 'some_unavailable'; ownModels: number; unavailable: number };
 
 /**
  * The slot an Ultra model runs on: the model routed as the heavy task with
@@ -129,10 +133,12 @@ const ultraModel = (
  * for Ultra, each with the slot it runs on, the org fallback and the model the
  * merge runs on. A model of the three that no longer resolves is listed as
  * unavailable and counts as failed when the review runs; Ultra is refused only
- * when none of the three resolves.
+ * when none of the three resolves. Saving the Ultra mode (`forSave`) asks for
+ * all three to resolve. Two that are the same model are refused either way.
  */
 export function resolveUltraTrio(
     storedConfig: unknown,
+    options: { forSave?: boolean } = {},
 ):
     | ({ ok: true } & Pick<
           UltraReviewState,
@@ -175,6 +181,27 @@ export function resolveUltraTrio(
             reason: 'unavailable_models',
             ownModels: own.length,
         };
+    }
+    if (options.forSave && unavailable.length) {
+        return {
+            ok: false,
+            reason: 'some_unavailable',
+            ownModels: own.length,
+            unavailable: unavailable.length,
+        };
+    }
+    const seen = new Set<string>();
+    for (const m of models) {
+        const id = normalizeModelId(m.slot.model ?? '');
+        if (seen.has(id)) {
+            return {
+                ok: false,
+                reason: 'same_model',
+                ownModels: own.length,
+                model: m.modelName,
+            };
+        }
+        seen.add(id);
     }
 
     const fallbackId = storedConfig.routing?.fallbackModelId?.trim();

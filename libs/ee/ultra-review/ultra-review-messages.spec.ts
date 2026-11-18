@@ -44,26 +44,40 @@ describe('ultraDegradedNotice', () => {
         expect(notice).toContain('Model 2 (`gone`) failed: Removed.');
     });
 
-    it("with no model completed, says the models' comments were not posted (Kody Rules may have been)", () => {
-        const notice = ultraDegradedNotice(
-            {
-                models: [model(1, 'a')],
-                mergeModel: model(1, 'a'),
-                runs: [
-                    {
-                        position: 1,
-                        modelId: 'a',
-                        modelName: 'openai:a',
-                        status: 'failed',
-                        failureReason: 'Down.',
-                    },
-                ],
-                outcome: 'failed',
-            },
-            { prNumber: 7 },
-        );
-        expect(notice).toContain(
-            "No model completed, so the models' comments were not posted.",
-        );
+    describe('with no model completed', () => {
+        const failedWith = (findings?: number) =>
+            ultraDegradedNotice(
+                {
+                    models: [model(1, 'a')],
+                    mergeModel: model(1, 'a'),
+                    runs: [
+                        {
+                            position: 1,
+                            modelId: 'a',
+                            modelName: 'openai:a',
+                            status: 'failed',
+                            failureReason: 'Down.',
+                            ...(findings !== undefined && { findings }),
+                        },
+                    ],
+                    outcome: 'failed',
+                },
+                { prNumber: 7 },
+            );
+
+        it('says the partial comments were posted when a model left some', () => {
+            expect(failedWith(2)).toContain(
+                'No model completed. The comments the models found before they stopped were posted.',
+            );
+        });
+
+        it('says nothing was posted when none left comments', () => {
+            expect(failedWith(0)).toContain(
+                'No model completed, and none left comments to post.',
+            );
+            expect(failedWith()).toContain(
+                'No model completed, and none left comments to post.',
+            );
+        });
     });
 });
