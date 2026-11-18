@@ -1,6 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
 import { IMessageBrokerService } from '@libs/core/domain/contracts/message-broker.service.contracts';
@@ -86,7 +86,7 @@ export class CodeReviewFeedbackCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_SYNC_CODE_REVIEW_REACTIONS, {
+    @GatedCron(API_CRON_SYNC_CODE_REVIEW_REACTIONS, {
         name: 'Sync Code Review Reactions',
         timeZone: 'America/Sao_Paulo',
     })

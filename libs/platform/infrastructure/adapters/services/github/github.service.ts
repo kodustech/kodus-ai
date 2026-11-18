@@ -204,6 +204,17 @@ interface GitHubInstallationData {
 /** A compare response lists at most this many files, with no way to page. */
 const GITHUB_COMPARE_MAX_FILES = 300;
 
+/** Who opened a PR in this many days counts as a recent PR author. */
+const PULL_REQUEST_AUTHORS_WINDOW_DAYS = 60;
+
+/**
+ * Repositories whose PR list is walked at the same time. GitHub's secondary
+ * rate limit forbids more than 100 concurrent requests per token, and the
+ * client fails fast on it, so an organization with hundreds of repositories
+ * must not list them all at once.
+ */
+const PULL_REQUEST_AUTHORS_REPO_CONCURRENCY = 10;
+
 /** GitHub said the App installation is uninstalled or suspended. */
 export class InstallationUnavailableError extends Error {}
 
@@ -2697,7 +2708,11 @@ export class GithubService
 
     async getPullRequestAuthors(params: {
         organizationAndTeamData: OrganizationAndTeamData;
+        requireLoaded?: boolean;
     }): Promise<PullRequestAuthor[]> {
+        let failedRepositories = 0;
+        const authorsData = new Map<string, PullRequestAuthor>();
+
         try {
             const githubAuthDetail = await this.getGithubAuthDetails(
                 params.organizationAndTeamData,
@@ -2716,58 +2731,84 @@ export class GithubService
                 params?.organizationAndTeamData,
             );
             const since = new Date();
-            since.setDate(since.getDate() - 60);
+            since.setDate(since.getDate() - PULL_REQUEST_AUTHORS_WINDOW_DAYS);
+            const sinceTime = since.getTime();
 
-            const authorsSet = new Set<string>();
-            const authorsData = new Map<string, PullRequestAuthor>();
+            const limit = pLimit(PULL_REQUEST_AUTHORS_REPO_CONCURRENCY);
 
-            // Busca paralela otimizada
-            const repoPromises = allRepositories.map(async (repo) => {
-                try {
-                    const { data } = await octokit.rest.pulls.list({
-                        owner: this.ownerOf(repo, githubAuthDetail),
-                        repo: repo.name,
-                        state: 'all',
-                        since: since.toISOString(),
-                        per_page: 100,
-                        sort: 'created',
-                        direction: 'desc',
-                    });
-
-                    // Para na primeira contribuição de cada usuário
-                    for (const pr of data) {
-                        if (pr.user?.id) {
-                            const userId = pr.user.id.toString();
-
-                            if (!authorsSet.has(userId)) {
-                                authorsSet.add(userId);
-                                authorsData.set(userId, {
-                                    id: pr.user.id.toString(),
-                                    name: pr.user.login,
-                                    type:
-                                        pr.user.type === 'Bot' ? 'bot' : 'user',
-                                });
-                            }
+            const repoPromises = allRepositories.map((repo) =>
+                limit(async () => {
+                    try {
+                        // "List pull requests" has no `since` filter, so
+                        // the window is walked page by page: newest first,
+                        // stopping at the first PR created before it. One
+                        // page of 100 left out anyone, a bot included,
+                        // whose last PR was not among the newest 100.
+                        // Authors are taken page by page, so a later page
+                        // that fails keeps the ones already read.
+                        await octokit.paginate(
+                            octokit.rest.pulls.list,
+                            {
+                                owner: this.ownerOf(repo, githubAuthDetail),
+                                repo: repo.name,
+                                state: 'all',
+                                per_page: 100,
+                                sort: 'created',
+                                direction: 'desc',
+                            },
+                            (response, done) => {
+                                for (const pr of response.data) {
+                                    if (
+                                        new Date(pr.created_at).getTime() <
+                                        sinceTime
+                                    ) {
+                                        done();
+                                        break;
+                                    }
+                                    const userId = pr.user?.id?.toString();
+                                    if (userId && !authorsData.has(userId)) {
+                                        authorsData.set(userId, {
+                                            id: userId,
+                                            name: pr.user.login,
+                                            type:
+                                                pr.user.type === 'Bot'
+                                                    ? 'bot'
+                                                    : 'user',
+                                        });
+                                    }
+                                }
+                                return [];
+                            },
+                        );
+                    } catch (error) {
+                        // A 404 means the credential cannot see the
+                        // repository (deleted, dropped from the install,
+                        // made private), so no review runs there and none
+                        // of its authors needs a seat for it. The selection
+                        // never drops a repository, so failing on it would
+                        // stop the seat prune for good.
+                        const hidden = error?.status === 404;
+                        if (!hidden) {
+                            failedRepositories += 1;
                         }
+                        this.logger[hidden ? 'warn' : 'error']({
+                            message: hidden
+                                ? 'Repository not visible to the credential; listed with no pull request authors'
+                                : 'Could not list the pull request authors of a repository',
+                            context: GithubService.name,
+                            error: error,
+                            metadata: {
+                                organizationAndTeamData:
+                                    params?.organizationAndTeamData,
+                                repository: repo.name,
+                                status: error?.status,
+                            },
+                        });
                     }
-                } catch (error) {
-                    this.logger.error({
-                        message: 'Error in getPullRequestAuthors',
-                        context: GithubService.name,
-                        error: error,
-                        metadata: {
-                            organizationAndTeamData:
-                                params?.organizationAndTeamData,
-                        },
-                    });
-                }
-            });
+                }),
+            );
 
             await Promise.all(repoPromises);
-
-            return Array.from(authorsData.values()).sort((a, b) =>
-                a.name.localeCompare(b.name),
-            );
         } catch (err) {
             this.logger.error({
                 message: 'Error in getPullRequestAuthors',
@@ -2777,8 +2818,24 @@ export class GithubService
                     organizationAndTeamData: params?.organizationAndTeamData,
                 },
             });
+            if (params.requireLoaded) {
+                throw err;
+            }
             return [];
         }
+
+        // The seat prune revokes whoever is missing, so a repository whose
+        // list could not be read (a rate limit on page N, an outage) must
+        // fail the call instead of passing for "nobody opened a PR there".
+        if (params.requireLoaded && failedRepositories > 0) {
+            throw new Error(
+                `Could not list pull request authors for ${failedRepositories} of the configured GitHub repositories`,
+            );
+        }
+
+        return Array.from(authorsData.values()).sort((a, b) =>
+            a.name.localeCompare(b.name),
+        );
     }
 
     async addAccessToken(

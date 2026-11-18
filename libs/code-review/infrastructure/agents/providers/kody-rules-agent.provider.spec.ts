@@ -2435,6 +2435,25 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         const out = await provider.execute(
             input({
                 repoLookup: lookup,
+                // The hunk must define a symbol: one that defines none asks
+                // the repository nothing, so the flip would never be reached.
+                changedFiles: [
+                    {
+                        filename: 'src/a.ts',
+                        status: 'modified',
+                        patch: [
+                            '@@ -1,2 +1,4 @@',
+                            ' line one',
+                            ' line two',
+                            "+import { formatDate } from '../shared/date';",
+                            '+export function renderInvoice(order) {}',
+                        ].join('\n'),
+                        patchWithLinesStr: [
+                            "3 +import { formatDate } from '../shared/date';",
+                            '4 +export function renderInvoice(order) {}',
+                        ].join('\n'),
+                    },
+                ],
                 kodyRules: [
                     RULE,
                     {
