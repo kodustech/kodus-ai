@@ -41,8 +41,10 @@ export interface StallReport {
      * inspector only after more than a second, so what it showed may have
      * run after the stall (a synchronous native call, a long builtin such as
      * a regex, a long GC). `no-answer`: it never answered within the bound.
+     * `not-captured`: the watchdog was still capturing an earlier stall.
      */
-    stackUnavailable?: 'ended-before-read' | 'answered-late' | 'no-answer';
+    stackUnavailable?:
+        'ended-before-read' | 'answered-late' | 'no-answer' | 'not-captured';
     /** The profile also covers time after the stall ended. */
     profileIncludesRecovery?: boolean;
     /** Human-readable location, as used in the log line and the alert. */
@@ -432,6 +434,8 @@ export function stallWatchdogThread(): void {
             'code the inspector could not interrupt (no answer within the bound: likely a synchronous native call such as execSync, a *Sync fs/zlib/crypto call or a native addon)',
         'ended-before-read':
             'an unknown place (the stall ended before its stack was read)',
+        'not-captured':
+            'an unknown place (not captured: the watchdog was still capturing an earlier stall)',
     };
 
     function describe(
@@ -455,6 +459,77 @@ export function stallWatchdogThread(): void {
             `Main thread recovered after a ${Math.round(stalledMs / 1000)}s stall`,
             { kind: 'recovered', stalledMs },
         );
+    }
+
+    type StallRecord = NonNullable<typeof stall>;
+
+    // One stall report (log line, parent message) and, for the first one of
+    // a stall, the BetterStack alert. Every stall gets this, captured or not.
+    function reportStall(
+        s: StallRecord,
+        n: number,
+        r: {
+            stack: ReturnType<typeof frame>[] | null;
+            hottest?: StallReport['hottest'];
+            hottestPath?: StallFrame[];
+            profileIncludesRecovery?: boolean;
+            recoveredBeforeRead?: boolean;
+            stackUnavailable?: StallReport['stackUnavailable'];
+            error?: string;
+        },
+    ) {
+        const {
+            stack,
+            hottest,
+            hottestPath,
+            profileIncludesRecovery,
+            recoveredBeforeRead,
+            stackUnavailable,
+            error,
+        } = r;
+        // A stall that ended during the capture keeps its real length, not
+        // the capture's.
+        const stalledMs = s.endedMs ?? Date.now() - s.start;
+        const where = describe(stack, hottest, stackUnavailable, error);
+        emit(
+            'error',
+            `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${where}`,
+            {
+                kind: 'stall',
+                stalledMs,
+                capture: n,
+                stack,
+                hottest,
+                hottestPath,
+                location: where,
+                ...(recoveredBeforeRead
+                    ? { stackReadAfterRecovery: true }
+                    : {}),
+                ...(stackUnavailable ? { stackUnavailable } : {}),
+                ...(profileIncludesRecovery
+                    ? { profileIncludesRecovery: true }
+                    : {}),
+                ...(error !== undefined ? { error } : {}),
+            },
+        );
+        if (n <= 1) {
+            void heartbeat('/fail', {
+                message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
+                    cfg.identity,
+                )
+                    .map(([k, v]) => `${k}=${v}`)
+                    .join(' ')}`,
+                context: {
+                    monitor: 'worker_stall',
+                    ...cfg.identity,
+                    stalledMs,
+                    location: where,
+                    stackUnavailable,
+                    stack: (stack ?? []).slice(0, 12),
+                    hottest: (hottest ?? []).slice(0, 5),
+                },
+            });
+        }
     }
 
     setInterval(() => {
@@ -498,68 +573,7 @@ export function stallWatchdogThread(): void {
                             String(e) ||
                             'capture failed without a message',
                     }))
-                    .then(
-                        ({
-                            stack,
-                            hottest,
-                            hottestPath,
-                            profileIncludesRecovery,
-                            recoveredBeforeRead,
-                            stackUnavailable,
-                            error,
-                        }) => {
-                            // A stall that ended during the capture keeps
-                            // its real length, not the capture's.
-                            const stalledMs = s.endedMs ?? Date.now() - s.start;
-                            const where = describe(
-                                stack,
-                                hottest,
-                                stackUnavailable,
-                                error,
-                            );
-                            emit(
-                                'error',
-                                `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${where}`,
-                                {
-                                    kind: 'stall',
-                                    stalledMs,
-                                    capture: n,
-                                    stack,
-                                    hottest,
-                                    hottestPath,
-                                    location: where,
-                                    ...(recoveredBeforeRead
-                                        ? { stackReadAfterRecovery: true }
-                                        : {}),
-                                    ...(stackUnavailable
-                                        ? { stackUnavailable }
-                                        : {}),
-                                    ...(profileIncludesRecovery
-                                        ? { profileIncludesRecovery: true }
-                                        : {}),
-                                    ...(error !== undefined ? { error } : {}),
-                                },
-                            );
-                            if (n === 1) {
-                                void heartbeat('/fail', {
-                                    message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
-                                        cfg.identity,
-                                    )
-                                        .map(([k, v]) => `${k}=${v}`)
-                                        .join(' ')}`,
-                                    context: {
-                                        monitor: 'worker_stall',
-                                        ...cfg.identity,
-                                        stalledMs,
-                                        location: where,
-                                        stackUnavailable,
-                                        stack: (stack ?? []).slice(0, 12),
-                                        hottest: (hottest ?? []).slice(0, 5),
-                                    },
-                                });
-                            }
-                        },
-                    )
+                    .then((r) => reportStall(s, n, r))
                     .finally(() => {
                         capturingFor = null;
                         // The recovery is reported after this stall's own
@@ -577,7 +591,16 @@ export function stallWatchdogThread(): void {
             stall = null;
             s.endedMs = now - lag - s.start;
             if (capturingFor === s) s.recoveryPending = true;
-            else emitRecovered(s.endedMs);
+            else {
+                // A stall that never got a capture (the slot was busy with an
+                // earlier stall's) is still a stall: report and alert it.
+                if (s.captures === 0)
+                    reportStall(s, 0, {
+                        stack: null,
+                        stackUnavailable: 'not-captured',
+                    });
+                emitRecovered(s.endedMs);
+            }
         }
 
         if (
