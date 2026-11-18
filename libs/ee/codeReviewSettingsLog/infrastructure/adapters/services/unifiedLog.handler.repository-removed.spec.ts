@@ -112,7 +112,7 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
         expect(created[0].repository.name).toBe('kept');
     });
 
-    it('looks the repository up once for a burst of entries about it', async () => {
+    it('looks the repository up once for a burst of entries about it, fired at once as the events are', async () => {
         const { handler, created, errorLog, integrationLookup } = build([
             {
                 configValue: [{ id: 'repo-kept' }],
@@ -120,9 +120,13 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
             },
         ]);
 
-        for (let i = 0; i < 26; i++) {
-            await handler.logAction(deleteRuleOf('repo-removed'));
-        }
+        // kodyRules.service emits the audit events without awaiting them,
+        // so the 26 entries of one removal run concurrently.
+        await Promise.all(
+            Array.from({ length: 26 }, () =>
+                handler.logAction(deleteRuleOf('repo-removed')),
+            ),
+        );
 
         expect(created).toHaveLength(26);
         expect(created.every((e) => e.repository.name === 'Unknown')).toBe(

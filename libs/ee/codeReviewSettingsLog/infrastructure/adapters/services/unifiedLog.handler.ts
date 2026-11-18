@@ -425,11 +425,12 @@ export class UnifiedLogHandler {
     /**
      * Removing the synced Kody Rules of a repository writes one entry per
      * rule, 26 in a row in prod (issue #2581), and each one asked for the
-     * same name. The answer is kept briefly per repository, including "not
-     * in the integration"; any other failure is not kept, so the next entry
-     * asks again.
+     * same name. The events are emitted without being awaited, so those
+     * entries run at the same time: the lookup in flight is shared, and its
+     * answer is kept briefly per repository, "not in the integration"
+     * included. Any other failure is dropped, so the next entry asks again.
      */
-    private async getRepositoryName(
+    private getRepositoryName(
         repositoryId: string,
         organizationId: string,
     ): Promise<string> {
@@ -437,32 +438,24 @@ export class UnifiedLogHandler {
         const now = Date.now();
         const cached = this.repositoryNames.get(key);
         if (cached && cached.expiresAt > now) {
-            if (cached.error) {
-                throw cached.error;
-            }
             return cached.name;
         }
 
-        try {
-            const name =
-                await this.contextResolutionService.getRepositoryNameByOrganizationAndRepository(
-                    organizationId,
-                    repositoryId,
-                );
-            this.remember(key, {
-                name,
-                expiresAt: now + REPOSITORY_NAME_TTL_MS,
-            });
-            return name;
-        } catch (error) {
-            if (error instanceof RepositoryNotIntegratedError) {
-                this.remember(key, {
-                    error,
-                    expiresAt: now + REPOSITORY_NAME_TTL_MS,
-                });
+        const name =
+            this.contextResolutionService.getRepositoryNameByOrganizationAndRepository(
+                organizationId,
+                repositoryId,
+            );
+        this.remember(key, { name, expiresAt: now + REPOSITORY_NAME_TTL_MS });
+        name.catch((error) => {
+            if (
+                !(error instanceof RepositoryNotIntegratedError) &&
+                this.repositoryNames.get(key)?.name === name
+            ) {
+                this.repositoryNames.delete(key);
             }
-            throw error;
-        }
+        });
+        return name;
     }
 
     private remember(key: string, entry: CachedRepositoryName): void {
@@ -477,6 +470,4 @@ export class UnifiedLogHandler {
 const REPOSITORY_NAME_TTL_MS = 60_000;
 const REPOSITORY_NAME_CACHE_MAX = 1_000;
 
-type CachedRepositoryName =
-    | { name: string; error?: undefined; expiresAt: number }
-    | { name?: undefined; error: Error; expiresAt: number };
+type CachedRepositoryName = { name: Promise<string>; expiresAt: number };
