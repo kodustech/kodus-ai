@@ -81,6 +81,9 @@ export interface BYOKRouting {
     /** Single fallback model id used when the resolved tier fails the capability
      *  gate and no higher-precedence capable model exists (REQ-ROUTE-01). */
     fallbackModelId?: string;
+    /** The three model ids an Ultra review runs the heavy review on, in the
+     *  order the team set them (libs/ee/ultra-review). */
+    ultraModelIds?: string[];
 }
 
 export interface BYOKConfig {

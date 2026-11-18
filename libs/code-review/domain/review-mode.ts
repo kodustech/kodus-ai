@@ -2,9 +2,9 @@ import type { ReviewMode } from '@libs/core/infrastructure/config/types/general/
 import type { RiskReviewRouting } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import type { RiskAssessmentResult } from './risk/risk-assessment';
 
-/** The mode a review command asks for (`--balanced` / `--heavy`), over the
- *  mode set in settings. */
-export type RequestedReviewMode = 'balanced' | 'heavy';
+/** The mode a review command asks for (`--balanced` / `--heavy` /
+ *  `--ultra`), over the mode set in settings. */
+export type RequestedReviewMode = 'balanced' | 'heavy' | 'ultra';
 
 /** Resolve before model selection. Commands win; unavailable risk uses settings. */
 export function resolveRiskReviewMode(input: {
@@ -33,7 +33,8 @@ export function resolveRiskReviewMode(input: {
 
 /**
  * Whether a review runs heavy: the mode the command asked for, else the mode
- * set in settings. A `fast` review never runs heavy.
+ * set in settings. A `fast` review never runs heavy. Ultra is not heavy here:
+ * its runs route their own models (libs/ee/ultra-review).
  */
 export function isHeavyReview(
     requested: RequestedReviewMode | undefined,
@@ -41,6 +42,15 @@ export function isHeavyReview(
 ): boolean {
     if (configured === 'fast') return false;
     return (requested ?? configured) === 'heavy';
+}
+
+/** Whether a review asks for Ultra: the command's mode, else the settings'. */
+export function isUltraReview(
+    requested: RequestedReviewMode | undefined,
+    configured: ReviewMode | undefined,
+): boolean {
+    if (configured === 'fast') return false;
+    return (requested ?? configured) === 'ultra';
 }
 
 /**
@@ -72,9 +82,25 @@ export function reviewModeOfExecution(
     if (!reviewed) return undefined;
     if (
         dataExecution.reviewMode === 'heavy' ||
-        dataExecution.reviewMode === 'balanced'
+        dataExecution.reviewMode === 'balanced' ||
+        dataExecution.reviewMode === 'ultra'
     ) {
         return dataExecution.reviewMode;
     }
     return dataExecution.heavy === true ? 'heavy' : 'balanced';
+}
+
+/**
+ * The mode the last review of a PR ran in, for a command asking another one:
+ * the stored mode, else `heavy` from the older flag, else `balanced`. Unlike
+ * reviewModeOfExecution, an execution that reviewed nothing still answers.
+ */
+export function lastReviewModeOf(
+    dataExecution: Record<string, any> | null | undefined,
+): RequestedReviewMode {
+    const mode = dataExecution?.reviewMode;
+    if (mode === 'heavy' || mode === 'balanced' || mode === 'ultra') {
+        return mode;
+    }
+    return dataExecution?.heavy === true ? 'heavy' : 'balanced';
 }

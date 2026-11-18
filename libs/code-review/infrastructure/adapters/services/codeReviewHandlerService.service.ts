@@ -4,6 +4,7 @@
  */
 
 import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
+import { ultraReviewRecord } from '@libs/code-review/domain/ultra-review-record';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -374,6 +375,7 @@ export class CodeReviewHandlerService {
                 ),
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
                 heavy: result?.heavy,
+                ultra: ultraReviewRecord(result?.ultra),
             };
         } catch (error) {
             if (initialContext) {

@@ -233,7 +233,8 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
                 reviewDirective: sanitizedPayload?.reviewDirective,
                 requestedReviewMode:
                     sanitizedPayload?.requestedReviewMode === 'heavy' ||
-                    sanitizedPayload?.requestedReviewMode === 'balanced'
+                    sanitizedPayload?.requestedReviewMode === 'balanced' ||
+                    sanitizedPayload?.requestedReviewMode === 'ultra'
                         ? sanitizedPayload.requestedReviewMode
                         : undefined,
                 onlyCustomAgent:

@@ -916,11 +916,18 @@ export class AutomationCodeReviewService implements Omit<
                 automaticReviewStatus: result.automaticReviewStatus,
                 approvalDecision: result.approvalDecision,
                 approvalRisk: result.approvalRisk,
-                // The mode it ran in: `--heavy` / `--balanced` asking for the
-                // other one re-reviews the whole PR.
+                // The mode it ran in: `--heavy` / `--balanced` / `--ultra`
+                // asking for another one re-reviews the whole PR.
                 heavy: !!result.heavy,
                 // Read by the Pull Requests screen (reviewModeOfExecution).
-                reviewMode: result.heavy ? 'heavy' : 'balanced',
+                reviewMode: result.ultra
+                    ? 'ultra'
+                    : result.heavy
+                      ? 'heavy'
+                      : 'balanced',
+                // Each Ultra model's outcome and the merge, for the Pull
+                // Requests screen.
+                ...(result.ultra && { ultraReview: result.ultra }),
             });
         }
 
