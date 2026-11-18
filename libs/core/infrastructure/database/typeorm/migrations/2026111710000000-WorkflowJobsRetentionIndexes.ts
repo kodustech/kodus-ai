@@ -21,7 +21,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   3. A 2% autovacuum/analyze scale factor for workflow_jobs. The default
  *      10% let ~1.4M dead rows pile up before a vacuum; a fixed small
  *      threshold would keep vacuum and analyze running back to back while
- *      the retention cron drains the backlog.
+ *      the retention cron drains the backlog. The TOAST relation gets the
+ *      same: it holds 117 of the table's 120 GB in prod, and a table-level
+ *      setting does not reach it.
  *
  * Every index statement is CONCURRENTLY and idempotent, with the same
  * self-heal for interrupted builds as CronPoolReliefIndexes2026080600000000.
@@ -67,7 +69,8 @@ export class WorkflowJobsRetentionIndexes2026111710000000 implements MigrationIn
         await queryRunner.query(`
             ALTER TABLE "kodus_workflow"."workflow_jobs" SET (
                 autovacuum_vacuum_scale_factor = 0.02,
-                autovacuum_analyze_scale_factor = 0.02
+                autovacuum_analyze_scale_factor = 0.02,
+                toast.autovacuum_vacuum_scale_factor = 0.02
             )
         `);
     }
@@ -79,7 +82,8 @@ export class WorkflowJobsRetentionIndexes2026111710000000 implements MigrationIn
         await queryRunner.query(`
             ALTER TABLE "kodus_workflow"."workflow_jobs" RESET (
                 autovacuum_vacuum_scale_factor,
-                autovacuum_analyze_scale_factor
+                autovacuum_analyze_scale_factor,
+                toast.autovacuum_vacuum_scale_factor
             )
         `);
 
