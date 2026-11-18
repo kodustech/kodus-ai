@@ -19,7 +19,11 @@
  *                  jobs that would otherwise share a process with reviews.
  *                  Same job pipeline as code-review, none of its crons,
  *                  monitors or outbox relay. The deep scan is cloud-only,
- *                  so self-hosted installs run without it.
+ *                  so self-hosted installs run without it. A parent
+ *                  process consumes the queue and heartbeats the inbox
+ *                  claim; SECURITY_SCAN_SLICE_JOB_ID forks a child that
+ *                  runs one slice with consumers and the health probe
+ *                  off, so engine CPU cannot stall AMQP or ECS health.
  *
  * Every deployment needs the code-review role. The analytics role is a
  * separate Cockpit/warehouse worker and may be absent in community

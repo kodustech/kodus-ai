@@ -19,6 +19,9 @@ import { NestFactory } from '@nestjs/core';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
+import { securityScanSliceJobId } from '@libs/core/workflow/infrastructure/security-scan-runtime';
+import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
+
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
 import { startEventLoopMonitor } from './event-loop-monitor';
@@ -98,6 +101,37 @@ async function bootstrap() {
 
         await appContext.get(ObservabilityService).init('worker');
 
+        // A slice child runs the engine only: no health port (the parent
+        // already bound :3334) and no queue consumer. Skip Nest shutdown
+        // hooks so SIGTERM is ours: abort the processor, release the
+        // sandbox, then close.
+        const sliceJobId = securityScanSliceJobId();
+
+        // Kept running through shutdown (unref'd): the drain is when we most
+        // need to see whether the thread is blocked.
+        startEventLoopMonitor();
+
+        if (sliceJobId) {
+            logger?.log(
+                `Running security-scan slice ${sliceJobId}`,
+                'Bootstrap',
+            );
+            const code = await runSecurityScanSliceProcess(
+                appContext,
+                sliceJobId,
+                {
+                    onError: (err) =>
+                        logger?.error({
+                            message: `Security-scan slice failed: ${err.message}`,
+                            context: 'Bootstrap',
+                            error: err,
+                            metadata: { jobId: sliceJobId },
+                        }),
+                },
+            );
+            process.exit(code);
+        }
+
         appContext.enableShutdownHooks();
 
         // ECS-facing health probe: returns 503 when AMQP is disconnected so
@@ -123,9 +157,6 @@ async function bootstrap() {
                 ? { requiredChannels: SECURITY_SCAN_WORKER_CHANNELS }
                 : {}),
         });
-        // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked.
-        startEventLoopMonitor();
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks
         // (enableShutdownHooks) fire after this on the same signal.
