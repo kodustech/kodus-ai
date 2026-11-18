@@ -208,13 +208,28 @@ export function resolveUltraTrio(
     const fallbackSlot = fallbackId
         ? ultraSlot(storedConfig, fallbackId)
         : undefined;
+    // A fallback that is one of the three under another id (another provider)
+    // is that model: its run is reused, never counted as a fourth.
+    const fallbackTwin = fallbackSlot
+        ? models.find(
+              (m) =>
+                  normalizeModelId(m.slot.model) ===
+                  normalizeModelId(fallbackSlot.model),
+          )
+        : undefined;
 
     return {
         ok: true,
         models,
         ...(unavailable.length && { unavailable }),
         ...(fallbackSlot && {
-            fallback: ultraModel('fallback', fallbackId!, fallbackSlot),
+            fallback: fallbackTwin
+                ? ultraModel(
+                      'fallback',
+                      fallbackTwin.modelId,
+                      fallbackTwin.slot,
+                  )
+                : ultraModel('fallback', fallbackId!, fallbackSlot),
         }),
         mergeModel:
             models[pickMergeModelIndex(models.map((m) => m.slot.model))],

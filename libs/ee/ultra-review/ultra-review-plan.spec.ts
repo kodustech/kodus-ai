@@ -267,6 +267,22 @@ describe('resolveUltraTrio', () => {
         expect(resolveUltraTrio(config(), { forSave: true }).ok).toBe(true);
     });
 
+    it('a fallback that is one of the three through another provider is that model: its run is reused', () => {
+        const c = config();
+        c.credentials.push(credential('c-or', 'open_router'));
+        c.models.push({
+            id: 'm-sol-or',
+            credentialId: 'c-or',
+            model: 'openai/gpt-6.1-sol',
+        });
+        c.routing!.fallbackModelId = 'm-sol-or';
+        const r = resolveUltraTrio(c);
+        expect(r.ok && r.fallback).toMatchObject({
+            position: 'fallback',
+            modelId: 'm-sol',
+        });
+    });
+
     it('refuses when none of the three resolves any more', () => {
         const c = config();
         c.routing!.ultraModelIds = ['x', 'y', 'z'];
