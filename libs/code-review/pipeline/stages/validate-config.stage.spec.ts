@@ -500,6 +500,24 @@ describe('ValidateConfigStage — v2 routing', () => {
             cadence.mockRestore();
         });
 
+        it('an unreadable record of earlier skips posts nothing: the review skips on the config error', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockRejectedValueOnce(
+                new Error('connection reset'),
+            );
+
+            const result = await stage.execute(ultraContext());
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.statusInfo?.message).not.toContain('Ultra review');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+        });
+
         it('a fallback on Kodus credits with none left is not used', async () => {
             const gate = (stage as any).permissionValidationService
                 .gateKodusCreditsForSlot as jest.Mock;

@@ -720,35 +720,24 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         };
     }
 
-    /** An earlier review of this PR was skipped with this same message. */
+    /**
+     * An earlier review of this PR was skipped with this same message. An
+     * unreadable answer is not "never told": it throws, and the review skips
+     * on the config error without posting the refusal again.
+     */
     private async wasSkippedFor(
         context: CodeReviewPipelineContext,
         message: string,
     ): Promise<boolean> {
-        try {
-            return !!(await this.automationExecutionService.findLatestExecutionByFilters(
-                {
-                    status: AutomationStatus.SKIPPED,
-                    errorMessage: message,
-                    teamAutomation: { uuid: context.teamAutomationId },
-                    pullRequestNumber: context.pullRequest.number,
-                    repositoryId: context?.repository?.id,
-                },
-            ));
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Could not read earlier skips of this PR; the Ultra refusal is posted again',
-                context: this.stageName,
-                error,
-                metadata: {
-                    organizationAndTeamData: context.organizationAndTeamData,
-                    prNumber: context.pullRequest?.number,
-                    repositoryId: context.repository?.id,
-                },
-            });
-            return false;
-        }
+        return !!(await this.automationExecutionService.findLatestExecutionByFilters(
+            {
+                status: AutomationStatus.SKIPPED,
+                errorMessage: message,
+                teamAutomation: { uuid: context.teamAutomationId },
+                pullRequestNumber: context.pullRequest.number,
+                repositoryId: context?.repository?.id,
+            },
+        ));
     }
 
     private async hasExistingSuccessfulReview(
