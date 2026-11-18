@@ -16,6 +16,7 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
 
     function build(integrationConfigs: unknown[]) {
         const created: any[] = [];
+        const integrationLookup = jest.fn(async () => integrationConfigs);
         const resolver = new ContextResolutionService(
             {
                 findByKey: async () => ({
@@ -25,7 +26,7 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
                 }),
             } as any,
             {
-                findByOrganizationAndConfigKey: async () => integrationConfigs,
+                findByOrganizationAndConfigKey: integrationLookup,
             } as any,
         );
         const handler = new UnifiedLogHandler(
@@ -35,7 +36,7 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
         const errorLog = jest
             .spyOn((handler as any).logger, 'error')
             .mockImplementation(() => undefined);
-        return { handler, created, errorLog };
+        return { handler, created, errorLog, integrationLookup };
     }
 
     const deleteRuleOf = (repositoryId: string) => ({
@@ -109,5 +110,39 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
         await handler.logAction(deleteRuleOf('repo-kept'));
 
         expect(created[0].repository.name).toBe('kept');
+    });
+
+    it('looks the repository up once for a burst of entries about it', async () => {
+        const { handler, created, errorLog, integrationLookup } = build([
+            {
+                configValue: [{ id: 'repo-kept' }],
+                team: { uuid: 'team-1' },
+            },
+        ]);
+
+        for (let i = 0; i < 26; i++) {
+            await handler.logAction(deleteRuleOf('repo-removed'));
+        }
+
+        expect(created).toHaveLength(26);
+        expect(created.every((e) => e.repository.name === 'Unknown')).toBe(
+            true,
+        );
+        expect(integrationLookup).toHaveBeenCalledTimes(1);
+        expect(errorLog).not.toHaveBeenCalled();
+    });
+
+    it('asks again after a failure that is not a removed repository', async () => {
+        const { handler, integrationLookup } = build([
+            {
+                configValue: [{ id: 'repo-orphan' }],
+                team: { uuid: 'team-1' },
+            },
+        ]);
+
+        await handler.logAction(deleteRuleOf('repo-orphan'));
+        await handler.logAction(deleteRuleOf('repo-orphan'));
+
+        expect(integrationLookup).toHaveBeenCalledTimes(2);
     });
 });

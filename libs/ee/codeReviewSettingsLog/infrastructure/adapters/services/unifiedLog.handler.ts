@@ -43,6 +43,7 @@ export interface UnifiedLogParams extends BaseLogParams {
 @Injectable()
 export class UnifiedLogHandler {
     private readonly logger = createLogger(UnifiedLogHandler.name);
+    private readonly repositoryNames = new Map<string, CachedRepositoryName>();
 
     constructor(
         @Inject(CODE_REVIEW_SETTINGS_LOG_REPOSITORY_TOKEN)
@@ -421,15 +422,61 @@ export class UnifiedLogHandler {
         return directoryPath;
     }
 
+    /**
+     * Removing the synced Kody Rules of a repository writes one entry per
+     * rule, 26 in a row in prod (issue #2581), and each one asked for the
+     * same name. The answer is kept briefly per repository, including "not
+     * in the integration"; any other failure is not kept, so the next entry
+     * asks again.
+     */
     private async getRepositoryName(
         repositoryId: string,
         organizationId: string,
     ): Promise<string> {
-        const repositoryName =
-            await this.contextResolutionService.getRepositoryNameByOrganizationAndRepository(
-                organizationId,
-                repositoryId,
-            );
-        return repositoryName;
+        const key = `${organizationId}:${repositoryId}`;
+        const now = Date.now();
+        const cached = this.repositoryNames.get(key);
+        if (cached && cached.expiresAt > now) {
+            if (cached.error) {
+                throw cached.error;
+            }
+            return cached.name;
+        }
+
+        try {
+            const name =
+                await this.contextResolutionService.getRepositoryNameByOrganizationAndRepository(
+                    organizationId,
+                    repositoryId,
+                );
+            this.remember(key, {
+                name,
+                expiresAt: now + REPOSITORY_NAME_TTL_MS,
+            });
+            return name;
+        } catch (error) {
+            if (error instanceof RepositoryNotIntegratedError) {
+                this.remember(key, {
+                    error,
+                    expiresAt: now + REPOSITORY_NAME_TTL_MS,
+                });
+            }
+            throw error;
+        }
+    }
+
+    private remember(key: string, entry: CachedRepositoryName): void {
+        if (this.repositoryNames.size >= REPOSITORY_NAME_CACHE_MAX) {
+            this.repositoryNames.clear();
+        }
+        this.repositoryNames.set(key, entry);
     }
 }
+
+// Long enough for one burst of entries, short enough that a rename shows up.
+const REPOSITORY_NAME_TTL_MS = 60_000;
+const REPOSITORY_NAME_CACHE_MAX = 1_000;
+
+type CachedRepositoryName =
+    | { name: string; error?: undefined; expiresAt: number }
+    | { name?: undefined; error: Error; expiresAt: number };

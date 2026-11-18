@@ -36,13 +36,9 @@ export class CodeReviewSettingsLogRepository implements ICodeReviewSettingsLogRe
 
         const codeReviewSettingsLog = await query.exec();
 
-        // The activity log reads `.length` off this, so an org with no logs
-        // (or a filter that matches none) must get an empty list (#2068).
-        return (
-            mapSimpleModelsToEntities<
-                CodeReviewSettingsLogModel,
-                CodeReviewSettingsLogEntity
-            >(codeReviewSettingsLog, CodeReviewSettingsLogEntity) ?? []
-        );
+        return mapSimpleModelsToEntities<
+            CodeReviewSettingsLogModel,
+            CodeReviewSettingsLogEntity
+        >(codeReviewSettingsLog, CodeReviewSettingsLogEntity);
     }
 }
