@@ -205,22 +205,57 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             );
         });
 
-        it('reads no more than one batch per call, held rows included', async () => {
+        it('reads one batch per call, held rows included, and resumes past them', async () => {
             if (!canRun) return;
 
-            await insertJob(JobStatus.COMPLETED, longAgo);
-            await insertJob(JobStatus.COMPLETED, longAgo);
-            await insertJob(JobStatus.COMPLETED, longAgo);
+            // A window of its own, before every other test's rows. The held
+            // row is the last one the first batch reads, where it stops.
+            const first = await insertJob(
+                JobStatus.COMPLETED,
+                '2000-06-02 00:00:00',
+            );
+            const held = await insertJob(
+                JobStatus.COMPLETED,
+                '2000-06-03 00:00:00',
+            );
+            const second = await insertJob(
+                JobStatus.COMPLETED,
+                '2000-06-04 00:00:00',
+            );
+            await dataSource.query(
+                `INSERT INTO "kodus_workflow"."inbox_messages" ("messageId", "consumerId", "job_id") VALUES ($1, 'retention-held', $2)`,
+                [marker, held],
+            );
 
             const batch = await repository.deleteFinishedOlderThan({
                 olderThan: cutoff,
                 batchSize: 2,
+                after: '2000-06-01 00:00:00',
             });
 
-            // Rows a message still holds take a slot and are skipped, so the
-            // cursor moves past them instead of re-reading them every batch.
-            expect(batch.candidates).toBe(2);
-            expect(batch.deleted).toBeLessThanOrEqual(2);
+            // The held row took a slot: two read, one deleted.
+            expect(batch).toEqual({
+                candidates: 2,
+                deleted: 1,
+                lastUpdatedAt: '2000-06-03 00:00:00',
+            });
+
+            // Resuming on the held row would read it again and never move.
+            const next = await repository.deleteFinishedOlderThan({
+                olderThan: cutoff,
+                batchSize: 1,
+                after: batch.lastUpdatedAt,
+            });
+
+            expect(next).toEqual({
+                candidates: 1,
+                deleted: 1,
+                lastUpdatedAt: '2000-06-04 00:00:00',
+            });
+            const left = await remaining();
+            expect(left).toContain(held);
+            expect(left).not.toEqual(expect.arrayContaining([first]));
+            expect(left).not.toEqual(expect.arrayContaining([second]));
         });
 
         it('resumes after the point a previous batch reached, leaving older rows to their own pass', async () => {

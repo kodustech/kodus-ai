@@ -357,13 +357,17 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         // the DELETE waited on its lock (FAILED retried back to PENDING) is
         // re-checked against them and kept, not deleted by its uuid alone.
         // Rows a message still holds are read and skipped, so the cursor
-        // moves past them.
+        // moves past them. The resume is exclusive: a held row at the cursor
+        // would otherwise be read again by every batch, and a full batch of
+        // them sharing one timestamp would never move it. Rows tied with the
+        // last one read but past the LIMIT wait for the next run, which
+        // starts from the oldest again.
         const raw = await this.repository.query(
             `WITH scan AS MATERIALIZED (
                     SELECT j."uuid", j."updatedAt"
                       FROM "kodus_workflow"."workflow_jobs" j
                      WHERE j."updatedAt" < $1
-                       AND ($6::timestamp IS NULL OR j."updatedAt" >= $6::timestamp)
+                       AND ($6::timestamp IS NULL OR j."updatedAt" > $6::timestamp)
                        AND j."status" IN ($2, $3, $4)
                        AND j."workflowType"::text <> ALL($7::text[])
                      ORDER BY j."updatedAt"
