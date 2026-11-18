@@ -54,18 +54,24 @@ export class MongooseFactory implements MongooseOptionsFactory {
 
         // Pool configuration per component (300 connections prod plan)
         // Pool configuration per component (prioritize ENV with safe fallbacks)
+        // `min` holds open per replica-set member, not per cluster: with three
+        // members a process keeps 3x min connections even when it reads only
+        // from the primary. API and webhook tasks are many and mostly idle
+        // between requests, so they keep one; workers keep more warm.
+        const envInt = (key: string, fallback: number) =>
+            parseInt(process.env[key] || String(fallback), 10);
         const poolConfigs = {
             webhook: {
-                max: parseInt(process.env.MG_POOL_MAX_WEBHOOK || '30', 10),
-                min: 2,
+                max: envInt('MG_POOL_MAX_WEBHOOK', 30),
+                min: envInt('MG_POOL_MIN_WEBHOOK', 1),
             },
             api: {
-                max: parseInt(process.env.MG_POOL_MAX_API || '30', 10),
-                min: 5,
+                max: envInt('MG_POOL_MAX_API', 30),
+                min: envInt('MG_POOL_MIN_API', 1),
             },
             worker: {
-                max: parseInt(process.env.MG_POOL_MAX_WORKER || '60', 10),
-                min: 5,
+                max: envInt('MG_POOL_MAX_WORKER', 60),
+                min: envInt('MG_POOL_MIN_WORKER', 5),
             },
             default: { max: 50, min: 5 },
         };
@@ -87,6 +93,20 @@ export class MongooseFactory implements MongooseOptionsFactory {
             minPoolSize: poolConfig.min,
             maxPoolSize: poolConfig.max,
             maxIdleTimeMS,
+            // Fail a request that cannot get a connection instead of queueing
+            // it behind a saturated pool forever, and give up on a cluster
+            // with no reachable primary after an election's worth of time.
+            serverSelectionTimeoutMS: envInt(
+                'MG_SERVER_SELECTION_TIMEOUT_MS',
+                15_000,
+            ),
+            waitQueueTimeoutMS: envInt('MG_WAIT_QUEUE_TIMEOUT_MS', 30_000),
+            // Builds every schema index on boot unless turned off
+            // (MONGO_AUTO_INDEX=false): on a large collection a missing index
+            // becomes a build on the primary started by each deploy. Turning it
+            // off moves index creation to migrations; check every declared
+            // index exists in production first.
+            autoIndex: process.env.MONGO_AUTO_INDEX !== 'false',
         };
     }
 }

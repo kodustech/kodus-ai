@@ -13,7 +13,7 @@ import {
     SecurityScanStatus,
 } from '../domain/security-scan.types';
 
-@Schema({ collection: 'security_scans', timestamps: true, autoIndex: true })
+@Schema({ collection: 'security_scans', timestamps: true })
 export class SecurityScanModel extends CoreDocument {
     @Prop({ type: String, required: true })
     public organizationId: string;

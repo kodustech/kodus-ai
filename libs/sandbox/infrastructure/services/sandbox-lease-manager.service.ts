@@ -98,6 +98,7 @@ const INVALIDATE_DRAIN_MS = 60_000;
  * How often to poll when waiting for a concurrent creator to finish.
  */
 const POLL_INTERVAL_MS = 500;
+const MAX_POLL_INTERVAL_MS = 2_000;
 
 /**
  * Maximum time to wait for a CREATING sandbox to become READY.
@@ -442,8 +443,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 metadata: { prKey },
             });
             const deadline = Date.now() + MAX_POLL_WAIT_MS;
+            // Doubling waits (0.5s, 1s, 2s, 2s...) instead of a read every
+            // 0.5s: a cleanup takes seconds, and 60 reads per wait added up.
+            let wait = POLL_INTERVAL_MS;
             while (Date.now() < deadline) {
-                await sleep(POLL_INTERVAL_MS);
+                await sleep(wait);
+                wait = Math.min(wait * 2, MAX_POLL_INTERVAL_MS);
                 const check = await this.leaseRepo.findByPrKey(prKey);
                 if (!check) break; // Doc deleted — cleanup complete
             }

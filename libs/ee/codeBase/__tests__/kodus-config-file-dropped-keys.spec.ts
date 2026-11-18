@@ -410,7 +410,10 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
             findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
         };
         const kodyRulesService = {
-            findByOrganizationId: jest.fn().mockResolvedValue(loadedEntity),
+            // The review reads the rules without the deleted ones.
+            findLiveRulesByOrganizationId: jest
+                .fn()
+                .mockResolvedValue(loadedEntity),
             // Paid → reconcile returns the fresh doc with the rule reactivated.
             syncRulesWithPlanLimit: jest.fn().mockResolvedValue({
                 toObject: () => ({ rules: [unlockedRule] }),

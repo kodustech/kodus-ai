@@ -61,7 +61,6 @@ export interface RunAuthor {
 @Schema({
     collection: 'businessValidationRuns',
     timestamps: true,
-    autoIndex: true,
 })
 export class BusinessValidationRunModel extends CoreDocument {
     @Prop({ type: String, required: true })

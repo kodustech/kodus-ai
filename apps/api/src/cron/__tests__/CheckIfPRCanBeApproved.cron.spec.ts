@@ -2869,6 +2869,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.parametersService,
             {
                 findByOrganizationId: async () => null,
+                findLiveRulesByOrganizationId: async () => null,
                 syncRulesWithPlanLimit: async () => null,
             } as any,
             {} as any,

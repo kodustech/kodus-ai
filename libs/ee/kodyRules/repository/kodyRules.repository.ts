@@ -15,6 +15,7 @@ import {
     IKodyRuleIndexEntry,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRulesModel } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 import { KodyRulesValidationService } from '../service/kody-rules-validation.service';
 
 /**
@@ -176,10 +177,86 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     async findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null> {
+        // lean: the mapper reads plain data, and hydrating a document of
+        // hundreds of KB (every rule, examples, compiled detectors) into a
+        // Mongoose document on every review cost CPU for nothing.
         const doc = await this.kodyRulesModel
             .findOne({ organizationId })
+            .lean()
             .exec();
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
+    }
+
+    async findLiveRulesByOrganizationId(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null> {
+        const [doc] = await this.kodyRulesModel
+            .aggregate([
+                { $match: { organizationId } },
+                // findOne's document, should an organization have two.
+                { $limit: 1 },
+                {
+                    $project: {
+                        organizationId: 1,
+                        createdAt: 1,
+                        updatedAt: 1,
+                        rules: {
+                            $filter: {
+                                input: '$rules',
+                                as: 'rule',
+                                cond: {
+                                    $ne: [
+                                        '$$rule.status',
+                                        KodyRulesStatus.DELETED,
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
+        return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
+    }
+
+    async updateRulesFields(
+        uuid: string,
+        changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
+    ): Promise<string[]> {
+        const ops = changes
+            .map(({ ruleId, patch }) => ({
+                ruleId,
+                setFields: ruleFieldSet(patch),
+            }))
+            .filter(({ setFields }) => setFields);
+        if (!ops.length) return [];
+
+        // One bulkWrite instead of a findAndModify per rule fired in
+        // parallel: the writes all land on the same document, where parallel
+        // ones only conflicted and retried, and each one sent the whole
+        // document back.
+        try {
+            await this.kodyRulesModel.bulkWrite(
+                ops.map(({ ruleId, setFields }) => ({
+                    updateOne: {
+                        filter: { '_id': uuid, 'rules.uuid': ruleId },
+                        update: { $set: setFields },
+                    },
+                })),
+                { ordered: false },
+            );
+            return [];
+        } catch (error) {
+            const failed = new Set<number>(
+                (
+                    (error as { writeErrors?: Array<{ index: number }> })
+                        ?.writeErrors ?? []
+                ).map((e) => e.index),
+            );
+            if (!failed.size) throw error;
+            return ops.filter((_, i) => failed.has(i)).map((op) => op.ruleId);
+        }
     }
 
     async findRulesIndex(

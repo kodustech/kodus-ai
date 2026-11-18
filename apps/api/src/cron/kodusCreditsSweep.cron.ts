@@ -1,3 +1,5 @@
+import pLimit from 'p-limit';
+
 import { createLogger } from '@libs/core/log/logger';
 import {
     KODUS_CREDITS_METERING_SERVICE_TOKEN,
@@ -19,6 +21,8 @@ const API_CRON_KODUS_CREDITS_SWEEP =
  * distributed lock (the sweep is idempotent anyway — unique span ids on both
  * sides — but two concurrent sweeps would just waste billing calls).
  */
+const SWEEP_CONCURRENCY = 4;
+
 @Injectable()
 export class KodusCreditsSweepCronProvider {
     private readonly logger = createLogger(KodusCreditsSweepCronProvider.name);
@@ -46,9 +50,14 @@ export class KodusCreditsSweepCronProvider {
                 return;
             }
 
+            // Each sweep reads a month of telemetry spans; all organizations
+            // at once stacked those scans on the primary.
+            const limit = pLimit(SWEEP_CONCURRENCY);
             const results = await Promise.allSettled(
                 orgs.map((organizationId) =>
-                    this.metering.sweepOrganization(organizationId),
+                    limit(() =>
+                        this.metering.sweepOrganization(organizationId),
+                    ),
                 ),
             );
 

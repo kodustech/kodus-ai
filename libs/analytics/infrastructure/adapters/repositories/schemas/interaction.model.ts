@@ -5,7 +5,6 @@ import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongo
 @Schema({
     collection: 'interaction',
     timestamps: true,
-    autoIndex: true,
 })
 export class InteractionModel extends CoreDocument {
     @Prop({ type: Date, default: Date.now })

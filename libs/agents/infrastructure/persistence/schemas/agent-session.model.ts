@@ -46,7 +46,6 @@ interface PersistedSessionData {
     // below are NON-UNIQUE and background: building them over the existing
     // legacy `@kodus/flow` documents cannot fail on duplicate threadIds and
     // does not block startup. (A unique build WOULD have failed — see below.)
-    autoIndex: true,
 })
 export class AgentSessionModel extends CoreDocument {
     /** Session id (legacy callers keyed reads on this). */

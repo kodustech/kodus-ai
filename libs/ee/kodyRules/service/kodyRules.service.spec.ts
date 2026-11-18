@@ -37,7 +37,10 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
     const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
     const MAX = 10;
 
-    let repo: { findByOrganizationId: jest.Mock; updateRule: jest.Mock };
+    let repo: {
+        findByOrganizationId: jest.Mock;
+        updateRulesFields: jest.Mock;
+    };
     let permission: { shouldLimitResources: jest.Mock };
     let svc: KodyRulesService;
 
@@ -53,10 +56,14 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
         ...over,
     });
 
+    // The per-rule changes the sync wrote, in its one round trip.
+    const written = (): Array<{ ruleId: string; patch: any }> =>
+        repo.updateRulesFields.mock.calls.flatMap(([, changes]) => changes);
+
     beforeEach(() => {
         repo = {
             findByOrganizationId: jest.fn().mockResolvedValue(null),
-            updateRule: jest.fn().mockResolvedValue(true),
+            updateRulesFields: jest.fn().mockResolvedValue([]),
         };
         permission = { shouldLimitResources: jest.fn() };
         svc = new KodyRulesService(
@@ -87,7 +94,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             limited: true,
         });
         expect(out).toBe(entity);
-        expect(repo.updateRule).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
     });
 
     it('FREE plan: pauses ONLY the active rules beyond the 10-rule ceiling, locked by plan', async () => {
@@ -97,23 +104,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             limited: true,
         });
 
-        expect(repo.updateRule).toHaveBeenCalledTimes(2); // only #11 and #12
-        expect(repo.updateRule).toHaveBeenCalledWith(
-            'doc-1',
-            'r11',
-            expect.objectContaining({
+        // One round trip for the document, holding only #11 and #12.
+        expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
+        expect(repo.updateRulesFields.mock.calls[0][0]).toBe('doc-1');
+        expect(written().map((c) => c.ruleId)).toEqual(['r11', 'r12']);
+        for (const change of written()) {
+            expect(change.patch).toMatchObject({
                 status: KodyRulesStatus.PAUSED,
                 lockedByPlan: true,
-            }),
-        );
-        expect(repo.updateRule).toHaveBeenCalledWith(
-            'doc-1',
-            'r12',
-            expect.objectContaining({
-                status: KodyRulesStatus.PAUSED,
-                lockedByPlan: true,
-            }),
-        );
+            });
+        }
     });
 
     it('FREE plan: exactly 10 active rules is within the ceiling — no changes', async () => {
@@ -122,7 +122,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             entity: entity as any,
             limited: true,
         });
-        expect(repo.updateRule).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
         expect(out).toBe(entity);
     });
 
@@ -137,15 +137,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             limited: false,
         });
 
-        expect(repo.updateRule).toHaveBeenCalledTimes(1); // only the plan-locked one
-        expect(repo.updateRule).toHaveBeenCalledWith(
-            'doc-1',
-            'r1',
-            expect.objectContaining({
-                status: KodyRulesStatus.ACTIVE,
-                lockedByPlan: false,
-            }),
-        );
+        // Only the plan-locked one.
+        expect(written()).toEqual([
+            {
+                ruleId: 'r1',
+                patch: expect.objectContaining({
+                    status: KodyRulesStatus.ACTIVE,
+                    lockedByPlan: false,
+                }),
+            },
+        ]);
     });
 
     it('falls back to shouldLimitResources when `limited` is not provided', async () => {
@@ -156,7 +157,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             ]) as any,
         });
         expect(permission.shouldLimitResources).toHaveBeenCalled();
-        expect(repo.updateRule).toHaveBeenCalledTimes(1); // paid → unpaused
+        expect(written()).toHaveLength(1); // paid → unpaused
     });
 
     it('loads the rules doc itself when the caller does not pass the entity', async () => {
@@ -167,7 +168,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
         );
         await svc.syncRulesWithPlanLimit(ORG, { limited: false });
         expect(repo.findByOrganizationId).toHaveBeenCalledWith('org-1');
-        expect(repo.updateRule).toHaveBeenCalledTimes(1);
+        expect(written()).toHaveLength(1);
     });
 
     it('is fail-safe when the limit check throws — returns the entity, changes nothing', async () => {
@@ -179,18 +180,106 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             entity: entity as any,
         }); // no `limited` → forces the lookup that throws
         expect(out).toBe(entity);
-        expect(repo.updateRule).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
     });
 
     it('is fail-safe when a per-rule update rejects — it never throws, and logs the failure', async () => {
-        repo.updateRule.mockRejectedValue(new Error('mongo write failed'));
+        repo.updateRulesFields.mockRejectedValue(new Error('mongo write failed'));
         const rules = Array.from({ length: 12 }, (_, i) => rule(i + 1));
-        // Promise.allSettled means the rejections are logged, not thrown.
+        // The failure is logged, not thrown.
         await svc.syncRulesWithPlanLimit(ORG, {
             entity: entityOf(rules) as any,
             limited: true,
         });
         expect((svc as any).logger.error).toHaveBeenCalled();
+    });
+
+    it('logs each rule whose patch the write reported as failed', async () => {
+        repo.updateRulesFields.mockResolvedValue(['r12']);
+        const rules = Array.from({ length: 12 }, (_, i) => rule(i + 1));
+        await svc.syncRulesWithPlanLimit(ORG, {
+            entity: entityOf(rules) as any,
+            limited: true,
+        });
+        expect((svc as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ ruleId: 'r12' }),
+            }),
+        );
+    });
+});
+
+describe('KodyRulesService.find — rules the plan limit paused', () => {
+    const lockedDoc = (organizationId: string) => ({
+        uuid: `doc-${organizationId}`,
+        toObject: () => ({
+            organizationId,
+            rules: [
+                {
+                    uuid: 'r1',
+                    status: KodyRulesStatus.PAUSED,
+                    lockedByPlan: true,
+                    severity: 'High',
+                },
+            ],
+        }),
+    });
+    let repo: any;
+    let svc: KodyRulesService;
+
+    beforeEach(() => {
+        repo = {
+            find: jest.fn().mockResolvedValue([lockedDoc('org-1')]),
+            findByOrganizationId: jest.fn(),
+            updateRulesFields: jest.fn().mockResolvedValue([]),
+        };
+        svc = new KodyRulesService(
+            repo,
+            {} as any,
+            {} as any,
+            {} as any,
+            { MAX_KODY_RULES: 10 } as any,
+            {} as any,
+            {} as any,
+            // Limited plan: the locked rule stays locked.
+            { shouldLimitResources: jest.fn().mockResolvedValue(true) } as any,
+            {} as any,
+            {} as any,
+            undefined,
+        );
+        jest.spyOn((svc as any).logger, 'log').mockImplementation(() => {});
+    });
+
+    it('reads once when the plan keeps the rule locked', async () => {
+        const result = await svc.find({ organizationId: 'org-1' } as any);
+
+        expect(repo.find).toHaveBeenCalledTimes(1);
+        expect(repo.findByOrganizationId).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
+        expect(result[0].rules[0].severity).toBe('high');
+    });
+
+    it('reads again when the plan sync changed a rule', async () => {
+        (svc as any).permissionValidationService = {
+            shouldLimitResources: jest.fn().mockResolvedValue(false),
+        } as any;
+        repo.findByOrganizationId.mockResolvedValue(lockedDoc('org-1'));
+
+        await svc.find({ organizationId: 'org-1' } as any);
+
+        expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
+        expect(repo.find).toHaveBeenCalledTimes(2);
+    });
+
+    it('lets the sync read the whole document when the find filtered rules', async () => {
+        repo.findByOrganizationId.mockResolvedValue(lockedDoc('org-1'));
+
+        await svc.find({
+            organizationId: 'org-1',
+            rules: [{ repositoryId: 'repo' }],
+        } as any);
+
+        expect(repo.findByOrganizationId).toHaveBeenCalledWith('org-1');
     });
 });
 

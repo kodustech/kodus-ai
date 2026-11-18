@@ -236,7 +236,12 @@ export class KodyRulesService implements IKodyRulesService {
         const toObject = (e: any) =>
             typeof e?.toObject === 'function' ? e.toObject() : e;
 
-        const staleOrgIds = new Set<string>();
+        // Organizations holding a rule the plan limit paused. When the find
+        // read whole documents (no rule filter), the sync reuses the entity
+        // instead of reading the document again; a rule-filtered entity holds
+        // only some rules and would make the sync miscount the active ones.
+        const wholeDocuments = !filter?.rules?.length;
+        const staleEntities = new Map<string, KodyRulesEntity>();
         entities.forEach((e) => {
             const obj = toObject(e);
             if (
@@ -246,27 +251,36 @@ export class KodyRulesService implements IKodyRulesService {
                 ) &&
                 obj?.organizationId
             ) {
-                staleOrgIds.add(obj.organizationId);
+                staleEntities.set(obj.organizationId, e);
             }
         });
 
-        const orgIdArray = [...staleOrgIds];
+        const orgIdArray = [...staleEntities.keys()];
         const syncResults = await Promise.allSettled(
             orgIdArray.map((orgId) =>
-                this.syncRulesWithPlanLimit({ organizationId: orgId }),
+                this.syncRulesWithPlanLimit(
+                    { organizationId: orgId },
+                    wholeDocuments ? { entity: staleEntities.get(orgId) } : {},
+                ),
             ),
         );
 
+        // Given the entity, the sync hands the same one back when it changed
+        // nothing: in a limited plan the locked rules stay locked on every
+        // call, and re-running the whole find for that was a third read.
+        let changed = !wholeDocuments;
         syncResults.forEach((result, index) => {
+            const orgId = orgIdArray[index];
             if (result.status === 'rejected') {
-                const orgId = orgIdArray[index];
                 this.logger.error({
                     message: 'Failed self-healing stale rules in find()',
                     context: KodyRulesService.name,
                     error: result.reason,
                     metadata: { organizationId: orgId },
                 });
+                return;
             }
+            if (result.value !== staleEntities.get(orgId)) changed = true;
         });
         const normalized = (entitiesResult: KodyRulesEntity[]) =>
             entitiesResult?.map((entity) => {
@@ -278,7 +292,7 @@ export class KodyRulesService implements IKodyRulesService {
                 return KodyRulesEntity.create(normalized);
             });
 
-        if (staleOrgIds.size > 0) {
+        if (staleEntities.size > 0 && changed) {
             return normalized(await this.kodyRulesRepository.find(filter));
         }
 
@@ -289,6 +303,21 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
     ): Promise<KodyRulesEntity | null> {
         return this.kodyRulesRepository.findByOrganizationId(organizationId);
+    }
+
+    async findLiveRulesByOrganizationId(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null> {
+        return this.kodyRulesRepository.findLiveRulesByOrganizationId(
+            organizationId,
+        );
+    }
+
+    async updateRulesFields(
+        uuid: string,
+        changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
+    ): Promise<string[]> {
+        return this.kodyRulesRepository.updateRulesFields(uuid, changes);
     }
 
     async findRulesIndex(
@@ -394,26 +423,31 @@ export class KodyRulesService implements IKodyRulesService {
 
         if (!changedRules.length) return entity;
 
-        // Targeted per-rule updates in parallel: prevents whole-array overwrite race conditions (#1626)
-        const updateResults = await Promise.allSettled(
-            changedRules.map(({ ruleId, patch }) =>
-                this.kodyRulesRepository.updateRule(entity.uuid, ruleId, patch),
-            ),
-        );
-
-        updateResults.forEach((res, i) => {
-            if (res.status === 'rejected') {
-                this.logger.error({
-                    message: 'Failed per-rule update in syncRulesWithPlanLimit',
-                    context: KodyRulesService.name,
-                    error: res.reason,
-                    metadata: {
-                        organizationId,
-                        ruleId: changedRules[i].ruleId,
-                    },
-                });
-            }
-        });
+        // Per-rule field updates, so no whole-array overwrite races (#1626),
+        // in one round trip instead of one findAndModify per rule fired in
+        // parallel against the same document.
+        let failedRuleIds: string[];
+        try {
+            failedRuleIds = await this.kodyRulesRepository.updateRulesFields(
+                entity.uuid,
+                changedRules,
+            );
+        } catch (error) {
+            failedRuleIds = changedRules.map(({ ruleId }) => ruleId);
+            this.logger.error({
+                message: 'Failed per-rule updates in syncRulesWithPlanLimit',
+                context: KodyRulesService.name,
+                error,
+                metadata: { organizationId, ruleIds: failedRuleIds },
+            });
+        }
+        for (const ruleId of failedRuleIds) {
+            this.logger.error({
+                message: 'Failed per-rule update in syncRulesWithPlanLimit',
+                context: KodyRulesService.name,
+                metadata: { organizationId, ruleId },
+            });
+        }
 
         this.logger.log({
             message:
