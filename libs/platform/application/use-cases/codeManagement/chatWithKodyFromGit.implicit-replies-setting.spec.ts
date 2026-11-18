@@ -226,7 +226,10 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
             codeManagementService,
             codeBaseConfigService,
             conversationAgentUseCase,
-        } = setup({ conversation: { implicitReplies: true } });
+        } = setup({
+            conversation: { implicitReplies: true },
+            kodusConfigFileOverridesWebPreferences: true,
+        });
         codeBaseConfigService.getKodusConfigFile.mockResolvedValue({
             conversation: { implicitReplies: false },
         });
@@ -238,7 +241,10 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
         await useCase.execute(params(agentReply));
 
         expect(codeBaseConfigService.getKodusConfigFile).toHaveBeenCalledWith(
-            expect.objectContaining({ repository: expect.anything() }),
+            expect.objectContaining({
+                repository: expect.anything(),
+                overrideConfig: true,
+            }),
         );
         expect(classify).not.toHaveBeenCalled();
         expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
@@ -248,7 +254,10 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
         // The file is the later layer of the cascade: it wins over the
         // organization's stored opt-out, as it does for the review pipeline.
         const { useCase, codeManagementService, codeBaseConfigService } = setup(
-            { conversation: { implicitReplies: false } },
+            {
+                conversation: { implicitReplies: false },
+                kodusConfigFileOverridesWebPreferences: true,
+            },
         );
         codeBaseConfigService.getKodusConfigFile.mockResolvedValue({
             conversation: { implicitReplies: true },
@@ -265,7 +274,10 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
 
     it('keeps the stored decision when the repository file cannot be read', async () => {
         const { useCase, codeManagementService, codeBaseConfigService } = setup(
-            { conversation: { implicitReplies: false } },
+            {
+                conversation: { implicitReplies: false },
+                kodusConfigFileOverridesWebPreferences: true,
+            },
         );
         codeBaseConfigService.getKodusConfigFile.mockRejectedValue(
             new Error('file unavailable'),
@@ -277,6 +289,29 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
 
         await useCase.execute(params(agentReply));
 
+        // The old code never read the file: this call is what the case pins.
+        expect(codeBaseConfigService.getKodusConfigFile).toHaveBeenCalled();
+        expect(classify).not.toHaveBeenCalled();
+    });
+
+    it('asks the loader not to apply the file when the repository never opted in', async () => {
+        // `kodusConfigFileOverridesWebPreferences` defaults to false: the
+        // loader returns nothing in that case, so a committed file cannot
+        // reverse a stored decision on its own.
+        const { useCase, codeManagementService, codeBaseConfigService } = setup(
+            { conversation: { implicitReplies: false } },
+        );
+        codeBaseConfigService.getKodusConfigFile.mockResolvedValue(undefined);
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            kodyRoot,
+            agentReply,
+        ]);
+
+        await useCase.execute(params(agentReply));
+
+        expect(codeBaseConfigService.getKodusConfigFile).toHaveBeenCalledWith(
+            expect.objectContaining({ overrideConfig: false }),
+        );
         expect(classify).not.toHaveBeenCalled();
     });
 

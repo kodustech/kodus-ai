@@ -2327,6 +2327,13 @@ export class ChatWithKodyFromGitUseCase {
                     await this.codeBaseConfigService.getKodusConfigFile({
                         organizationAndTeamData,
                         repository,
+                        // The file only overrides the stored preferences when
+                        // the repository opted in, as in the review pipeline.
+                        // The loader defaults to true, so an undefined value
+                        // here would silently reverse that decision.
+                        overrideConfig:
+                            config?.kodusConfigFileOverridesWebPreferences ??
+                            false,
                     });
                 fileValue = fileConfig?.conversation?.implicitReplies;
             } catch (error) {
