@@ -168,6 +168,43 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             );
         });
 
+        it('keeps a job retried back to PENDING while the purge waited on its row', async () => {
+            if (!canRun) return;
+
+            const retried = await insertJob(JobStatus.FAILED, longAgo);
+            const runner = dataSource.createQueryRunner();
+            await runner.connect();
+            await runner.startTransaction();
+            try {
+                await runner.query(
+                    `UPDATE "kodus_workflow"."workflow_jobs"
+                        SET "status" = $1, "updatedAt" = now()
+                      WHERE "uuid" = $2`,
+                    [JobStatus.PENDING, retried],
+                );
+
+                // The purge reads the row as FAILED, then waits on its lock.
+                const purge = repository.deleteFinishedOlderThan({
+                    olderThan: cutoff,
+                    batchSize: 100,
+                });
+                await new Promise((r) => setTimeout(r, 300));
+                await runner.commitTransaction();
+                const batch = await purge;
+
+                expect(batch.candidates).toBeGreaterThan(batch.deleted);
+            } finally {
+                if (runner.isTransactionActive) {
+                    await runner.rollbackTransaction();
+                }
+                await runner.release();
+            }
+
+            expect(await remaining()).toEqual(
+                expect.arrayContaining([retried]),
+            );
+        });
+
         it('deletes no more than one batch per call', async () => {
             if (!canRun) return;
 
@@ -203,6 +240,7 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
 
             expect(batch).toEqual({
                 deleted: 1,
+                candidates: 1,
                 lastUpdatedAt: '2001-01-20 00:00:00',
             });
             expect(await remaining()).toEqual(expect.arrayContaining([before]));

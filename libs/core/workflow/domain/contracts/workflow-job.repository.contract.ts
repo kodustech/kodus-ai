@@ -34,7 +34,12 @@ export interface IWorkflowJobRepository {
         batchSize: number;
         after?: string;
         keepWorkflowTypes?: string[];
-    }): Promise<{ deleted: number; lastUpdatedAt?: string }>;
+    }): Promise<{
+        deleted: number;
+        /** Rows the batch read; fewer than `batchSize` means nothing is left. */
+        candidates: number;
+        lastUpdatedAt?: string;
+    }>;
 }
 
 export const WORKFLOW_JOB_REPOSITORY_TOKEN = Symbol.for(
