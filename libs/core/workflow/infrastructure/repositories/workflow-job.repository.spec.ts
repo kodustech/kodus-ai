@@ -88,6 +88,59 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
     });
 });
 
+describe('WorkflowJobRepository.failIfProcessing', () => {
+    let qb: {
+        update: jest.Mock;
+        set: jest.Mock;
+        where: jest.Mock;
+        andWhere: jest.Mock;
+        execute: jest.Mock;
+    };
+    let repository: { createQueryBuilder: jest.Mock };
+    let repo: WorkflowJobRepository;
+
+    beforeEach(() => {
+        qb = {
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ affected: 1 }),
+        };
+        repository = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
+        repo = new WorkflowJobRepository(repository as any);
+    });
+
+    it('flips only the named PROCESSING row to FAILED', async () => {
+        const flipped = await repo.failIfProcessing('job-1', {
+            lastError: 'unrecorded child exit',
+            errorClassification: ErrorClassification.PERMANENT,
+        });
+
+        expect(flipped).toBe(true);
+        expect(qb.where).toHaveBeenCalledWith('uuid = :id', { id: 'job-1' });
+        expect(qb.andWhere).toHaveBeenCalledWith('status = :status', {
+            status: JobStatus.PROCESSING,
+        });
+        expect(qb.set).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: JobStatus.FAILED,
+                lastError: 'unrecorded child exit',
+            }),
+        );
+    });
+
+    it('returns false when the row is already terminal', async () => {
+        qb.execute.mockResolvedValue({ affected: 0 });
+        await expect(
+            repo.failIfProcessing('job-1', {
+                lastError: 'unrecorded child exit',
+                errorClassification: ErrorClassification.PERMANENT,
+            }),
+        ).resolves.toBe(false);
+    });
+});
+
 describe('WorkflowJobRepository.cancelActiveByCorrelation', () => {
     let qb: {
         update: jest.Mock;

@@ -15,8 +15,9 @@
  * drift apart again. Do not inline queue arguments at either site.
  */
 
-/** The deep scan worker's one queue (#2451). */
-export const SECURITY_SCAN_JOB_QUEUE = 'workflow.jobs.security_scan.queue';
+import { SECURITY_SCAN_JOB_QUEUE } from './security-scan-runtime';
+
+export { SECURITY_SCAN_JOB_QUEUE };
 
 export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
     string,

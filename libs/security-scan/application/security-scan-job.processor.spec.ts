@@ -23,6 +23,8 @@ import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents
 import { SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { SCAN_NO_AREA_EXAMINED_MESSAGE } from '../domain/scan-failure';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 
 const scanRecord = (overrides = {}) => ({
     uuid: 'scan-1',
@@ -138,7 +140,7 @@ function setup(engineResult: any, scan = scanRecord()) {
         kodyIssuesManagement as any,
     );
 
-    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager, pricingResolver };
+    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager, pricingResolver, jobRepository };
 }
 
 const lastUpdate = (scans: { update: jest.Mock }) =>
@@ -186,6 +188,40 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
         expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
         expect(scans.recordUnit).not.toHaveBeenCalled();
+    });
+
+    it('releases the sandbox and leaves the scan running when the slice is preempted', async () => {
+        const { processor, scans, sandbox, jobRepository } = setup({
+            result: finishedResult(),
+        });
+        let started!: () => void;
+        const running = new Promise<void>((r) => (started = r));
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async () => {
+                started();
+                return new Promise(() => undefined);
+            }),
+        }));
+        const abort = new AbortController();
+        const processed = processor.process('job-1', abort.signal);
+        await running;
+        abort.abort(new SlicePreemptedError());
+        await expect(processed).rejects.toBeInstanceOf(SlicePreemptedError);
+        expect(sandbox.cleanup).toHaveBeenCalled();
+        expect(
+            scans.update.mock.calls.some(
+                (call) =>
+                    (call[1] as { status?: string })?.status ===
+                    SecurityScanStatus.FAILED,
+            ),
+        ).toBe(false);
+        expect(
+            jobRepository.update.mock.calls.some(
+                (call) =>
+                    (call[1] as { status?: string })?.status ===
+                    JobStatus.FAILED,
+            ),
+        ).toBe(false);
     });
 
     it('starts a slice from what the one before may have been billed, when it died with requests in flight', async () => {

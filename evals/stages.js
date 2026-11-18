@@ -414,6 +414,7 @@ const STAGES = [
                 name: 'The agent, its path match and the rule compiler',
                 specs: [
                     'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.spec.ts',
+                    'libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.prompt.spec.ts',
                 ],
