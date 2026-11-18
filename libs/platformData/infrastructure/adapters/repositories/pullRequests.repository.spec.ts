@@ -709,17 +709,19 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     });
 
     describe('updateSuggestion for a known PR', () => {
+        const PR_ID = '6650f1c2a1b2c3d4e5f60718';
+
         it('finds the PR by its _id instead of searching the organization for the suggestion', async () => {
             await repo.updateSuggestion(
                 'sugg-id-1',
                 { implementationStatus: 'implemented' } as any,
                 ORG,
-                { pullRequestId: 'pr-uuid-1', returnDocument: false },
+                { pullRequestId: PR_ID, returnDocument: false },
             );
 
             const [filter] = findOneAndUpdate.mock.calls[0];
             expect(filter).toMatchObject({
-                '_id': 'pr-uuid-1',
+                '_id': PR_ID,
                 'files.suggestions.id': 'sugg-id-1',
                 'organizationId': 'org-A',
             });
@@ -731,15 +733,31 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 { implementationStatus: 'implemented' } as any,
                 ORG,
                 {
-                    pullRequestId: 'pr-uuid-1',
+                    pullRequestId: PR_ID,
                     implementationStatusNotIn: ['implemented'] as any,
                 },
             );
 
             const [filter] = findOneAndUpdate.mock.calls[0];
             expect(filter).toMatchObject({
-                _id: 'pr-uuid-1',
+                _id: PR_ID,
                 organizationId: 'org-A',
+            });
+        });
+
+        it('falls back to the suggestion id when the PR id is not an ObjectId', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                { pullRequestId: 'legacy-id', returnDocument: false },
+            );
+
+            const [filter] = findOneAndUpdate.mock.calls[0];
+            expect(filter).not.toHaveProperty('_id');
+            expect(filter).toMatchObject({
+                'files.suggestions.id': 'sugg-id-1',
+                'organizationId': 'org-A',
             });
         });
     });

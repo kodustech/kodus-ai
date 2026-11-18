@@ -2741,9 +2741,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
               }
             : null;
 
-        const pullRequestFilter = options?.pullRequestId
-            ? { _id: options.pullRequestId }
-            : {};
+        // An _id that is not an ObjectId would throw a CastError and lose the
+        // write; such a PR is found by the suggestion id alone, as before.
+        const pullRequestFilter =
+            options?.pullRequestId &&
+            mongoose.Types.ObjectId.isValid(options.pullRequestId)
+                ? { _id: options.pullRequestId }
+                : {};
         const doc = await this.pullRequestsModel
             .findOneAndUpdate(
                 suggestionMatch
