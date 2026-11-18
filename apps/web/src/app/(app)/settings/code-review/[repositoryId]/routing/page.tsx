@@ -41,7 +41,6 @@ import {
     RoutingSettingsError,
     routingStatusQueryKey,
 } from "src/features/ee/byok/_components/routing/routing-state";
-import { isUltraTrioSet } from "src/features/ee/ultra-review/plan";
 
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { OverrideIndicatorForm } from "../../_components/override";
@@ -319,10 +318,7 @@ function RoutingSettings() {
             // A trio cleared together with a mode change away from Ultra:
             // the mode goes first, or the stored config would be Ultra with
             // no models if the second save failed (the API refuses it too).
-            const modeFirst =
-                reviewDirty &&
-                organization.dirty &&
-                !isUltraTrioSet(organization.routing.ultraModelIds);
+            const modeFirst = reviewDirty && organization.breaksUltraTrio;
             const saveReview = () =>
                 reviewDirty
                     ? saveSettings(data, {

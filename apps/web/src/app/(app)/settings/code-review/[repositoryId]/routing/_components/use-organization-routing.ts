@@ -27,6 +27,7 @@ import {
     hasVisibleModels,
 } from "src/features/ee/byok/_utils";
 import {
+    isUltraTrioSet,
     ULTRA_MODEL_COUNT,
     ultraModelResolver,
     ultraTrioError,
@@ -229,6 +230,11 @@ export function useOrganizationRouting({
             };
         },
         routing,
+        /** The saved trio is being broken by this edit. */
+        breaksUltraTrio:
+            dirty &&
+            isUltraTrioSet(saved.ultraModelIds) &&
+            !isUltraTrioSet(routing.ultraModelIds),
         pool,
         dirty,
         validationError,

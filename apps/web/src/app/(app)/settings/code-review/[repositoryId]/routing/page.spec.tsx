@@ -864,6 +864,40 @@ describe("Ultra review mode", () => {
         ).toHaveTextContent("Reviews in this mode do not run until then.");
     });
 
+    it("moving the mode off Ultra while clearing the saved trio saves the mode first", async () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mockByok.routing!.ultraModelIds = ["c", "a", "b"];
+        mount(false, false, { reviewMode: leaf("ultra") });
+        await chooseReviewMode("All PRs", "Balanced");
+        for (const n of [1, 2, 3]) {
+            await chooseOrgModel(`Ultra Model ${n}`, /^None$/);
+        }
+        await waitFor(() => expect(saveButton()).toBeEnabled());
+        fireEvent.click(saveButton());
+        await waitFor(() => expect(saveModels).toHaveBeenCalledTimes(1));
+        expect(save).toHaveBeenCalledTimes(1);
+        // The API refuses a cleared trio while the stored mode is Ultra.
+        expect(save.mock.invocationCallOrder[0]).toBeLessThan(
+            saveModels.mock.invocationCallOrder[0],
+        );
+    });
+
+    it("a risk route saved on Ultra shows with risk assessment off, so it can be changed", () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mount(false, false, {
+            riskReviewRouting: {
+                noRisk: leaf("balanced"),
+                riskFound: leaf("ultra"),
+            },
+        });
+        expect(
+            screen.getByRole("combobox", { name: "Risk found" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getAllByText("Runs when risk assessment is on.").length,
+        ).toBe(2);
+    });
+
     it("the General summary shows Ultra with its models", () => {
         mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
         mount(false, true, { reviewMode: leaf("ultra") });
