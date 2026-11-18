@@ -543,11 +543,15 @@ export async function executeUltraReview(
         (s) => s.label !== 'kody_rules',
     );
     // What each run already listed under "Also found in".
+    const handedOver = [...nativeFindings, ...auxiliary.findings];
     const renderedBefore = new Map(
-        [...nativeFindings, ...auxiliary.findings].map((f) => [
-            f,
-            otherLocationsToRender(f),
-        ]),
+        handedOver.map((f) => [f, otherLocationsToRender(f)]),
+    );
+    // A merge that rebuilds a comment keeps its id.
+    const renderedBeforeById = new Map(
+        handedOver
+            .filter((f) => f.id)
+            .map((f) => [f.id, otherLocationsToRender(f)]),
     );
     const { merged, trace, merge } = await mergeAcrossModels(
         host,
@@ -582,7 +586,9 @@ export async function executeUltraReview(
         deduped,
         // A comment the runs did not hand over is left as it is.
         (finding) =>
-            renderedBefore.get(finding) ?? otherLocationsToRender(finding),
+            renderedBefore.get(finding) ??
+            (finding.id ? renderedBeforeById.get(finding.id) : undefined) ??
+            otherLocationsToRender(finding),
     );
 
     const outcome = ultraReviewOutcome(runs, merge);

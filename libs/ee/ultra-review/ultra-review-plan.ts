@@ -192,7 +192,7 @@ export function resolveUltraTrio(
     }
     const seen = new Set<string>();
     for (const m of models) {
-        const id = normalizeModelId(m.slot.model ?? '');
+        const id = normalizeModelId(m.slot.model);
         if (seen.has(id)) {
             return {
                 ok: false,

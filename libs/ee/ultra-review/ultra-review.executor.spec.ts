@@ -705,6 +705,30 @@ describe('executeUltraReview', () => {
         });
     });
 
+    it('a comment the merge rebuilt lists the places it absorbed too', async () => {
+        const { calls, context, host } = setup({
+            passes: {
+                a: collected(['a1']),
+                b: collected(['b1']),
+                c: collected(['c2']),
+                auxiliary: collected([]),
+            },
+        });
+        host.mergeFindings = async (findings) => ({
+            suggestions: findings
+                .filter((f) => f.id !== 'b1')
+                .map((f) =>
+                    f.id === 'a1' ? { ...f, alsoFoundIn: ['b.ts:3-4'] } : f,
+                ),
+            trace: { status: 'success' } as any,
+        });
+        await executeUltraReview(context, host, LIMITS);
+        const out = calls.published.deduped.find((f: any) => f.id === 'a1');
+        expect(out.suggestionContent).toContain(
+            `${OTHER_LOCATIONS_HEADING}\n- \`b.ts:3-4\``,
+        );
+    });
+
     it("a failed review carries the models' error, not one the Kody Rules left", async () => {
         const { context, host } = setup({
             passes: {
