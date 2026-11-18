@@ -17,12 +17,40 @@ export const isUltraReviewPlan = (
         selfHostedTiers: ["teams", "enterprise"],
     });
 
-/** Three different models picked, the only trio Ultra runs on. */
-export const isUltraTrioSet = (ids?: string[]): boolean => {
+/**
+ * Mirror of `normalizeModelId` in `libs/ee/ultra-review/ultra-merge-ranking.ts`
+ * — keep aligned. The same model through two providers reads the same.
+ */
+export const normalizeUltraModel = (modelId: string): string => {
+    let id = modelId.trim().toLowerCase();
+    id = id.split("/").pop() ?? "";
+    id = id.split("@")[0];
+    id = id.replace(/^(?:(?:us|eu|apac|global)\.)?[a-z]+\.(?=[a-z])/, "");
+    id = id.split(":")[0];
+    id = id.replace(/-v\d+$/, "");
+    id = id.replace(/(\d)p(\d)/g, "$1-$2");
+    id = id.replace(/[._\s]+/g, "-");
+    id = id.replace(/-(?:\d{8}|latest)$/, "");
+    return id;
+};
+
+/**
+ * Three different models picked, the only trio Ultra runs on. With
+ * `modelOf` (id → provider model), two ids for the same model count once,
+ * as the server does.
+ */
+export const isUltraTrioSet = (
+    ids?: string[],
+    modelOf?: (id: string) => string | undefined,
+): boolean => {
     const picked = (ids ?? []).filter(Boolean);
+    const keys = picked.map((id) => {
+        const model = modelOf?.(id);
+        return model ? normalizeUltraModel(model) : id;
+    });
     return (
         picked.length === ULTRA_MODEL_COUNT &&
-        new Set(picked).size === ULTRA_MODEL_COUNT
+        new Set(keys).size === ULTRA_MODEL_COUNT
     );
 };
 
@@ -34,8 +62,9 @@ export const isUltraTrioSet = (ids?: string[]): boolean => {
 export const ultraTrioError = (
     ids?: string[],
     required = false,
+    modelOf?: (id: string) => string | undefined,
 ): string | undefined => {
-    if (isUltraTrioSet(ids)) return undefined;
+    if (isUltraTrioSet(ids, modelOf)) return undefined;
     const picked = (ids ?? []).filter(Boolean);
     if (picked.length) return "Select three different models to save Ultra.";
     return required

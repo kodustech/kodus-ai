@@ -41,6 +41,7 @@ import {
     RoutingSettingsError,
     routingStatusQueryKey,
 } from "src/features/ee/byok/_components/routing/routing-state";
+import { isUltraTrioSet } from "src/features/ee/ultra-review/plan";
 
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { OverrideIndicatorForm } from "../../_components/override";
@@ -73,6 +74,7 @@ function ModeRow({
     disabled,
     description,
     modelFor,
+    routing,
 }: {
     label: string;
     name: ModeField;
@@ -80,9 +82,10 @@ function ModeRow({
     disabled: boolean;
     description?: string;
     modelFor?: (mode: Mode) => string;
+    /** The page's routing, with the trio being edited on it. */
+    routing: ReturnType<typeof useReviewRouting>;
 }) {
     const form = useFormContext<CodeReviewFormType>();
-    const routing = useReviewRouting();
     return (
         <Controller
             name={name}
@@ -313,6 +316,43 @@ function RoutingSettings() {
             ) {
                 if (!(await confirmOffCatalogModelSave(model))) return;
             }
+            // A trio cleared together with a mode change away from Ultra:
+            // the mode goes first, or the stored config would be Ultra with
+            // no models if the second save failed (the API refuses it too).
+            const modeFirst =
+                reviewDirty &&
+                organization.dirty &&
+                !isUltraTrioSet(organization.routing.ultraModelIds);
+            const saveReview = () =>
+                reviewDirty
+                    ? saveSettings(data, {
+                          prepare: (current) => {
+                              const config = unformatConfig(current);
+                              return {
+                                  savedFormData: current,
+                                  codeReviewConfig: {
+                                      reviewMode:
+                                          config.reviewMode ?? "balanced",
+                                      riskReviewRouting:
+                                          config.riskReviewRouting,
+                                      ...(dirtyFields.byokModelId
+                                          ? { byokModelId: config.byokModelId }
+                                          : {}),
+                                  },
+                              };
+                          },
+                      })
+                    : Promise.resolve(undefined);
+            let result = modeFirst ? await saveReview() : undefined;
+            if (modeFirst && result?.centralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        result.centralizedPr,
+                        "Routing change proposed. Clear the Ultra models once it is merged.",
+                    ),
+                );
+                return;
+            }
             modelsSaved = await organization.save(freshStatus);
             if (modelsSaved) {
                 checkingSavedModels = true;
@@ -325,23 +365,7 @@ function RoutingSettings() {
                     );
                 }
             }
-            const result = reviewDirty
-                ? await saveSettings(data, {
-                      prepare: (current) => {
-                          const config = unformatConfig(current);
-                          return {
-                              savedFormData: current,
-                              codeReviewConfig: {
-                                  reviewMode: config.reviewMode ?? "balanced",
-                                  riskReviewRouting: config.riskReviewRouting,
-                                  ...(dirtyFields.byokModelId
-                                      ? { byokModelId: config.byokModelId }
-                                      : {}),
-                              },
-                          };
-                      },
-                  })
-                : undefined;
+            if (!modeFirst) result = await saveReview();
             if (reviewDirty && !result?.centralizedPr) {
                 await queryClient.invalidateQueries({
                     queryKey: ["routing-model-overrides", teamId],
@@ -594,6 +618,7 @@ function RoutingSettings() {
                             {routing.active ? (
                                 <>
                                     <ModeRow
+                                        routing={routing}
                                         label="No risk found"
                                         name="riskReviewRouting.noRisk.value"
                                         fallback="balanced"
@@ -605,6 +630,7 @@ function RoutingSettings() {
                                         modelFor={routing.modelFor}
                                     />
                                     <ModeRow
+                                        routing={routing}
                                         label="Risk found"
                                         name="riskReviewRouting.riskFound.value"
                                         fallback="heavy"
@@ -618,6 +644,7 @@ function RoutingSettings() {
                                 </>
                             ) : (
                                 <ModeRow
+                                    routing={routing}
                                     label="All PRs"
                                     name="reviewMode.value"
                                     fallback="balanced"
@@ -633,6 +660,7 @@ function RoutingSettings() {
                         {routing.active && (
                             <div className="border-card-lv3 border-t">
                                 <ModeRow
+                                    routing={routing}
                                     label="Risk assessment unavailable"
                                     description="Uses the default review mode. Automatic approval stays blocked."
                                     name="reviewMode.value"

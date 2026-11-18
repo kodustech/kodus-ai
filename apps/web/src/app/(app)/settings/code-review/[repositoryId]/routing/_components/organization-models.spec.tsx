@@ -105,16 +105,19 @@ function Harness({
     canEdit = true,
     heavyAllowed = true,
     ultraAllowed = false,
+    ultraInUse = false,
 }: {
     canEdit?: boolean;
     heavyAllowed?: boolean;
     ultraAllowed?: boolean;
+    ultraInUse?: boolean;
 }) {
     const controller = useOrganizationRouting({
         teamId: "team",
         enabled: true,
         canEdit,
         status,
+        ultraInUse,
     });
     useEffect(() => {
         latest = controller;
@@ -162,6 +165,7 @@ function mount(
         canEdit?: boolean;
         heavyAllowed?: boolean;
         ultraAllowed?: boolean;
+        ultraInUse?: boolean;
         deepScan?: boolean;
     } = {},
 ) {
@@ -516,5 +520,65 @@ describe("Ultra models", () => {
         await waitFor(() => expect(put).toHaveBeenCalled());
         const saved = put.mock.calls[0][1] as BYOKConfig;
         expect(saved.routing?.ultraModelIds).toEqual(["a", "b", "c"]);
+    });
+
+    describe("while a review mode here is Ultra", () => {
+        const clearTrio = async () => {
+            for (const n of [1, 2, 3]) {
+                await choose(`Ultra Model ${n}`, /^None$/);
+            }
+        };
+
+        it("clearing the trio is blocked", async () => {
+            config.routing!.ultraModelIds = ["a", "b", "c"];
+            status = metadata(config);
+            mount({ ultraAllowed: true, ultraInUse: true });
+            await clearTrio();
+            expect(screen.getByRole("alert")).toHaveTextContent(
+                "Ultra is a review mode here. Keep three models, or change the mode first.",
+            );
+            expect(
+                screen.getByRole("button", { name: "Save models" }),
+            ).toBeDisabled();
+        });
+
+        it("with no mode on Ultra, clearing it saves", async () => {
+            config.routing!.ultraModelIds = ["a", "b", "c"];
+            status = metadata(config);
+            mount({ ultraAllowed: true });
+            await clearTrio();
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+            fireEvent.click(
+                screen.getByRole("button", { name: "Save models" }),
+            );
+            await waitFor(() => expect(put).toHaveBeenCalled());
+        });
+    });
+
+    it("two ids for one model through another provider count once, as the API counts them", async () => {
+        config.models.push({
+            id: "d",
+            credentialId: "credential-b",
+            model: "openai/model-alpha",
+        });
+        status = metadata(config);
+        mount({ ultraAllowed: true });
+        const pickId = async (n: number, id: string) => {
+            fireEvent.click(
+                await screen.findByRole("combobox", {
+                    name: `Ultra Model ${n}`,
+                }),
+            );
+            fireEvent.click(
+                document.querySelector(`[role=option][data-value="${id}"]`)!,
+            );
+        };
+        await pickId(1, "a");
+        await pickId(2, "b");
+        await pickId(3, "d");
+        expect(draft().ultraModelIds).toEqual(["a", "b", "d"]);
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "Select three different models to save Ultra.",
+        );
     });
 });

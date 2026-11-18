@@ -48,12 +48,17 @@ export function useReviewModes() {
     return { active, configuredDefault, noRisk, riskFound };
 }
 
-/** Whether a review here runs Ultra: the default mode, or a risk route. */
+/**
+ * Whether a review here runs Ultra: the default mode, or a risk route even
+ * with risk assessment off (turning it on would run the route). Other
+ * scopes are checked by the API when the trio is saved.
+ */
 export function useUltraModeInUse(): boolean {
-    const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
+    const { configuredDefault, noRisk, riskFound } = useReviewModes();
     return (
         configuredDefault === "ultra" ||
-        (active && (noRisk === "ultra" || riskFound === "ultra"))
+        noRisk === "ultra" ||
+        riskFound === "ultra"
     );
 }
 
@@ -70,7 +75,10 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
     const ultraModelIds = modelDraft
         ? modelDraft.ultraModelIds
         : status?.modelRouting?.ultraModelIds;
-    const ultraSet = isUltraTrioSet(ultraModelIds);
+    const ultraSet = isUltraTrioSet(
+        ultraModelIds,
+        (id) => status?.models?.find((model) => model.modelId === id)?.model,
+    );
     const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
     const selectedScope = useWatch({ control, name: "byokModelId.value" });
     const scopeModel =

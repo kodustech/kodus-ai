@@ -128,7 +128,13 @@ export function useOrganizationRouting({
         )
             ? "Select a connected default model."
             : dirty
-              ? ultraTrioError(routing.ultraModelIds, ultraInUse)
+              ? ultraTrioError(
+                    routing.ultraModelIds,
+                    ultraInUse,
+                    (id) =>
+                        query.data?.models?.find((model) => model.id === id)
+                            ?.model,
+                )
               : undefined;
 
     useUnsavedChangesGuard({
