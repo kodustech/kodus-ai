@@ -391,6 +391,8 @@ export interface ReviewPass {
     timelineTag?: AgentTimelineTag;
     /** Takes the pass's findings; the pass then publishes nothing. */
     collect?: (collected: ReviewPassCollected) => void;
+    /** The agents' loop ended; the later steps (dedup, severity...) follow. */
+    onLoopEnd?: () => void;
 }
 
 /**
@@ -521,11 +523,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     private ultraReviewHost(): UltraReviewHost {
         return {
             reviewPass: (context, pass) => this.reviewPass(context, pass),
-            acquireRunSandbox: async (context, suffix, leaseTtlMs) =>
+            acquireRunSandbox: async (context, suffix, leaseTtlMs, signal) =>
                 this.createSandboxStage?.acquireRunSandbox(
                     context,
                     suffix,
                     leaseTtlMs,
+                    signal,
                 ),
             runContext: (context, model, sandbox, signal) =>
                 this.updateContext(context, (draft) => {
@@ -571,18 +574,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                           pullRequestNumber: context.pullRequest?.number,
                           repositoryId: context.repository?.id,
                       };
+                const metadata = {
+                    visibility: 'secondary',
+                    label: entry.label,
+                    ...entry.metadata,
+                };
                 try {
-                    await this.automationExecutionService.updateCodeReview(
-                        filter,
-                        { status: entry.status },
-                        entry.label,
-                        entry.stageName,
-                        {
-                            visibility: 'secondary',
-                            label: entry.label,
-                            ...entry.metadata,
-                        },
-                    );
+                    // Created in progress, then finished on the entry alone:
+                    // the execution's own status stays the pipeline's.
+                    const created =
+                        await this.automationExecutionService.updateCodeReview(
+                            filter,
+                            { status: AutomationStatus.IN_PROGRESS },
+                            entry.label,
+                            entry.stageName,
+                            metadata,
+                        );
+                    const uuid = created?.stageLog?.uuid;
+                    if (uuid) {
+                        await this.automationExecutionService.updateStageLog(
+                            uuid,
+                            {
+                                status: entry.status,
+                                message: entry.label,
+                                metadata,
+                                finishedAt: new Date(),
+                            },
+                        );
+                    }
                 } catch (error) {
                     this.logger.warn({
                         message: `[ULTRA] Could not write the ${entry.stageName} timeline entry`,
@@ -1317,6 +1336,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     onCliRun: (run) => cliRuns.push(run),
                 },
             });
+            pass.onLoopEnd?.();
 
             // Snapshot linked-repo metadata after the review so clone status
             // (ready/failed) reflects what the agent actually used. When the

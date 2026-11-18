@@ -68,13 +68,17 @@ type PassPlan =
     | ReviewPassCollected
     | 'throw'
     | 'hang'
-    | { untilStopped: ReviewPassCollected };
+    | { untilStopped: ReviewPassCollected }
+    /** The loop ends in time; the later steps take `ms` more. */
+    | { slowAfterLoop: number; result: ReviewPassCollected };
 
 interface Fixture {
     passes: Record<string, PassPlan>;
     merge?: Record<string, 'ok' | 'fail' | 'throw' | 'hang'>;
     /** Runs whose sandbox could not be created. */
     noSandbox?: string[];
+    /** Runs that wait for a sandbox slot until their deadline stops them. */
+    waitForSlot?: string[];
     context?: Partial<CodeReviewPipelineContext>;
     state?: Partial<UltraReviewState>;
 }
@@ -137,8 +141,14 @@ function setup(fx: Fixture) {
                 await new Promise((resolve) =>
                     signal.addEventListener('abort', resolve),
                 );
+                pass.onLoopEnd?.();
                 result = plan.untilStopped;
+            } else if (plan && 'slowAfterLoop' in plan) {
+                pass.onLoopEnd?.();
+                await new Promise((r) => setTimeout(r, plan.slowAfterLoop));
+                result = plan.result;
             } else {
+                pass.onLoopEnd?.();
                 result = plan as ReviewPassCollected | undefined;
             }
             if (result) pass.collect?.(result);
@@ -151,12 +161,19 @@ function setup(fx: Fixture) {
                     }),
             } as any;
         },
-        acquireRunSandbox: async (_ctx, suffix, leaseTtlMs) => {
+        acquireRunSandbox: async (_ctx, suffix, leaseTtlMs, signal) => {
             // The run's place in the trio, without this review's tag.
             const run = suffix.replace(/-pipe42$/, '');
             calls.sandboxes.push(run);
             calls.sandboxKeys.push(suffix);
             calls.leaseTtls.push(leaseTtlMs);
+            if (fx.waitForSlot?.includes(run)) {
+                // The lease manager gives up when the signal fires.
+                await new Promise((resolve) =>
+                    signal.addEventListener('abort', resolve),
+                );
+                return undefined;
+            }
             if (fx.noSandbox?.includes(run)) return undefined;
             return {
                 id: run,
@@ -468,6 +485,40 @@ describe('executeUltraReview', () => {
                 'c2',
                 'f3',
             ]);
+        });
+
+        it('a deadline that fires after the loop ended, during the later steps, does not fail the run', async () => {
+            const { context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: { slowAfterLoop: 300, result: collected(['b1']) },
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(
+                out.ultra?.runs?.find((r) => r.modelId === 'b')?.status,
+            ).toBe('completed');
+            expect(out.ultra?.outcome).toBe('success');
+        });
+
+        it('a run still waiting for a sandbox slot at its deadline gives up, and the others post', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b9']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                waitForSlot: ['ultra-2'],
+                state: { fallback: undefined },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(out.ultra?.outcome).toBe('degraded');
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual(
+                expect.arrayContaining(['a1', 'c2']),
+            );
         });
 
         it('the fallback does not start without time left to review', async () => {

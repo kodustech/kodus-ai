@@ -98,6 +98,8 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         context: CodeReviewPipelineContext,
         suffix: string,
         leaseTtlMs?: number,
+        /** Stops waiting for a slot; the review job's own signal by default. */
+        signal?: AbortSignal,
     ): Promise<SandboxInstance | undefined> {
         const prKey = runPrKey(
             `${context.organizationAndTeamData?.organizationId}:${context.repository?.id}:${context.pullRequest?.number}`,
@@ -138,7 +140,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                         context.organizationAndTeamData?.organizationId,
                     teamId: context.organizationAndTeamData?.teamId,
                 },
-                { signal: context.parentSignal },
+                { signal: signal ?? context.parentSignal },
             );
             sandbox.cleanup = this.releaseOnce(leaseId);
             this.logger.log({

@@ -116,6 +116,8 @@ export interface UltraReviewHost {
         context: CodeReviewPipelineContext,
         suffix: string,
         leaseTtlMs: number,
+        /** Stops waiting for a sandbox slot: the run's deadline. */
+        signal: AbortSignal,
     ): Promise<SandboxInstance | undefined>;
     /**
      * The context a model's run reviews in: its sandbox, its model, and the
@@ -446,6 +448,10 @@ export async function executeUltraReview(
         run: async (model) => {
             const tag = runTag(model);
             const window = runWindow();
+            const startedAt = Date.now();
+            // The deadline covers the wait for a sandbox slot too: a run
+            // that waits past it reviews with what time is left, or none.
+            const stop = deadlineSignal(context.parentSignal, window);
             // A review a later push superseded takes no new sandboxes.
             const sandbox = context.sandboxSuperseded
                 ? undefined
@@ -453,10 +459,15 @@ export async function executeUltraReview(
                       context,
                       `${tag}-${sandboxTag}`,
                       ULTRA_RUN_LEASE_TTL_MS,
+                      stop.signal,
                   );
             const release = () =>
                 sandbox?.cleanup?.().catch(releaseFailed(tag));
-            const stop = deadlineSignal(context.parentSignal, window);
+            const left = Math.max(0, window - (Date.now() - startedAt));
+            // Whether the deadline stopped the review loop. Read when the loop
+            // ends: the later steps have the grace, and a deadline that fires
+            // during them stops nothing.
+            let loopStopped: boolean | undefined;
             // A run that outlives its grace is left behind: nothing it
             // reports afterwards reaches the review.
             let abandoned = false;
@@ -468,6 +479,12 @@ export async function executeUltraReview(
                         scope: 'native',
                         model,
                         timelineTag: { key: tag, label: model.modelName },
+                        onLoopEnd: () => {
+                            loopStopped =
+                                stop.signal.aborted &&
+                                !context.parentSignal?.aborted;
+                            stop.clear();
+                        },
                         collect: (c) => {
                             if (!abandoned) collected = c;
                         },
@@ -477,7 +494,7 @@ export async function executeUltraReview(
                     stop.clear();
                     void release();
                 });
-            const result = await withDeadline(pass, window + limits.runGraceMs);
+            const result = await withDeadline(pass, left + limits.runGraceMs);
             if (result === TIMED_OUT) {
                 abandoned = true;
                 void release();
@@ -505,7 +522,8 @@ export async function executeUltraReview(
                 };
             }
             const timedOut =
-                stop.signal.aborted && !context.parentSignal?.aborted;
+                loopStopped ??
+                (stop.signal.aborted && !context.parentSignal?.aborted);
             const withoutCheckout = checkoutExpected && !sandbox;
             const completed =
                 collected.completion.completed && !timedOut && !withoutCheckout;
