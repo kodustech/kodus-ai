@@ -153,7 +153,14 @@ export function resolveModelConfig(
             resolvedSlot,
             agentModelOptions.defaultModelOverride,
         ),
-        callOptions: resolveSlotCallOptions(resolvedSlot),
+        // For the env/managed path, resolvedSlot is undefined and the provider
+        // lives in envDescriptor. Pass it as a fallback so anthropic-wire env
+        // providers (API_LLM_PROVIDER=anthropic_compatible/moonshot/zai) get
+        // the same large-default injection that BYOK slots on those transports do.
+        callOptions: resolveSlotCallOptions(
+            resolvedSlot ??
+                (envDescriptor as unknown as Parameters<typeof resolveSlotCallOptions>[0]),
+        ),
         providerOptions,
     };
 }

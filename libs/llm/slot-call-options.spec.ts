@@ -49,13 +49,13 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
         }
     });
 
-    it('does NOT inject a default for anthropic_compatible Claude ids', () => {
-        // A real Claude id proxied over a compatible endpoint is still known to
-        // @ai-sdk/anthropic — the SDK sets the right ceiling itself.
+    it('does NOT inject a default for anthropic_compatible hyphenated Claude ids', () => {
+        // @ai-sdk/anthropic only recognises hyphenated 'claude-' ids -- the SDK
+        // sets the right ceiling for those itself.
         for (const model of [
             'claude-sonnet-4-5',
             'claude-opus-4-8',
-            'claude_3_haiku',
+            'claude-3-haiku-20240307',
         ]) {
             const result = resolveSlotCallOptions({
                 provider: 'anthropic_compatible',
@@ -63,6 +63,42 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
             } as any);
             expect(result.maxOutputTokens).toBeUndefined();
         }
+    });
+
+    it('injects a default for underscore-prefixed Claude ids (not recognised by the SDK)', () => {
+        // @ai-sdk/anthropic only recognises 'claude-' (hyphen), not 'claude_'
+        // (underscore). An underscore id is unknown to the SDK and floors at 4096.
+        const result = resolveSlotCallOptions({
+            provider: 'anthropic_compatible',
+            model: 'claude_3_haiku',
+        } as any);
+        expect(result.maxOutputTokens).toBeGreaterThan(4096);
+    });
+
+    it('injects a default for brand slots (moonshot/zai) with non-Claude model ids', () => {
+        // Brand slots keep their own provider id ('moonshot'/'zai') on the slot --
+        // they only present as 'anthropic_compatible' at build time, so the guard
+        // must include the brand ids.
+        for (const [provider, model] of [
+            ['moonshot', 'kimi-k2.7-code'],
+            ['moonshot', 'kimi-k2.6'],
+            ['zai', 'glm-5.3'],
+            ['zai', 'glm-4-flash'],
+        ]) {
+            const result = resolveSlotCallOptions({ provider, model } as any);
+            expect(result.maxOutputTokens).toBeGreaterThan(4096);
+        }
+    });
+
+    it('injects a default when given an env descriptor shape (provider + model, no BYOK slot)', () => {
+        // The env/managed path passes an envDescriptor -- just provider + model,
+        // no temperature or maxOutputTokens fields -- to resolveSlotCallOptions.
+        // The default must fire for Anthropic-wire env providers too.
+        const result = resolveSlotCallOptions({
+            provider: 'anthropic_compatible',
+            model: 'kimi-k2.7-code',
+        } as any);
+        expect(result.maxOutputTokens).toBeGreaterThan(4096);
     });
 
     it('honours an explicit maxOutputTokens over the default on anthropic_compatible', () => {
