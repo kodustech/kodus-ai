@@ -95,8 +95,10 @@ export function AutoTopUpMonthlyLimit({
             </p>
             {auto.enabled && auto.monthlyLimitReached && (
                 <p role="status" className="text-warning">
-                    Monthly limit blocks the next auto top-up. Increase the
-                    limit or wait until {resets} (UTC).
+                    {/* A zero cap pauses every month, so waiting never resumes it. */}
+                    {auto.monthlyLimitUsd === 0
+                        ? "Automatic purchases are paused by a $0 limit. Raise the limit to resume them."
+                        : `Monthly limit blocks the next auto top-up. Increase the limit or wait until ${resets} (UTC).`}
                 </p>
             )}
         </div>

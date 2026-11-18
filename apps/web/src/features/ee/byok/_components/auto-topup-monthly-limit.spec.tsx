@@ -120,6 +120,27 @@ describe("monthly auto top-up limit", () => {
         );
     });
 
+    it("says a zero cap pauses purchases instead of pointing at the reset", () => {
+        render(
+            <AutoTopUpMonthlyLimit
+                auto={{
+                    ...auto,
+                    monthlyLimitUsd: 0,
+                    monthlyPurchasedUsd: 0,
+                    monthlyRemainingUsd: 0,
+                    monthlyLimitReached: true,
+                }}
+                disabled={false}
+                onSave={jest.fn()}
+            />,
+        );
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent(
+            "Automatic purchases are paused by a $0 limit. Raise the limit to resume them.",
+        );
+        expect(status).not.toHaveTextContent("wait until");
+    });
+
     it("does not offer an unenforced cap against an older billing deployment", () => {
         render(
             <AutoTopUpMonthlyLimit
