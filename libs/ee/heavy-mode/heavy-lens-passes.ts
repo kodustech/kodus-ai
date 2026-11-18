@@ -4,6 +4,7 @@
  * `isHeavyModePlanAllowed` (heavy-mode-plan.ts).
  */
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import type {
     ToolContext,
     ToolRegistry,
@@ -11,10 +12,10 @@ import type {
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import {
     type FinderSuggestion,
+    type HeavyLensOutcome,
     type HeavyLensRun,
     type HeavyLensRunResult,
     type RecallPassStat,
-    type VerifyUsage,
     ZERO_VERIFY_USAGE,
     buildFinderAgentSpec,
     extractFindingsWithRecovery,
@@ -25,6 +26,7 @@ import {
     usageOf,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import type { FinderLabel } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
+import { submittedWholeResult } from '@libs/code-review/infrastructure/agents/core/submitted-result';
 import type { AgentLoopInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import {
     buildLangfuseTelemetry,
@@ -72,6 +74,8 @@ export interface HeavyLensEnvironment {
     contextWindowTokens?: number;
     overheadTokens?: number;
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** Called once, with the lens labels, when the lenses start. */
+    onStarted?: (labels: string[]) => void;
 }
 
 /**
@@ -125,7 +129,10 @@ export function buildHeavyLensRun(
 ): HeavyLensRun | undefined {
     const passes = buildHeavyLensPasses(env);
     if (!passes.length) return undefined;
-    return (params, ctx) => runHeavyLensPasses(passes, params, ctx);
+    return (params, ctx) => {
+        env.onStarted?.(passes.map((p) => p.label));
+        return runHeavyLensPasses(passes, params, ctx);
+    };
 }
 
 /**
@@ -140,80 +147,91 @@ export async function runHeavyLensPasses(
     ctx: ToolContext,
 ): Promise<HeavyLensRunResult> {
     const t0 = Date.now();
+    // Each lens's own time, kept apart so a lens that threw reports it too.
+    const startedAt: number[] = [];
+    const endedAt: number[] = [];
     const settled = await Promise.allSettled(
-        passes.map(async (pass) => {
+        passes.map(async (pass, i) => {
             const passT0 = Date.now();
-            const state = await params.runner.run(
-                pass.spec,
-                {
-                    prompt: pass.prompt,
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(
-                            `${params.agentName ?? 'finder'}-${pass.label}`,
-                            params.telemetryMetadata,
-                        ),
-                    ),
-                },
-                ctx,
-            );
-            const extracted = await extractFindingsWithRecovery(
-                state,
-                params.recoverProse,
-                { ...params.telemetryMetadata, modelId: params.modelId },
-            );
-            const returned = (extracted.suggestions ?? []).filter(Boolean);
-            if (
-                pass.maxFindings !== undefined &&
-                returned.length > pass.maxFindings
-            ) {
-                finderLogger.warn({
-                    message: `Heavy lens ${pass.label} returned ${returned.length} findings; kept its first ${pass.maxFindings}`,
-                    context: 'finder',
-                    metadata: {
-                        organizationId:
-                            params.telemetryMetadata?.organizationId,
-                        teamId: params.telemetryMetadata?.teamId,
-                        pullRequestId: params.telemetryMetadata?.pullRequestId,
-                        lens: pass.label,
-                        returned: returned.length,
-                        kept: pass.maxFindings,
-                    },
-                });
+            startedAt[i] = passT0;
+            try {
+                return await runLensPass(pass, passT0);
+            } finally {
+                endedAt[i] = Date.now();
             }
-            const suggestions = returned
-                .slice(0, pass.maxFindings)
-                .map((s) => ({
-                    ...s,
-                    label: pass.findingLabel,
-                    producedBy: pass.label,
-                }));
-            return {
-                pass,
-                state,
-                suggestions,
-                ms: Date.now() - passT0,
-                passT0,
-            };
         }),
     );
-
-    const suggestions: FinderSuggestion[] = [];
-    const passStats: RecallPassStat[] = [];
-    const investigatedFiles = new Set<string>();
-    let usage = ZERO_VERIFY_USAGE;
-    settled.forEach((r, i) => {
-        if (r.status === 'rejected') {
+    async function runLensPass(pass: HeavyLensPass, passT0: number) {
+        const state = await params.runner.run(
+            pass.spec,
+            {
+                prompt: pass.prompt,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        `${params.agentName ?? 'finder'}-${pass.label}`,
+                        params.telemetryMetadata,
+                    ),
+                ),
+            },
+            ctx,
+        );
+        const extracted = await extractFindingsWithRecovery(
+            state,
+            params.recoverProse,
+            { ...params.telemetryMetadata, modelId: params.modelId },
+        );
+        const returned = (extracted.suggestions ?? []).filter(Boolean);
+        if (
+            pass.maxFindings !== undefined &&
+            returned.length > pass.maxFindings
+        ) {
             finderLogger.warn({
-                message: `Heavy lens ${passes[i].label} failed; the review goes on without its findings`,
+                message: `Heavy lens ${pass.label} returned ${returned.length} findings; kept its first ${pass.maxFindings}`,
                 context: 'finder',
-                error: r.reason,
                 metadata: {
                     organizationId: params.telemetryMetadata?.organizationId,
                     teamId: params.telemetryMetadata?.teamId,
                     pullRequestId: params.telemetryMetadata?.pullRequestId,
-                    repositoryId: params.telemetryMetadata?.repositoryId,
-                    lens: passes[i].label,
+                    lens: pass.label,
+                    returned: returned.length,
+                    kept: pass.maxFindings,
                 },
+            });
+        }
+        const suggestions = returned.slice(0, pass.maxFindings).map((s) => ({
+            ...s,
+            label: pass.findingLabel,
+            producedBy: pass.label,
+        }));
+        return {
+            pass,
+            state,
+            suggestions,
+            ms: Date.now() - passT0,
+            passT0,
+        };
+    }
+
+    const suggestions: FinderSuggestion[] = [];
+    const passStats: RecallPassStat[] = [];
+    const outcomes: HeavyLensOutcome[] = [];
+    const investigatedFiles = new Set<string>();
+    let usage = ZERO_VERIFY_USAGE;
+    settled.forEach((r, i) => {
+        if (r.status === 'rejected') {
+            const reason =
+                r.reason instanceof Error
+                    ? r.reason
+                    : new Error(String(r.reason));
+            warnLensFailed(params, passes[i].label, reason);
+            outcomes.push({
+                label: passes[i].label,
+                status: 'failed',
+                found: 0,
+                ms: endedAt[i] - startedAt[i],
+                steps: 0,
+                toolCalls: 0,
+                error: { message: reason.message, name: reason.name },
             });
             return;
         }
@@ -221,15 +239,79 @@ export async function runHeavyLensPasses(
         suggestions.push(...r.value.suggestions);
         usage = sumVerifyUsage(usage, usageOf(state.usage));
         for (const f of strongFilesFromRun(state)) investigatedFiles.add(f);
-        passStats.push(
-            passStatOf(state, {
-                label: pass.label,
-                added: r.value.suggestions.length,
-                ms,
-                startMs: passT0 - t0,
-                startEpochMs: passT0,
-            }),
-        );
+        const stat = passStatOf(state, {
+            label: pass.label,
+            added: r.value.suggestions.length,
+            ms,
+            startMs: passT0 - t0,
+            startEpochMs: passT0,
+        });
+        passStats.push(stat);
+        const outcome = lensOutcomeOf(state, stat, r.value.suggestions.length);
+        if (outcome.status === 'failed') {
+            const error = new Error(
+                outcome.error?.message ?? 'lens run failed',
+            );
+            if (outcome.error?.name) error.name = outcome.error.name;
+            warnLensFailed(params, pass.label, error);
+        }
+        outcomes.push(outcome);
     });
-    return { suggestions, usage, passStats, investigatedFiles };
+    return { suggestions, usage, passStats, investigatedFiles, outcomes };
+}
+
+/**
+ * How a lens ended, read from its state: the runner turns a provider throw
+ * into an error-status state instead of rejecting, so a settled lens can still
+ * be a failed one. A lens that submitted no result and found nothing ran out
+ * of its steps before answering.
+ */
+export function lensOutcomeOf(
+    state: RunState,
+    stat: RecallPassStat,
+    found: number,
+): HeavyLensOutcome {
+    const base = {
+        label: stat.label,
+        found,
+        ms: stat.ms ?? 0,
+        steps: stat.steps,
+        toolCalls: stat.toolCalls,
+    };
+    if (state.status === 'error') {
+        const detail = state.trace.find((e) => e.kind === 'error')?.detail;
+        return {
+            ...base,
+            status: 'failed',
+            error: {
+                message: detail?.message as string | undefined,
+                name: detail?.name as string | undefined,
+                status: detail?.status as number | undefined,
+                responseBody: detail?.responseBody as string | undefined,
+            },
+        };
+    }
+    if (found === 0 && !submittedWholeResult(state)) {
+        return { ...base, status: 'no-result' };
+    }
+    return { ...base, status: 'success' };
+}
+
+function warnLensFailed(
+    params: Parameters<HeavyLensRun>[0],
+    label: string,
+    error: Error,
+): void {
+    finderLogger.warn({
+        message: `Heavy lens ${label} failed; the review goes on without its findings`,
+        context: 'finder',
+        error,
+        metadata: {
+            organizationId: params.telemetryMetadata?.organizationId,
+            teamId: params.telemetryMetadata?.teamId,
+            pullRequestId: params.telemetryMetadata?.pullRequestId,
+            repositoryId: params.telemetryMetadata?.repositoryId,
+            lens: label,
+        },
+    });
 }

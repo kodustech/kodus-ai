@@ -1,4 +1,5 @@
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import { reviewModeOfExecution } from '@libs/code-review/domain/review-mode';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -649,7 +650,9 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             title: pullRequest.title,
                             status: pullRequest.status,
                             merged: pullRequest.merged,
-                            heavy: pullRequest.heavy,
+                            reviewMode: reviewModeOfExecution(
+                                execution.dataExecution,
+                            ),
                             url: pullRequest.url,
                             baseBranchRef: pullRequest.baseBranchRef,
                             headBranchRef: pullRequest.headBranchRef,

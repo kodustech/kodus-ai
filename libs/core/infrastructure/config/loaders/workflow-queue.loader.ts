@@ -34,10 +34,13 @@ export const WorkflowQueueLoader = registerAs(
             20,
         ),
         // AMQP interprets zero as unlimited. Only an explicit positive whole
-        // number may replace the bounded default for long-running scans.
+        // number may replace the bounded default. Default is 1: each slice
+        // forks a child Nest process, so a higher prefetch stacks heaps.
         WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH: (() => {
-            const count = Number(process.env.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH);
-            return Number.isSafeInteger(count) && count > 0 ? count : 5;
+            const count = Number(
+                process.env.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH,
+            );
+            return Number.isSafeInteger(count) && count > 0 ? count : 1;
         })(),
         WORKFLOW_QUEUE_WORKER_MAX_RETRIES: parseIntOrDefault(
             process.env.WORKFLOW_QUEUE_WORKER_MAX_RETRIES,

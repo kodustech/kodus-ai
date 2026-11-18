@@ -32,9 +32,11 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
     beforeEach(async () => {
         mockMemberListService = {
-            fetch: jest
-                .fn()
-                .mockResolvedValue({ status: 'ok', members: mockMembers }),
+            fetch: jest.fn().mockResolvedValue({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+            }),
         };
 
         mockCacheService = {
@@ -70,13 +72,21 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
     describe('caching', () => {
         it('should return cached members on cache hit', async () => {
-            mockCacheService.getFromCache.mockResolvedValue(mockMembers);
+            mockCacheService.getFromCache.mockResolvedValue({
+                members: mockMembers,
+                absentSeatHolderIds: ['77'],
+            });
 
             const result = await useCase.execute();
 
-            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+                absentSeatHolderIds: ['77'],
+            });
             expect(mockCacheService.getFromCache).toHaveBeenCalledWith(
-                'org_members_org-uuid-123',
+                'org_members_v3_org-uuid-123',
             );
             expect(mockMemberListService.fetch).not.toHaveBeenCalled();
         });
@@ -86,7 +96,11 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
             const result = await useCase.execute();
 
-            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+            });
             expect(mockMemberListService.fetch).toHaveBeenCalled();
         });
 
@@ -95,7 +109,11 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
             const result = await useCase.execute();
 
-            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+            });
             expect(mockMemberListService.fetch).toHaveBeenCalledWith(
                 {
                     organizationId: 'org-uuid-123',
@@ -120,12 +138,18 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
         it('should populate cache after fetching from code integration', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
+            mockMemberListService.fetch.mockResolvedValue({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+                absentSeatHolderIds: ['77'],
+            });
 
             await useCase.execute();
 
             expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-                'org_members_org-uuid-123',
-                mockMembers,
+                'org_members_v3_org-uuid-123',
+                { members: mockMembers, absentSeatHolderIds: ['77'] },
                 30 * 60 * 1000,
             );
         });
@@ -137,7 +161,11 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
             const result = await useCase.execute();
 
-            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+            });
         });
 
         it('should not fail when addToCache throws', async () => {
@@ -148,7 +176,29 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
             const result = await useCase.execute();
 
-            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: mockMembers,
+            });
+        });
+
+        it('does not cache an incomplete list, so recovery is seen on the next load', async () => {
+            mockCacheService.getFromCache.mockResolvedValue(null);
+            mockMemberListService.fetch.mockResolvedValue({
+                status: 'ok',
+                complete: false,
+                members: mockMembers,
+            });
+
+            const result = await useCase.execute();
+
+            expect(result).toEqual({
+                status: 'ok',
+                complete: false,
+                members: mockMembers,
+            });
+            expect(mockCacheService.addToCache).not.toHaveBeenCalled();
         });
 
         it('should not cache unavailable results to avoid caching transient errors', async () => {
@@ -167,7 +217,7 @@ describe('GetCodeManagementMemberListUseCase', () => {
             await useCase.execute('team-1');
 
             expect(mockCacheService.getFromCache).toHaveBeenCalledWith(
-                'org_members_org-uuid-123_team-1',
+                'org_members_v3_org-uuid-123_team-1',
             );
         });
     });
@@ -190,7 +240,7 @@ describe('GetCodeManagementMemberListUseCase', () => {
             await useCase.refreshMembers('team-1');
 
             expect(mockCacheService.removeFromCache).toHaveBeenCalledWith(
-                'org_members_org-uuid-123_team-1',
+                'org_members_v3_org-uuid-123_team-1',
             );
             expect(mockMemberListService.fetch).toHaveBeenCalled();
         });

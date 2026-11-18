@@ -190,7 +190,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 { operation: 'update', jobId: id },
             );
 
-            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
+            if (data.metadata !== undefined)
+                updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
                 updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
@@ -437,6 +438,35 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             lastUpdatedAt: row.lastUpdatedAt ?? undefined,
             lastId: row.lastId ?? undefined,
         };
+    }
+
+    async failIfProcessing(
+        id: string,
+        data: { lastError: string; errorClassification: ErrorClassification },
+    ): Promise<boolean> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.FAILED,
+                    errorClassification: data.errorClassification,
+                    lastError: data.lastError,
+                    completedAt: () => 'NOW()',
+                })
+                .where('uuid = :id', { id })
+                .andWhere('status = :status', { status: JobStatus.PROCESSING })
+                .execute();
+            return (result.affected ?? 0) > 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to mark PROCESSING workflow job as FAILED',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { jobId: id },
+            });
+            throw error;
+        }
     }
 
     async getExecutionHistory(_jobId: string): Promise<IJobExecutionHistory[]> {

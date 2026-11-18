@@ -8,6 +8,10 @@ import {
     calculateBackoffInterval,
 } from '@libs/common/utils/polling';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import {
+    CLAIM_CONFLICT_REQUEUE_DELAY_MS,
+    isClaimConflictError,
+} from '@libs/core/workflow/domain/errors/claim-conflict.error';
 
 /**
  * Backoff configuration for consumer retries.
@@ -105,6 +109,17 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         // handler, so a throw only becomes an unhandled rejection. The broker
         // owns redelivery of any delivery left unacked.
         try {
+            if (isClaimConflictError(error)) {
+                await this.requeueHeldClaim(
+                    msg,
+                    headers,
+                    error,
+                    delayedExchange,
+                );
+                channel.ack(msg);
+                return;
+            }
+
             if (retryCount < this.maxRetriesConsumer) {
                 await this.retryWithDelay(
                     msg,
@@ -148,6 +163,52 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                 metadata,
             });
         }
+    }
+
+    /**
+     * Another worker still holds the inbox claim. Republish with a delay
+     * and leave x-retry-count alone so a dead holder is not DLQ'd after
+     * two collisions.
+     */
+    private async requeueHeldClaim(
+        msg: ConsumeMessage,
+        headers: Record<string, any>,
+        error: { message?: string; requeueDelayMs?: number },
+        delayedExchange: string,
+    ): Promise<void> {
+        const delayMs =
+            typeof error.requeueDelayMs === 'number' && error.requeueDelayMs > 0
+                ? error.requeueDelayMs
+                : CLAIM_CONFLICT_REQUEUE_DELAY_MS;
+
+        headers['x-delay'] = delayMs;
+
+        this.logger.warn({
+            message:
+                'Inbox claim held by another worker, requeueing without burning retries',
+            context: RabbitMQErrorHandler.name,
+            metadata: {
+                messageId: msg.properties.messageId,
+                routingKey: msg.fields.routingKey,
+                retryCount: headers[this.RETRY_COUNT_HEADER] || 0,
+                delayMs,
+                error: error?.message,
+            },
+        });
+
+        await this.amqpConnection.publish(
+            delayedExchange,
+            msg.fields.routingKey,
+            msg.content,
+            {
+                messageId: msg.properties.messageId,
+                correlationId: msg.properties.correlationId,
+                contentType: msg.properties.contentType,
+                contentEncoding: msg.properties.contentEncoding,
+                persistent: true,
+                headers: headers,
+            },
+        );
     }
 
     private async retryWithDelay(

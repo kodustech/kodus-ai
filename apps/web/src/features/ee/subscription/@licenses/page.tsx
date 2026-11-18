@@ -2,6 +2,7 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
 
 import {
+    getOrganizationMemberLabels,
     getOrganizationMembers,
     getUsersWithLicense,
     MEMBERS_UNAVAILABLE,
@@ -24,14 +25,36 @@ export default async function SubscriptionTabs() {
             getAutoLicenseAssignmentConfig().catch(() => undefined),
         ]);
 
-    // Without a confirmed member list we cannot tell who left the org, so no row
-    // is flagged as removed and seat pruning stays unavailable.
-    const membersUnavailable = memberList.status !== "ok";
+    // Only a complete list can say who left the org. A partial one is still
+    // shown, but nobody missing from it is flagged as removed.
+    const membersComplete = memberList.status === "ok" && memberList.complete;
+    // When the provider checks unlisted seat holders, only the ones it
+    // confirmed absent are removed; a seat it never saw is not.
+    const confirmedAbsent =
+        memberList.status === "ok" && memberList.absentSeatHolderIds
+            ? new Set(memberList.absentSeatHolderIds)
+            : null;
+    const isRemovedFromGit = (gitId: string) =>
+        membersComplete && (!confirmedAbsent || confirmedAbsent.has(gitId));
     const organizationMembers = memberList.members;
 
     const organizationMemberIds = new Set(
         organizationMembers.map((m) => m.id.toString()),
     );
+
+    const unlistedSeatHolders = usersWithLicense.filter(
+        (userWithLicense) =>
+            !organizationMemberIds.has(userWithLicense.git_id) &&
+            userWithLicense.status !== "inactive",
+    );
+
+    const seatHolderLabels: Record<string, string> =
+        unlistedSeatHolders.length > 0
+            ? await getOrganizationMemberLabels({
+                  teamId,
+                  ids: unlistedSeatHolders.map((u) => u.git_id),
+              }).catch(() => ({}))
+            : {};
 
     const usersWithLicenseByGitId = new Map(
         usersWithLicense.map((u) => [u.git_id, u]),
@@ -55,32 +78,27 @@ export default async function SubscriptionTabs() {
                 licenseStatus:
                     license.valid && license.subscriptionStatus === "trial"
                         ? "active"
-                        : user?.git_id && (user?.status ?? "active") === "active"
+                        : user?.git_id &&
+                            (user?.status ?? "active") === "active"
                           ? "active"
                           : "inactive",
             } satisfies LicenseTableRow;
         }),
-        ...usersWithLicense
-            .filter(
-                (userWithLicense) =>
-                    !organizationMemberIds.has(userWithLicense.git_id) &&
-                    userWithLicense.status !== "inactive",
-            )
-            .map((userWithLicense) => ({
-                id: userWithLicense.git_id,
-                name: membersUnavailable
-                    ? userWithLicense.git_id
-                    : `Deleted user (${userWithLicense.git_id})`,
-                licenseStatus: userWithLicense.status ?? "active",
-                removedFromGit: !membersUnavailable,
-            })),
+        ...unlistedSeatHolders.map((userWithLicense) => ({
+            id: userWithLicense.git_id,
+            name:
+                seatHolderLabels[userWithLicense.git_id] ??
+                userWithLicense.git_id,
+            licenseStatus: userWithLicense.status ?? "active",
+            removedFromGit: isRemovedFromGit(userWithLicense.git_id),
+        })),
     ];
 
     return (
         <LicensesPageClient
             data={organizationMembersWithLicense}
             autoLicenseAssignmentConfig={autoLicenseAssignmentConfig}
-            membersUnavailable={membersUnavailable}
+            membersUnavailable={!membersComplete}
         />
     );
 }

@@ -817,6 +817,27 @@ export interface HeavyLensRunResult {
     usage: VerifyUsage;
     passStats: RecallPassStat[];
     investigatedFiles: Set<string>;
+    /** How each lens ended, failed ones included: what the PR timeline shows. */
+    outcomes: HeavyLensOutcome[];
+}
+
+/** How one lens ended. A provider error does not reject the run: the runner
+ *  returns it as an error-status state, so this reads the state. */
+export interface HeavyLensOutcome {
+    /** The pass label, `lens-<id>`; findings carry it in `producedBy`. */
+    label: string;
+    status: 'success' | 'failed' | 'no-result';
+    /** Findings the lens returned, before verify. */
+    found: number;
+    ms: number;
+    steps: number;
+    toolCalls: number;
+    error?: {
+        message?: string;
+        name?: string;
+        status?: number;
+        responseBody?: string;
+    };
 }
 
 /** Runs heavy mode's lenses on the finder's runner. */
@@ -907,6 +928,8 @@ export interface FinderWithVerifyResult {
     /** Per-pass stats (the base pass and the synthesis rescue), so a pass
      *  that pays for itself can be told from one that doesn't. */
     passStats: RecallPassStat[];
+    /** How each heavy-mode lens ended. Absent when the review ran no lenses. */
+    lensOutcomes?: HeavyLensOutcome[];
 }
 
 export const ZERO_VERIFY_USAGE: VerifyUsage = {
@@ -1062,6 +1085,7 @@ export async function runFinderWithVerify(
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
             passStats,
+            ...(lensResult && { lensOutcomes: lensResult.outcomes }),
         };
     }
 
@@ -1225,6 +1249,7 @@ export async function runFinderWithVerify(
         verifyMs,
         recallUsage,
         passStats,
+        ...(lensResult && { lensOutcomes: lensResult.outcomes }),
     };
 }
 
