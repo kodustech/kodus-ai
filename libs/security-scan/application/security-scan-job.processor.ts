@@ -38,6 +38,7 @@ import {
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { isSlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 
 import { ScanBudgetMeter, validateBudget } from '../domain/budget-meter';
@@ -182,6 +183,32 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 signal,
             );
         } catch (error) {
+            if (isSlicePreemptedError(error)) {
+                logger.warn({
+                    message: `Security scan ${scan.uuid} slice preempted`,
+                    context: SecurityScanJobProcessor.name,
+                    error,
+                    metadata: {
+                        scanId: scan.uuid,
+                        organizationId: scan.organizationId,
+                        repositoryId: scan.repository.id,
+                    },
+                });
+                if (sliceMeter) {
+                    await this.scans.update(
+                        scan.uuid,
+                        { spend: sliceMeter.committedSpend() },
+                        undefined,
+                        {
+                            statuses: active,
+                            ownedBy: jobId,
+                            orUnowned: true,
+                        },
+                    );
+                }
+                throw error;
+            }
+
             logger.error({
                 message: `Security scan ${scan.uuid} failed`,
                 context: SecurityScanJobProcessor.name,

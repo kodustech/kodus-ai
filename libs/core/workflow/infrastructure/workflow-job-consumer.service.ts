@@ -28,19 +28,10 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
-import {
-    ClaimConflictError,
-    isClaimConflictError,
-} from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { isClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
-import { runSecurityScanSliceChild } from './security-scan-slice.runner';
-import {
-    isSecurityScanSliceProcess,
-    SECURITY_SCAN_CLAIM_HEARTBEAT_MS,
-    SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
-    SECURITY_SCAN_JOB_QUEUE,
-} from './security-scan-runtime';
+import { isSecurityScanSliceProcess } from './security-scan-runtime';
 import {
     ITaskProtectionService,
     TASK_PROTECTION_SERVICE_TOKEN,
@@ -64,20 +55,19 @@ const CONSUMER_CONTEXT = 'WorkflowJobConsumer';
  */
 @Injectable()
 export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdown {
-    private readonly logger = createLogger(CONSUMER_CONTEXT);
-    private readonly instanceId = os.hostname();
+    protected readonly logger = createLogger(CONSUMER_CONTEXT);
+    protected readonly instanceId = os.hostname();
     // Default ECS protection time in minutes
     private readonly JOB_PROTECTION_MINUTES = 60;
     private activeJobs = 0;
     private protectionSync: Promise<void> = Promise.resolve();
     private protectionSyncQueued = false;
-    private readonly sliceAborts = new Set<AbortController>();
 
     constructor(
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
         private readonly jobProcessor: IJobProcessorService,
         @Inject(INBOX_MESSAGE_REPOSITORY_TOKEN)
-        private readonly inboxRepository: IInboxMessageRepository,
+        protected readonly inboxRepository: IInboxMessageRepository,
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
         private readonly jobRepository: IWorkflowJobRepository,
         private readonly observability: ObservabilityService,
@@ -91,15 +81,25 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
      * block retries for the default 2.5h while we wait for the reaper.
      * Queues not listed fall back to 150 (2.5h).
      */
-    private resolveClaimTimeoutMinutes(queueName: string): number {
+    protected resolveClaimTimeoutMinutes(queueName: string): number {
         if (queueName === 'workflow.jobs.ast_graph_build.queue') return 30;
         if (queueName === 'workflow.jobs.ast_graph_incremental.queue')
             return 15;
         if (queueName === 'workflow.jobs.webhook.queue') return 20;
         if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
-        if (queueName === SECURITY_SCAN_JOB_QUEUE)
-            return SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES;
         return 150;
+    }
+
+    protected heldClaimError(): Error {
+        return new Error('Message already claimed but not finished');
+    }
+
+    protected shouldMarkJobFailed(error: unknown): boolean {
+        return !isClaimConflictError(error);
+    }
+
+    protected abortInFlightWork(): void {
+        // Subclasses abort work that must not outlive drain.
     }
 
     protected async handleWorkflowJob(
@@ -238,11 +238,10 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
             }
 
             // Held by another worker (or a dead one whose claim has not
-            // aged out). ClaimConflictError requeues without burning the
-            // retry budget, so two collisions cannot DLQ the message.
+            // aged out). Subclasses may throw ClaimConflictError so the
+            // delivery requeues without burning retries.
             this.logger.warn({
-                message:
-                    'Message already claimed by another worker, requeueing without burning retries',
+                message: 'Message already claimed by another worker',
                 context: CONSUMER_CONTEXT,
                 metadata: {
                     messageId,
@@ -250,7 +249,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
                     queueName,
                 },
             });
-            throw new ClaimConflictError();
+            throw this.heldClaimError();
         }
 
         // 2. Start observability span
@@ -293,9 +292,9 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
                     });
 
                     this.logger.error({
-                        message: isClaimConflictError(error)
-                            ? 'Security-scan slice aborted; requeueing without failing the job'
-                            : 'Failed to process workflow job',
+                        message: this.shouldMarkJobFailed(error)
+                            ? 'Failed to process workflow job'
+                            : 'Held or preempted job; requeueing without failing it',
                         context: CONSUMER_CONTEXT,
                         error,
                         metadata: {
@@ -309,7 +308,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
                     // A held or stolen claim is not a processing failure:
                     // the scan document stays RUNNING so a redelivery can
                     // continue it. Marking FAILED here raced a live child.
-                    if (!isClaimConflictError(error)) {
+                    if (this.shouldMarkJobFailed(error)) {
                         try {
                             await this.jobRepository.update(
                                 unwrappedMessage.jobId,
@@ -382,50 +381,13 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
         );
     }
 
-    /**
-     * Deep-scan slices run in a child process so CPU stalls cannot block
-     * the parent's AMQP heartbeats or the ECS health probe. The parent
-     * heartbeats the inbox claim while it waits; a dead parent is
-     * stealable after SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES.
-     */
-    private async executeJob(
+    protected async executeJob(
         jobId: string,
-        queueName: string,
-        messageId: string,
-        consumerId: string,
+        _queueName: string,
+        _messageId: string,
+        _consumerId: string,
     ): Promise<void> {
-        if (queueName !== SECURITY_SCAN_JOB_QUEUE) {
-            await this.jobProcessor.process(jobId);
-            return;
-        }
-
-        const abort = new AbortController();
-        this.sliceAborts.add(abort);
-        const beat = setInterval(() => {
-            void this.inboxRepository
-                .heartbeat(messageId, consumerId, this.instanceId)
-                .then((held) => {
-                    if (!held) abort.abort();
-                })
-                .catch(() => abort.abort());
-        }, SECURITY_SCAN_CLAIM_HEARTBEAT_MS);
-        beat.unref();
-
-        try {
-            await runSecurityScanSliceChild(jobId, {
-                abortSignal: abort.signal,
-            });
-        } catch (error) {
-            if (abort.signal.aborted) {
-                throw new ClaimConflictError(
-                    'Security-scan slice aborted: inbox claim lost or parent shutting down',
-                );
-            }
-            throw error;
-        } finally {
-            clearInterval(beat);
-            this.sliceAborts.delete(abort);
-        }
+        await this.jobProcessor.process(jobId);
     }
 
     /**
@@ -443,9 +405,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
             return;
         }
 
-        for (const abort of this.sliceAborts) {
-            abort.abort();
-        }
+        this.abortInFlightWork();
 
         // Same reader as the worker's force-exit timer, so the two agree
         const maxWaitMs = parseDrainTimeoutMs();

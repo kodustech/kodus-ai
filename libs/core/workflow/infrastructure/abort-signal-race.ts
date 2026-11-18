@@ -1,8 +1,11 @@
+import { isSlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
+
 /**
  * Race a promise against an AbortSignal.
  *
  * If `signal` aborts before `work` settles, the returned promise rejects
- * with a `JobAbortedError`. The underlying `work` promise is NOT cancelled
+ * with a `JobAbortedError`, or with `signal.reason` when that is a
+ * SlicePreemptedError. The underlying `work` promise is NOT cancelled
  * (octokit / fetch do not expose a way to yank a sleeping request once
  * issued) — it will settle later in the background and its result is
  * discarded.
@@ -17,6 +20,12 @@
  * matches `Promise.race` semantics: pass-through, or immediate rejection.
  */
 
+function errorFromAbort(signal: AbortSignal): Error {
+    return isSlicePreemptedError(signal.reason)
+        ? (signal.reason as Error)
+        : new JobAbortedError();
+}
+
 export class JobAbortedError extends Error {
     constructor(message = 'Job aborted by parent signal') {
         super(message);
@@ -29,11 +38,11 @@ export async function raceWithAbortSignal<T>(
     signal: AbortSignal | undefined,
 ): Promise<T> {
     if (!signal) return work;
-    if (signal.aborted) throw new JobAbortedError();
+    if (signal.aborted) throw errorFromAbort(signal);
 
     let onAbort: (() => void) | undefined;
     const abortPromise = new Promise<never>((_, reject) => {
-        onAbort = () => reject(new JobAbortedError());
+        onAbort = () => reject(errorFromAbort(signal));
         signal.addEventListener('abort', onAbort, { once: true });
     });
 

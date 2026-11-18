@@ -19,11 +19,8 @@ import { NestFactory } from '@nestjs/core';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
-import {
-    IJobProcessorService,
-    JOB_PROCESSOR_SERVICE_TOKEN,
-} from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
 import { securityScanSliceJobId } from '@libs/core/workflow/infrastructure/security-scan-runtime';
+import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
 
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
@@ -104,10 +101,10 @@ async function bootstrap() {
 
         await appContext.get(ObservabilityService).init('worker');
 
-        appContext.enableShutdownHooks();
-
         // A slice child runs the engine only: no health port (the parent
-        // already bound :3334) and no queue consumer.
+        // already bound :3334) and no queue consumer. Skip Nest shutdown
+        // hooks so SIGTERM is ours: abort the processor, release the
+        // sandbox, then close.
         const sliceJobId = securityScanSliceJobId();
 
         // Kept running through shutdown (unref'd): the drain is when we most
@@ -119,37 +116,23 @@ async function bootstrap() {
                 `Running security-scan slice ${sliceJobId}`,
                 'Bootstrap',
             );
-            const processor = appContext.get<IJobProcessorService>(
-                JOB_PROCESSOR_SERVICE_TOKEN,
+            const code = await runSecurityScanSliceProcess(
+                appContext,
+                sliceJobId,
+                {
+                    onError: (err) =>
+                        logger?.error({
+                            message: `Security-scan slice failed: ${err.message}`,
+                            context: 'Bootstrap',
+                            error: err,
+                            metadata: { jobId: sliceJobId },
+                        }),
+                },
             );
-            // SIGTERM's default terminate is overridden by Nest shutdown
-            // hooks; exit here so a parent abort does not leave the engine
-            // running until the 34-min router timeout. Do not abort the
-            // processor: JobAbortedError would mark the scan FAILED.
-            const onStop = () => process.exit(1);
-            process.once('SIGTERM', onStop);
-            process.once('SIGINT', onStop);
-            try {
-                await processor.process(sliceJobId);
-                await appContext.close();
-                process.exit(0);
-            } catch (error) {
-                const err =
-                    error instanceof Error ? error : new Error(String(error));
-                logger?.error({
-                    message: `Security-scan slice failed: ${err.message}`,
-                    context: 'Bootstrap',
-                    error: err,
-                    metadata: { jobId: sliceJobId },
-                });
-                try {
-                    await appContext.close();
-                } catch {
-                    // exit below
-                }
-                process.exit(1);
-            }
+            process.exit(code);
         }
+
+        appContext.enableShutdownHooks();
 
         // ECS-facing health probe: returns 503 when AMQP is disconnected so
         // the ECS task health check can detect a zombie worker (live Node

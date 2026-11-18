@@ -50,11 +50,17 @@ function killChild(child: ChildProcess): void {
     killTimer.unref();
 }
 
+/** Child exited with a numeric code: the engine already wrote job FAILED. */
+export function isSliceChildNonZeroExit(error: unknown): boolean {
+    return error instanceof Error && /exited \d+ for job/.test(error.message);
+}
+
 /**
  * Run one security-scan slice in a child process of the same worker
  * entry. The parent keeps the AMQP consumer and the ECS health probe on
  * its own event loop; the child boots Nest without those listeners.
  */
+
 export async function runSecurityScanSliceChild(
     jobId: string,
     options: RunSecurityScanSliceChildOptions = {},

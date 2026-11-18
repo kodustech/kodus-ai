@@ -34,6 +34,13 @@ export const SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES = 3;
 /** Parent refreshes lockedAt this often while the child is running. */
 export const SECURITY_SCAN_CLAIM_HEARTBEAT_MS = 30_000;
 
+/**
+ * Abort the child only after this long without a successful heartbeat.
+ * Shorter than the 3 min steal window so we stop before another worker
+ * takes the claim; longer than one Postgres blip.
+ */
+export const SECURITY_SCAN_HEARTBEAT_STALE_MS = 2 * 60 * 1000;
+
 export { CLAIM_CONFLICT_REQUEUE_DELAY_MS } from '../domain/errors/claim-conflict.error';
 
 /**
