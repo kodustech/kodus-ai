@@ -1,5 +1,10 @@
 import { ForbiddenException } from '@nestjs/common';
 
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+
 import { SecurityScansController } from '../securityScans.controller';
 
 describe('SecurityScansController.start', () => {
@@ -74,6 +79,13 @@ describe('SecurityScansController.cancel', () => {
     const setup = (allowed: string[]) => {
         const getSecurityScans = {
             get: jest.fn(async () => scan),
+            isInRepositoryScope: jest.fn(
+                async (
+                    _org: string,
+                    current: { repository: { id: string } },
+                    ids: string[] | undefined,
+                ) => ids === undefined || ids.includes(current.repository.id),
+            ),
         };
         const cancelSecurityScan = {
             execute: jest.fn(async () => ({ ...scan, status: 'cancelled' })),
@@ -117,8 +129,23 @@ describe('SecurityScansController.cancel', () => {
             scan.uuid,
             undefined,
         );
+        expect(authorizationService.getRepositoryScope).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: Action.Create,
+                resource: ResourceType.SecurityScan,
+            }),
+        );
+        expect(getSecurityScans.isInRepositoryScope).toHaveBeenCalledWith(
+            'org-1',
+            scan,
+            ['repo-allowed'],
+        );
         expect(authorizationService.ensure).toHaveBeenCalledWith(
-            expect.objectContaining({ repoIds: ['repo-allowed'] }),
+            expect.objectContaining({
+                action: Action.Create,
+                resource: ResourceType.SecurityScan,
+                repoIds: ['repo-allowed'],
+            }),
         );
         expect(cancelSecurityScan.execute).toHaveBeenCalledWith({
             organizationId: 'org-1',

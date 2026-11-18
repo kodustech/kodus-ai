@@ -197,13 +197,25 @@ export class SecurityScansController {
     @CheckPolicies(canCancelScan)
     async cancel(@Param('id') id: string) {
         const organizationId = await this.organizationId();
-        // Id + org only. Create-scoped ids go through fail-closed
-        // host/platform resolution and 404 a scan ensure would allow.
         const scan = await this.getSecurityScans.get(
             organizationId,
             id,
             undefined,
         );
+        const writeRepos = await this.authorizationService.getRepositoryScope({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+        });
+        if (
+            !(await this.getSecurityScans.isInRepositoryScope(
+                organizationId,
+                scan,
+                writeRepos ?? undefined,
+            ))
+        ) {
+            throw new ForbiddenException();
+        }
         await this.authorizationService.ensure({
             user: this.request.user,
             action: Action.Create,

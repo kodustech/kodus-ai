@@ -54,4 +54,26 @@ describe('scan read scope', () => {
         ).not.toHaveBeenCalled();
         expect(scans.findRecent).toHaveBeenCalledWith('org', undefined, 20);
     });
+
+    it('matches a write grant on the full repository identity, not the id alone', async () => {
+        const { useCase } = setup();
+        const scan = { organizationId: 'org', repository } as any;
+        await expect(
+            useCase.isInRepositoryScope('org', scan, ['123']),
+        ).resolves.toBe(true);
+        await expect(
+            useCase.isInRepositoryScope('org', scan, undefined),
+        ).resolves.toBe(true);
+    });
+
+    it('does not match an ambiguous legacy id to another instance', async () => {
+        const { useCase } = setup([
+            config(),
+            config('GITLAB', 'gitlab.com'),
+        ] as any);
+        const scan = { organizationId: 'org', repository } as any;
+        await expect(
+            useCase.isInRepositoryScope('org', scan, ['123']),
+        ).resolves.toBe(false);
+    });
 });
