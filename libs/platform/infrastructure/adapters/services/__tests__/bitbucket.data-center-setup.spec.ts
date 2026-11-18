@@ -264,9 +264,8 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
 
     it('refuses a probe that does not answer 200', async () => {
         const svc = dataCenter();
-        jest.spyOn(axios, 'create').mockReturnValue({
-            get: jest.fn(async () => ({ status: 401 })),
-        } as any);
+        const get = jest.fn(async () => ({ status: 401 }));
+        jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
 
         await expect(
             svc.createAuthIntegration({
@@ -277,6 +276,39 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
 
+        // The old probe called /projects?limit=1: the URL is what pins the fix.
+        expect(get).toHaveBeenCalledWith('/repos?limit=1');
         expect(svc.addAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('keeps the Basic request the setup form sends for a first-time connection', async () => {
+        const svc = dataCenter();
+        const get = jest.fn(async () => ({ status: 200 }));
+        const create = jest
+            .spyOn(axios, 'create')
+            .mockReturnValue({ get } as any);
+
+        await svc.createAuthIntegration({
+            organizationAndTeamData: ORG,
+            authMode: AuthMode.BASIC,
+            token: 'app-password',
+            username: 'acme',
+            host: HOST,
+        });
+
+        const basic = Buffer.from('acme:app-password').toString('base64');
+        expect(create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: `${HOST}/rest/api/1.0`,
+                headers: expect.objectContaining({
+                    Authorization: `Basic ${basic}`,
+                }),
+            }),
+        );
+        expect(get).toHaveBeenCalledWith('/repos?limit=1');
+        expect(svc.addAccessToken).toHaveBeenCalledWith(
+            ORG,
+            expect.objectContaining({ authMode: AuthMode.BASIC }),
+        );
     });
 });
