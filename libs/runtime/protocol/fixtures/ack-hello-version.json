@@ -1,0 +1,17 @@
+{
+  "name": "ack-hello-version",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "re": "7a2b3c4d-5e6f-4a1b-9c2d-3e4f5a6b7c8d",
+    "type": "ack",
+    "body": {
+      "version": 1
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "ack"
+  }
+}

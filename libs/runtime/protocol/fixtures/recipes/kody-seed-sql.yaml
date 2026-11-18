@@ -1,0 +1,13 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: app
+    health: /health
+    health_timeout: 120s
+  expose:
+    - { service: app, port: 3000, kind: http }
+    - { service: db, port: 5432, kind: postgres }
+data:
+  seed: { service: db, sql: db/seed.sql, user: shop, database: shop }
+  reset: recreate

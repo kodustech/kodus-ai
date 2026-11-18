@@ -1,0 +1,19 @@
+{
+  "name": "blocked-security-violation",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a51",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "blocked",
+    "body": {
+      "kind": "security_violation",
+      "signature": "credential_exfiltration",
+      "message": "the claim's code sent its test credential to collector.example.test; the claim runs nothing more"
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "blocked"
+  }
+}

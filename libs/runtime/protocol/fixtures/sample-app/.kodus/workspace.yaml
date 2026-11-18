@@ -1,0 +1,14 @@
+# Kody Runtime recipe (format of the local-docker driver, Rodada 2).
+# Without a recipe-aware driver the cell falls back to docker-compose.yml.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: app
+    health: /health
+    health_timeout: 120s
+  expose:
+    - { service: app, port: 3000, kind: http }
+data:
+  seed: { service: db, sql: db/seed.sql, user: shop, database: shop }
+  reset: recreate
