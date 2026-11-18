@@ -350,11 +350,13 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         lastId?: string;
     }> {
         // `scan` walks idx_workflow_jobs_updated_at for the next batch and
-        // stops there (MATERIALIZED keeps the LIMIT before the anti-joins):
-        // planned as one query, the anti-joins read all of inbox and outbox
-        // into hashes and sorted every finished job, which on a 12M-row copy
-        // spilled to disk until it ran out. The message checks then probe the
-        // job_id indexes for those rows only.
+        // stops there (MATERIALIZED keeps the LIMIT ahead of the message
+        // checks): planned as one query, the checks read all of inbox and
+        // outbox into hashes and sorted every finished job, which on a
+        // 12M-row copy spilled to disk until it ran out. The checks are
+        // LIMIT 1 subqueries, not NOT EXISTS: the planner keeps them as one
+        // job_id index probe per row instead of turning them into a join that
+        // can still hash a whole message table.
         //
         // The DELETE repeats the candidate predicates: a row updated while
         // the DELETE waited on its lock (FAILED retried back to PENDING) is
@@ -385,8 +387,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
              doomed AS (
                     SELECT s."uuid"
                       FROM scan s
-                     WHERE NOT EXISTS (SELECT 1 FROM "kodus_workflow"."inbox_messages" i WHERE i."job_id" = s."uuid")
-                       AND NOT EXISTS (SELECT 1 FROM "kodus_workflow"."outbox_messages" o WHERE o."job_id" = s."uuid")
+                     WHERE (SELECT 1 FROM "kodus_workflow"."inbox_messages" i WHERE i."job_id" = s."uuid" LIMIT 1) IS NULL
+                       AND (SELECT 1 FROM "kodus_workflow"."outbox_messages" o WHERE o."job_id" = s."uuid" LIMIT 1) IS NULL
              ),
              gone AS (
                 DELETE FROM "kodus_workflow"."workflow_jobs" w
