@@ -89,7 +89,7 @@ export function matchesRiskSnapshot(
 interface CurrentRiskSnapshot {
     headSha: string | undefined;
     baseSha: string | undefined;
-    description?: { title?: string; body?: string };
+    description: { title?: string; body?: string } | undefined;
 }
 
 /** Compare the PR fields available to a consumer after the assessment runs. */
@@ -106,12 +106,11 @@ export function riskSnapshotMismatch(
     }
     if (!current.baseSha?.trim() || risk.snapshot.baseSha !== current.baseSha)
         return 'Risk assessment is unavailable for the current PR base.';
-    if (current.description && !risk.snapshot.descriptionKey)
+    if (!current.description || !risk.snapshot.descriptionKey)
         return 'Risk assessment is unavailable for the current PR context.';
     if (
-        current.description &&
         risk.snapshot.descriptionKey !==
-            prRiskDescriptionKey(current.description)
+        prRiskDescriptionKey(current.description)
     )
         return 'The PR title or description changed after risk assessment.';
     return undefined;

@@ -350,7 +350,11 @@ export async function toggleApprovalAction(
         }
         const state = enabled ? 'enabled' : 'disabled';
         cliInfo(
-            `${policyId} ${changed === false ? `already ${state}` : state} at ${describeScope(scope)}.`,
+            changed === true
+                ? `${policyId} ${state} at ${describeScope(scope)}.`
+                : changed === false
+                  ? `${policyId} already ${state} at ${describeScope(scope)}.`
+                  : `Change to ${policyId} could not be confirmed at ${describeScope(scope)}.`,
         );
         if (result.centralized?.prUrl) {
             cliInfo(`Pull request: ${result.centralized.prUrl}`);

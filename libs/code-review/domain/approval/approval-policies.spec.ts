@@ -1,5 +1,6 @@
 import type { NamedApprovalPolicy } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { prRiskDescriptionKey } from '../risk/risk-configuration';
 import {
     approvalPoliciesFromConfig,
     evaluateApprovalPolicies,
@@ -23,6 +24,7 @@ const run = (over: Partial<ApprovalPolicyInput> = {}) =>
         riskEnabled: false,
         currentHeadSha: 'head',
         currentBaseSha: 'base',
+        currentDescription: {},
         policies: [policy('Docs', { includedFiles: ['docs/**'] })],
         files: [file('docs/readme.md')],
         ...over,
@@ -38,6 +40,7 @@ const risk = (riskIdentified: boolean) => ({
         baseSha: 'base',
         headSha: 'head',
         assessmentKey: 'key',
+        descriptionKey: prRiskDescriptionKey({}),
     },
 });
 

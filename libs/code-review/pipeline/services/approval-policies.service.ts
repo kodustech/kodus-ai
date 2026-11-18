@@ -259,6 +259,7 @@ export class ApprovalPoliciesService {
                 risk: input.risk,
                 currentHeadSha: headSha,
                 currentBaseSha: baseSha,
+                currentDescription: live,
                 platformType: input.platformType,
                 author: live.user?.login,
                 labels: live.labels,

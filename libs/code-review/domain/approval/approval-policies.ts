@@ -60,6 +60,7 @@ export interface ApprovalPolicyInput {
     risk?: RiskAssessmentResult;
     currentHeadSha: string;
     currentBaseSha: string;
+    currentDescription: { title?: string; body?: string };
     platformType?: PlatformType;
     author?: string;
     labels?: string[];
@@ -199,6 +200,7 @@ export async function evaluateApprovalPolicies(
     const veto = riskApprovalVeto(input.riskEnabled, input.risk, {
         headSha: input.currentHeadSha,
         baseSha: input.currentBaseSha,
+        description: input.currentDescription,
     });
     if (veto) return hold(veto);
     if (input.sensitivePaths?.length) {

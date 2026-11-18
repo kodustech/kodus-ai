@@ -152,6 +152,7 @@ it.each([false, true])(
                 riskApprovalVeto(true, result.riskAssessment, {
                     headSha: 'head',
                     baseSha: 'base',
+                    description: result.pullRequest,
                 }),
             ).toBeDefined();
             expect(
@@ -184,7 +185,11 @@ it('keeps the incremental review available when complete risk settings cannot be
         riskApprovalVeto(
             result.codeReviewConfig.riskAssessmentActive,
             result.riskAssessment,
-            { headSha: 'head', baseSha: 'base' },
+            {
+                headSha: 'head',
+                baseSha: 'base',
+                description: result.pullRequest,
+            },
         ),
     ).toBeDefined();
     expect(LLM.run).not.toHaveBeenCalled();

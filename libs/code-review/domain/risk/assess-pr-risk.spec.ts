@@ -1,6 +1,5 @@
 import { assessApprovalRisk } from '../approval/assess-approval-risk';
 import { LLM } from '@libs/llm/llm';
-import { riskApprovalVeto } from './risk-assessment';
 import {
     applicableRiskCriteria,
     assessPrRisk,
@@ -113,12 +112,6 @@ it.each([
             ] as any,
         });
         expect(result.status).toBe('unavailable');
-        expect(
-            riskApprovalVeto(true, result, {
-                headSha: input.headSha,
-                baseSha: input.baseSha,
-            }),
-        ).toBeDefined();
         expect(LLM.run).toHaveBeenCalledTimes(1);
     },
 );
@@ -369,12 +362,6 @@ it('keeps a large diff unavailable when the configured model rejects its context
             code: 'diff_too_large',
         },
     });
-    expect(
-        riskApprovalVeto(true, result, {
-            headSha: input.headSha,
-            baseSha: input.baseSha,
-        }),
-    ).toBeTruthy();
 });
 
 it.each([

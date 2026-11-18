@@ -11,6 +11,7 @@ export interface PullRequestReviewRun {
     url: string;
     repositoryName: string;
     repositoryId: string;
+    provider?: string;
     author?: { id: string; username: string; name?: string };
     suggestionsCount?: {
         sent: number;

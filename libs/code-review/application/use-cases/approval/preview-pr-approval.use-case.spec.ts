@@ -62,6 +62,7 @@ describe(PreviewPrApprovalUseCase.name, () => {
                 changedFilesCount: 1,
             }),
             getFilesByPullRequestId: jest.fn().mockResolvedValue(files),
+            getPullRequestReviewThreads: jest.fn(),
         };
         const evaluate = jest.fn().mockResolvedValue({
             decision: {
@@ -70,6 +71,11 @@ describe(PreviewPrApprovalUseCase.name, () => {
                 matchedPolicy: policy,
             },
         });
+        const pullRequests = {
+            findPullRequestsWithDeliveredSuggestions: jest
+                .fn()
+                .mockResolvedValue([]),
+        };
         const useCase = new PreviewPrApprovalUseCase(
             parameters as never,
             configs as never,
@@ -78,8 +84,9 @@ describe(PreviewPrApprovalUseCase.name, () => {
             codeManagement as never,
             {} as never,
             { evaluate } as never,
+            pullRequests as never,
         );
-        return { useCase, evaluate, executions, codeManagement };
+        return { useCase, evaluate, executions, codeManagement, pullRequests };
     }
 
     it('uses only the matching recorded clean snapshot and delegates to the real policy service', async () => {
@@ -133,6 +140,30 @@ describe(PreviewPrApprovalUseCase.name, () => {
                 config: expect.objectContaining({ approvalPolicies: [] }),
             }),
         );
+    });
+
+    it('holds a clean-looking review when an older delivered finding remains open', async () => {
+        const { useCase, evaluate, pullRequests, codeManagement } = setup();
+        pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [
+                {
+                    repository: { id: 'repo' },
+                    suggestions: [{ comment: { id: 'finding-1' } }],
+                },
+            ],
+        );
+        codeManagement.getPullRequestReviewThreads.mockResolvedValue([
+            { id: 'finding-1', isResolved: false },
+        ]);
+        expect((await useCase.execute(input)).decision).toEqual({
+            kind: 'hold',
+            reason: 'Review findings remain unresolved.',
+        });
+        expect(evaluate).not.toHaveBeenCalled();
+        codeManagement.getPullRequestReviewThreads.mockResolvedValue([
+            { id: 'finding-1', isResolved: true },
+        ]);
+        expect((await useCase.execute(input)).decision.kind).toBe('approve');
     });
 
     it('holds when the provider returns an incomplete file list', async () => {

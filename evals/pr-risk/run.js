@@ -94,6 +94,7 @@ async function runCase(item, storedConfig) {
             riskApprovalVeto(item.active, risk, {
                 headSha: pr.head?.sha,
                 baseSha: pr.base?.sha,
+                description: pr,
             }),
         ),
         policyDecision: decision.approvalDecision.kind,

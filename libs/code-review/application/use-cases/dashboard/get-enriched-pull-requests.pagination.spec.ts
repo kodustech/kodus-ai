@@ -148,12 +148,15 @@ const idsOf = (response) =>
 describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', () => {
     it('looks up the live head only for an explanation and logs provider failures without dropping history', async () => {
         const { useCase } = buildUseCase();
-        const failure = new Error('provider unavailable');
+        const failure = Object.assign(new Error('provider unavailable'), {
+            config: { headers: { Authorization: 'fixture-only' } },
+        });
         const getPullRequest = jest
             .fn()
             .mockResolvedValueOnce({ head: { sha: 'latest' } })
             .mockRejectedValueOnce(failure);
-        useCase.codeManagementService = { getPullRequest };
+        const getTypeIntegration = jest.fn().mockResolvedValue('GITHUB');
+        useCase.codeManagementService = { getPullRequest, getTypeIntegration };
         const query = {
             teamId: 't1',
             pullRequestNumber: 1000,
@@ -164,26 +167,39 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
 
         const first = await useCase.execute({ ...query, explain: 'true' });
         expect(first.currentHeadSha).toBe('latest');
-        expect(getPullRequest).toHaveBeenCalledWith({
-            organizationAndTeamData: { organizationId: 'org-1', teamId: 't1' },
-            repository: { id: 'repo-1', name: 'api' },
-            prNumber: 1000,
-        });
+        expect(getPullRequest).toHaveBeenCalledWith(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 't1',
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 1000,
+            },
+            'GITHUB',
+        );
 
         const failed = await useCase.execute({ ...query, explain: 'true' });
         expect(failed.currentHeadSha).toBeUndefined();
         expect(failed.data).toHaveLength(1);
         expect(useCase.logger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
-                error: failure,
-                metadata: {
+                error: expect.objectContaining({ message: failure.message }),
+                metadata: expect.objectContaining({
                     organizationId: 'org-1',
                     teamId: 't1',
                     repositoryId: 'repo-1',
                     prNumber: 1000,
-                },
+                }),
             }),
         );
+        expect(useCase.logger.warn.mock.calls[0][0].error).not.toHaveProperty(
+            'config',
+        );
+        getTypeIntegration.mockResolvedValue('GITLAB');
+        const unrelated = await useCase.execute({ ...query, explain: 'true' });
+        expect(unrelated.currentHeadSha).toBeUndefined();
+        expect(getPullRequest).toHaveBeenCalledTimes(2);
     });
     it('does not serve the same execution on two consecutive pages', async () => {
         const { useCase } = buildUseCase();

@@ -12,6 +12,7 @@ import { AutomationStatus } from '@libs/automation/domain/automation/enum/automa
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
 import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
+import { hasOpenFinding } from '@libs/code-review/domain/approval/own-change-request';
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
@@ -22,6 +23,8 @@ import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { PrRiskAssessmentService } from '@libs/code-review/pipeline/services/pr-risk-assessment.service';
 import { ParametersKey } from '@libs/core/domain/enums';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { isHeavyModePlanAllowed } from '@libs/ee/heavy-mode/heavy-mode-plan';
@@ -34,6 +37,10 @@ import {
     type IParametersService,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import {
+    PULL_REQUESTS_SERVICE_TOKEN,
+    type IPullRequestsService,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 
 @Injectable()
 export class PreviewPrApprovalUseCase {
@@ -49,6 +56,8 @@ export class PreviewPrApprovalUseCase {
         private readonly codeManagement: CodeManagementService,
         private readonly risk: PrRiskAssessmentService,
         private readonly approval: ApprovalPoliciesService,
+        @Inject(PULL_REQUESTS_SERVICE_TOKEN)
+        private readonly pullRequests: IPullRequestsService,
     ) {}
 
     async execute(input: {
@@ -206,6 +215,47 @@ export class PreviewPrApprovalUseCase {
                 return hold(
                     'There is no completed, recorded clean review for this PR snapshot. Use the clean-review assumption to test policy conditions independently.',
                 );
+            }
+            try {
+                const candidates =
+                    await this.pullRequests.findPullRequestsWithDeliveredSuggestions(
+                        organizationAndTeamData.organizationId,
+                        [prNumber],
+                        [
+                            PullRequestState.OPENED,
+                            PullRequestState.CLOSED,
+                            PullRequestState.MERGED,
+                        ],
+                    );
+                const stored = candidates.find(
+                    (candidate) => candidate.repository.id === repository.id,
+                );
+                if (stored?.suggestions.length) {
+                    const comments =
+                        platformType === PlatformType.GITHUB
+                            ? await this.codeManagement.getPullRequestReviewThreads(
+                                  request,
+                                  platformType,
+                              )
+                            : await this.codeManagement.getPullRequestReviewComments(
+                                  request,
+                                  platformType,
+                              );
+                    if (
+                        !Array.isArray(comments) ||
+                        hasOpenFinding(
+                            stored.suggestions.map(({ comment }) =>
+                                String(comment?.id),
+                            ),
+                            comments,
+                            platformType,
+                        )
+                    ) {
+                        return hold('Review findings remain unresolved.');
+                    }
+                }
+            } catch {
+                return hold('Review findings could not be verified.');
             }
             previousHeavy = data.heavy;
         }

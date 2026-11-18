@@ -34,6 +34,7 @@ import {
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { createLogger } from '@libs/core/log/logger';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import {
@@ -823,7 +824,11 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             !query.pullRequestNumber ||
             !first ||
             !(query.repositoryId || query.repositoryName) ||
-            runs.some((run) => run.repositoryId !== first.repositoryId)
+            runs.some(
+                (run) =>
+                    run.repositoryId !== first.repositoryId ||
+                    run.provider !== first.provider,
+            )
         ) {
             return undefined;
         }
@@ -834,19 +839,40 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         };
         const prNumber = query.pullRequestNumber;
         try {
+            const provider =
+                await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                );
+            const storedProvider = first.provider
+                ?.toUpperCase()
+                .replaceAll('-', '_');
+            if (
+                !provider ||
+                (storedProvider !== provider &&
+                    !(
+                        storedProvider === 'AZURE_DEVOPS' &&
+                        provider === PlatformType.AZURE_REPOS
+                    ))
+            ) {
+                return undefined;
+            }
             const pullRequest = await this.codeManagementService.getPullRequest(
                 {
                     organizationAndTeamData,
                     repository,
                     prNumber,
                 },
+                provider,
             );
             return pullRequest?.head?.sha;
         } catch (error) {
             this.logger.warn({
                 message:
                     'Could not fetch the current PR head for review history',
-                error,
+                error:
+                    error instanceof Error
+                        ? new Error(error.message)
+                        : undefined,
                 metadata: {
                     ...organizationAndTeamData,
                     repositoryId: repository.id,

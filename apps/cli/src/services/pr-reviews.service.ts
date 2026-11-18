@@ -92,7 +92,14 @@ class PullRequestReviewsService {
         }
 
         runs.sort((a, b) => runTime(b) - runTime(a));
-        const singleRepository = new Set(runs.map((run) => run.repositoryId)).size === 1;
+        const [first] = runs;
+        const singleRepository =
+            first &&
+            runs.every(
+                (run) =>
+                    run.repositoryId === first.repositoryId &&
+                    run.provider === first.provider,
+            );
 
         return {
             prNumber: input.prNumber,

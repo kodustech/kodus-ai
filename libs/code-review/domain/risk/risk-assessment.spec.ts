@@ -15,6 +15,7 @@ export const snapshot: RiskSnapshot = {
     baseSha: 'base',
     headSha: 'head',
     assessmentKey: 'config-and-diff',
+    descriptionKey: prRiskDescriptionKey({}),
 };
 
 const assessed = (
@@ -25,7 +26,7 @@ const assessed = (
     reason: 'Assessment reason.',
     snapshot,
 });
-const current = { headSha: 'head', baseSha: 'base' };
+const current = { headSha: 'head', baseSha: 'base', description: {} };
 
 describe('shared PR risk contract', () => {
     it.each([
@@ -145,6 +146,13 @@ describe('shared PR risk contract', () => {
             riskApprovalVeto(false, assessed(true), current),
         ).toBeUndefined();
         expect(riskApprovalVeto(false, undefined, current)).toBeUndefined();
+    });
+
+    it('holds an otherwise current assessment when the PR description was not read', () => {
+        const identity = { ...current, description: undefined };
+        expect(riskApprovalVeto(true, assessed(false), identity)).toBe(
+            'Risk assessment is unavailable for the current PR context.',
+        );
     });
 
     it.each([undefined, '', '   '])(
