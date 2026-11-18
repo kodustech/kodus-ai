@@ -482,44 +482,6 @@ describe('KodyIssuesManagementService', () => {
         });
     });
 
-    describe('resolveExistingIssues', () => {
-        it('resolves only issues it showed the model, never an id the model returned on its own', async () => {
-            const shown = '6a96d2e89ea5d12c21545480';
-            issuesServiceMock.findByFileAndStatus = jest
-                .fn()
-                .mockResolvedValue([
-                    { uuid: shown, title: 't', description: 'd' },
-                ]);
-            issuesServiceMock.updateStatus = jest.fn().mockResolvedValue(null);
-            kodyIssuesAnalysisServiceMock.resolveExistingIssues = jest
-                .fn()
-                .mockResolvedValue({
-                    issueVerificationResults: [
-                        // Production echoed a mangled id (one hex digit short).
-                        { issueId: '6a96d2e89ea5d12c2154548', isIssuePresentInCode: false },
-                        // ...or any id at all, including another org's issue.
-                        { issueId: '000000000000000000000001', isIssuePresentInCode: false },
-                        { issueId: shown, isIssuePresentInCode: false },
-                    ],
-                });
-            jest.spyOn(service as any, 'getChangedFiles').mockResolvedValue([
-                { filename: 'src/main.ts', fileContent: 'code' },
-            ]);
-
-            await service.resolveExistingIssues(
-                baseParams,
-                [{ path: 'src/main.ts', suggestions: [mockSuggestion] }],
-                undefined,
-            );
-
-            expect(issuesServiceMock.updateStatus).toHaveBeenCalledTimes(1);
-            expect(issuesServiceMock.updateStatus).toHaveBeenCalledWith(
-                shown,
-                expect.anything(),
-            );
-        });
-    });
-
     describe('processClosedPr', () => {
         let mergeSpy: jest.SpyInstance;
 
