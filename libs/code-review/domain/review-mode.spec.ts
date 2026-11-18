@@ -1,4 +1,5 @@
 import {
+    reviewModeOfExecution,
     agentReviewMode,
     isHeavyReview,
     resolveRiskReviewMode,
@@ -114,5 +115,40 @@ describe('agentReviewMode', () => {
         expect(agentReviewMode('normal')).toBe('balanced');
         expect(agentReviewMode('fast')).toBe('fast');
         expect(agentReviewMode('deep')).toBe('deep');
+    });
+});
+
+describe('reviewModeOfExecution', () => {
+    const reviewed = { lastAnalyzedCommit: { sha: 'abc' } };
+
+    it('reads the stored mode', () => {
+        expect(
+            reviewModeOfExecution({ ...reviewed, reviewMode: 'heavy' }),
+        ).toBe('heavy');
+        expect(
+            reviewModeOfExecution({
+                ...reviewed,
+                reviewMode: 'balanced',
+                heavy: false,
+            }),
+        ).toBe('balanced');
+    });
+
+    it('reads the heavy flag of an execution stored before the mode', () => {
+        expect(reviewModeOfExecution({ ...reviewed, heavy: true })).toBe(
+            'heavy',
+        );
+    });
+
+    it('reads an older execution with no mark as balanced', () => {
+        expect(reviewModeOfExecution(reviewed)).toBe('balanced');
+    });
+
+    it('has no mode for an execution that reviewed nothing', () => {
+        expect(reviewModeOfExecution({ heavy: true })).toBeUndefined();
+        expect(
+            reviewModeOfExecution({ lastAnalyzedCommit: {} }),
+        ).toBeUndefined();
+        expect(reviewModeOfExecution(undefined)).toBeUndefined();
     });
 });

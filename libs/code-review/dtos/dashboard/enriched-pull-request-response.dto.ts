@@ -20,8 +20,9 @@ export interface EnrichedPullRequestResponse {
     title: string;
     status: string;
     merged: boolean;
-    /** Whether the last review ran in heavy mode. */
-    heavy?: boolean;
+    /** The mode this execution reviewed in; absent when it reviewed nothing
+     *  (skipped, failed before the review). */
+    reviewMode?: 'balanced' | 'heavy';
     url: string;
     baseBranchRef: string;
     headBranchRef: string;
