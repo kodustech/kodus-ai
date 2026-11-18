@@ -6,7 +6,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { isAxiosError } from 'axios';
 import pLimit from 'p-limit';
 
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { createLogger } from '@libs/core/log/logger';
+import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
@@ -204,6 +209,10 @@ function throwIfForgejoFailed(result: {
     );
 }
 
+function isForgejoServerError(error: unknown): boolean {
+    const status = (error as { status?: unknown } | null)?.status;
+    return typeof status === 'number' && status >= 500;
+}
 
 const FORGEJO_REACTIONS_CONCURRENCY = 5;
 
@@ -1045,43 +1054,14 @@ export class ForgejoService implements Omit<
      * Returns a map of filename -> patch content.
      */
     private parseUnifiedDiff(diffContent: string): Map<string, string> {
-        const patchMap = new Map<string, string>();
-
-        if (!diffContent) {
-            return patchMap;
-        }
-
-        // Split by file diff headers (diff --git a/... b/...)
-        const fileDiffs = diffContent.split(/(?=^diff --git )/m);
-
-        for (const fileDiff of fileDiffs) {
-            if (!fileDiff.trim()) continue;
-
-            // Extract filename from the diff header
-            // Format: diff --git a/path/to/file b/path/to/file
-            const headerMatch = fileDiff.match(
-                /^diff --git a\/(.+?) b\/(.+?)$/m,
-            );
-            if (!headerMatch) continue;
-
-            // Use the 'b' path (new filename, handles renames)
-            const filename = headerMatch[2];
-
-            // Find where the actual patch starts (after the header lines)
-            // The patch starts at the first @@ line
-            const patchStartIndex = fileDiff.indexOf('@@');
-            if (patchStartIndex === -1) {
-                // No hunks - might be a binary file or mode change only
-                patchMap.set(filename, '');
-                continue;
-            }
-
-            // Extract just the patch part (from @@ onwards)
-            const patch = fileDiff.substring(patchStartIndex);
-            patchMap.set(filename, patch.trim());
-        }
-
-        return patchMap;
+        // The shared splitter reads the name from the ---/+++ lines first;
+        // the `diff --git` header is ambiguous for a path holding " b/"
+        return new Map(
+            splitUnifiedDiff(diffContent).map((file) => [
+                file.filename,
+                file.patch,
+            ]),
+        );
     }
 
     private transformCommit(commit: ForgejoCommit): Commit {
@@ -1573,26 +1553,39 @@ export class ForgejoService implements Omit<
     async getDefaultBranch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
+        /**
+         * Only the branch the provider confirmed: a failed or empty lookup
+         * throws instead of falling back to a usual name, which a caller
+         * acting on the branch (the security scan) would read as the answer.
+         */
+        strict?: boolean;
     }): Promise<string> {
+        const fallback = (why: string) => {
+            if (params.strict) {
+                throw new Error(`Forgejo default branch not confirmed: ${why}`);
+            }
+            return 'main';
+        };
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return 'main';
+            if (!authDetail) return fallback('no credentials');
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'getDefaultBranch',
             );
-            if (!repoInfo) return 'main';
+            if (!repoInfo) return fallback('unreadable repository name');
 
             const client = this.createForgejoClient(authDetail);
             const result = await repoGet({
                 client,
                 path: { owner: repoInfo.owner, repo: repoInfo.repo },
             });
-            return result.data?.default_branch || 'main';
+            return result.data?.default_branch || fallback('none returned');
         } catch (error) {
+            if (params.strict) throw error;
             this.logger.error({
                 message: 'Error getting default branch',
                 context: ForgejoService.name,
@@ -2223,6 +2216,13 @@ export class ForgejoService implements Omit<
         repository: { name: string };
         prNumber: number;
     }): Promise<any[] | null> {
+        const logMetadata = {
+            organizationId: params.organizationAndTeamData.organizationId,
+            teamId: params.organizationAndTeamData.teamId,
+            repository: params.repository.name,
+            prNumber: params.prNumber,
+        };
+
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
@@ -2249,6 +2249,9 @@ export class ForgejoService implements Omit<
                         },
                         query: { page, limit },
                     });
+                    // The client answers an HTTP error instead of throwing
+                    // it: read as an empty page, it would end the listing early
+                    throwIfForgejoFailed(result);
                     return result.data ?? [];
                 }),
                 repoDownloadPullDiffOrPatch({
@@ -2259,14 +2262,29 @@ export class ForgejoService implements Omit<
                         index: params.prNumber,
                         diffType: 'diff',
                     },
-                }).catch((error) => {
-                    this.logger.warn({
-                        message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
-                        context: ForgejoService.name,
-                        error,
-                    });
-                    return { data: '' };
-                }),
+                })
+                    .then((result) => {
+                        throwIfForgejoFailed(result);
+                        return result;
+                    })
+                    .catch((error) => {
+                        // A rate limit, a network blip or a server error is
+                        // not a PR without patches: let the job retry
+                        if (
+                            is429Error(error) ||
+                            isTransientFetchError(error) ||
+                            isForgejoServerError(error)
+                        ) {
+                            throw error;
+                        }
+                        this.logger.warn({
+                            message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
+                            context: ForgejoService.name,
+                            error,
+                            metadata: logMetadata,
+                        });
+                        return { data: '' };
+                    }),
             ]);
 
             const diffContent = (diffResult.data as string) ?? '';
@@ -2295,10 +2313,20 @@ export class ForgejoService implements Omit<
                 previous_filename: f.previous_filename,
             }));
         } catch (error) {
+            // A rate limit, a network blip or a server error is not a
+            // fileless PR: let the job retry
+            if (
+                is429Error(error) ||
+                isTransientFetchError(error) ||
+                isForgejoServerError(error)
+            ) {
+                throw error;
+            }
             this.logger.error({
                 message: 'Error getting files by PR ID',
                 context: ForgejoService.name,
                 error,
+                metadata: logMetadata,
             });
             return null;
         }

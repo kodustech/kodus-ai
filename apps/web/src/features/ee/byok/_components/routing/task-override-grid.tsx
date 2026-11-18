@@ -28,6 +28,7 @@ import {
     GitPullRequestIcon,
     ListChecksIcon,
     MessageSquareIcon,
+    ShieldAlertIcon,
     ShieldCheckIcon,
     type LucideIcon,
 } from "lucide-react";
@@ -423,6 +424,11 @@ const AGENT_CARDS: AgentCard[] = [
         task: "customAgent",
         Icon: BotIcon,
         title: "Custom Agents",
+    },
+    {
+        task: "securityScan",
+        Icon: ShieldAlertIcon,
+        title: "Deep scan",
     },
 ];
 

@@ -22,8 +22,15 @@ import {
 } from '@libs/llm/byok-to-vercel';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
+    readAiSdkUsageFromError,
+    readProviderUsage,
+} from '@libs/llm/ai-sdk-usage';
+import { admitRequest, meterAdmitsRequests } from '@libs/llm/usage-meter';
+import { reasoningBudgetFrom } from '@libs/llm/reasoning-budget';
+import {
     attachClassification,
     classifyLLMError,
+    extractHttpStatus,
     LlmErrorCategory,
     type ClassifiedErrorInfo,
 } from '@libs/llm/error-classifier';
@@ -40,6 +47,54 @@ import {
 import { REGISTRY } from '@libs/llm/providers/kernel/registry';
 
 const logger = createLogger('ByokModelWrapper');
+
+/**
+ * Adapters that send max_tokens = answer cap + reasoning budget, read in
+ * their source: @ai-sdk/anthropic (`maxTokens + thinkingBudget`) and
+ * @ai-sdk/amazon-bedrock (`maxTokens += thinkingBudget`). Others hold the
+ * reasoning inside the answer cap (OpenAI, Gemini).
+ */
+const ADDS_BUDGET_TO_ANSWER_CAP = new Set(['anthropic', 'amazonBedrock']);
+
+/**
+ * The reasoning budget a request adds on top of its answer cap: read only from
+ * the options the served adapter parses, and only for an adapter that adds it.
+ * An adapter parses its own key, or else a legacy alias (Bedrock's `bedrock`),
+ * so the first of them present is the one sent.
+ */
+function budgetAddedToAnswerCap(
+    providerOptions: Record<string, unknown> | undefined,
+    slot: NormalizedModel | undefined,
+    namespace: string | undefined,
+): number | undefined {
+    if (!namespace || !ADDS_BUDGET_TO_ANSWER_CAP.has(namespace)) {
+        return undefined;
+    }
+    const aliases =
+        REGISTRY.get(slot!.provider).providerOptionsNamespaceAliases?.(
+            slot!.provider,
+        ) ?? [];
+    const parsed = [namespace, ...aliases].find(
+        (key) => providerOptions?.[key] != null,
+    );
+    if (!parsed) {
+        return undefined;
+    }
+    const options = providerOptions![parsed] as Record<string, unknown>;
+    const budget = reasoningBudgetFrom(options);
+    if (budget !== undefined) {
+        return budget;
+    }
+    // Thinking enabled with no budget: @ai-sdk/anthropic sends its default
+    // budget, 1024, on top of the answer cap all the same.
+    const thinking = (options as { thinking?: { type?: unknown } }).thinking;
+    return namespace === 'anthropic' && thinking?.type === 'enabled'
+        ? ANTHROPIC_DEFAULT_THINKING_BUDGET
+        : undefined;
+}
+
+/** What @ai-sdk/anthropic budgets for thinking enabled without a budget. */
+const ANTHROPIC_DEFAULT_THINKING_BUDGET = 1024;
 
 /** The provider-options key the slot's adapter reads, so an effort the call
  *  never carried can be added there when the upstream asks for it. */
@@ -65,6 +120,54 @@ function estimatePromptTokens(prompt: unknown): number {
         typeof prompt === 'string' ? prompt : safeSerialize(prompt);
     return estimateTextTokens(text);
 }
+
+/**
+ * Room a provider adds around what is sent: its chat template, each turn's
+ * markers and the instructions some render tools into (Anthropic's tool
+ * prompt runs to a few hundred tokens).
+ */
+const PROVIDER_FRAMING_TOKENS = 2_000;
+
+/**
+ * More tokens than any model's tokenizer makes of the prompt: every token of
+ * a byte-level tokenizer covers at least one byte, so the UTF-8 size of the
+ * serialized prompt bounds it (its JSON quoting only adds). The shared
+ * tokenizer's count is no bound: another model's tokenizer can split some
+ * scripts (Korean comments in code) into more tokens than any fixed margin.
+ */
+function promptTokensUpperBound(prompt: unknown): number {
+    if (prompt == null) return PROVIDER_FRAMING_TOKENS;
+    let text: string;
+    try {
+        text = typeof prompt === 'string' ? prompt : JSON.stringify(prompt);
+    } catch {
+        // What cannot be measured has no bound: a cap refuses it rather
+        // than reserve "[object Object]".
+        return Number.POSITIVE_INFINITY;
+    }
+    return Buffer.byteLength(text ?? '', 'utf8') + PROVIDER_FRAMING_TOKENS;
+}
+
+/**
+ * The provider turned the request away before running it, so nothing was
+ * billed: a client error (bad request, auth, not found, rate limit), or
+ * Anthropic's own "overloaded". Read wherever an error carries the status
+ * (status, statusCode, the response, the cause, a retry's last attempt).
+ * A server error is no such proof: a gateway answers 502 or 504 after
+ * forwarding a billable inference, and a 500 can come mid-answer. Nor is a
+ * timeout (408) or a closed request (499).
+ */
+function refusedByProvider(err: unknown): boolean {
+    const status = extractHttpStatus(err);
+    if (typeof status !== 'number') return false;
+    return (
+        (status >= 400 && status < 500 && status !== 408 && status !== 499) ||
+        status === ANTHROPIC_OVERLOADED
+    );
+}
+
+/** Anthropic's "overloaded_error": sent by the API itself, before any work. */
+const ANTHROPIC_OVERLOADED = 529;
 
 function safeSerialize(value: unknown): string {
     try {
@@ -125,16 +228,30 @@ export function wrapByokModel(
             wrapGenerate: async ({ doGenerate, params, model: inner }: any) => {
                 const slot = opts.byokConfig;
                 const namespace = optionsNamespace(slot);
+                // What is sent: the call's own params, or with the answer cap
+                // a spend-capped run enforces (below).
+                let callParams = params;
+                // Set as the request leaves: a failure before it was never
+                // billed; one after it may have been.
+                let reachedProvider = false;
                 const generate = async () => {
                     const sent = withoutRefusedFields(
-                        params,
+                        callParams,
                         slot,
                         opts.organizationId,
                         Date.now(),
                         namespace,
                     );
-                    const call = (p: any) =>
-                        p === params ? doGenerate() : inner.doGenerate(p);
+                    const call = (p: any) => {
+                        // An already aborted request is refused by the
+                        // transport before anything is sent.
+                        if (!p?.abortSignal?.aborted) {
+                            reachedProvider = true;
+                        }
+                        return p === params
+                            ? doGenerate()
+                            : inner.doGenerate(p);
+                    };
                     // A strict upstream refuses one unknown field per answer
                     // (Go's decoder stops at the first), so each reasoning field
                     // we added can cost one more ask, never more than that: a
@@ -259,22 +376,91 @@ export function wrapByokModel(
                     ? estimatePromptTokens(params?.prompt)
                     : undefined;
 
+                // A metered run with a spend cap admits the request before it
+                // leaves, against the most it can cost: its prompt and tools,
+                // and the answer cap it asks for (#2451).
+                const admission = await admitRequest(
+                    () => ({
+                        inputTokens: estimatePromptTokens({
+                            prompt: params?.prompt,
+                            tools: params?.tools,
+                        }),
+                        inputTokensUpperBound: promptTokensUpperBound({
+                            prompt: params?.prompt,
+                            tools: params?.tools,
+                        }),
+                        maxOutputTokens: params?.maxOutputTokens,
+                        reasoningBudgetTokens: budgetAddedToAnswerCap(
+                            params?.providerOptions,
+                            slot,
+                            namespace,
+                        ),
+                    }),
+                    // A request whose caller gave up stops waiting for room.
+                    params?.abortSignal,
+                );
+                // The answer cap it was admitted at is sent, so the provider
+                // cannot answer past what was reserved. Zero is no cap a
+                // provider accepts.
+                if (
+                    (admission.maxOutputTokens ?? 0) > 0 &&
+                    params?.maxOutputTokens == null
+                ) {
+                    callParams = {
+                        ...params,
+                        maxOutputTokens: admission.maxOutputTokens,
+                    };
+                }
+                const settle = admission.settle;
+
                 // Pin T to the SDK's generate-result type so inference doesn't
                 // collapse to `unknown` (the middleware return type would then
                 // reject it). `run` yields exactly this, and `extractUsageTotal`
                 // takes `unknown`, so nothing else constrains T.
-                return runWithBYOKLimiter<ByokGenerateResult>(
-                    {
-                        slot,
-                        organizationId: opts.organizationId,
-                        abortSignal: params?.abortSignal,
-                        queueTimeoutMs: opts.queueTimeoutMs,
-                        estimatedTokens,
-                        getUsageTokens: hasTpm ? extractUsageTotal : undefined,
-                    },
-                    run,
-                    'llm-call',
-                );
+                let result: ByokGenerateResult;
+                try {
+                    result = await runWithBYOKLimiter<ByokGenerateResult>(
+                        {
+                            slot,
+                            organizationId: opts.organizationId,
+                            abortSignal: params?.abortSignal,
+                            queueTimeoutMs: opts.queueTimeoutMs,
+                            estimatedTokens,
+                            getUsageTokens: hasTpm
+                                ? extractUsageTotal
+                                : undefined,
+                        },
+                        run,
+                        'llm-call',
+                    );
+                } catch (err) {
+                    // An error can still carry what the provider billed.
+                    // Without it, only a request that never left, or that
+                    // the provider refused with an error status, cost
+                    // nothing; a lost connection or a cut stream may have
+                    // been billed, so its totals are unknown, not zero.
+                    const billed = readAiSdkUsageFromError(err)?.usage;
+                    settle(
+                        billed ??
+                            (reachedProvider && !refusedByProvider(err)
+                                ? {}
+                                : undefined),
+                    );
+                    throw err;
+                }
+                // Answered, so billed, even when the provider sent no usage.
+                settle(readProviderUsage((result as any)?.usage) ?? {});
+                return result;
+            },
+            // A stream's usage arrives only at its end, after the request was
+            // sent unchecked: a run with a spend cap does not stream.
+            wrapStream: async ({ doStream }: any) => {
+                if (meterAdmitsRequests()) {
+                    throw new Error(
+                        'A model request in a spend-capped run cannot stream',
+                    );
+                }
+                return doStream();
             },
         },
     });

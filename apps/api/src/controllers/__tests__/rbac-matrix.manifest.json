@@ -792,6 +792,17 @@
     }
   },
   {
+    "key": "issues.controller.ts#buildFixPrompt",
+    "httpMethod": "POST",
+    "urlPath": "/issues/fix-prompt",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "issues.controller.ts#countIssues",
     "httpMethod": "GET",
     "urlPath": "/issues/count",
@@ -1763,6 +1774,39 @@
     "key": "riskAssessment.controller.ts#previewOnPr",
     "httpMethod": "POST",
     "urlPath": "/code-review/risk/preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#get",
+    "httpMethod": "GET",
+    "urlPath": "/security-scans/:id",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#list",
+    "httpMethod": "GET",
+    "urlPath": "/security-scans",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#start",
+    "httpMethod": "POST",
+    "urlPath": "/security-scans",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

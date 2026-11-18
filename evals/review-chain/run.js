@@ -67,7 +67,7 @@ const BOUNDARIES = [
     },
     {
         phase: 'dedup',
-        files: ['libs/code-review/pipeline/stages/agent-review.stage.ts'],
+        files: ['libs/code-review/infrastructure/agents/engine/finding-dedup.ts'],
         requires: ['schema', 'shape'],
     },
     {
