@@ -120,17 +120,24 @@ describe("monthly auto top-up limit", () => {
         );
     });
 
-    // Billing buys whole packs only, so a cap below the $50 pack blocks every month.
-    it.each([0, 20])(
-        "says a $%i cap below the pack pauses purchases instead of pointing at the reset",
-        (cap) => {
+    // Billing buys whole packs only, so a cap below the $50 pack blocks every
+    // month. It resumes once the cap covers added + pending + one pack.
+    it.each([
+        { cap: 0, purchased: 0, reserved: 0, resume: 50 },
+        { cap: 20, purchased: 0, reserved: 0, resume: 50 },
+        { cap: 40, purchased: 50, reserved: 0, resume: 100 },
+        { cap: 40, purchased: 30, reserved: 20, resume: 100 },
+    ])(
+        "says a $$cap cap below the pack pauses purchases until it reaches $$resume",
+        ({ cap, purchased, reserved, resume }) => {
             render(
                 <AutoTopUpMonthlyLimit
                     auto={{
                         ...auto,
                         monthlyLimitUsd: cap,
-                        monthlyPurchasedUsd: 0,
-                        monthlyRemainingUsd: cap,
+                        monthlyPurchasedUsd: purchased,
+                        monthlyReservedUsd: reserved,
+                        monthlyRemainingUsd: 0,
                         monthlyLimitReached: true,
                     }}
                     disabled={false}
@@ -139,22 +146,30 @@ describe("monthly auto top-up limit", () => {
             );
             const status = screen.getByRole("status");
             expect(status).toHaveTextContent(
-                `Automatic purchases are paused: the $${cap} limit is below the $50 top-up. Raise the limit to at least $50 to resume them.`,
+                `Automatic purchases are paused: the $${cap} limit is below the $50 top-up. Raise the limit to at least $${resume} to resume them.`,
             );
             expect(status).not.toHaveTextContent("wait until");
         },
     );
 
-    it("points at the reset once the cap covers at least one pack", () => {
-        render(
+    it("switches from paused to the reset advice once the cap covers one pack", () => {
+        const blocked = {
+            ...auto,
+            monthlyPurchasedUsd: 0,
+            monthlyRemainingUsd: 0,
+            monthlyLimitReached: true,
+        };
+        const { rerender } = render(
             <AutoTopUpMonthlyLimit
-                auto={{
-                    ...auto,
-                    monthlyLimitUsd: 50,
-                    monthlyPurchasedUsd: 50,
-                    monthlyRemainingUsd: 0,
-                    monthlyLimitReached: true,
-                }}
+                auto={{ ...blocked, monthlyLimitUsd: 20 }}
+                disabled={false}
+                onSave={jest.fn()}
+            />,
+        );
+        expect(screen.getByRole("status")).toHaveTextContent("paused");
+        rerender(
+            <AutoTopUpMonthlyLimit
+                auto={{ ...blocked, monthlyLimitUsd: 50, monthlyPurchasedUsd: 50 }}
                 disabled={false}
                 onSave={jest.fn()}
             />,

@@ -96,11 +96,13 @@ export function AutoTopUpMonthlyLimit({
             {auto.enabled && auto.monthlyLimitReached && (
                 <p role="status" className="text-warning">
                     {/* Billing buys whole packs only, so a cap below one pack
-                        (including 0) blocks every month and waiting never helps. */}
+                        (including 0) blocks every month and waiting never helps.
+                        It resumes once the cap also covers this month's added
+                        and pending credits. */}
                     {auto.monthlyLimitUsd != null &&
                     auto.amountUsd != null &&
                     auto.monthlyLimitUsd < auto.amountUsd
-                        ? `Automatic purchases are paused: the ${money(auto.monthlyLimitUsd)} limit is below the ${money(auto.amountUsd)} top-up. Raise the limit to at least ${money(auto.amountUsd)} to resume them.`
+                        ? `Automatic purchases are paused: the ${money(auto.monthlyLimitUsd)} limit is below the ${money(auto.amountUsd)} top-up. Raise the limit to at least ${money(auto.monthlyPurchasedUsd + (auto.monthlyReservedUsd ?? 0) + auto.amountUsd)} to resume them.`
                         : `Monthly limit blocks the next auto top-up. Increase the limit or wait until ${resets} (UTC).`}
                 </p>
             )}
