@@ -104,3 +104,56 @@ export function lastReviewModeOf(
     }
     return dataExecution?.heavy === true ? 'heavy' : 'balanced';
 }
+
+/**
+ * Where a team's code review config runs Ultra: the default mode or either
+ * risk route (whether risk assessment is on or not: turning it on would run
+ * the route), at the global, repository and directory scopes.
+ */
+export function ultraModeScopes(codeReviewConfig: unknown): string[] {
+    const config = codeReviewConfig as
+        | {
+              configs?: unknown;
+              repositories?: Array<{
+                  id?: string;
+                  name?: string;
+                  configs?: unknown;
+                  directories?: Array<{
+                      id?: string;
+                      name?: string;
+                      path?: string;
+                      configs?: unknown;
+                  }>;
+              }>;
+          }
+        | null
+        | undefined;
+    const usesUltra = (configs: unknown): boolean => {
+        const c = configs as
+            | {
+                  reviewMode?: unknown;
+                  riskReviewRouting?: { noRisk?: unknown; riskFound?: unknown };
+              }
+            | undefined;
+        return (
+            c?.reviewMode === 'ultra' ||
+            c?.riskReviewRouting?.noRisk === 'ultra' ||
+            c?.riskReviewRouting?.riskFound === 'ultra'
+        );
+    };
+    if (!config) return [];
+    const scopes: string[] = [];
+    if (usesUltra(config.configs)) scopes.push('the global settings');
+    for (const repo of config.repositories ?? []) {
+        const repoLabel = repo?.name ?? repo?.id ?? 'a repository';
+        if (usesUltra(repo?.configs)) scopes.push(`repository "${repoLabel}"`);
+        for (const dir of repo?.directories ?? []) {
+            if (usesUltra(dir?.configs)) {
+                scopes.push(
+                    `directory "${dir?.path ?? dir?.name ?? dir?.id}" in repository "${repoLabel}"`,
+                );
+            }
+        }
+    }
+    return scopes;
+}

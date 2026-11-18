@@ -27,6 +27,16 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersEntity } from '@libs/organization/domain/organizationParameters/entities/organizationParameters.entity';
 import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
+import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import { ultraModeScopes } from '@libs/code-review/domain/review-mode';
+import {
     BadRequestException,
     HttpException,
     Inject,
@@ -64,6 +74,12 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         @Optional()
         @Inject(KODUS_PROVIDER_GATE_TOKEN)
         private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
+        @Optional()
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService?: ITeamService,
     ) {}
 
     async execute(
@@ -144,6 +160,51 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
     }
 
+    /**
+     * The Ultra trio cannot stop being three different models while a review
+     * mode of any team, at any scope, is Ultra: those reviews would all be
+     * refused. Change the mode first. Only a save that breaks a set trio is
+     * checked, so an unrelated edit never trips over it; a read that fails
+     * refuses the save rather than passing unchecked.
+     */
+    private async assertUltraTrioKeptWhileInUse(
+        next: BYOKConfig,
+        previous: BYOKConfig | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        const isSet = (ids?: string[]) => {
+            const picked = (ids ?? []).filter(Boolean);
+            return picked.length === 3 && new Set(picked).size === 3;
+        };
+        if (
+            !isSet(previous?.routing?.ultraModelIds) ||
+            isSet(next.routing?.ultraModelIds) ||
+            !this.parametersService ||
+            !this.teamService
+        ) {
+            return;
+        }
+        const organizationId = organizationAndTeamData.organizationId;
+        const teams = await this.teamService.find({
+            organization: { uuid: organizationId },
+        });
+        const configs = await Promise.all(
+            teams.map((team) =>
+                this.parametersService!.findByKey(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    { organizationId, teamId: team.uuid },
+                ).then((p) => p?.configValue ?? null),
+            ),
+        );
+        const scopes = configs.flatMap((config) => ultraModeScopes(config));
+        if (scopes.length) {
+            throw new BadRequestException(
+                `Ultra review is the review mode in ${scopes.join('; ')}. ` +
+                    'Keep three different Ultra models, or change that mode first.',
+            );
+        }
+    }
+
     private async saveByokConfig(
         organizationParametersKey: OrganizationParametersKey,
         configValue: any,
@@ -198,6 +259,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             await this.assertKodusProviderAllowed(
                 configValue as BYOKConfig,
                 isByokConfig(existingConfig) ? existingConfig : undefined,
+            );
+            await this.assertUltraTrioKeptWhileInUse(
+                configValue as BYOKConfig,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+                organizationAndTeamData,
             );
         }
 
