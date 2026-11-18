@@ -30,13 +30,13 @@ export async function runSecurityScanSliceProcess(
 ): Promise<number> {
     const abort = options?.abort ?? new AbortController();
     const proc = options?.process ?? process;
-    const processor = appContext.get<IJobProcessorService>(
-        JOB_PROCESSOR_SERVICE_TOKEN,
-    );
     const onStop = () => abort.abort(new SlicePreemptedError());
     proc.once('SIGTERM', onStop);
     proc.once('SIGINT', onStop);
     try {
+        const processor = appContext.get<IJobProcessorService>(
+            JOB_PROCESSOR_SERVICE_TOKEN,
+        );
         await processor.process(jobId, abort.signal);
         await appContext.close();
         return 0;

@@ -69,7 +69,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
         @Inject(INBOX_MESSAGE_REPOSITORY_TOKEN)
         protected readonly inboxRepository: IInboxMessageRepository,
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
-        private readonly jobRepository: IWorkflowJobRepository,
+        protected readonly jobRepository: IWorkflowJobRepository,
         private readonly observability: ObservabilityService,
         @Inject(TASK_PROTECTION_SERVICE_TOKEN)
         private readonly taskProtectionService: ITaskProtectionService,

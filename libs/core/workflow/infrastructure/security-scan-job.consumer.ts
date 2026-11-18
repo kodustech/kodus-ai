@@ -8,6 +8,7 @@ import { ConsumeMessage } from 'amqplib';
 import { MessagePayload } from '@libs/core/domain/contracts/message-broker.service.contracts';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
 import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 
 import {
     WorkflowJobConsumerBase,
@@ -68,6 +69,11 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
         let beating = false;
         let abortReason: string | undefined;
         const beat = setInterval(() => {
+            if (Date.now() - lastHeldAt >= SECURITY_SCAN_HEARTBEAT_STALE_MS) {
+                abortReason = 'inbox heartbeat stale';
+                abort.abort();
+                return;
+            }
             if (beating) return;
             beating = true;
             void this.inboxRepository
@@ -111,6 +117,19 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                     abortReason
                         ? `Security-scan slice aborted: ${abortReason}`
                         : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
+                );
+            }
+            if (isSliceChildNonZeroExit(error)) {
+                const job = await this.jobRepository.findOne(jobId);
+                if (
+                    job?.status === JobStatus.FAILED ||
+                    job?.status === JobStatus.COMPLETED ||
+                    job?.status === JobStatus.CANCELLED
+                ) {
+                    throw error;
+                }
+                throw new Error(
+                    `Security-scan slice child left job ${jobId} unrecorded`,
                 );
             }
             throw error;

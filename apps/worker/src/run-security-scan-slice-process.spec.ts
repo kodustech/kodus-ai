@@ -60,4 +60,18 @@ describe('runSecurityScanSliceProcess', () => {
         expect(onError).toHaveBeenCalledWith(expect.any(SlicePreemptedError));
         expect(appContext.close).toHaveBeenCalled();
     });
+
+    it('returns 1 after close when resolving the processor throws', async () => {
+        const appContext = {
+            get: jest.fn(() => {
+                throw new Error('no processor');
+            }),
+            close: jest.fn().mockResolvedValue(undefined),
+        };
+
+        await expect(
+            runSecurityScanSliceProcess(appContext, 'job-1'),
+        ).resolves.toBe(1);
+        expect(appContext.close).toHaveBeenCalled();
+    });
 });
