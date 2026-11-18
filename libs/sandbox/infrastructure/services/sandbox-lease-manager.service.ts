@@ -674,6 +674,17 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * - doc not found: no-op (idempotent).
      */
     async invalidate(prKey: string): Promise<void> {
+        await this.invalidateOne(prKey);
+        // The PR's runs with a sandbox of their own (an Ultra review's
+        // models) review the same state of the PR: they go with it.
+        if (prKey.includes('#')) return;
+        const runKeys = await this.leaseRepo.findRunKeys(prKey);
+        for (const runKey of runKeys) {
+            await this.invalidateOne(runKey);
+        }
+    }
+
+    private async invalidateOne(prKey: string): Promise<void> {
         this.logger.log({
             message: `SandboxLeaseManager: invalidate prKey="${prKey}"`,
             context: SandboxLeaseManager.name,

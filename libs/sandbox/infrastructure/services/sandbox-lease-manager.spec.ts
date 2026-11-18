@@ -25,6 +25,8 @@ import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
+    assertValidPrKey,
+    runPrKey,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -59,6 +61,7 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         completeCleanup: jest.fn().mockResolvedValue(true),
         failCleanup: jest.fn().mockResolvedValue(true),
         resetStaleCleanup: jest.fn().mockResolvedValue(undefined),
+        findRunKeys: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<SandboxLeaseRepository>;
 }
 
@@ -2315,6 +2318,121 @@ describe('SandboxLeaseManager', () => {
             // so exactly one decrement — the IN_PROGRESS undo — is expected.
             expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('a run with a sandbox of its own (Ultra review)', () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
+
+        it('keys the run on the PR and validates it like a PR key', () => {
+            expect(runPrKey(prKey, 'ultra-1')).toBe(`${prKey}#ultra-1`);
+            expect(() => assertValidPrKey(`${prKey}#ultra-1`)).not.toThrow();
+            expect(() => assertValidPrKey(`${prKey}#`)).toThrow();
+            expect(() => assertValidPrKey(`${prKey}#a#b`)).toThrow();
+            expect(() => runPrKey(prKey, 'Ultra 1')).toThrow();
+        });
+
+        it("invalidating the PR retires its runs' sandboxes too", async () => {
+            const runKeys = [
+                runPrKey(prKey, 'ultra-1'),
+                runPrKey(prKey, 'ultra-fallback'),
+            ];
+            (leaseRepo as any).findRunKeys.mockResolvedValue(runKeys);
+            leaseRepo.findByPrKey.mockImplementation(
+                async (key: string) =>
+                    ({
+                        _id: key,
+                        leaseCount: 1,
+                        state: 'READY',
+                        sandboxId: `e2b-${key.split('#')[1] ?? 'pr'}`,
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+
+            await manager.invalidate(prKey);
+
+            expect((leaseRepo as any).findRunKeys).toHaveBeenCalledWith(prKey);
+            const retired = leaseRepo.retire.mock.calls.map((c) => c[0]);
+            expect(retired).toEqual([prKey, ...runKeys]);
+        });
+
+        it('invalidating one run leaves the PR and the other runs alone', async () => {
+            const runKey = runPrKey(prKey, 'ultra-2');
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: runKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: 'e2b-ultra-2',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            await manager.invalidate(runKey);
+
+            expect((leaseRepo as any).findRunKeys).not.toHaveBeenCalled();
+            expect(leaseRepo.retire.mock.calls.map((c) => c[0])).toEqual([
+                runKey,
+            ]);
+        });
+
+        it('a replacement started near the PR lease expiry gets a fresh sandbox and the whole budget, without touching the other runs', async () => {
+            const fallbackKey = runPrKey(prKey, 'ultra-fallback');
+            leaseRepo.upsertAcquire.mockImplementation(
+                async (key: string, ttl: number) =>
+                    ({
+                        _id: key,
+                        leaseCount: 1,
+                        state: 'CREATING',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + ttl),
+                    }) as any,
+            );
+            leaseRepo.findByPrKey.mockImplementation(
+                async (key: string) =>
+                    ({
+                        _id: key,
+                        leaseCount: 1,
+                        state: 'READY',
+                        sandboxId: '',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+
+            const result = await manager.acquire(
+                fallbackKey,
+                'review',
+                undefined,
+                {
+                    cloneUrl: 'https://github.com/org/repo.git',
+                    branch: 'feature',
+                    prNumber: 77,
+                    platform: 'GITHUB' as any,
+                },
+            );
+
+            expect(result.sandbox).toBeDefined();
+            // Its own lease, created rather than joined, with the full TTL,
+            // however close the PR's own lease is to expiring.
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(1);
+            const [key, ttl] = leaseRepo.upsertAcquire.mock.calls[0];
+            expect(key).toBe(fallbackKey);
+            expect(ttl).toBeGreaterThanOrEqual(30 * 60 * 1000);
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                1,
+            );
+            // Nothing was written on the PR's lease or another run's.
+            const touched = [
+                ...leaseRepo.updateReady.mock.calls,
+                ...leaseRepo.clearKillAt.mock.calls,
+                ...leaseRepo.retire.mock.calls,
+                ...leaseRepo.decrementLease.mock.calls,
+                ...leaseRepo.markInvalidated.mock.calls,
+            ].map((c) => c[0]);
+            expect(touched.length).toBeGreaterThan(0);
+            expect(touched.every((k) => k === fallbackKey)).toBe(true);
+            expect(Sandbox.setTimeout).not.toHaveBeenCalled();
         });
     });
 });

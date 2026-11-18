@@ -34,12 +34,13 @@ function decomposePrKey(prKey: string): {
             `decomposePrKey: first segment must be a UUID organizationId or 'trial'`,
         );
     }
-    // PR mode shape: <orgId>:<repoId>:<prNumber>
+    // PR mode shape: <orgId>:<repoId>:<prNumber>, or <prNumber>#<run> for
+    // a run's own sandbox (runPrKey)
     if (parts.length === 3) {
         return {
             organizationId: parts[0],
             repositoryId: parts[1],
-            prNumber: parts[2],
+            prNumber: parts[2].split('#')[0],
         };
     }
     // CLI mode shape: <orgId>:<repoId>:cli:<branch>
@@ -182,6 +183,19 @@ export class SandboxLeaseRepository {
             .find({ expiresAt: { $lt: now } })
             .select('_id sandboxId state killRetryCount organizationId')
             .lean();
+    }
+
+    /**
+     * The keys of the runs that hold a sandbox of their own on this PR
+     * (`<prKey>#<run>`, runPrKey).
+     */
+    async findRunKeys(prKey: string): Promise<string[]> {
+        const escaped = prKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const docs = await this.leaseModel
+            .find({ _id: { $regex: `^${escaped}#` } })
+            .select('_id')
+            .lean();
+        return docs.map((d) => String(d._id));
     }
 
     /**

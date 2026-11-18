@@ -147,6 +147,25 @@ export function buildPrKey(
 }
 
 /**
+ * A run of its own on a PR (one model of an Ultra review) gets a sandbox of
+ * its own: the PR's key with `#<run>` on its last segment. A new key is a new
+ * lease, so the run gets a fresh sandbox and the whole lease budget, and
+ * invalidating the PR's key invalidates its runs' keys too.
+ */
+export const PR_KEY_RUN_SEPARATOR = '#';
+
+const RUN_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+export function runPrKey(prKey: string, run: string): string {
+    if (!RUN_RE.test(run)) {
+        throw new Error(
+            `runPrKey: run must be lowercase letters, digits and dashes, got ${JSON.stringify(run)}`,
+        );
+    }
+    return `${prKey}${PR_KEY_RUN_SEPARATOR}${run}`;
+}
+
+/**
  * Validate a prKey passed by an internal caller (webhook handler, pipeline
  * stage). Used by SandboxLeaseManager.acquire() as a defense-in-depth check
  * so a bad caller can't poison the lease collection.
@@ -179,5 +198,14 @@ export function assertValidPrKey(prKey: string): void {
         throw new Error(
             `Invalid prKey: missing prNumber/marker in ${JSON.stringify(prKey)}`,
         );
+    }
+    const last = parts[parts.length - 1];
+    if (last.includes(PR_KEY_RUN_SEPARATOR)) {
+        const [head, run, ...rest] = last.split(PR_KEY_RUN_SEPARATOR);
+        if (!head || !run || rest.length || !RUN_RE.test(run)) {
+            throw new Error(
+                `Invalid prKey: malformed run suffix in ${JSON.stringify(prKey)}`,
+            );
+        }
     }
 }
