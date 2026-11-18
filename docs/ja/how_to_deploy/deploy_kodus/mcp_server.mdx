@@ -26,20 +26,19 @@ Helm チャートではこのエンドポイントはデフォルトでオンで
 自分のインスタンスの API にある `https://<your-api-host>/mcp` に接続します。通信には Streamable HTTP を使用します。
 
 1. **Organization → CLI keys** を開き、キーを生成してコピーします。キーを生成できるのは組織のオーナーのみです。[CLI キー](/ja/how_to_use/organization/organization_settings#cli-キー)を参照してください。
-2. すべてのリクエストで、次のいずれかのヘッダーにキーを付けて送信します。
+2. ツールを呼び出すときに、次のいずれかのヘッダーでキーを送信するようクライアントを設定します。
 
 ```
 x-team-key: kodus_xxxxx
 Authorization: Bearer kodus_xxxxx
 ```
 
-接続を確認するには、ツールを一覧表示します。
+接続を確認するには、`kodus-api.example.com` をお使いの API のホスト名に置き換え、ツールを一覧表示します。この検出リクエストにキーは不要です。
 
 ```bash
-curl -X POST https://<your-api-host>/mcp \
+curl -X POST https://kodus-api.example.com/mcp \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H 'x-team-key: kodus_xxxxx' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 

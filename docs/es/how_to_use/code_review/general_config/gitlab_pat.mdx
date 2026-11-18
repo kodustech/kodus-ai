@@ -29,14 +29,7 @@ Sigue estos pasos para configurar el token correctamente:
 
    - **Token Name**: Elige un nombre fácilmente identificable, como `kody_code_review`.
    - **Expiration Date**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
-   - **Permissions**: Configura los siguientes permisos:
-     - **api**
-     - **read_api**
-     - **read_user**
-     - **read_repository**
-     - **write_repository**
-
-   En un token de acceso personal, `api` ya incluye los otros cuatro alcances, así que `api` por sí solo basta. Kody nunca hace push por Git.
+   - En **Scopes**, selecciona solo `api` para un token de acceso personal. Cubre las llamadas de Kody a la API y el acceso al repositorio por HTTPS.
 
 5. **Finaliza y guarda el token**:
    - Después de configurar los permisos, haz clic en `Generate token`.
@@ -63,7 +56,7 @@ Un token de acceso de grupo publica las revisiones como un usuario bot que GitLa
    - **Token name**: El nombre que mostrarán las revisiones de Kody, como `Kody`.
    - **Expiration date**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
    - **Role**: `Maintainer`. Kody lo necesita para crear el webhook en cada proyecto.
-   - **Scopes**: `api` y `read_repository`. Kody clona tus repositorios, y en un token de acceso de grupo `api` no incluye Git sobre HTTPS.
+   - En **Scopes**, selecciona `api` para las llamadas a la API y `read_repository` para que Kody pueda clonar los repositorios del grupo por HTTPS.
 
 4. **Finaliza y guarda el token**:
    - Haz clic en `Create group access token`.

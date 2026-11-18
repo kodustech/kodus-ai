@@ -26,20 +26,19 @@ While it is off, the API does not serve `/mcp`. The route is `POST /mcp` on the 
 Connect to `https://<your-api-host>/mcp` on your self-hosted API. The server uses Streamable HTTP.
 
 1. Open **Organization → CLI keys**, generate a key and copy it. Only organization owners can generate keys. See [CLI keys](/en/how_to_use/organization/organization_settings#cli-keys).
-2. Send the key with every request, in either header:
+2. Configure your client to send the key in one of these headers when it calls a tool.
 
 ```
 x-team-key: kodus_xxxxx
 Authorization: Bearer kodus_xxxxx
 ```
 
-To check the connection, list the tools:
+To check the connection, replace `kodus-api.example.com` with your API hostname and list the tools. This discovery request runs without a key.
 
 ```bash
-curl -X POST https://<your-api-host>/mcp \
+curl -X POST https://kodus-api.example.com/mcp \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H 'x-team-key: kodus_xxxxx' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 

@@ -29,14 +29,7 @@ Kody は、トークンの所有者である GitLab ユーザーとしてレビ�
 
    - **Token Name**：`kody_code_review` など、識別しやすい名前を付けます。
    - **Expiration Date**：可能であれば、長めの有効期限（できれば 180 日以上）を選択します。
-   - **Permissions**：次の権限を設定します。
-     - **api**
-     - **read_api**
-     - **read_user**
-     - **read_repository**
-     - **write_repository**
-
-   個人用アクセストークンでは、`api` に他の 4 つのスコープがすでに含まれているため、`api` だけで十分です。Kody が Git 経由でプッシュすることはありません。
+   - 個人用アクセストークンの **Scopes** では `api` のみを選択します。Kody の API 呼び出しと HTTPS 経由のリポジトリアクセスが含まれます。
 
 5. **トークンを確定して保存します**：
    - 権限を設定したら、`Generate token` をクリックします。
@@ -63,7 +56,7 @@ Kody は、トークンの所有者である GitLab ユーザーとしてレビ�
    - **Token name**：Kody のレビューに表示される名前です。例：`Kody`。
    - **Expiration date**：可能であれば、長めの有効期限（できれば 180 日以上）を選択します。
    - **Role**：`Maintainer`。Kody は各プロジェクトに Webhook を作成するためにこのロールを必要とします。
-   - **Scopes**：`api` と `read_repository`。Kody はリポジトリをクローンしますが、グループアクセストークンの `api` には Git over HTTPS が含まれません。
+   - **Scopes** では、API 呼び出し用に `api` を、Kody がグループのリポジトリを HTTPS でクローンするために `read_repository` を選択します。
 
 4. **トークンを確定して保存します**：
    - `Create group access token` をクリックします。

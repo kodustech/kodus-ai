@@ -26,20 +26,19 @@ Enquanto estiver desativado, a API não serve `/mcp`. A rota é `POST /mcp` no h
 Conecte o cliente a `https://<your-api-host>/mcp` na API da sua instância. O servidor usa Streamable HTTP.
 
 1. Abra **Organization → CLI keys**, gere uma chave e copie-a. Apenas os owners da organização podem gerar chaves. Veja [CLI keys](/pt-BR/how_to_use/organization/organization_settings#cli-keys).
-2. Envie a chave em toda requisição, em qualquer um dos headers:
+2. Configure o cliente para enviar a chave em um destes cabeçalhos ao chamar uma ferramenta.
 
 ```
 x-team-key: kodus_xxxxx
 Authorization: Bearer kodus_xxxxx
 ```
 
-Para verificar a conexão, liste as ferramentas:
+Para verificar a conexão, troque `kodus-api.example.com` pelo host da sua API e liste as ferramentas. Essa consulta funciona sem chave.
 
 ```bash
-curl -X POST https://<your-api-host>/mcp \
+curl -X POST https://kodus-api.example.com/mcp \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H 'x-team-key: kodus_xxxxx' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 

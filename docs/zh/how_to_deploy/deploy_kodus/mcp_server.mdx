@@ -26,20 +26,19 @@ Helm Chart 默认启用此端点。要关闭它，请在 values 文件中将 `gl
 将客户端连接到自托管实例的 API 端点 `https://<your-api-host>/mcp`。服务器使用 Streamable HTTP。
 
 1. 打开 **Organization → CLI keys**,生成一个密钥并复制。只有组织所有者可以生成密钥。参见 [CLI 密钥](/zh/how_to_use/organization/organization_settings#cli-密钥)。
-2. 在每个请求中通过以下任一请求头发送该密钥:
+2. 配置客户端，使其在调用工具时通过以下任一请求头发送密钥。
 
 ```
 x-team-key: kodus_xxxxx
 Authorization: Bearer kodus_xxxxx
 ```
 
-要检查连接,请列出工具:
+要检查连接，请将 `kodus-api.example.com` 替换为您的 API 主机名，然后列出工具。此发现请求无需密钥。
 
 ```bash
-curl -X POST https://<your-api-host>/mcp \
+curl -X POST https://kodus-api.example.com/mcp \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H 'x-team-key: kodus_xxxxx' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
