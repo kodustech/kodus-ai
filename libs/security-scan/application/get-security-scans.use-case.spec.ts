@@ -77,6 +77,17 @@ describe('scan read scope', () => {
         ).resolves.toBe(false);
     });
 
+    it('refuses the same id and platform on another host', async () => {
+        const { useCase } = setup([config('GITHUB', 'github.enterprise')]);
+        const scan = {
+            organizationId: 'org',
+            repository: { id: '123', platform: 'GITHUB', host: 'github.com' },
+        } as any;
+        await expect(
+            useCase.isInRepositoryScope('org', scan, ['123']),
+        ).resolves.toBe(false);
+    });
+
     it('does not match an ambiguous legacy id to another instance', async () => {
         const { useCase } = setup([
             config(),
