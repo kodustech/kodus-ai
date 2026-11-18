@@ -2,6 +2,10 @@ import { calculateBackoffIntervalExact } from '@libs/common/utils/polling/expone
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    cronRunGate,
+    GatedCron,
+} from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -26,7 +30,6 @@ import {
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
-import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
 import {
@@ -259,12 +262,16 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
     }
 
-    @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
+    @GatedCron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
         name: 'CHECK IF PR SHOULD BE APPROVED',
         timeZone: 'America/Sao_Paulo',
         waitForCompletion: true,
     })
     async handleCron() {
+        await this.runCron();
+    }
+
+    private async runCron() {
         const lockKey = 'CRON:CHECK_IF_PR_SHOULD_BE_APPROVED';
 
         let lock: DistributedLock;
@@ -421,6 +428,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             await Promise.allSettled(
                 teams.map((team) =>
                     teamLimit(async () => {
+                        if (cronRunGate.stopping) return;
                         const organizationId = team.organization?.uuid;
                         const teamId = team.uuid;
 
@@ -552,6 +560,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         await Promise.allSettled(
                             eligibleOpenPullRequests.map((pr) =>
                                 prLimit(async () => {
+                                    if (cronRunGate.stopping) return;
                                     const repository = pr?.repository;
 
                                     const codeReviewConfigFromRepo =
@@ -889,7 +898,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
             // runs after them. Every PR that carries the request is judged
             // here on its own terms: it must stop blocking the merge once
             // the findings behind it are resolved, approved by Kody or not.
-            if (this.ownChangeRequest) {
+            // Skipped whole, never cut short: it reads a missing organization
+            // as one with no change request. The next run does it.
+            if (this.ownChangeRequest && !cronRunGate.stopping) {
                 await this.withdrawResolvedChangeRequests(
                     teams,
                     parametersByTeam,

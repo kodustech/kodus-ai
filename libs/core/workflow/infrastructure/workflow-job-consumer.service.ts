@@ -28,8 +28,10 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { isClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
+import { isSecurityScanSliceProcess } from './security-scan-runtime';
 import {
     ITaskProtectionService,
     TASK_PROTECTION_SERVICE_TOKEN,
@@ -52,11 +54,9 @@ const CONSUMER_CONTEXT = 'WorkflowJobConsumer';
  * worker, #2451), and only those are subscribed.
  */
 @Injectable()
-export abstract class WorkflowJobConsumerBase
-    implements BeforeApplicationShutdown
-{
-    private readonly logger = createLogger(CONSUMER_CONTEXT);
-    private readonly instanceId = os.hostname();
+export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdown {
+    protected readonly logger = createLogger(CONSUMER_CONTEXT);
+    protected readonly instanceId = os.hostname();
     // Default ECS protection time in minutes
     private readonly JOB_PROTECTION_MINUTES = 60;
     private activeJobs = 0;
@@ -67,14 +67,13 @@ export abstract class WorkflowJobConsumerBase
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
         private readonly jobProcessor: IJobProcessorService,
         @Inject(INBOX_MESSAGE_REPOSITORY_TOKEN)
-        private readonly inboxRepository: IInboxMessageRepository,
+        protected readonly inboxRepository: IInboxMessageRepository,
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
-        private readonly jobRepository: IWorkflowJobRepository,
+        protected readonly jobRepository: IWorkflowJobRepository,
         private readonly observability: ObservabilityService,
         @Inject(TASK_PROTECTION_SERVICE_TOKEN)
         private readonly taskProtectionService: ITaskProtectionService,
     ) {}
-
 
     /**
      * Inbox claim timeout per queue, in minutes. Dimensioned as
@@ -82,14 +81,25 @@ export abstract class WorkflowJobConsumerBase
      * block retries for the default 2.5h while we wait for the reaper.
      * Queues not listed fall back to 150 (2.5h).
      */
-    private resolveClaimTimeoutMinutes(queueName: string): number {
+    protected resolveClaimTimeoutMinutes(queueName: string): number {
         if (queueName === 'workflow.jobs.ast_graph_build.queue') return 30;
         if (queueName === 'workflow.jobs.ast_graph_incremental.queue')
             return 15;
         if (queueName === 'workflow.jobs.webhook.queue') return 20;
         if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
-        if (queueName === 'workflow.jobs.security_scan.queue') return 45;
         return 150;
+    }
+
+    protected heldClaimError(): Error {
+        return new Error('Message already claimed but not finished');
+    }
+
+    protected shouldMarkJobFailed(error: unknown): boolean {
+        return !isClaimConflictError(error);
+    }
+
+    protected abortInFlightWork(): void {
+        // Subclasses abort work that must not outlive drain.
     }
 
     protected async handleWorkflowJob(
@@ -227,11 +237,11 @@ export abstract class WorkflowJobConsumerBase
                 return;
             }
 
-            // If it exists but isn't processed (and claim failed), throw error to trigger retry with backoff
-            // Isso evita o hot loop de Nack(true) e respeita o delivery-limit das quorum queues
+            // Held by another worker (or a dead one whose claim has not
+            // aged out). Subclasses may throw ClaimConflictError so the
+            // delivery requeues without burning retries.
             this.logger.warn({
-                message:
-                    'Message already claimed by another worker, retrying with backoff',
+                message: 'Message already claimed by another worker',
                 context: CONSUMER_CONTEXT,
                 metadata: {
                     messageId,
@@ -239,7 +249,7 @@ export abstract class WorkflowJobConsumerBase
                     queueName,
                 },
             });
-            throw new Error('Message already claimed but not finished');
+            throw this.heldClaimError();
         }
 
         // 2. Start observability span
@@ -258,11 +268,17 @@ export abstract class WorkflowJobConsumerBase
                 });
 
                 try {
-                    await this.jobProcessor.process(unwrappedMessage.jobId);
-
-                    await this.inboxRepository.markAsProcessed(
+                    await this.executeJob(
+                        unwrappedMessage.jobId,
+                        queueName,
                         messageId,
                         consumerId,
+                    );
+
+                    await this.inboxRepository.completeIfHeldBy(
+                        messageId,
+                        consumerId,
+                        this.instanceId,
                     );
 
                     span.setAttributes({
@@ -276,7 +292,9 @@ export abstract class WorkflowJobConsumerBase
                     });
 
                     this.logger.error({
-                        message: 'Failed to process workflow job',
+                        message: this.shouldMarkJobFailed(error)
+                            ? 'Failed to process workflow job'
+                            : 'Held or preempted job; requeueing without failing it',
                         context: CONSUMER_CONTEXT,
                         error,
                         metadata: {
@@ -287,37 +305,42 @@ export abstract class WorkflowJobConsumerBase
                         },
                     });
 
-                    // CRITICAL: Always mark job as FAILED to prevent stuck PENDING jobs
-                    try {
-                        await this.jobRepository.update(
-                            unwrappedMessage.jobId,
-                            {
-                                status: JobStatus.FAILED,
-                                errorClassification:
-                                    ErrorClassification.PERMANENT,
-                                lastError: error.message,
-                            },
-                        );
+                    // A held or stolen claim is not a processing failure:
+                    // the scan document stays RUNNING so a redelivery can
+                    // continue it. Marking FAILED here raced a live child.
+                    if (this.shouldMarkJobFailed(error)) {
+                        try {
+                            await this.jobRepository.update(
+                                unwrappedMessage.jobId,
+                                {
+                                    status: JobStatus.FAILED,
+                                    errorClassification:
+                                        ErrorClassification.PERMANENT,
+                                    lastError: error.message,
+                                },
+                            );
 
-                        this.logger.log({
-                            message:
-                                'Job marked as FAILED after processing error',
-                            context: CONSUMER_CONTEXT,
-                            metadata: {
-                                jobId: unwrappedMessage.jobId,
-                                error: error.message,
-                            },
-                        });
-                    } catch (updateError) {
-                        this.logger.error({
-                            message: 'Failed to update job status to FAILED',
-                            context: CONSUMER_CONTEXT,
-                            error: updateError,
-                            metadata: {
-                                jobId: unwrappedMessage.jobId,
-                                originalError: error.message,
-                            },
-                        });
+                            this.logger.log({
+                                message:
+                                    'Job marked as FAILED after processing error',
+                                context: CONSUMER_CONTEXT,
+                                metadata: {
+                                    jobId: unwrappedMessage.jobId,
+                                    error: error.message,
+                                },
+                            });
+                        } catch (updateError) {
+                            this.logger.error({
+                                message:
+                                    'Failed to update job status to FAILED',
+                                context: CONSUMER_CONTEXT,
+                                error: updateError,
+                                metadata: {
+                                    jobId: unwrappedMessage.jobId,
+                                    originalError: error.message,
+                                },
+                            });
+                        }
                     }
 
                     // Release lock — bounded so a slow Mongo cannot keep the
@@ -326,18 +349,18 @@ export abstract class WorkflowJobConsumerBase
                     // Retry scheduling for AMQP is handled by RabbitMQErrorHandler.
                     try {
                         await runWithBoundedTimeout(
-                            this.inboxRepository.releaseLock(
+                            this.inboxRepository.releaseIfHeldBy(
                                 messageId,
                                 consumerId,
-                                error.message,
+                                this.instanceId,
                             ),
                             10_000,
-                            'inbox.releaseLock',
+                            'inbox.releaseIfHeldBy',
                         );
                     } catch (releaseErr) {
                         this.logger.error({
                             message:
-                                'releaseLock failed/timed out; deferring to stale-claim reaper',
+                                'releaseIfHeldBy failed/timed out; deferring to stale-claim reaper',
                             context: CONSUMER_CONTEXT,
                             error: releaseErr,
                             metadata: {
@@ -358,6 +381,15 @@ export abstract class WorkflowJobConsumerBase
         );
     }
 
+    protected async executeJob(
+        jobId: string,
+        _queueName: string,
+        _messageId: string,
+        _consumerId: string,
+    ): Promise<void> {
+        await this.jobProcessor.process(jobId);
+    }
+
     /**
      * Drain active jobs and release this host's inbox locks. Runs in
      * beforeApplicationShutdown: after WorkerDrainService cancelled the
@@ -365,6 +397,16 @@ export abstract class WorkflowJobConsumerBase
      * (onApplicationShutdown), so running jobs can still ack.
      */
     async beforeApplicationShutdown(signal?: string): Promise<void> {
+        // Slice children share the parent's hostname and own no inbox
+        // claims. Their close() must not releaseAllByInstance the parent's
+        // live rows (completeIfHeldBy would then no-op and a duplicate
+        // would re-run the slice).
+        if (isSecurityScanSliceProcess()) {
+            return;
+        }
+
+        this.abortInFlightWork();
+
         // Same reader as the worker's force-exit timer, so the two agree
         const maxWaitMs = parseDrainTimeoutMs();
 
@@ -545,7 +587,9 @@ export class WorkflowJobConsumer extends WorkflowJobConsumerBase {
         queueOptions: {
             channel: 'channel-cli-code-review',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.cli_code_review.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.cli_code_review.queue'
+                ],
         },
     })
     async handleCliCodeReviewJob(
@@ -575,7 +619,9 @@ export class WorkflowJobConsumer extends WorkflowJobConsumerBase {
         queueOptions: {
             channel: 'channel-check-implementation',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.check_implementation.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.check_implementation.queue'
+                ],
         },
     })
     async handleImplementationCheckJob(
@@ -623,7 +669,9 @@ export class WorkflowJobConsumer extends WorkflowJobConsumerBase {
         queueOptions: {
             channel: 'channel-ast-graph-build',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_build.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_build.queue'
+                ],
         },
     })
     async handleAstGraphBuildJob(
@@ -659,7 +707,9 @@ export class WorkflowJobConsumer extends WorkflowJobConsumerBase {
         queueOptions: {
             channel: 'channel-ast-graph-incremental',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_incremental.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_incremental.queue'
+                ],
         },
     })
     async handleAstGraphIncrementalJob(

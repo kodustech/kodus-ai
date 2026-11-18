@@ -68,6 +68,8 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     private healthCheckTimer: NodeJS.Timeout | null = null;
 
     private isFlushingLogs = false;
+    private activeLogFlush: Promise<void> | null = null;
+    private activeTelemetryFlush: Promise<void> | null = null;
     private isFlushingTelemetry = false;
 
     // Write-Ahead Log (WAL) for critical spans
@@ -1431,9 +1433,26 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     }
 
     /**
-     * Flush logs para MongoDB
+     * Flush logs para MongoDB. A call made while a flush is writing gets that
+     * flush's promise, so a caller that awaits it (dispose) waits for the
+     * write instead of returning before it lands.
      */
-    private async flushLogs(): Promise<void> {
+    private flushLogs(): Promise<void> {
+        if (this.activeLogFlush) {
+            return this.activeLogFlush;
+        }
+        // Cleared only by the flush it holds: a call made from inside
+        // writeLogs before the field is set must not clear the running one.
+        const running = this.writeLogs().finally(() => {
+            if (this.activeLogFlush === running) {
+                this.activeLogFlush = null;
+            }
+        });
+        this.activeLogFlush = running;
+        return running;
+    }
+
+    private async writeLogs(): Promise<void> {
         if (!this.config.enableObservability) {
             return;
         }
@@ -1636,7 +1655,21 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     /**
      * Flush telemetry para MongoDB (Dual Buffer: Crítico + Normal)
      */
-    private async flushTelemetry(): Promise<void> {
+    /** Same contract as flushLogs. */
+    private flushTelemetry(): Promise<void> {
+        if (this.activeTelemetryFlush) {
+            return this.activeTelemetryFlush;
+        }
+        const running = this.writeTelemetry().finally(() => {
+            if (this.activeTelemetryFlush === running) {
+                this.activeTelemetryFlush = null;
+            }
+        });
+        this.activeTelemetryFlush = running;
+        return running;
+    }
+
+    private async writeTelemetry(): Promise<void> {
         if (!this.config.enableObservability) {
             return;
         }
@@ -1874,6 +1907,9 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      * Flush todos os buffers
      */
     async flush(): Promise<void> {
+        await Promise.allSettled([this.flushLogs(), this.flushTelemetry()]);
+        // A flush already running when this was called only wrote what it
+        // had taken; what was buffered during its write goes now.
         await Promise.allSettled([this.flushLogs(), this.flushTelemetry()]);
     }
 

@@ -11,6 +11,9 @@ export enum InboxStatus {
 }
 
 @Entity({ name: 'inbox_messages', schema: 'kodus_workflow' })
+// FK lookup index for deletes on workflow_jobs; built CONCURRENTLY in
+// migration WorkflowJobsRetentionIndexes2026111710000000.
+@Index('IDX_inbox_messages_job_id', { synchronize: false })
 @Index('IDX_inbox_messages_status', ['status'])
 @Index('IDX_inbox_messages_next_attempt_at', ['nextAttemptAt'])
 @Index('IDX_inbox_messages_created_at', ['createdAt'])

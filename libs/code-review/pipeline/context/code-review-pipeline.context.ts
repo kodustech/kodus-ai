@@ -115,6 +115,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Arquivos filtrados COM conteúdo - após aplicar ignorePaths no FetchChangedFilesStage */
     changedFiles?: FileChange[];
+    /** Path inventory of the PR for rules that also examine prior rounds. */
+    prFilePaths?: string[];
 
     /** List of files ignored by configuration patterns */
     ignoredFiles?: string[];

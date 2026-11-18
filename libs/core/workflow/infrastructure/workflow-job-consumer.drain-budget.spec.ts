@@ -1,6 +1,7 @@
 import * as os from 'os';
 
 import { WorkflowJobConsumer } from './workflow-job-consumer.service';
+import { SECURITY_SCAN_SLICE_JOB_ID_ENV } from './security-scan-runtime';
 
 /**
  * The job drain and the worker's force-exit timer read the same budget. A
@@ -15,6 +16,7 @@ describe('WorkflowJobConsumer drain budget', () => {
         jest.useRealTimers();
         if (prev === undefined) delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
         else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+        delete process.env[SECURITY_SCAN_SLICE_JOB_ID_ENV];
     });
 
     function consumerWithStuckJob(
@@ -83,5 +85,14 @@ describe('WorkflowJobConsumer drain budget', () => {
                 message: 'Failed to release inbox locks during shutdown',
             }),
         );
+    });
+
+    it('does not release the parent host claims from a slice child', async () => {
+        process.env[SECURITY_SCAN_SLICE_JOB_ID_ENV] = 'job-1';
+        const { consumer, inboxRepository } = consumerWithStuckJob();
+
+        await consumer.beforeApplicationShutdown('SIGTERM');
+
+        expect(inboxRepository.releaseAllByInstance).not.toHaveBeenCalled();
     });
 });

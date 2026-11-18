@@ -1,5 +1,6 @@
 import pLimit from 'p-limit';
 
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import {
     KODUS_CREDITS_METERING_SERVICE_TOKEN,
@@ -10,10 +11,13 @@ import {
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { Injectable, Inject } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 const API_CRON_KODUS_CREDITS_SWEEP =
     process.env.API_CRON_KODUS_CREDITS_SWEEP || '*/5 * * * *';
+
+// Each sweep reads a month of telemetry spans; this many organizations at a
+// time keeps those scans from stacking on the primary.
+const SWEEP_CONCURRENCY = 4;
 
 /**
  * Every 5 minutes: journal Kodus-routed usage spans as charges and debit them
@@ -21,8 +25,6 @@ const API_CRON_KODUS_CREDITS_SWEEP =
  * distributed lock (the sweep is idempotent anyway — unique span ids on both
  * sides — but two concurrent sweeps would just waste billing calls).
  */
-const SWEEP_CONCURRENCY = 4;
-
 @Injectable()
 export class KodusCreditsSweepCronProvider {
     private readonly logger = createLogger(KodusCreditsSweepCronProvider.name);
@@ -33,7 +35,7 @@ export class KodusCreditsSweepCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_KODUS_CREDITS_SWEEP, {
+    @GatedCron(API_CRON_KODUS_CREDITS_SWEEP, {
         name: 'Kodus Credits Sweep',
         timeZone: 'America/Sao_Paulo',
     })

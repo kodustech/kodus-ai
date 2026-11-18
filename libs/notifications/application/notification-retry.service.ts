@@ -1,6 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import * as os from 'os';
 
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
@@ -42,7 +42,7 @@ export class NotificationRetryService {
      * concurrent claims correctly anyway, but the lock saves the
      * wasted polling.
      */
-    @Cron('*/30 * * * * *')
+    @GatedCron('*/30 * * * * *')
     async tick(): Promise<void> {
         const lock = await this.distributedLockService
             .acquire(LOCK_KEY, { ttl: LOCK_TTL_MS })

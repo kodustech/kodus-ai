@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { createLogger } from '@libs/core/log/logger';
 import {
     DistributedLock,
@@ -62,7 +62,7 @@ export class KodyRuleDetectorSweepService {
         );
     }
 
-    @Cron('0 4 * * *') // daily at 04:00 (low-traffic window)
+    @GatedCron('0 4 * * *') // daily at 04:00 (low-traffic window)
     async sweep(): Promise<void> {
         if (!this.enabled) return;
 
