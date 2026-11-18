@@ -86,10 +86,9 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             });
         }
         if (usesNamedApprovalPolicies(config)) {
-            // The comment manager records REPLACED only alongside a SENT fallback.
-            const lineFindings = (context.lineComments ?? []).filter(
-                (finding) => finding.deliveryStatus !== DeliveryStatus.REPLACED,
-            );
+            // A fallback posts a different suggestion. The replaced finding
+            // still belongs in the review and lacks publication evidence.
+            const lineFindings = context.lineComments ?? [];
             const result = await this.approvalPolicies.evaluate({
                 organizationAndTeamData: context.organizationAndTeamData,
                 repository: context.repository,

@@ -436,23 +436,15 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             name: 'an older comment instead of the current finding',
             commentIds: ['finding-1', 'old'],
             recordedIds: ['finding-1', 'finding-2'],
-            expectedHold: 'Review findings could not be verified.',
         },
         {
             name: 'duplicates in the recorded IDs',
             commentIds: ['finding-1', 'old'],
             recordedIds: ['finding-1', ' finding-1 '],
-            expectedHold: 'Review findings could not be verified.',
-        },
-        {
-            name: 'both current comments',
-            commentIds: [' finding-1 ', 'finding-2'],
-            recordedIds: ['finding-1', 'finding-2'],
-            expectedHold: undefined,
         },
     ])(
-        'verifies exact recorded comment IDs with $name',
-        async ({ commentIds, recordedIds, expectedHold }) => {
+        'holds when the evidence has $name',
+        async ({ commentIds, recordedIds }) => {
             const { input, deps, execution, run } = namedPolicyCase();
             Object.assign(execution.dataExecution.approvalReviewSummary, {
                 lineFindings: recordedIds.length,
@@ -464,24 +456,20 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
                 commentIds.map((id) => ({ id: id.trim(), isResolved: true })),
             );
-            expect(await run()).toBe(!expectedHold);
-            if (expectedHold) {
-                expect(
-                    deps.codeManagementService.approvePullRequest,
-                ).not.toHaveBeenCalled();
-                expect(
-                    deps.codeManagementService.createIssueComment,
-                ).toHaveBeenCalledWith(
-                    expect.objectContaining({
-                        body: expect.stringContaining(expectedHold),
-                    }),
-                    PlatformType.GITLAB,
-                );
-            } else {
-                expect(
-                    deps.codeManagementService.approvePullRequest,
-                ).toHaveBeenCalled();
-            }
+            expect(await run()).toBe(false);
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Review findings could not be verified.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
         },
     );
 

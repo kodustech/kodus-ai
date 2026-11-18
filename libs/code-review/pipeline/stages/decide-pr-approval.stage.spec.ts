@@ -247,8 +247,8 @@ it('records the exact posted comment IDs and missing delivery evidence for named
     });
     expect(result.approvalReviewSummary).toMatchObject({
         complete: true,
-        lineFindings: 3,
-        lineCommentIds: ['42', null, null],
+        lineFindings: 4,
+        lineCommentIds: [null, '42', null, null],
     });
     expect(evaluate).toHaveBeenCalledWith(
         expect.objectContaining({ reviewClean: false }),
