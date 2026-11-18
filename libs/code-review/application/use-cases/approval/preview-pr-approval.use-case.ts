@@ -208,6 +208,17 @@ export class PreviewPrApprovalUseCase {
             previousHeavy = data.heavy;
         }
 
+        const language = await this.parameters.findByKey(
+            ParametersKey.LANGUAGE_CONFIG,
+            organizationAndTeamData,
+        );
+        const resolvedConfig = {
+            ...config,
+            languageResultPrompt:
+                typeof language?.configValue === 'string'
+                    ? language.configValue
+                    : 'en-US',
+        };
         const risk =
             config.pullRequestApprovalActive &&
             !config.reviewSettingsError &&
@@ -217,16 +228,7 @@ export class PreviewPrApprovalUseCase {
                           organizationAndTeamData,
                           repository,
                           pullRequest: { ...pr, number: prNumber },
-                          codeReviewConfig: {
-                              ...config,
-                              languageResultPrompt:
-                                  (
-                                      await this.parameters.findByKey(
-                                          ParametersKey.LANGUAGE_CONFIG,
-                                          organizationAndTeamData,
-                                      )
-                                  )?.configValue ?? 'en-US',
-                          },
+                          codeReviewConfig: resolvedConfig,
                           origin: 'preview',
                           fullPrFiles: files,
                       })
@@ -253,7 +255,7 @@ export class PreviewPrApprovalUseCase {
             organizationAndTeamData,
             repository,
             pullRequest: { ...pr, number: prNumber },
-            config,
+            config: resolvedConfig,
             platformType,
             reviewClean: true,
             risk,
