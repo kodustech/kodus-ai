@@ -193,3 +193,13 @@ export function resolveUltraTrio(
             models[pickMergeModelIndex(models.map((m) => m.slot.model))],
     };
 }
+
+/** The refusal of a resolved trio, or undefined when Ultra can run. */
+export function ultraTrioRefusal(
+    trio: ReturnType<typeof resolveUltraTrio>,
+): UltraTrioRefusal | undefined {
+    if (trio.ok === true) return undefined;
+    const { ok: _ok, ...refusal } = trio as { ok: false } & UltraTrioRefusal;
+    return refusal as UltraTrioRefusal;
+}
+

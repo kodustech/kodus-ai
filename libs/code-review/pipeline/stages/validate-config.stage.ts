@@ -46,6 +46,7 @@ import type { UltraModel } from '@libs/code-review/domain/ultra-review-state';
 import {
     isUltraReviewPlanAllowed,
     resolveUltraTrio,
+    ultraTrioRefusal,
 } from '@libs/ee/ultra-review/ultra-review-plan';
 import {
     ULTRA_REVIEW_PLAN_REQUIRED,
@@ -346,14 +347,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             this.stageName,
         );
         const trio = planAllowed ? resolveUltraTrio(storedConfig) : undefined;
-        const refusal = !planAllowed
-            ? ULTRA_REVIEW_PLAN_REQUIRED
-            : trio && !trio.ok
-              ? ultraTrioRefusalMessage(trio)
-              : undefined;
+        const trioRefusal = trio ? ultraTrioRefusal(trio) : undefined;
 
-        if (refusal || !trio?.ok) {
-            const message = refusal ?? ULTRA_REVIEW_PLAN_REQUIRED;
+        if (!trio || trio.ok !== true) {
+            const message = trioRefusal
+                ? ultraTrioRefusalMessage(trioRefusal)
+                : ULTRA_REVIEW_PLAN_REQUIRED;
             this.logger.log({
                 message: 'Ultra review refused — the review does not run',
                 context: this.stageName,
@@ -363,7 +362,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     repositoryId: context.repository?.id,
                     askedByCommand,
                     planAllowed,
-                    reason: trio && !trio.ok ? trio.reason : 'plan',
+                    reason: trioRefusal?.reason ?? 'plan',
                 },
             });
             // Settings asking for it: told once per PR, and only when the

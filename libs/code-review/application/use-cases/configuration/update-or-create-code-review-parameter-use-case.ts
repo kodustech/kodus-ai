@@ -124,6 +124,7 @@ import {
 import {
     isUltraReviewPlanAllowed,
     resolveUltraTrio,
+    ultraTrioRefusal,
 } from '@libs/ee/ultra-review/ultra-review-plan';
 import { ultraSaveRefusalMessage } from '@libs/ee/ultra-review/ultra-review-messages';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
@@ -916,15 +917,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     reason: ultraSaveRefusalMessage('plan'),
                 });
             } else {
-                const trio = resolveUltraTrio(
-                    await this.permissionValidationService.getBYOKConfig(
-                        organizationAndTeamData,
+                const refusal = ultraTrioRefusal(
+                    resolveUltraTrio(
+                        await this.permissionValidationService.getBYOKConfig(
+                            organizationAndTeamData,
+                        ),
                     ),
                 );
-                if (!trio.ok) {
+                if (refusal) {
                     refusals.push({
                         mode: 'ultra',
-                        reason: ultraSaveRefusalMessage(trio),
+                        reason: ultraSaveRefusalMessage(refusal),
                     });
                 }
             }
