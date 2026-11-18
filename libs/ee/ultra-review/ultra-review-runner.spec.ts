@@ -28,10 +28,12 @@ async function run(
     state: Pick<UltraReviewState, 'models' | 'unavailable' | 'fallback'>,
     plan: Plan,
     delays: Record<string, number> = {},
+    fallbackAllowed?: () => boolean,
 ) {
     const started: string[] = [];
     const result = await runUltraModels<string[]>({
         state,
+        fallbackAllowed,
         run: async (m) => {
             started.push(m.modelId);
             await new Promise((r) => setTimeout(r, delays[m.modelId] ?? 0));
@@ -268,6 +270,33 @@ describe('runUltraModels', () => {
         });
         expect(order.indexOf('start:f')).toBeLessThan(order.indexOf('end:a'));
         expect(order.indexOf('start:f')).toBeLessThan(order.indexOf('end:c'));
+    });
+
+    it('the fallback does not start without time left, and the failed model keeps its partial output', async () => {
+        const r = await run(
+            { models: trio, fallback: fb },
+            { a: ok('a'), b: fail('b'), c: ok('c'), f: ok('f') },
+            {},
+            () => false,
+        );
+        expect(r.started).not.toContain('f');
+        expect(
+            r.runs.find((o) => o.modelId === 'b')?.replacedBy,
+        ).toBeUndefined();
+        expect(r.outputs.map((o) => o.output)).toContainEqual(['b-partial']);
+    });
+
+    it('a fallback in the trio is reused even without time left: it runs anyway', async () => {
+        const r = await run(
+            { models: trio, fallback: model('fallback', 'c') },
+            { a: ok('a'), b: fail('b'), c: ok('c') },
+            {},
+            () => false,
+        );
+        expect(r.runs.find((o) => o.modelId === 'b')).toMatchObject({
+            replacedBy: 'c',
+            reusedRun: true,
+        });
     });
 });
 

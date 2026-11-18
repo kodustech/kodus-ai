@@ -33,11 +33,13 @@ export interface UltraRunOutput<T> {
  * runs again: the first other model to fail is marked as replaced by its
  * review. A failed model replaced by a fallback that completed gives up its
  * partial output; with no fallback, or a failed one, the partial output stays.
+ * The fallback starts only while `fallbackAllowed` says there is time for it.
  * `run` must not throw; a throw is read as a failed run with no output.
  */
 export async function runUltraModels<T>(input: {
     state: Pick<UltraReviewState, 'models' | 'unavailable' | 'fallback'>;
     run: (model: UltraModel) => Promise<UltraModelRunResult<T>>;
+    fallbackAllowed?: () => boolean;
     now?: () => number;
 }): Promise<{ runs: UltraRunOutcome[]; outputs: UltraRunOutput<T>[] }> {
     const now = input.now ?? Date.now;
@@ -103,6 +105,7 @@ export async function runUltraModels<T>(input: {
             }
             return;
         }
+        if (input.fallbackAllowed && !input.fallbackAllowed()) return;
         fallbackUsed = true;
         if ('status' in failed) {
             failed.replacedBy = fallback.modelId;

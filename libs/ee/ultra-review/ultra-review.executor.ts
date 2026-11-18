@@ -34,6 +34,72 @@ export const ULTRA_REVIEW_DEGRADED_REASON = 'ULTRA_REVIEW_DEGRADED';
 /** The timeline entry of the cross-model merge. */
 export const ULTRA_MERGE_STAGE_NAME = 'AgentReview::ultra-merge';
 
+/**
+ * The time an Ultra review spends, sized so the comments go out before the
+ * review job's own ceiling (105 min) kills it and loses what was done.
+ */
+export interface UltraReviewLimits {
+    /** A model's review loop is stopped after this long. */
+    runDeadlineMs: number;
+    /** After its loop stops, how long a run gets to finish its later steps. */
+    runGraceMs: number;
+    /** Every run, the fallback included, ends this long after the start. */
+    runsWindowMs: number;
+    /** The fallback starts only with at least this long to review. */
+    fallbackMinMs: number;
+    /** Each merge attempt is dropped after this long. */
+    mergeDeadlineMs: number;
+}
+
+// Model runs end by minute 75 at the latest; two merge attempts take at most
+// 16 more, which leaves the cross-dedup and the comments well inside 105.
+export const ULTRA_REVIEW_LIMITS: UltraReviewLimits = {
+    runDeadlineMs: 40 * 60 * 1000,
+    runGraceMs: 10 * 60 * 1000,
+    runsWindowMs: 75 * 60 * 1000,
+    fallbackMinMs: 15 * 60 * 1000,
+    mergeDeadlineMs: 8 * 60 * 1000,
+};
+
+/** A run's sandbox outlives the longest the run can take. */
+export const ULTRA_RUN_LEASE_TTL_MS =
+    ULTRA_REVIEW_LIMITS.runsWindowMs + 5 * 60 * 1000;
+
+const minutes = (ms: number) => Math.round(ms / 60_000);
+
+const TIMED_OUT = Symbol('timed out');
+
+/** The value of `promise`, or TIMED_OUT when it takes longer than `ms`. */
+async function withDeadline<T>(
+    promise: Promise<T>,
+    ms: number,
+): Promise<T | typeof TIMED_OUT> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), ms);
+    });
+    try {
+        return await Promise.race([promise, deadline]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/** A signal that fires with `parent` or after `ms`. */
+function deadlineSignal(
+    parent: AbortSignal | undefined,
+    ms: number,
+): { signal: AbortSignal; clear: () => void } {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return {
+        signal: parent
+            ? AbortSignal.any([parent, controller.signal])
+            : controller.signal,
+        clear: () => clearTimeout(timer),
+    };
+}
+
 /** What AgentReviewStage lends an Ultra review. */
 export interface UltraReviewHost {
     reviewPass(
@@ -44,12 +110,17 @@ export interface UltraReviewHost {
     acquireRunSandbox(
         context: CodeReviewPipelineContext,
         suffix: string,
+        leaseTtlMs: number,
     ): Promise<SandboxInstance | undefined>;
-    /** The context a model's run reviews in: its sandbox, its model. */
+    /**
+     * The context a model's run reviews in: its sandbox, its model, and the
+     * signal that stops its review loop.
+     */
     runContext(
         context: CodeReviewPipelineContext,
         model: UltraModel,
         sandbox: SandboxInstance | undefined,
+        signal: AbortSignal,
     ): CodeReviewPipelineContext;
     update(
         context: CodeReviewPipelineContext,
@@ -133,6 +204,7 @@ async function mergeAcrossModels(
     state: UltraReviewState,
     modelLists: number,
     logMeta: Record<string, unknown>,
+    deadlineMs: number,
 ): Promise<{
     merged: Partial<CodeSuggestion>[];
     trace?: DedupTraceSummary;
@@ -163,12 +235,16 @@ async function mergeAcrossModels(
     let lastError = '';
     for (const { model, status } of candidates) {
         try {
-            const result = await host.mergeFindings(
-                findings,
-                prNumber,
-                model.slot,
-                context,
+            const attempt = await withDeadline(
+                host.mergeFindings(findings, prNumber, model.slot, context),
+                deadlineMs,
             );
+            if (attempt === TIMED_OUT) {
+                throw new Error(
+                    `The merge did not finish within ${minutes(deadlineMs)} minutes.`,
+                );
+            }
+            const result = attempt;
             const failed =
                 result.trace.status === 'failed-keep-all' ||
                 result.trace.status === 'empty-keep-all';
@@ -218,6 +294,7 @@ async function mergeAcrossModels(
 export async function executeUltraReview(
     context: CodeReviewPipelineContext,
     host: UltraReviewHost,
+    limits: UltraReviewLimits = ULTRA_REVIEW_LIMITS,
 ): Promise<CodeReviewPipelineContext> {
     const changedFiles = context.changedFiles ?? [];
     // Only ignored files changed: no model reviews them, the custom agents do.
@@ -244,70 +321,146 @@ export async function executeUltraReview(
         },
     });
 
+    const startedAt = Date.now();
+    const runsEndAt = startedAt + limits.runsWindowMs;
+    // A run's review loop gets the deadline or what is left of the window,
+    // keeping the grace its later steps need.
+    const runWindow = () =>
+        Math.min(
+            limits.runDeadlineMs,
+            runsEndAt - Date.now() - limits.runGraceMs,
+        );
+
     // Kody Rules and the custom agents, once, on the PR's own sandbox, which
-    // is released as soon as they are done: the models have their own.
+    // is released as soon as they are done: the models have their own. They
+    // stop with the models; past the window the review goes on without them.
     let auxiliary = emptyCollected();
-    const auxiliaryRun = (
-        hasAuxiliaryWork(context)
-            ? host.reviewPass(context, {
-                  scope: 'auxiliary',
-                  collect: (collected) => {
-                      auxiliary = collected;
-                  },
-              })
-            : Promise.resolve(context)
-    ).finally(() => context.sandboxHandle?.cleanup?.().catch(() => undefined));
+    const releaseBase = () =>
+        context.sandboxHandle?.cleanup?.().catch(() => undefined);
+    let auxiliaryRun: Promise<CodeReviewPipelineContext> =
+        Promise.resolve(context);
+    if (hasAuxiliaryWork(context)) {
+        const stop = deadlineSignal(context.parentSignal, runWindow());
+        let abandoned = false;
+        auxiliaryRun = withDeadline(
+            host
+                .reviewPass(
+                    host.update(context, (draft) => {
+                        draft.parentSignal = stop.signal;
+                    }),
+                    {
+                        scope: 'auxiliary',
+                        collect: (collected) => {
+                            if (!abandoned) auxiliary = collected;
+                        },
+                    },
+                )
+                .finally(() => {
+                    stop.clear();
+                    void releaseBase();
+                }),
+            runsEndAt - Date.now(),
+        ).then((result) => {
+            if (result !== TIMED_OUT) return result;
+            abandoned = true;
+            void releaseBase();
+            logger.warn({
+                message: `[ULTRA] PR#${prNumber}: Kody Rules and custom agents did not finish in time; the review goes on without them`,
+                context: 'UltraReview',
+                metadata: logMeta,
+            });
+            return context;
+        });
+    } else {
+        void releaseBase();
+    }
 
     const runWarnings: ReviewWarning[] = [];
     const runErrors: CodeReviewPipelineContext['lastReviewError'][] = [];
     const { runs, outputs } = await runUltraModels<ReviewPassCollected>({
         state,
+        fallbackAllowed: () => runWindow() >= limits.fallbackMinMs,
         run: async (model) => {
             const suffix = runSuffix(model);
-            const sandbox = await host.acquireRunSandbox(context, suffix);
-            try {
-                let collected: ReviewPassCollected | undefined;
-                const after = await host.reviewPass(
-                    host.runContext(context, model, sandbox),
+            const window = runWindow();
+            const sandbox = await host.acquireRunSandbox(
+                context,
+                suffix,
+                ULTRA_RUN_LEASE_TTL_MS,
+            );
+            const release = () => sandbox?.cleanup?.().catch(() => undefined);
+            const stop = deadlineSignal(context.parentSignal, window);
+            // A run that outlives its grace is left behind: nothing it
+            // reports afterwards reaches the review.
+            let abandoned = false;
+            let collected: ReviewPassCollected | undefined;
+            const pass = host
+                .reviewPass(
+                    host.runContext(context, model, sandbox, stop.signal),
                     {
                         scope: 'native',
                         model,
                         timelineTag: { key: suffix, label: model.modelName },
                         collect: (c) => {
-                            collected = c;
+                            if (!abandoned) collected = c;
                         },
                     },
-                );
-                runWarnings.push(...(after.reviewWarnings ?? []));
-                if (after.lastReviewError)
-                    runErrors.push(after.lastReviewError);
-                if (!collected) {
-                    return {
-                        completed: false,
-                        failureReason: 'The review ended without its findings.',
-                    };
-                }
-                logger.log({
-                    message: `[ULTRA] PR#${prNumber}: ${model.modelName} ${collected.completion.completed ? 'completed' : 'failed'} with ${collected.findings.length} findings`,
+                )
+                .finally(() => {
+                    stop.clear();
+                    void release();
+                });
+            const result = await withDeadline(pass, window + limits.runGraceMs);
+            if (result === TIMED_OUT) {
+                abandoned = true;
+                void release();
+                logger.warn({
+                    message: `[ULTRA] PR#${prNumber}: ${model.modelName} did not finish in time; left behind`,
                     context: 'UltraReview',
                     metadata: {
                         ...logMeta,
                         model: model.modelName,
                         position: model.position,
-                        completed: collected.completion.completed,
-                        failureReason: collected.completion.failureReason,
-                        findings: collected.findings.length,
                     },
                 });
                 return {
-                    completed: collected.completion.completed,
-                    failureReason: collected.completion.failureReason,
-                    output: collected,
-                    findings: collected.findings.length,
+                    completed: false,
+                    failureReason: `It did not finish within ${minutes(window + limits.runGraceMs)} minutes.`,
                 };
-            } finally {
-                await sandbox?.cleanup?.().catch(() => undefined);
             }
+            const after = result;
+            runWarnings.push(...(after.reviewWarnings ?? []));
+            if (after.lastReviewError) runErrors.push(after.lastReviewError);
+            if (!collected) {
+                return {
+                    completed: false,
+                    failureReason: 'The review ended without its findings.',
+                };
+            }
+            const timedOut =
+                stop.signal.aborted && !context.parentSignal?.aborted;
+            const completed = collected.completion.completed && !timedOut;
+            const failureReason = timedOut
+                ? `Its review was stopped after ${minutes(window)} minutes.`
+                : collected.completion.failureReason;
+            logger.log({
+                message: `[ULTRA] PR#${prNumber}: ${model.modelName} ${completed ? 'completed' : 'failed'} with ${collected.findings.length} findings`,
+                context: 'UltraReview',
+                metadata: {
+                    ...logMeta,
+                    model: model.modelName,
+                    position: model.position,
+                    completed,
+                    failureReason,
+                    findings: collected.findings.length,
+                },
+            });
+            return {
+                completed,
+                failureReason,
+                output: collected,
+                findings: collected.findings.length,
+            };
         },
     });
 
@@ -326,6 +479,7 @@ export async function executeUltraReview(
         state,
         outputs.length,
         logMeta,
+        limits.mergeDeadlineMs,
     );
     await host.recordTimeline(main, {
         stageName: ULTRA_MERGE_STAGE_NAME,

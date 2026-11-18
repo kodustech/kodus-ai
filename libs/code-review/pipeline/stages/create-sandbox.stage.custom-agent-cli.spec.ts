@@ -5,6 +5,8 @@ jest.mock(
 
 import { provisionCustomAgentClis } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 
+import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
+
 import { CreateSandboxStage } from './create-sandbox.stage';
 
 const provision = provisionCustomAgentClis as jest.Mock;
@@ -63,7 +65,7 @@ function build(params: { sandboxType: 'e2b' | 'local' }) {
         changedFiles: [{ filename: 'src/app.ts' }],
         codeReviewConfig: { customAgents: [agent] },
     };
-    return { stage, context, featureGate };
+    return { stage, context, featureGate, leaseManager };
 }
 
 describe('CreateSandboxStage custom agent CLIs', () => {
@@ -156,5 +158,36 @@ describe('CreateSandboxStage on a PR whose changed files are all ignored', () =>
 
         expect(result.sandboxHandle).toBeUndefined();
         expect(provision).not.toHaveBeenCalled();
+    });
+});
+
+describe('CreateSandboxStage lease on an Ultra review', () => {
+    beforeEach(() => {
+        provision.mockReset();
+        provision.mockResolvedValue(undefined);
+    });
+
+    it("keeps the PR's sandbox as long as the Ultra models run", async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        context.ultra = { models: [] };
+        await (stage as any).executeStage(context);
+        expect(leaseManager.acquire.mock.calls[0][2]).toBe(
+            ULTRA_RUN_LEASE_TTL_MS,
+        );
+    });
+
+    it('a run sandbox gets its own key and the lease asked for', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        await stage.acquireRunSandbox(context, 'ultra-2', 1234);
+        expect(leaseManager.acquire.mock.calls[0][0]).toBe(
+            'org-1:repo-1:7#ultra-2',
+        );
+        expect(leaseManager.acquire.mock.calls[0][2]).toBe(1234);
+    });
+
+    it('a review that is not Ultra keeps the default lease', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        await (stage as any).executeStage(context);
+        expect(leaseManager.acquire.mock.calls[0][2]).toBeUndefined();
     });
 });

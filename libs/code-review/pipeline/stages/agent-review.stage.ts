@@ -515,10 +515,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     private ultraReviewHost(): UltraReviewHost {
         return {
             reviewPass: (context, pass) => this.reviewPass(context, pass),
-            acquireRunSandbox: async (context, suffix) =>
-                this.createSandboxStage?.acquireRunSandbox(context, suffix),
-            runContext: (context, model, sandbox) =>
+            acquireRunSandbox: async (context, suffix, leaseTtlMs) =>
+                this.createSandboxStage?.acquireRunSandbox(
+                    context,
+                    suffix,
+                    leaseTtlMs,
+                ),
+            runContext: (context, model, sandbox, signal) =>
                 this.updateContext(context, (draft) => {
+                    draft.parentSignal = signal;
                     draft.sandboxHandle = sandbox;
                     draft.sandboxSuperseded = undefined;
                     // Every later step of the run (dedup, severity,

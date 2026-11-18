@@ -11,8 +11,19 @@ import type {
 import {
     executeUltraReview,
     ULTRA_REVIEW_DEGRADED_REASON,
+    ULTRA_RUN_LEASE_TTL_MS,
     type UltraReviewHost,
+    type UltraReviewLimits,
 } from './ultra-review.executor';
+
+// Every case runs on these; a deadline case shortens one.
+const LIMITS: UltraReviewLimits = {
+    runDeadlineMs: 200,
+    runGraceMs: 200,
+    runsWindowMs: 2_000,
+    fallbackMinMs: 50,
+    mergeDeadlineMs: 200,
+};
 
 const model = (
     position: UltraModel['position'],
@@ -47,9 +58,19 @@ const collected = (
     ...extra,
 });
 
+/**
+ * 'hang' never returns; 'until-stopped' returns these findings as completed
+ * once its review loop is stopped.
+ */
+type PassPlan =
+    | ReviewPassCollected
+    | 'throw'
+    | 'hang'
+    | { untilStopped: ReviewPassCollected };
+
 interface Fixture {
-    passes: Record<string, ReviewPassCollected | 'throw'>;
-    merge?: Record<string, 'ok' | 'fail' | 'throw'>;
+    passes: Record<string, PassPlan>;
+    merge?: Record<string, 'ok' | 'fail' | 'throw' | 'hang'>;
     context?: Partial<CodeReviewPipelineContext>;
     state?: Partial<UltraReviewState>;
 }
@@ -63,6 +84,7 @@ function setup(fx: Fixture) {
         }>,
         sandboxes: [] as string[],
         released: [] as string[],
+        leaseTtls: [] as number[],
         merges: [] as string[],
         published: undefined as any,
         timeline: [] as any[],
@@ -99,18 +121,33 @@ function setup(fx: Fixture) {
             });
             const plan = fx.passes[key];
             if (plan === 'throw') throw new Error(`${key} threw`);
-            if (plan) pass.collect?.(plan);
+            if (plan === 'hang') {
+                await new Promise(() => undefined);
+                return ctx;
+            }
+            let result: ReviewPassCollected | undefined;
+            if (plan && 'untilStopped' in plan) {
+                const signal = ctx.parentSignal!;
+                await new Promise((resolve) =>
+                    signal.addEventListener('abort', resolve),
+                );
+                result = plan.untilStopped;
+            } else {
+                result = plan as ReviewPassCollected | undefined;
+            }
+            if (result) pass.collect?.(result);
             return {
                 ...ctx,
                 ...(pass.model &&
-                    plan &&
-                    !plan.completion.completed && {
+                    result &&
+                    !result.completion.completed && {
                         lastReviewError: { category: 'auth', model: key },
                     }),
             } as any;
         },
-        acquireRunSandbox: async (_ctx, suffix) => {
+        acquireRunSandbox: async (_ctx, suffix, leaseTtlMs) => {
             calls.sandboxes.push(suffix);
+            calls.leaseTtls.push(leaseTtlMs);
             return {
                 id: suffix,
                 cleanup: async () => {
@@ -118,15 +155,22 @@ function setup(fx: Fixture) {
                 },
             } as any;
         },
-        runContext: (ctx, m, sandbox) =>
-            ({ ...ctx, sandboxHandle: sandbox, model: m.modelId }) as any,
+        runContext: (ctx, m, sandbox, signal) =>
+            ({
+                ...ctx,
+                sandboxHandle: sandbox,
+                model: m.modelId,
+                parentSignal: signal,
+            }) as any,
         update: (ctx, recipe) => {
             const draft = structuredClone({
                 ...ctx,
                 sandboxHandle: undefined,
                 ultra: undefined,
+                parentSignal: undefined,
             }) as any;
             draft.ultra = ctx.ultra;
+            draft.parentSignal = ctx.parentSignal;
             recipe(draft);
             return draft;
         },
@@ -134,6 +178,7 @@ function setup(fx: Fixture) {
             calls.merges.push(slot.model);
             const plan = fx.merge?.[slot.model] ?? 'ok';
             if (plan === 'throw') throw new Error('merge threw');
+            if (plan === 'hang') return new Promise(() => undefined);
             if (plan === 'fail') {
                 return {
                     suggestions: findings,
@@ -180,7 +225,7 @@ describe('executeUltraReview', () => {
             },
         });
 
-        const out = await executeUltraReview(context, host);
+        const out = await executeUltraReview(context, host, LIMITS);
 
         const native = calls.passes.filter((p) => p.scope === 'native');
         expect(native.map((p) => [p.model, p.sandbox])).toEqual([
@@ -195,6 +240,12 @@ describe('executeUltraReview', () => {
         expect(calls.released.sort()).toEqual(
             ['base', 'ultra-1', 'ultra-2', 'ultra-3'].sort(),
         );
+        // A run's lease outlives the longest the run can take.
+        expect(calls.leaseTtls).toEqual([
+            ULTRA_RUN_LEASE_TTL_MS,
+            ULTRA_RUN_LEASE_TTL_MS,
+            ULTRA_RUN_LEASE_TTL_MS,
+        ]);
         // The merge runs on the merge model only, over every model's list.
         expect(calls.merges).toEqual(['b']);
         expect(calls.crossDedup.rules.map((r: any) => r.id)).toEqual(['rule1']);
@@ -226,7 +277,7 @@ describe('executeUltraReview', () => {
             },
             context: { codeReviewConfig: {} as any },
         });
-        await executeUltraReview(context, host);
+        await executeUltraReview(context, host, LIMITS);
         expect(calls.passes.some((p) => p.scope === 'auxiliary')).toBe(false);
         expect(baseCleanup).toHaveBeenCalledTimes(1);
     });
@@ -241,7 +292,7 @@ describe('executeUltraReview', () => {
                 auxiliary: collected([]),
             },
         });
-        const out = await executeUltraReview(context, host);
+        const out = await executeUltraReview(context, host, LIMITS);
         expect(calls.sandboxes).toContain('ultra-fallback');
         expect(out.ultra?.outcome).toBe('success');
         expect(out.ultra?.runs?.find((r) => r.modelId === 'b')).toMatchObject({
@@ -264,7 +315,7 @@ describe('executeUltraReview', () => {
             },
             merge: { b: 'fail' },
         });
-        const out = await executeUltraReview(context, host);
+        const out = await executeUltraReview(context, host, LIMITS);
         expect(calls.merges).toEqual(['b', 'f']);
         expect(out.ultra?.merge).toMatchObject({
             status: 'fallback',
@@ -283,7 +334,7 @@ describe('executeUltraReview', () => {
             },
             merge: { b: 'throw', f: 'fail' },
         });
-        const out = await executeUltraReview(context, host);
+        const out = await executeUltraReview(context, host, LIMITS);
         expect(out.ultra?.merge?.status).toBe('failed');
         expect(calls.published.deduped).toHaveLength(3);
         expect(out.ultra?.outcome).toBe('degraded');
@@ -310,7 +361,7 @@ describe('executeUltraReview', () => {
             },
             state: { fallback: undefined },
         });
-        const out = await executeUltraReview(context, host);
+        const out = await executeUltraReview(context, host, LIMITS);
         expect(out.ultra?.outcome).toBe('degraded');
         expect(calls.published.deduped.map((f: any) => f.id)).toContain('b9');
         expect(out.errors?.[0]?.severity).toBe('partial');
@@ -326,7 +377,7 @@ describe('executeUltraReview', () => {
                 auxiliary: collected(['rule1']),
             },
         });
-        const out = await executeUltraReview(context, host);
+        const out = await executeUltraReview(context, host, LIMITS);
         expect(out.ultra?.outcome).toBe('failed');
         expect(out.errors?.[0]).toMatchObject({ severity: 'critical' });
         expect(out.lastReviewError).toBeDefined();
@@ -349,9 +400,125 @@ describe('executeUltraReview', () => {
             passes: {},
             context: { changedFiles: [] },
         });
-        await executeUltraReview(context, host);
+        await executeUltraReview(context, host, LIMITS);
         expect(calls.passes).toEqual([
             { scope: undefined, model: undefined, sandbox: undefined },
         ]);
+    });
+
+    describe('time limits', () => {
+        it('a model that never returns is left behind: the other two still post, degraded', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: 'hang',
+                    c: collected(['c2']),
+                    auxiliary: collected(['rule1']),
+                },
+                state: { fallback: undefined },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+                'rule1',
+            ]);
+            expect(out.ultra?.outcome).toBe('degraded');
+            expect(
+                out.ultra?.runs?.find((r) => r.modelId === 'b'),
+            ).toMatchObject({
+                status: 'failed',
+                failureReason: expect.stringMatching(/did not finish within/),
+            });
+            // Its sandbox is not held for the run it was left behind on.
+            expect(calls.released).toContain('ultra-2');
+        });
+
+        it('a model whose loop is stopped by the deadline failed, and the fallback replaces it', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: { untilStopped: collected(['b9']) },
+                    c: collected(['c2']),
+                    f: collected(['f3']),
+                    auxiliary: collected([]),
+                },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(
+                out.ultra?.runs?.find((r) => r.modelId === 'b'),
+            ).toMatchObject({
+                status: 'failed',
+                failureReason: expect.stringMatching(/stopped after/),
+                replacedBy: 'f',
+            });
+            expect(out.ultra?.outcome).toBe('success');
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+                'f3',
+            ]);
+        });
+
+        it('the fallback does not start without time left to review', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b9'], false),
+                    c: collected(['c2']),
+                    f: collected(['f3']),
+                    auxiliary: collected([]),
+                },
+            });
+            const out = await executeUltraReview(context, host, {
+                ...LIMITS,
+                fallbackMinMs: 10_000,
+            });
+            expect(calls.sandboxes).not.toContain('ultra-fallback');
+            expect(out.ultra?.outcome).toBe('degraded');
+            // With no fallback run, the failed model's partial findings post.
+            expect(calls.published.deduped.map((f: any) => f.id)).toContain(
+                'b9',
+            );
+        });
+
+        it('a merge that never answers gives way to the fallback', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                merge: { b: 'hang' },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(calls.merges).toEqual(['b', 'f']);
+            expect(out.ultra?.merge).toMatchObject({
+                status: 'fallback',
+                modelName: 'p:f',
+            });
+        });
+
+        it('Kody Rules that never return do not hold the models back', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: 'hang',
+                },
+            });
+            const out = await executeUltraReview(context, host, {
+                ...LIMITS,
+                runsWindowMs: 300,
+            });
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+            ]);
+            expect(out.ultra?.outcome).toBe('success');
+            expect(calls.released).toContain('base');
+        });
     });
 });

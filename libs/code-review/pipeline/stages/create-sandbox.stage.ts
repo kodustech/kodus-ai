@@ -28,6 +28,7 @@ import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
+import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
 
 /**
  * After review finishes, only keep the sandbox warm for 30 seconds. Either
@@ -96,6 +97,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
     async acquireRunSandbox(
         context: CodeReviewPipelineContext,
         suffix: string,
+        leaseTtlMs?: number,
     ): Promise<SandboxInstance | undefined> {
         const prKey = runPrKey(
             `${context.organizationAndTeamData?.organizationId}:${context.repository?.id}:${context.pullRequest?.number}`,
@@ -120,7 +122,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
-                undefined,
+                leaseTtlMs,
                 {
                     cloneUrl: cloneInfo.url,
                     authToken: cloneInfo.authToken,
@@ -242,10 +244,11 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // call (one retry, none on timeouts) and a circuit breaker that
             // fails fast while sandbox infra is degraded. If acquire() throws
             // here the review continues self-contained.
+            // An Ultra review's Kody Rules run as long as its models do.
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
-                undefined,
+                context.ultra ? ULTRA_RUN_LEASE_TTL_MS : undefined,
                 {
                     cloneUrl: cloneInfo.url,
                     authToken: cloneInfo.authToken,
