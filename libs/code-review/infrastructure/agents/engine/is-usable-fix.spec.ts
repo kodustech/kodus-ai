@@ -103,6 +103,16 @@ describe('checkFix', () => {
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 
+        it('accepts a TypeScript regex literal containing a slash and a star', () => {
+            expect(
+                checkFix(
+                    'const r = /src/;',
+                    'const r = /src\\/*/;',
+                    'typescript',
+                ),
+            ).toBeNull();
+        });
+
         it.each([
             ['dockerfile', 'COPY app/main /app/', 'COPY app/* /app/'],
             ['makefile', 'SRC = src/main.c', 'SRC = src/*.c'],
@@ -111,7 +121,6 @@ describe('checkFix', () => {
                 'for f in src/main; do echo $f; done',
                 'for f in src/*; do echo $f; done',
             ],
-            ['typescript', 'const r = /src/;', 'const r = /src\\/*/;'],
         ])(
             'accepts a %s glob without treating it as a block comment',
             (language, existing, improved) => {
