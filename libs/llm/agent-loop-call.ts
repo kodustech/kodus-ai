@@ -174,8 +174,13 @@ export async function runAgentLoopCall(
     // the abort was ignored.
     const signal = callerSignal ?? timeoutSignal(hardTimeoutMs);
     const temperature = params.temperature ?? inv.callOptions.temperature;
+    // params.maxOutputTokens wins over the slot default so per-agent caps
+    // (e.g. 800 for task-finder, 600 for agent-tool-reader) are not silently
+    // overridden by the large Anthropic-wire default injected in
+    // resolveSlotCallOptions. An explicit slot value still applies when no
+    // per-agent cap is set.
     const maxOutputTokens =
-        inv.callOptions.maxOutputTokens ?? params.maxOutputTokens;
+        params.maxOutputTokens ?? inv.callOptions.maxOutputTokens;
     // Reasoning: a caller-supplied override wins (the finder's config-derived
     // providerOptions); otherwise the slot-derived ones.
     const providerOptions = params.providerOptions ?? inv.providerOptions;
