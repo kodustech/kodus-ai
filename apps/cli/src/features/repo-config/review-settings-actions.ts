@@ -36,6 +36,11 @@ export type ReviewModelSetOptions = ReviewSettingsTargetOptions & {
     force?: boolean;
 };
 
+export type RiskPreviewOptions = ReviewSettingsTargetOptions & {
+    pr: string;
+    criteria?: string;
+};
+
 const LEVEL_LABEL: Record<FormattedConfigLevel, string> = {
     default: 'default',
     global: 'global',
@@ -186,6 +191,40 @@ export async function reviewSettingsShowAction(
         for (const line of formatSettingsShow(result)) {
             cliInfo(line);
         }
+    } catch (error) {
+        fail(error);
+    }
+}
+
+export async function riskPreviewAction(
+    repository: string,
+    options: RiskPreviewOptions,
+): Promise<void> {
+    try {
+        const result = await reviewSettingsService.previewRisk(
+            { repository, directory: options.directory, team: options.team },
+            /^\d+$/.test(options.pr) ? Number(options.pr) : NaN,
+            options.criteria,
+        );
+        if (options.json) {
+            cliInfo(JSON.stringify(result, null, 2));
+            return;
+        }
+
+        const { assessment, files } = result;
+        if (assessment.status === 'assessed') {
+            cliInfo(assessment.riskIdentified ? 'Risk found' : 'No risk found');
+        } else {
+            cliInfo(
+                assessment.status === 'unavailable'
+                    ? 'Assessment unavailable'
+                    : 'Assessment disabled',
+            );
+        }
+        if ('reason' in assessment) {
+            cliInfo(assessment.reason);
+        }
+        cliInfo(`Changed files: ${files.length}`);
     } catch (error) {
         fail(error);
     }

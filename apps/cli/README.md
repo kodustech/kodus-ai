@@ -624,6 +624,23 @@ Pattern fields accept glob expressions such as `**/*.lock`, `dist/**`, `release/
 
 Use `kodus config remote open` when you need advanced repository settings that are still web-only. The CLI opens the Kodus app and prints the repository/section path to navigate.
 
+### Risk assessment, routing and approval policies
+
+Sign in with `kodus auth login` to inspect and edit the same settings used by the app. `.` selects the current repository. Use `global` for team-wide settings or `--directory <path>` for a directory with its own settings.
+
+```bash
+kodus config remote show . --json
+kodus config remote set . riskAssessmentActive true
+kodus config remote set . reviewMode balanced
+kodus config remote set . riskReviewRouting.riskFound heavy
+kodus config remote unset . riskReviewRouting.riskFound
+kodus config remote risk-preview . --pr 123 --json
+```
+
+Use `set . riskCriteria '<JSON array>'` and `set . approvalPolicies '<JSON array>'` to replace the list at that scope. `riskCriteria '[]'` uses standard risk assessment, and `approvalPolicies '[]'` disables all approval policies at the scope. Use `unset` at repository and directory scope to restore inheritance. The automatic approval switch is `pullRequestApprovalActive`.
+
+Risk preview uses the effective criteria for the scope. Pass `--criteria '<JSON array>'` to try different criteria for that run. The preview doesn't save settings, post a comment or approve the PR.
+
 Use `--json` with `show`, `set`, `open`, `add-pattern`, `remove-pattern`, and the pattern aliases when you need stable machine-readable output for scripts or AI agents.
 
 When targeting a repository that is different from your current working directory, pass `owner/repo` explicitly instead of `.`:

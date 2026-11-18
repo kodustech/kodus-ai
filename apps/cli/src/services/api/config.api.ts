@@ -14,6 +14,8 @@ import type {
     LLMConfigStatus,
     SaveCodeReviewConfigParams,
     SaveCodeReviewConfigResult,
+    PreviewPrRiskParams,
+    PreviewPrRiskResult,
     TestByokModelResult,
 } from '../../types/review-settings.js';
 import type { IConfigApi } from './api.interface.js';
@@ -274,7 +276,22 @@ export class RealConfigApi implements IConfigApi {
                     repositoryId: params.repositoryId,
                     directoryId: params.directoryId,
                     directoryPaths: params.directoryPaths,
+                    inheritFields: params.inheritFields,
                 }),
+            },
+        );
+    }
+
+    async previewPrRisk(
+        accessToken: string,
+        params: PreviewPrRiskParams,
+    ): Promise<PreviewPrRiskResult> {
+        return this.requester<PreviewPrRiskResult>(
+            '/code-review/risk/preview',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(params),
             },
         );
     }

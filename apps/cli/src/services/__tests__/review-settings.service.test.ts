@@ -18,6 +18,7 @@ vi.mock('../api/index.js', () => ({
             getCodeReviewScopes: vi.fn(),
             getFormattedCodeReviewParameter: vi.fn(),
             saveCodeReviewConfig: vi.fn(),
+            previewPrRisk: vi.fn(),
             getLLMConfigStatus: vi.fn(),
             testByokModel: vi.fn(),
         },
@@ -53,6 +54,13 @@ const CTX = {
     organizationId: 'org-1',
     teamId: 'team-1',
     teamName: 'Core',
+};
+
+const RISK_CRITERION = {
+    id: 'approval-snapshot',
+    name: 'Approval snapshot',
+    enabled: true,
+    instructions: 'Check changes to the reviewed PR snapshot.',
 };
 
 const SCOPES = [
@@ -106,6 +114,13 @@ const FORMATTED = {
                 kodusConfigFile: { status: 'loaded' },
                 configs: {
                     runOnDraft: leaf(false, 'repository', [true, 'default']),
+                    riskCriteria: leaf([RISK_CRITERION], 'repository'),
+                    riskReviewRouting: {
+                        riskFound: leaf('heavy', 'repository', [
+                            'balanced',
+                            'global',
+                        ]),
+                    },
                     ignorePaths: leaf(['dist/**'], 'repository_file', [
                         [],
                         'default',
@@ -628,6 +643,20 @@ describe('reviewSettingsService', () => {
     });
 
     describe('unset', () => {
+        it('restores one risk route through the API without writing the parent value', async () => {
+            await reviewSettingsService.unset(
+                { repository: 'kodus-ai' },
+                'riskReviewRouting.riskFound',
+            );
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: {},
+                    repositoryId: 'repo-1',
+                    inheritFields: ['riskReviewRouting.riskFound'],
+                }),
+            );
+        });
         it('fails an unset the plan left out, instead of reporting it reverted', async () => {
             const base = FORMATTED as any;
             // The override is still there after the save.
@@ -700,6 +729,41 @@ describe('reviewSettingsService', () => {
                 'suggestionControl.severityLevelFilter',
             );
             expect(result.changed).toBe(false);
+            expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('risk preview', () => {
+        it('previews the effective criteria for a PR without saving', async () => {
+            await reviewSettingsService.previewRisk(
+                { repository: 'kodus-ai' },
+                42,
+            );
+            expect(configApi.previewPrRisk).toHaveBeenCalledWith(
+                CTX.accessToken,
+                {
+                    teamId: 'team-1',
+                    repositoryId: 'repo-1',
+                    prNumber: 42,
+                    criteria: [RISK_CRITERION],
+                },
+            );
+            expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+        });
+
+        it('uses explicit criteria, including an empty list, for this preview only', async () => {
+            await reviewSettingsService.previewRisk(
+                { repository: 'kodus-ai' },
+                42,
+                '[]',
+            );
+            expect(configApi.previewPrRisk).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({ criteria: [] }),
+            );
+            expect(
+                configApi.getFormattedCodeReviewParameter,
+            ).not.toHaveBeenCalled();
             expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
         });
     });

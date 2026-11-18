@@ -398,6 +398,7 @@ class ReviewSettingsService {
         ctx: UserContext,
         scope: SettingsScope,
         configValue: Record<string, unknown>,
+        inheritFields?: string[],
     ) {
         return api.config.saveCodeReviewConfig(ctx.accessToken, {
             teamId: ctx.teamId,
@@ -408,6 +409,47 @@ class ReviewSettingsService {
                 scope.level === 'directory' && !scope.directoryId
                     ? [scope.directoryPath as string]
                     : undefined,
+            ...(inheritFields ? { inheritFields } : {}),
+        });
+    }
+
+    async previewRisk(
+        target: SettingsTarget,
+        prNumber: number,
+        rawCriteria?: string,
+    ) {
+        if (!Number.isSafeInteger(prNumber) || prNumber < 1) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                'Enter a positive PR number.',
+            );
+        }
+        if (target.repository === 'global') {
+            throw new CommandError(
+                'INVALID_INPUT',
+                'Risk preview needs a repository.',
+            );
+        }
+        const criteriaOverride =
+            rawCriteria === undefined
+                ? undefined
+                : parseReviewSettingValue(
+                      resolveReviewSetting('riskCriteria'),
+                      rawCriteria,
+                  );
+        const ctx = await this.context(target);
+        const scope = await this.resolveScope(ctx, target);
+        const criteria =
+            criteriaOverride ??
+            readLeaf(
+                (await this.loadScopeConfigs(ctx, scope)).configs,
+                'riskCriteria',
+            )?.value;
+        return api.config.previewPrRisk(ctx.accessToken, {
+            teamId: ctx.teamId,
+            repositoryId: scope.repositoryId!,
+            prNumber,
+            criteria: Array.isArray(criteria) ? criteria : [],
         });
     }
 
@@ -483,9 +525,8 @@ class ReviewSettingsService {
     }
 
     /**
-     * Drops this scope's override so the value inherits again. Same as the
-     * settings page's revert: save the parent's value, and the API stores
-     * only what differs from the parent.
+     * Restore inheritance with explicit API metadata for risk and approval
+     * settings, or by saving the parent value for older settings.
      */
     async unset(
         target: SettingsTarget,
@@ -511,7 +552,13 @@ class ReviewSettingsService {
             };
         }
 
-        if (leaf.overriddenValue === undefined) {
+        if (setting.inheritField && scope.level === 'global') {
+            throw new CommandError(
+                'INVALID_INPUT',
+                `'${setting.key}' supports inheritance at repository and directory scope. Set the global value explicitly instead.`,
+            );
+        }
+        if (!setting.inheritField && leaf.overriddenValue === undefined) {
             throw new CommandError(
                 'INVALID_INPUT',
                 `'${setting.key}' has no inherited value to go back to. Set it explicitly instead.`,
@@ -521,7 +568,10 @@ class ReviewSettingsService {
         const result = await this.save(
             ctx,
             scope,
-            buildConfigDelta(setting.key, leaf.overriddenValue),
+            setting.inheritField
+                ? {}
+                : buildConfigDelta(setting.key, leaf.overriddenValue),
+            setting.inheritField ? [setting.key] : undefined,
         );
 
         // Same check as set: on a plan below Teams the API answers success

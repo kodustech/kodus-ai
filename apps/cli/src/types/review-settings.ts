@@ -59,11 +59,27 @@ export interface SaveCodeReviewConfigParams {
     repositoryId?: string;
     directoryId?: string;
     directoryPaths?: string[];
+    inheritFields?: string[];
 }
 
 export type SaveCodeReviewConfigResult =
     | (CentralizedPrMetadata & { mode: 'centralized-pr' })
     | Record<string, unknown>;
+
+export interface PreviewPrRiskParams {
+    teamId: string;
+    repositoryId: string;
+    prNumber: number;
+    criteria: unknown[];
+}
+
+export interface PreviewPrRiskResult {
+    assessment:
+        | { status: 'disabled' }
+        | { status: 'assessed'; riskIdentified: boolean; reason: string }
+        | { status: 'unavailable'; reason: string };
+    files: Array<{ path: string; previousPath?: string; status: string }>;
+}
 
 /** GET /organization-parameters/llm-config/status (never carries a key). */
 export interface LLMConfigStatus {

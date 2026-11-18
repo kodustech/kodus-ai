@@ -25,8 +25,10 @@ import {
     reviewModelTestAction,
     reviewSettingsKeysAction,
     reviewSettingsUnsetAction,
+    riskPreviewAction,
     type ReviewModelSetOptions,
     type ReviewSettingsTargetOptions,
+    type RiskPreviewOptions,
 } from './review-settings-actions.js';
 import {
     languageListAction,
@@ -171,6 +173,29 @@ export function registerRepositoryConfigCommand(
             ) => {
                 await configRepoSetupAction(repository ?? '.', actionOptions);
             },
+        );
+
+    withScopeOptions(
+        command
+            .command('risk-preview [repository]')
+            .description(
+                'Assess a PR without posting or saving settings. Requires kodus auth login.',
+            ),
+    )
+        .requiredOption(
+            '--pr <number>',
+            'Pull request number in the repository',
+        )
+        .option(
+            '--criteria <json>',
+            'Use this JSON array of criteria for the preview only',
+        )
+        .option('--json', 'Output the assessment and changed files as JSON')
+        .action(
+            (
+                repository: string | undefined,
+                actionOptions: RiskPreviewOptions,
+            ) => riskPreviewAction(repository ?? '.', actionOptions),
         );
 
     withScopeOptions(
