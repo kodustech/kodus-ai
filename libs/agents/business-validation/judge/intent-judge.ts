@@ -420,10 +420,15 @@ function parseAnalyzerAnswer(answer: {
     if (!isParserFallback(fromTool) || !answer.content.trim()) {
         return fromTool;
     }
-    // Only a text that carries a verdict replaces the unusable call; chatter
+    // Only a text that carries a verdict replaces the unusable call: the
+    // requirements, a status, or a stated need for more information. Chatter
     // keeps the parse failure visible.
     const fromText = parseBusinessRulesValidationResult(answer.content);
-    return fromText.requirements || fromText.status ? fromText : fromTool;
+    const carriesVerdict =
+        !!fromText.requirements ||
+        !!fromText.status ||
+        (fromText.needsMoreInfo && !isParserFallback(fromText));
+    return carriesVerdict ? fromText : fromTool;
 }
 
 function isParserFallback(result: ValidationResult): boolean {

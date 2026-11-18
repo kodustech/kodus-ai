@@ -263,6 +263,24 @@ describe('analyzer run — submitValidation result tool', () => {
         },
     );
 
+    it('keeps a text answer that only asks for more information beside an unusable result call', async () => {
+        jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue(
+            runResult(
+                JSON.stringify({
+                    needsMoreInfo: true,
+                    missingInfo:
+                        'The task does not say which plans get the discount.',
+                }),
+                [{ type: VALIDATION_RESULT_TOOL, payload: {} }],
+            ),
+        );
+
+        const result = await makeJudge().judge(judgeInput);
+
+        expect(result.reason).not.toBe('parser_fallback');
+        expect(result.missingInfo).toContain('which plans get the discount');
+    });
+
     it('still reports a parse failure when the text beside an unusable result call holds no verdict', async () => {
         jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue(
             runResult('I have submitted the validation result.', [
