@@ -2391,53 +2391,72 @@ describe('SandboxLeaseManager', () => {
             ]);
         });
 
-        it('a replacement started near the PR lease expiry gets a fresh sandbox and the whole budget, without touching the other runs', async () => {
-            const fallbackKey = runPrKey(prKey, 'ultra-fallback');
+        it('a replacement started near the PR lease expiry gets a fresh lease, and the PR and the other runs keep theirs', async () => {
+            // The leases as Mongo holds them: an acquire sets `expiresAt` only
+            // when it inserts the doc ($setOnInsert in upsertAcquire).
+            const minute = 60 * 1000;
+            const takenAt = new Date(Date.now() - 29 * minute);
+            const seeded = (key: string) => ({
+                _id: key,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: `e2b-${key}`,
+                createdAt: takenAt,
+                expiresAt: new Date(takenAt.getTime() + 30 * minute),
+            });
+            const run1Key = runPrKey(prKey, 'ultra-1-pipe42');
+            const fallbackKey = runPrKey(prKey, 'ultra-fallback-pipe42');
+            const docs = new Map<string, any>([
+                [prKey, seeded(prKey)],
+                [run1Key, seeded(run1Key)],
+            ]);
+            const before = new Map(
+                [...docs].map(([k, d]) => [k, d.expiresAt.getTime()]),
+            );
             leaseRepo.upsertAcquire.mockImplementation(
-                async (key: string, ttl: number) =>
-                    ({
+                async (key: string, ttl: number) => {
+                    const doc = docs.get(key) ?? {
                         _id: key,
-                        leaseCount: 1,
+                        leaseCount: 0,
                         state: 'CREATING',
                         createdAt: new Date(),
                         expiresAt: new Date(Date.now() + ttl),
-                    }) as any,
+                    };
+                    doc.leaseCount += 1;
+                    docs.set(key, doc);
+                    return { ...doc } as any;
+                },
             );
             leaseRepo.findByPrKey.mockImplementation(
-                async (key: string) =>
-                    ({
-                        _id: key,
-                        leaseCount: 1,
-                        state: 'READY',
-                        sandboxId: '',
-                        createdAt: new Date(),
-                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-                    }) as any,
+                async (key: string) => (docs.get(key) ?? null) as any,
             );
+            const ttl = 80 * minute;
 
-            const result = await manager.acquire(
-                fallbackKey,
-                'review',
-                undefined,
-                {
-                    cloneUrl: 'https://github.com/org/repo.git',
-                    branch: 'feature',
-                    prNumber: 77,
-                    platform: 'GITHUB',
-                } as any,
-            );
+            const result = await manager.acquire(fallbackKey, 'review', ttl, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                branch: 'feature',
+                prNumber: 77,
+                platform: 'GITHUB',
+            } as any);
 
             expect(result.sandbox).toBeDefined();
-            // Its own lease, created rather than joined, with the full TTL,
-            // however close the PR's own lease is to expiring.
-            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(1);
-            const [key, ttl] = leaseRepo.upsertAcquire.mock.calls[0];
-            expect(key).toBe(fallbackKey);
-            expect(ttl).toBeGreaterThanOrEqual(30 * 60 * 1000);
             expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
                 1,
             );
-            // Nothing was written on the PR's lease or another run's.
+            // Its own lease, created rather than joined, with the whole TTL.
+            const fresh = docs.get(fallbackKey);
+            expect(fresh.createdAt.getTime()).toBeGreaterThan(
+                takenAt.getTime(),
+            );
+            expect(fresh.expiresAt.getTime() - Date.now()).toBeGreaterThan(
+                ttl - minute,
+            );
+            // The PR's lease and the other run's keep their expiry, and no
+            // write went to them.
+            for (const key of [prKey, run1Key]) {
+                expect(docs.get(key).expiresAt.getTime()).toBe(before.get(key));
+                expect(docs.get(key).leaseCount).toBe(1);
+            }
             const touched = [
                 ...leaseRepo.updateReady.mock.calls,
                 ...leaseRepo.clearKillAt.mock.calls,
@@ -2445,8 +2464,8 @@ describe('SandboxLeaseManager', () => {
                 ...leaseRepo.decrementLease.mock.calls,
                 ...leaseRepo.markInvalidated.mock.calls,
             ].map((c) => c[0]);
-            expect(touched.length).toBeGreaterThan(0);
-            expect(touched.every((k) => k === fallbackKey)).toBe(true);
+            expect(touched).not.toContain(prKey);
+            expect(touched).not.toContain(run1Key);
             expect(Sandbox.setTimeout).not.toHaveBeenCalled();
         });
     });
