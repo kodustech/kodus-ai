@@ -68,20 +68,29 @@ describe('startStallWatchdog (real worker thread)', () => {
             reports.find((r) => r.kind === 'stall'),
         );
         expect(stall.stalledMs).toBeGreaterThanOrEqual(400);
-        expect(stall.stack?.map((f) => f.fn)).toContain(
-            'burnCpuInATightLoopForTest',
-        );
-        // The paused stack is authoritative (the profiler can fold an
-        // inlined function into its caller); the top frame is the burner.
-        expect(stall.stack?.[0]).toEqual(
-            expect.objectContaining({
-                fn: 'burnCpuInATightLoopForTest',
-                file: expect.stringContaining('stall-watchdog.spec'),
-            }),
-        );
-        // The profile was taken during the stall: one place holds the CPU.
-        expect(stall.hottest?.[0].pct).toBeGreaterThan(50);
-        expect(stall.hottest?.[0].file).toContain('stall-watchdog.spec');
+        // Whatever names the place, stack or profile, names the burner and
+        // never code that ran after it.
+        if (stall.stack) {
+            expect(stall.stack[0]).toEqual(
+                expect.objectContaining({
+                    fn: 'burnCpuInATightLoopForTest',
+                    file: expect.stringContaining('stall-watchdog.spec'),
+                }),
+            );
+        } else {
+            // The inspector answered late (seen in CI: Debugger.enable
+            // replays every script of a long in-band Jest run), so the
+            // stack it carried is not trusted, and the reason is given.
+            expect(stall.stackUnavailable).toBe('answered-late');
+        }
+        if (stall.hottest?.length) {
+            // The profile was taken during the stall: one place holds the CPU.
+            expect(stall.hottest[0].pct).toBeGreaterThan(50);
+            expect(stall.hottest[0].file).toContain('stall-watchdog.spec');
+        }
+        if (stall.stack || stall.hottest?.length) {
+            expect(stall.location).toContain('stall-watchdog.spec');
+        }
         expect(logger.error).not.toHaveBeenCalled();
     });
 
@@ -203,18 +212,15 @@ describe('startStallWatchdog (real worker thread)', () => {
 
         const stall = reports.find((r) => r.kind === 'stall');
         expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
-        // Either the stack shows the native call itself, or no location is
-        // claimed: never code that merely ran after the stall.
-        const top = stall?.stack?.[0]?.fn ?? '';
+        // The inspector only got an answer after execSync returned: neither
+        // the stack nor the profile it would carry is the stall, so neither
+        // is used, and the alert says why instead of naming this file.
         const message = JSON.parse(fail.body).message as string;
-        if (stall?.stack?.length) {
-            expect(stall.stack.map((f) => f.fn).join(' ')).toMatch(
-                /execSync|spawnSync/,
-            );
-        } else {
-            expect(top).toBe('');
-            expect(message).toContain('no JavaScript stack');
-        }
+        expect(stall?.stack).toBeNull();
+        expect(stall?.hottest).toBeUndefined();
+        expect(stall?.stackUnavailable).toBe('answered-late');
+        expect(message).toContain('could not interrupt');
+        expect(message).not.toContain('stall-watchdog.spec');
         expect(message).toContain('stalled');
     });
     it('closes a stall that recovers during its capture, so the next stall gets its own report', async () => {
@@ -253,5 +259,39 @@ describe('startStallWatchdog (real worker thread)', () => {
         // Its length is the stall's (~1s), not the capture's (~2.4s).
         expect(firstRecovery?.stalledMs).toBeGreaterThanOrEqual(800);
         expect(firstRecovery?.stalledMs).toBeLessThan(1_800);
+    });
+    it('names the code from the profile when the stall ends during the capture', async () => {
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 600,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: (r) => reports.push(r),
+            },
+            logger,
+        );
+        await settle(200);
+
+        // Ends while the profile is running, before the stack is read.
+        burnCpuInATightLoopForTest(600);
+
+        const stall = await waitFor(() =>
+            reports.find((r) => r.kind === 'stall'),
+        );
+        // The stack was read after the recovery, so it is not used ...
+        expect(stall.stack).toBeNull();
+        // ... but the profile started inside the stall still names it,
+        // instead of blaming a native call that never happened.
+        expect(stall.location).toContain('stall-watchdog.spec');
+        expect(stall.location).not.toContain('could not interrupt');
+        if (stall.stackUnavailable !== 'answered-late') {
+            expect(stall.stackUnavailable).toBe('ended-before-read');
+            expect(stall.profileIncludesRecovery).toBe(true);
+        }
     });
 });

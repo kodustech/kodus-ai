@@ -35,6 +35,18 @@ export interface StallReport {
     capture?: number;
     /** The stack was read after the main thread ran again: not the stall. */
     stackReadAfterRecovery?: boolean;
+    /**
+     * Why `stack` is null. `ended-before-read`: the stall ended before the
+     * stack was read. `answered-late`: the main thread answered the
+     * inspector only after more than a second, so what it showed may have
+     * run after the stall (a synchronous native call, a long builtin such as
+     * a regex, a long GC). `no-answer`: it never answered within the bound.
+     */
+    stackUnavailable?: 'ended-before-read' | 'answered-late' | 'no-answer';
+    /** The profile also covers time after the stall ended. */
+    profileIncludesRecovery?: boolean;
+    /** Human-readable location, as used in the log line and the alert. */
+    location?: string;
     stack?: StallFrame[] | null;
     hottest?: Array<{ fn: string; file: string; line: number; pct: number }>;
     hottestPath?: StallFrame[];
@@ -242,16 +254,25 @@ export function stallWatchdogThread(): void {
         return { hottest, hottestPath };
     }
 
+    // The main thread answers the inspector at its next interrupt check,
+    // which JavaScript reaches within milliseconds. An answer slower than
+    // this may have come only after the blocking code returned, so the
+    // stack it carries is not trusted.
+    const LATE_ANSWER_MS = 1_000;
+
     function pausedStack(
         session: InstanceType<typeof inspector.Session>,
         ranSinceStart: () => boolean,
     ): Promise<{
         frames: ReturnType<typeof frame>[];
         recovered: boolean;
+        late: boolean;
     } | null> {
         return new Promise((resolve) => {
             let done = false;
             let recovered = false;
+            let late = false;
+            const askedAt = Date.now();
             // CallFrame.url is deprecated and often empty; the script's url
             // comes from the scriptParsed events Debugger.enable replays.
             const scripts = new Map<string, string>();
@@ -265,13 +286,14 @@ export function stallWatchdogThread(): void {
                 clearTimeout(timer);
                 session.removeListener('Debugger.paused', onPaused);
                 session.removeListener('Debugger.scriptParsed', onScript);
-                resolve(frames ? { frames, recovered } : null);
+                resolve(frames ? { frames, recovered, late } : null);
             };
             const timer = setTimeout(() => finish(null), 5_000);
             function onPaused(msg: any) {
                 // Read while the main thread is paused: if it ticked since
                 // the capture began, the stall had already ended.
                 recovered = ranSinceStart();
+                late = Date.now() - askedAt > LATE_ANSWER_MS;
                 const frames = (msg.params?.callFrames ?? [])
                     .slice(0, 40)
                     .map((f: any) =>
@@ -304,34 +326,55 @@ export function stallWatchdogThread(): void {
     // moment the stack is read (while it is paused) and when the profile
     // ends. Code the inspector cannot interrupt (synchronous native calls)
     // only answers once it has returned, so this is how that case shows.
-    async function capture() {
-        const tickAtStart = Atomics.load(lastTick, 0);
-        const ranSinceStart = () => Atomics.load(lastTick, 0) !== tickAtStart;
+    // `tickSeen` is the tick the stall was detected on: any later tick
+    // means the main thread ran again.
+    async function capture(tickSeen: bigint) {
+        const ranSinceStart = () => Atomics.load(lastTick, 0) !== tickSeen;
         const session = new inspector.Session();
         session.connectToMainThread();
         try {
             let summary: ReturnType<typeof summarize> | null = null;
+            let profileIncludesRecovery = false;
+            let profileLate = false;
+            let profileSlow = false;
             if (cfg.profileMs > 0) {
                 try {
+                    const askedAt = Date.now();
                     await post(session, 'Profiler.enable');
                     await post(session, 'Profiler.setSamplingInterval', {
                         interval: 1_000,
                     });
                     await post(session, 'Profiler.start');
+                    // Started only after the stall ended (or after code the
+                    // inspector cannot interrupt returned): every sample is
+                    // of what ran next, so the profile says nothing.
+                    profileSlow = Date.now() - askedAt > LATE_ANSWER_MS;
+                    profileLate = profileSlow || ranSinceStart();
                     await sleep(cfg.profileMs);
                     const { profile } = await post(session, 'Profiler.stop');
-                    summary = ranSinceStart() ? null : summarize(profile);
+                    // Started inside the stall: its samples up to the
+                    // recovery still name the code (idle time is ignored).
+                    profileIncludesRecovery = ranSinceStart();
+                    summary = profileLate ? null : summarize(profile);
                     await post(session, 'Profiler.disable').catch(() => {});
                 } catch {
                     summary = null;
                 }
             }
             const paused = await pausedStack(session, ranSinceStart);
-            const stack = paused && !paused.recovered ? paused.frames : null;
+            const stackUnavailable: StallReport['stackUnavailable'] = !paused
+                ? 'no-answer'
+                : paused.late || profileSlow
+                  ? 'answered-late'
+                  : paused.recovered
+                    ? 'ended-before-read'
+                    : undefined;
             return {
-                stack,
+                stack: stackUnavailable ? null : paused!.frames,
                 ...(summary ?? {}),
+                profileIncludesRecovery: !!summary && profileIncludesRecovery,
                 recoveredBeforeRead: !!paused?.recovered,
+                stackUnavailable,
             };
         } finally {
             try {
@@ -381,13 +424,29 @@ export function stallWatchdogThread(): void {
         }
     }
 
-    // No JavaScript frame to name: the inspector only interrupts JavaScript,
-    // so the main thread was most likely inside a synchronous native call.
-    const NO_STACK =
-        'an unknown place (no JavaScript stack: likely a synchronous native call such as execSync, a *Sync fs/zlib/crypto call or a native addon)';
+    // Why there is no place to name, in the words of the alert.
+    const NO_PLACE: Record<string, string> = {
+        'answered-late':
+            'code the inspector could not interrupt in time (it answered only after more than a second: likely a synchronous native call such as execSync, a *Sync fs/zlib/crypto call or a native addon, a long regex or builtin, or a long garbage collection)',
+        'no-answer':
+            'code the inspector could not interrupt (no answer within the bound: likely a synchronous native call such as execSync, a *Sync fs/zlib/crypto call or a native addon)',
+        'ended-before-read':
+            'an unknown place (the stall ended before its stack was read)',
+    };
 
-    function describe(f?: { fn: string; file: string; line: number }) {
-        return f ? `${f.fn} (${f.file}:${f.line})` : NO_STACK;
+    function describe(
+        stack: Array<{ fn: string; file: string; line: number }> | null,
+        hottest: Array<{ fn: string; file: string; line: number }> | undefined,
+        reason: string | undefined,
+        error: string | undefined,
+    ) {
+        const top = stack?.[0];
+        if (top) return `${top.fn} (${top.file}:${top.line})`;
+        const hot = hottest?.[0];
+        if (hot)
+            return `${hot.fn} (${hot.file}:${hot.line}) per the CPU profile`;
+        if (reason && NO_PLACE[reason]) return NO_PLACE[reason];
+        return `an unknown place (capture failed${error ? `: ${error}` : ''})`;
     }
 
     function emitRecovered(stalledMs: number) {
@@ -400,7 +459,8 @@ export function stallWatchdogThread(): void {
 
     setInterval(() => {
         const now = Date.now();
-        const lag = now - Number(Atomics.load(lastTick, 0));
+        const tick = Atomics.load(lastTick, 0);
+        const lag = now - Number(tick);
 
         if (lag >= cfg.thresholdMs) {
             if (stall === null) {
@@ -418,7 +478,7 @@ export function stallWatchdogThread(): void {
                 const n = s.captures;
                 // Every stall is reported and alerted, with or without a
                 // stack: a capture that fails still means a stuck worker.
-                capture()
+                capture(tick)
                     .then((r) => ({
                         ...r,
                         error: undefined as string | undefined,
@@ -427,7 +487,10 @@ export function stallWatchdogThread(): void {
                         stack: null,
                         hottest: undefined,
                         hottestPath: undefined,
+                        profileIncludesRecovery: false,
                         recoveredBeforeRead: false,
+                        stackUnavailable:
+                            undefined as StallReport['stackUnavailable'],
                         error: String(e?.message ?? e),
                     }))
                     .then(
@@ -435,16 +498,23 @@ export function stallWatchdogThread(): void {
                             stack,
                             hottest,
                             hottestPath,
+                            profileIncludesRecovery,
                             recoveredBeforeRead,
+                            stackUnavailable,
                             error,
                         }) => {
                             // A stall that ended during the capture keeps
                             // its real length, not the capture's.
                             const stalledMs = s.endedMs ?? Date.now() - s.start;
-                            const where = stack?.[0] ?? hottest?.[0];
+                            const where = describe(
+                                stack,
+                                hottest,
+                                stackUnavailable,
+                                error,
+                            );
                             emit(
                                 'error',
-                                `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${describe(where)}`,
+                                `Main thread stalled for ${Math.round(stalledMs / 1000)}s in ${where}`,
                                 {
                                     kind: 'stall',
                                     stalledMs,
@@ -452,15 +522,22 @@ export function stallWatchdogThread(): void {
                                     stack,
                                     hottest,
                                     hottestPath,
+                                    location: where,
                                     ...(recoveredBeforeRead
                                         ? { stackReadAfterRecovery: true }
+                                        : {}),
+                                    ...(stackUnavailable
+                                        ? { stackUnavailable }
+                                        : {}),
+                                    ...(profileIncludesRecovery
+                                        ? { profileIncludesRecovery: true }
                                         : {}),
                                     ...(error ? { error } : {}),
                                 },
                             );
                             if (n === 1) {
                                 void heartbeat('/fail', {
-                                    message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${describe(where)}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
+                                    message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
                                         cfg.identity,
                                     )
                                         .map(([k, v]) => `${k}=${v}`)
@@ -469,6 +546,8 @@ export function stallWatchdogThread(): void {
                                         monitor: 'worker_stall',
                                         ...cfg.identity,
                                         stalledMs,
+                                        location: where,
+                                        stackUnavailable,
                                         stack: (stack ?? []).slice(0, 12),
                                         hottest: (hottest ?? []).slice(0, 5),
                                     },
