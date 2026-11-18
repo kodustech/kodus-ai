@@ -29,6 +29,22 @@ describe("getOrganizationMembers", () => {
         });
     });
 
+    it("keeps the seat holders the API confirmed absent", async () => {
+        fetchMock.mockResolvedValue({
+            status: "ok",
+            complete: true,
+            members,
+            absentSeatHolderIds: ["77"],
+        });
+
+        await expect(getOrganizationMembers({ teamId: "t" })).resolves.toEqual({
+            status: "ok",
+            complete: true,
+            members,
+            absentSeatHolderIds: ["77"],
+        });
+    });
+
     it("reads a response without complete as incomplete", async () => {
         fetchMock.mockResolvedValue({ status: "ok", members });
 

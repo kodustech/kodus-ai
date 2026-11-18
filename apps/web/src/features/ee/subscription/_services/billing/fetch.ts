@@ -33,7 +33,13 @@ type OrganizationMember = {
  * from an incomplete list may still be in the organization.
  */
 export type OrganizationMemberListResult =
-    | { status: "ok"; complete: boolean; members: Array<OrganizationMember> }
+    | {
+          status: "ok";
+          complete: boolean;
+          members: Array<OrganizationMember>;
+          /** Seat holders checked with the provider and not found. */
+          absentSeatHolderIds?: Array<string>;
+      }
     | { status: "unavailable"; members: [] };
 
 /**
@@ -65,13 +71,22 @@ const toMemberListResult = (
     }
 
     const result = response as
-        { status?: string; complete?: unknown; members?: unknown } | undefined;
+        | {
+              status?: string;
+              complete?: unknown;
+              members?: unknown;
+              absentSeatHolderIds?: unknown;
+          }
+        | undefined;
 
     if (result?.status === "ok" && Array.isArray(result.members)) {
         return {
             status: "ok",
             complete: result.complete === true,
             members: result.members as Array<OrganizationMember>,
+            ...(Array.isArray(result.absentSeatHolderIds) && {
+                absentSeatHolderIds: result.absentSeatHolderIds.map(String),
+            }),
         };
     }
 

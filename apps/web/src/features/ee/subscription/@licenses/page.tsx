@@ -28,6 +28,14 @@ export default async function SubscriptionTabs() {
     // Only a complete list can say who left the org. A partial one is still
     // shown, but nobody missing from it is flagged as removed.
     const membersComplete = memberList.status === "ok" && memberList.complete;
+    // When the provider checks unlisted seat holders, only the ones it
+    // confirmed absent are removed; a seat it never saw is not.
+    const confirmedAbsent =
+        memberList.status === "ok" && memberList.absentSeatHolderIds
+            ? new Set(memberList.absentSeatHolderIds)
+            : null;
+    const isRemovedFromGit = (gitId: string) =>
+        membersComplete && (!confirmedAbsent || confirmedAbsent.has(gitId));
     const organizationMembers = memberList.members;
 
     const organizationMemberIds = new Set(
@@ -82,7 +90,7 @@ export default async function SubscriptionTabs() {
                 seatHolderLabels[userWithLicense.git_id] ??
                 userWithLicense.git_id,
             licenseStatus: userWithLicense.status ?? "active",
-            removedFromGit: membersComplete,
+            removedFromGit: isRemovedFromGit(userWithLicense.git_id),
         })),
     ];
 
