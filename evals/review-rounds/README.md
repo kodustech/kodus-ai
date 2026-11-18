@@ -29,6 +29,8 @@ H1–H4 reproduce the original failure shapes. G1–G4 are paired transfer cases
 
 Use the existing `kody-rules` GitHub-cases suite for real violating lines and clean files, and `funnel/verify --set=controlled` for known bugs presented to the verifier. Forced timeout and degraded-evidence behavior are checked by the repeat-check and provider contracts. None of these measures establishes production timeout frequency or end-user acceptance.
 
+Run `--set=applied-advice` to check new consequences of implementing past advice. R18 and R19 use the same change and earlier comment. One consumer deletes catalog entries when the source goes offline. The other only renders an empty list. Only the destructive consumer warrants a linked finding. R1, R7 and R13 cover repeats, and R12 covers an unrelated bug.
+
 ## Similar comments across rounds
 
 Run the on-demand set with `node evals/review-rounds/run.js --set=repeat-boundaries --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=2 --output=/tmp/repeat-boundaries.json`.

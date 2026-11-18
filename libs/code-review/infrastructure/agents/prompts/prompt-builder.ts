@@ -674,6 +674,17 @@ const clipDecisionText = (text: string) =>
 const NO_REPEAT_INSTRUCTION = `Every entry is already on this pull request, so never report the problem an entry raised again — whatever its Outcome (which may be stale), however it is worded, whatever fix it proposes, wherever the code moved, and also when the developer changed the code and the problem still looks unsolved. Judge "the same problem" by the failure, not by the cause you name: a finding whose consequence is the failure an entry already described (the same crash, hang, wrong result or data loss in the same operation) is that entry again, even if it blames a new cause in the developer's attempted fix. `;
 const REPEATS_CHECKED_LATER_INSTRUCTION = `Report what you find even when an entry already raised it: a later step compares every finding with these entries and drops what is already on the pull request. `;
 
+// Only the tool-enabled finder can follow a newly reachable path before
+// deciding that implementing an earlier suggestion has resolved the issue.
+function finderDecisionContext(input: ReviewAgentInput, meta: PromptAgentMeta): string {
+    const history = formatPreviousDecisions(input.previousDecisions);
+    if (!history || meta.categoryLabel !== 'generalist' || hasOwnLane(meta)) return history;
+    return history + `
+  <ReviewAppliedChanges>
+    Where a changed line implements earlier advice, trace the changed behavior to the consumer that now handles it. Check what the value or error means at its source, what the consumer actually does, and the contract of any resulting side effect. Compare that outcome with the failure the earlier comment described. If the applied change introduces a distinct failure, report it on the changed line and link the earlier Id. If the behavior is safe or the only failure is the one already reported, move on.
+  </ReviewAppliedChanges>`;
+}
+
 export function formatPreviousDecisions(
     decisions: readonly PrDecisionRecord[] | undefined,
     ruleTitleByUuid?: ReadonlyMap<string, string>,
@@ -1030,9 +1041,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
         const traceDecisionsSection = formatTraceDecisions(
             input.traceDecisions,
         );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
+        const previousDecisionsSection = finderDecisionContext(input, meta);
         const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         // The callGraph string from kodus-graph already starts with <CallGraph>
@@ -1196,9 +1205,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
         const traceDecisionsSection = formatTraceDecisions(
             input.traceDecisions,
         );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
+        const previousDecisionsSection = finderDecisionContext(input, meta);
         const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         const callGraphSection = input.callGraph

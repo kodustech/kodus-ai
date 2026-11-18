@@ -15,6 +15,7 @@
     ],
     "sets": {
         "review-quality-2597": ["H1", "H2", "H3", "H4", "G1", "G2", "G3", "G4", "B1", "B2", "B3", "R2", "R8", "R12", "R13"],
+        "applied-advice": ["R2", "R8", "R18", "R19", "R1", "R7", "R12", "R13"],
         "repeat-boundaries": ["B1", "B2", "B3"],
         "hallucinations-2528": ["H1", "H2", "H3", "H4"],
         "nightly": [
