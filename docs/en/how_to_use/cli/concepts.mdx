@@ -47,7 +47,7 @@ Pick one per machine. The CLI uses the first credential it finds, in this order:
 
 - **Trial** — no auth. 2 reviews per hour. Good for "try it once". A trial review has no team, so it runs with default settings and no Kody Rules. Commands that read or change your team's data need a login or a team key.
 - **Personal login** (`kodus auth login`) — an individual account. Tokens refresh automatically.
-- **Team key** (`kodus auth team-key --key kodus_xxxxx`) — one shared key for a team, generated in the web app under **Organization → CLI keys**. Recommended for AI agents, CI, and anywhere you don't want interactive logins.
+- **Team key** (`KODUS_TEAM_KEY`) — one shared key for a team, generated in the web app under **Organization → CLI keys**. Recommended for AI agents, CI, and anywhere you don't want interactive logins.
 
 Which commands each one unlocks:
 

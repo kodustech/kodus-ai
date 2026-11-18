@@ -33,16 +33,10 @@ Para qualquer outro agente que possa executar comandos shell e ler texto, `kodus
 Instale o CLI e as skills de uma só vez:
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-Isso:
-
-1. Instala o `@kodus/cli` globalmente com o npm.
-2. Aplica a chave de equipe com `kodus auth team-key`, que a armazena em `~/.kodus/config.json`.
-3. Executa `kodus skills install` para adicionar as skills a todos os agentes que ele detecta.
-
-Sem logins individuais e sem prompts interativos. Para adicionar ou atualizar as skills depois, execute `kodus skills install` ou `kodus skills resync`.
+O instalador adiciona o CLI e instala as skills incluídas para cada agente que detecta. Defina `KODUS_TEAM_KEY` no ambiente em que o agente roda. Em uma instância self-hosted, defina também `KODUS_API_URL`. Para adicionar ou atualizar as skills depois, execute `kodus skills install` ou `kodus skills resync`.
 
 ## As skills
 

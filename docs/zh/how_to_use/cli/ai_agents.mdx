@@ -33,16 +33,10 @@ CLI 内置了一种精简、结构化的输出模式(`--prompt-only`),专为 AI 
 一键安装 CLI 与技能:
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-此命令会:
-
-1. 用 npm 全局安装 `@kodus/cli`。
-2. 用 `kodus auth team-key` 应用团队密钥,将其存储在 `~/.kodus/config.json` 中。
-3. 运行 `kodus skills install`,把技能添加到它检测到的每个代理。
-
-无需个人登录,无交互提示。之后若要添加或刷新技能,请运行 `kodus skills install` 或 `kodus skills resync`。
+安装器会安装 CLI，并为检测到的每个代理安装随附的技能。在代理运行的环境中设置 `KODUS_TEAM_KEY`。连接自托管实例时，也要设置 `KODUS_API_URL`。之后若要添加或更新技能，请运行 `kodus skills install` 或 `kodus skills resync`。
 
 ## 技能
 

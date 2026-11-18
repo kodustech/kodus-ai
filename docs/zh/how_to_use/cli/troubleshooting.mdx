@@ -81,7 +81,7 @@ kodus review --verbose    # or any command with --verbose
   </Accordion>
 
   <Accordion title="达到速率限制 / 试用已用尽">
-    试用模式下，每个用户、设备和仓库文件夹每小时可进行 2 次审查，按滚动一小时计算。运行 `kodus auth login` 登录，或通过 `kodus auth team-key --key kodus_xxxxx` 配置团队密钥以提升限额。在试用模式下，`kodus auth status` 会打印您的用量及重置时间。它把限额标为 "daily"，并显示 "Files limit: 10 per review"；服务器两者都不采用：限额按小时计算，试用审查没有文件数限制。达到试用限额时，`kodus review` 会打印 "Daily limit reached" 提示并以退出码 0 结束，无论 `--fail-on` 如何设置。
+    试用模式下，每个用户、设备和仓库文件夹每小时可进行 2 次审查，按滚动一小时计算。运行 `kodus auth login` 登录，或通过 `KODUS_TEAM_KEY` 配置团队密钥以提升限额。在试用模式下，`kodus auth status` 会打印您的用量及重置时间。它把限额标为 "daily"，并显示 "Files limit: 10 per review"；服务器两者都不采用：限额按小时计算，试用审查没有文件数限制。达到试用限额时，`kodus review` 会打印 "Daily limit reached" 提示并以退出码 0 结束，无论 `--fail-on` 如何设置。
 
     已登录的团队限额为每小时 1,000 次请求。审查、业务验证检查和 Kodus Trace 会话事件都计入其中。此时 CLI 会提示 "Rate limit exceeded. Please try again later."
   </Accordion>

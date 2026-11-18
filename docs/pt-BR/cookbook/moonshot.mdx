@@ -97,7 +97,7 @@ O Kimi K3.1 Pro e o K3 sempre fazem reasoning. A API da Moonshot não tem config
 
 ### Ajustar a simultaneidade
 
-- **Kimi Code Plan**: a Moonshot não publica um número de simultaneidade para o plano. Defina **Max concurrent requests** (em **Advanced (optional)**) com um valor baixo e aumente enquanto as revisões rodarem sem erros 429.
+- **Kimi Code Plan**: Na [apresentação do Kimi Code](https://www.kimi.com/resources/kimi-code-introduction), a Moonshot cita até 30 requisições simultâneas. O limite pode variar conforme a conta. Comece com um valor baixo em **Max concurrent requests** (em **Advanced (optional)**) e aumente aos poucos. Reduza o valor se a API indicar que o limite de simultaneidade foi atingido.
 - **Developer API**: deixe vazio (sem limite). Seu limite depende da sua recarga acumulada. Defina um valor se você vir erros 429 durante as revisões.
 
 <Note>

@@ -90,8 +90,10 @@ docker compose logs db_kodus_mongodb
 
 ```bash
 docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin'
+docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin'
 ```
+
+Digite a senha root do MongoDB quando solicitado.
 
 ### "MongoDB encerra com SERVER-121912"
 

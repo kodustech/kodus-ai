@@ -81,7 +81,7 @@ kodus review --verbose    # or any command with --verbose
   </Accordion>
 
   <Accordion title="Rate limit reached / Trial exhausted">
-    Trial mode allows 2 reviews per hour for each user, device, and repository folder, counted over a rolling hour. Sign in with `kodus auth login` or configure a team key with `kodus auth team-key --key kodus_xxxxx` to raise the limit. In trial mode, `kodus auth status` prints your usage and when it resets. It labels the limit "daily" and shows "Files limit: 10 per review"; the server applies neither: the limit is hourly, and no file limit applies to a trial review. When the trial limit is reached, `kodus review` prints a "Daily limit reached" notice and exits with code 0, whatever `--fail-on` says.
+    Trial mode allows 2 reviews per hour for each user, device, and repository folder, counted over a rolling hour. Sign in with `kodus auth login` or configure a team key with `KODUS_TEAM_KEY` to raise the limit. In trial mode, `kodus auth status` prints your usage and when it resets. It labels the limit "daily" and shows "Files limit: 10 per review"; the server applies neither: the limit is hourly, and no file limit applies to a trial review. When the trial limit is reached, `kodus review` prints a "Daily limit reached" notice and exits with code 0, whatever `--fail-on` says.
 
     A signed-in team is limited to 1,000 requests per hour. Reviews, business validation checks, and Kodus Trace session events count toward it. The CLI then says "Rate limit exceeded. Please try again later."
   </Accordion>

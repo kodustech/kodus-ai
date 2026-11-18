@@ -47,7 +47,7 @@ Escolha um por máquina. O CLI usa a primeira credencial que encontrar, nesta or
 
 - **Trial** — sem autenticação. 2 revisões por hora. Bom para "experimentar uma vez". Uma revisão trial não tem equipe, então roda com as configurações padrão e sem Kody Rules. Comandos que leem ou alteram os dados da sua equipe exigem login ou chave de equipe.
 - **Login pessoal** (`kodus auth login`) — uma conta individual. Tokens são atualizados automaticamente.
-- **Chave de equipe** (`kodus auth team-key --key kodus_xxxxx`) — uma chave compartilhada para uma equipe, gerada no web app em **Organization → CLI keys**. Recomendada para agentes de IA, CI e qualquer lugar onde você não queira logins interativos.
+- **Chave de equipe** (`KODUS_TEAM_KEY`) — uma chave compartilhada para uma equipe, gerada no web app em **Organization → CLI keys**. Recomendada para agentes de IA, CI e qualquer lugar onde você não queira logins interativos.
 
 Quais comandos cada um libera:
 

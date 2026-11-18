@@ -192,7 +192,7 @@ The `maxConcurrentRequests` field (**Max concurrent requests**, under **Advanced
 | Provider / plan | Value | Why |
 | --- | --- | --- |
 | **GLM Coding Plan** | Confirm with Z.AI | For approved use, set the cap to the limit Z.AI gives your account. |
-| **Kimi Code Plan** | `30` | Moonshot's documented cap on the coding endpoint. |
+| **Kimi Code Plan** | Start low | [Tuning concurrency](/en/cookbook/moonshot#tuning-concurrency) |
 | **GLM Developer API** | _(empty)_ | Limits scale per key; no sensible global default. |
 | **Kimi Developer API** | _(empty)_ | Scales with your recharge tier (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
 | **Anthropic / OpenAI / Google / OpenRouter** | _(empty)_ | Providers enforce their own TPM/RPM; Kodus doesn't cap. |

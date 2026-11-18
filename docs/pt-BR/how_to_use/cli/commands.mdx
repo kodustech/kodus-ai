@@ -249,11 +249,9 @@ O comando aparece na ajuda do CLI. O endpoint que ele chama está ausente na API
 
 ### `auth team-key`
 
-```bash
-kodus auth team-key --key kodus_xxxxx
-```
+Salva uma chave de equipe compartilhada em `~/.kodus/config.json`. O comando exige `--key`, verifica a chave com a API, registra o dispositivo e substitui qualquer login armazenado.
 
-Autentica usando uma chave de equipe compartilhada. A chave deve começar com `kodus_`. O CLI a verifica com a API, registra seu dispositivo e substitui qualquer login armazenado. Você também pode definir a chave com a variável de ambiente `KODUS_TEAM_KEY`.
+No uso cotidiano, defina `KODUS_TEAM_KEY` no ambiente do CLI. O CLI lê a variável diretamente. As chaves de equipe começam com `kodus_`.
 
 ### `auth team-status`
 

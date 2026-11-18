@@ -59,17 +59,7 @@ Si estás ejecutando Kodus en tu propia infraestructura, el CLI funciona de la m
   <Step title="Autenticarse">
     <Tabs>
       <Tab title="Clave de Equipo (Recomendado)">
-        Genera una clave de equipo en la aplicación web de tu Kodus auto-alojado, en **Organization → CLI keys**, y configúrala:
-
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        O usa el instalador, pasándole la URL de la API:
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
-        ```
+        Genera una clave de equipo en **Organization → CLI keys** de tu app autohospedada de Kodus. Define la clave como variable de entorno `KODUS_TEAM_KEY` en la terminal donde ejecutas el CLI.
 
         <Tip>Las claves de equipo son ideales para entornos compartidos y configuraciones de agentes de IA: no se requiere inicio de sesión individual.</Tip>
       </Tab>
@@ -91,12 +81,10 @@ Si estás ejecutando Kodus en tu propia infraestructura, el CLI funciona de la m
 
   <Step title="Verificar la Conexión">
     ```bash
-    kodus auth status
+    kodus status
     ```
 
-    Deberías ver cómo has iniciado sesión y tu organización. Con un inicio de sesión o una clave de equipo, `auth status` lee tus credenciales almacenadas y no llama a la API. Para comprobar con qué URL se comunica el CLI, añade `--verbose` a un comando que sí la llame: cada solicitud imprime su método y su URL.
-
-    Si la clave solo está en el entorno (`KODUS_TEAM_KEY`), `auth status` dice "No credentials found". Ejecuta `kodus status` en su lugar.
+    `kodus status` muestra el modo de autenticación detectado localmente. Para comprobar la URL de la API, añade `--verbose` a un comando que llame a la API. Por ejemplo, con una clave de equipo que permita configurar repositorios, ejecuta:
 
     ```bash
     kodus config remote list --verbose
@@ -215,13 +203,7 @@ Para instancias auto-alojadas en pipelines de CI/CD, establece la URL de la API 
 
 ## Distribución a Tu Equipo
 
-Para incorporar a tu equipo con un solo comando, pasa la URL de la API y una clave de equipo al instalador:
-
-```bash
-curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
-```
-
-Esto instala el CLI, aplica la clave de equipo contra tu instancia e instala los skills de Kodus en los agentes de IA que encuentre. No guarda la URL de la API, así que cada persona sigue necesitando `KODUS_API_URL` en su perfil de shell, o `apiUrl` en `~/.kodus/config.json` antes de aplicar la clave.
+Comparte con tu equipo las [instrucciones de instalación del CLI](/es/how_to_use/cli/getting_started) y la URL de tu API autohospedada. Cada persona configura `KODUS_API_URL` en su perfil de la terminal o `apiUrl` en `~/.kodus/config.json`. Distribuye la clave de equipo mediante tu gestor de secretos y defínela como `KODUS_TEAM_KEY` antes de usar el CLI.
 
 ## Solución de Problemas
 
@@ -238,7 +220,7 @@ Esto instala el CLI, aplica la clave de equipo contra tu instancia e instala los
   </Accordion>
 
   <Accordion title="Autenticación fallida (401)">
-    - Ejecuta `kodus auth status` para verificar tu estado de autenticación actual
+    - Ejecuta `kodus status` para verificar tu estado de autenticación actual
     - Si usas una clave de equipo, verifica que siga **Active** en **Organization → CLI keys** de tu aplicación web auto-alojada
     - Si usas inicio de sesión personal, el CLI actualiza tu sesión automáticamente; si la actualización falla, ejecuta `kodus auth login` de nuevo
     - Asegúrate de que `KODUS_API_URL` apunte a la instancia correcta

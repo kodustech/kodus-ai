@@ -97,7 +97,7 @@ Kimi K3.1 Pro と K3 は常に推論を行います。Moonshot の API にはこ
 
 ### 同時実行数の調整
 
-- **Kimi Code Plan**：Moonshot はこのプランの同時実行数を公開していません。**Max concurrent requests**（**Advanced (optional)** 内）を低い値に設定し、レビューが 429 エラーなしで実行される間は少しずつ引き上げてください。
+- **Kimi Code Plan**：Moonshot は [Kimi Code の紹介記事](https://www.kimi.com/resources/kimi-code-introduction)で最大 30 件の同時リクエストに言及しています。実際に適用される上限はアカウントによって異なる場合があります。**Advanced (optional)** の **Max concurrent requests** を低い値に設定し、少しずつ引き上げてください。API から同時リクエスト数の上限エラーが返ったら、値を下げてください。
 - **Developer API**：空欄のままにします（上限なし）。上限は累計のチャージ額によって決まります。レビュー中に 429 エラーが出る場合に設定してください。
 
 <Note>

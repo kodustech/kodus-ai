@@ -59,17 +59,7 @@ If you're running Kodus on your own infrastructure, the CLI works the same way �
   <Step title="Authenticate">
     <Tabs>
       <Tab title="Team Key (Recommended)">
-        Generate a team key in your self-hosted Kodus web app under **Organization → CLI keys** and configure it:
-
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        Or use the installer, passing the API URL to it:
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
-        ```
+        Generate a team key in your self-hosted Kodus web app under **Organization → CLI keys**. Set it as `KODUS_TEAM_KEY` in the shell where you run the CLI.
 
         <Tip>Team keys are ideal for shared environments and AI agent setups — no individual login required.</Tip>
       </Tab>
@@ -91,12 +81,10 @@ If you're running Kodus on your own infrastructure, the CLI works the same way �
 
   <Step title="Verify the Connection">
     ```bash
-    kodus auth status
+    kodus status
     ```
 
-    You should see how you are signed in and your organization. With a login or a team key, `auth status` reads your stored credentials and does not call the API. To check which URL the CLI talks to, add `--verbose` to a command that does: each request prints its method and URL.
-
-    If the key is only in the environment (`KODUS_TEAM_KEY`), `auth status` says "No credentials found". Run `kodus status` instead.
+    `kodus status` shows the authentication mode detected locally. To check the API URL, add `--verbose` to a command that calls the API. For example, with a team key that allows repository configuration, run:
 
     ```bash
     kodus config remote list --verbose
@@ -215,13 +203,7 @@ For self-hosted instances in CI/CD pipelines, set the API URL and a team key as 
 
 ## Distributing to Your Team
 
-To onboard your team in one command, pass the API URL and a team key to the installer:
-
-```bash
-curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
-```
-
-This installs the CLI, applies the team key against your instance, and installs the Kodus skills into the AI agents it finds. It does not save the API URL, so each person still needs `KODUS_API_URL` in their shell profile, or `apiUrl` in `~/.kodus/config.json` before they apply the key.
+Share the [CLI installation instructions](/en/how_to_use/cli/getting_started) and your self-hosted API URL with your team. Each teammate sets `KODUS_API_URL` in their shell profile or `apiUrl` in `~/.kodus/config.json`. Provide the team key through your secret manager and set it as `KODUS_TEAM_KEY` before using the CLI.
 
 ## Troubleshooting
 
@@ -238,7 +220,7 @@ This installs the CLI, applies the team key against your instance, and installs 
   </Accordion>
 
   <Accordion title="Authentication failed (401)">
-    - Run `kodus auth status` to check your current auth state
+    - Run `kodus status` to check your current auth state
     - If using a team key, verify it's still **Active** under **Organization → CLI keys** in your self-hosted web app
     - If using personal login, the CLI refreshes your login automatically; if the refresh fails, run `kodus auth login` again
     - Make sure `KODUS_API_URL` points to the correct instance

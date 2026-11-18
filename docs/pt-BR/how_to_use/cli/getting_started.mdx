@@ -67,17 +67,9 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
         Seu login é armazenado em `~/.kodus/credentials.json` e atualizado automaticamente.
       </Tab>
       <Tab title="Equipe (chave compartilhada)">
-        Um owner da organização gera uma chave de equipe na barra lateral em **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>). Aplique-a:
+        Um owner da organização gera uma chave de equipe na barra lateral em **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>).
 
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        Ou distribua o comando de bootstrap para sua equipe. Ele instala o CLI, aplica a chave e instala as skills:
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
-        ```
+        Defina a chave na variável de ambiente `KODUS_TEAM_KEY` no shell em que você executa o CLI. Execute `kodus status` para confirmar que o CLI detecta a chave.
 
         <Warning>Salve a chave quando ela for exibida — ela não será mostrada novamente.</Warning>
       </Tab>

@@ -249,11 +249,9 @@ This command appears in the CLI help, and relies on a CI token endpoint absent f
 
 ### `auth team-key`
 
-```bash
-kodus auth team-key --key kodus_xxxxx
-```
+Stores a shared team key in `~/.kodus/config.json`. The command requires `--key`, verifies the key with the API, registers the device, and replaces any stored login.
 
-Authenticate using a shared team key. The key must start with `kodus_`. The CLI checks it with the API, registers your device, and replaces any stored login. You can also set the key with the `KODUS_TEAM_KEY` environment variable.
+For routine use, set `KODUS_TEAM_KEY` in the CLI environment. The CLI reads it directly. Team keys start with `kodus_`.
 
 ### `auth team-status`
 

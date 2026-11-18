@@ -33,16 +33,10 @@ CLI には、AI コーディングエージェントが解析して行動する�
 CLI とスキルを一度にインストールします。
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-このコマンドは次の処理を行います。
-
-1. npm で `@kodus/cli` をグローバルにインストールします。
-2. `kodus auth team-key` でチームキーを適用し、`~/.kodus/config.json` に保存します。
-3. `kodus skills install` を実行し、検出されたすべてのエージェントにスキルを追加します。
-
-個別のログインやインタラクティブなプロンプトは不要です。スキルを後から追加または更新するには、`kodus skills install` または `kodus skills resync` を実行します。
+インストーラーは CLI をインストールし、検出したエージェントに同梱のスキルを追加します。エージェントを実行する環境で `KODUS_TEAM_KEY` を設定します。セルフホストの場合は、`KODUS_API_URL` も設定します。スキルを後から追加・更新するには、`kodus skills install` または `kodus skills resync` を実行します。
 
 ## スキル
 

@@ -81,7 +81,7 @@ kodus review --verbose    # or any command with --verbose
   </Accordion>
 
   <Accordion title="Limite de taxa atingido / Trial esgotado">
-    O modo trial permite 2 revisões por hora para cada usuário, dispositivo e pasta de repositório, contadas em uma hora móvel. Faça login com `kodus auth login` ou configure uma chave de equipe com `kodus auth team-key --key kodus_xxxxx` para aumentar o limite. No modo trial, `kodus auth status` imprime seu uso e quando ele é reiniciado. Ele rotula o limite como "daily" e mostra "Files limit: 10 per review"; o servidor não aplica nenhum dos dois: o limite é por hora, e nenhum limite de arquivos se aplica a uma revisão trial. Quando o limite do trial é atingido, `kodus review` imprime um aviso "Daily limit reached" e termina com código 0, independentemente do que `--fail-on` diga.
+    O modo trial permite 2 revisões por hora para cada usuário, dispositivo e pasta de repositório, contadas em uma hora móvel. Faça login com `kodus auth login` ou configure uma chave de equipe com `KODUS_TEAM_KEY` para aumentar o limite. No modo trial, `kodus auth status` imprime seu uso e quando ele é reiniciado. Ele rotula o limite como "daily" e mostra "Files limit: 10 per review"; o servidor não aplica nenhum dos dois: o limite é por hora, e nenhum limite de arquivos se aplica a uma revisão trial. Quando o limite do trial é atingido, `kodus review` imprime um aviso "Daily limit reached" e termina com código 0, independentemente do que `--fail-on` diga.
 
     Uma equipe logada é limitada a 1.000 requisições por hora. Revisões, verificações de validação de negócio e eventos de sessão do Kodus Trace contam para esse limite. O CLI então diz "Rate limit exceeded. Please try again later."
   </Accordion>

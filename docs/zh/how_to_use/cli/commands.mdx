@@ -249,11 +249,9 @@ kodus auth status
 
 ### `auth team-key`
 
-```bash
-kodus auth team-key --key kodus_xxxxx
-```
+将共享团队密钥保存到 `~/.kodus/config.json`。此命令要求提供 `--key`，通过 API 校验密钥、注册设备，并替换已保存的登录信息。
 
-使用共享团队密钥进行身份验证。密钥必须以 `kodus_` 开头。CLI 会通过 API 校验它、注册您的设备,并替换任何已存储的登录信息。您也可以通过 `KODUS_TEAM_KEY` 环境变量设置密钥。
+日常使用时，在 CLI 环境中设置 `KODUS_TEAM_KEY`。CLI 会直接读取该变量。团队密钥以 `kodus_` 开头。
 
 ### `auth team-status`
 

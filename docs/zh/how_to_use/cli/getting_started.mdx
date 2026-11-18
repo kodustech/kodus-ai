@@ -67,17 +67,9 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
         您的登录信息保存在 `~/.kodus/credentials.json`，并自动刷新。
       </Tab>
       <Tab title="团队（共享密钥）">
-        组织 Owner 在侧边栏的 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下生成团队密钥。然后应用它：
+        组织 Owner 在侧边栏的 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下生成团队密钥。
 
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        或者将以下引导命令分发给团队。它会安装 CLI、应用密钥并安装技能：
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
-        ```
+        在运行 CLI 的 shell 中，将密钥设置为环境变量 `KODUS_TEAM_KEY`。运行 `kodus status`，确认 CLI 已识别该密钥。
 
         <Warning>请在显示密钥时保存 — 之后将无法再次查看。</Warning>
       </Tab>

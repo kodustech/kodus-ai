@@ -67,17 +67,9 @@ This guide gets you from zero to a reviewed diff in under five minutes.
         Your login is stored in `~/.kodus/credentials.json` and refreshed automatically.
       </Tab>
       <Tab title="Team (shared key)">
-        An organization owner generates a team key in the sidebar under **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>). Apply it:
+        An organization owner generates a team key in the sidebar under **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>).
 
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        Or distribute the bootstrap command to your team. It installs the CLI, applies the key, and installs the skills:
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
-        ```
+        Set the key as the `KODUS_TEAM_KEY` environment variable in the shell where you run the CLI. Run `kodus status` to confirm that it detects the key.
 
         <Warning>Save the key when it's shown — it won't be displayed again.</Warning>
       </Tab>

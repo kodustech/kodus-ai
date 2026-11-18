@@ -67,17 +67,9 @@ description: "Kodus CLI をインストールし、認証し、最初のレビ�
         ログイン情報は `~/.kodus/credentials.json` に保存され、自動的に更新されます。
       </Tab>
       <Tab title="チーム（共有キー）">
-        組織のオーナーが、サイドバーの **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）でチームキーを生成します。それを適用します。
+        組織のオーナーが、サイドバーの **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）でチームキーを生成します。
 
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        または、ブートストラップコマンドをチームに配布します。CLI のインストール、キーの適用、スキルのインストールをまとめて行います。
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
-        ```
+        CLI を実行するシェルで、環境変数 `KODUS_TEAM_KEY` にキーを設定します。`kodus status` を実行し、キーが認識されていることを確認します。
 
         <Warning>キーは表示されたときに保存してください。再表示されません。</Warning>
       </Tab>

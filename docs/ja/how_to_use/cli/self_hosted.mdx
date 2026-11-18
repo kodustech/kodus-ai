@@ -59,17 +59,7 @@ description: "Kodus CLI をセルフホスト型の Kodus インスタンスに�
   <Step title="認証">
     <Tabs>
       <Tab title="チームキー（推奨）">
-        セルフホスト型 Kodus の Web アプリの **Organization → CLI keys** でチームキーを生成し、設定します。
-
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        または、API URL を渡してインストーラーを使用します。
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
-        ```
+        セルフホスト版の Kodus Web アプリで **Organization → CLI keys** を開き、チームキーを生成します。CLI を実行するシェルで、環境変数 `KODUS_TEAM_KEY` にキーを設定します。
 
         <Tip>チームキーは共有環境や AI エージェントのセットアップに最適です。個別のログインは不要です。</Tip>
       </Tab>
@@ -91,12 +81,10 @@ description: "Kodus CLI をセルフホスト型の Kodus インスタンスに�
 
   <Step title="接続を確認">
     ```bash
-    kodus auth status
+    kodus status
     ```
 
-    サインイン方法と組織が表示されるはずです。ログインまたはチームキーの場合、`auth status` は保存された認証情報を読み取るだけで、API は呼び出しません。CLI が通信している URL を確認するには、API を呼び出すコマンドに `--verbose` を追加します。各リクエストのメソッドと URL が出力されます。
-
-    キーが環境変数（`KODUS_TEAM_KEY`）にしかない場合、`auth status` は "No credentials found" と表示します。代わりに `kodus status` を実行してください。
+    `kodus status` はローカルで検出した認証方法を表示します。API の URL を確認するには、API を呼び出すコマンドに `--verbose` を追加します。たとえば、リポジトリの設定を許可されたチームキーを使う場合は、次を実行します。
 
     ```bash
     kodus config remote list --verbose
@@ -215,13 +203,7 @@ CI/CD パイプラインでセルフホスト型インスタンスを使用す�
 
 ## チームへの配布
 
-1つのコマンドでチームをオンボーディングするには、API URL とチームキーをインストーラーに渡します。
-
-```bash
-curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
-```
-
-これにより、CLI のインストール、インスタンスに対するチームキーの適用、検出された AI エージェントへの Kodus スキルのインストールが行われます。API URL は保存されないため、各自がシェルプロファイルに `KODUS_API_URL` を設定するか、キーを適用する前に `~/.kodus/config.json` に `apiUrl` を設定する必要があります。
+[CLI のインストール手順](/ja/how_to_use/cli/getting_started)とセルフホスト API の URL をチームに共有します。各自がシェルプロファイルに `KODUS_API_URL` を設定するか、`~/.kodus/config.json` に `apiUrl` を設定します。チームキーはシークレット管理ツールで配布し、CLI を使う前に `KODUS_TEAM_KEY` に設定します。
 
 ## トラブルシューティング
 
@@ -238,7 +220,7 @@ curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yo
   </Accordion>
 
   <Accordion title="認証失敗（401）">
-    - `kodus auth status` を実行して、現在の認証状態を確認します
+    - `kodus status` を実行して、現在の認証状態を確認します
     - チームキーを使用している場合は、セルフホスト型 Web アプリの **Organization → CLI keys** で、まだ **Active** であることを確認します
     - 個人ログインを使用している場合、CLI はログインを自動的に更新します。更新に失敗した場合は、もう一度 `kodus auth login` を実行してください
     - `KODUS_API_URL` が正しいインスタンスを指していることを確認します

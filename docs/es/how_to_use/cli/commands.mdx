@@ -249,11 +249,9 @@ El comando aparece en la ayuda de la CLI. Para CI/CD, usa una clave de equipo en
 
 ### `auth team-key`
 
-```bash
-kodus auth team-key --key kodus_xxxxx
-```
+Guarda una clave de equipo compartida en `~/.kodus/config.json`. El comando requiere `--key`, verifica la clave con la API, registra el dispositivo y reemplaza cualquier sesión guardada.
 
-Autentícate con una clave de equipo compartida. La clave debe empezar con `kodus_`. El CLI la verifica con la API, registra tu dispositivo y reemplaza cualquier inicio de sesión almacenado. También puedes definir la clave con la variable de entorno `KODUS_TEAM_KEY`.
+Para el uso habitual, define `KODUS_TEAM_KEY` en el entorno del CLI. El CLI lee la variable directamente. Las claves de equipo empiezan por `kodus_`.
 
 ### `auth team-status`
 

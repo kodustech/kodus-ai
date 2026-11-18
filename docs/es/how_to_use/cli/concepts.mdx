@@ -47,7 +47,7 @@ Elige uno por máquina. El CLI usa la primera credencial que encuentra, en este 
 
 - **Prueba** — sin autenticación. 2 revisiones por hora. Bueno para "probarlo una vez". Una revisión de prueba no tiene equipo, por lo que se ejecuta con la configuración predeterminada y sin Kody Rules. Los comandos que leen o modifican los datos de tu equipo requieren un inicio de sesión o una clave de equipo.
 - **Inicio de sesión personal** (`kodus auth login`) — una cuenta individual. Los tokens se actualizan automáticamente.
-- **Clave de equipo** (`kodus auth team-key --key kodus_xxxxx`) — una clave compartida para un equipo, generada en la aplicación web en **Organization → CLI keys**. Recomendada para agentes de IA, CI y cualquier lugar donde no quieras inicios de sesión interactivos.
+- **Clave de equipo** (`KODUS_TEAM_KEY`) — una clave compartida para un equipo, generada en la aplicación web en **Organization → CLI keys**. Recomendada para agentes de IA, CI y cualquier lugar donde no quieras inicios de sesión interactivos.
 
 Qué comandos desbloquea cada una:
 

@@ -33,16 +33,10 @@ For any other agent that can run shell commands and read text, `kodus review --p
 Install the CLI plus the skills in one shot:
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-This:
-
-1. Installs `@kodus/cli` globally with npm.
-2. Applies the team key with `kodus auth team-key`, which stores it in `~/.kodus/config.json`.
-3. Runs `kodus skills install` to add the skills to every agent it detects.
-
-No individual logins and no interactive prompts. To add or refresh the skills later, run `kodus skills install` or `kodus skills resync`.
+The installer adds the CLI and installs the bundled skills for each agent it detects. Set `KODUS_TEAM_KEY` in the environment where your agent runs. For a self-hosted instance, also set `KODUS_API_URL`. To add or refresh skills later, run `kodus skills install` or `kodus skills resync`.
 
 ## The skills
 

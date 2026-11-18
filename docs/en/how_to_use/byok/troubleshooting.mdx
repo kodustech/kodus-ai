@@ -34,7 +34,7 @@ Fixes for the errors you meet when connecting a provider and running reviews on 
   <Accordion title="'Rate limited' or 'Too much concurrency'">
     - Lower **Max concurrent requests** in Advanced settings.
     - On GLM Coding Plan Lite/Pro, stay at **1 concurrent**. Upgrade to Max (30 concurrent) if you need more throughput.
-    - On Kimi Code Plan, the documented cap is **30 concurrent**.
+    - On Kimi Code Plan, lower the cap if the error reports a concurrent request limit. See [Tuning concurrency](/en/cookbook/moonshot#tuning-concurrency).
   </Accordion>
 
   <Accordion title="Self-hosted env vars not showing">

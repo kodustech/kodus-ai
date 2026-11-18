@@ -192,7 +192,7 @@ Temperature は **Advanced settings** の中にあり、フィールドはモデ
 | プロバイダー / プラン | 値 | 理由 |
 | --- | --- | --- |
 | **GLM Coding Plan** | Z.AI に確認 | 利用が認められている場合は、Z.AI がアカウントに設定した上限に合わせます。 |
-| **Kimi Code Plan** | `30` | コーディングエンドポイントについて Moonshot が公開している上限です。 |
+| **Kimi Code Plan** | 低い値から開始 | [同時実行数の調整](/ja/cookbook/moonshot#同時実行数の調整) |
 | **GLM Developer API** | （空欄） | 上限はキーごとに変わるため、適切なグローバルのデフォルトはありません。 |
 | **Kimi Developer API** | （空欄） | チャージのティアに応じて変わります（Tier 1 で約 50、Tier 5 で約 1000）。 |
 | **Anthropic / OpenAI / Google / OpenRouter** | （空欄） | プロバイダーが独自に TPM/RPM を適用するため、Kodus では上限を設けません。 |

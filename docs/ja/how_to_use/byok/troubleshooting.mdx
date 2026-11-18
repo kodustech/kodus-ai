@@ -34,7 +34,7 @@ description: "Test のエラー、レート制限、予期しないコストを�
   <Accordion title="「Rate limited」または「Too much concurrency」と表示される">
     - Advanced settings の **Max concurrent requests** を下げます。
     - GLM Coding Plan の Lite/Pro では、**同時実行数 1** のままにしてください。より高いスループットが必要な場合は、Max（同時実行数 30）にアップグレードしてください。
-    - Kimi Code Plan では、公開されている上限は**同時実行数 30** です。
+    - Kimi Code Plan で同時リクエスト数の上限エラーが出たら、設定値を下げてください。[同時実行数の調整](/ja/cookbook/moonshot#同時実行数の調整)を参照してください。
   </Accordion>
 
   <Accordion title="セルフホストの環境変数が表示されない">

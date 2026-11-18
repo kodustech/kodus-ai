@@ -81,7 +81,7 @@ kodus review --verbose    # or any command with --verbose
   </Accordion>
 
   <Accordion title="レート制限に達した / トライアルが終了した">
-    トライアルモードでは、ユーザー、デバイス、リポジトリフォルダごとに1時間あたり2回のレビューが許可され、スライディングウィンドウの1時間で集計されます。制限を引き上げるには、`kodus auth login` でサインインするか、`kodus auth team-key --key kodus_xxxxx` でチームキーを設定してください。トライアルモードでは、`kodus auth status` が使用状況とリセットされるタイミングを表示します。ただし、制限を "daily" と表示し、"Files limit: 10 per review" も表示します。サーバーはどちらも適用しません。制限は1時間単位で、トライアルのレビューにはファイル数の制限はありません。トライアルの上限に達すると、`kodus review` は "Daily limit reached" という通知を表示し、`--fail-on` の指定にかかわらず終了コード 0 で終了します。
+    トライアルモードでは、ユーザー、デバイス、リポジトリフォルダごとに1時間あたり2回のレビューが許可され、スライディングウィンドウの1時間で集計されます。制限を引き上げるには、`kodus auth login` でサインインするか、`KODUS_TEAM_KEY` でチームキーを設定してください。トライアルモードでは、`kodus auth status` が使用状況とリセットされるタイミングを表示します。ただし、制限を "daily" と表示し、"Files limit: 10 per review" も表示します。サーバーはどちらも適用しません。制限は1時間単位で、トライアルのレビューにはファイル数の制限はありません。トライアルの上限に達すると、`kodus review` は "Daily limit reached" という通知を表示し、`--fail-on` の指定にかかわらず終了コード 0 で終了します。
 
     サインイン済みのチームは、1時間あたり1,000リクエストに制限されます。レビュー、ビジネス検証のチェック、Kodus Trace のセッションイベントがカウントされます。上限に達すると、CLI は "Rate limit exceeded. Please try again later." と表示します。
   </Accordion>

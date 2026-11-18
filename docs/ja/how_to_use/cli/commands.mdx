@@ -249,11 +249,9 @@ kodus auth status
 
 ### `auth team-key`
 
-```bash
-kodus auth team-key --key kodus_xxxxx
-```
+共有のチームキーを `~/.kodus/config.json` に保存します。このコマンドには `--key` が必要です。API でキーを確認し、デバイスを登録して、保存済みのログイン情報を置き換えます。
 
-共有のチームキーを使用して認証します。キーは `kodus_` で始まる必要があります。CLI は API でキーを確認し、お使いのデバイスを登録して、保存されているログイン情報を置き換えます。環境変数 `KODUS_TEAM_KEY` でキーを設定することもできます。
+通常は CLI の実行環境で `KODUS_TEAM_KEY` を設定してください。CLI はこの変数を直接読み取ります。チームキーは `kodus_` で始まります。
 
 ### `auth team-status`
 

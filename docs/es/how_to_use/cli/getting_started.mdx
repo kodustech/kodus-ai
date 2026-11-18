@@ -67,17 +67,9 @@ Esta guía te lleva de cero a un diff revisado en menos de cinco minutos.
         Tu inicio de sesión se almacena en `~/.kodus/credentials.json` y se actualiza automáticamente.
       </Tab>
       <Tab title="Equipo (clave compartida)">
-        Un owner de la organización genera una clave de equipo en la barra lateral, en **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>). Aplícala:
+        Un owner de la organización genera una clave de equipo en la barra lateral, en **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>).
 
-        ```bash
-        kodus auth team-key --key kodus_xxxxx
-        ```
-
-        O distribuye el comando de inicio a tu equipo. Instala el CLI, aplica la clave e instala los skills:
-
-        ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
-        ```
+        Define la clave como variable de entorno `KODUS_TEAM_KEY` en la terminal donde ejecutas el CLI. Ejecuta `kodus status` para confirmar que el CLI detecta la clave.
 
         <Warning>Guarda la clave cuando se muestre — no se volverá a mostrar.</Warning>
       </Tab>
