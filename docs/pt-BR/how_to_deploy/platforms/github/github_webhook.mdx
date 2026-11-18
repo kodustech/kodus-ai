@@ -1,10 +1,12 @@
 ---
 title: Criando um Webhook
-description: "Crie manualmente o webhook do GitHub quando o registro automático não aconteceu, e selecione os três eventos que o Kodus consome."
+description: "Crie manualmente o webhook do GitHub para uma integração por token quando o registro automático não aconteceu, e selecione os três eventos que o Kodus consome."
 icon: webhook
 ---
 
-O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga estas etapas para configurá-lo manualmente:
+Com um personal access token, o Kodus cria o webhook em cada repositório quando você salva a seleção de repositórios. Isso exige acesso de leitura e escrita aos webhooks do repositório: `admin:repo_hook` em um token classic, ou **Webhooks: Read and write** em um token fine-grained. Se o token não tiver essa permissão, **Repositories** lista o repositório com o motivo, e você pode criar o webhook manualmente como descrito a seguir.
+
+Com o GitHub App não existe webhook por repositório: os eventos vêm do próprio webhook do App. Veja [Criando um GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app).
 
 <Note>
   As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Usar o domínio da API só funciona se seu proxy reverso rotear os caminhos `/.../webhook` para o serviço de webhooks.
@@ -16,21 +18,20 @@ O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga 
 4. Clique em "Add webhook"
 5. Configure seu webhook:
 
-   - **Payload URL**: Insira a URL do seu arquivo `.env`: `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`
+   - **Payload URL**: Insira a URL do seu arquivo `.env`: `API_GITHUB_CODE_MANAGEMENT_WEBHOOK` (ela termina com `/github/webhook`)
    - **Content type**: `application/json`
    - **Secret**: Deixe em branco
    - **SSL verification**: Habilite a verificação SSL
    - **Which events would you like to trigger this webhook?**: Let me select individual events
    - Marque estas opções:
-     - Issue comment
+     - Issue comments
      - Pull request review comments
      - Pull requests
 
 6. Clique em "Add webhook"
 
-Você configurou com sucesso um webhook para revisões de código no seu repositório GitHub.
+Você configurou com sucesso um webhook para code reviews no seu repositório GitHub.
 
 <Note>
-  Estes são os únicos três eventos que o Kodus consome. Marcar outros (pushes, pull request
-  reviews, review threads) só gera tráfego que é descartado na chegada.
+  Estes são os únicos eventos que uma integração por token usa. O Kodus ignora os outros, como pushes, pull request reviews e review threads, então selecioná-los só gera mais tráfego.
 </Note>

@@ -5,34 +5,41 @@ description: "Meça o tamanho médio dos seus Pull Requests"
 
 ## O que é Tamanho de PR
 
-O Tamanho de PR mede o número médio de alterações (linhas adicionadas, modificadas ou excluídas) nos seus Pull Requests. Essa métrica ajuda a entender como sua equipe divide o trabalho e pode indicar potenciais gargalos no processo de desenvolvimento.
+O Tamanho de PR é o número médio de linhas alteradas nos seus pull requests. Mostra como o seu time divide o trabalho, e PRs grandes costumam ser sinal de reviews lentos.
 
 No Cockpit, é o card **PR Size** na aba **Productivity**.
 
 ## Como Calculamos
 
-Medimos automaticamente o tamanho de cada Pull Request contando o total de linhas de código que foram adicionadas, modificadas ou excluídas.
-
-**O que rastreamos:**
-- Total de linhas alteradas em cada PR
-- Adições, modificações e exclusões
-- O tamanho médio em todos os seus PRs
-
-**Como é calculado:**
 ```
-Tamanho de PR = (Total de Linhas Adicionadas + Modificadas + Excluídas) ÷ (Número de PRs)
+PR Size = (Total lines changed in the PRs) ÷ (Number of PRs)
 ```
+
+- Cobre PRs fechados no intervalo de datas selecionado, com merge ou fechados sem merge.
+- Linhas alteradas são as linhas adicionadas e excluídas em cada PR. Um PR sem tamanho registrado conta como 0 linhas.
 
 Por exemplo, se você tem 3 PRs com 50, 100 e 150 linhas alteradas, o tamanho médio do seu PR é 100 linhas.
 
+## Lendo o card
+
+O card mostra a média, um badge de nível e o valor do período anterior de mesma duração, com a variação percentual (quanto menor, melhor). O rodapé diz "Last 2 weeks was …" qualquer que seja o intervalo selecionado; o número é do período anterior. Passe o mouse sobre o badge para ver os níveis:
+
+| Linhas alteradas | Nível |
+| --- | --- |
+| Menos de 250 | Elite |
+| 250 a 400 | High |
+| 400 a 600 | Fair |
+| Mais de 600 | Need focus |
+
+<Note>
+  O título do card diz **PR Size (p75)**, mas o valor é a média, como descrito acima.
+</Note>
+
 ## Por que é Importante
 
-O Tamanho de PR é uma métrica crítica que impacta múltiplos aspectos do seu processo de desenvolvimento:
-
-- **Qualidade de Revisão**: PRs menores são mais fáceis de revisar completamente
-- **Velocidade de Deploy**: Mudanças menores podem ser implantadas com mais frequência
-- **Gestão de Riscos**: Mudanças grandes aumentam o risco de introduzir bugs
-- **Colaboração em Equipe**: PRs menores permitem feedback e iteração mais rápidos
+- **Qualidade de Review**: PRs menores são mais fáceis de revisar a fundo
+- **Velocidade de Deploy**: mudanças menores podem ser implantadas com mais frequência
+- **Gestão de Riscos**: mudanças grandes carregam mais risco de bugs
 
 ## Como Melhorar
 
@@ -40,4 +47,3 @@ O Tamanho de PR é uma métrica crítica que impacta múltiplos aspectos do seu 
 - Divida histórias de usuário em tarefas menores e focadas
 - Defina limites claros de tamanho de PR (200-400 linhas recomendado)
 - Construa fatias verticais em vez de camadas técnicas
-- Refatore regularmente para manter a modularidade

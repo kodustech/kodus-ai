@@ -1,33 +1,35 @@
 ---
-title: "Política de Revisão"
-description: "Como interpretar o feedback do Kody e como ele interage com suas políticas de merge — o que bloqueia um PR, o que não bloqueia e quem decide."
+title: "Política de revisão"
+description: "Como interpretar o feedback do Kody e como ele interage com as suas políticas de merge: o que bloqueia um PR, o que não bloqueia e quem decide."
 ---
 
-## Propósito
+## Sugestões vs. bloqueio
 
-Esclarecer como interpretar o feedback de Kody e como ela interage com as políticas de merge do seu repositório.
-
-## Sugestões vs. Bloqueio
-
-- Sugestões: Por padrão, Kody posta comentários não bloqueantes para você avaliar.
-- Solicitar Alterações (opcional): Se habilitado, Kody pode marcar uma revisão como "alterações solicitadas" para problemas críticos.
-- Auto-aprovar (opcional): Se habilitado, Kody pode aprovar um PR depois de uma revisão limpa. A aprovação condicional também pode restringir labels e autores elegíveis, exigir uma pessoa para paths selecionados e segurar PRs que Kody não consiga avaliar como de baixo risco. Veja [Auto-aprovação](/pt-BR/how_to_use/code_review/configs/auto_approve).
+- **Sugestões:** por padrão, o Kody posta comentários que não bloqueiam o PR. Você decide quais aplicar.
+- **Request changes em problemas críticos (opcional):** quando o Kody encontra um problema crítico, ele define o seu review no PR como Request Changes. Só apontamentos críticos fazem isso. O Kody retira o pedido quando esses apontamentos são resolvidos, mesmo em um PR que ele não aprova. Essa configuração fica em **Code review → General → Review feedback**. Ela não está disponível quando o GitLab é o seu único provider conectado.
+- **Aprovação automática de PR (opcional):** quando um review está limpo, o Kody aprova o PR. Ele nunca faz o merge. Com políticas de aprovação, só os PRs que casam com uma política são aprovados. Veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve).
 
 <Note>
-  Habilite comportamentos de bloqueio apenas quando sua equipe concordar com os limites e tiver CI sólido implementado.
+  Ative o comportamento de bloqueio apenas quando o seu time concordar com os limites e tiver um CI sólido.
 </Note>
 
-## Quando Habilitar Solicitar Alterações
+## O que não bloqueia
 
-- Áreas sensíveis à segurança onde problemas críticos nunca devem chegar à produção.
-- Pontos críticos de performance onde regressões são custosas.
-- Repositórios com padrões de codificação claros e regras de revisão estáveis.
+- **O check Kody Code Review** (GitHub App e Forgejo) informa que um review rodou. Ele passa com sugestões em aberto e só falha quando o review em si não pôde rodar. Um check obrigatório garante que um review aconteceu; ele não bloqueia um merge pelos apontamentos do Kody.
+- **Business Logic** posta um comentário e nenhum check ou status. Veja [Business Logic Validation](/pt-BR/how_to_use/code_review/business_logic_validation).
+- **Risk assessment** e **routing** mudam como o Kody revisa, e se ele pode aprovar. Eles não bloqueiam um merge. Veja [Avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) e [Modos e modelos de revisão](/pt-BR/how_to_use/code_review/configs/routing).
 
-## Quando Usar Auto-aprovação
+## Quando ativar o Request changes
 
-- Alterações pequenas e de baixo risco (docs/testes). Configure a aprovação condicional quando só uma parte dos PRs deve ser elegível.
-- Equipes com alta cobertura de testes e CI confiável.
+- Áreas sensíveis à segurança, onde problemas críticos nunca devem chegar à produção.
+- Pontos críticos de performance, onde regressões são custosas.
+- Repositórios com padrões de código claros e regras de review estáveis.
 
-## A Decisão Humana Sempre Importa
+## Quando ativar a aprovação automática
 
-Kody acelera o feedback, mas não substitui o julgamento humano. Sua equipe decide quais sugestões adotar e quando fazer o merge.
+- Mudanças pequenas e de baixo risco, como docs ou testes. Adicione políticas de aprovação quando só alguns PRs devem ser elegíveis.
+- Times com alta cobertura de testes e CI confiável.
+
+## A decisão humana sempre importa
+
+O Kody acelera o feedback, mas não substitui o julgamento humano. O seu time decide quais sugestões adotar e quando fazer o merge.

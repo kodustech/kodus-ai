@@ -1,50 +1,57 @@
 ---
-title: "GitHub、GitLab、Bitbucketでコードレビューを自動化する方法"
-description: "GitHub、GitLab、Bitbucket、Azure DevOps全体のすべてのプルリクエストで自動的に実行されるAI搭載コードレビューをセットアップします。"
+title: "GitHub、GitLab、Bitbucket でコードレビューを自動化する方法"
+description: "GitHub、GitLab、Bitbucket、Azure DevOps のすべての Pull Request で自動的に実行される、AI によるコードレビューをセットアップします。"
 ---
 
-手動のコードレビューはボトルネックを生み出します。レビュアーはコンテキストを切り替え、PRが溜まり、フィードバックの品質にばらつきが生じます。AI搭載のコードレビューは、人間のレビュアーがコードを見る前に、すべてのPRで即座に実行され、問題を発見します。
+手動のコードレビューはボトルネックを生み出します。レビュアーはコンテキストを切り替え、PR が溜まり、フィードバックの品質にばらつきが生じます。AI によるコードレビューは、すべての PR で即座に実行され、人間のレビュアーがコードを見る前に問題を発見します。
 
-## Kodusがコードレビューを自動化する方法
+## Kodus がコードレビューを自動化する方法
 
-接続されると、Kodusはすべてのプルリクエストを自動的にレビューします。セキュリティの脆弱性、パフォーマンスの問題、エラー処理、保守性、カスタムルールについてコードを分析し、PR内に直接コメントを投稿します。
+接続すると、Kodus はすべての Pull Request を自動的にレビューします。セキュリティの脆弱性、パフォーマンスの問題、エラー処理、保守性、カスタムルールについてコードを分析し、PR に直接コメントを投稿します。
 
 ### サポートされているプラットフォーム
 
-- **GitHub** — GitHub App（またはパーソナルアクセストークン）を通じて
-- **GitLab** — OAuth（またはパーソナルアクセストークン）を通じて
-- **Bitbucket** — APIトークンを通じて
-- **Azure DevOps**（Azure Repos）— パーソナルアクセストークンを通じて
-- **Forgejo** — パーソナルアクセストークンを通じて
+- **GitHub** — GitHub App（または Personal Access Token）経由
+- **GitLab** — OAuth（または Personal Access Token）経由
+- **Bitbucket** — API トークン経由
+- **Azure DevOps**（Azure Repos）— Personal Access Token 経由
+- **Forgejo** — Personal Access Token 経由
 
 ### 分析される内容
 
-デフォルトでは、Kodusは **Code review → What to review** でオン/オフを切り替えられるカテゴリと、独自のルールを確認します：
-- セキュリティ問題（SQLインジェクション、XSS、ハードコードされた秘密情報）
-- パフォーマンスの問題（N+1クエリ、インデックスの不足）
-- 潜在的なバグ（nullポインタ、リソースリーク、エラー処理のギャップ）
-- ビジネスロジックへの準拠（リンクされたタスク要件に対して検証）
-- カスタムKodyルール（コードスタイルやチームの規約に使用します）
+デフォルトでは、Kodus は **Code review → What to review** でオン/オフを切り替えられるカテゴリと、独自のルールを確認します。
+- セキュリティの問題（SQL インジェクション、XSS、ハードコードされたシークレット）
+- パフォーマンスの問題（N+1 クエリ、インデックスの不足）
+- 潜在的なバグ（null ポインタ、リソースリーク、エラー処理の抜け）
+- ビジネスロジックへの準拠（リンクされたタスクの要件に対して検証）
+- カスタムの Kody Rules（コードスタイルやチームの規約に使用します）
 
-### レビューの頻度オプション
+### レビュー頻度のオプション
 
-頻度は **Code review → General** の **Enable Automated Code Review** → **Review Cadence** で設定します。
+頻度は **Code review → General** の **Automated code review** → **Review Cadence** で設定します。
 
 | モード | 動作 |
 |------|----------|
-| **自動** | すべてのプッシュをレビュー — 継続的なフィードバック |
-| **自動一時停止** | 急速なプッシュ時に一時停止（例：15分以内に3回）してノイズを避ける |
-| **手動** | `@kody start-review` とコメントしたときのみレビュー |
+| **Automatic** | すべてのプッシュをレビューし、継続的なフィードバックを提供します |
+| **Auto-pause** | ノイズを避けるため、短時間に連続したレビュー（デフォルト：15 分以内に 3 回）の後、PR を一時停止します |
+| **Manual** | PR がオープンされたときにレビューし、その後は `@kody start-review` とコメントしたときのみレビューします |
+
+どの PR でも `@kody start-review` でオンデマンドにレビューを実行することもできます。すべてのコマンドと、レビューがスキップされる理由については、[コードレビューフロー](/ja/how_to_use/code_review/flow)を参照してください。
+
+### レビュー後の動作
+
+Kody は、問題のない PR を承認したり（[Auto-approve](/ja/how_to_use/code_review/configs/auto_approve) を参照）、重大な問題について変更をリクエストしたりすることもできます（[レビューポリシー](/ja/how_to_use/code_review/policy)を参照）。どちらもデフォルトではオフです。Kodus が PR をマージすることはありません。
 
 ## はじめに
 
-1. [kodus.io](https://kodus.io)でワークスペースを作成するか、[Kodusをセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
-2. Gitプロバイダーを接続します（GitHub、GitLab、Bitbucket、Azure DevOps、またはForgejo）
+1. [kodus.io](https://kodus.io) でワークスペースを作成するか、[Kodus をセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
+2. Git プロバイダーを接続します（GitHub、GitLab、Bitbucket、Azure DevOps、または Forgejo）
 3. 監視するリポジトリを選択します
-4. PRをオープンします — Kodusが自動的にレビューします
+4. PR をオープンします — Kodus が自動的にレビューします
 
-プラットフォーム固有のセットアップについては以下を参照してください：
-- [GitHubセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-github)
-- [GitLabセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-gitlab)
-- [Azure DevOpsセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops)
-- [Bitbucketセットアップ](/ja/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+プラットフォーム固有のセットアップについては、以下を参照してください。
+- [GitHub のセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-github)
+- [GitLab のセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-gitlab)
+- [Azure DevOps のセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops)
+- [Bitbucket のセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket)
+- [Forgejo のセットアップ](/ja/knowledge_base/how-to-set-up-ai-code-review-on-forgejo)

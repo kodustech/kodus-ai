@@ -1,13 +1,13 @@
 ---
 title: "Como automatizar a revisão de código no GitHub, GitLab e Bitbucket"
-description: "Configure revisão de código com IA que executa automaticamente em cada pull request no GitHub, GitLab, Bitbucket e Azure DevOps."
+description: "Configure uma revisão de código com IA que roda automaticamente em cada pull request no GitHub, GitLab, Bitbucket e Azure DevOps."
 ---
 
-Revisões de código manuais criam gargalos. Revisores mudam de contexto, PRs se acumulam e a qualidade do feedback varia. A revisão de código com IA executa instantaneamente em cada PR, identificando problemas antes mesmo que um revisor humano olhe para o código.
+Revisões de código manuais criam gargalos. Revisores trocam de contexto, PRs se acumulam e a qualidade do feedback varia. A revisão de código com IA roda instantaneamente em cada PR, identificando problemas antes mesmo de um revisor humano olhar o código.
 
 ## Como o Kodus automatiza a revisão de código
 
-Uma vez conectado, o Kodus revisa automaticamente cada pull request. Ele analisa o código em busca de vulnerabilidades de segurança, problemas de performance, tratamento de erros, manutenibilidade e suas regras personalizadas — e então posta comentários diretamente no PR.
+Depois de conectado, o Kodus revisa automaticamente cada pull request. Ele analisa o código em busca de vulnerabilidades de segurança, problemas de performance, tratamento de erros, manutenibilidade e das suas regras personalizadas — e então posta comentários diretamente no PR.
 
 ### Plataformas suportadas
 
@@ -23,18 +23,24 @@ Por padrão, o Kodus verifica as categorias que você pode ativar ou desativar e
 - Problemas de segurança (SQL injection, XSS, segredos hardcoded)
 - Problemas de performance (queries N+1, índices ausentes)
 - Bugs em potencial (ponteiros nulos, vazamentos de recursos, lacunas no tratamento de erros)
-- Conformidade com lógica de negócio (valida contra os requisitos da tarefa vinculada)
-- Suas Regras do Kody personalizadas (use-as para estilo de código e convenções do time)
+- Conformidade com a lógica de negócio (valida contra os requisitos da tarefa vinculada)
+- Suas Kody Rules personalizadas (use-as para estilo de código e convenções do time)
 
 ### Opções de cadência de revisão
 
-Defina a cadência em **Code review → General**, em **Enable Automated Code Review** → **Review Cadence**.
+Defina a cadência em **Code review → General**, em **Automated code review** → **Review Cadence**.
 
 | Modo | Comportamento |
 |------|---------------|
-| **Automático** | Revisa a cada push — feedback contínuo |
-| **Pausa automática** | Pausa durante pushes rápidos (ex.: 3 em 15 minutos) para evitar ruído |
-| **Manual** | Apenas revisa quando você comenta `@kody start-review` |
+| **Automatic** | Revisa a cada push, para um feedback contínuo |
+| **Auto-pause** | Pausa um PR depois de uma sequência de revisões (padrão: 3 em 15 minutos) para evitar ruído |
+| **Manual** | Revisa o PR quando ele é aberto e, depois, só quando você comenta `@kody start-review` |
+
+Você também pode rodar uma revisão sob demanda em qualquer PR com `@kody start-review`. Veja o [Fluxo da revisão](/pt-BR/how_to_use/code_review/flow) para todos os comandos e para os motivos pelos quais uma revisão é ignorada.
+
+### O que acontece depois da revisão
+
+O Kody também pode aprovar PRs sem problemas (veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve)) e solicitar mudanças em problemas críticos (veja [Política de revisão](/pt-BR/how_to_use/code_review/policy)). Ambos vêm desativados por padrão. O Kodus nunca faz merge de um PR.
 
 ## Como começar
 
@@ -43,8 +49,9 @@ Defina a cadência em **Code review → General**, em **Enable Automated Code Re
 3. Selecione quais repositórios monitorar
 4. Abra um PR — o Kodus o revisa automaticamente
 
-Para configuração específica por plataforma, consulte:
-- [Configuração GitHub](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-github)
-- [Configuração GitLab](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-gitlab)
-- [Configuração Azure DevOps](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops)
-- [Configuração Bitbucket](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+Para a configuração específica de cada plataforma, consulte:
+- [Configuração do GitHub](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-github)
+- [Configuração do GitLab](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-gitlab)
+- [Configuração do Azure DevOps](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops)
+- [Configuração do Bitbucket](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket)
+- [Configuração do Forgejo](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-forgejo)

@@ -1,15 +1,15 @@
 ---
 title: "セルフホストセットアップ"
-description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続します。"
+description: "Kodus CLI をセルフホスト型の Kodus インスタンスに接続します。"
 ---
 
-独自のインフラで Kodus を実行している場合、CLI は同じように動作します — API に向けるだけです。
+独自のインフラで Kodus を実行している場合も、CLI は同じように動作します。API の接続先を指定するだけです。
 
 ## インスタンスへの接続
 
 <Steps>
   <Step title="API URL を設定">
-    Kodus API の場所を CLI に伝えます。方法を1つ選択してください:
+    Kodus API の場所を CLI に伝えます。方法を1つ選択してください。
 
     <Tabs>
       <Tab title="環境変数（推奨）">
@@ -17,7 +17,7 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
         export KODUS_API_URL=https://kodus-api.yourcompany.com
         ```
 
-        永続的にするために、シェルプロファイル（`~/.bashrc`、`~/.zshrc` など）に追加:
+        永続化するには、シェルプロファイル（`~/.bashrc`、`~/.zshrc` など）に追加します。
 
         ```bash
         echo 'export KODUS_API_URL=https://kodus-api.yourcompany.com' >> ~/.zshrc
@@ -25,7 +25,7 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
         ```
       </Tab>
       <Tab title="設定ファイル">
-        `~/.kodus/config.json` を作成または編集:
+        `~/.kodus/config.json` を作成または編集します。
 
         ```json
         {
@@ -36,7 +36,11 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
         }
         ```
 
-        CLI は `kodus auth team-key` を実行したときにこのファイルを自動的に作成しますが、手動で作成することもできます。
+        CLI は `kodus auth team-key` を実行したときにこのファイルを自動的に作成し、すでに含まれている `apiUrl` はそのまま保持します。手動で作成することもできます。
+
+        <Warning>
+          `kodus auth login` と `kodus auth logout` は、`apiUrl` を含めてこのファイルを削除します。ログインでサインインする場合は、代わりに環境変数を使用してください。
+        </Warning>
       </Tab>
       <Tab title="インライン（一回限り）">
         ```bash
@@ -46,7 +50,7 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
     </Tabs>
 
     <Warning>
-      **HTTPS が必要です。** CLI はセキュリティのために非 HTTPS URL を拒否します。唯一の例外はローカル開発用の `localhost` と `127.0.0.1` です。
+      **HTTPS が必要です。** CLI はセキュリティ上の理由から、HTTPS 以外の URL を拒否します。唯一の例外は、ローカル開発用の `localhost` と `127.0.0.1` です。
     </Warning>
 
     **優先順位:** `KODUS_API_URL` 環境変数 > `~/.kodus/config.json` の apiUrl > デフォルト（`https://api.kodus.io`）。
@@ -55,39 +59,32 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
   <Step title="認証">
     <Tabs>
       <Tab title="チームキー（推奨）">
-        セルフホスト型 Kodus の Web アプリの **Organization → CLI keys** でチームキーを生成して設定:
+        セルフホスト型 Kodus の Web アプリの **Organization → CLI keys** でチームキーを生成し、設定します。
 
         ```bash
         kodus auth team-key --key kodus_xxxxx
         ```
 
-        または API URL とチームキーの両方でインストーラーを使用:
+        または、API URL を渡してインストーラーを使用します。
 
         ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+        curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
         ```
 
-        <Tip>チームキーは共有環境と AI エージェントのセットアップに最適です — 個別ログインは不要です。</Tip>
+        <Tip>チームキーは共有環境や AI エージェントのセットアップに最適です。個別のログインは不要です。</Tip>
       </Tab>
       <Tab title="個人ログイン">
         ```bash
         kodus auth login
         ```
 
-        CLI がセルフホスト型 Web アプリの **Authorize Kodus CLI** ページを開きます。インスタンスに登録されたアカウントでサインインし、**Authorize CLI** をクリックします。非インタラクティブにログインする場合は、代わりに `--email` と `--password` を渡します（[`auth login`](/ja/how_to_use/cli/commands#auth-login) を参照）。トークンは制限されたパーミッション（600）で `~/.kodus/credentials.json` にローカル保存されます。
-      </Tab>
-      <Tab title="CI/CD トークン">
-        個人アカウントからトークンを生成し、パイプラインで使用:
+        CLI がセルフホスト型 Web アプリの **Authorize Kodus CLI** ページを開きます。インスタンスに登録されたアカウントでサインインし（サインイン後はダッシュボードに移動するため、CLI が出力した URL をもう一度開いてください）、**Authorize CLI** をクリックします。ブラウザのないマシンでは、CLI は代わりに URL とコードを出力します（または `--device-code` を追加します）。ページにコードを入力するフィールドはありません。URL に `?code=<code>` を追加して開いてください。ログイン情報は、制限されたパーミッション（600）で `~/.kodus/credentials.json` に保存されます。
 
-        ```bash
-        # 生成（一度、ログイン済みのマシンから）
-        kodus auth token
+        <Info>
+          そのページのアドレスは、Kodus API の `API_FRONTEND_URL` 設定から取得されます。Web アプリの URL を指定する必要があります。そうでないと、ログインページが誤ったホストで開きます。
+        </Info>
 
-        # パイプラインで使用
-        export KODUS_API_URL=https://kodus-api.yourcompany.com
-        export KODUS_TOKEN=<generated-token>
-        kodus review --format json --fail-on error
-        ```
+        ブラウザを使用できないスクリプトでは、`--legacy` と `--email`、`--password` を指定すると、メールアドレスとパスワードでサインインできます（[`auth login`](/ja/how_to_use/cli/commands#auth-login) を参照）。これは非推奨です。
       </Tab>
     </Tabs>
   </Step>
@@ -97,10 +94,12 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
     kodus auth status
     ```
 
-    認証モード、組織名、トークンが有効であることが表示されるはずです。詳細モードを使用すると、使用されている API URL がログに記録されます:
+    サインイン方法と組織が表示されるはずです。ログインまたはチームキーの場合、`auth status` は保存された認証情報を読み取るだけで、API は呼び出しません。CLI が通信している URL を確認するには、API を呼び出すコマンドに `--verbose` を追加します。各リクエストのメソッドと URL が出力されます。
+
+    キーが環境変数（`KODUS_TEAM_KEY`）にしかない場合、`auth status` は "No credentials found" と表示します。代わりに `kodus status` を実行してください。
 
     ```bash
-    kodus auth status --verbose
+    kodus config remote list --verbose
     ```
   </Step>
 </Steps>
@@ -129,11 +128,11 @@ description: "Kodus CLI を自己ホスト型 Kodus インスタンスに接続�
   </Tab>
 </Tabs>
 
-設定されると、CLI はすべての API リクエストで `CF-Access-Client-Id` と `CF-Access-Client-Secret` ヘッダーを送信します。優先順位: 環境変数 > 設定ファイル。
+クライアント ID とシークレットの両方が設定されている場合、CLI はすべての API リクエストで `CF-Access-Client-Id` と `CF-Access-Client-Secret` ヘッダーを送信します。優先順位: 環境変数 > 設定ファイル。
 
 ## 設定ファイルリファレンス
 
-CLI は `~/.kodus/config.json` に設定を保存します:
+CLI は `~/.kodus/config.json` に設定を保存します。
 
 ```json
 {
@@ -148,105 +147,111 @@ CLI は `~/.kodus/config.json` に設定を保存します:
 
 | フィールド | 必須 | 説明 |
 |-----------|------|------|
-| `apiUrl` | いいえ | セルフホスト型 API URL。`KODUS_API_URL` 環境変数で上書き。 |
-| `teamKey` | いいえ | チーム APIキー（`kodus_` で始まる）。`KODUS_TEAM_KEY` 環境変数で上書き。 |
+| `apiUrl` | いいえ | セルフホスト型 API の URL。`KODUS_API_URL` 環境変数で上書きされます。 |
+| `teamKey` | いいえ | チームの API キー（`kodus_` で始まる）。`KODUS_TEAM_KEY` 環境変数で上書きされます。 |
 | `teamName` | いいえ | チームの表示名。 |
 | `organizationName` | いいえ | 組織の表示名。 |
-| `cfAccessClientId` | いいえ | Cloudflare Access クライアント ID。`CF_ACCESS_CLIENT_ID` 環境変数で上書き。 |
-| `cfAccessClientSecret` | いいえ | Cloudflare Access クライアントシークレット。`CF_ACCESS_CLIENT_SECRET` 環境変数で上書き。 |
+| `cfAccessClientId` | いいえ | Cloudflare Access クライアント ID。`CF_ACCESS_CLIENT_ID` 環境変数で上書きされます。 |
+| `cfAccessClientSecret` | いいえ | Cloudflare Access クライアントシークレット。`CF_ACCESS_CLIENT_SECRET` 環境変数で上書きされます。 |
 
 <Info>
-  設定ファイルは `0600` パーミッション（所有者の読み取り/書き込みのみ）で作成されます。ディレクトリ `~/.kodus/` は `0700` パーミッションで作成されます。
+  設定ファイルは `0600` パーミッション（所有者のみ読み取り/書き込み可）で作成されます。ディレクトリ `~/.kodus/` は `0700` パーミッションで作成されます。
 </Info>
 
-## 環境変数サマリー
+## 環境変数のまとめ
 
 | 変数 | 説明 |
 |------|------|
-| `KODUS_API_URL` | セルフホスト型 API エンドポイント（HTTPS 必須、localhost 除く） |
-| `KODUS_TEAM_KEY` | 共有アクセス用チームキー |
-| `KODUS_TOKEN` | パイプライン用 CI/CD トークン |
+| `KODUS_API_URL` | セルフホスト型 API のエンドポイント（localhost を除き HTTPS 必須） |
+| `KODUS_APP_URL` | `kodus config remote open` が指す Web アプリの URL（デフォルト `https://app.kodus.io`） |
+| `KODUS_TEAM_KEY` | 共有アクセス用のチームキー |
+| `KODUS_TOKEN` | ログインのアクセストークン。そのまま使用され、更新されません。他のすべての認証情報より優先されます。CI ではチームキーを使用してください |
 | `CF_ACCESS_CLIENT_ID` | Cloudflare Access クライアント ID |
 | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access クライアントシークレット |
-| `KODUS_VERBOSE` | 解決された API URL とリクエスト詳細を表示するには `true` に設定 |
+| `KODUS_REQUEST_TIMEOUT_MIN` | 各 API リクエストのタイムアウト（分）（デフォルト `60`） |
+| `KODUS_DISABLE_UPDATE_CHECK` | `1` に設定すると、更新の通知をオフにします |
 
 ## CI/CD 統合
 
-CI/CD パイプラインのセルフホスト型インスタンスでは、API URL と認証を環境変数として設定します:
+CI/CD パイプラインでセルフホスト型インスタンスを使用する場合は、API URL とチームキーを環境変数として設定します。新規チェックアウトにはコミットされていない変更がないため、`--branch` でブランチをベースと比較してレビューします。ベースブランチがチェックアウトに存在する必要があるため、履歴全体を取得してください。
 
 <Tabs>
   <Tab title="GitHub Actions">
     ```yaml
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Kodus Review
       env:
         KODUS_API_URL: ${{ secrets.KODUS_API_URL }}
         KODUS_TEAM_KEY: ${{ secrets.KODUS_TEAM_KEY }}
-      run: npx @kodus/cli review --format json --fail-on error
+      run: npx @kodus/cli review --branch origin/main --format json --fail-on error
     ```
   </Tab>
   <Tab title="GitLab CI">
     ```yaml
     kodus-review:
-      script:
-        - npx @kodus/cli review --format json --fail-on error
       variables:
-        KODUS_API_URL: $KODUS_API_URL
-        KODUS_TEAM_KEY: $KODUS_TEAM_KEY
+        GIT_DEPTH: "0"
+      script:
+        - git fetch origin main
+        - npx @kodus/cli review --branch origin/main --format json --fail-on error
     ```
+
+    プロジェクト設定の CI/CD 変数として `KODUS_API_URL` と `KODUS_TEAM_KEY` を追加します。
   </Tab>
   <Tab title="汎用">
     ```bash
     export KODUS_API_URL=https://kodus-api.yourcompany.com
     export KODUS_TEAM_KEY=kodus_xxxxx
-    npx @kodus/cli review --format json --fail-on error
+    npx @kodus/cli review --branch origin/main --format json --fail-on error
     ```
   </Tab>
 </Tabs>
 
 <Tip>
-  重要度の閾値を超える問題が見つかったときにパイプラインを失敗させるには `--fail-on error` または `--fail-on critical` を使用してください。
+  重大度のしきい値を超える問題が見つかったときにパイプラインを失敗させるには、`--fail-on error` または `--fail-on critical` を使用してください。プルリクエストは Git 連携によってレビューされるため、パイプラインのジョブは不要です。
 </Tip>
 
 ## チームへの配布
 
-1つのコマンドでチームをオンボーディングするには、API URL とスキルインストーラーを組み合わせます:
+1つのコマンドでチームをオンボーディングするには、API URL とチームキーをインストーラーに渡します。
 
 ```bash
-KODUS_API_URL=https://kodus-api.yourcompany.com \
-  curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
 ```
 
-これにより CLI がインストールされ、チームキーが設定され、検出された AI エージェント（Claude Code、Cursor、Windsurf）にレビュースキルがデプロイされます — すべてセルフホスト型インスタンスに向けて。
+これにより、CLI のインストール、インスタンスに対するチームキーの適用、検出された AI エージェントへの Kodus スキルのインストールが行われます。API URL は保存されないため、各自がシェルプロファイルに `KODUS_API_URL` を設定するか、キーを適用する前に `~/.kodus/config.json` に `apiUrl` を設定する必要があります。
 
 ## トラブルシューティング
 
 <AccordionGroup>
   <Accordion title="セキュリティエラー: API URL は HTTPS プロトコルを使用する必要があります">
-    CLI はすべての非 localhost URL に対して HTTPS を要求します。セルフホスト型インスタンスに有効な TLS 証明書があることを確認してください。ローカルでテストしている場合は、代わりに `http://localhost:<port>` を使用してください。
+    CLI は、localhost 以外のすべての URL に HTTPS を要求します。その後デフォルトの `https://api.kodus.io` にフォールバックするため、認証する前にメッセージを確認してください。セルフホスト型インスタンスに有効な TLS 証明書があることを確認してください。ローカルでテストしている場合は、代わりに `http://localhost:<port>` を使用してください。
   </Accordion>
 
   <Accordion title="接続拒否またはタイムアウト">
-    - URL に到達できることを確認: `curl -I https://kodus-api.yourcompany.com`
-    - ファイアウォールまたは VPN が接続をブロックしていないか確認
-    - Cloudflare Access の背後にある場合は、`CF_ACCESS_CLIENT_ID` と `CF_ACCESS_CLIENT_SECRET` が設定されていることを確認
-    - `--verbose` で使用されている正確な URL を確認
+    - URL に到達できることを確認します: `curl -I https://kodus-api.yourcompany.com`
+    - ファイアウォールや VPN が接続をブロックしていないか確認します
+    - Cloudflare Access の背後にある場合は、`CF_ACCESS_CLIENT_ID` と `CF_ACCESS_CLIENT_SECRET` が設定されていることを確認します
+    - `--verbose` を使用して、実際に使用されている URL を確認します
   </Accordion>
 
   <Accordion title="認証失敗（401）">
-    - `kodus auth status` で現在の認証状態を確認
-    - チームキーを使用している場合は、セルフホスト型 Web アプリの **Organization → CLI keys** でまだ **Active** であることを確認
-    - 個人ログインを使用している場合、トークンは1時間後に期限切れになります — CLI は自動更新しますが、リフレッシュトークンも期限切れになった場合は再ログインが必要な場合があります
-    - `KODUS_API_URL` が正しいインスタンスを向いていることを確認
+    - `kodus auth status` を実行して、現在の認証状態を確認します
+    - チームキーを使用している場合は、セルフホスト型 Web アプリの **Organization → CLI keys** で、まだ **Active** であることを確認します
+    - 個人ログインを使用している場合、CLI はログインを自動的に更新します。更新に失敗した場合は、もう一度 `kodus auth login` を実行してください
+    - `KODUS_API_URL` が正しいインスタンスを指していることを確認します
   </Accordion>
 
   <Accordion title="API が無効なレスポンスを返した（JSON が期待されたが HTML が返された）">
-    これは通常、URL が実際の API の代わりにリバースプロキシ、ロードバランサー、または Cloudflare Access ページに到達していることを意味します。確認事項:
-    - URL パスが正しいこと（`/api` や類似の余計なパスなし）
-    - 該当する場合、Cloudflare Access の資格情報が設定されていること
+    これは通常、URL が実際の API ではなく、リバースプロキシ、ロードバランサー、または Cloudflare Access のページに到達していることを意味します。次を確認してください。
+    - URL のパスが正しいこと（末尾に `/api` などが付いていないこと）
+    - 該当する場合は、Cloudflare Access の認証情報が設定されていること
     - リバースプロキシがリクエストを正しく転送していること
   </Accordion>
 
   <Accordion title="デバイス制限に達しました">
-    セルフホスト型インスタンスは組織ごとにデバイス制限を強制する場合があります。Web アプリには整理できるデバイス一覧がないため、制限を増やすよう管理者に連絡してください（API の `CLI_DEVICE_LIMIT` 設定。デフォルトの `0` は無制限を意味します）。
+    セルフホスト型インスタンスでは、組織ごとにデバイス数の上限が適用されている場合があります。Web アプリには整理できるデバイス一覧がないため、上限を引き上げるよう管理者に連絡してください（API の `CLI_DEVICE_LIMIT` 設定。デフォルトの `0` は無制限を意味します）。
   </Accordion>
 </AccordionGroup>

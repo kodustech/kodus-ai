@@ -8,15 +8,17 @@ description: "Kodus CLI 常见错误、退出码和调试方法。"
 ```bash
 kodus status
 kodus auth status
-kodus review --verbose    # 或在任意命令上加 --verbose
+kodus review --verbose    # or any command with --verbose
 ```
 
-`kodus status` 显示统一的状态（认证模式、组织、仓库、钩子、版本）。`--verbose` 会打印解析出的 API URL 以及单次请求的详细信息。
+`kodus status` 显示 CLI 版本、认证模式、仓库、钩子和技能。`--verbose` 会打印每个 API 请求的 URL 和状态。
+
+`kodus auth status` 读取 CLI 已保存的凭据。当唯一的凭据是环境变量中的 `KODUS_TEAM_KEY` 或 `KODUS_TOKEN` 时，它会提示 "No credentials found"。`kodus status` 会报告这些凭据。
 
 ## 常见错误
 
 <AccordionGroup>
-  <Accordion title="command not found: kodus">
+  <Accordion title="Command not found: kodus">
     CLI 不在 `PATH` 中。使用包管理器的全局标志重新安装，或使用 `npx @kodus/cli <command>` 一次性运行。
 
     - `npm install -g @kodus/cli`
@@ -24,72 +26,110 @@ kodus review --verbose    # 或在任意命令上加 --verbose
     - `pnpm add -g @kodus/cli`
     - `bun add -g @kodus/cli`
 
-    如果通过技能安装器安装，重新运行 `curl -fsSL https://review-skill.com/install | bash` 以修复 PATH。
+    CLI 需要 Node.js 22.19.0 或更高版本。如果通过安装器安装，重新运行 `curl -fsSL https://review-skill.com/install | bash` 以修复 PATH。
   </Accordion>
 
-  <Accordion title="AUTH_REQUIRED 或 401 Unauthorized">
-    - 运行 `kodus auth status` 查看当前模式。
+  <Accordion title="Not authenticated、AUTH_REQUIRED 或 401 Unauthorized">
+    - 运行 `kodus status` 查看当前模式。
     - 若使用团队密钥，在 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下核对其 **Status** 是否仍为 **Active**。
-    - 若使用个人登录，再次运行 `kodus auth login` — 刷新令牌可能已过期。
-    - 对于 CI，确认流水线运行环境中设置了 `KODUS_TOKEN`（或 `KODUS_TEAM_KEY`）。
+    - 若使用个人登录，再次运行 `kodus auth login`。刷新可能已失败。
+    - 对于 CI，确认流水线运行环境中设置了 `KODUS_TEAM_KEY`。
     - 若为自托管，确认 `KODUS_API_URL` 指向正确实例。
+
+    当审查因凭据已撤销或过期而被拒绝时，`kodus review` 会以试用审查运行并给出提示。试用审查的限额更低。
+  </Accordion>
+
+  <Accordion title="Requires a logged-in user">
+    `pr reviews`、`agents`、`cockpit`、`usage`、`rules pause`、`rules resume`、`rules delete`，以及 `config remote` 的子命令 `unset`、`model`、`messages`、`language` 和 `skills` 不接受团队密钥。请运行 `kodus auth login`。环境中的 `KODUS_TEAM_KEY` 不会妨碍这些命令。
+  </Accordion>
+
+  <Accordion title="使用团队密钥配置仓库或 Kody Rules 时访问被拒绝">
+    API 返回 "This CLI key is not allowed to configure repositories" 或 "Team API key does not have permission to manage Kody Rules"。团队密钥在您允许之前不能配置仓库或管理 Kody Rules。打开 **Organization → CLI keys**，点击密钥上的 **Configure**，然后开启 **Allow repository configuration via CLI** 或 **Allow Kody Rules management via CLI**。两项默认均关闭。使用 `kodus auth login` 登录则改用您在 Web 应用中角色的权限。
   </Accordion>
 
   <Accordion title="NOT_IN_GIT_REPO">
-    `kodus review` 需要 git 工作目录。`cd` 进入仓库或使用 `git init` 初始化。对于 `kodus config repo` 命令，您可以显式传入 `owner/repo` 而非 `.`。
+    `kodus review` 需要 git 工作目录。`cd` 进入仓库或使用 `git init` 初始化。对于 `kodus config remote` 命令，您可以显式传入 `owner/repo` 而非 `.`。
+  </Accordion>
+
+  <Accordion title="No changes to review">
+    工作目录审查涵盖已跟踪的变更，包括已暂存和未暂存的。新文件在您对其执行 `git add` 之前不算在内。可以尝试：
+
+    - `kodus review --staged`，仅审查已暂存的变更
+    - `kodus review --branch <base>`，审查分支上的提交（在 CI 中使用它，因为检出结果没有未提交的变更）
+    - `kodus review --commit <sha>`，审查单个提交
+    - `kodus review src/file.ts`，审查指定文件
+
+    这不是错误：命令以退出码 0 结束。
   </Accordion>
 
   <Accordion title="审查耗时过长或看似挂起">
-    大型分支（数百文件、数千行）可能需要几分钟。默认请求超时为 60 分钟 — 使用 verbose 模式可以看到进度。
+    CLI 提交审查后会持续检查，直到完成，最多等待 30 分钟。加载动画会显示审查是在排队还是在分析。大型分支可能需要几分钟。
 
-    - 使用 `--verbose` 确认请求正在进行。
-    - 对于非常大的 diff，优先使用 `--branch <base>` 或 `--commit <sha>` 而非工作目录模式：这使后端可以克隆相应提交，而不必接收内联文件内容。
-    - 如需可使用 `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` 覆盖超时。
+    - 使用 `--verbose` 确认请求正在发出。
+    - 对于非常大的 diff，优先使用 `--branch <base>` 或 `--commit <sha>` 而非工作目录模式：它们只发送 diff，不带文件内容。
     - 切实可行时，将工作拆分为更小的分支。
   </Accordion>
 
+  <Accordion title="审查过大，或 API 返回 403 或 413">
+    请求超出了 API 接受的大小。CLI 会在发送前拒绝超过 24 MB 的请求，或超过 2000 万字符的 diff。API 前面的网关也可能对大请求返回 403 或 413。请缩小范围：传入指定文件，或使用 `--branch`、`--commit` 或 `--fast`，它们只发送 diff，不带文件内容。
+  </Accordion>
+
   <Accordion title="部分文件被跳过">
-    审查遵循 `kodus config repo` 中配置的 `ignore-files` 模式。使用以下命令查看：
-
-    ```bash
-    kodus config repo show
-    ```
-
-    可新增或移除模式：
-
-    ```bash
-    kodus config repo add-ignore-file . "**/*.generated.ts"
-    kodus config repo remove-ignore-file . "**/*.generated.ts"
-    ```
-
-    二进制文件、图片和锁文件默认会被跳过。
+    - 尚未跟踪的新文件不在任何 diff 中。请对其执行 `git add`。
+    - diff 超过 500,000 字符或内容超过 2,000,000 字符的文件，在发送文件内容的审查中会被跳过（`--branch`、`--commit` 或 `--fast` 除外）。CLI 会打印是哪些文件以及原因。
+    - 一次审查最多发送 500 个文件。CLI 在截断列表时会给出警告。
   </Accordion>
 
-  <Accordion title="达到限额 / 试用已用尽">
-    试用模式每日 5 次审查。运行 `kodus auth login` 登录，或通过 `kodus auth team-key --key kodus_xxxxx` 配置团队密钥以提升限额。`kodus auth status` 会显示当前使用情况。
+  <Accordion title="达到速率限制 / 试用已用尽">
+    试用模式下，每个用户、设备和仓库文件夹每小时可进行 2 次审查，按滚动一小时计算。运行 `kodus auth login` 登录，或通过 `kodus auth team-key --key kodus_xxxxx` 配置团队密钥以提升限额。在试用模式下，`kodus auth status` 会打印您的用量及重置时间。它把限额标为 "daily"，并显示 "Files limit: 10 per review"；服务器两者都不采用：限额按小时计算，试用审查没有文件数限制。达到试用限额时，`kodus review` 会打印 "Daily limit reached" 提示并以退出码 0 结束，无论 `--fail-on` 如何设置。
+
+    已登录的团队限额为每小时 1,000 次请求。审查、业务验证检查和 Kodus Trace 会话事件都计入其中。此时 CLI 会提示 "Rate limit exceeded. Please try again later."
   </Accordion>
 
-  <Accordion title="API 返回无效响应（期望 JSON，得到 HTML）">
+  <Accordion title="登录页面无法打开或登录超时">
+    - 浏览器未打开时，CLI 会打印 URL。请将其粘贴到浏览器中。
+    - 在 SSH 会话、CI 或非交互式终端中，CLI 会改用代码。它会打印一个 URL 和一个代码，并提示输入代码，但页面上没有输入字段。请在 URL 后添加 `?code=<code>` 后打开（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`），然后点击 **Authorize CLI**。
+    - 如果您在该浏览器中尚未登录 Kodus，页面会把您带到登录页，登录后进入的是仪表板，而不是 **Authorize CLI**。请再次打开该 URL；CLI 会继续等待。
+    - 登录最多等待 10 分钟。出现 "Authorization timed out"、"expired" 或 "denied" 表示您需要重新运行 `kodus auth login`。
+    - 要强制使用代码流程，请运行 `kodus auth login --device-code`。
+  </Accordion>
+
+  <Accordion title="Hunk 查看器没有打开">
+    `kodus review` 只在 macOS 和 Linux 的交互式终端中、使用默认终端输出时才会打开 Hunk 查看器。使用 `--no-hunk`、`--interactive`、`--agent`、`--output`、非终端的 `--format`、输出不是终端，或在 Windows 上，则改为显示交互式列表。当您预期会出现查看器却被跳过时（在 Windows 上、`--commit` 与 `--branch` 同时使用，或没有任何问题带有文件和行号），CLI 会打印一行说明原因的提示。`kodus diff` 在 Windows 上不可用。
+  </Accordion>
+
+  <Accordion title="技能没有安装到我的代理中">
+    当 `kodus skills install` 没有找到 [AI 代理](/zh/how_to_use/cli/ai_agents#支持的代理) 中列出的任何代理配置文件夹时，会提示 "No compatible local agent directories were detected"。请先运行一次代理让它创建自己的文件夹，然后再次运行该命令。
+  </Accordion>
+
+  <Accordion title="API returned invalid response (expected JSON, got HTML)">
     您的 `KODUS_API_URL` 命中了反向代理或 Cloudflare Access 页面，而非 API 本身。请检查：
 
     - URL 路径（不要有多余的 `/api`、`/v1` 等）。
     - 如适用，Cloudflare Access 凭据（`CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`）。
-    - 代理是否完整转发 `Authorization` 和 `CF-Access-*` 请求头。
+    - 代理是否完整转发 `Authorization`、`X-Team-Key` 和 `CF-Access-*` 请求头。
   </Accordion>
 
-  <Accordion title="API URL 必须使用 HTTPS">
-    除 `localhost` 和 `127.0.0.1` 外，CLI 拒绝非 HTTPS 的 API URL。请为自托管实例配置有效的 TLS 证书，或本地开发时使用 `http://localhost:<port>`。
+  <Accordion title="HTTPS required for API URL">
+    除 `localhost` 和 `127.0.0.1` 外，CLI 拒绝非 HTTPS 的 API URL，打印 "Security Error: API URL must use HTTPS protocol"，并回退到 `https://api.kodus.io`。请为自托管实例配置有效的 TLS 证书，或本地开发时使用 `http://localhost:<port>`。
   </Accordion>
 
   <Accordion title="Pre-push 钩子没有运行">
     - 确认安装：`kodus hook status`。
     - 确保 `.git/hooks/pre-push` 可执行。
     - 其他钩子管理器（Husky、Lefthook、pre-commit）可能覆盖 `.git/hooks/pre-push`。要么级联它们，要么使用 `kodus hook install --force` 重装。
+    - 钩子只审查您当前检出的分支，并跳过新分支和分支删除。它也会跳过 `git push origin HEAD`，因为 Git 向钩子传递的是 `HEAD` 而不是分支名。请按名称推送分支：`git push origin my-branch`。
     - 跳过单次推送：`KODUS_SKIP_HOOK=1 git push`。
   </Accordion>
 
-  <Accordion title="达到设备数上限">
-    自托管实例可按组织强制设备数上限。Web 应用中没有可供清理的设备列表，因此请联系管理员提高上限（API 的 `CLI_DEVICE_LIMIT` 设置；默认值 `0` 表示不限制）。
+  <Accordion title="推送被 pre-push 钩子阻止">
+    当某个问题达到 `--fail-on` 严重级别（默认为 `critical`）时，钩子会阻止推送；审查本身失败时也会阻止，例如无法连接 API。请阅读 Git 的 "failed to push some refs" 那一行上方的消息。用 `kodus hook status` 查看严重级别，并用 `kodus hook install --fail-on error` 重装以更改它。
+
+    不在交互式终端中运行的推送，例如来自 IDE 或 Git GUI 的推送，无法打开 Hunk 查看器。此时钩子会显示交互式列表，而它需要终端，最终以 "User force closed the prompt" 结束。无论 `--fail-on` 严重级别如何，任何问题都会阻止该推送。请从终端推送，或用 `KODUS_SKIP_HOOK=1` 跳过该次推送的钩子。
+  </Accordion>
+
+  <Accordion title="设备限制已达上限">
+    自托管实例可按组织强制设备限制。Web 应用中没有可供清理的设备列表，因此请联系管理员提高限制（API 的 `CLI_DEVICE_LIMIT` 设置；默认值 `0` 表示不限制）。
   </Accordion>
 </AccordionGroup>
 
@@ -98,27 +138,36 @@ kodus review --verbose    # 或在任意命令上加 --verbose
 可在脚本和 CI 流水线中使用。
 
 | 退出码 | 含义 |
-|------|------|
-| `0` | 成功。未发现问题，或问题严重级别低于 `--fail-on`。 |
-| `1` | 发现问题，达到或超过 `--fail-on` 指定的严重级别。 |
-| `2` | CLI 使用错误（参数非法或缺失）。 |
-| `3` | 认证或授权失败。 |
-| `4` | 网络或 API 错误（超时、5xx、响应无效）。 |
-| `5` | 不在 git 仓库中，或没有可审查的变更。 |
+| ------ | ---- |
+| `0` | 成功。未发现问题、发现的问题低于 `--fail-on`、没有可审查的变更，或已达到试用限额（未运行审查）。 |
+| `1` | 问题达到或超过 `--fail-on` 严重级别，或出现错误：标志或参数错误、认证、网络或 API 失败、不在 git 仓库中。 |
 
 <Tip>
-  在 CI 中，可将 `--fail-on error` 与 `--format json` 和 `--output review.json` 搭配使用，将结构化结果作为流水线产物输出，同时不影响退出码逻辑。
+  在 CI 中，可将 `--fail-on error` 与 `--format json` 和 `--output review.json` 搭配使用，将结构化结果保留为流水线产物。
 </Tip>
+
+### 代理模式下的错误码
+
+使用 `--agent` 时，失败会打印一个 `ok: false` 且带有 `error.code` 的封装：
+
+| 错误码 | 含义 |
+| ------ | ---- |
+| `INVALID_INPUT` | 标志或参数错误或缺失 |
+| `AUTH_REQUIRED` | 此命令没有可用的凭据 |
+| `NOT_IN_GIT_REPO` | 命令需要 git 仓库 |
+| `NO_CHANGES` | 所选范围内没有可审查的内容。退出码为 0 |
+| `API_REQUEST_FAILED` | API 拒绝了请求，或无法连接 |
+| `REVIEW_TOO_LARGE` | diff 或请求超过大小限制 |
+| `INTERNAL_ERROR` | 其他任何情况 |
 
 ## 调试技巧
 
-- **在任意命令上加 `--verbose`** 会打印解析出的 API URL、请求 ID 和耗时。
+- **在任意命令上加 `--verbose`** 会打印每个 API 请求的方法和 URL，以及错误详情。输出到 stderr。
 - **`kodus schema`** 输出机器可读的命令 schema — 代理报告找不到标志时很有用。
-- **`--agent`** 强制输出为确定性、机器可读格式；脚本中常与 `--format json` 搭配。
-- **`KODUS_VERBOSE=true`** 在同一会话的多条命令间保持 verbose 模式。
+- **`--agent`** 在支持它的命令上输出确定性的 JSON；与 `--fields` 搭配可使其保持精简。
 
 ## 寻求帮助
 
-- 报告 Bug：[github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
+- 报告 Bug：[github.com/kodustech/kodus-ai/issues](https://github.com/kodustech/kodus-ai/issues)
 - 功能请求、配置问题：联系您的 Kodus 客户经理，或发送邮件至 `support@kodus.io`。
-- 自托管部署：提交 Issue 时附上 `kodus status --verbose` 输出。
+- 自托管部署：提交 Issue 时附上 `kodus status` 的输出和您的 CLI 版本（`kodus --version`）。

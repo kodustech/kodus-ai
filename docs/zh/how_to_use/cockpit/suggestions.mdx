@@ -1,0 +1,35 @@
+---
+title: "Suggestions"
+description: "列出 Kody 发送的建议，对其进行筛选，并查看团队实施了哪些建议。"
+---
+
+**Cockpit › Suggestions** 列出 [Kodus Review](/zh/how_to_use/cockpit/kodus_review) 中某个数字背后的建议。它没有侧边栏入口：您可以通过点击 Kodus Review 标签页上的类别条形（实施或负面反馈）或 Kody Rule 行进入。它需要与 Cockpit 相同的套餐。
+
+## 列出的内容
+
+Kody 以 PR 评论形式发送、且创建于页面顶部所示 Cockpit 日期范围内的每一条建议，每页 20 条。与按 PR 关闭日期统计的 Kodus Review 图表不同，此列表按建议的创建日期统计，因此仍处于打开状态的 pull request 上的建议也会出现。它不跟随 Cockpit 的仓库选择器。
+
+列表顶部显示有多少条建议匹配，以及当前页面上的建议中有多少已被实施。
+
+## 筛选器
+
+- **Category**
+- **Severity**：critical、high、medium 或 low
+- **Status**：**Implemented**、**Partially implemented**、**Not implemented** 或 **Not measured**
+- **Search**：按 Enter 匹配建议的摘要或其文件路径
+- **Rule**：当您从某条 Kody Rule 打开该页面时，一个带有规则名称的标签会把列表限定到该规则。点击它即可移除该规则
+
+**Clear all** 会重置所有筛选器。
+
+### Status
+
+| Status | 含义 |
+| --- | --- |
+| **Implemented** | 后续的更改完成了建议所要求的内容 |
+| **Partially implemented** | 后续的更改完成了其中一部分。在 Cockpit 比率中计为已实施 |
+| **Not implemented** | 未发现任何更改，或该建议尚未被检查 |
+| **Not measured** | 实施检查无法做出判断。这些不计入 Cockpit 的实施率 |
+
+## 建议详情
+
+每一行显示严重程度、摘要、类别、状态、文件和 PR 编号。点击某一行会打开一个侧边面板，显示现有代码和建议的代码。**Open in PR review** 会在该建议处打开 pull request 的[审查界面](/zh/how_to_use/reviews/pull_requests)。

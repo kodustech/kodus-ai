@@ -1,0 +1,220 @@
+---
+title: "BYOK のモデル設定"
+sidebarTitle: "モデル設定"
+description: "モデルごとの reasoning、temperature、プロバイダー固有のカスタムオプション、同時実行数の制限を設定します。"
+---
+
+これらの設定は、**AI providers** ページにあるモデルの追加・編集フォームの **Advanced settings** カードで行います。
+
+## Reasoning / 拡張思考
+
+モデルの追加フォームでは、**Advanced settings** の下に **Thinking / Reasoning** のトグル（Off / Low / Medium / High / Custom）が表示されます。選択できるオプションは、そのモデルが実際にできることに対応しています。
+
+- reasoning を行えないモデルは、注記とともに **Off** に固定されます。
+- 特定のレベルでのみ reasoning を行うモデル（例：GPT-5 の medium/high）では、無効なレベルが選択できなくなります。
+- デフォルトで reasoning を行うモデルでは、出発点として適切な **Medium** が選択されます。
+
+### プリセットレベル
+
+Low / Medium / High を選択すると、Kodus はそのレベルを各プロバイダーのネイティブ形式に自動で変換します。
+
+| プロバイダー | レベルが送信する内容 |
+| --- | --- |
+| **Anthropic**（Claude 4.6 以降） | `thinking: { type: "adaptive" }` と、レベルに設定された `effort` |
+| **Anthropic**（Claude 3.7 から 4.5） | `thinking: { type: "enabled", budgetTokens }`。Low / Medium / High に対して 5,000 / 15,000 / 40,000 トークン |
+| **Google**（Gemini 3） | `thinkingConfig: { thinkingLevel }` |
+| **Google**（Gemini 2.5） | `thinkingConfig: { thinkingBudget }`。トークン数は同じで、モデルの上限で頭打ちになります |
+| **OpenAI**（GPT-5 / o シリーズ）と **Azure OpenAI** | `reasoningEffort` |
+| **OpenRouter** | `reasoning: { effort }` |
+| **Google Vertex AI**、**Amazon Bedrock** | 上記の Gemini または Claude の形式。Bedrock は Off の場合は何も送信せず、Claude 以外のモデルでも何も送信しません |
+| **OpenAI-compatible**（Kimi） | `thinking: { type: "enabled" }`。レベルは無視されます |
+| **OpenAI-compatible**（GLM、DeepSeek） | `thinking: { type: "enabled" }` と `reasoning_effort`（Low は `low`、Medium は `high`、High は `max`）。GLM-5.3 には `reasoning_effort` のみが送信されます |
+| **Moonshot**、**Z.ai**、**Anthropic-compatible**（Kimi、GLM、DeepSeek） | レベルに応じた `thinking: { type: "enabled", budgetTokens }` |
+| **Novita** | 何も送信しません。reasoning を有効にするには **Custom** を使用します |
+
+<Note>
+  **常に reasoning を行うバリアント**（Kimi `k2p7-code`/`k3`、GLM-5.3）は無条件に reasoning を行い、Off にできません。**Test** はこれらのモデルでの Off の設定を拒否します。
+</Note>
+
+### Custom JSON override
+
+**Thinking / Reasoning** のトグルで **Custom** を選択すると、JSON のテキストエリアが表示されます。プロバイダーのオプションをそのまま貼り付けてください。**Kodus が現在のプロバイダーの名前空間で自動的にラップします。** Vercel AI SDK のルーティングルールを知っておく必要はありません。
+
+次のような場合に使用します。
+
+- Claude で、プリセットの effort マッピングではなく特定の `budgetTokens` の値が必要な場合
+- OpenAI-compatible プロバイダーで、モデルごとに thinking の有効・無効を切り替えたい場合
+- reasoning 以外のフィールド（**キャッシュ、サービスティア、セーフティ設定、`user` タグ付けなど**）を指定したい場合。オーバーライドは `providerOptions` にマージされるため、アダプターのどのフィールドも通過します
+- プロバイダーが、Kodus がまだラップしていない新しいフィールドを提供した場合
+
+#### 例（そのまま貼り付けます。名前空間は不要です）
+
+<Tabs>
+  <Tab title="Anthropic">
+    Claude の thinking バジェットをちょうど 20,000 トークンにオーバーライドします（Claude 4.7 以降は `budgetTokens` を拒否するため、そちらでは `effort` を使用してください）。
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    プロンプトキャッシュを有効にします（reasoning 以外の例）。
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    明示的な thinking バジェット（Gemini 2.5）またはレベル（Gemini 3 以降）を指定します。
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    セーフティ設定を調整します。
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    OpenAI 固有のフィールドを使った reasoning を設定します。
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    reasoning を強制し、特定の上流プロバイダーを除外します。
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "provider": { "ignore": ["deepinfra"] }
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible（Kimi、GLM など）">
+    バジェットのヒントを付けて thinking を有効にします。
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    thinking を明示的に無効にします（サポートしているモデルでのみ有効です）。
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      上流のプロバイダーが認識しないフィールド（たとえば、`budget_tokens` を無視するサーバーでの `budget_tokens`）は、通知なく破棄されます。受け付けるフィールドはプロバイダーのドキュメントで確認してください。
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### 名前空間を手動で指定する（上級者向け）
+
+JSON の最上位がすでに既知の名前空間キー（下のマッピング表にあるキー）で始まっている場合、Kodus はそのまま変更しません。複数のプロバイダーの名前空間を混在させたい場合や、明示的に指定したい場合に便利です。
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+内部的には、Kodus は次の名前空間のマッピングを使用しています。
+
+| BYOK プロバイダー | 名前空間キー |
+| --- | --- |
+| `anthropic` / `anthropic_compatible` / `moonshot` / `zai` | `anthropic` |
+| `google_gemini` | `google` |
+| `google_vertex` | Gemini は `google`、Vertex 上の Claude は `anthropic` |
+| `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock`（`bedrock` も受け付けます） |
+| `novita` | `novita` |
+| `open_router` | `openrouter` |
+
+#### 注意点
+
+- **有効な JSON オブジェクトのみ。** カンマの欠落、末尾のカンマ、オブジェクト以外の値は、保存時に拒否されます。
+- **優先順位：** JSON オーバーライドは、effort プリセットの名前空間ブロックを**完全に置き換えます**。`anthropic.thinking` をオーバーライドして `anthropic.effort` を指定し忘れた場合、そのフィールドは送信されません。OpenRouter のルーティング（Pin providers / Allow fallbacks）は唯一の例外で、`openrouter` の下でオーバーライドとディープマージされます。
+- **不明なプロバイダーはラップされない。** BYOK プロバイダーが上の名前空間の表にない場合、Kodus は JSON をそのまま渡します。
+
+## Temperature
+
+Temperature は **Advanced settings** の中にあり、フィールドはモデルのルールに合わせて変化します。ルールはフォームの推測ではなく、プロバイダーが定めたものです。
+
+| モデル | Temperature フィールド |
+| --- | --- |
+| ほとんどのモデル | **編集可能**（0 = 決定的、2 = 創造的）。 |
+| Kimi `k3` と GLM-5.3（常に reasoning を行う） | **`1` に固定。** プロトコルが thinking 中の temperature を 1 に固定しているため、Kodus は保存されている値にかかわらず `1` を送信します。フィールドにはロックが表示されます。 |
+| Kimi `k2.6` と `k2.7-code`、および reasoning がオンの DeepSeek | **非表示。** Kimi はこれらのモデルで temperature を変更できないと明記しており、DeepSeek は thinking 中に temperature を無視します。reasoning が **Off** の DeepSeek では、編集可能なフィールドが残ります。 |
+| Claude 4.7 以降と OpenAI GPT-5 / o シリーズ | **非表示。** これらのモデルは temperature を廃止しており、temperature を設定したリクエストはすべて拒否します。代わりに thinking のレベルで制御してください。 |
+
+<Info>
+  [Test](/ja/how_to_use/byok#保存前にテストする) は、設定した temperature をこれらのルールに照らして検証し、保存する前にエラーを返します。そのため、モデルが受け付けない値が保存されることはありません。
+</Info>
+
+## 同時実行数とレート制限
+
+`maxConcurrentRequests` フィールド（**Advanced settings** 内の **Max concurrent requests**）は、Kodus がプロバイダーに並列で送信する処理中のリクエスト数に上限を設けます。ほとんどの場合はデフォルトで問題ありませんが、同時実行数に厳しい上限があるサブスクリプションプランでは、明示的な設定が必要です。
+
+### 設定する値
+
+| プロバイダー / プラン | 値 | 理由 |
+| --- | --- | --- |
+| **GLM Coding Plan** | Z.AI に確認 | 利用が認められている場合は、Z.AI がアカウントに設定した上限に合わせます。 |
+| **Kimi Code Plan** | `30` | コーディングエンドポイントについて Moonshot が公開している上限です。 |
+| **GLM Developer API** | （空欄） | 上限はキーごとに変わるため、適切なグローバルのデフォルトはありません。 |
+| **Kimi Developer API** | （空欄） | チャージのティアに応じて変わります（Tier 1 で約 50、Tier 5 で約 1000）。 |
+| **Anthropic / OpenAI / Google / OpenRouter** | （空欄） | プロバイダーが独自に TPM/RPM を適用するため、Kodus では上限を設けません。 |
+
+### 調整するタイミング
+
+<CardGroup cols={2}>
+  <Card title="引き上げる場合" icon="arrow-up">
+    - Moonshot や OpenRouter で高いティアのチャージがあり、大きな PR でより高いスループットが欲しい
+    - 複数ファイルにまたがる PR でレビューが直列に実行されているように感じられ、429 は出ていない
+  </Card>
+  <Card title="引き下げる場合" icon="arrow-down">
+    - レビューのログに `429` や `Too much concurrency` のエラーが出る
+    - プロバイダーのダッシュボードでレート制限に関する警告が出ている
+    - より多くの PR にわたって、Coding Plan のウィンドウ（5 時間 / 週次）を節約したい
+  </Card>
+</CardGroup>
+
+<Tip>
+  **同時実行数、RPM、TPM の違い。** `maxConcurrentRequests` が制限するのは、並列で処理中のリクエスト数だけです。多くのプロバイダーは、別途 **RPM**（1 分あたりのリクエスト数）と **TPM**（1 分あたりのトークン数）の制限も適用します。同時実行数に問題がなさそうなのに RPM や TPM に達する場合は、通常、ティアのアップグレードや負荷の分散で対処します。`maxConcurrentRequests` を変更しても解決しません。
+</Tip>
+
+<Note>
+  **フォールバックとの関係。** タスクのモデルが 429 で失敗し続け、Kody が **Fallback model** にフェイルオーバーすると、フォールバック側の `maxConcurrentRequests` が適用されます。別のプロバイダーに余裕のあるフォールバックを設定しておくと、メインのモデルが厳しい制限のサブスクリプションにある場合のバーストを吸収できます。
+</Note>

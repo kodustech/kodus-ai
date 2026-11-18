@@ -1,0 +1,56 @@
+---
+title: "代码热点"
+description: "查看仓库中哪些目录变更最频繁，并包含较长或复杂的函数。"
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="providers" detail="Code hotspots 可分析通过 GitHub 或 GitLab 连接的仓库。">
+    <Badge icon="code-branch" stroke>GitHub 和 GitLab</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="cloud" detail="适用于 Kodus Cloud，试用版也可使用。">
+    <Badge icon="cloud" stroke>Teams 和 Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="需要 Enterprise 许可证和 BETA_FEATURES=true。">
+    <Badge icon="server" stroke>自托管</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="Kodus Cloud 工作区需要开通此 Beta 功能。">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+**Code hotspots** 标签页会按变更频率，以及从这些目录中抽样的 JavaScript 和 TypeScript 文件是否包含较长或复杂的函数，来绘制一个仓库的目录图。关联的 bug 修复提供了额外的上下文。
+
+拥有 [Cockpit 访问权限](/zh/how_to_use/cockpit/overview)的 Owner 和 Repo Admin 可以打开此标签页。
+
+该标签页有自己的 **Repository** 选择器，默认选中 Cockpit 顶部所选的仓库（当选择 **All repositories** 时则为第一个仓库）。Cockpit 顶部的仓库和日期范围选择器在此处是隐藏的，因为历史窗口是固定的（参见[计算方式](#计算方式)）。**Organization → Cockpit visibility** 不控制此标签页。
+
+## 目录图
+
+每张卡片代表一个目录。各列把目录分为 **Occasional changes** 和 **Frequent changes**，其中频繁指按变更的 pull request 数量排名前四分之一的目录。各行则按抽样函数是否被标记来划分目录。
+
+| 分组 | 含义 |
+| --- | --- |
+| **Investigate first** | 变更频繁，且有被标记的函数 |
+| **Monitor** | 偶尔变更，且有被标记的函数 |
+| **Watch changes** | 变更频繁，抽样中没有被标记的函数 |
+| **Less active** | 偶尔变更，抽样中没有被标记的函数 |
+
+每张卡片显示其 **changed PRs**，以及（如果有的话）其 **linked fixes**。在一个分组内，关联修复更多的目录排在前面。有历史记录但没有 JavaScript 或 TypeScript 抽样的目录，会列在地图之外的 **Structure not measured** 下；**Find a directory** 可筛选该列表。当仓库中没有任何文件可供抽样时，地图会改为显示 **Function analysis is not available yet**。
+
+选择一张卡片可打开 **Area detail**：**Changed PRs**、**JS/TS files checked**、**Linked fix PRs**、该目录出现的原因、**Files sampled** 及其被标记的函数，以及 **PR and issue evidence**。证据列表中的每个 PR 都会标记为 **Linked to a bug issue**、**Bug-fix wording in the title** 或 **Changed this area**。
+
+## 计算方式
+
+- **历史：** 已合并的 pull request。首次扫描覆盖前 30 天，之后新合并的 pull request 会延长该范围，最长一年。当某一周有 100 个或更多 pull request，或其中一些无法完整读取时，该标签页会显示 **Sampled history (up to 100 PRs per week)**。
+- **刷新：** 后台作业每两小时运行一次。在某个仓库的首次扫描完成之前，该标签页会显示 **History scan in progress**。
+- **函数：** Kodus 从默认分支读取最多 60 个 JavaScript 和 TypeScript 文件，每个目录最多三个，优先读取变更最多的。它会跳过超过 150,000 个字符的文件以及有语法错误的文件。当函数达到 80 行或更多、12 个或更多分支，或嵌套层级为 4 或更多时，会被标记。
+- **关联修复：** 变更了该目录、且其描述关闭了同一仓库中带有 bug、defect 或 regression 标签的 issue 的 pull request（例如 `fixes #123`）。它们增加了历史记录。它们并不显示缺陷从何处开始，也不预测未来的 bug。
+
+标签页底部的 **How this view is calculated** 会显示所选仓库的计数。
+
+## 命令行
+
+`kodus cockpit code-areas --repo org/repo` 会在终端中显示此标签页。参阅 [CLI 命令](/zh/how_to_use/cli/commands)。

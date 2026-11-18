@@ -9,30 +9,35 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
   <Step title="Instalar">
     <Tabs>
       <Tab title="Instalador de Skills (Recomendado)">
-        Instala o CLI e implanta as skills do Kodus em todos os agentes de IA detectados (Claude Code, Cursor, Codex, Windsurf):
+        Instala ou atualiza o CLI e depois instala as skills do Kodus nos agentes de IA que encontrar na sua máquina (Claude Code, Cursor, Codex e outros — veja [Agentes de IA](/pt-BR/how_to_use/cli/ai_agents)).
+
+        macOS e Linux:
 
         ```bash
         curl -fsSL https://review-skill.com/install | bash
+        ```
+
+        Windows PowerShell:
+
+        ```powershell
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$tmp = Join-Path $env:TEMP 'kodus-install.ps1'; Invoke-WebRequest https://review-skill.com/install.ps1 -OutFile $tmp; & $tmp"
         ```
       </Tab>
       <Tab title="npm">
         ```bash
         npm install -g @kodus/cli
         ```
+
+        `pnpm add -g @kodus/cli`, `yarn global add @kodus/cli` e `bun add -g @kodus/cli` funcionam da mesma forma.
       </Tab>
       <Tab title="npx (Sem Instalação)">
         ```bash
         npx @kodus/cli review
         ```
       </Tab>
-      <Tab title="curl">
-        ```bash
-        curl -fsSL https://raw.githubusercontent.com/kodustech/cli/main/install.sh | bash
-        ```
-      </Tab>
     </Tabs>
 
-    <Note>Requer Node.js >= 20.0.0.</Note>
+    <Note>Requer Node.js 22.19.0 ou superior.</Note>
 
     Verifique a instalação:
 
@@ -43,7 +48,7 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
   </Step>
 
   <Step title="Autenticar">
-    Escolha o caminho que corresponde à sua situação. Você também pode pular a autenticação e executar `kodus review` diretamente — funciona em modo trial com limites diários.
+    Escolha o caminho que corresponde à sua situação. Você também pode pular a autenticação e executar `kodus review` diretamente — funciona em modo trial com limites por hora.
 
     <Tabs>
       <Tab title="Desenvolvedor solo">
@@ -53,9 +58,13 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
         kodus auth login
         ```
 
-        O CLI abre a página **Authorize Kodus CLI** no seu navegador (faça login no Kodus se for solicitado). Confira os detalhes de **Device**, **Mode** e **Expires**, clique em **Authorize CLI** e depois volte ao terminal.
+        O CLI abre a página **Authorize Kodus CLI** no seu navegador e imprime a URL caso o navegador não abra. Confira os detalhes de **Device**, **Mode** e **Expires**, clique em **Authorize CLI** e volte ao terminal.
 
-        Os tokens são armazenados em `~/.kodus/credentials.json` e atualizados automaticamente.
+        Se você não estiver logado no Kodus nesse navegador, primeiro cai na página de login e, depois de entrar, no dashboard. Abra novamente a URL do terminal para chegar em **Authorize CLI**. O CLI espera por até 10 minutos.
+
+        Em uma máquina sem navegador (uma sessão SSH, CI ou um terminal não interativo), o CLI imprime uma URL e um código. A página não tem campo para digitar o código. Abra a URL em qualquer dispositivo com o código adicionado como parâmetro `code` (`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`) e clique em **Authorize CLI**. O código expira após 10 minutos. Adicione `--device-code` para usar esse fluxo em qualquer máquina.
+
+        Seu login é armazenado em `~/.kodus/credentials.json` e atualizado automaticamente.
       </Tab>
       <Tab title="Equipe (chave compartilhada)">
         Um owner da organização gera uma chave de equipe na barra lateral em **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>). Aplique-a:
@@ -64,7 +73,7 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
         kodus auth team-key --key kodus_xxxxx
         ```
 
-        Ou distribua o comando de bootstrap para sua equipe — ele instala o CLI e configura a chave de uma só vez:
+        Ou distribua o comando de bootstrap para sua equipe. Ele instala o CLI, aplica a chave e instala as skills:
 
         ```bash
         curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
@@ -73,42 +82,36 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
         <Warning>Salve a chave quando ela for exibida — ela não será mostrada novamente.</Warning>
       </Tab>
       <Tab title="Agente de IA">
-        Para agentes de programação de IA (Claude Code, Cursor, Codex), chaves de equipe são o caminho recomendado — sem login individual, sem prompts interativos. Defina a chave uma vez:
+        Para agentes de código com IA (Claude Code, Cursor, Codex), chaves de equipe são o caminho recomendado — sem login individual, sem prompts interativos. Defina a chave uma vez:
 
         ```bash
         export KODUS_TEAM_KEY=kodus_xxxxx
         ```
 
-        Adicione ao seu perfil de shell para que o agente a utilize em cada execução.
+        Adicione-a ao perfil do seu shell para que o agente a use em toda execução.
       </Tab>
       <Tab title="CI/CD">
-        A partir de uma máquina com login, gere um token de longa duração:
+        Use uma chave de equipe. Armazene-a como secret e exponha-a ao job como `KODUS_TEAM_KEY`:
 
         ```bash
-        kodus auth token
+        export KODUS_TEAM_KEY=kodus_xxxxx
         ```
 
-        No seu pipeline, defina:
-
-        ```bash
-        export KODUS_TOKEN=<token-gerado>
-        ```
-
-        Veja [Configuração Self-Hosted](self_hosted) para exemplos completos de CI.
+        Veja [Configuração Self-Hosted](/pt-BR/how_to_use/cli/self_hosted#integração-com-ci/cd) para exemplos de GitHub Actions, GitLab CI e pipelines genéricos.
       </Tab>
     </Tabs>
 
     <Info>
-      **Usando Kodus self-hosted?** Aponte o CLI para a sua API antes de autenticar:
+      **Hospedando o Kodus por conta própria?** Aponte o CLI para a sua API antes de autenticar:
 
       ```bash
-      export KODUS_API_URL=https://kodus-api.suaempresa.com
+      export KODUS_API_URL=https://kodus-api.yourcompany.com
       ```
 
       HTTPS é obrigatório, exceto para `localhost`.
     </Info>
 
-    Confirme o estado de autenticação:
+    Confirme o estado da autenticação:
 
     ```bash
     kodus auth status
@@ -122,39 +125,43 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
     kodus review
     ```
 
-    O CLI analisa o diff da sua árvore de trabalho, imprime um resumo e (no modo interativo) permite navegar arquivo por arquivo, visualizar correções sugeridas e aplicá-las.
+    O CLI analisa o diff da sua árvore de trabalho e imprime um resumo. Em um terminal interativo no macOS e no Linux, os achados abrem no visualizador de diff Hunk, ao lado do código. No Windows, ou com `--no-hunk`, você navega por uma lista arquivo a arquivo, visualiza as correções sugeridas e as aplica.
 
     Variações comuns:
 
     ```bash
-    kodus review --staged             # Apenas arquivos staged
-    kodus review --branch main        # Comparar a branch atual com main
-    kodus review --commit abc123      # Analisar um único commit
-    kodus review --fix                # Aplicar automaticamente todos os problemas corrigíveis
-    kodus review --prompt-only        # Saída compacta para agentes de IA
-    kodus review --fail-on error      # Sair com código não-zero em error ou acima (adequado para CI)
+    kodus review --staged             # Only staged files
+    kodus review --branch main        # Compare current branch against main
+    kodus review --commit abc123      # Analyze a single commit
+    kodus review --fix                # Apply every fixable issue (asks to confirm)
+    kodus review --prompt-only        # Compact output for AI agents
+    kodus review --fail-on error      # Exit 1 on error-or-worse issues (CI-friendly)
     ```
 
     <Tip>
-      Revisões de árvore de trabalho (padrão) e `--staged` incluem o conteúdo dos arquivos para que o backend veja suas alterações não commitadas. Os modos `--branch` e `--commit` ignoram a inclusão, pois o backend pode buscar esses commits diretamente — é por isso que esses modos funcionam bem em branches grandes.
+      Com login ou chave de equipe, revisões de árvore de trabalho (padrão) e `--staged` enviam o conteúdo dos arquivos alterados junto com o diff. `--branch`, `--commit` e `--fast` enviam apenas o diff, já que o backend consegue ler esses commits por conta própria. É por isso que funcionam bem em branches enormes. Revisões trial sempre enviam apenas o diff.
     </Tip>
+
+    <Note>
+      Apenas alterações rastreadas são revisadas. Execute `git add` em um arquivo novo para incluí-lo.
+    </Note>
   </Step>
 
-  <Step title="Escolha o que vem a seguir">
+  <Step title="Escolha o próximo passo">
     Dependendo do seu objetivo:
 
     <CardGroup cols={2}>
-      <Card title="Automatizar em cada push" icon="shield-check" href="commands#kodus-hook">
-        Instale o hook pre-push com `kodus hook install`.
+      <Card title="Automatize a cada push" icon="shield-check" href="/pt-BR/how_to_use/cli/commands#kodus-hook">
+        Instale o hook de pre-push com `kodus hook install`. Ele revisa a branch que você envia e bloqueia o push quando há achados críticos.
       </Card>
-      <Card title="Executar revisões no CI" icon="infinity" href="self_hosted#ci-cd-integration">
-        GitHub Actions, GitLab CI e exemplos de pipelines genéricos.
+      <Card title="Rode revisões no CI" icon="infinity" href="/pt-BR/how_to_use/cli/self_hosted#integração-com-ci/cd">
+        Exemplos de GitHub Actions, GitLab CI e pipelines genéricos.
       </Card>
-      <Card title="Integrar com um agente de IA" icon="robot" href="ai_agents">
-        Alimente `--prompt-only` no Claude Code, Cursor ou Codex para loops de correção autônomos.
+      <Card title="Conecte a um agente de IA" icon="robot" href="/pt-BR/how_to_use/cli/ai_agents">
+        Alimente o Claude Code, o Cursor ou o Codex com `--prompt-only` para loops de correção autônomos.
       </Card>
-      <Card title="Configurar o repositório" icon="sliders" href="commands#kodus-config-repo">
-        Gerencie arquivos ignorados, branches base e configurações de revisão pelo CLI.
+      <Card title="Configure o repositório" icon="sliders" href="/pt-BR/how_to_use/cli/commands#kodus-config-remote">
+        Leia e altere as configurações de revisão pelo CLI.
       </Card>
     </CardGroup>
   </Step>
@@ -164,19 +171,21 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
 
 Essas variáveis de ambiente configuram o CLI em todos os comandos.
 
-| Variável                     | Descrição                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| `KODUS_API_URL`              | Endpoint da API (padrão: `https://api.kodus.io`)                          |
-| `KODUS_TEAM_KEY`             | Chave de equipe para acesso compartilhado e agentes de IA                 |
-| `KODUS_TOKEN`                | Token CI/CD gerado via `kodus auth token`                                 |
-| `KODUS_VERBOSE`              | Defina como `true` para saída detalhada                                   |
-| `KODUS_SKIP_HOOK`            | Defina como `1` para ignorar o hook pre-push em um único `git push`       |
-| `KODUS_REQUEST_TIMEOUT_MIN`  | Timeout por requisição em minutos (padrão: `60`)                          |
-| `CF_ACCESS_CLIENT_ID`        | ID do cliente Cloudflare Access (APIs atrás de Zero Trust)                |
-| `CF_ACCESS_CLIENT_SECRET`    | Segredo do cliente Cloudflare Access                                      |
+| Variable                     | Description                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `KODUS_API_URL`              | Endpoint da API (padrão: `https://api.kodus.io`)                                     |
+| `KODUS_APP_URL`              | URL do web app para a qual `kodus config remote open` aponta (padrão: `https://app.kodus.io`) |
+| `KODUS_TEAM_KEY`             | Chave de equipe para acesso compartilhado e agentes de IA                                           |
+| `KODUS_TOKEN`                | Um token de acesso de login, usado como está e sem renovação. Tem prioridade sobre qualquer outra credencial. Para CI, use uma chave de equipe |
+| `KODUS_GITHUB_PAT`           | Token do GitHub para revisões trial de repositórios privados. `GITHUB_TOKEN` e `GH_TOKEN` também são lidos |
+| `KODUS_SKIP_HOOK`            | Defina com qualquer valor para pular o hook de pre-push em um único `git push`                 |
+| `KODUS_REQUEST_TIMEOUT_MIN`  | Timeout de cada requisição à API em minutos (padrão: `60`)                             |
+| `KODUS_DISABLE_UPDATE_CHECK` | Defina como `1` para desativar o aviso de atualização                                           |
+| `CF_ACCESS_CLIENT_ID`        | Client ID do Cloudflare Access (APIs atrás do Zero Trust)                               |
+| `CF_ACCESS_CLIENT_SECRET`    | Client secret do Cloudflare Access                                                    |
 
-Para configurações self-hosted, tokens e Cloudflare Access, veja [Configuração Self-Hosted](self_hosted).
+Para configurações self-hosted e Cloudflare Access, veja [Configuração Self-Hosted](/pt-BR/how_to_use/cli/self_hosted).
 
 ## Solução de Problemas
 
-Encontrou um erro? Verifique o [guia de Solução de Problemas](troubleshooting) para sintomas comuns e correções.
+Encontrou um erro? Consulte o [guia de Solução de Problemas](/pt-BR/how_to_use/cli/troubleshooting) para ver sintomas comuns e correções.

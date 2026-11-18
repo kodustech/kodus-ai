@@ -1,0 +1,220 @@
+---
+title: "Configurações de modelo do BYOK"
+sidebarTitle: "Configuração de modelos"
+description: "Reasoning, temperature, opções customizadas do provedor e limites de simultaneidade para cada modelo."
+---
+
+Estas configurações ficam no card **Advanced settings** do formulário de adicionar ou editar um modelo na página **AI providers**.
+
+## Reasoning / Extended Thinking
+
+O formulário de adicionar modelo expõe um toggle **Thinking / Reasoning** (Off / Low / Medium / High / Custom) em **Advanced settings**. As opções disponíveis refletem o que o modelo realmente consegue fazer:
+
+- Um modelo que não faz reasoning fica travado em **Off**, com uma nota.
+- Um modelo que só faz reasoning em certos níveis (ex.: medium/high do GPT-5) desabilita os inválidos.
+- Um modelo que faz reasoning por padrão recebe **Medium** como um ponto de partida sensato.
+
+### Níveis predefinidos
+
+Quando você escolhe Low / Medium / High, o Kodus traduz o nível automaticamente para o formato nativo de cada provedor:
+
+| Provedor | O que o nível envia |
+| --- | --- |
+| **Anthropic** (Claude 4.6 e posteriores) | `thinking: { type: "adaptive" }` + `effort` definido com o nível |
+| **Anthropic** (Claude 3.7 a 4.5) | `thinking: { type: "enabled", budgetTokens }` com 5.000 / 15.000 / 40.000 tokens para Low / Medium / High |
+| **Google** (Gemini 3) | `thinkingConfig: { thinkingLevel }` |
+| **Google** (Gemini 2.5) | `thinkingConfig: { thinkingBudget }` com os mesmos tamanhos de tokens, limitado ao máximo do modelo |
+| **OpenAI** (GPT-5 / série o) e **Azure OpenAI** | `reasoningEffort` |
+| **OpenRouter** | `reasoning: { effort }` |
+| **Google Vertex AI**, **Amazon Bedrock** | O formato do Gemini ou do Claude acima. O Bedrock não envia nada para Off, e nada para modelos que não sejam Claude |
+| **OpenAI-compatible** (Kimi) | `thinking: { type: "enabled" }`. O nível é ignorado |
+| **OpenAI-compatible** (GLM, DeepSeek) | `thinking: { type: "enabled" }` mais `reasoning_effort` (Low é `low`, Medium é `high`, High é `max`). O GLM-5.3 recebe apenas `reasoning_effort` |
+| **Moonshot**, **Z.ai**, **Anthropic-compatible** (Kimi, GLM, DeepSeek) | `thinking: { type: "enabled", budgetTokens }` dimensionado pelo nível |
+| **Novita** | Nada. Use **Custom** para ligar o reasoning |
+
+<Note>
+  **Variantes que sempre fazem reasoning** (Kimi `k2p7-code`/`k3`, GLM-5.3) fazem reasoning incondicionalmente e não podem ser colocadas em Off. O **Test** rejeita a configuração Off nelas.
+</Note>
+
+### Custom JSON override
+
+Escolher **Custom** no toggle **Thinking / Reasoning** revela uma textarea de JSON. Cole as opções do provedor diretamente — **o Kodus as envolve automaticamente no namespace do provedor ativo**. Você não precisa conhecer as regras de roteamento do Vercel AI SDK.
+
+Use quando:
+
+- Você precisa de um valor específico de `budgetTokens` para o Claude (em vez do mapeamento de esforço predefinido)
+- Você quer habilitar/desabilitar thinking por modelo em provedores compatíveis com OpenAI
+- Você quer campos além de reasoning — **caching, service tier, safety settings, tagging de `user` etc.** O override é mesclado em `providerOptions`, então qualquer campo do adaptador passa
+- O provedor lançou um campo novo que o Kodus ainda não envolveu
+
+#### Exemplos (cole direto — não precisa de namespace)
+
+<Tabs>
+  <Tab title="Anthropic">
+    Sobrescreva o budget de thinking do Claude para exatamente 20.000 tokens (o Claude 4.7 e posteriores rejeitam `budgetTokens`; use `effort` neles):
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    Habilite o prompt caching (exemplo sem reasoning):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    Budget de thinking explícito (Gemini 2.5) ou nível (Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    Ajuste as safety settings:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    Reasoning com campos específicos da OpenAI:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    Force reasoning + ignore um upstream específico:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "provider": { "ignore": ["deepinfra"] }
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible (Kimi, GLM, etc.)">
+    Habilite thinking com uma dica de budget:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    Desabilite thinking explicitamente (somente em um modelo que suporte isso):
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      Campos que o provedor upstream não reconhece (ex.: `budget_tokens` em um servidor que o ignora) são descartados silenciosamente. Confira a documentação do provedor para confirmar o que ele aceita.
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### Indo no modo manual com namespaces (usuários avançados)
+
+Se o seu JSON já começa com uma chave de namespace conhecida no nível superior — qualquer chave da tabela de mapeamento abaixo — o Kodus o deixa intocado. Útil se você quer misturar vários namespaces de provedores ou ser explícito:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+Por baixo dos panos, estes são os mapeamentos de namespace que o Kodus usa:
+
+| Provedor BYOK | Chave de namespace |
+| --- | --- |
+| `anthropic` / `anthropic_compatible` / `moonshot` / `zai` | `anthropic` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` para Gemini, `anthropic` para Claude no Vertex |
+| `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (também aceita `bedrock`) |
+| `novita` | `novita` |
+| `open_router` | `openrouter` |
+
+#### Pegadinhas
+
+- **Apenas um objeto JSON válido.** Vírgulas faltando, vírgulas sobrando ou um valor que não seja objeto são rejeitados ao salvar.
+- **Precedência:** o override em JSON **substitui por completo** o bloco de namespace do preset de esforço — se você sobrescrever `anthropic.thinking` mas esquecer `anthropic.effort`, esse campo não será enviado. O roteamento do OpenRouter (Pin providers / Allow fallbacks) é a única exceção: ele faz deep-merge com o seu override em `openrouter`.
+- **Provedor desconhecido = sem wrap.** Se o seu provedor BYOK não está na tabela de namespaces acima, o Kodus repassa o JSON como está.
+
+## Temperature
+
+A temperature fica em **Advanced settings**, e o campo se adapta às regras do modelo — definidas pelo provedor, não adivinhadas pelo formulário:
+
+| Modelo | Campo de temperature |
+| --- | --- |
+| A maioria dos modelos | **Editável** (0 = determinístico, 2 = criativo). |
+| Kimi `k3` e GLM-5.3 (sempre com reasoning) | **Travado em `1`.** O protocolo fixa a temperature em 1 durante o thinking, então o Kodus envia `1` independentemente do que foi armazenado. O campo mostra um cadeado. |
+| Kimi `k2.6` e `k2.7-code`, e DeepSeek com reasoning ligado | **Oculto.** O Kimi informa que a temperature não é modificável nesses modelos, e o DeepSeek a ignora durante o thinking. O DeepSeek com reasoning em **Off** mantém um campo editável. |
+| Claude 4.7+ e OpenAI GPT-5 / série o | **Oculto.** Esses modelos removeram a temperature e rejeitam qualquer requisição que a defina. Guie-os pelo nível de thinking. |
+
+<Info>
+  O [Test](/pt-BR/how_to_use/byok#teste-antes-de-salvar) valida a temperature que você definiu contra essas regras e retorna um erro antes de salvar, então você nunca persiste um valor que o modelo não vai respeitar.
+</Info>
+
+## Simultaneidade e rate limits
+
+O campo `maxConcurrentRequests` (**Max concurrent requests**, em **Advanced settings**) limita quantas requisições em andamento o Kodus envia ao seu provedor em paralelo. Na maioria das vezes, o padrão serve — mas planos de assinatura com limites de simultaneidade rígidos precisam que ele seja definido explicitamente.
+
+### Valores a definir
+
+| Provedor / plano | Valor | Por quê |
+| --- | --- | --- |
+| **GLM Coding Plan** | Confirme com a Z.AI | Para uso autorizado, use o limite informado pela Z.AI para sua conta. |
+| **Kimi Code Plan** | `30` | O limite documentado da Moonshot no endpoint de codificação. |
+| **GLM Developer API** | _(vazio)_ | Os limites escalam por chave; não há um padrão global sensato. |
+| **Kimi Developer API** | _(vazio)_ | Escala com o seu tier de recarga (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(vazio)_ | Os provedores aplicam seus próprios TPM/RPM; o Kodus não limita. |
+
+### Quando ajustar
+
+<CardGroup cols={2}>
+  <Card title="Aumente" icon="arrow-up">
+    - Você tem uma recarga de tier alto na Moonshot/OpenRouter e quer mais throughput em PRs grandes
+    - As revisões parecem serializadas em PRs com vários arquivos e você não vê 429
+  </Card>
+  <Card title="Diminua" icon="arrow-down">
+    - Você vê erros `429` ou `Too much concurrency` nos logs de revisão
+    - Seu provedor avisa sobre rate limits no painel
+    - Você quer conservar a janela do Coding Plan (5h/semanal) em mais PRs
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Simultaneidade vs. RPM vs. TPM.** `maxConcurrentRequests` só limita requisições paralelas em andamento. Muitos provedores também aplicam limites separados de **RPM** (requisições por minuto) e **TPM** (tokens por minuto). Se você está atingindo RPM/TPM enquanto a simultaneidade parece boa, a solução geralmente é subir de tier ou distribuir a carga ao longo do tempo — não mudar `maxConcurrentRequests`.
+</Tip>
+
+<Note>
+  **Interação com o fallback.** Quando o modelo de uma tarefa continua falhando com 429 e a Kody faz failover para o **Fallback model**, o `maxConcurrentRequests` do próprio fallback é que vale. Definir um fallback generoso em um provedor diferente é uma boa forma de absorver picos quando seu modelo principal está em uma assinatura apertada.
+</Note>

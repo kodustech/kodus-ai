@@ -9,37 +9,66 @@ A short tour of the ideas that show up everywhere in the CLI. Read this once and
 
 Every review needs to answer one question: *what changed?* The CLI supports four diff modes, each with a different source of truth.
 
-| Mode                | Source of diff                                | Inlines files? | When to use                                            |
-| ------------------- | --------------------------------------------- | -------------- | ------------------------------------------------------ |
-| **Working tree** (default) | Uncommitted changes in your working directory | Yes            | Mid-development, before staging anything.              |
-| **Staged** (`--staged`)    | `git diff --cached`                           | Yes            | About to commit — same scope as `git commit`.           |
-| **Branch** (`--branch <base>`) | `base..HEAD` committed diff              | No             | Pre-merge review of the whole branch.                   |
-| **Commit** (`--commit <sha>`) | The diff introduced by a single commit     | No             | Audit one commit, cherry-pick review.                   |
+| Mode                           | Source of diff                                      | Sends file contents? | When to use                                   |
+| ------------------------------ | --------------------------------------------------- | -------------------- | --------------------------------------------- |
+| **Working tree** (default)     | Tracked changes in your working directory, staged and unstaged | Yes   | Mid-development, before committing.           |
+| **Staged** (`--staged`)        | `git diff --cached`                                 | Yes                  | About to commit — same scope as `git commit`. |
+| **Branch** (`--branch <base>`) | `git diff <base>...HEAD`: your commits since the branch left `<base>` | No | Pre-merge review of the whole branch.   |
+| **Commit** (`--commit <sha>`)  | The diff introduced by a single commit              | No                   | Audit one commit, cherry-pick review.         |
+
+Files named on the command line (`kodus review src/auth.ts`) limit a working-tree review to those files. If you pass more than one scope, files win over `--branch`, `--branch` over `--commit`, and `--commit` over `--staged`.
+
+Untracked files are not part of any diff until you `git add` them.
 
 <Tip>
-  **Why does inlining matter?** Working-tree and staged reviews send file contents alongside the diff because the backend can't see your uncommitted work. Branch and commit modes skip inlining — the backend clones the same commit directly. That's why branch/commit reviews work on huge diffs where working-tree reviews would exceed request size limits.
+  **Why does it matter what is sent?** Working-tree and staged reviews send the contents of the changed files alongside the diff, because the backend can't see your uncommitted work. Branch and commit reviews send the diff alone, since the backend can read those commits itself. `--fast` also sends the diff alone. That's why those modes work on huge diffs where a working-tree review would exceed the request size limit. A trial review sends the diff alone in every mode.
 </Tip>
 
 ## Review Modes
 
 Three output styles, same underlying review.
 
-- **Interactive** (default) — a TUI that lists files, expands issues, and applies fixes one at a time with a preview. The natural way to work in a terminal.
-- **Auto-fix** (`--fix`) — applies every fixable issue at once, with a single confirmation. Use when you trust the rules and want to batch-apply.
+- **Interactive** (default) — in a terminal on macOS and Linux, the findings open in the Hunk diff viewer, next to the code. On Windows, with `--no-hunk`, or with `--interactive`, you get a list that shows issue counts per file, previews fixes, applies them one at a time, and copies a fix prompt for an AI agent.
+- **Auto-fix** (`--fix`) — applies every fixable issue at once, after a single confirmation. Use when you trust the rules and want to batch-apply.
 - **Prompt-only** (`--prompt-only`) — minimal, structured text designed for AI agents to parse and act on. Pair with `--fail-on` in an agent loop so the loop exits cleanly when the review is clean.
 
-You can also use `--format json` or `--format markdown` with any command for non-interactive consumers (CI, scripts, webhooks).
+You can also use `--format json` or `--format markdown` for non-interactive consumers (CI, scripts, webhooks).
+
+## Review Depth
+
+- **Default** — the review mode set for the repository in Kodus (Balanced unless you changed it).
+- **`--fast`** — lighter checks and a smaller step budget. The hook installed by `kodus hook install` uses it.
+- **`--heavy`** — adds specialist reviewers for higher recall, at more cost. It runs for a signed-in team on the Teams or Enterprise plan; any other review runs Balanced and says so. `--balanced` forces the main review alone on a repository set to Heavy. See [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode).
+- **`--focus <text>`** — points the review at one area. See [Steer a Review](/en/how_to_use/code_review/review_directive).
 
 ## Authentication Modes
 
-Pick one per machine. The CLI auto-detects what's available.
+Pick one per machine. The CLI uses the first credential it finds, in this order: `KODUS_TOKEN`, `KODUS_TEAM_KEY`, a stored login, a stored team key.
 
-- **Trial** — no auth. 5 reviews per day. Good for "try it once".
+- **Trial** — no auth. 2 reviews per hour. Good for "try it once". A trial review has no team, so it runs with default settings and no Kody Rules. Commands that read or change your team's data need a login or a team key.
 - **Personal login** (`kodus auth login`) — an individual account. Tokens refresh automatically.
-- **Team key** (`kodus auth team-key --key kodus_xxxxx`) — one shared key for a team, generated in the web app under **Organization → CLI keys**. Recommended for AI agents and anywhere you don't want interactive logins.
-- **CI/CD token** (`kodus auth token`) — a long-lived token for pipelines. Generated from a logged-in machine, used via `KODUS_TOKEN`.
+- **Team key** (`kodus auth team-key --key kodus_xxxxx`) — one shared key for a team, generated in the web app under **Organization → CLI keys**. Recommended for AI agents, CI, and anywhere you don't want interactive logins.
 
-See [Getting Started](getting_started) for the full decision tree.
+Which commands each one unlocks:
+
+| Command                                                          | Trial | Team key                  | Login |
+| ---------------------------------------------------------------- | :---: | :-----------------------: | :---: |
+| `review`, `diff`, `hook`, `skills`, `status`, `update`, `trace`, `schema`, `config remote keys` | Yes | Yes | Yes |
+| `pr suggestions`, `pr business-validation`                       | —     | Yes                       | Yes   |
+| `pr reviews`, `agents`, `cockpit`, `usage`                       | —     | —                         | Yes   |
+| `rules view`, `create`, `update`                                 | —     | Yes, if the key allows it | Yes   |
+| `rules pause`, `resume`, `delete`                                | —     | —                         | Yes   |
+| `config remote list`, `show`, `set`, and the pattern shortcuts   | —     | Yes, if the key allows it. `show` and `set` cover six settings of one repository | Every setting, at any scope |
+| `config remote add`, `setup`, `open`, and `config centralized`   | —     | Yes, if the key allows it | —     |
+| `config remote unset`, `model`, `messages`, `language`, `skills` | —     | —                         | Yes   |
+
+A team key can be allowed to configure repositories and to manage Kody Rules from the CLI: open **Organization → CLI keys** and click **Configure** on the key. Both are off by default. When you are logged in, the permissions of your role in the web app apply instead.
+
+<Note>
+  A `KODUS_TEAM_KEY` set in the environment is used by `rules` and `config remote` even when you are logged in. The commands that need a login ignore it.
+</Note>
+
+See [Getting Started](/en/how_to_use/cli/getting_started) for how to sign in.
 
 ## Kody Rules
 
@@ -50,37 +79,41 @@ Rule
 ├── title          "No console.log in production code"
 ├── rule           "Avoid leaving console.log in committed code"
 ├── severity       low | medium | high | critical
-├── scope          file | pull request
+├── scope          file | pull-request
 ├── path           **/*.ts       (glob for file targeting)
 └── repo-id        <uuid> | global
 ```
 
 Rules layer on top of the general Kodus review — the AI uses them as additional criteria, not replacements.
 
-Manage rules from the web app (**Code review → Kody Rules**) or from the CLI with `kodus rules create|update|view`. The CLI is useful when you want rules in version control (generate them from a script, check into a repo, re-apply on provisioning).
+Manage rules from the web app (**Code review → Kody Rules**) or from the CLI with `kodus rules create|update|view|pause|resume|delete`. The CLI is useful when you want rules in version control (generate them from a script, check into a repo, re-apply on provisioning). Under [Centralized Config](#centralized-config), a rule change becomes a pull request instead of a direct write.
 
-## Repository Settings
+## Review Settings
 
-Every repository in Kodus has settings that govern how reviews behave: ignored files, base branch patterns, title filters, feature toggles. These live in the Kodus backend and are mirrored anywhere the repo is reviewed (web PRs, CLI reviews, agent loops).
+Code review settings govern how Kody reviews: which categories to check, severity limits, ignored files, base branches, PR summaries, approval, and more. They apply at three levels: **global**, **repository**, and **directory**. The most specific level wins, and a level without its own value inherits the one above.
 
 From the CLI:
 
 ```bash
-kodus config repo list                 # See your configured repos
-kodus config repo show                 # See settings for the current repo
-kodus config repo setup                # Guided wizard
-kodus config repo set . reviewEnabled true
-kodus config repo add-ignore-file . "**/*.generated.ts"
-kodus config repo open                 # Jump to the web dashboard
+kodus config remote list                       # Repositories added to Kodus
+kodus config remote show .                     # Settings of this repo, with the level each value comes from
+kodus config remote keys                       # Every setting you can change
+kodus config remote set . runOnDraft true
+kodus config remote set global suggestionControl.severityLevelFilter high
+kodus config remote unset . runOnDraft         # Inherit again
 ```
 
-`kodus config repo` and `kodus config remote` are aliases for the same command group.
+`show` also reads `kodus-config.yml` from the repository, so you see which values a file overrides. `keys` lists each key with its allowed values and the settings page it belongs to. For how the levels combine, see [Config Inheritance & Overrides](/en/how_to_use/code_review/configs/inheritance_overrides).
+
+`kodus config repo` still works as an alias of `kodus config remote`.
+
+A CLI review uses your team's global settings and Kody Rules, plus the matched repository's rules, review mode, and repository instructions. Per-repository settings beyond those, such as base branches and ignored titles, concern pull requests.
 
 ## Centralized Config
 
 Normally, each repository's settings live in Kodus. **Centralized Config** lets a team store those settings in a single source-of-truth git repository — every change becomes a pull request against that repo, giving you review and version history on your review configuration itself.
 
-Enable, sync, or inspect state:
+Enable, sync, or inspect state (team key required):
 
 ```bash
 kodus config centralized status
@@ -89,38 +122,46 @@ kodus config centralized sync
 kodus config centralized disable
 ```
 
-Use Centralized Config when your team wants auditable, versioned control over review settings. Keep the default (per-repo settings in Kodus) when that ceremony is overkill.
+Use Centralized Config when your team wants auditable, versioned control over review settings. Keep the default (per-repo settings in Kodus) when that ceremony is overkill. See the [Centralized Config guide](/en/how_to_use/code_review/configs/centralized_config#cli).
 
 ## Business Validation
 
-Where `kodus review` asks "is this code good?", `kodus pr business-validation` asks "does this diff actually do what the task said to do?". You point it at a Linear/Jira/URL-based task and a diff source (working tree, staged, branch, commit) and it checks the implementation against the task's acceptance criteria.
+Where `kodus review` asks "is this code good?", `kodus pr business-validation` asks "does this diff actually do what the task said to do?". You point it at a task (by id or URL) and a diff source (working tree, staged, branch, commit), and it checks the implementation against the task's acceptance criteria. It needs a login or team key.
 
 ```bash
 kodus pr business-validation --task-id KC-1441 --branch main
-kodus pr business-validation --task-url https://linear.app/… --staged
+kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441 --staged
 ```
 
-Pair with a pre-merge check to catch "code works, but it's not what was asked for" before human review.
+Pair it with a pre-merge check to catch "code works, but it's not what was asked for" before human review. See [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation#from-the-cli).
+
+## Custom Agents
+
+Custom agents are extra reviewers your team defines, each with its own instructions, files, and tools. `kodus agents` lists, creates, edits, turns on and off, deletes, and tries them, with a login. A new agent starts turned off: run it on a pull request with `kodus agents try`, then turn it on with `kodus agents enable`. See [Custom agents](/en/how_to_use/code_review/custom_agents).
+
+## Kodus Trace
+
+Kodus Trace records the decisions behind changes an AI coding agent makes, and `kodus trace <path>` reads back the ones recorded for a path. See [Kodus Trace](/en/how_to_use/cli/trace).
 
 ## AI Agent Output (`--prompt-only` and `--agent`)
 
 Two related flags, different jobs.
 
-- **`--prompt-only`** — output is optimized for an AI agent to parse and act on. Only works on commands that produce review-style output (`review`, `pr suggestions`).
-- **`--agent`** — global flag that enforces **deterministic, machine-readable** output on any command. Use when a script or agent parses CLI output; combine with `--format json` for strictness.
+- **`--prompt-only`** — output is optimized for an AI agent to parse and act on. It exists on `kodus review` only.
+- **`--agent`** — global flag that prints a deterministic JSON envelope (`ok`, `command`, `data`, `error`, `meta`). It works on `review`, `pr`, `schema`, `hook install`, `hook uninstall`, `trace status`, `trace disable`, and `trace <path>`. Other commands take `--json` for JSON output.
 
 Most agent integrations just need `--prompt-only`. Reach for `--agent` when you're orchestrating the CLI from a harness or a tool-calling loop that has strict format expectations.
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Command Reference" icon="book" href="commands">
+  <Card title="Command Reference" icon="book" href="/en/how_to_use/cli/commands">
     Full command + flag listing.
   </Card>
-  <Card title="AI Agents" icon="robot" href="ai_agents">
+  <Card title="AI Agents" icon="robot" href="/en/how_to_use/cli/ai_agents">
     Build review-fix loops with coding agents.
   </Card>
-  <Card title="Troubleshooting" icon="life-ring" href="troubleshooting">
+  <Card title="Troubleshooting" icon="life-ring" href="/en/how_to_use/cli/troubleshooting">
     Common errors and exit codes.
   </Card>
 </CardGroup>

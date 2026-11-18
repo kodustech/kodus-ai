@@ -1,31 +1,26 @@
 ---
 title: "Cómo configurar la revisión de código con IA en Azure DevOps"
-description: "Instala y configura Kodus para repositorios de Azure DevOps para obtener revisión de código automatizada con IA en cada pull request."
+description: "Conecta Azure DevOps a Kodus y selecciona los repositorios para la revisión automática."
 ---
 
-Kodus se integra con Azure DevOps mediante webhooks. Una vez configurado, cada pull request se revisa automáticamente.
+Kodus se conecta a Azure DevOps Services (`dev.azure.com`) con un personal access token y recibe los eventos de pull request mediante service hooks.
 
 ## Pasos
 
 1. **Crea una cuenta** en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
-2. **Conecta Azure DevOps** — en el paso **Connect your Git tool** del onboarding, abre la pestaña **Azure Repos**, haz clic en **Connect via token** e ingresa el nombre de tu organización de Azure Repos y tu Token de Acceso Personal (también puedes conectarlo más tarde desde **Repositories** en la barra lateral)
-3. **Selecciona repositorios** — elige qué repositorios de Azure DevOps debe revisar Kodus
-4. **Webhooks** — Kodus crea automáticamente los service hooks de pull request cuando guardas la selección. Si eso no ocurrió (normalmente en instalaciones self-hosted), regístralos manualmente con la guía de [Webhooks de Azure DevOps](/es/how_to_deploy/platforms/azure_devops/azdevops_webhook)
-5. **Abre un pull request** — Kodus lo revisa automáticamente
+2. **Conecta Azure DevOps** — en el paso **Connect your Git tool** del onboarding, abre la pestaña **Azure Repos**, haz clic en **Connect via token** e ingresa el nombre de tu organización de Azure Repos y tu Personal Access Token (también puedes conectarlo más tarde desde **Repositories** en la barra lateral: haz clic en **Azure Repos** en **Connect a provider**)
+3. **Selecciona repositorios** — elige qué repositorios de Azure DevOps debe revisar Kodus, o activa [Revisar todos los repositorios](/es/how_to_use/code_review/configs/review_all_repositories) en **Repositories**
+4. **Webhooks** — Kodus crea automáticamente los service hooks de pull request cuando guardas la selección. Eso requiere el permiso **Edit subscriptions** en el proyecto (los Project Administrators lo tienen). Revísalos en **Project settings** → **Service hooks**; **Repositories** lista un repositorio cuyos hooks fallaron, con el motivo, solo cuando **Review every repository** está activado. Si faltan, registra los hooks manualmente con la guía de [Webhooks de Azure DevOps](/es/how_to_deploy/platforms/azure_devops/azdevops_webhook)
+5. Abre un pull request en un repositorio seleccionado. Consulta [qué publica Kody y cómo comprobar el estado](/es/how_to_use/code_review/flow).
 
-## Qué obtienes
-
-- Revisiones automatizadas en cada PR
-- Comentarios publicados directamente en el pull request
-- Reglas personalizables, categorías de revisión y un umbral de severidad mínima
-- Validación de lógica de negocio contra elementos de trabajo vinculados
+Para validar un PR frente a un work item de Azure Boards, selecciona un plugin personalizado como **Task source**. [Consulta los ajustes de validación](/es/how_to_use/code_review/business_logic_validation).
 
 ## Configuración personalizada
 
-Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por repositorio. El archivo anula la configuración de la web una vez que **kodus Config File Overrides Web Preferences** está activado para ese repositorio (**Code review → General**).
+Usa [kodus-config.yml](/es/how_to_use/code_review/configs/general#kodus-config-yml) para personalizar la configuración de revisión por repositorio.
 
-## Usar un Token de Acceso Personal
+## Usar un Personal Access Token
 
-Azure DevOps requiere un PAT para que Kodus pueda acceder a tus repositorios y publicar comentarios de revisión. Asegúrate de que el token tenga los alcances apropiados para lectura de código y acceso a comentarios de PR.
+Azure DevOps requiere un PAT para que Kodus pueda acceder a tus repositorios y publicar comentarios de revisión. Créalo con los alcances que se listan en la guía de [PAT de Azure DevOps](/es/how_to_use/code_review/general_config/azure_devops_pat); sin **Code: Read & Write**, Kodus puede leer tus repositorios pero no puede comentar.
 
 Para la guía de configuración completa, consulta [Webhooks de Azure DevOps](/es/how_to_deploy/platforms/azure_devops/azdevops_webhook) y [PAT de Azure DevOps](/es/how_to_use/code_review/general_config/azure_devops_pat).

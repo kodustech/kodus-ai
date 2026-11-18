@@ -23,7 +23,7 @@ Follow these steps to set up the token correctly:
 
 3. **Add a new token**:
 
-   - Click on the `Add new token` button.
+   - Click on the `Add new token` button. On recent GitLab versions, open the `Generate token` dropdown and select `Legacy token` instead.
 
 4. **Set up the new token with the following specifications**:
 
@@ -35,6 +35,8 @@ Follow these steps to set up the token correctly:
      - **read_user**
      - **read_repository**
      - **write_repository**
+
+   On a personal access token, `api` already includes the other four scopes, so `api` alone is enough. Kody never pushes over Git.
 
 5. **Finalize and save the token**:
    - After configuring the permissions, click `Generate token`.

@@ -1,78 +1,60 @@
 ---
 title: "Rule Inheritance"
-description: "How Global → Repository → Directory rules are inherited, and how to stop or exclude inheritance at specific levels."
+description: "Which Global, Repository and Directory rules a review applies, and what the Inheritable and Override and disable controls change."
 ---
 
-## Overview
+## Which rules a review applies
 
-By default, Kody Rules are inherited down the hierarchy:
+Every review applies the active rules of three scopes: **Global → Repository → Directory**.
 
-**Global → Repository → Directory**
+- **Global** rules apply to every repository.
+- **Repository** rules apply to every pull request in that repository.
+- **Directory** rules apply when the pull request is reviewed with that directory scope's settings, which happens when it touches exactly one directory scope. The rules of the repository's other directory scopes do not apply.
+- A pull request that touches no directory scope, or two or more, is reviewed with the repository's settings. In that case the rules of **all** of the repository's directory scopes apply too, to every file in the pull request.
 
-The effective rule set at each level is:
-- Rules defined at that level, plus
-- Rules inherited from the parent level,
-- Minus any rules explicitly excluded at that level.
+A rule written at a parent scope is always inherited by the scopes below it. A rule that appears at two scopes with identical instructions runs once.
 
-## Default behavior
+<Note>
+  The **Inheritable** switch and **Override and disable for this scope** change how rules are listed on the **Kody Rules** page. They do not change which rules a review applies. See below.
+</Note>
 
-- Global rules apply to all repositories and directories by default.
-- Repository rules inherit all Global rules, plus any rules defined specifically for that repository.
-- Directory rules inherit all rules from their repository, plus any rules defined specifically for that directory.
+## In the app
 
-No action is required to enable inheritance — it is automatic.
+On the **Kody Rules** page, rules inherited from higher scopes are listed next to the scope's own rules, marked with the scope they come from. They are read-only there: open the rule and use **View**, or go to the scope where it was created to edit it. **Filters → View** shows or hides **Inherited from Global**, **Inherited from Repository** and **Disabled Rules**.
 
-## Breaking inheritance
+### Inheritable
 
-There are two ways to stop a rule from being inherited:
+On a rule at any scope, open **Advanced settings** in the rule dialog and turn off **Inheritable** (on by default).
 
-### 1) Mark a rule as non‑inheritable (at creation time)
+- The rule is no longer listed as inherited in the scopes below it.
+- A review still applies it at every scope as described above.
 
-When creating a rule at any level (Global, Repository, or Directory), you can mark it as “non‑inheritable”: in the rule dialog, open **Advanced settings** and turn off **Inheritable** (it is on by default).
+### Override and disable for this scope
 
-Effect:
-- The rule applies only at the level where it was created.
-- It does not appear in child levels.
+At a repository or directory scope, open an inherited rule (**View**) and turn on **Override and disable for this scope**.
 
-Use this when a rule is intentionally specific to a particular scope and should not flow down the hierarchy.
+- The rule shows as **Disabled** at that scope, and is hidden when **Disabled Rules** is unchecked in **Filters → View**.
+- It does not show as disabled in scopes below, which keep their own setting.
+- A review still applies the rule.
 
-### 2) Exclude a parent rule from a child level
+To stop a rule from applying, pause or delete it at the scope where it was created.
 
-From a child configuration (Repository or Directory), you can explicitly exclude a rule that would otherwise be inherited from the parent: on **Code review → Kody Rules** at that scope, open the inherited rule and turn on **Override and disable for this scope**. The rule then shows as **Disabled** at that level.
+## Centralized config
 
-Effect:
-- The rule is not applied at that exact child level.
-- The exclusion does not cascade further — grandchildren still see the parent’s rule unless they also exclude it (or the rule was created as non‑inheritable).
+A rule file in a [centralized config](/en/how_to_use/code_review/configs/centralized_config) repository can carry the same settings:
 
-Use this to fine‑tune behavior for a specific repository or directory without affecting other children.
+```yaml
+inheritance:
+  inheritable: true
+  exclude: []   # repository or directory IDs
+  include: []   # repository or directory IDs
+```
 
-## Examples
-
-### Excluding at the repository level
-
-Suppose a Global rule “Require tests for new endpoints” exists. In repository “shop”, you exclude this rule at the repository level.
-
-Result:
-- At the repository level, the rule no longer applies.
-- If you have a configured directory inside the same repository (e.g., `apps/api`), that directory still inherits the Global rule and will apply it — unless you also exclude it at the directory level, or the original Global rule was created as non‑inheritable.
-
-### Creating a non‑inheritable Global rule
-
-You create a Global rule and mark it as non‑inheritable.
-
-Result:
-- The rule applies only at the Global level.
-- Repositories and directories do not inherit it.
-
-## Practical tips
-
-- Keep foundational rules at the Global level so all repos benefit by default.
-- Use non‑inheritable rules for highly specific contexts that shouldn’t affect children.
-- Use child‑level exclusions to make targeted exceptions without impacting other repos or directories.
+`inheritable` and `exclude` behave as described above. `include` has no control in the app and no effect on a review; a rule with a non-empty `include` list is not shown in the inherited list.
 
 ## Related
 
 - <a href="/en/how_to_use/code_review/configs/kody_rules">Kody Rules Overview</a>
 - <a href="/en/how_to_use/code_review/configs/directory_level">Directory-Level Settings</a>
 - <a href="/en/how_to_use/code_review/configs/inheritance_overrides">Config Inheritance & Overrides</a>
-- <a href="/en/how_to_use/code_review/configs/centralized_config">Centralized Config</a> — manage rules as YAML files under `.kody-rules/` in a single repository.
+- <a href="/en/how_to_use/code_review/configs/centralized_config">Centralized Config</a>

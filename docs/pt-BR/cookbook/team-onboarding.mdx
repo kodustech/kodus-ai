@@ -6,21 +6,23 @@ icon: "users-gear"
 
 ## Visão geral
 
-Colocar um novo time em funcionamento com o Kodus leva cerca de 30 minutos. Este guia percorre a configuração completa para que seu time extraia valor desde o primeiro PR.
+Colocar um novo time em funcionamento com o Kodus leva cerca de 30 minutos. Este guia percorre a configuração completa para que seu time tenha valor desde o primeiro PR.
 
 ## Passo 1 — Crie e configure o workspace
 
-1. Cadastre-se em [kodus.io](https://kodus.io) ou acesse sua instância auto-hospedada
+1. Cadastre-se em [kodus.io](https://kodus.io) ou acesse sua instância self-hosted
 2. Crie um novo workspace para o seu time
 3. Conecte seu provedor Git (GitHub, GitLab, Bitbucket, Azure Repos ou Forgejo)
 4. Selecione os repositórios a monitorar
 
+O guia de configuração continua com a severidade mínima para postar, o interruptor das instruções de agentes de código (Passo 3) e um pull request para o primeiro review do Kody.
+
 ## Passo 2 — Defina a linha de base de revisão
 
-Comece com padrões sensatos antes de personalizar:
+O Kodus começa com padrões sensatos, então personalize só o que for diferente. Você pode definir a linha de base no app web, em **Code review → What to review** (categorias e **Minimum severity to post**), ou mantê-la em um `kodus-config.yml` na raiz de cada repositório, na branch padrão. O Kody só lê esse arquivo depois que você ativa **Prefer kodus-config.yml settings** em **Code review → General** para o repositório.
 
 ```yaml
-# kodus-config.yml — coloque este arquivo na raiz de cada repositório
+# kodus-config.yml — these are the defaults
 reviewOptions:
   bug: true
   security: true
@@ -34,17 +36,17 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-Isso fornece revisões automatizadas com um limite de severidade razoável. Ajuste após uma semana com base no feedback.
+Isso dá a você revisões automatizadas com um limite de severidade razoável. Ajuste depois de uma semana com base no feedback.
 
 ## Passo 3 — Use as instruções que você já escreveu para agentes de código
 
 Se o seu time já mantém instruções do Cursor, Copilot, Claude ou `AGENTS.md`:
 
-1. Na barra lateral, selecione **Global** ou um repositório no seletor de escopo no topo do grupo **Code review**, abra **What to review** e ative **Coding-agent instructions**
-2. O Kody lê os arquivos de instrução que cobrem os arquivos alterados em cada pull request e aponta mudanças que os quebram
-3. Para uma convenção que você quer aplicar em toda revisão, escreva-a como um arquivo de regra em `.kody/rules`
+1. Na barra lateral, escolha **Global** ou um repositório no seletor de escopo no topo do grupo **Code review**, abra **What to review** e ative **Coding-agent instructions**
+2. O Kody lê os arquivos de instrução que cobrem os arquivos alterados de cada pull request e aponta mudanças que os quebram
+3. Para uma convenção que você quer aplicar em todo review, escreva-a como um arquivo de regra em `.kody/rules`
 
-Os arquivos de instrução nunca são transformados em Kody Rules, então não podem mudar sua política de revisão sem que você perceba.
+Os arquivos de instrução nunca são transformados em Kody Rules, então não conseguem mudar sua política de revisão sem que você perceba.
 
 ## Passo 4 — Ensine suas 5 principais convenções
 
@@ -74,14 +76,14 @@ Use interfaces and dependency injection.
 No direct DB access from services or controllers.
 ```
 
-Estas se tornam Memories que se aplicam imediatamente a todas as revisões.
+Elas viram Memories que o Kody usa nos reviews seguintes. Com **Kody knowledge approval** ativado, cada uma espera em **Pending review** até que alguém a aprove.
 
 ## Passo 5 — Crie 2-3 regras críticas
 
-Adicione regras para coisas que nunca devem acontecer:
+Adicione regras para coisas que nunca devem acontecer. Em **Code review → Kody Rules**, na aba **Review Rules**, clique em **New rule**:
 
 ```
-Name: No console.log in production code
+Rule name: No console.log in production code
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: High
@@ -91,7 +93,7 @@ Exclude test files (*.spec.ts, *.test.ts).
 ```
 
 ```
-Name: No hardcoded API URLs
+Rule name: No hardcoded API URLs
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -102,31 +104,31 @@ URLs must come from environment variables or config files.
 
 ## Passo 6 — Conecte a gestão de tarefas (opcional, mas recomendado)
 
-Conecte Jira, Linear, Notion ou ClickUp em **Plugins** (na barra lateral) para habilitar a validação de lógica de negócio. Isso permite que o Kodus verifique se os PRs implementam o que as tarefas descrevem.
+Conecte Atlassian Rovo (Jira), Linear, Notion ou Git Issues em **Plugins** (na barra lateral) para habilitar a [validação de lógica de negócio](/pt-BR/how_to_use/code_review/business_logic_validation). Isso permite que o Kodus confira se os PRs implementam o que as tarefas descrevem.
 
-## Passo 7 — Execute um PR piloto
+## Passo 7 — Rode um PR piloto
 
 Abra um PR de teste e verifique:
 
 - [ ] Os comentários do Kodus aparecem no PR
-- [ ] As sugestões são relevantes e com a severidade correta
+- [ ] As sugestões são relevantes e estão na severidade certa
 - [ ] Suas regras personalizadas disparam quando deveriam
-- [ ] As Memories são refletidas no contexto de revisão
+- [ ] As Memories aparecem refletidas no contexto do review
 
-## Passo 8 — Colete feedback após uma semana
+## Passo 8 — Colete feedback depois de uma semana
 
-Após uma semana de revisões, consulte o time:
+Depois de uma semana de reviews, converse com o time:
 
 - Há sugestões demais? → Aumente **Minimum severity to post** em **Code review → What to review** (`severityLevelFilter` no `kodus-config.yml`)
-- As regras estão gerando muito ruído? → Restrinja os caminhos de arquivo ou adicione exclusões
+- As regras estão com muito ruído? → Restrinja os caminhos de arquivo ou adicione exclusões
 - Faltam padrões importantes? → Adicione novas regras ou Memories
-- Quer regras geradas automaticamente? → Selecione o repositório no seletor de escopo, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Generate from past reviews** para obter sugestões do histórico de revisões
+- Quer regras geradas automaticamente? → Escolha o repositório no seletor de escopo, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Generate from past reviews** para que o Kody rascunhe regras a partir dos comentários dos seus revisores. Na nuvem, fora do trial, isso exige [BYOK](/pt-BR/how_to_use/byok)
 
 ## Dicas
 
-- Não sobrecarregue com regras no primeiro dia — comece pequeno e expanda
+- Não sobrecarregue com regras no primeiro dia — comece pequeno e vá crescendo
 - Deixe o time ensinar o Kody naturalmente por meio de conversas antes de formalizar como regras
 - Use `@kody start-review` nos primeiros PRs para que o time veja o Kodus em ação
 - Ative **Kody knowledge approval** (**Code review → Kody Rules → Configuration**) se quiser revisar o que o Kody aprende
 
-Para o guia completo de configuração, consulte [Início Rápido](/pt-BR/how_to_use/quickstart).
+Para o guia completo de configuração, veja o [Início Rápido](/pt-BR/how_to_use/quickstart).

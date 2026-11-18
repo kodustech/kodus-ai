@@ -12,7 +12,7 @@ Este cookbook configura una capa de seguridad prioritaria sobre tu revisión exi
 
 ## Paso 1 — Habilita el análisis de seguridad
 
-Asegúrate de que el análisis de seguridad esté habilitado:
+Asegúrate de que la categoría **Security** esté activada en **Code review → What to review**, o en `kodus-config.yml` (se lee solo cuando **Prefer kodus-config.yml settings** está activado para el repositorio):
 
 ```yaml
 reviewOptions:
@@ -23,10 +23,12 @@ Esto te da las verificaciones de seguridad integradas de Kodus. Las reglas a con
 
 ## Paso 2 — Crea reglas enfocadas en OWASP
 
+Crea cada regla en **Code review → Kody Rules**: en la pestaña **Review Rules**, haz clic en **New rule** y completa los campos como se muestra a continuación.
+
 ### Prevención de inyección SQL
 
 ```
-Name: No raw SQL queries
+Rule name: No raw SQL queries
 Execution mode: Per file
 Path: **/*.ts, **/*.js, **/*.py
 Severity: Critical
@@ -42,7 +44,7 @@ Instructions:
 ### Detección de secretos hardcodeados
 
 ```
-Name: No hardcoded secrets or credentials
+Rule name: No hardcoded secrets or credentials
 Execution mode: Per file
 Path: **/*
 Severity: Critical
@@ -60,7 +62,7 @@ Instructions:
 ### Omisión de autenticación
 
 ```
-Name: Auth middleware must not be skipped
+Rule name: Auth middleware must not be skipped
 Execution mode: Per PR
 Severity: Critical
 Instructions:
@@ -70,14 +72,14 @@ Instructions:
     or equivalent decorators
   - Middleware bypass patterns like skipAuth: true
   - Public endpoints that access user-specific data
-  Reference @file:src/shared/auth/guards/ for the
+  Reference @file:src/shared/auth/guards/auth.guard.ts for the
   approved auth patterns.
 ```
 
 ### Prevención de XSS
 
 ```
-Name: No dangerouslySetInnerHTML without sanitization
+Rule name: No dangerouslySetInnerHTML without sanitization
 Execution mode: Per file
 Path: **/*.tsx, **/*.jsx
 Severity: Critical
@@ -109,36 +111,23 @@ internal paths, or database details to the client.
 
 ## Paso 4 — Configura para tolerancia cero
 
-Para las reglas de seguridad, querrás que los hallazgos críticos sean bloqueantes:
+Para las reglas de seguridad, querrás que los hallazgos críticos bloqueen y que nunca se filtren:
 
-1. En **Code review → General**, activa **Enable changing status of Review to 'Request Changes'** para que Kody solicite cambios cuando se encuentren problemas críticos
-2. Configura las reglas de seguridad en severidad **Crítica** para que siempre aparezcan por encima de cualquier filtro de severidad
-3. NO establezcas un límite bajo en `maxSuggestions` — los hallazgos de seguridad nunca deben suprimirse
+1. En **Code review → General → Review feedback**, activa **Request changes on critical issues** (no disponible cuando todos los proveedores conectados son GitLab). Kody marca la revisión como Request Changes cuando publica un comentario inline Critical
+2. Configura las reglas de seguridad en severidad **Critical**
+3. En **Code review → What to review**, deja **Apply the threshold to Kody Rules** desactivado, que es su valor por defecto. Las reglas entonces se publican con cualquier severidad, sea cual sea **Minimum severity to post**
 
-## Paso 5 — Añade una regla de auditoría de dependencias (opcional)
-
-Si usas plugins MCP, puedes verificar dependencias:
-
-```
-Name: No known vulnerable dependencies
-Execution mode: Per PR
-Severity: Critical
-Instructions:
-  If pr_files_diff modifies package.json, requirements.txt,
-  or any dependency file, use @MCP to check for known
-  vulnerabilities in the added or updated packages.
-  Flag any dependency with known critical CVEs.
-```
+Request changes sigue a los comentarios inline, por lo que lo establecen las reglas **Per file**. Una regla **Per PR**, como la del middleware de autenticación, publica un único comentario en el pull request y no lo establece.
 
 ## Lista de verificación
 
-- [ ] Análisis de seguridad habilitado en reviewOptions
+- [ ] Categoría **Security** activada
 - [ ] La regla de inyección SQL cubre todo el código que interactúa con BD
 - [ ] La regla de detección de secretos cubre todos los tipos de archivo
 - [ ] La regla de omisión de auth referencia tus patrones de auth reales
 - [ ] La regla de XSS cubre todos los archivos de componentes frontend
 - [ ] Las Memorias de seguridad enseñan principios generales de codificación segura
-- [ ] Solicitar cambios habilitado para hallazgos críticos
+- [ ] **Request changes on critical issues** está activado, y **Apply the threshold to Kody Rules** está desactivado
 - [ ] Un PR de prueba confirmó que las reglas se activan correctamente
 
 Para más información sobre la configuración de reglas, consulta [Kody Rules](/es/how_to_use/code_review/configs/kody_rules).

@@ -1,18 +1,20 @@
 ---
 title: "用 ast-grep 强制执行约定"
-description: "一个用 ast-grep 规则强制执行团队约定的自定义智能体，每条发现都是经过证明的匹配。"
+description: "一个用 ast-grep 规则强制执行团队约定的自定义 agent，每条发现都是经过证明的匹配。"
 icon: "code"
 ---
 
-## 为什么用 ast-grep
+## 为什么选择 ast-grep
 
-有些约定是结构性的："这里永远不要调用这个函数"、"总是传这个选项"。模型能发现它们，但也可能漏掉或凭空想象。[ast-grep](https://ast-grep.github.io) 规则匹配的是语法树，因此匹配本身就是证据。引用了本次运行匹配到的规则的发现会跳过模型检查并直接发布。
+有些约定是结构性的：“永远不要在这里调用这个函数”“始终传入这个选项”。模型可以发现它们，但也可能漏掉，或者凭空想象出一个。[ast-grep](https://ast-grep.github.io) 规则匹配的是语法树，所以一次匹配就是证明。引用了运行时已匹配规则的发现会跳过模型检查，直接发布。
 
-示例是一个结账服务，只有一条约定：**金额是由 `Money` 辅助类处理的整数分，永远不用浮点数。**
+示例是一个只有一条约定的结账服务：**金额是由 `Money` 辅助类处理的整数分，绝不使用浮点数。**
 
-## 步骤 1 — 在代码库中编写规则
+自定义 agent 处于 beta 阶段，适用于 Teams 和 Enterprise 套餐以及试用期间。自托管 Kodus 还需要 `BETA_FEATURES=true`。
 
-在默认分支上提交一个规则文件。Kodus 从每个拉取请求的目标分支读取它，因此拉取请求无法放宽用来检查它的规则。
+## 步骤 1 — 在仓库中编写规则
+
+在默认分支上提交一个规则文件。Kodus 从每个 pull request 的目标分支读取它，因此 pull request 无法放宽用来检查它自己的规则。
 
 ```yaml rules/money.yml
 id: no-parsefloat-amount
@@ -30,9 +32,9 @@ rule:
   pattern: $A.toFixed($N)
 ```
 
-每条规则的 `message` 就是评论中作为规则引用的内容，所以请为阅读拉取请求的人来写它。
+每条规则的 `message` 就是评论中作为该规则引用的内容，因此请为阅读 pull request 的人来写。
 
-再把背后的理由写进一份 doc，覆盖模式无法捕捉的情况：
+对于模式无法覆盖的情况，也把理由在文档中写一次：
 
 ```markdown docs/money.md
 # Money
@@ -41,7 +43,7 @@ Amounts are integers in cents, wrapped in `Money`. Never store, add or compare a
 Convert at the edges only: `Money.parse` on input, `Money.format` on output.
 ```
 
-## 步骤 2 — 创建智能体
+## 步骤 2 — 创建 agent
 
 **New agent → Templates → Blank**，然后：
 
@@ -61,19 +63,19 @@ Ignore tests and amounts that are not money (percentages, durations, counts).
 
 | 字段 | 值 |
 | --- | --- |
-| **Files** | `src/checkout/**`、`src/billing/**` |
+| **Files** | `src/checkout/**`, `src/billing/**` |
 | **Except** | `**/*.test.ts` |
 | **Skills & docs** | `docs/money.md`（**Add skill or doc → Add by path**） |
 
 ## 步骤 3 — 指向规则
 
-在 **Tools → Advanced → Structural search (ast-grep rules)** 中，单独一行填写路径：
+在 **Tools → Advanced → Structural search (ast-grep rules)** 下，用单行输入路径：
 
 ```text
 rules/money.yml
 ```
 
-提示会列出找到的规则：`2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`。您也可以直接粘贴内联 YAML 而不是路径；这样规则就保存在智能体中，而不是在代码库中。
+提示会列出它找到的规则：`2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`。你也可以直接粘贴 YAML 而不是路径；此时规则存放在 agent 中，而不是仓库里。
 
 ## 步骤 4 — 评论
 
@@ -83,25 +85,27 @@ rules/money.yml
 | **Minimum severity** | Team minimum |
 | **Suggested fix** | When confident |
 
-点击 **Save**。
+点击 **Save settings**。
 
-## 步骤 5 — Try it
+## 步骤 5 — 试一试
 
-在一个对价格使用了 `parseFloat` 的拉取请求上运行 **Try it**。该发现会被 **kept**，其评论引用规则：
+在一个给价格添加了 `parseFloat` 的 pull request 上运行 **Try it**。该发现会被**保留**，其评论会引用规则：
 
 ```markdown
 **Rule** (`ast-grep:no-parsefloat-amount`):
 > Parse amounts with Money.parse; parseFloat turns cents into a float.
 ```
 
-智能体基于 `docs/money.md` 提出的发现会改为引用该 doc；如果引文不在目标分支上的 doc 中，则会被丢弃。
+agent 根据 `docs/money.md` 提出的发现会引用该文档，如果引用内容不在目标分支上的文档中，该发现会被丢弃。
+
+如果 **Warnings** 提示沙箱中未安装 ast-grep，说明 agent 是在没有规则的情况下运行的。
 
 ## 检查清单
 
 - [ ] 规则文件已提交到默认分支
-- [ ] 每条规则都有 `id`、`rule` 和易读的 `message`
+- [ ] 每条规则都有 `id`、`rule` 和可读的 `message`
 - [ ] 字段提示列出了每一条规则
 - [ ] glob 只覆盖该约定适用的代码
-- [ ] 已在一个已知存在违规的拉取请求上试运行
+- [ ] 已在含有已知违规的 pull request 上试过
 
-该字段的详细说明，请参阅 [ast-grep 规则](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#ast-grep-rules)。
+字段详情请参阅 [ast-grep 规则](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#ast-grep-rules)。

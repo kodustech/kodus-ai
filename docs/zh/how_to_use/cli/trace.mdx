@@ -1,0 +1,102 @@
+---
+title: "Kodus Trace"
+description: "记录编码代理所做变更背后的决策，并按路径读回。"
+---
+
+diff 展示了改了什么，Kodus Trace 则保留为什么。它会捕获仓库中的编码代理会话，把您推送的分支提炼成决策（架构选择、约定、权衡），并让您或代理在修改某个路径之前读取为该路径记录的决策。
+
+可通过 CLI 在本地记录和查询。将脱敏后的 Trace 决策用于同一仓库的 PR 审查属于 Kodus Cloud 的**私有 Alpha** 功能。
+
+## 开启
+
+```bash
+kodus trace enable
+```
+
+在仓库内运行。它会安装：
+
+- **会话钩子**：Claude Code（仓库的 `.claude/settings.json`）、Cursor（仓库的 `.cursor/hooks.json`）和 Codex（`~/.codex/config.toml`，位于您的主目录）。`--agents claude,cursor` 可限定安装哪些，`--codex-config <path>` 可指向另一个 Codex 配置。
+- **两个 git 钩子**：`prepare-commit-msg` 会在每条提交信息中添加 `Kodus-Trace:` trailer，把提交与其会话关联起来；`pre-push` 会在后台启动提炼。
+- **一项 fetch 设置**，使普通的 `git fetch` 也能拉取共享的决策。
+
+<Warning>
+  `pre-push` 钩子与 `kodus hook install` 安装的审查钩子共用同一个文件。两者都安装时，推送不会启动提炼，因此不会写入新的决策。`kodus hook uninstall` 只移除审查钩子，保留 Trace 的钩子。
+</Warning>
+
+用 `kodus trace status` 查看它做了什么：已捕获的会话和轮次、决策（本地和共享）、已安装的钩子，以及遇到的任何问题。用 `kodus trace disable` 移除钩子（加 `--dry-run` 预览）。禁用只会移除钩子：已捕获的会话仍保留在您的机器上，已发送到 Kodus 的事件也仍保留在那里。
+
+## 捕获的内容
+
+代理会话的每一轮：提示词和响应、代理所用每个工具的一行摘要、读取和修改的文件、执行的命令，以及 token 用量。记录保存在 `~/.kodus/sessions` 下，位于仓库之外，90 天后删除。在存储任何内容之前，密钥会先被脱敏：API 密钥、令牌、私钥，以及 URL 或赋值中的密码。
+
+捕获无需账户即可使用。
+
+当您使用登录或团队密钥登录时，CLI 还会把每个会话经过脱敏的事件发送给 Kodus：提示词和响应、代理调用的工具及其输入和输出、读取和修改的文件、命令、token 用量、分支、git remote URL 和提交 id。Kodus 会为您的组织存储这些内容。会话结束时，模型会读取它们来提取决策：如果您的组织有 BYOK 模型，则使用该模型，否则使用 Kodus 托管的模型。这些事件计入团队每小时 1,000 次请求的限额。
+
+## 决策如何生成
+
+执行 `git push` 时，后台任务会对您分支上不在默认分支中的每个提交生成摘要。随后它会请求您机器上的一个编码代理 CLI，把这些摘要和该分支已捕获的会话提炼成决策。它会使用找到的第一个 `claude`、`codex`、`gemini` 和 `cursor-agent`。该工具会收到提交信息、文件名以及会话中经过脱敏的提示词和响应，因此这些内容会像该工具的任何其他使用方式一样发送给其提供商。如果一个都没有安装，捕获仍然有效，但不会写入决策。
+
+该任务不会延迟或使推送失败。它会把决策写入名为 `kodus/trace/v1` 的分支，并将该分支推送到同一个 remote，因此队友的克隆通过 `git fetch` 就能获取它们。每次推送都会替换该分支的记录。
+
+## 读取决策
+
+传入您即将修改的路径即可，不需要子命令。
+
+```bash
+kodus trace src/billing/invoice.ts
+kodus trace src/billing src/payments --limit 10
+kodus trace src/billing --format json
+```
+
+目录会返回其下记录的所有内容。文件会返回范围覆盖它的所有内容，包括为其所在目录记录的决策。读取使用您机器上已有的数据，不会发起网络请求。`--remote <name>` 用于选择读取哪个 remote 的决策分支。
+
+每条决策会显示：
+
+- **Type：** `architectural_decision`、`convention`、`tradeoff`、`implementation_detail`、`tooling` 或 `other`。
+- **Origin：** 如果是您要求的则为 `human`，代理自行选择的则为 `agent`，双方共同敲定的则为 `collaborative`。
+- **Confidence**，0 到 1，为写入决策时的判断。
+- **Scope**（适用的路径）和 **source**：`local`（在本地记录）或 `branch`（由他人共享）。
+- 一个 **id**，即 `forget` 和 `pin` 所用的标识。
+
+空结果是正常的回答，退出码为 0。它表示这些路径尚无记录，或捕获已关闭。
+
+如果某个路径与子命令同名，例如 `status`，请用 `--` 分隔：`kodus trace -- status`。
+
+## 修正记录
+
+```bash
+kodus trace forget <id>      # The decision is wrong: stop returning it
+kodus trace pin <id>         # Always keep this decision
+kodus trace pin <id> --remove
+```
+
+两者都保存在本地。当决策位于共享分支上时，它们也会发布到该分支，因此团队能看到这次修正。
+
+## 浏览会话
+
+```bash
+kodus trace ui               # http://127.0.0.1:4711 by default
+kodus trace ui --port 5000 --no-open
+```
+
+在浏览器中提供您的本地会话。它只读取本地存储。
+
+## 环境变量
+
+| 变量 | 描述 |
+| ---- | ---- |
+| `KODUS_TRACE_HOME` | 存放会话的文件夹，替代 `~/.kodus` |
+| `KODUS_TRACE_AGENT_CMD` | 用于写入决策的命令，替代找到的第一个 CLI，例如 `claude -p` |
+| `KODUS_TRACE_SKIP` | 设置为任意值，使会话钩子和 pre-push 钩子不执行任何操作 |
+
+## 相关内容
+
+<CardGroup cols={2}>
+  <Card title="AI 代理" icon="robot" href="/zh/how_to_use/cli/ai_agents">
+    面向编码代理的技能和循环。
+  </Card>
+  <Card title="命令参考" icon="book" href="/zh/how_to_use/cli/commands#kodus-trace">
+    所有 `kodus trace` 命令。
+  </Card>
+</CardGroup>

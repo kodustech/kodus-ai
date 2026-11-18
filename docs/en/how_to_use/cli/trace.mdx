@@ -1,0 +1,102 @@
+---
+title: "Kodus Trace"
+description: "Record the decisions behind changes a coding agent makes, and read them back by path."
+---
+
+A diff shows what changed. Kodus Trace keeps why. It captures the coding agent sessions in a repository, turns the branch you push into decisions (architectural choices, conventions, tradeoffs), and lets you or an agent read the decisions recorded for a path before changing it.
+
+Local capture and lookup run through the CLI. Using redacted Trace decisions as context in PR reviews is a **private alpha** on Kodus Cloud for the same repository.
+
+## Turn it on
+
+```bash
+kodus trace enable
+```
+
+Run it inside the repository. It installs:
+
+- **Session hooks** for Claude Code (the repository's `.claude/settings.json`), Cursor (the repository's `.cursor/hooks.json`), and Codex (`~/.codex/config.toml`, in your home folder). `--agents claude,cursor` limits which ones, and `--codex-config <path>` points to another Codex config.
+- **Two git hooks.** `prepare-commit-msg` adds a `Kodus-Trace:` trailer to each commit message, linking the commit to its session. `pre-push` starts the distillation in the background.
+- **A fetch setting** so a plain `git fetch` also brings down the shared decisions.
+
+<Warning>
+  The `pre-push` hook shares its file with the review hook from `kodus hook install`. With both installed, a push does not start the distillation, so no new decisions are written. `kodus hook uninstall` removes only the review hook and leaves Trace's.
+</Warning>
+
+Check what it did with `kodus trace status`: sessions and turns captured, decisions (local and shared), hooks installed, and any problem it ran into. Remove the hooks with `kodus trace disable` (add `--dry-run` to preview). Disabling removes only the hooks: captured sessions stay on your machine, and events already sent to Kodus stay there.
+
+## What is captured
+
+Each turn of an agent session: the prompt and response, a one-line summary of each tool the agent used, the files it read and changed, its commands, and token usage. Records live under `~/.kodus/sessions`, outside the repository, and are deleted after 90 days. Secrets are redacted before anything is stored: API keys, tokens, private keys, and passwords in URLs or assignments.
+
+Capture works with no account.
+
+When you are signed in with a login or a team key, the CLI also sends each session's redacted events to Kodus: the prompts and responses, the tools the agent called with their inputs and outputs, the files read and changed, the commands, token usage, the branch, the git remote URL, and commit ids. Kodus stores them for your organization. When a session ends, a model reads them to extract decisions, on your organization's BYOK model when it has one and on a Kodus-managed model otherwise. These events count toward the team's 1,000 requests per hour.
+
+## How decisions are made
+
+On `git push`, a background job summarizes each commit on your branch that is not on the default branch. It then asks a coding agent CLI on your machine to turn those summaries and the branch's captured sessions into decisions. It uses the first of `claude`, `codex`, `gemini`, and `cursor-agent` that it finds. That tool receives the commit messages, the file names, and the redacted prompts and responses of the sessions, so they go to its provider as in any other use of it. With none of them installed, capture still works and no decisions are written.
+
+The job never delays or fails a push. It writes the decisions to a branch named `kodus/trace/v1` and pushes that branch to the same remote, so a teammate's clone gets them with `git fetch`. Each push replaces the record of that branch.
+
+## Read the decisions
+
+Pass the paths you are about to change. No subcommand is needed.
+
+```bash
+kodus trace src/billing/invoice.ts
+kodus trace src/billing src/payments --limit 10
+kodus trace src/billing --format json
+```
+
+A directory returns everything recorded under it. A file returns everything whose scope covers it, including decisions recorded for its directory. Reading uses what is already on your machine and makes no network call. `--remote <name>` picks the remote whose decision branch to read.
+
+Each decision shows:
+
+- **Type:** `architectural_decision`, `convention`, `tradeoff`, `implementation_detail`, `tooling`, or `other`.
+- **Origin:** `human` if you asked for it, `agent` if the agent chose it unprompted, `collaborative` if you settled it together.
+- **Confidence**, from 0 to 1, as judged when the decision was written.
+- **Scope**, the paths it applies to, and the **source**: `local` (recorded here) or `branch` (shared by someone else).
+- An **id**, the handle for `forget` and `pin`.
+
+An empty result is a normal answer, with exit code 0. It means nothing is recorded for those paths yet, or capture is off.
+
+If a path has the name of a subcommand, such as `status`, separate it with `--`: `kodus trace -- status`.
+
+## Correct the record
+
+```bash
+kodus trace forget <id>      # The decision is wrong: stop returning it
+kodus trace pin <id>         # Always keep this decision
+kodus trace pin <id> --remove
+```
+
+Both are saved locally. When the decision is on the shared branch, they are also published to it, so the team sees the correction.
+
+## Browse sessions
+
+```bash
+kodus trace ui               # http://127.0.0.1:4711 by default
+kodus trace ui --port 5000 --no-open
+```
+
+Serves your local sessions in the browser. It reads the local store only.
+
+## Environment variables
+
+| Variable                | Description                                                              |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `KODUS_TRACE_HOME`      | Folder that holds the sessions, instead of `~/.kodus`                    |
+| `KODUS_TRACE_AGENT_CMD` | The command that writes decisions, instead of the first CLI found, for example `claude -p` |
+| `KODUS_TRACE_SKIP`      | Set to any value to make the session hooks and the pre-push hook do nothing |
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="AI Agents" icon="robot" href="/en/how_to_use/cli/ai_agents">
+    Skills and loops for coding agents.
+  </Card>
+  <Card title="Command Reference" icon="book" href="/en/how_to_use/cli/commands#kodus-trace">
+    All `kodus trace` commands.
+  </Card>
+</CardGroup>

@@ -1,10 +1,15 @@
 ---
-title: GitLab OAuth App (Sign in with GitLab)
-description: "Create the GitLab OAuth App that powers \"Sign in with GitLab\" for your Kodus users — separate from the webhook integration used for code review."
+title: GitLab OAuth App
+description: "Create the GitLab application behind \"Sign in with GitLab\" and the OAuth connection for code review, with the redirect URIs, scopes and environment variables to set."
 icon: gitlab
 ---
 
-Use this if you want users to sign in to Kodus with GitLab. This is separate from the GitLab webhook integration used for code review automation.
+One GitLab application covers two things in Kodus:
+
+- **Sign in with GitLab** on the sign-in page.
+- **Install Gitlab app** on the **Connect your Git tool** step, or **Go to OAuth** on the **OAuth** tab when you connect GitLab on **Repositories**. Both connect GitLab for code review with OAuth.
+
+Skip this page if users sign in with email and connect GitLab with a [personal or group access token](/en/how_to_use/code_review/general_config/gitlab_pat). A token connection needs no OAuth app.
 
 ## Prerequisites
 
@@ -14,46 +19,58 @@ Use this if you want users to sign in to Kodus with GitLab. This is separate fro
 
 1. In GitLab, go to **User Settings** > **Applications**
 2. Click **New application**
-3. Fill in the application name and the redirect URI
+3. Fill in the application name
 
-## Step 2: Configure the Callback URL
+## Step 2: Configure the Redirect URIs
 
-Set the **Redirect URI** to:
+Add both URIs, one per line, in **Redirect URI**:
 
 ```
 WEB_DOMAIN/api/auth/callback/gitlab
+WEB_DOMAIN/setup/gitlab
 ```
 
-Make sure the URL matches your actual web domain and scheme (http/https).
+The first completes **Sign in with GitLab**. The second returns from GitLab after you connect GitLab with OAuth. Make sure they match your actual web domain and scheme (http/https).
 
 ## Step 3: Configure Scopes
 
-Set the scopes in GitLab to match the scopes below:
+Select these scopes:
 
-```
-WEB_GITLAB_SCOPES="read_api read_user read_repository"
-```
+- `api`
+- `read_user`
+- `read_repository`
+
+Each flow requests its own scopes:
+
+- **Sign in with GitLab** requests `read_user` only.
+- **Install Gitlab app** and **Go to OAuth** request the scopes in `WEB_GITLAB_SCOPES` (Step 4).
+
+Kody needs `api` to post review comments and to create, edit and remove webhooks. `read_api` can read but cannot post.
+
+<Warning>
+  `.env.schema` defaults `WEB_GITLAB_SCOPES` to `read_api read_user read_repository`. A connection made with that value can read your repositories but cannot post comments or manage webhooks. Set the value shown in Step 4.
+</Warning>
 
 ## Step 4: Add Credentials to .env
 
-After creating the app, copy the credentials from GitLab and add them to your Kodus environment:
+Copy the **Application ID** and **Secret** from GitLab. Both values go in two pairs of variables, because the web app and the API each read their own:
 
 ```
-WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
-WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
-WEB_GITLAB_SCOPES="read_api read_user read_repository"
+# Sign in with GitLab
+WEB_OAUTH_GITLAB_CLIENT_ID="your_application_id_here"
+WEB_OAUTH_GITLAB_CLIENT_SECRET="your_secret_here"
+
+# Connect GitLab with OAuth
+GLOBAL_GITLAB_CLIENT_ID="your_application_id_here"
+GLOBAL_GITLAB_CLIENT_SECRET="your_secret_here"
+GLOBAL_GITLAB_REDIRECT_URL="WEB_DOMAIN/setup/gitlab"
+WEB_GITLAB_SCOPES="api read_user read_repository"
 WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
+API_GITLAB_TOKEN_URL="https://gitlab.com/oauth/token"
 ```
 
-For self-managed GitLab, replace the OAuth URL with your instance domain (e.g., `https://gitlab.yourdomain.com/oauth/authorize`).
+For self-managed GitLab, replace the host in `WEB_GITLAB_OAUTH_URL` and `API_GITLAB_TOKEN_URL` with your instance domain (e.g., `https://gitlab.yourdomain.com/oauth/authorize` and `https://gitlab.yourdomain.com/oauth/token`).
 
-## Summary of Environment Variables
+If you only use one of the two, set only its variables.
 
-```bash
-WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
-WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
-WEB_GITLAB_SCOPES="read_api read_user read_repository"
-WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
-```
-
-Restart the web application to apply the changes.
+Restart the web application and the API to apply the changes.

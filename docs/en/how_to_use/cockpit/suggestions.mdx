@@ -1,0 +1,35 @@
+---
+title: "Suggestions"
+description: "List the suggestions Kody sent, filter them, and see which ones the team implemented."
+---
+
+**Cockpit › Suggestions** lists the suggestions behind a [Kodus Review](/en/how_to_use/cockpit/kodus_review) number. It has no sidebar entry: you reach it by clicking a category bar (implementation or negative feedback) or a Kody Rule row on the Kodus Review tab. It needs the same plan as the Cockpit.
+
+## What it lists
+
+Every suggestion Kody delivered as a PR comment and created inside the Cockpit date range, shown at the top of the page, 20 per page. Unlike the Kodus Review charts, which count PRs by the date they closed, this list goes by the date the suggestion was created, so suggestions on pull requests that are still open appear too. It does not follow the Cockpit repository picker.
+
+The top of the list shows how many suggestions match and how many of the ones on the current page were implemented.
+
+## Filters
+
+- **Category**
+- **Severity**: critical, high, medium or low
+- **Status**: **Implemented**, **Partially implemented**, **Not implemented** or **Not measured**
+- **Search**: press Enter to match the suggestion's summary or its file path
+- **Rule**: when you open the page from a Kody Rule, a chip with the rule name narrows the list to that rule. Click it to remove the rule
+
+**Clear all** resets every filter.
+
+### Status
+
+| Status | Meaning |
+| --- | --- |
+| **Implemented** | A later change made what the suggestion asked |
+| **Partially implemented** | A later change made part of it. Counts as implemented in the Cockpit rates |
+| **Not implemented** | No change was found, or the suggestion hasn't been checked yet |
+| **Not measured** | The implementation check could not decide. These are left out of the Cockpit implementation rates |
+
+## Suggestion details
+
+Each row shows severity, summary, category, status, file and PR number. Click a row to open a side panel with the existing code and the suggested code. **Open in PR review** opens the pull request's [review screen](/en/how_to_use/reviews/pull_requests) at that suggestion.

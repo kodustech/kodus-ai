@@ -1,0 +1,56 @@
+---
+title: "Code hotspots"
+description: "See which directories of a repository change most often and hold long or complex functions."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="providers" detail="Code hotspots analyzes repositories connected through GitHub or GitLab.">
+    <Badge icon="code-branch" stroke>GitHub &amp; GitLab</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="cloud" detail="Available on Kodus Cloud, including the trial.">
+    <Badge icon="cloud" stroke>Teams &amp; Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requires an Enterprise license and BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="Kodus Cloud workspaces need access to this beta.">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+The **Code hotspots** tab maps one repository's directories by how often they change and whether the JavaScript and TypeScript files sampled from them contain long or complex functions. Linked bug fixes add context.
+
+Owners and Repo Admins can open the tab with [Cockpit access](/en/how_to_use/cockpit/overview).
+
+The tab has its own **Repository** picker, which starts on the repository selected at the top of the Cockpit (or the first repository when **All repositories** is selected). The repository and date range pickers at the top of the Cockpit are hidden here, because the history window is fixed (see [How it is calculated](#how-it-is-calculated)). **Organization → Cockpit visibility** doesn't control this tab.
+
+## The map
+
+Each card is a directory. Columns split directories into **Occasional changes** and **Frequent changes**, where frequent means the top quarter of directories by changed pull requests. Rows split them by whether a sampled function was flagged.
+
+| Group | Meaning |
+| --- | --- |
+| **Investigate first** | Frequent changes, with flagged functions |
+| **Monitor** | Occasional changes, with flagged functions |
+| **Watch changes** | Frequent changes, no flagged functions in the sample |
+| **Less active** | Occasional changes, no flagged functions in the sample |
+
+Each card shows its **changed PRs** and, when there are any, its **linked fixes**. Inside a group, directories with more linked fixes come first. Directories with history but no JavaScript or TypeScript sample are listed under **Structure not measured**, outside the map; **Find a directory** filters that list. When no file in the repository could be sampled, the map shows **Function analysis is not available yet** instead.
+
+Select a card to open **Area detail**: **Changed PRs**, **JS/TS files checked**, **Linked fix PRs**, why the directory appears, the **Files sampled** with their flagged functions, and **PR and issue evidence**. Each PR in the evidence list is marked **Linked to a bug issue**, **Bug-fix wording in the title** or **Changed this area**.
+
+## How it is calculated
+
+- **History:** merged pull requests. The first scan covers the previous 30 days, and new merged pull requests extend it, up to one year. When a week has 100 or more pull requests, or some could not be read in full, the tab says **Sampled history (up to 100 PRs per week)**.
+- **Refresh:** a background job runs every two hours. Until a repository's first scan finishes, the tab shows **History scan in progress**.
+- **Functions:** Kodus reads up to 60 JavaScript and TypeScript files from the default branch, at most three per directory, the most changed first. It skips files over 150,000 characters and files with syntax errors. A function is flagged at 80 or more lines, 12 or more branches, or nesting of 4 or more.
+- **Linked fixes:** pull requests that changed the directory and whose description closes an issue in the same repository (for example `fixes #123`) labeled bug, defect or regression. They add history. They don't show where a defect started or predict future bugs.
+
+**How this view is calculated**, at the bottom of the tab, shows the counts for the selected repository.
+
+## Command line
+
+`kodus cockpit code-areas --repo org/repo` shows this tab in the terminal. See [CLI commands](/en/how_to_use/cli/commands).

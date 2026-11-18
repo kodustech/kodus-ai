@@ -7,34 +7,34 @@ Cada equipo tiene contexto no escrito — preferencias tecnológicas, convencion
 
 ## Cómo funciona
 
-Cuando hablas con Kody en los comentarios de un PR, detecta cuándo estás declarando contexto del código o una preferencia del equipo y lo guarda automáticamente como una **Memoria**. Las Memorias se aplican luego como contexto de alta prioridad en todas las revisiones de código y conversaciones futuras.
+Cuando le pides a Kody en un comentario de PR que recuerde algo, lo guarda como una **Memoria**. Cuando solo expones contexto del código o una preferencia del equipo, Kody ofrece guardarlo y lo guarda cuando le dices que sí. Las Memorias se usan luego como contexto de alta prioridad en futuras revisiones de código y conversaciones.
 
 ### Enseñanza explícita
 
 Dile directamente a Kody que recuerde algo:
 
 ```
-@kody remember: este repositorio refleja una API de terceros, así que algunos campos del payload se mantienen intencionalmente en snake_case.
+@kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
 ```
-@kody please remember: este servicio sigue arquitectura hexagonal y deja los adapters en los bordes.
+@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
 ```
 
-### Aprendizaje implícito
+### Exponer una convención
 
-Expresa una preferencia de forma natural — Kody la capta:
-
-```
-@kody este repositorio refleja una API de terceros, así que algunos campos del payload se mantienen intencionalmente en snake_case.
-```
+Expón una convención, o explica por qué una sugerencia no aplica, y Kody ofrece guardarla como memoria. Responde `@kody yes` para guardarla. Por ejemplo:
 
 ```
-@kody en este servicio, las pruebas suelen vivir junto a los archivos de implementación y no en una carpeta central de tests.
+@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
 ```
-@kody el módulo de facturación está a mitad de una migración, así que convienen cambios incrementales y no refactors amplios.
+@kody in this service, tests usually live next to the implementation files rather than in a central test folder.
+```
+
+```
+@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
 ```
 
 ## Qué no guardará Kody
@@ -59,7 +59,7 @@ Cada memoria se aplica en un nivel específico:
 
 ## Flujo de aprobación
 
-Si deseas revisar las memorias generadas por IA antes de que entren en vigor, abre **Code review → Kody Rules**, haz clic en **Configuration** y activa **Kody knowledge approval**. Las memorias (y las reglas generadas por Kody) entrarán en estado pendiente y esperarán en la sección **Pending review** hasta que las apruebes (**Approve**) o descartes (**Discard**).
+Si quieres revisar las memorias que Kody crea antes de que entren en vigor, abre **Code review → Kody Rules**, haz clic en **Configuration** y activa **Kody knowledge approval**. Las memorias nuevas (y las reglas generadas por Kody) esperarán entonces en la sección **Pending review** hasta que las apruebes (**Approve**) o descartes (**Discard**). Las memorias que escribes con **New memory** están activas de inmediato.
 
 ## Gestionar memorias
 

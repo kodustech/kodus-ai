@@ -10,6 +10,8 @@ A model reading a diff can't know that the 30 lines it just read already exist t
 
 The example is a TypeScript billing service. Adjust paths and thresholds to your repository.
 
+Custom agents are in beta, on Teams and Enterprise plans and during the trial. Self-hosted Kodus also needs `BETA_FEATURES=true`.
+
 ## Step 1 — Create the agent
 
 In **Code review → What to review → Custom agents**, click **New agent → Templates → Blank**. On its page, fill in **Instructions**:
@@ -65,7 +67,8 @@ Call it with the console reporter, the thresholds, and the directories the pull 
 
 --reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
 
-There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+There is no shell: do not quote arguments. Each clone prints both copies as `file [startLine:col - endLine:col]`,
+with the file relative to the directory scanned.
 Read both copies before reporting a clone.
 ```
 
@@ -81,20 +84,21 @@ Under **Comments & model**:
 | **Suggested fix** | Never | The fix is a refactor across files, not a line change. |
 | **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
 
-Click **Save**.
+Click **Save settings**.
 
 ## Step 5 — Try it
 
 Paste the link of a pull request that copies a function, and click **Run agent**. Check:
 
-- **Tool calls** shows the `jscpd` call and its output.
-- Each kept finding's **Comment** ends with an **Evidence** block quoting the jscpd lines that name the file:
+- The tool calls list shows a `runCli` call to `jscpd` and its output.
+- Each kept finding's **Comment** ends with an **Evidence** block quoting the jscpd lines that name the finding's file:
 
-```markdown
-**Evidence** (`jscpd`):
-> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
-> src/billing/credit-note.ts [8:1 - 37:2]
+````markdown
+**Evidence** (`jscpd` output):
+```text
+- invoice.ts [12:1 - 41:2] (30 lines, 212 tokens)
 ```
+````
 
 If **Warnings** says the CLI could not be installed, check the install command. CLIs need the E2B sandbox; without it the agent runs without jscpd.
 

@@ -1,42 +1,43 @@
 ---
-title: "如何将 Jira 连接到代码审查工具"
-description: "链接 Jira 到 Kodus，使 AI 代码审查自动根据任务需求和验收标准验证 PR。"
+title: "连接 Jira 并验证拉取请求"
+description: "在 Kodus 中设置 Atlassian Rovo，并根据 Jira 工单验证 PR。"
 ---
 
-将 Jira 连接到 Kodus 启用两个强大功能：根据 Jira 工单的自动**业务逻辑验证**，以及为代码审查建议提供更丰富的上下文。
+你需要有权读取拉取请求所引用的 Jira 项目。
 
 ## 如何连接
 
-1. 在侧边栏中打开 **Plugins**
-2. 点击 **Jira** 磁贴
-3. 进行身份验证（OAuth 或 API 令牌）并授权访问您的 Jira 工作区
-4. 选择 Kody 可以使用的工具，然后点击 **Install plugin**
+1. 在侧边栏中打开 **Plugins**(安装插件需要 Owner 角色)
+2. 点击 **Atlassian Rovo** 磁贴(Jira)
+3. 点击 **Authenticate with** 该插件并授权访问您的 Jira 工作区(OAuth),或输入您的 Atlassian 电子邮件和 API 令牌并点击 **Connect**
+4. 插件在连接后立即安装,并选中其只读工具。之后如需更改,请打开它,编辑 **Selected tools** 并点击 **Update Tools**
+
+请保持选中以下工具,因为 Kody 使用它们读取工单:`getJiraIssue`、`getAccessibleAtlassianResources` 和 `getVisibleJiraProjects`。被关闭的工具无法使用。
 
 ## 启用的功能
 
 ### 自动业务逻辑验证
 
-当 PR 关联到 Jira 工单，且 **Code review → What to review** 中的 **Business Logic** 类别已开启时，Kodus 自动：
-- 获取工单标题、描述和验收标准
-- 将 PR 差异与需求进行比较
-- 报告缺失的实现、范围不匹配和差距
+在 PR 标题、分支名或描述中引用Jira 工单。在 **Code review → What to review** 中开启 **Business Logic**（默认开启）后，Kody 会在第一次审查时验证 PR。 Kody 会读取工单、父任务和子任务。
 
 ### 按需验证
 
-在 PR 评论中粘贴任何 Jira URL：
+在 PR 评论中粘贴任何 Jira URL 或工单键:
 
 ```
 @kody -v business-logic https://your-org.atlassian.net/browse/PROJ-123
 ```
 
-### 更丰富的代码审查上下文
+## 查看结果
 
-连接 Jira 后，Kody 可以在规则中使用 MCP 函数获取任务上下文、检查问题状态和交叉引用需求。
+Kody 会发布一条 **Kody · Business Logic** 评论，列出已检查的要求和每项结果所依据的代码。再次验证时会更新同一条评论。有关结果状态和重新验证方式，请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。
 
-## 要求
+## 提示
 
-- Jira Cloud 或 Jira Data Center
-- OAuth 或 API 令牌访问
-- 读取相关项目的权限
+- 在 Jira 工单中写明**验收标准**。如果标准位于特定标题下或自定义字段内，请在业务逻辑设置中配置 **Requirements → Where acceptance criteria live**。
+- 对于 Jira 子任务，Kody 会根据子任务标题选取父工单中相关的需求进行检查。
+- 修复缺口后，评论 `@kody -v business-logic` 重新检查。
 
-有关业务逻辑验证的详情，请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。有关插件设置，请参阅[插件](/zh/how_to_use/code_review/plugins)。
+## 对话中的插件工具
+
+当您在 PR 评论中提及 Kody 时,它可以使用该插件。也可以为[自定义代理](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp)开启它。

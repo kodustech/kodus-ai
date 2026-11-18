@@ -1,54 +1,64 @@
 ---
 title: "Como criar regras personalizadas de revisão de código"
-description: "Defina regras adaptadas à arquitetura, padrões e preferências de codificação do seu time, aplicadas automaticamente em cada PR."
+description: "Defina regras adaptadas à arquitetura, aos padrões e às preferências de codificação do seu time, verificadas em cada PR."
 ---
 
-Cada time tem convenções que linters genéricos não cobrem — limites de arquitetura, padrões de nomenclatura, requisitos de testes ou restrições específicas do negócio. Regras personalizadas de revisão de código permitem codificar isso em verificações automatizadas.
+Todo time tem convenções que linters genéricos não cobrem: limites de arquitetura, padrões de nomenclatura, requisitos de testes ou restrições específicas do negócio. Regras personalizadas de revisão de código permitem codificá-las como verificações que o Kody roda em cada pull request.
 
 ## Criando uma regra no Kodus
 
 1. Selecione **Global** (ou um repositório / diretório) no seletor de escopo no topo do grupo **Code review** na barra lateral e abra **Kody Rules**
-2. Clique em **New rule**
+2. Na aba **Review Rules**, clique em **New rule**
 3. Configure:
-   - **Rule name** — o que a regra verifica (ex.: "Arquivos de serviço devem ter testes")
-   - **Execution mode** — **Per file** (analisa cada arquivo alterado) ou **Per PR** (analisa o PR completo)
-   - **Path** — padrão glob para direcionar arquivos específicos (ex.: `src/services/**/*.ts`); não é usado por regras Per PR
-   - **Severidade** — Crítica, Alta, Média ou Baixa
-   - **Instruções** — descrição detalhada do que verificar
+   - **Rule name**: o que a regra verifica (ex.: "Arquivos de serviço devem ter testes")
+   - **Execution mode**: **Per file** (verifica cada arquivo alterado e comenta inline) ou **Per PR** (verifica o PR inteiro e posta um comentário no PR)
+   - **Path**: padrões glob que limitam uma regra Per file a arquivos específicos (ex.: `src/services/**/*.ts`); não é usado por regras Per PR
+   - **Instructions**: o que verificar e como decidir
+   - **Severity**: Critical, High (o padrão), Medium ou Low
 
-## O que torna as regras poderosas
+Em **Advanced settings**, você pode adicionar um **Bad example** e um **Good example**, que ajudam o Kody a distinguir uma violação de um código em conformidade.
 
-As regras podem acessar um contexto rico:
+## O que ajuda uma regra a funcionar
 
-- **Variáveis** como `fileDiff`, `pr_title`, `pr_description`, `pr_files_diff`
-- **Referências de arquivo** com `@file:caminho/para/arquivo.ts` para comparar com padrões
-- **Funções MCP** para buscar dados de ferramentas conectadas (Jira, estrutura do repositório, etc.)
+- **Seja específico.** Cite o padrão, o caminho e o que conta como violação.
+- **Aponte para os seus padrões.** Mencione um arquivo pelo caminho, como `@file:docs/architecture.md`, e o Kody o lê quando avalia a regra. O arquivo é lido da branch de destino do pull request.
+- **Escolha o modo certo.** Use Per file para o que dá para ver em um único arquivo, e Per PR para requisitos sobre o pull request como um todo: a descrição, o tamanho ou se arquivos relacionados mudam juntos.
+
+### Exemplo: Aplicando uma convenção de nomenclatura
+
+Você pode criar uma regra em nível de arquivo como:
+
+- **Rule name**: "Componentes React devem usar nomes de arquivo em PascalCase"
+- **Path**: `src/components/**/*.tsx`
+- **Severity**: High
+- **Instructions**: "Sinalize qualquer arquivo de componente que não siga a nomenclatura PascalCase."
 
 ### Exemplo: Regra de limite arquitetural
 
 ```
-Nome: A camada de domínio não deve depender da infraestrutura
+Name: Domain layer must not depend on infrastructure
 Execution mode: Per PR
-Instruções: Verifique pr_files_diff para qualquer importação em src/domain/
-que referencie src/infrastructure/. Consulte
-@file:docs/architecture.md para dependências permitidas.
+Instructions: Flag any import added in src/domain/ that
+points to src/infrastructure/. The allowed dependencies are
+described in @file:docs/architecture.md.
 ```
 
 ### Exemplo: Regra de cobertura de testes
 
 ```
-Nome: Todo serviço deve ter um arquivo de teste
+Name: Every service change needs a test change
 Execution mode: Per PR
-Instruções: Para cada arquivo modificado em src/services/,
-verifique se existe um arquivo de teste correspondente em test/services/.
-Use MCP para verificar a árvore de arquivos do repositório.
+Instructions: For each file modified in src/services/, check that the
+PR also changes a matching test file under test/services/.
 ```
 
 ## Outras formas de adicionar regras
 
-- **Importar da Biblioteca de Regras** — clique em **Discovery** na página de Kody Rules para navegar por regras comprovadas por linguagem e categoria
-- **Sincronizar de ferramentas de IDE** — importe regras automaticamente do Cursor, Copilot, Claude
-- **Regras de repositório** — defina regras em arquivos markdown no seu repositório
-- **Geração automática** — o Kody sugere regras baseadas no seu histórico de revisões
+- **Rules Library**: clique em **Discovery** na página de Kody Rules para adicionar regras e packs prontos
+- **Regras de repositório**: mantenha uma regra por arquivo markdown no seu repositório, em `.kody/rules`
+- **Geração automática**: o Kody redige regras a partir dos comentários passados dos seus revisores
+- **Em uma thread de revisão**: peça ao Kody para criar ou alterar uma regra, por exemplo `@kody update this rule to ignore test files`
 
-Para a referência completa, consulte [Regras do Kody](/pt-BR/how_to_use/code_review/configs/kody_rules).
+Para que o Kody confira pull requests com o `CLAUDE.md`, o `AGENTS.md` ou as instruções do Cursor e do Copilot, veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
+
+Para a referência completa, consulte [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).

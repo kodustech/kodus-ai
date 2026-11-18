@@ -1,48 +1,97 @@
 ---
-title: "Como corrigir problemas de webhook com GitHub ou GitLab"
-description: "Diagnostique e resolva problemas de conectividade de webhook entre seu provedor Git e o Kodus."
+title: "Como corrigir problemas de webhook"
+description: "Diagnostique e resolva problemas de entrega de webhook entre seu provedor Git e o Kodus."
 ---
 
-Webhooks são a forma como o Kodus sabe quando um PR é aberto ou atualizado. Se não estiverem funcionando, as revisões não serão acionadas.
+Webhooks são a forma como o Kodus sabe quando um PR é aberto, atualizado ou comentado. Se não estiverem funcionando, as revisões não serão acionadas.
 
-## Diagnosticando o problema
+Com o GitHub App, os eventos vêm do webhook do próprio App. Em todas as outras conexões, o Kodus cria um webhook em cada repositório quando você salva a seleção em **Repositories**.
+
+## Verifique Repositories primeiro
+
+Quando um provedor se recusa a criar um webhook, **Repositories** mostra um aviso, **A repository has no webhook** ou **N repositories have no webhook**, com cada repositório e o motivo. O Kodus nunca fica sabendo dos pull requests nesses repositórios, então nenhuma revisão roda. A causa usual é uma credencial que não consegue gerenciar webhooks:
+
+### Permissões de webhook por provedor
+
+| Provedor | O que a credencial precisa |
+| --- | --- |
+| GitHub (token) | Acesso de leitura e escrita aos webhooks do repositório: `admin:repo_hook`, ou **Webhooks: Read and write** em um fine-grained token |
+| GitLab | Função **Maintainer** ou **Owner** no projeto |
+| Bitbucket Cloud | Acesso de admin ao repositório e `read:webhook:bitbucket` e `write:webhook:bitbucket` |
+| Bitbucket Data Center | Permissão **Repository admin** |
+| Azure DevOps | **Edit subscriptions** no projeto (os Project Administrators têm) |
+| Forgejo | Acesso de admin ao repositório e o escopo `write:repository` |
+
+Corrija a permissão e salve a seleção de novo (**Save selected repositories**). Com **Review every repository** ativado, o Kodus tenta esses repositórios de novo a cada sincronização.
+
+As recusas do Azure DevOps só aparecem aqui com **Review every repository** ativado. Com uma seleção, confira as assinaturas em **Project settings** → **Service hooks**.
+
+## Verifique a entrega
 
 ### GitHub
 
-1. Vá nas **Configurações** do seu repositório → **Webhooks**
+1. Vá em **Settings** → **Webhooks** do seu repositório
 2. Encontre o webhook do Kodus
-3. Clique nele e verifique as **Entregas Recentes**
-4. Procure por entregas com falha (códigos de status não 2xx)
+3. Clique nele e verifique **Recent Deliveries**
+4. Procure entregas com falha (códigos de status diferentes de 2xx)
+
+Com um GitHub App que você criou para uma instância self-hosted, verifique **Advanced** → **Recent Deliveries** nas configurações do App.
 
 ### GitLab
 
-1. Vá nas **Configurações** do seu projeto → **Webhooks**
+1. Vá em **Settings** → **Webhooks** do seu projeto
 2. Encontre o webhook do Kodus
 3. Verifique o histórico de entregas em busca de erros
 
+### Azure DevOps
+
+Abra **Project settings** → **Service hooks** e verifique o histórico da assinatura.
+
+## Verifique se a URL chega ao Kodus
+
+Os webhooks são tratados por um serviço separado (porta 3332), não pela API nem pelo app web. Envie uma requisição que o serviço aceite sem um evento real:
+
+```bash
+curl -i -X POST https://kodus-webhooks.yourdomain.com/github/webhook \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: ping' \
+  -d '{}'
+```
+
+Um `200` com `Webhook ignored (event not supported)` significa que a requisição chegou ao serviço de webhooks. Um `404`, um redirecionamento ou uma página HTML significa que a URL aponta para a API ou para o app web: corrija a URL ou o seu reverse proxy. Para os outros provedores, use `/gitlab/webhook`, `/bitbucket/webhook` ou `/forgejo/webhook`. O Azure Repos responde `403 Unauthorized` sem o parâmetro `token`, o que também prova que a rota está certa.
+
+Um `200` só significa que o serviço aceitou a requisição. O Kodus descarta eventos de um repositório que não está selecionado em **Repositories**.
+
 ## Correções comuns
 
-### URL do webhook incorreta ou desatualizada
+### A URL do webhook está errada ou desatualizada
 
-Se você alterou a URL de implantação do Kodus, atualize a URL do webhook nas configurações do seu provedor Git.
+A URL de cada provedor vem da sua variável de ambiente:
 
-### Problemas com certificado SSL
+| Provedor | Variável | Caminho |
+| --- | --- | --- |
+| GitHub | `API_GITHUB_CODE_MANAGEMENT_WEBHOOK` | `/github/webhook` |
+| GitLab | `API_GITLAB_CODE_MANAGEMENT_WEBHOOK` | `/gitlab/webhook` |
+| Bitbucket | `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | `/bitbucket/webhook` |
+| Azure DevOps | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | `/azure-repos/webhook` |
+| Forgejo | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | `/forgejo/webhook` |
 
-Se você está hospedando por conta própria, certifique-se de que seu certificado SSL é válido. GitHub e GitLab rejeitam webhooks com certificados inválidos.
+O Kodus identifica os webhooks existentes pela URL. Depois de alterar a URL, reinicie a API e salve a seleção de novo: o Kodus cria um novo webhook e deixa o antigo no lugar. Exclua o antigo no seu provedor Git.
+
+### Problemas com o certificado SSL
+
+Os webhooks que o Kodus cria no GitHub e no GitLab têm a verificação SSL ativada; os outros provedores usam o próprio padrão. Se você hospeda por conta própria, garanta que seu certificado SSL seja válido, ou o provedor rejeita a entrega.
 
 ### Bloqueio por firewall
 
-Se o Kodus está atrás de um firewall, certifique-se de que as faixas de IP do seu provedor Git podem alcançar o endpoint do webhook.
+Se o Kodus está atrás de um firewall, garanta que as faixas de IP do seu provedor Git consigam alcançar o endpoint do webhook.
 
-### Webhook foi excluído
+### O webhook foi excluído
 
-O Kodus registra webhooks ausentes sempre que a seleção de repositórios é salva em **Repositories** na barra lateral (**Add repository** → **Save selected repositories**), então salvar uma alteração na seleção registra o webhook novamente. Você também pode adicionar manualmente a URL do webhook.
+Salvar a seleção em **Repositories** (**Add repository** → **Save selected repositories**) registra qualquer webhook ausente. Você também pode adicioná-lo manualmente: [GitHub](/pt-BR/how_to_deploy/platforms/github/github_webhook), [GitLab](/pt-BR/how_to_deploy/platforms/gitlab/gitlab_webhook), [Bitbucket](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook), [Azure DevOps](/pt-BR/how_to_deploy/platforms/azure_devops/azdevops_webhook) ou [Forgejo](/pt-BR/how_to_deploy/platforms/forgejo/forgejo_webhook).
 
 ## Testando
 
-A maioria dos provedores Git permite **reenviar** um payload de webhook recente. Use isso para testar sem criar um novo PR.
+A maioria dos provedores Git permite **reenviar** (redeliver) um payload de webhook recente. Use isso para testar sem criar um novo PR.
 
-Para guias específicos por plataforma, consulte:
-- [Webhooks GitHub](/pt-BR/how_to_deploy/platforms/github/github_webhook)
-- [Webhooks GitLab](/pt-BR/how_to_deploy/platforms/gitlab/gitlab_webhook)
-- [Webhooks Bitbucket](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+Self-hosted: rode `./scripts/doctor.sh` a partir da pasta do instalador. As verificações de Git dele reportam repositórios que o token não consegue ler nem comentar, repositórios sem webhook do Kodus e se a URL do webhook está definida e recebeu eventos nos últimos 7 dias.

@@ -74,7 +74,7 @@ const mcpAdapter = createMCPAdapter({
     {
       name: 'kodus-code-management',
       type: 'http',
-      url: 'https://api.kodus.io/mcp',
+      url: 'https://<your-api-host>/mcp',
       headers: { 'x-team-key': 'kodus_...' }
     }
   ]

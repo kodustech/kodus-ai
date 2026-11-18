@@ -10,6 +10,8 @@ Un modelo que lee un diff no puede saber que las 30 líneas que acaba de leer ya
 
 El ejemplo es un servicio de facturación en TypeScript. Ajusta rutas y umbrales a tu repositorio.
 
+Los agentes personalizados están en beta, en los planes Teams y Enterprise y durante el trial. Kodus self-hosted también necesita `BETA_FEATURES=true`.
+
 ## Paso 1 — Crea el agente
 
 En **Code review → What to review → Custom agents**, haz clic en **New agent → Templates → Blank**. En su página, completa **Instructions**:
@@ -65,7 +67,8 @@ Call it with the console reporter, the thresholds, and the directories the pull 
 
 --reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
 
-There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+There is no shell: do not quote arguments. Each clone prints both copies as `file [startLine:col - endLine:col]`,
+with the file relative to the directory scanned.
 Read both copies before reporting a clone.
 ```
 
@@ -81,26 +84,27 @@ En **Comments & model**:
 | **Suggested fix** | Never | El fix es un refactor entre archivos, no un cambio de línea. |
 | **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
 
-Haz clic en **Save**.
+Haz clic en **Save settings**.
 
 ## Paso 5 — Try it
 
 Pega el enlace de un pull request que copie una función y haz clic en **Run agent**. Revisa:
 
-- Las llamadas a herramientas muestran la llamada a `jscpd` y su salida.
-- El **Comment** de cada hallazgo conservado termina con un bloque **Evidence** que cita las líneas de jscpd que nombran el archivo:
+- La lista de llamadas a herramientas muestra una llamada `runCli` a `jscpd` y su salida.
+- El **Comment** de cada hallazgo conservado termina con un bloque **Evidence** que cita las líneas de jscpd que nombran el archivo del hallazgo:
 
-```markdown
-**Evidence** (`jscpd`):
-> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
-> src/billing/credit-note.ts [8:1 - 37:2]
+````markdown
+**Evidence** (`jscpd` output):
+```text
+- invoice.ts [12:1 - 41:2] (30 lines, 212 tokens)
 ```
+````
 
 Si **Warnings** dice que la CLI no se pudo instalar, revisa el comando de instalación. Las CLIs necesitan el sandbox de E2B; sin él, el agente se ejecuta sin jscpd.
 
 Activa el agente cuando los hallazgos sean los que quieres.
 
-## Checklist
+## Lista de verificación
 
 - [ ] Instalación fijada a una versión exacta
 - [ ] El prefijo permitido empieza con un flag, no solo con el binario

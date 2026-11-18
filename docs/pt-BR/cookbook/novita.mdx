@@ -6,153 +6,90 @@ icon: "server"
 
 ## Como a Novita funciona
 
-A Novita é uma plataforma de infraestrutura serverless para IA, projetada para escalar modelos open-source com baixa latência e custo reduzido. Ela suporta centenas de modelos prontos para produção — incluindo Llama, Mistral, Claude e Stable Diffusion — e fornece APIs otimizadas, GPUs sob demanda e implantações de modelos personalizados sem qualquer sobrecarga de DevOps.
+A Novita é uma plataforma de inferência serverless que hospeda modelos open-source, como DeepSeek, Kimi, GLM, MiniMax e Qwen, por trás de uma API **compatível com OpenAI**. O Kodus tem um provedor **Novita** dedicado, então você só precisa de uma chave de API.
 
 ## Modelos Recomendados
 
-Recomendamos bons modelos de codificação com janela de contexto de +100k.
-
 <Info>
-  {" "}
-  Para informações mais atualizadas, visite o [site da Novita](https://novita.ai/models/llm).{" "}
+  Veja a [lista de modelos da Novita](https://novita.ai/models/llm) para os modelos e preços atuais. A lista em `https://api.novita.ai/openai/v1/models` é pública e mostra o tamanho de contexto e os recursos de cada modelo.
 </Info>
 
-| Modelo                              | Preço      | Janela de Contexto |
-| ---------------------------------- | ---------- | ------------------ |
-| **Deepseek v3 0324** `recommended` | $0.33/1.3  | ~128k tokens   |
-| **Deepseek R1 0528**               | $0.7/2.5   | ~128k tokens   |
-| **Llama 4 Maverick Instruct**      | $0.17/0.85 | ~100k tokens   |
+Os IDs de modelo da Novita são strings `org/model`, na maioria em minúsculas. Estes listam function calling e saídas estruturadas no catálogo da Novita:
+
+| ID do Modelo | Janela de Contexto |
+| ------------ | ------------------ |
+| `deepseek/deepseek-v4-pro` | ~1M tokens |
+| `moonshotai/kimi-k3` | ~1M tokens |
+| `zai-org/glm-5.3` | ~1M tokens |
+| `minimax/minimax-m3` | ~1M tokens |
+| `qwen/qwen3.8-27b` | ~1M tokens |
 
 ## Criando a Chave de API
 
-<Warning>Uma conta na Novita é necessária para criar a Chave de API.</Warning>
+<Warning>Uma conta na Novita é necessária para criar uma chave de API.</Warning>
 
-Acesse diretamente a [página de Chaves de API da Novita](https://novita.ai/settings/key-management) para criar uma nova Chave de API.
+1. Abra [**Key Management**](https://novita.ai/settings/key-management) no console da Novita.
+2. Selecione **Create API Key** e dê um nome, por exemplo `kodus`.
+3. Escolha uma expiração: **Permanent**, 90 dias, 30 dias ou 24 horas. Você não pode alterá-la depois, e a Novita rejeita uma chave expirada.
+4. Copie a chave. A Novita a mostra por completo apenas uma vez.
 
-Ou siga estas etapas:
+## Configurar a Novita no Kodus
 
-1. Acesse o console da Novita
-2. Clique no botão "Manage API Keys" ou vá até sua foto de perfil e clique em API Keys
-3. Clique em "Add New Key" e preencha com 'Kodus' ou qualquer nome que quiser
-4. Clique em "Confirm"
-5. Copie a Chave de API e salve em um local seguro
+### Opção 1 — Página AI providers (recomendado)
 
+Este fluxo é o mesmo no Kodus Cloud e em uma instância self-hosted.
 
+<Steps>
+  <Step title="Abrir AI providers e escolher Novita">
+    Na barra lateral, abra **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok) no Cloud, `/byok` na sua própria instância). Na aba **Providers**, clique no card **Novita**. Ele fica em **Connect your first provider**, ou depois de **Add another provider** se você já conectou um.
+  </Step>
 
-<Snippet file="deploy-basic-setup.mdx" />
+  <Step title="Colar sua chave de API e escolher o modelo">
+    Cole sua chave da Novita no campo **Key** do card **API key**. Deixe **Base URL (optional)** vazio: o Kodus então chama `https://api.novita.ai/v3/openai`. No card **Model**, escolha um modelo da lista ou selecione **Type model manually**.
+  </Step>
 
-### Configure a Novita no Arquivo de Ambiente
+  <Step title="Test & save">
+    Clique em **Test & save**. O Kodus envia ao modelo uma requisição de um token e salva a configuração em caso de sucesso.
+  </Step>
+</Steps>
 
-Edite seu arquivo `.env` e configure as definições principais. Para **Integração com LLM**, use a Novita no Modo Fixo:
+Em seguida, abra **Code review → Routing** (o botão **Configure routing** na página **AI providers** abre essa tela). No card **Models**, defina o modelo da Novita como **Default model** e um modelo de outro provedor conectado, como OpenAI ou Anthropic, como **Fallback model**, para que as revisões continuem funcionando se a Novita estiver indisponível. Clique em **Save settings**.
+
+### Opção 2 — Self-hosted (variáveis de ambiente)
+
+Para dar a uma instância self-hosted um modelo via `.env`, use o provedor compatível com OpenAI:
 
 ```env
-# Core System Settings (update with your domains)
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
-WEB_PORT_API=443                               
-NEXTAUTH_URL="https://kodus-web.yourdomain.com"
-
-# Security Keys (generate with openssl commands above)
-WEB_NEXTAUTH_SECRET="your-generated-secret"
-API_CRYPTO_KEY="your-generated-hex-key"
-API_JWT_SECRET="your-generated-secret"
-API_JWT_REFRESH_SECRET="your-generated-secret"
-
-# Database Configuration
-API_PG_DB_PASSWORD="your-secure-db-password"
-API_MG_DB_PASSWORD="your-secure-db-password"
-
-# Novita Configuration (Fixed Mode) 
-API_LLM_PROVIDER_MODEL="deepseek-v3-0324"                    # Choose your preferred model
-API_OPENAI_FORCE_BASE_URL="https://api.novita.ai/v3/openai"  # Novita API URL
-API_OPEN_AI_API_KEY="your-novita-api-key"                    # Your Novita API Key
-
-# Git Provider Webhooks (choose your provider)
-API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
-# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
-# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="deepseek/deepseek-v4-pro"
+API_LLM_BASE_URL="https://api.novita.ai/openai"
+API_LLM_API_KEY="your-novita-api-key"
 ```
 
-<Note>
-  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Use um domínio dedicado para webhooks ou roteie `/.../webhook` para a porta 3332 no seu proxy reverso.
-</Note>
+Siga o guia de instalação para [aplicar a mudança de modelo](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#aplicar-mudanças-no-modelo).
 
-<Info>
-  **O Modo Fixo é ideal para a Novita** porque fornece APIs compatíveis com OpenAI e requer apenas uma chave de API. Isso simplifica significativamente sua configuração.
-</Info>
-
-<Snippet file="deploy-installation.mdx" />
-
-### 6. Configure o Proxy Reverso (Para Produção)
-
-Para webhooks e acesso externo, configure o Nginx:
-
-```nginx
-# Web App (port 3000)
-server {
-    listen 80;
-    server_name kodus-web.yourdomain.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# API (port 3001)  
-server {
-    listen 80;
-    server_name kodus-api.yourdomain.com;
-    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
-        proxy_pass http://localhost:3332;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### Verifique a Integração com a Novita
-
-Além da verificação básica de instalação, confirme que a Novita está funcionando:
-
-```bash
-# Verify Novita API connection specifically
-docker-compose logs api worker | grep -i novita
-```
-
-<Tip>
-  Para informações detalhadas sobre configuração de SSL, monitoramento e configurações avançadas, consulte nosso [guia completo de implantação](https://docs.kodus.io/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
-</Tip>
-
-### Solução de Problemas
+## Solução de problemas
 
 <AccordionGroup>
   <Accordion title="Problemas com a Chave de API">
     - Verifique se sua chave de API está correta e ativa no [console da Novita](https://novita.ai/settings/key-management)
-    - Verifique se você tem créditos suficientes em sua conta Novita
-    - Certifique-se de que não há espaços extras no seu arquivo `.env`
+    - Confira se você tem créditos suficientes na sua conta da Novita
+    - Certifique-se de que não há espaços em excesso ou aspas no valor do `.env`
   </Accordion>
-  
+
   <Accordion title="Modelo Não Encontrado">
-    - Verifique se o nome do modelo está escrito corretamente na sua configuração
-    - Confirme se o modelo está disponível no seu plano Novita
-    - Tente com um modelo diferente da nossa lista recomendada
+    - Os IDs de modelo são strings `org/model`, e alguns contêm maiúsculas. Copie o ID exato da lista de modelos da Novita
+    - Confira se o modelo ainda está na lista em `https://api.novita.ai/openai/v1/models`
   </Accordion>
-  
+
   <Accordion title="Erros de Conexão">
     - Verifique se seu servidor tem acesso à internet para alcançar `api.novita.ai`
-    - Verifique se há restrições de firewall
-    - Revise os logs da API/worker para mensagens de erro detalhadas
+    - Confira se há restrições de firewall
+    - Revise os logs da API e do worker para o erro upstream exato
   </Accordion>
 </AccordionGroup>
+
+## Relacionados
+
+- [Lista de modelos da Novita](https://novita.ai/models/llm)
+- [Visão geral do BYOK](/pt-BR/how_to_use/byok)

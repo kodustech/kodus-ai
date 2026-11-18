@@ -4,33 +4,37 @@ description: "Hide the Cockpit tabs and individual metrics your organization doe
 ---
 
 Not every team wants every metric visible. Cockpit lets an Owner turn off whole tabs or
-individual charts for the **entire organization** — useful when a metric is noisy for your
+individual charts for the **entire organization**, useful when a metric is noisy for your
 workflow, or when you don't want per-developer numbers on display at all.
 
-In the sidebar, open **Organization → Cockpit visibility** (`/organization/cockpit`). The page is titled
+Only Owners can change org-wide visibility in **Organization → Cockpit visibility**. See [Cockpit availability](/en/how_to_use/cockpit/overview) for plan and self-hosted requirements.
+
+In the sidebar, open **Organization → Cockpit visibility**. The page is titled
 **Cockpit Configuration**; click **Save settings** to apply your changes.
 
 <Info>
   This is an **organization-wide** setting, not a per-user preference. Turning a metric off
-  hides it for everyone.
+  hides it for everyone. Only Owners can change it.
 </Info>
 
 ## Tabs
 
-The Cockpit has two metric tabs, and each can be hidden (the **Issues** tab next to them isn't
-controlled here):
+Each of the three metric tabs can be hidden (the **Code hotspots** and **Issues** tabs
+next to them aren't controlled here):
 
 | Tab | What it holds |
 | --- | --- |
-| **Kodus Review** | How effective Kodus's reviews are — implementation rate, severity calibration, negative feedback, Kody Rules health. |
-| **Productivity** | Delivery metrics — deploy frequency, cycle time, PR size, team activity. |
+| **Kodus Review** | How effective Kodus's reviews are: implementation rate, severity calibration, negative feedback, Kody Rules health. This tab has no per-metric toggles. |
+| **Delivered as asked** | Pull requests checked against their task: share that met it, changes not in the task, and the split by author and team. |
+| **Productivity** | Delivery metrics: deploy frequency, cycle time, PR size, team activity. |
 
 <Warning>
-  **At least one tab must stay enabled.** The form rejects turning both off.
+  **At least one tab must stay enabled.** The form rejects turning all of them off.
 </Warning>
 
 Hiding the Productivity tab also hides everything inside it, so the individual toggles below
-only matter while that tab is on.
+only matter while that tab is on. When **Kodus Review** is hidden as well, the Cockpit still
+shows the Productivity tab.
 
 ## Summary cards
 
@@ -38,10 +42,10 @@ The cards at the top of the Productivity tab:
 
 | Metric | What it shows |
 | --- | --- |
-| **Deploy Frequency** | How often your team deploys to production |
-| **PR Cycle Time** | Time from PR creation to merge (75th percentile) |
-| **Bug Ratio** | Percentage of PRs that are bug fixes |
-| **PR Size** | Average size of pull requests |
+| **Deploy Frequency** | Pull requests closed per week. See [Deploy Frequency](/en/how_to_use/cockpit/metrics/deploy_frequency) |
+| **PR Cycle Time** | Time from PR opened to closed (75th percentile). See [PR Cycle Time](/en/how_to_use/cockpit/metrics/lead_time_for_changes) |
+| **Bug Ratio** | Percentage of closed PRs classified as bug fixes. See [Bug Ratio](/en/how_to_use/cockpit/metrics/change_failure_rate) |
+| **PR Size** | Average lines changed per pull request. See [PR Size](/en/how_to_use/cockpit/metrics/pr_size) |
 
 ## Detail charts
 
@@ -49,16 +53,15 @@ The charts below the summary cards:
 
 | Chart | What it shows |
 | --- | --- |
-| **Lead Time Breakdown** | Lead time split into its stages |
-| **PR Cycle Time Chart** | Cycle time plotted over the period |
-| **PRs Opened vs Closed** | Weekly opened vs closed counts — see [PRs Opened vs Closed](/en/how_to_use/cockpit/metrics/prs_opened_vs_closed) |
-| **PRs Merged by Developer** | PRs merged per team member |
-| **Team Activity** | Overall team activity and contributions |
+| **Lead Time Breakdown** | Coding, pickup and review time per week. See [Lead Time Breakdown](/en/how_to_use/cockpit/metrics/lead_time_breakdown) |
+| **PR Cycle Time Chart** | Cycle time plotted per week |
+| **PRs Opened vs Closed** | Weekly opened vs closed counts. See [PRs Opened vs Closed](/en/how_to_use/cockpit/metrics/prs_opened_vs_closed) |
+| **PRs Merged by Developer** | PRs closed per author per week. See [PRs by Developer](/en/how_to_use/cockpit/metrics/prs_by_developer) |
+| **Team Activity** | PRs opened per developer. See [Developer Activity](/en/how_to_use/cockpit/metrics/developer_activity) |
 
 ## Notes
 
-- New metrics ship **visible by default**. If Kodus adds a chart, it appears for everyone until
-  someone turns it off — your saved configuration is merged over the current defaults rather
-  than replacing them, so an older saved config never hides something new.
+- A metric you haven't configured is visible. Your saved configuration is merged over the
+  current defaults, so an older saved config never hides a chart that was added later.
 - Hiding a metric only affects display. Kodus keeps ingesting the underlying data, so turning it
   back on shows the full history, not just data from that point forward.

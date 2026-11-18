@@ -1,0 +1,51 @@
+---
+title: "Uso de tokens"
+description: "Consulta cuántos tokens usan tus revisiones y cuánto cuestan, por día, pull request, ejecución de revisión, desarrollador, modelo y tarea."
+---
+
+**Organization → Token usage** muestra los tokens que consumen tus revisiones y una estimación de su costo.
+
+Los Owners, Billing Managers y Repo Admins pueden abrir el panel o consultar el consumo con `kodus usage tokens` tras iniciar sesión.
+
+Para un presupuesto mensual con alertas, consulta [Límite mensual de gasto](/es/how_to_use/spend-limit), que enlaza aquí para el desglose completo.
+
+Para consultar el uso de tokens y el costo estimado desde la terminal o exportarlos en JSON, usa [`kodus usage tokens`](/es/how_to_use/cli/commands#usage-tokens).
+
+## Filtros
+
+- **Models**: marca los modelos que quieres incluir. Todos están seleccionados por defecto.
+- **Repository**: se muestra cuando tienes repositorios conectados.
+- **View**: **Daily**, **By PR**, **By Review** o **By Developer**. **By PR** agrega un cuadro **PR Number**, y **By Developer** agrega un selector de desarrolladores.
+- **Date range**: **Last week**, **Last 15 days**, **Last month**, **Last 3 months** o fechas personalizadas. El valor por defecto son los últimos 15 días.
+
+## Tarjetas de resumen
+
+Totales para el rango y los filtros, con el cambio frente al período anterior de la misma duración donde se muestra.
+
+| Tarjeta | Qué muestra |
+| --- | --- |
+| **Total cost** | Costo estimado, con el promedio por día y por PR |
+| **Total tokens** | Todos los tokens usados, incluidos los tokens de razonamiento |
+| **Uncached input** | Tokens de entrada facturados al precio completo de entrada |
+| **Cache read** | Tokens de entrada servidos desde la caché de prompts del proveedor, facturados con descuento, con lo que eso ahorró |
+| **Output** | Tokens de salida, incluido el razonamiento |
+| **Cache write** | Tokens de entrada que llenaron una entrada de caché. Se muestra solo cuando hay alguno |
+
+El costo se estima a partir de los precios por token de cada modelo. Un modelo sin precio conocido muestra **Price unavailable** y cuenta como cero.
+
+Si defines un presupuesto mensual, una barra **Monthly spend limit (BYOK)** muestra el gasto de este mes frente a él. Siempre cubre el mes actual e ignora el rango de fechas.
+
+## Gráfico
+
+El gráfico sigue la **View** que elegiste, y **Tokens** / **USD** cambia su unidad. **By PR**, **By Review** y **By Developer** muestran los 24 mayores consumidores por tokens:
+
+- **Daily**: **Usage over time**, dividido en entrada sin caché, caché, salida y razonamiento.
+- **By PR**: **Top pull requests**, los PRs que usaron más tokens.
+- **By Review**: **Top review runs**. Cada barra es una ejecución de revisión, así que un PR revisado dos veces aparece dos veces. Una tabla **Review activity** debajo lista cada ejecución con su PR, hora de inicio, modelos, tokens y costo, la más cara primero, hasta 100 ejecuciones. Acota los filtros para ver el resto.
+- **By Developer**: **Top developers**, con el uso atribuido al autor del PR.
+
+## Dónde van los tokens
+
+**Where tokens go** desglosa el gasto por tarea, como Code Review, Kody Rules Review, PR Summary, Conversation y Custom Agents, con una barra que muestra la mezcla de entrada, caché, salida y razonamiento. Expande una tarea para ver los pasos que ejecutó y qué modelos los ejecutaron y cuándo. El gasto que no se puede asociar a una tarea aparece como **Unrouted**.
+
+Debajo, cada modelo tiene su propia fila con su costo. Expande una fila para ver sus tokens y su costo por tipo de token, y pasa el cursor sobre el icono de precio para ver las tarifas del modelo.

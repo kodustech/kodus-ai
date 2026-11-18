@@ -1,18 +1,16 @@
 ---
 title: "提案へのフィードバック"
-description: "現在記録されるフィードバックと、今後のレビューに影響する仕組み。"
+description: "現在フィードバックとして記録される内容と、今後のレビューに影響する仕組み。"
 ---
 
-<Note>
-リアクションに基づくファインチューニングは現在無効です。👍/👎 のリアクションや提案の実装状況は記録できますが、モデルの学習、好みのクラスタリング、次回レビューのフィルタリングには使われません。
-</Note>
+Kody のコメントへのリアクションが、モデルの学習や次回レビューのフィルタリングに使われることはありません。Kody は 👍 と 👎 のリアクション、および各提案が適用されたかどうかを記録し、Cockpit に表示します。これらが作用する唯一の場所が、以下の **Pause ignored and noisy rules** です。提案が 👎 を集める、またはほとんど適用されない Kody Rule は一時停止されることがあります。
 
-評価だけでは提案を却下した理由がわかりません。この学習ループを再開するには、否定的なフィードバックの詳しい背景が必要です。
-
-リアクションは任意の製品フィードバックとして残せます。ただし、評価しただけで次回以降の類似提案が自動的に非表示になるわけではありません。
+提案にリアクションして、チームへのフィードバックとして残すことはできます。ある種類の提案が再び表示されないようにするには、以下の仕組みのいずれかを使用してください。
 
 ## 今後のレビューに影響する仕組み
 
-- [メモリ](/ja/knowledge_base/how-to-teach-ai-your-team-conventions): `@kody remember` や会話を通じて、明示的なチームの規約を保存します。
-- [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules): コードレビュー時に適用する基準を定義します。
-- [ルールの自動生成](/ja/how_to_use/code_review/learning/kody_rules_generation): レビュー履歴からルールを生成します（デフォルトで有効。**Kody knowledge approval** がオンの場合は承認のため **Pending review** に保留されます）。これはリアクションによる調整とは別の、現在も有効な機能です。
+- **同じ PR での過去の提案：** Kody がすでにレビューした PR では、以前に投稿した提案とそれらが適用されたかどうかを参照し、同じ提案を再び投稿しないようにします。
+- [メモリ](/ja/knowledge_base/how-to-teach-ai-your-team-conventions)：`@kody remember` や会話を通じて、明示的なチームの規約を保存します。
+- [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules)：コードレビュー時に適用する基準を定義します。
+- [ルールの自動生成](/ja/how_to_use/code_review/learning/kody_rules_generation)：レビュー履歴からルールを生成します。ルールはデフォルトで有効になります。**Kody knowledge approval** がオンの場合は、承認のため **Pending review** に保留されます。
+- [Pause ignored and noisy rules](/ja/how_to_use/code_review/configs/kody_rules#pause-ignored-and-noisy-rules)：Teams および Enterprise プランで利用でき、デフォルトではオフです。オンにすると、Kody は直近 30 日間で **Ignored**（適用された提案が少ない）または **Noisy**（👎 が多い）とラベル付けされた有効なルールを、1 日 1 回一時停止します。

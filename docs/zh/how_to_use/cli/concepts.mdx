@@ -9,37 +9,66 @@ description: "充分利用 Kodus CLI 所需的心智模型。"
 
 每次审查都需要回答一个问题：*变化了什么？* CLI 支持四种 diff 模式，每种模式的事实来源不同。
 
-| 模式 | 差异来源 | 是否内联文件 | 何时使用 |
-|------|----------|--------------|----------|
-| **工作目录**（默认） | 工作目录中的未提交变更 | 是 | 开发中，尚未暂存任何内容时。 |
+| 模式 | 差异来源 | 是否发送文件内容 | 何时使用 |
+| ---- | -------- | ---------------- | -------- |
+| **工作目录**（默认） | 工作目录中已跟踪的变更，包括已暂存和未暂存的 | 是 | 开发过程中，提交之前。 |
 | **暂存区**（`--staged`） | `git diff --cached` | 是 | 即将提交 — 与 `git commit` 同样范围。 |
-| **分支**（`--branch <base>`） | `base..HEAD` 已提交的 diff | 否 | 对整个分支进行合并前审查。 |
+| **分支**（`--branch <base>`） | `git diff <base>...HEAD`：分支从 `<base>` 分出之后您的提交 | 否 | 对整个分支进行合并前审查。 |
 | **提交**（`--commit <sha>`） | 单个提交引入的 diff | 否 | 审核单个提交、cherry-pick 场景。 |
 
+在命令行中指定文件（`kodus review src/auth.ts`）会把工作目录审查限制在这些文件上。如果同时传入多个范围，文件优先于 `--branch`，`--branch` 优先于 `--commit`，`--commit` 优先于 `--staged`。
+
+未跟踪的文件在您执行 `git add` 之前不属于任何 diff。
+
 <Tip>
-  **为什么内联很重要？** 工作目录和暂存区模式会连同文件内容一起发送，因为后端看不到您的未提交工作。分支和提交模式跳过内联 — 后端直接克隆相应提交。这就是为什么分支/提交审查在大型 diff 上仍然工作良好，而工作目录模式可能超过请求大小限制。
+  **为什么发送的内容很重要？** 工作目录和暂存区审查会把变更文件的内容连同 diff 一起发送，因为后端看不到您的未提交工作。分支和提交审查只发送 diff，因为后端可以自行读取这些提交。`--fast` 同样只发送 diff。这就是为什么这些模式在大型 diff 上仍然可用，而工作目录审查可能超过请求大小限制。试用审查在所有模式下都只发送 diff。
 </Tip>
 
 ## 审查模式
 
 同一审查引擎，三种输出风格。
 
-- **交互式**（默认） — TUI 界面，列出文件、展开问题，逐一预览并应用修复。终端中最自然的工作方式。
+- **交互式**（默认） — 在 macOS 和 Linux 的终端中，审查结果会在 Hunk diff 查看器中打开，紧挨着代码。在 Windows 上，或使用 `--no-hunk`、`--interactive` 时，您会得到一个列表，显示每个文件的问题数量、预览修复、逐一应用修复，并可复制供 AI 代理使用的修复提示词。
 - **自动修复**（`--fix`） — 一次性应用所有可修复的问题，仅需一次确认。适合您信任规则、想要批量应用时。
-- **Prompt-only**（`--prompt-only`） — 为 AI 代理解析和执行而优化的精简结构化文本。在代理循环中搭配 `--fail-on`，审查完成时循环可干净退出。
+- **Prompt-only**（`--prompt-only`） — 为 AI 代理解析和执行而优化的精简结构化文本。在代理循环中搭配 `--fail-on`，审查通过时循环可干净退出。
 
-您也可以在任何命令上使用 `--format json` 或 `--format markdown`，用于非交互式消费者（CI、脚本、Webhook）。
+您也可以使用 `--format json` 或 `--format markdown`，用于非交互式消费者（CI、脚本、Webhook）。
+
+## 审查深度
+
+- **默认** — 使用 Kodus 中为该仓库设置的审查模式（除非您修改过，否则为 Balanced）。
+- **`--fast`** — 更轻量的检查和更小的步骤预算。`kodus hook install` 安装的钩子使用该选项。
+- **`--heavy`** — 增加专项审查器以提高召回率，成本更高。仅对已登录且使用 Teams 或 Enterprise 套餐的团队生效；其他审查按 Balanced 运行并给出提示。`--balanced` 会在设置为 Heavy 的仓库上强制只运行主审查。参见 [Heavy 模式](/zh/how_to_use/code_review/review_directive#heavy-mode)。
+- **`--focus <text>`** — 让审查聚焦于某一方面。参见 [引导审查](/zh/how_to_use/code_review/review_directive)。
 
 ## 认证模式
 
-每台机器选择一种，CLI 会自动检测可用方式。
+每台机器选择一种。CLI 使用找到的第一个凭据，顺序为：`KODUS_TOKEN`、`KODUS_TEAM_KEY`、已保存的登录、已保存的团队密钥。
 
-- **试用** — 无需认证。每日 5 次审查，适合"先试一下"。
+- **试用** — 无需认证。每小时 2 次审查，适合"先试一下"。试用审查没有团队，因此使用默认设置且不含 Kody Rules。读取或修改团队数据的命令需要登录或团队密钥。
 - **个人登录**（`kodus auth login`） — 个人账户，令牌自动刷新。
-- **团队密钥**（`kodus auth team-key --key kodus_xxxxx`） — 团队共享的密钥，在 Web 应用的 **Organization → CLI keys** 下生成。推荐用于 AI 代理和任何不希望交互式登录的场景。
-- **CI/CD 令牌**（`kodus auth token`） — 长效令牌，在已登录机器上生成，通过 `KODUS_TOKEN` 使用。
+- **团队密钥**（`kodus auth team-key --key kodus_xxxxx`） — 团队共享的密钥，在 Web 应用的 **Organization → CLI keys** 下生成。推荐用于 AI 代理、CI 以及任何不希望交互式登录的场景。
 
-完整决策树见 [快速开始](getting_started)。
+各方式可使用的命令：
+
+| 命令 | 试用 | 团队密钥 | 登录 |
+| ---- | :---: | :------: | :---: |
+| `review`、`diff`、`hook`、`skills`、`status`、`update`、`trace`、`schema`、`config remote keys` | 是 | 是 | 是 |
+| `pr suggestions`、`pr business-validation` | — | 是 | 是 |
+| `pr reviews`、`agents`、`cockpit`、`usage` | — | — | 是 |
+| `rules view`、`create`、`update` | — | 是，前提是密钥允许 | 是 |
+| `rules pause`、`resume`、`delete` | — | — | 是 |
+| `config remote list`、`show`、`set` 以及模式快捷命令 | — | 是，前提是密钥允许。`show` 和 `set` 涵盖单个仓库的六项设置 | 任意范围的所有设置 |
+| `config remote add`、`setup`、`open` 以及 `config centralized` | — | 是，前提是密钥允许 | — |
+| `config remote unset`、`model`、`messages`、`language`、`skills` | — | — | 是 |
+
+可以允许团队密钥通过 CLI 配置仓库和管理 Kody Rules：打开 **Organization → CLI keys**，点击密钥上的 **Configure**。两项默认均关闭。登录后，将改用您在 Web 应用中角色的权限。
+
+<Note>
+  环境中设置的 `KODUS_TEAM_KEY` 会被 `rules` 和 `config remote` 使用，即使您已登录。需要登录的命令会忽略它。
+</Note>
+
+登录方法参见 [快速开始](/zh/how_to_use/cli/getting_started)。
 
 ## Kody Rules
 
@@ -47,40 +76,44 @@ description: "充分利用 Kodus CLI 所需的心智模型。"
 
 ```
 Rule
-├── title          "生产代码中禁用 console.log"
-├── rule           "避免将 console.log 提交到代码库"
+├── title          "No console.log in production code"
+├── rule           "Avoid leaving console.log in committed code"
 ├── severity       low | medium | high | critical
-├── scope          file | pull request
-├── path           **/*.ts       (文件匹配的 glob 模式)
+├── scope          file | pull-request
+├── path           **/*.ts       (glob for file targeting)
 └── repo-id        <uuid> | global
 ```
 
 规则叠加在通用 Kodus 审查之上 — AI 将其作为额外判据，而不是替代通用检查。
 
-可从 Web 应用（**Code review → Kody Rules**）或 CLI 通过 `kodus rules create|update|view` 管理规则。当您希望规则在版本控制中（脚本生成、入库、配置时重新应用）时，CLI 会非常有用。
+可从 Web 应用（**Code review → Kody Rules**）或 CLI 通过 `kodus rules create|update|view|pause|resume|delete` 管理规则。当您希望规则在版本控制中（脚本生成、入库、配置时重新应用）时，CLI 会非常有用。在 [集中化配置](#集中化配置（centralized-config）) 下，规则变更会变成一个 Pull Request，而不是直接写入。
 
-## 仓库设置
+## 审查设置
 
-Kodus 中的每个仓库都有控制审查行为的设置：忽略文件、基础分支模式、标题过滤器、功能开关。这些设置保存在 Kodus 后端，并在任何审查场景（Web PR、CLI 审查、代理循环）中生效。
+代码审查设置决定 Kody 如何审查：检查哪些类别、严重级别限制、忽略的文件、基础分支、PR 摘要、批准等。它们在三个层级生效：**全局**、**仓库**和**目录**。最具体的层级优先，没有自己取值的层级继承上一层的值。
 
 通过 CLI：
 
 ```bash
-kodus config repo list                 # 查看已配置的仓库
-kodus config repo show                 # 查看当前仓库的设置
-kodus config repo setup                # 引导式向导
-kodus config repo set . reviewEnabled true
-kodus config repo add-ignore-file . "**/*.generated.ts"
-kodus config repo open                 # 跳转到 Web 仪表板
+kodus config remote list                       # Repositories added to Kodus
+kodus config remote show .                     # Settings of this repo, with the level each value comes from
+kodus config remote keys                       # Every setting you can change
+kodus config remote set . runOnDraft true
+kodus config remote set global suggestionControl.severityLevelFilter high
+kodus config remote unset . runOnDraft         # Inherit again
 ```
 
-`kodus config repo` 和 `kodus config remote` 是同一命令组的别名。
+`show` 还会读取仓库中的 `kodus-config.yml`，让您看到哪些值被文件覆盖。`keys` 列出每个键及其允许的取值和所属的设置页面。各层级如何组合，参见 [配置继承与覆盖](/zh/how_to_use/code_review/configs/inheritance_overrides)。
+
+`kodus config repo` 仍可作为 `kodus config remote` 的别名使用。
+
+CLI 审查使用团队的全局设置和 Kody Rules，以及匹配仓库的规则、审查模式和仓库指令。除此之外的单仓库设置，例如基础分支和忽略的标题，则与 Pull Request 有关。
 
 ## 集中化配置（Centralized Config）
 
 通常，每个仓库的设置存在 Kodus 中。**集中化配置** 允许团队将这些设置存入一个单一事实源的 git 仓库 — 每次变更都成为对该仓库的 Pull Request，从而让审查配置本身也有审查与版本历史。
 
-启用、同步或查看状态：
+启用、同步或查看状态（需要团队密钥）：
 
 ```bash
 kodus config centralized status
@@ -89,38 +122,46 @@ kodus config centralized sync
 kodus config centralized disable
 ```
 
-若团队需要对审查设置进行可审计、可版本控制的管理，使用集中化配置。若不需要此仪式，保留默认的单仓库设置即可。
+若团队需要对审查设置进行可审计、可版本控制的管理，使用集中化配置。若不需要此仪式，保留默认的单仓库设置（存于 Kodus）即可。参见 [集中化配置指南](/zh/how_to_use/code_review/configs/centralized_config#cli)。
 
 ## 业务验证（Business Validation）
 
-若 `kodus review` 问的是"代码质量是否良好？"，那么 `kodus pr business-validation` 问的是"这段 diff 是否真的做了任务要求的事？"。将它指向 Linear/Jira/URL 任务和 diff 来源（工作目录、暂存、分支、提交），它会根据任务的验收标准检查实现。
+若 `kodus review` 问的是"代码质量是否良好？"，那么 `kodus pr business-validation` 问的是"这段 diff 是否真的做了任务要求的事？"。将它指向一个任务（通过 id 或 URL）和一个 diff 来源（工作目录、暂存、分支、提交），它会根据任务的验收标准检查实现。需要登录或团队密钥。
 
 ```bash
 kodus pr business-validation --task-id KC-1441 --branch main
-kodus pr business-validation --task-url https://linear.app/… --staged
+kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441 --staged
 ```
 
-在合并前搭配一次预检，可在人工审查之前捕获"代码能跑，但不是任务要求"的情况。
+在合并前搭配一次预检，可在人工审查之前捕获"代码能跑，但不是任务要求"的情况。参见 [业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation#通过-cli)。
+
+## 自定义代理
+
+自定义代理是团队定义的额外审查器，各自拥有独立的指令、文件和工具。`kodus agents` 需要登录，可用于列出、创建、编辑、开启和关闭、删除以及试用它们。新代理默认处于关闭状态：先用 `kodus agents try` 在 Pull Request 上运行，再用 `kodus agents enable` 开启。参见 [自定义代理](/zh/how_to_use/code_review/custom_agents)。
+
+## Kodus Trace
+
+Kodus Trace 记录 AI 编码代理所做变更背后的决策，`kodus trace <path>` 会读回为某个路径记录的决策。参见 [Kodus Trace](/zh/how_to_use/cli/trace)。
 
 ## AI 代理输出（`--prompt-only` 与 `--agent`）
 
 两个相关但职责不同的标志。
 
-- **`--prompt-only`** — 输出经过优化，便于 AI 代理解析和执行。仅适用于产生审查式输出的命令（`review`、`pr suggestions`）。
-- **`--agent`** — 全局标志，强制任意命令输出为 **确定性、机器可读** 的格式。当脚本或代理解析 CLI 输出时使用；常与 `--format json` 搭配。
+- **`--prompt-only`** — 输出经过优化，便于 AI 代理解析和执行。仅适用于 `kodus review`。
+- **`--agent`** — 全局标志，输出确定性的 JSON 封装（`ok`、`command`、`data`、`error`、`meta`）。适用于 `review`、`pr`、`schema`、`hook install`、`hook uninstall`、`trace status`、`trace disable` 和 `trace <path>`。其他命令使用 `--json` 输出 JSON。
 
 大多数代理集成只需要 `--prompt-only`。当您从一个外壳或 tool-calling 循环中编排 CLI、并且对输出格式有严格要求时，再考虑 `--agent`。
 
 ## 下一步
 
 <CardGroup cols={2}>
-  <Card title="命令参考" icon="book" href="commands">
+  <Card title="命令参考" icon="book" href="/zh/how_to_use/cli/commands">
     完整命令和标志列表。
   </Card>
-  <Card title="AI 代理" icon="robot" href="ai_agents">
+  <Card title="AI 代理" icon="robot" href="/zh/how_to_use/cli/ai_agents">
     与编码代理构建审查-修复循环。
   </Card>
-  <Card title="故障排查" icon="life-ring" href="troubleshooting">
+  <Card title="故障排查" icon="life-ring" href="/zh/how_to_use/cli/troubleshooting">
     常见错误和退出码。
   </Card>
 </CardGroup>

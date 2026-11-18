@@ -1,44 +1,30 @@
 ---
 title: "Sugestões do Kody"
-description: "Meça a eficácia das sugestões de código alimentadas por IA"
+description: "Meça quantas das sugestões do Kody o seu time implementa"
 ---
 
-## O que são Sugestões do Kody
+## O que é a taxa de implementação
 
-As Sugestões do Kody medem a eficácia das sugestões de código alimentadas por IA geradas pelo Kodus. Essa métrica rastreia quantas sugestões são enviadas aos desenvolvedores e quantas são realmente implementadas, fornecendo insights sobre o valor e a adoção do desenvolvimento assistido por IA.
+A taxa de implementação é a parcela das sugestões que o Kody enviou que o seu time implementou. Mostra quanto do feedback do Kody vira mudança de código.
 
-No Cockpit, fica na aba **Kodus Review**, nos cartões **Implementation rate** e **Suggestions sent** e nos gráficos abaixo deles — veja [Kodus Review](/pt-BR/how_to_use/cockpit/kodus_review).
+No Cockpit, fica na aba **Kodus Review**, nos cards **Implementation rate** e **Suggestions sent** e nos gráficos abaixo deles. Veja [Kodus Review](/pt-BR/how_to_use/cockpit/kodus_review).
 
 ## Como Calculamos
 
-Rastreamos automaticamente quantas sugestões alimentadas por IA o Kody envia para sua equipe e quantas dessas sugestões são realmente implementadas no seu código.
-
-**O que rastreamos:**
-- Sugestões enviadas aos desenvolvedores
-- Sugestões que são implementadas
-- A porcentagem de sugestões adotadas
-
-**Como é calculado:**
 ```
-Taxa de Implementação = (Sugestões Implementadas) ÷ (Total de Sugestões Enviadas) × 100
+Implementation Rate = (Implemented Suggestions) ÷ (Suggestions Sent) × 100
 ```
+
+- Apenas sugestões entregues como comentários de PR contam.
+- Uma sugestão conta como implementada quando seu status é **Implemented** ou **Partially implemented** no momento em que seu PR fecha.
+- Contam as sugestões em PRs fechados no intervalo de datas selecionado, agrupadas pela semana em que o PR foi fechado.
+- Sugestões que a verificação de implementação não conseguiu decidir ficam fora da taxa, não são contadas como ignoradas.
 
 Por exemplo, se o Kody enviou 20 sugestões e 16 foram implementadas, sua taxa de implementação é de 80%.
 
-## Por que é Importante
-
-As Sugestões do Kody oferecem vários benefícios para sua equipe de desenvolvimento:
-
-- **Aumento de Produtividade**: A IA pode detectar problemas comuns e sugerir melhorias
-- **Qualidade de Código**: Sugestões consistentes ajudam a manter os padrões de código
-- **Oportunidade de Aprendizado**: Os desenvolvedores aprendem boas práticas por meio do feedback da IA
-- **Economia de Tempo**: Reduza o tempo gasto em tarefas rotineiras de revisão de código
-
 ## Como Melhorar
 
-- Configure regras personalizadas do Kody específicas para os padrões da sua equipe
-- Forneça feedback sobre sugestões para melhorar a precisão
-- Certifique-se de que o Kody tenha acesso ao contexto relevante da base de código
-- Eduque os desenvolvedores sobre como usar o Kody de forma eficaz
-- Compartilhe exemplos de como o Kody ajudou a equipe
-- Colete opiniões sobre a utilidade das sugestões
+- Configure Kody Rules específicas para os padrões do seu time
+- Confira a tabela **Kody Rules — health** em busca de regras ruidosas ou ignoradas, e então reescreva-as ou ajuste o escopo delas
+- Olhe **Implementation rate by category** para ver os temas mais ignorados
+- Leia as reações 👎 em **Negative feedback** para ver onde o time discorda (as reações são registradas como feedback e não alteram sozinhas os reviews seguintes; veja [Feedback nas sugestões](/pt-BR/how_to_use/code_review/learning/kody_learning))

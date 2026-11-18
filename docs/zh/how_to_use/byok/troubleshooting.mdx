@@ -1,0 +1,77 @@
+---
+title: "BYOK 故障排查与常见问题"
+sidebarTitle: "故障排查"
+description: "修复 Test 错误、速率限制和意外的成本,以及常见 BYOK 问题的解答。"
+---
+
+连接提供商并在其上运行审查时会遇到的错误的修复方法,以及常见问题的解答。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="点击 Test 时出现 'Invalid API key'">
+    - 复制密钥时不要带多余的空格、引号或结尾的换行符。
+    - 确认已启用计费且账户有额度。
+    - 对于 GLM Coding Plan / Kimi Code Plan 密钥,请确保 **base URL** 与套餐匹配 — 订阅密钥不能用于开发者 API 端点,反之亦然。
+  </Accordion>
+
+  <Accordion title="点击 Test 时出现 'Model not found'">
+    - Test 会向模型发送真实请求,因此错误或拼写有误的模型 ID 会在这里失败。这是预期行为,比在审查时才失败更好。
+    - 从提供商的仪表板复制精确的模型 ID。有些提供商使用较深的路径(例如 Fireworks 的 `accounts/fireworks/models/kimi-k2p7-code`),或对版本的写法不同(`k2p7` 与 `k2.7`)。
+  </Accordion>
+
+  <Accordion title="点击 Test 时出现 'Endpoint not found'">
+    - 验证 base URL 与提供商完全一致(对某些提供商来说,结尾的斜杠很重要)。
+    - 对于 OpenAI 兼容提供商,端点通常是 `{baseURL}/chat/completions`(Kodus 会添加该路径),因此请粘贴不含它的 base URL。以 `/chat/completions`、`/messages` 或 `/responses` 结尾的 URL 会被拒绝,消息中会给出应使用的地址。
+    - 对没有版本号的 OpenAI 或 OpenAI 兼容 URL 出现 `404`,通常意味着它需要 `/v1`。消息会建议更正后的 URL。
+    - URL 必须使用 `https://` 并解析到公网地址。解析到私有或保留地址的 URL 会被拒绝。
+  </Accordion>
+
+  <Accordion title="Test 拒绝了我设置的温度或推理">
+    - 有些模型固定温度或始终推理(Kimi `k2p7-code`/`k3`、GLM-5.3;Claude 4.7+/GPT-5 完全移除了温度)。Test 会根据模型的规则校验您的调优,并返回具体消息 — 请按其操作(不设置温度或使用要求的值;不要对始终推理的模型关闭推理)。参见[温度](/zh/how_to_use/byok/model_settings#temperature)。
+  </Accordion>
+
+  <Accordion title="'Rate limited' 或 'Too much concurrency'">
+    - 在 Advanced settings 中调低 **Max concurrent requests**。
+    - 在 GLM Coding Plan Lite/Pro 上,请保持 **1 个并发**。如果需要更多吞吐量,请升级到 Max(30 个并发)。
+    - 在 Kimi Code Plan 上,文档上限为 **30 个并发**。
+  </Accordion>
+
+  <Accordion title="自托管的环境变量没有显示">
+    - 如果 Kodus 通过环境变量配置,那么在没有连接模型时,**AI providers** 页面会显示 **Kodus is currently using an LLM configured via environment variables**,以及模型和提供商(以及该提供商是在 `API_LLM_PROVIDER` 中设置的还是推断出来的)。密钥永远不会显示。
+    - 连接模型并保存会覆盖环境变量配置。
+  </Accordion>
+
+  <Accordion title="成本偏高或意外">
+    - 推理会增加 token。如果成本飙升,请将 **Thinking / Reasoning** 从 Medium 降到 Low,或在 **Code review → Routing** 的 **Other task models** 下将较轻的任务路由到更便宜的模型。
+    - 参见 [Token 用量](/zh/how_to_use/organization/token_usage),了解每个模型、PR、审查和开发者的成本;在您的提供商仪表板中查看按模型的明细;并在 **Budget** 选项卡下设置带开销提醒的月度预算(仅提醒;请在提供商处设置硬性上限)。
+  </Accordion>
+</AccordionGroup>
+
+## 常见问题
+
+<AccordionGroup>
+  <Accordion title="我可以随时切换提供商吗?">
+    可以。更改会对下一次审查生效 — 无需重新部署。
+  </Accordion>
+
+  <Accordion title="如果我的 API 密钥额度用完了会怎样?">
+    如果配置了备用模型,审查会切换到备用模型。没有备用模型时,审查会失败并返回错误。请配置备用模型。
+  </Accordion>
+
+  <Accordion title="默认 / 备用系统是如何工作的?">
+    除非您在 Routing 中为某个任务选择了另一个模型,否则每个任务都使用默认模型。如果某个任务的模型以另一个模型能够修复的方式失败(密钥无效或过期、没有额度,或提供商在其自身重试之后仍然宕机),Kody 会在 Fallback model 上重试一次。可以等待消退的速率限制、对模型来说过大的提示或超时,不会切换模型。您只需为实际处理该调用的提供商付费。
+  </Accordion>
+
+  <Accordion title="不同的任务可以使用不同的模型吗?">
+    可以。这正是 **Code review → Routing** 的用途:按任务选择模型,例如为代码审查选择强力模型,为摘要或聊天选择更便宜的模型。您需要至少连接两个模型,路由才有意义。
+  </Accordion>
+
+  <Accordion title="你们会安全地存储我们的 API 密钥吗?">
+    会。密钥进行静态加密和传输加密,并且从不以明文记录日志。BYOK 状态端点从不返回原始密钥。
+  </Accordion>
+
+  <Accordion title="我可以使用自托管的 LLM(例如 Ollama、vLLM)吗?">
+    可以 — 通过 **OpenAI-compatible** 提供商(位于 Custom 下)。输入您端点的 base URL、它暴露的模型 ID,以及一个占位用的 API 密钥(大多数自托管运行时会忽略密钥请求头,但仍要求提供一个)。**AI providers** 页面只接受解析到公网地址的 `https://` URL,因此 `localhost` 和私有网络地址会被拒绝。在自托管的 Kodus 上,请改用环境变量设置私有网络上的端点;参见[安装](/zh/how_to_deploy/deploy_kodus/generic_vm)。
+  </Accordion>
+</AccordionGroup>

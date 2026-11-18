@@ -9,30 +9,35 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
   <Step title="安装">
     <Tabs>
       <Tab title="技能安装器（推荐）">
-        安装 CLI 并将 Kodus 技能部署到所有检测到的 AI 代理（Claude Code、Cursor、Codex、Windsurf）：
+        安装或更新 CLI，然后将 Kodus 技能安装到在您机器上找到的 AI 代理中（Claude Code、Cursor、Codex 等 — 参见 [AI 代理](/zh/how_to_use/cli/ai_agents)）。
+
+        macOS 和 Linux：
 
         ```bash
         curl -fsSL https://review-skill.com/install | bash
+        ```
+
+        Windows PowerShell：
+
+        ```powershell
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$tmp = Join-Path $env:TEMP 'kodus-install.ps1'; Invoke-WebRequest https://review-skill.com/install.ps1 -OutFile $tmp; & $tmp"
         ```
       </Tab>
       <Tab title="npm">
         ```bash
         npm install -g @kodus/cli
         ```
+
+        `pnpm add -g @kodus/cli`、`yarn global add @kodus/cli` 和 `bun add -g @kodus/cli` 的效果相同。
       </Tab>
       <Tab title="npx（无需安装）">
         ```bash
         npx @kodus/cli review
         ```
       </Tab>
-      <Tab title="curl">
-        ```bash
-        curl -fsSL https://raw.githubusercontent.com/kodustech/cli/main/install.sh | bash
-        ```
-      </Tab>
     </Tabs>
 
-    <Note>需要 Node.js >= 20.0.0。</Note>
+    <Note>需要 Node.js 22.19.0 或更高版本。</Note>
 
     验证安装：
 
@@ -43,7 +48,7 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
   </Step>
 
   <Step title="认证">
-    根据您的使用场景选择。您也可以跳过认证，直接运行 `kodus review` — 试用模式每日有使用次数限制。
+    根据您的使用场景选择。您也可以跳过认证，直接运行 `kodus review` — 试用模式有每小时次数限制。
 
     <Tabs>
       <Tab title="独立开发者">
@@ -53,9 +58,13 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
         kodus auth login
         ```
 
-        CLI 会在浏览器中打开 **Authorize Kodus CLI** 页面（如有提示，请登录 Kodus）。核对 **Device**、**Mode** 和 **Expires** 信息，点击 **Authorize CLI**，然后返回终端。
+        CLI 会在浏览器中打开 **Authorize Kodus CLI** 页面，并在浏览器未打开时打印其 URL。核对 **Device**、**Mode** 和 **Expires** 信息，点击 **Authorize CLI**，然后返回终端。
 
-        令牌保存在 `~/.kodus/credentials.json`，并自动刷新。
+        如果您在该浏览器中尚未登录 Kodus，会先进入登录页面，登录后进入仪表板。请再次打开终端中的 URL 以到达 **Authorize CLI**。CLI 最多等待 10 分钟。
+
+        在没有浏览器的机器上（SSH 会话、CI 或非交互式终端），CLI 会改为打印一个 URL 和一个代码。页面上没有输入代码的字段。请在任意设备上打开该 URL，并把代码作为 `code` 参数添加进去（`https://app.kodus.io/cli/authorize?code=ABCD-EFGH`），然后点击 **Authorize CLI**。代码 10 分钟后过期。添加 `--device-code` 可在任意机器上使用此流程。
+
+        您的登录信息保存在 `~/.kodus/credentials.json`，并自动刷新。
       </Tab>
       <Tab title="团队（共享密钥）">
         组织 Owner 在侧边栏的 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下生成团队密钥。然后应用它：
@@ -64,7 +73,7 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
         kodus auth team-key --key kodus_xxxxx
         ```
 
-        或者将以下引导命令分发给团队 — 一次性完成 CLI 安装并配置密钥：
+        或者将以下引导命令分发给团队。它会安装 CLI、应用密钥并安装技能：
 
         ```bash
         curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
@@ -82,19 +91,13 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
         将其添加到您的 shell 配置文件，使代理每次运行都能读取。
       </Tab>
       <Tab title="CI/CD">
-        在已登录的机器上生成长效令牌：
+        使用团队密钥。将其存为 secret，并以 `KODUS_TEAM_KEY` 暴露给作业：
 
         ```bash
-        kodus auth token
+        export KODUS_TEAM_KEY=kodus_xxxxx
         ```
 
-        在流水线中设置：
-
-        ```bash
-        export KODUS_TOKEN=<生成的令牌>
-        ```
-
-        完整 CI 示例参考 [自托管配置](self_hosted)。
+        GitHub Actions、GitLab CI 及通用流水线示例参见 [自托管配置](/zh/how_to_use/cli/self_hosted#ci/cd-集成)。
       </Tab>
     </Tabs>
 
@@ -122,39 +125,43 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
     kodus review
     ```
 
-    CLI 会分析您的工作目录差异，打印摘要，并（在交互模式下）允许您逐文件浏览、预览建议修复并应用。
+    CLI 会分析您的工作目录差异并打印摘要。在 macOS 和 Linux 的交互式终端中，审查结果会在 Hunk diff 查看器中打开，紧挨着代码。在 Windows 上，或使用 `--no-hunk` 时，您可以逐文件浏览列表、预览建议的修复并应用。
 
     常见变体：
 
     ```bash
-    kodus review --staged             # 仅审查暂存文件
-    kodus review --branch main        # 将当前分支与 main 对比
-    kodus review --commit abc123      # 分析单个提交
-    kodus review --fix                # 自动应用所有可修复问题
-    kodus review --prompt-only        # 为 AI 代理优化的紧凑输出
-    kodus review --fail-on error      # 在 error 或更高级别时非零退出（适合 CI）
+    kodus review --staged             # Only staged files
+    kodus review --branch main        # Compare current branch against main
+    kodus review --commit abc123      # Analyze a single commit
+    kodus review --fix                # Apply every fixable issue (asks to confirm)
+    kodus review --prompt-only        # Compact output for AI agents
+    kodus review --fail-on error      # Exit 1 on error-or-worse issues (CI-friendly)
     ```
 
     <Tip>
-      工作目录审查（默认）和 `--staged` 会将文件内容内联到请求中，以便后端看到未提交的变更。`--branch` 和 `--commit` 模式跳过内联，因为后端可以自行获取相应提交 — 这使得这些模式在大型分支上表现良好。
+      使用登录或团队密钥时，工作目录审查（默认）和 `--staged` 会将变更文件的内容连同 diff 一起发送。`--branch`、`--commit` 和 `--fast` 只发送 diff，因为后端可以自行读取这些提交。这就是它们在超大分支上表现良好的原因。试用审查始终只发送 diff。
     </Tip>
+
+    <Note>
+      只审查已跟踪的变更。对新文件执行 `git add` 以将其纳入审查。
+    </Note>
   </Step>
 
   <Step title="选择下一步">
     根据您的目标：
 
     <CardGroup cols={2}>
-      <Card title="每次推送自动审查" icon="shield-check" href="commands#kodus-hook">
-        使用 `kodus hook install` 安装 pre-push 钩子。
+      <Card title="每次推送自动审查" icon="shield-check" href="/zh/how_to_use/cli/commands#kodus-hook">
+        使用 `kodus hook install` 安装 pre-push 钩子。它会审查您推送的分支，并在出现严重问题时阻止推送。
       </Card>
-      <Card title="在 CI 中运行审查" icon="infinity" href="self_hosted#ci-cd-integration">
+      <Card title="在 CI 中运行审查" icon="infinity" href="/zh/how_to_use/cli/self_hosted#ci/cd-集成">
         GitHub Actions、GitLab CI 及通用流水线示例。
       </Card>
-      <Card title="接入 AI 代理" icon="robot" href="ai_agents">
+      <Card title="接入 AI 代理" icon="robot" href="/zh/how_to_use/cli/ai_agents">
         将 `--prompt-only` 接入 Claude Code、Cursor 或 Codex，实现自主修复循环。
       </Card>
-      <Card title="配置仓库" icon="sliders" href="commands#kodus-config-repo">
-        从 CLI 管理忽略文件、基础分支及审查设置。
+      <Card title="配置仓库" icon="sliders" href="/zh/how_to_use/cli/commands#kodus-config-remote">
+        从 CLI 读取和修改审查设置。
       </Card>
     </CardGroup>
   </Step>
@@ -162,21 +169,23 @@ description: "安装 Kodus CLI，完成认证，并运行您的第一次审查�
 
 ## 环境变量
 
-这些环境变量用于配置 CLI 行为。
+这些环境变量用于配置所有命令下的 CLI 行为。
 
 | 变量 | 描述 |
-|------|------|
+| ---- | ---- |
 | `KODUS_API_URL` | API 端点（默认：`https://api.kodus.io`） |
+| `KODUS_APP_URL` | `kodus config remote open` 指向的 Web 应用 URL（默认：`https://app.kodus.io`） |
 | `KODUS_TEAM_KEY` | 团队共享访问和 AI 代理的团队密钥 |
-| `KODUS_TOKEN` | 通过 `kodus auth token` 生成的 CI/CD 令牌 |
-| `KODUS_VERBOSE` | 设置为 `true` 以启用详细输出 |
-| `KODUS_SKIP_HOOK` | 设置为 `1` 以跳过单次 `git push` 的 pre-push 钩子 |
-| `KODUS_REQUEST_TIMEOUT_MIN` | 每次请求的超时时间（分钟，默认：`60`） |
+| `KODUS_TOKEN` | 登录访问令牌，按原样使用，不会刷新。优先级高于所有其他凭据。CI 请使用团队密钥 |
+| `KODUS_GITHUB_PAT` | 用于对私有仓库进行试用审查的 GitHub 令牌。也会读取 `GITHUB_TOKEN` 和 `GH_TOKEN` |
+| `KODUS_SKIP_HOOK` | 设置为任意值以跳过单次 `git push` 的 pre-push 钩子 |
+| `KODUS_REQUEST_TIMEOUT_MIN` | 每次 API 请求的超时时间（分钟，默认：`60`） |
+| `KODUS_DISABLE_UPDATE_CHECK` | 设置为 `1` 以关闭更新提示 |
 | `CF_ACCESS_CLIENT_ID` | Cloudflare Access 客户端 ID（用于 Zero Trust 后的 API） |
 | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access 客户端密钥 |
 
-关于自托管配置、令牌和 Cloudflare Access，请参考 [自托管配置](self_hosted)。
+关于自托管配置和 Cloudflare Access，请参考 [自托管配置](/zh/how_to_use/cli/self_hosted)。
 
 ## 故障排查
 
-遇到错误？查看 [故障排查指南](troubleshooting) 了解常见症状和解决方案。
+遇到错误？查看 [故障排查指南](/zh/how_to_use/cli/troubleshooting) 了解常见症状和解决方案。

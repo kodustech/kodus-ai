@@ -1,18 +1,20 @@
 ---
-title: "使用 jscpd 的重复代码智能体"
-description: "一个在沙箱中运行 jscpd 的自定义智能体，标记拉取请求中复制而非复用的代码。"
+title: "用 jscpd 检测重复代码的 agent"
+description: "一个在沙箱中运行 jscpd 的自定义 agent，标记 pull request 复制而非复用的代码。"
 icon: "clone"
 ---
 
 ## 为什么用 CLI
 
-模型阅读 diff 时，无法知道刚读到的 30 行代码其实在三个文件夹之外已经存在。[jscpd](https://github.com/kucherenko/jscpd) 可以：它扫描检出的代码，报告每一处克隆及其两个位置。这个智能体运行 jscpd，保留由拉取请求引入的克隆，并以 jscpd 自己的输出作为证据逐条发布。
+阅读 diff 的模型无法得知，它刚读到的 30 行代码在三个目录之外已经存在。[jscpd](https://github.com/kucherenko/jscpd) 可以：它扫描 checkout 并报告每个克隆及其两处位置。这个 agent 运行它，保留 pull request 引入的克隆，并把 jscpd 自己的输出作为证据发布每一条。
 
-示例是一个 TypeScript 计费服务。请根据您的代码库调整路径和阈值。
+示例是一个 TypeScript 计费服务。请根据你的仓库调整路径和阈值。
 
-## 步骤 1 — 创建智能体
+自定义 agent 处于 beta 阶段，适用于 Teams 和 Enterprise 套餐以及试用期间。自托管 Kodus 还需要 `BETA_FEATURES=true`。
 
-在 **Code review → What to review → Custom agents** 中，点击 **New agent → Templates → Blank**。在其页面中填写 **Instructions**：
+## 步骤 1 — 创建 agent
+
+在 **Code review → What to review → Custom agents** 中，点击 **New agent → Templates → Blank**。在其页面上填写 **Instructions**：
 
 ```text Name
 Duplicate code
@@ -40,7 +42,7 @@ For each finding, name both locations and say what to extract or reuse: an exist
 | 字段 | 值 |
 | --- | --- |
 | **Files** | `src/**` |
-| **Except** | `**/*.test.ts`、`**/*.spec.ts`、`**/__fixtures__/**`、`**/generated/**`、`src/db/migrations/**` |
+| **Except** | `**/*.test.ts`, `**/*.spec.ts`, `**/__fixtures__/**`, `**/generated/**`, `src/db/migrations/**` |
 
 ## 步骤 3 — 添加 CLI
 
@@ -52,8 +54,8 @@ For each finding, name both locations and say what to extract or reuse: an exist
 | **Binary** | `jscpd` |
 | **Install** | `npm i -g jscpd@5.4.1` |
 | **Allowed command prefixes** | `jscpd --reporters console` |
-| **Allowed domains** | *（留空：jscpd 不需要网络）* |
-| **Runs project code** | 关闭：jscpd 只读取文件，不执行它们 |
+| **Allowed domains** | *（空：jscpd 不需要网络）* |
+| **Runs project code** | Off：jscpd 只读取文件，不执行它们 |
 | **Secrets** | *（无）* |
 
 **Usage**：
@@ -65,7 +67,8 @@ Call it with the console reporter, the thresholds, and the directories the pull 
 
 --reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
 
-There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+There is no shell: do not quote arguments. Each clone prints both copies as `file [startLine:col - endLine:col]`,
+with the file relative to the directory scanned.
 Read both copies before reporting a clone.
 ```
 
@@ -75,37 +78,38 @@ Read both copies before reporting a clone.
 
 | 字段 | 值 | 原因 |
 | --- | --- | --- |
-| **Format** | Inline comments | 每处克隆都落在被复制的行上。 |
+| **Format** | Inline comments | 每个克隆都落在被复制的行上。 |
 | **Minimum severity** | Team minimum | |
-| **Max comments per pull request** | `5` | 一次大规模复制粘贴可能产生许多克隆；保留最严重的那些。 |
-| **Suggested fix** | Never | 修复是跨文件的重构，而不是改一行。 |
+| **Max comments per pull request** | `5` | 大段复制粘贴可能产生许多克隆；只保留最严重的。 |
+| **Suggested fix** | Never | 修复是跨文件的重构，而不是单行修改。 |
 | **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
 
-点击 **Save**。
+点击 **Save settings**。
 
-## 步骤 5 — Try it
+## 步骤 5 — 试一试
 
-粘贴一个复制了函数的拉取请求链接，点击 **Run agent**。检查：
+粘贴一个复制了函数的 pull request 链接，然后点击 **Run agent**。检查：
 
-- **Tool calls** 显示了 `jscpd` 调用及其输出。
-- 每条保留的发现的 **Comment** 末尾都有一个 **Evidence** 块，引用 jscpd 输出中提到该文件的行：
+- 工具调用列表中显示一次对 `jscpd` 的 `runCli` 调用及其输出。
+- 每条被保留的发现，其 **Comment** 末尾都有一个 **Evidence** 块，引用点名该发现所在文件的 jscpd 行：
 
-```markdown
-**Evidence** (`jscpd`):
-> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
-> src/billing/credit-note.ts [8:1 - 37:2]
+````markdown
+**Evidence** (`jscpd` output):
+```text
+- invoice.ts [12:1 - 41:2] (30 lines, 212 tokens)
 ```
+````
 
-如果 **Warnings** 提示 CLI 无法安装，请检查安装命令。CLI 需要 E2B 沙箱；没有它时，智能体会在没有 jscpd 的情况下运行。
+如果 **Warnings** 提示无法安装该 CLI，请检查安装命令。CLI 需要 E2B 沙箱；没有它时，agent 会在没有 jscpd 的情况下运行。
 
-当发现正是您想要的内容时，开启该智能体。
+当发现的内容符合你的预期时，再启用该 agent。
 
 ## 检查清单
 
 - [ ] 安装固定到确切版本
-- [ ] 允许的前缀以参数开头，而不只是二进制名
-- [ ] 测试和生成的代码同时写进 **Except** 和 jscpd 的 `--ignore`
+- [ ] 允许的前缀以标志开头，而不仅仅是二进制文件
+- [ ] 测试和生成的代码同时放在 **Except** 和 jscpd 的 `--ignore` 中
 - [ ] 已设置 **Max comments per pull request**
-- [ ] 已在一个已知包含复制代码的拉取请求上试运行
+- [ ] 已在含有已知复制代码的 pull request 上试过
 
-所有字段的说明，请参阅 [Skills、docs 和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis)。
+各字段详情请参阅[技能、文档和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis)。

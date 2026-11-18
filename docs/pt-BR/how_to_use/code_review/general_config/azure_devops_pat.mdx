@@ -1,79 +1,85 @@
 ---
 title: "Token PAT do Azure DevOps"
-description: "Gere o Personal Access Token do Azure DevOps que o Kody precisa para ler seus repositórios e publicar comentários, com os escopos exatos."
+description: "Gere o Personal Access Token do Azure DevOps que o Kody precisa para ler seus repositórios e publicar comentários de revisão, com os escopos exatos necessários."
 ---
 
 ## Introdução ao PAT
 
-Para habilitar Kody a realizar Code Reviews automáticos, você precisa gerar um Personal Access Token (PAT) no Azure DevOps. Esse token permite que Kody acesse seus repositórios de forma segura e conduza análises de código de maneira controlada.
+Para habilitar o Kody a realizar Code Reviews automáticos, você precisa gerar um Personal Access Token (PAT) no Azure DevOps. Esse token permite que o Kody acesse seus repositórios de forma segura e conduza a análise de código de maneira controlada.
 
 ## Gerando o PAT (Personal Access Token)
 
-Você pode acessar as configurações de PAT diretamente usando este link: [Azure DevOps PATs](https://dev.azure.com/).
+Você pode abrir as configurações de PAT diretamente em `https://dev.azure.com/<organization>/_usersSettings/tokens`.
 
 Siga estas etapas para configurar o token corretamente:
 
-1. **Acesse o Azure DevOps e vá para suas configurações de segurança:**
+1. **Acesse o Azure DevOps e vá para as configurações de token:**
 
-   - Acesse [Azure DevOps](https://dev.azure.com/) e faça login.
-   - Clique na foto do seu perfil no canto superior direito.
-   - Selecione **"Security"** no menu suspenso.
+   - Faça login na sua organização em `https://dev.azure.com/<organization>`.
+   - Abra **User settings** (o ícone ao lado da sua foto de perfil, no canto superior direito).
+   - Selecione **Personal access tokens**.
 
 2. **Crie um novo PAT:**
 
-   - Na seção **Personal Access Tokens**, clique em **"New Token"**.
+   - Clique em **+ New Token**.
 
 3. **Configure o novo token com as seguintes especificações:**
 
-   - **Name:** Escolha um nome facilmente identificável, como `kody_code_review`.
-   - **Organization:** Selecione sua organização de destino.
-   - **Expiration:** Escolha um tempo de expiração apropriado (ex.: 90 ou 180 dias).
-   - **Scopes:** Selecione as seguintes permissões:
+   - **Name:** Escolha um nome fácil de identificar, como `kody_code_review`.
+   - **Organization:** Selecione a organização de destino, não **All accessible organizations**. O Azure DevOps está descontinuando tokens com escopo em todas as organizações.
+   - **Expiration:** Escolha um prazo de expiração adequado (ex.: 90 ou 180 dias).
+   - **Scopes:** Selecione as permissões a seguir, com os nomes da [lista de escopos](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/oauth#available-scopes) da Microsoft:
 
-     - **Analytics:** Read
-     - **Code:** Read & Write
-     - **Graph:** Read
-     - **Identities and Groups:** Read
-     - **Project and Team:** Read
-     - **User Profile:** Read
+     | Scope | Id | O Kody usa para |
+     | --- | --- | --- |
+     | **Code (read and write)** | `vso.code_write` | Ler repositórios e pull requests, publicar comentários de revisão e criar os service hooks que entregam os eventos de pull request. |
+     | **Project and team (read)** | `vso.project` | Listar projetos, times e membros dos times. |
+     | **Analytics (read)** | `vso.analytics` | Ler as métricas de linguagem dos repositórios. |
+     | **Graph (read)** | `vso.graph` | Consultar usuários da organização. |
+     | **Identity (read)** | `vso.identity` | Ler identidades e grupos. |
+     | **User profile (read)** | `vso.profile` | Ler o perfil do dono do token. |
 
 4. **Clique em Create.**
 
-Copie o token gerado e armazene-o com segurança, pois você precisará dele para configurar Kody.
+Copie o token gerado e guarde-o com segurança, pois você precisará dele para configurar o Kody.
 
 <Note>
-  O acesso de escrita ao Code é necessário para que Kody possa postar comentários e gerenciar o feedback de pull requests.
+  O acesso de escrita em Code é necessário para o Kody publicar comentários e gerenciar o feedback dos pull requests.
+</Note>
+
+<Note>
+  O Kody cria uma assinatura de service hook por evento de pull request e por repositório. O endpoint [Create Subscription](https://learn.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/create?view=azure-devops-rest-7.1) da Microsoft aceita `vso.code` para esses eventos, e **Code (read and write)** o inclui, então o token não precisa de um escopo separado para service hooks. O dono do token também precisa da permissão **Edit subscriptions** no projeto. Os Project Administrators já a têm.
 </Note>
 
 ## Adicionando o Token ao Kody
 
-Após gerar o token, cole-o no Kodus: durante o onboarding (**Connect your Git tool** → aba **Azure Repos** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Azure Repos**. Preencha **Organization name** e **Personal Access Token** e clique em **Validate and save**.
+Depois de gerar o token, cole-o no Kodus: durante o onboarding (**Connect your Git tool** → aba **Azure Repos** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Azure Repos**. Preencha **Organization name** (o nome em `dev.azure.com/<organization>`) e **Personal Access Token** e clique em **Validate and save**. O Kodus se conecta ao Azure DevOps Services em `dev.azure.com`.
 
-## Solução de Problemas: Kody não está revisando PRs no Azure DevOps
+## Solução de problemas: o Kody não está revisando PRs no Azure DevOps
 
-Se Kody está conectado mas **nada acontece em novos pull requests** — sem reações, sem comentários, sem PRs aparecendo no painel Kodus — a causa é quase sempre um destes três problemas, em ordem de frequência.
+Se o Kody está conectado mas **nada acontece em novos pull requests** — sem reações, sem comentários, sem PRs aparecendo no dashboard do Kodus — a causa é quase sempre um destes três problemas, em ordem de frequência.
 
 ### 1. Verifique os escopos do PAT
 
-Abra o PAT no Azure DevOps e confirme que cada escopo listado em [Gerando o PAT](#gerando-o-pat-personal-access-token) está habilitado. O mais frequentemente esquecido é **Code: Read & Write** — sem **Write**, Kody pode ler seus repositórios mas não pode postar comentários de revisão, então as revisões "executam em silêncio".
+Abra o PAT no Azure DevOps e confirme que todos os escopos listados em [Gerando o PAT](#gerando-o-pat-personal-access-token) estão habilitados. O mais esquecido é **Code (read and write)**. Com apenas **Code (read)**, o Kody consegue ler seus repositórios, mas não consegue publicar comentários de revisão, então as revisões "rodam em silêncio".
 
-Se o PAT foi criado antes de um escopo ser adicionado, o Azure DevOps não o adicionará retroativamente. Crie um novo PAT com a lista completa de escopos e reconecte com ele (**Repositories** → **Reset** no card do provedor → **Just reset the integration**, depois conecte o Azure Repos novamente com o novo token).
+Se o PAT foi criado antes de um escopo ser adicionado, o Azure DevOps não o adiciona retroativamente. Crie um novo PAT com a lista completa de escopos e reconecte com ele (**Repositories** → **Reset** no card do provedor → **Just reset the integration**, depois conecte o Azure Repos novamente com o novo token).
 
 ### 2. Verifique as permissões do usuário no projeto
 
-Um PAT herda as permissões do usuário do Azure DevOps que o criou. Se esse usuário não tiver acesso ao projeto, repositório ou fluxo de PR de destino, mesmo um PAT com escopos corretos será silenciosamente rejeitado pelo Azure.
+Um PAT herda as permissões do usuário do Azure DevOps que o criou. Se esse usuário não tem acesso ao projeto, ao repositório ou ao fluxo de PR de destino, até um PAT com os escopos corretos será rejeitado silenciosamente pelo Azure.
 
-Verifique se o proprietário do PAT consegue, pela interface web:
+Verifique se o dono do PAT consegue, pela interface web:
 
-- Abrir o repositório e visualizar pull requests.
-- Postar um comentário em um pull request.
-- Ver as threads e reações do PR.
+- Abrir o repositório e ver os pull requests.
+- Publicar um comentário em um pull request.
+- Ver as threads e as reações do PR.
 
-Se qualquer uma das ações acima falhar para o usuário, Kody também não conseguirá fazê-la. Conceda ao usuário as permissões **Contribute** e **Contribute to pull requests** no repositório antes de tentar novamente.
+Se qualquer uma das ações acima falhar para o usuário, o Kody também não conseguirá fazê-la. Conceda ao usuário as permissões **Contribute** e **Contribute to pull requests** no repositório antes de tentar novamente.
 
 ### 3. Como último recurso: adicione o usuário ao Project Collection Administrators
 
-Algumas organizações do Azure DevOps aplicam políticas mais rígidas no nível organizacional que bloqueiam até mesmo usuários com permissões corretas de postar comentários de PR via PAT. Se as etapas 1 e 2 parecem corretas, mas Kody ainda não posta nada, adicione o proprietário do PAT ao grupo **Project Collection Administrators**:
+Algumas organizações do Azure DevOps aplicam políticas mais rígidas no nível da organização que bloqueiam até usuários com as permissões corretas de publicar comentários em PRs via PAT. Se as etapas 1 e 2 parecem corretas, mas o Kody ainda não publica nada, adicione o dono do PAT ao grupo **Project Collection Administrators**:
 
 1. Abra **Organization Settings** → **Permissions** (barra lateral esquerda).
 2. Clique no grupo **Project Collection Administrators**.
@@ -81,11 +87,11 @@ Algumas organizações do Azure DevOps aplicam políticas mais rígidas no níve
 4. Adicione o usuário que gerou o PAT do Kodus.
 
 <Warning>
-  **Project Collection Administrators é um grupo de alto privilégio** — ele concede controle administrativo sobre toda a organização do Azure DevOps. Use isso como diagnóstico para confirmar se o problema é relacionado a permissões e, uma vez confirmado, trabalhe com seu administrador do Azure DevOps para conceder apenas as permissões específicas que o proprietário do PAT precisa (geralmente Contribute + Contribute to pull requests nos projetos relevantes), em vez de mantê-lo como PCA.
+  **Project Collection Administrators é um grupo de alto privilégio** — ele concede controle administrativo sobre toda a organização do Azure DevOps. Use isso como diagnóstico para confirmar que o problema é de permissão e, depois de confirmado, trabalhe com o administrador do Azure DevOps para conceder apenas as permissões específicas de que o dono do PAT precisa (normalmente Contribute + Contribute to pull requests nos projetos relevantes), em vez de mantê-lo como PCA.
 </Warning>
 
-Uma vez que a permissão estiver em vigor, Kody deverá começar a reagir e postar revisões no próximo evento de PR. Nenhuma reinicialização é necessária.
+Com a permissão em vigor, o Kody deve começar a reagir e a publicar revisões no próximo evento de PR. Não é necessário reiniciar.
 
 ### Ainda com problemas?
 
-Se nenhuma das opções acima resolver o problema, o problema geralmente está no lado do webhook, não no PAT. Veja [Criando um Webhook](/pt-BR/how_to_deploy/platforms/azure_devops/azdevops_webhook) — especialmente a seção de solução de problemas, que cobre o requisito de URL assinada com `?token=` exclusivo do Azure Repos.
+Se nada acima resolver, o problema geralmente está no lado do webhook, não no PAT. Veja [Criando um Webhook](/pt-BR/how_to_deploy/platforms/azure_devops/azdevops_webhook) — principalmente a seção de solução de problemas, que cobre o requisito de URL assinada com `?token=` que só o Azure Repos tem.

@@ -1,0 +1,63 @@
+---
+title: "Activity logs"
+description: "See who changed Kody Rules, review settings, integrations and access in your organization."
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="Available on Kodus Cloud with Enterprise or an active trial.">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requires an Enterprise license.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+**Organization → Activity logs** is an audit trail of configuration changes. The page is titled **User Activity Logs**. Owners, Repo Admins, Billing Managers and Contributors can read it, and each sees every entry in the organization.
+
+| Your plan | What you see |
+| --- | --- |
+| Enterprise, or a trial | The full page |
+| Free or Teams | The sidebar entry carries a padlock, and the page opens a preview with a **See plans** button |
+| Self-hosted with an Enterprise license key | The full page |
+| Self-hosted without a license key | The padlock and a preview with an **Activate a license** button |
+| Expired, canceled or payment-failed plan | The padlock and the preview |
+
+The API refuses the request on any other plan. Recording is checked separately: Kodus records changes on every valid plan except Free, and on self-hosted only with a license key. Changes made on Free, or on a self-hosted instance without a key, are never recorded.
+
+## What is logged
+
+Changes made in the app, with who made them:
+
+- Code review settings, including removing a repository's or directory's configuration
+- Kody Rules
+- Repositories selected for review
+- Git integrations connected or removed
+- Pull request messages
+- Organization settings
+- CLI keys
+- Member invites, role changes and repository access
+- Seat status changes
+
+## The list
+
+Newest first. Each row has:
+
+| Column | What it shows |
+| --- | --- |
+| **Action** | **ADD**, **CREATE**, **EDIT**, **DELETE** or **CLONE** |
+| **User** | The email of the person who made the change |
+| **Description** | What changed |
+| **Action Description** | A short label for the kind of change |
+| **Level** | Where the change applies: **Main**, **Global**, **Repository** or **Directory** |
+| **Date** | How long ago |
+
+Click the eye icon on a row to open **Log Details**: the user, level, created and updated times, and every change in the entry. Click **Action**, **User**, **Level** or **Date** to sort.
+
+## Search and date range
+
+The page loads the 100 most recent entries. These two controls narrow that list, so older entries aren't reachable from here:
+
+- **Search logs...**: matches the user's email and the change descriptions.
+- Date range: **Today**, **Last week**, **Last 2 weeks**, **Last month**, **Last 3 months** or custom dates, up to about three months.

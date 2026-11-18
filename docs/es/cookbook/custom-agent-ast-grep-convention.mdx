@@ -10,6 +10,8 @@ Algunas convenciones son estructurales: "nunca llames a esta función aquí", "p
 
 El ejemplo es un servicio de checkout con una convención: **los montos son centavos enteros manejados por el helper `Money`, nunca floats.**
 
+Los agentes personalizados están en beta, en los planes Teams y Enterprise y durante el trial. Kodus self-hosted también necesita `BETA_FEATURES=true`.
+
 ## Paso 1 — Escribe las reglas en el repositorio
 
 Haz commit de un archivo de reglas en tu rama por defecto. Kodus lo lee de la rama de destino de cada pull request, así que un pull request no puede relajar las reglas con las que se verifica.
@@ -83,7 +85,7 @@ La ayuda lista las reglas que encontró: `2 rules in rules/money.yml: no-parsefl
 | **Minimum severity** | Team minimum |
 | **Suggested fix** | When confident |
 
-Haz clic en **Save**.
+Haz clic en **Save settings**.
 
 ## Paso 5 — Try it
 
@@ -96,7 +98,9 @@ Ejecuta **Try it** en un pull request que agregue un `parseFloat` sobre un preci
 
 Un hallazgo que el agente levantó a partir de `docs/money.md` cita el doc en su lugar, y se descarta si la cita no está en el doc de la rama de destino.
 
-## Checklist
+Si **Warnings** indica que ast-grep no está instalado en el sandbox, el agente se ejecutó sin las reglas.
+
+## Lista de verificación
 
 - [ ] Archivo de reglas con commit en la rama por defecto
 - [ ] Cada regla tiene un `id`, una `rule` y un `message` legible

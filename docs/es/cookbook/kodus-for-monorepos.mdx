@@ -25,30 +25,35 @@ Identifica las áreas distintas de tu monorepo y sus necesidades de revisión:
 ```
 monorepo/
 ├── apps/
-│   ├── web/          → Reglas React, patrones de componentes
-│   ├── api/          → Reglas NestJS, límites de arquitectura
-│   └── mobile/       → Reglas React Native
+│   ├── web/          → React rules, component patterns
+│   ├── api/          → NestJS rules, architecture boundaries
+│   └── mobile/       → React Native rules
 ├── libs/
-│   ├── shared/       → Estabilidad de API, detección de cambios incompatibles
-│   └── ui/           → Cumplimiento del sistema de diseño
-└── infra/            → Reglas Terraform/IaC
+│   ├── shared/       → API stability, breaking change detection
+│   └── ui/           → Design system compliance
+└── infra/            → Terraform/IaC rules
 ```
 
-## Paso 2 — Crea configuraciones a nivel de directorio
+## Paso 2 — Crea alcances de directorio
 
-En la barra lateral, abre el selector de alcance en la parte superior del grupo **Code review** y elige **Add repository configuration**. En **Create repository settings**, usa **Select the target repository** (el monorepo), luego **Select the target directories** (una o más carpetas de paquetes) y haz clic en **Create settings**. Cada directorio aparece con sangría bajo el repositorio en el selector de alcance; selecciónalo para configurarlo.
+Elige el monorepo en el selector de alcance en la parte superior del grupo **Code review**, abre el selector otra vez y elige **Add directory scope**. En **Select directories**, elige una o más carpetas de paquetes que compartan la configuración de revisión y luego haz clic en **Add directory scope**. Cada alcance de directorio aparece con sangría bajo el repositorio en el selector; selecciónalo para configurarlo.
 
-Cada directorio puede tener su propia:
+Cada alcance de directorio puede tener su propia:
 - **Kody Rules** (a nivel de archivo y de PR)
 - **What to review** (qué categorías habilitar y la severidad mínima para publicar)
+- **Custom agents**, que se suman a los del repositorio
 - **Ignored files** (en **General**)
+
+Un pull request usa la configuración de un directorio cuando toca ese directorio configurado y ningún otro directorio configurado. Consulta [Configuración a nivel de directorio](/es/how_to_use/code_review/configs/directory_level) para ver cómo un pull request elige su configuración.
 
 ## Paso 3 — Escribe reglas específicas
 
-### Reglas de frontend (ámbito: `apps/web/`)
+En **Code review → Kody Rules**, pestaña **Review Rules**, haz clic en **New rule**. Una regla creada en un alcance de directorio no tiene **Path**, así que se aplica a todos los archivos de un pull request revisado con la configuración de ese alcance de directorio. Un pull request que toca dos o más alcances de directorio, o ninguno, se revisa con la configuración del repositorio, y entonces las reglas de **todos** los alcances de directorio se aplican a todos sus archivos. Escribe las reglas de directorio de modo que sigan siendo válidas en ese caso, por ejemplo nombrando la carpeta en las instrucciones. Consulta [Herencia de reglas](/es/how_to_use/code_review/configs/rules_inheritance). Para apuntar a una parte de un paquete, crea la regla en el alcance del repositorio con un glob en **Path**.
+
+### Regla de frontend (alcance: el monorepo, con una ruta)
 
 ```
-Name: React components must use design system tokens
+Rule name: React components must use design system tokens
 Execution mode: Per file
 Path: apps/web/src/components/**/*.tsx
 Severity: High
@@ -58,24 +63,23 @@ Instructions:
   Flag any hex color, pixel value, or font-size not from the token file.
 ```
 
-### Reglas de backend (ámbito: `apps/api/`)
+### Regla de backend (alcance: el directorio `apps/api/`)
 
 ```
-Name: Domain layer must not import from infrastructure
+Rule name: Domain layer must not import from infrastructure
 Execution mode: Per file
-Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
-  Check fileDiff for any import from "../infrastructure",
-  "../../infrastructure", or any path containing "/infrastructure/".
-  Domain modules must only depend on other domain modules
-  and shared interfaces.
+  In files under apps/api/src/domain, check fileDiff for any import from
+  "../infrastructure", "../../infrastructure", or any path containing
+  "/infrastructure/". Domain modules must only depend on other
+  domain modules and shared interfaces.
 ```
 
-### Reglas de librería compartida (ámbito: `libs/shared/`)
+### Regla de librería compartida (alcance: el directorio `libs/shared/`)
 
 ```
-Name: Public API changes require changeset
+Rule name: Public API changes require changeset
 Execution mode: Per PR
 Severity: High
 Instructions:
@@ -105,11 +109,13 @@ Los paquetes con mucho tráfico pueden necesitar filtros más estrictos. Selecci
 
 - **apps/web/** — **Medium** (el frontend avanza rápido)
 - **libs/shared/** — **Low/All** (la estabilidad importa)
-- **infra/** — **High** (menos pero críticas)
+- **infra/** — **High** (menos, pero críticas)
+
+El umbral se aplica a Kody Rules solo cuando **Apply the threshold to Kody Rules** está activado.
 
 ## Paso 6 — Ignora rutas generadas
 
-Añade ignorados específicos del monorepo para evitar ruido:
+Añade ignorados específicos del monorepo para evitar ruido: en **Code review → General → Review scope**, haz clic en **Edit** bajo **Ignored files**, o defínelos en `kodus-config.yml` (se lee solo cuando **Prefer kodus-config.yml settings** está activado para el repositorio):
 
 ```yaml
 ignorePaths:
@@ -125,6 +131,6 @@ ignorePaths:
 
 - Comienza con 2-3 reglas por directorio y amplía según lo que tu equipo realmente marque en las revisiones
 - Usa la herencia de reglas — las reglas a nivel de organización cubren seguridad, las de repositorio cubren convenciones, las de directorio cubren arquitectura
-- Si una regla se activa demasiado en un paquete pero es válida en otros, excluye ese directorio de la regla en lugar de debilitarla
+- Si una regla se activa demasiado en un paquete pero es válida en otros, acota su **Path** o reescríbela. **Override and disable for this scope** solo marca una regla heredada como deshabilitada en la lista; una revisión igualmente la aplica
 
-Para más información sobre configuraciones de directorio, consulta [Configuración a nivel de directorio](/es/how_to_use/code_review/configs/directory_level). Para la herencia de reglas, consulta [Herencia de reglas](/es/how_to_use/code_review/configs/rules_inheritance).
+Para más información sobre alcances de directorio, consulta [Configuración a nivel de directorio](/es/how_to_use/code_review/configs/directory_level). Para la herencia de reglas, consulta [Herencia de reglas](/es/how_to_use/code_review/configs/rules_inheritance).

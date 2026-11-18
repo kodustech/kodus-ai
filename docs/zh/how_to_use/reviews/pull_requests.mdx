@@ -1,0 +1,62 @@
+---
+title: "拉取请求"
+description: "跟踪每一次 Kody 审查,按结果筛选,并打开任意拉取请求上的发现。"
+---
+
+**Reviews → Pull requests** 列出 Kody 运行过的拉取请求,以及每次审查的结果。所有套餐上的所有者、代码库管理员和贡献者都可以打开它,并且它会在审查运行时更新。旁边的 **CLI** 标签页列出 [CLI 审查](/zh/how_to_use/reviews/cli_reviews)。
+
+## 列表
+
+每一行是一个拉取请求。被审查多次的 PR 只占一行。
+
+| 列 | 显示内容 |
+| --- | --- |
+| **Pull request** | 编号、标题、代码库、源分支、打开时间和作者。点击标题会打开审查界面;箭头图标会在您的 Git 提供方上打开该 PR |
+| **Reviews** | Kody 审查该 PR 的次数以及最近一次的时间 |
+| **Suggestions** | 两个计数:已发布到 PR 上的(对勾图标)和被您的审查配置拦下的(过滤器图标) |
+| **Status** | 最近一次审查:**Success**、**Review failed**、**In Progress**、**Skipped**、**Partial Error** 或 **Pending**。PR 合并后会由 **Merged** 取代 |
+
+点击某一行可展开它。它会列出该 PR 的每次审查,包括其状态、耗时、所审查的提交,以及它运行的各阶段的时间线。**Open full review** 会打开审查界面。
+
+记录了审查模式时，每次运行都会显示 **Balanced** 或 **Heavy** 徽章。PR 行显示最近一次实际审查该 PR 的运行模式。对于含有专项智能体数据的 Heavy 审查，展开时间线中的 **Specialist Agents**，即可查看各智能体的耗时、工具调用、发现项及记录的失败原因。**Findings** 统计通过验证的发现项，计数发生在去重之前。 这项时间线详情在自托管版 2.2.11 之后加入。
+
+当审查成功但可用的内容少于应有的内容时,例如没有代码库检出,或部分 Kody Rules 未被评估,展开的审查会列出缺失的内容。这些提示只出现在这里,不会出现在拉取请求上。
+
+## 快捷方式
+
+右上角的三个计数器在点击时会筛选列表:
+
+- **Reviewed today**:Kody 今天(UTC)审查过的不同 PR。添加 **Status** 筛选可进一步缩小范围,例如缩小到失败的审查。
+- **Kody skipped**:Kody 被触发但因配置(无许可证、BYOK、手动或已暂停的节奏、被忽略的用户)而跳过且从未审查的 PR。它是当前的积压量,而不是每日数字,并且会打开它自己的列表。
+- **Needs attention**:Kody 已发布建议但作者尚未采纳的未关闭 PR。它可能会滞后到下一次实施检查。
+
+## 筛选器
+
+按 **title**、**number** 或 **author** 搜索,然后使用以下条件缩小范围:
+
+- **Repository**
+- **Authors**:默认会隐藏被您的审查设置排除的作者的 PR;**All authors** 显示所有人,**Excluded authors** 只显示被排除的作者
+- **Suggestions**:**Has suggestions** 或 **No suggestions**
+- **Date**:审查日期范围,可使用预设(**Last week**、**Last 15 days**、**Last month**、**Last 3 months**)或自定义日期
+- **PR state**:**Open** 或 **Closed**,即拉取请求本身的状态
+- **Status**:审查的结果(**Success**、**Error**、**Partial error**、**Skipped**、**In progress**、**Pending**)
+
+生效的筛选条件会显示为可移除的标签,**Clear all** 可重置它们。筛选条件保存在 URL 中,因此您可以分享筛选后的视图。
+
+## 审查界面
+
+点击 PR 标题可打开其 **Code Review** 界面。它会在 diff 之上显示该 PR 所有审查的发现。
+
+- **左侧**:已更改的文件,以文件夹树显示,或通过 **Group by role** 按角色分组。带有发现的文件会被标记,您也可以将文件标记为已查看。
+- **中间**:PR 头部带有 **Review** 标签页和 **Commits** 标签页,一个显示潜在 bug 和标记数量以及您已查看文件数量的栏,以及统一或分栏视图的 diff。Kody 的发现内联显示在它们所指的行下方。
+- **右侧**:按严重性分组的发现(**Critical**、**High**、**Medium**、**Low**)。点击其中一项即可跳转到它。
+
+关键和高严重性发现标记为 **Potential Bug**,中等标记为 **Suggestion**,低标记为 **Nit**。发现会显示 Kody 的说明、**Suggested fix** 或 **Recommendation**,以及用于 **Copy fix**、**Copy AI prompt**(可粘贴到编码代理中以应用修复的提示词)和 **Open on provider** 的按钮。
+
+如果审查没有产生发现,界面会说明原因,例如 **Nothing to flag.**、**Review failed — nothing to show.** 或 **Review skipped.**
+
+针对整个拉取请求而不是某个文件的建议不会显示在此界面上。
+
+快捷键:**J** 和 **K** 跳转到下一个和上一个文件,**B** 隐藏或显示文件树,**Esc** 清除所选文件。
+
+当您通过 **Open in PR review** 从[建议](/zh/how_to_use/cockpit/suggestions)中打开一条建议时,界面会滚动到该发现。

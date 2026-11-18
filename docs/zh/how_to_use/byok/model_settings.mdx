@@ -1,0 +1,220 @@
+---
+title: "BYOK 模型设置"
+sidebarTitle: "模型设置"
+description: "每个模型的推理、温度、自定义提供商选项和并发限制。"
+---
+
+这些设置位于 **AI providers** 页面上模型的添加或编辑表单的 **Advanced settings** 卡片中。
+
+## Reasoning / Extended Thinking
+
+添加模型的表单在 **Advanced settings** 下提供一个 **Thinking / Reasoning** 开关(Off / Low / Medium / High / Custom)。可用的选项与模型实际能做到的一致:
+
+- 无法推理的模型会被锁定为 **Off**,并附带说明。
+- 仅在某些级别上推理的模型(例如 GPT-5 的 medium/high)会禁用无效的级别。
+- 默认进行推理的模型会以 **Medium** 作为合理的起点。
+
+### 预设级别
+
+当您选择 Low / Medium / High 时,Kodus 会自动把该级别转换为各提供商的原生格式:
+
+| 提供商 | 该级别发送的内容 |
+| --- | --- |
+| **Anthropic**(Claude 4.6 及更高版本) | `thinking: { type: "adaptive" }` + 设为该级别的 `effort` |
+| **Anthropic**(Claude 3.7 至 4.5) | `thinking: { type: "enabled", budgetTokens }`,Low / Medium / High 分别对应 5,000 / 15,000 / 40,000 tokens |
+| **Google**(Gemini 3) | `thinkingConfig: { thinkingLevel }` |
+| **Google**(Gemini 2.5) | `thinkingConfig: { thinkingBudget }`,token 数相同,上限为模型的最大值 |
+| **OpenAI**(GPT-5 / o 系列)和 **Azure OpenAI** | `reasoningEffort` |
+| **OpenRouter** | `reasoning: { effort }` |
+| **Google Vertex AI**、**Amazon Bedrock** | 上述 Gemini 或 Claude 格式。Bedrock 在 Off 时不发送任何内容,对 Claude 以外的模型也不发送任何内容 |
+| **OpenAI-compatible**(Kimi) | `thinking: { type: "enabled" }`。级别会被忽略 |
+| **OpenAI-compatible**(GLM、DeepSeek) | `thinking: { type: "enabled" }` 加上 `reasoning_effort`(Low 为 `low`,Medium 为 `high`,High 为 `max`)。GLM-5.3 只发送 `reasoning_effort` |
+| **Moonshot**、**Z.ai**、**Anthropic-compatible**(Kimi、GLM、DeepSeek) | `thinking: { type: "enabled", budgetTokens }`,大小由级别决定 |
+| **Novita** | 不发送任何内容。请使用 **Custom** 来开启推理 |
+
+<Note>
+  **始终推理的变体**(Kimi `k2p7-code`/`k3`、GLM-5.3)无条件进行推理,无法设为 Off。**Test** 会拒绝对它们设置 Off。
+</Note>
+
+### 自定义 JSON 覆盖
+
+在 **Thinking / Reasoning** 开关中选择 **Custom** 会显示一个 JSON 文本框。直接粘贴提供商选项 — **Kodus 会自动将它们包装在当前提供商的命名空间下**。您无需了解 Vercel AI SDK 的路由规则。
+
+在以下情况下使用:
+
+- 您需要为 Claude 指定具体的 `budgetTokens` 值(而不是预设的 effort 映射)
+- 您想为 OpenAI 兼容提供商按模型启用/禁用思考
+- 您想设置推理之外的字段 — **缓存、服务层级、安全设置、`user` 标记等**。该覆盖会被合并到 `providerOptions` 中,因此任何适配器字段都能透传
+- 提供商推出了 Kodus 尚未封装的新字段
+
+#### 示例(直接粘贴 — 无需命名空间)
+
+<Tabs>
+  <Tab title="Anthropic">
+    将 Claude 的思考预算精确覆盖为 20,000 tokens(Claude 4.7 及更高版本会拒绝 `budgetTokens`;请改用 `effort`):
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    启用提示缓存(非推理示例):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    显式的思考预算(Gemini 2.5)或级别(Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    调整安全设置:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    使用 OpenAI 特有字段的推理:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    强制推理 + 忽略某个特定上游:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "provider": { "ignore": ["deepinfra"] }
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible (Kimi, GLM, etc.)">
+    启用带预算提示的思考:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    显式禁用思考(仅限支持该操作的模型):
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      上游提供商无法识别的字段(例如在忽略它的服务器上使用 `budget_tokens`)会被静默丢弃。请查阅提供商的文档,确认它们接受什么。
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### 手动使用命名空间(高级用户)
+
+如果您的 JSON 在顶层已经以某个已知的命名空间键开头 — 下面映射表中的任意键 — Kodus 会保持其不变。如果您想混用多个提供商的命名空间,或想明确指定,这会很有用:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+在底层,Kodus 使用的命名空间映射如下:
+
+| BYOK 提供商 | 命名空间键 |
+| --- | --- |
+| `anthropic` / `anthropic_compatible` / `moonshot` / `zai` | `anthropic` |
+| `google_gemini` | `google` |
+| `google_vertex` | Gemini 使用 `google`,Vertex 上的 Claude 使用 `anthropic` |
+| `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock`(也接受 `bedrock`) |
+| `novita` | `novita` |
+| `open_router` | `openrouter` |
+
+#### 注意事项
+
+- **只接受有效的 JSON 对象。** 缺少逗号、多余的尾随逗号或非对象的值,在保存时会被拒绝。
+- **优先级:** JSON 覆盖会**完全替换**预设 effort 的命名空间块 — 如果您覆盖了 `anthropic.thinking` 却忘了 `anthropic.effort`,该字段就不会被发送。OpenRouter 路由(Pin providers / Allow fallbacks)是唯一的例外:它会在 `openrouter` 下与您的覆盖深度合并。
+- **未知提供商 = 不包装。** 如果您的 BYOK 提供商不在上面的命名空间表中,Kodus 会原样透传该 JSON。
+
+## Temperature
+
+Temperature 位于 **Advanced settings** 下,该字段会根据模型的规则自适应 — 规则由提供商设定,而不是由表单猜测:
+
+| 模型 | Temperature 字段 |
+| --- | --- |
+| 大多数模型 | **可编辑**(0 = 确定性,2 = 创造性)。 |
+| Kimi `k3` 和 GLM-5.3(始终推理) | **锁定为 `1`。** 协议在思考时将温度固定为 1,因此无论存储了什么,Kodus 都发送 `1`。该字段显示一个锁。 |
+| Kimi `k2.6` 和 `k2.7-code`,以及开启推理的 DeepSeek | **隐藏。** Kimi 说明这些模型的温度不可修改,而 DeepSeek 在思考时会忽略它。推理为 **Off** 的 DeepSeek 保留可编辑字段。 |
+| Claude 4.7+ 和 OpenAI GPT-5 / o 系列 | **隐藏。** 这些模型移除了温度,并会拒绝任何设置它的请求。请改用思考级别来引导它们。 |
+
+<Info>
+  [Test](/zh/how_to_use/byok#保存前先测试) 会根据这些规则校验您设置的温度,并在保存之前返回错误,因此您永远不会保存模型不会遵从的值。
+</Info>
+
+## 并发与速率限制
+
+`maxConcurrentRequests` 字段(**Max concurrent requests**,位于 **Advanced settings** 下)限制 Kodus 并行发送给您的提供商的在途请求数量。大多数情况下默认值就足够了,但并发上限严格的订阅套餐需要显式设置它。
+
+### 建议设置的值
+
+| 提供商 / 套餐 | 值 | 原因 |
+| --- | --- | --- |
+| **GLM Coding Plan** | 向 Z.AI 确认 | 对于获准的用途，请采用 Z.AI 为您的账号指定的上限。 |
+| **Kimi Code Plan** | `30` | Moonshot 为编码端点公布的上限。 |
+| **GLM 开发者 API** | _(留空)_ | 限制按密钥伸缩;没有合理的全局默认值。 |
+| **Kimi 开发者 API** | _(留空)_ | 随您的充值档位伸缩(Tier 1 ≈ 50,Tier 5 ≈ 1000)。 |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(留空)_ | 提供商自行执行其 TPM/RPM 限制;Kodus 不设上限。 |
+
+### 何时调整
+
+<CardGroup cols={2}>
+  <Card title="调高" icon="arrow-up">
+    - 您在 Moonshot/OpenRouter 上有高档位充值,并希望在大型 PR 上获得更高吞吐量
+    - 在多文件 PR 上审查感觉是串行的,而且您没有看到 429
+  </Card>
+  <Card title="调低" icon="arrow-down">
+    - 您在审查日志中看到 `429` 或 `Too much concurrency` 错误
+    - 您的提供商在仪表板上提示速率限制警告
+    - 您想在更多 PR 之间节省 Coding Plan 窗口(5 小时/每周)
+  </Card>
+</CardGroup>
+
+<Tip>
+  **并发 vs. RPM vs. TPM。** `maxConcurrentRequests` 只限制并行的在途请求数。许多提供商还会单独执行 **RPM**(每分钟请求数)和 **TPM**(每分钟 token 数)限制。如果在并发看起来正常的情况下触及了 RPM/TPM,通常的解决办法是升级档位或把负载分散到更长的时间 — 而不是修改 `maxConcurrentRequests`。
+</Tip>
+
+<Note>
+  **与备用模型的交互。** 当某个任务的模型持续因 429 失败,Kody 故障转移到 **Fallback model** 时,适用的是备用模型自己的 `maxConcurrentRequests`。在另一个提供商上设置一个宽松的备用模型,是在主模型使用严格订阅时吸收突发流量的好办法。
+</Note>

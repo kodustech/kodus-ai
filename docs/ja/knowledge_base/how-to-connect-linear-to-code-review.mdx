@@ -1,36 +1,40 @@
 ---
-title: "LinearをコードレビューツールにConnectする方法"
-description: "LinearをKodusにリンクして、AIコードレビューがイシュー要件に対してPRを自動的に検証するようにします。"
+title: "Linear を接続してプルリクエストを検証する"
+description: "Kodus で Linear を設定し、イシューに照らして PR を検証します。"
 ---
-
-LinearをKodusに接続すると、Linearイシューに対する自動**ビジネスロジック検証**とコードレビュー提案のためのリッチなコンテキストが有効になります。
 
 ## 接続方法
 
-1. サイドバーから **Plugins** を開きます
+1. サイドバーで **Plugins** を開きます（プラグインのインストールには Owner ロールが必要です）
 2. **Linear** タイルをクリックします
-3. 認証を行い、Linearワークスペースへのアクセスを許可します
-4. Kodyが使用できるツールを選択し、**Install plugin** をクリックします
+3. プラグインの **Authenticate with** をクリックして Linear ワークスペースへのアクセスを許可するか（OAuth）、Linear の API キーを入力して **Connect** をクリックします
+4. 接続するとすぐに、読み取り専用のツールが選択された状態でプラグインがインストールされます。後から変更するには、プラグインを開いて **Selected tools** を編集し、**Update Tools** をクリックします
+
+Kody はこれらのツールで Issue を読み取るため、次のツールは選択したままにしてください：`get_issue`、`get_team`、`list_teams`、`list_issues`、`get_document`。オフにしたツールは使用できません。
 
 ## 有効になる機能
 
 ### 自動ビジネスロジック検証
 
-PRがLinearイシューにリンクされ、**Code review → What to review** で **Business Logic** カテゴリがオンになっていると、Kodusは自動的に：
-- イシューのタイトル、説明、受け入れ基準を取得
-- PRのdiffを要件と比較
-- 不足している実装とギャップを報告
+Linear イシューを PR のタイトル、ブランチ名、または説明に記載します。**Code review → What to review** の **Business Logic** がオン（初期設定）の場合、Kody は最初のレビューで PR を検証します。 Kody はイシュー、親イシュー、サブイシュー、添付ドキュメントを読み取ります。
 
 ### オンデマンド検証
 
-PRコメントに任意のLinear URLを貼り付けます：
+PR コメントに、任意の Linear URL または Issue キーを貼り付けます。
 
 ```
 @kody -v business-logic https://linear.app/your-team/issue/TEAM-123
 ```
 
-### リッチなコードレビューコンテキスト
+## 得られるもの
 
-Linearが接続されると、Kodyはルールや会話でタスクコンテキストを参照できます。
+Kody は、検証した要件と各結果の根拠となるコードを **Kody · Business Logic** コメントにまとめます。再検証すると同じコメントが更新されます。結果のステータスと再検証の方法は[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)を参照してください。
 
-詳細については、[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)と[プラグイン](/ja/how_to_use/code_review/plugins)を参照してください。
+## ヒント
+
+- 最も徹底した検証のために、Linear の Issue に明確な受け入れ基準を書きます。
+- サブ Issue で提供される要件は **CHECK MANUALLY** と表示され、不足とは判定されません。
+
+## 会話でのプラグインツール
+
+PR コメントで Kody にメンションすると、Kody はプラグインを使用できます。[カスタムエージェント](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp)でもオンにできます。

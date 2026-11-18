@@ -4,7 +4,7 @@ description: "Registre manualmente o webhook do Azure Repos quando o Kody não c
 icon: webhook
 ---
 
-O Kody geralmente cria o webhook automaticamente quando você conecta um projeto do Azure DevOps. Esta página cobre o caminho de **configuração manual** que você percorre quando o registro automático não aconteceu — tipicamente em instalações self-hosted ou em projetos Azure onde o Kody não pode criar service hooks em seu nome.
+O Kody geralmente cria os service hooks automaticamente, por repositório, quando você salva a seleção de repositórios. Isso exige a permissão **Edit subscriptions** no projeto (Project Administrators a têm). Esta página cobre o caminho de **configuração manual** que você percorre quando o registro automático não aconteceu. **Repositories** lista o repositório com o motivo.
 
 <Note>
   As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Usar o domínio da API só funciona se seu proxy reverso rotear os caminhos `/.../webhook` para o serviço de Webhooks.
@@ -31,7 +31,7 @@ O valor `<generated>` é produzido criptografando `CODE_MANAGEMENT_WEBHOOK_TOKEN
 
 ## Gerando o token do webhook
 
-Escolha a opção que corresponde ao seu ambiente. Ambas usam as variáveis de ambiente que seu stack Kodus já tem configurado — você **não** precisa clonar o repositório.
+Escolha a opção que corresponde ao seu ambiente. Ambas usam as variáveis de ambiente que seu stack Kodus já tem configuradas — você **não** precisa clonar o repositório.
 
 ### Opção A — dentro do contêiner Kodus em execução (recomendado)
 
@@ -57,11 +57,11 @@ A saída é o valor que você cola como `?token=...` na URL do webhook. Exemplo:
 
 ### Opção B — localmente com Node (sem Docker)
 
-Se seu stack Kodus não estiver em execução ou quiser gerar o token em uma máquina diferente, exporte as duas variáveis de ambiente e execute:
+Se seu stack Kodus não estiver em execução ou você quiser gerar o token em uma máquina diferente, exporte as duas variáveis de ambiente e execute:
 
 ```bash
-export CODE_MANAGEMENT_SECRET="<mesmo valor do seu .env>"
-export CODE_MANAGEMENT_WEBHOOK_TOKEN="<mesmo valor do seu .env>"
+export CODE_MANAGEMENT_SECRET="<same value as in your .env>"
+export CODE_MANAGEMENT_WEBHOOK_TOKEN="<same value as in your .env>"
 
 node -e "
 const crypto = require('crypto');
@@ -75,7 +75,7 @@ console.log(iv.toString('hex') + ':' + e);
 ```
 
 <Warning>
-  Ambos os valores das variáveis de ambiente devem corresponder **exatamente** aos que o contêiner da API do Kodus está usando. Uma discrepância na chave produz um token com aparência válida que o Kodus rejeitará com `403 Unauthorized`.
+  Os valores das duas variáveis de ambiente devem corresponder **exatamente** aos que o contêiner da API do Kodus está usando. Uma discrepância na chave produz um token com aparência válida que o Kodus rejeitará com `403 Unauthorized`.
 </Warning>
 
 <Tip>
@@ -103,12 +103,13 @@ console.log(iv.toString('hex') + ':' + e);
 
 6. Clique em **Finish**.
 
-Crie uma assinatura por tipo de evento. O Kodus atualmente reage a:
+Crie uma assinatura por tipo de evento. Estes três são os que o Kody cria por conta própria e de que precisa para fazer o review:
 
 - `git.pullrequest.created` — Pull request criado
 - `git.pullrequest.updated` — Pull request atualizado
-- `git.pullrequest.merge.attempted` — Tentativa de merge de pull request
 - `ms.vss-code.git-pullrequest-comment-event` — Comentário em pull request
+
+O Kodus também aceita `git.pullrequest.merge.attempted` — Tentativa de merge de pull request — mas não precisa dele para fazer o review.
 
 <Note>
   Certifique-se de que a URL é acessível a partir do Azure DevOps e aceita requisições POST de entrada na porta 3332 (diretamente ou por meio do seu proxy reverso).
@@ -126,6 +127,10 @@ Crie uma assinatura por tipo de evento. O Kodus atualmente reage a:
   </Accordion>
 
   <Accordion title="Funciona para um evento mas não para outros">
-    Cada tipo de evento precisa de sua própria assinatura no Azure DevOps. Se você criou apenas "Pull request created", atualizações e comentários não irão disparar revisões.
+    Cada tipo de evento precisa de sua própria assinatura no Azure DevOps. Se você criou apenas "Pull request created", atualizações e comentários não irão disparar reviews.
+  </Accordion>
+
+  <Accordion title="O Kodus retorna 400 Unrecognized event">
+    O token foi aceito, mas o corpo da requisição não tem `eventType`. Os service hooks do Azure DevOps sempre o enviam, então outra coisa está fazendo POST na URL, por exemplo uma requisição de teste manual.
   </Accordion>
 </AccordionGroup>

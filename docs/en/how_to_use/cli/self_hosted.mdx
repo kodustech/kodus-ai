@@ -36,7 +36,11 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
         }
         ```
 
-        The CLI creates this file automatically when you run `kodus auth team-key`, but you can also create it manually.
+        The CLI creates this file automatically when you run `kodus auth team-key`, and keeps an `apiUrl` that is already in it. You can also create it manually.
+
+        <Warning>
+          `kodus auth login` and `kodus auth logout` delete this file, including `apiUrl`. If you sign in with a login, use the environment variable instead.
+        </Warning>
       </Tab>
       <Tab title="Inline (One-off)">
         ```bash
@@ -61,10 +65,10 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
         kodus auth team-key --key kodus_xxxxx
         ```
 
-        Or use the installer with both API URL and team key:
+        Or use the installer, passing the API URL to it:
 
         ```bash
-        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+        curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
         ```
 
         <Tip>Team keys are ideal for shared environments and AI agent setups â€” no individual login required.</Tip>
@@ -74,20 +78,13 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
         kodus auth login
         ```
 
-        The CLI opens the **Authorize Kodus CLI** page of your self-hosted web app. Sign in with the account registered on your instance, then click **Authorize CLI**. For a non-interactive login, pass `--email` and `--password` instead (see [`auth login`](/en/how_to_use/cli/commands#auth-login)). Tokens are stored locally in `~/.kodus/credentials.json` with restricted permissions (600).
-      </Tab>
-      <Tab title="CI/CD Token">
-        Generate a token from a personal account, then use it in pipelines:
+        The CLI opens the **Authorize Kodus CLI** page of your self-hosted web app. Sign in with the account registered on your instance (after signing in you land on the dashboard, so open the URL the CLI printed again), then click **Authorize CLI**. On a machine with no browser, the CLI prints a URL and a code instead (or add `--device-code`). The page has no field for the code: open the URL with `?code=<code>` added. Your login is stored in `~/.kodus/credentials.json` with restricted permissions (600).
 
-        ```bash
-        # Generate (once, from a logged-in machine)
-        kodus auth token
+        <Info>
+          The address of that page comes from the `API_FRONTEND_URL` setting of your Kodus API. It must be your web app's URL, or the login page opens on the wrong host.
+        </Info>
 
-        # Use in your pipeline
-        export KODUS_API_URL=https://kodus-api.yourcompany.com
-        export KODUS_TOKEN=<generated-token>
-        kodus review --format json --fail-on error
-        ```
+        For scripts that cannot use a browser, `--legacy` with `--email` and `--password` signs in with email and password (see [`auth login`](/en/how_to_use/cli/commands#auth-login)). It is deprecated.
       </Tab>
     </Tabs>
   </Step>
@@ -97,10 +94,12 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
     kodus auth status
     ```
 
-    You should see your authentication mode, organization name, and that the token is valid. If using verbose mode, the API URL being used is logged:
+    You should see how you are signed in and your organization. With a login or a team key, `auth status` reads your stored credentials and does not call the API. To check which URL the CLI talks to, add `--verbose` to a command that does: each request prints its method and URL.
+
+    If the key is only in the environment (`KODUS_TEAM_KEY`), `auth status` says "No credentials found". Run `kodus status` instead.
 
     ```bash
-    kodus auth status --verbose
+    kodus config remote list --verbose
     ```
   </Step>
 </Steps>
@@ -129,7 +128,7 @@ If your self-hosted API is behind [Cloudflare Access](https://developers.cloudfl
   </Tab>
 </Tabs>
 
-The CLI sends `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers on every API request when configured. Priority: env vars > config file.
+When both the client ID and the secret are set, the CLI sends `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers on every API request. Priority: env vars > config file.
 
 ## Config File Reference
 
@@ -164,65 +163,71 @@ The CLI stores configuration in `~/.kodus/config.json`:
 | Variable | Description |
 |----------|-------------|
 | `KODUS_API_URL` | Self-hosted API endpoint (HTTPS required, except localhost) |
+| `KODUS_APP_URL` | Your web app's URL, which `kodus config remote open` points to (default `https://app.kodus.io`) |
 | `KODUS_TEAM_KEY` | Team key for shared access |
-| `KODUS_TOKEN` | CI/CD token for pipelines |
+| `KODUS_TOKEN` | A login access token, used as is and not refreshed. Takes priority over every other credential. For CI, use a team key |
 | `CF_ACCESS_CLIENT_ID` | Cloudflare Access client ID |
 | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access client secret |
-| `KODUS_VERBOSE` | Set to `true` to see the resolved API URL and request details |
+| `KODUS_REQUEST_TIMEOUT_MIN` | Timeout of each API request in minutes (default `60`) |
+| `KODUS_DISABLE_UPDATE_CHECK` | Set to `1` to turn off the update notice |
 
 ## CI/CD Integration
 
-For self-hosted instances in CI/CD pipelines, set the API URL and authentication as environment variables:
+For self-hosted instances in CI/CD pipelines, set the API URL and a team key as environment variables. A fresh checkout has no uncommitted changes, so review the branch against its base with `--branch`. The base branch must be available in the checkout, so fetch the full history.
 
 <Tabs>
   <Tab title="GitHub Actions">
     ```yaml
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Kodus Review
       env:
         KODUS_API_URL: ${{ secrets.KODUS_API_URL }}
         KODUS_TEAM_KEY: ${{ secrets.KODUS_TEAM_KEY }}
-      run: npx @kodus/cli review --format json --fail-on error
+      run: npx @kodus/cli review --branch origin/main --format json --fail-on error
     ```
   </Tab>
   <Tab title="GitLab CI">
     ```yaml
     kodus-review:
-      script:
-        - npx @kodus/cli review --format json --fail-on error
       variables:
-        KODUS_API_URL: $KODUS_API_URL
-        KODUS_TEAM_KEY: $KODUS_TEAM_KEY
+        GIT_DEPTH: "0"
+      script:
+        - git fetch origin main
+        - npx @kodus/cli review --branch origin/main --format json --fail-on error
     ```
+
+    Add `KODUS_API_URL` and `KODUS_TEAM_KEY` as CI/CD variables in the project settings.
   </Tab>
   <Tab title="Generic">
     ```bash
     export KODUS_API_URL=https://kodus-api.yourcompany.com
     export KODUS_TEAM_KEY=kodus_xxxxx
-    npx @kodus/cli review --format json --fail-on error
+    npx @kodus/cli review --branch origin/main --format json --fail-on error
     ```
   </Tab>
 </Tabs>
 
 <Tip>
-  Use `--fail-on error` or `--fail-on critical` to fail the pipeline when issues above a severity threshold are found.
+  Use `--fail-on error` or `--fail-on critical` to fail the pipeline when issues above a severity threshold are found. Pull requests are reviewed by the Git integration, so they need no pipeline job.
 </Tip>
 
 ## Distributing to Your Team
 
-To onboard your team in one command, combine the API URL with the skill installer:
+To onboard your team in one command, pass the API URL and a team key to the installer:
 
 ```bash
-KODUS_API_URL=https://kodus-api.yourcompany.com \
-  curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | KODUS_API_URL=https://kodus-api.yourcompany.com bash -s -- --team-key kodus_xxxxx
 ```
 
-This installs the CLI, configures the team key, and deploys review skills to detected AI agents (Claude Code, Cursor, Windsurf) â€” all pointing to your self-hosted instance.
+This installs the CLI, applies the team key against your instance, and installs the Kodus skills into the AI agents it finds. It does not save the API URL, so each person still needs `KODUS_API_URL` in their shell profile, or `apiUrl` in `~/.kodus/config.json` before they apply the key.
 
 ## Troubleshooting
 
 <AccordionGroup>
   <Accordion title="Security Error: API URL must use HTTPS protocol">
-    The CLI requires HTTPS for all non-localhost URLs. Make sure your self-hosted instance has a valid TLS certificate. If you're testing locally, use `http://localhost:<port>` instead.
+    The CLI requires HTTPS for all non-localhost URLs. It then falls back to the default `https://api.kodus.io`, so read the message before you authenticate. Make sure your self-hosted instance has a valid TLS certificate. If you're testing locally, use `http://localhost:<port>` instead.
   </Accordion>
 
   <Accordion title="Connection refused or timeout">
@@ -235,7 +240,7 @@ This installs the CLI, configures the team key, and deploys review skills to det
   <Accordion title="Authentication failed (401)">
     - Run `kodus auth status` to check your current auth state
     - If using a team key, verify it's still **Active** under **Organization â†’ CLI keys** in your self-hosted web app
-    - If using personal login, tokens expire after 1 hour â€” the CLI auto-refreshes, but you may need to re-login if the refresh token is also expired
+    - If using personal login, the CLI refreshes your login automatically; if the refresh fails, run `kodus auth login` again
     - Make sure `KODUS_API_URL` points to the correct instance
   </Accordion>
 

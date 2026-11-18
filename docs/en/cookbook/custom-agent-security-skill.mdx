@@ -6,9 +6,11 @@ icon: "shield-halved"
 
 ## Why a skill
 
-Your team may already keep its security rules as an agent skill, for coding assistants. A custom agent can follow the same skill in code review: it opens the skill when the change needs it, reads its reference files, and quotes the rule each finding applies. When the skill changes on the main branch, the agent follows the new version with no settings change.
+Your team may already keep its security rules as an agent skill, for coding assistants. A custom agent can follow the same skill in code review: it opens the skill when the change needs it, reads its reference files, and quotes the rule each finding applies. When the skill changes on the branch a pull request targets, the agent follows the new version with no settings change.
 
 The example is a multi-tenant scheduling API where every query must be scoped to the caller's workspace.
+
+Custom agents are in beta, on Teams and Enterprise plans and during the trial. Self-hosted Kodus also needs `BETA_FEATURES=true`.
 
 ## Step 1 — The skill in the repository
 
@@ -34,7 +36,7 @@ For the list of tenant tables, see references/tenant-tables.md.
 bookings, calendars, invoices, members, resources
 ```
 
-The folder name and `name` must match, and `description` is required.
+`name` uses lowercase letters, digits and hyphens (a `name` that differs from the folder is read as the folder name), and `description` is required.
 
 ## Step 2 — Import it as an agent
 
@@ -83,7 +85,7 @@ If your issue tracker is installed as a plugin, turn it on under **Tools → Plu
 | **Minimum severity** | High | Only tenant leaks and missing auth, not hardening ideas. |
 | **Suggested fix** | When confident | |
 
-Click **Save**.
+Click **Save settings**.
 
 ## Step 6 — Try it
 
@@ -103,10 +105,10 @@ Turn the agent on. To get a second opinion on an open pull request later, commen
 
 ## Checklist
 
-- [ ] `SKILL.md` has `name` matching its folder and a `description`
-- [ ] Reference files sit one folder below the skill at most
+- [ ] `SKILL.md` has a `name` and a `description`
+- [ ] Reference files sit inside the skill's folder
 - [ ] Instructions say what proof a finding needs
 - [ ] Minimum severity matches how loud the agent should be
 - [ ] Tried on a pull request with a known gap
 
-See [Skills & docs](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs) for detection and budgets.
+See [Skills & docs](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#skills-&-docs) for detection and budgets.

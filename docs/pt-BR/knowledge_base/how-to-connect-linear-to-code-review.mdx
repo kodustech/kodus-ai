@@ -1,36 +1,40 @@
 ---
-title: "Como conectar o Linear à sua ferramenta de revisão de código"
-description: "Vincule o Linear ao Kodus para que suas revisões de código com IA validem automaticamente os PRs contra os requisitos das issues."
+title: "Conecte o Linear e valide pull requests"
+description: "Configure o Linear no Kodus e confira um PR com sua issue."
 ---
-
-Conectar o Linear ao Kodus habilita a **validação automática de lógica de negócio** contra issues do Linear e um contexto mais rico para sugestões de revisão de código.
 
 ## Como conectar
 
-1. Na barra lateral, abra **Plugins**
+1. Na barra lateral, abra **Plugins** (instalar um plugin exige a função Owner)
 2. Clique no card **Linear**
-3. Autentique-se e autorize o acesso ao seu workspace do Linear
-4. Escolha as ferramentas que o Kody pode usar e clique em **Install plugin**
+3. Clique em **Authenticate with** do plugin e autorize o acesso ao seu workspace do Linear (OAuth), ou informe uma API key do Linear e clique em **Connect**
+4. O plugin é instalado assim que conecta, com as ferramentas somente leitura selecionadas. Para alterá-las depois, abra o plugin, edite **Selected tools** e clique em **Update Tools**
+
+Mantenha estas ferramentas selecionadas, porque o Kody lê as issues com elas: `get_issue`, `get_team`, `list_teams`, `list_issues` e `get_document`. Uma ferramenta que você desativa não pode ser usada.
 
 ## O que isso habilita
 
 ### Validação automática de lógica de negócio
 
-Quando um PR está vinculado a uma issue do Linear e a categoria **Business Logic** está ativada em **Code review → What to review**, o Kodus automaticamente:
-- Busca o título, a descrição e os critérios de aceitação da issue
-- Compara o diff do PR com os requisitos
-- Reporta implementações ausentes e lacunas
+Informe a issue do Linear no título, na branch ou na descrição do PR. Com **Business Logic** ativado em **Code review → What to review** (o padrão), o Kody verifica o PR na primeira revisão. O Kody lê a issue, a issue pai, as sub-issues e os documentos anexados.
 
 ### Validação sob demanda
 
-Cole qualquer URL do Linear em um comentário de PR:
+Cole qualquer URL do Linear, ou a chave de uma issue, em um comentário de PR:
 
 ```
 @kody -v business-logic https://linear.app/your-team/issue/TEAM-123
 ```
 
-### Contexto mais rico para revisão de código
+## O que você recebe
 
-Com o Linear conectado, o Kody pode referenciar o contexto da tarefa nas regras e conversas.
+O Kody publica um comentário **Kody · Business Logic** com os requisitos que conferiu e o trecho de código que embasa cada resultado. Uma nova verificação atualiza esse comentário. Consulte a [Validação de regras de negócio](/pt-BR/how_to_use/code_review/business_logic_validation) para ver os estados e as opções de rechecagem.
 
-Para detalhes, consulte [Validação de Lógica de Negócio](/pt-BR/how_to_use/code_review/business_logic_validation) e [Plugins](/pt-BR/how_to_use/code_review/plugins).
+## Dicas
+
+- Escreva critérios de aceitação claros nas suas issues do Linear para obter a validação mais completa.
+- Um requisito entregue por uma sub-issue aparece como **CHECK MANUALLY**, nunca como ausente.
+
+## Ferramentas do plugin em conversas
+
+O Kody pode usar o plugin quando você o menciona em um comentário de PR. Ele também pode ser ativado para um [agente personalizado](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp).

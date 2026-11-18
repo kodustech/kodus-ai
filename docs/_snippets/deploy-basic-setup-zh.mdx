@@ -2,128 +2,142 @@
 
 <AccordionGroup>
   <Accordion title="推荐硬件">
-    按默认 `local` 沙箱模式（kodus-graph + cross-file context 在 worker
-    容器内运行）调整大小。
+    按默认的 `local` 沙箱模式（kodus-graph + cross-file
+    上下文在 worker 容器内运行）确定规格。
 
-    - **CPU**: 2+ 核心（约 100k LOC 以上的仓库推荐 4+ 核心）
-    - **RAM**: 8GB+（在大型仓库上运行 `local` 沙箱时推荐 16GB）
-    - **存储**: 60GB+ 可用空间（Postgres 保存 AST 图缓存；
+    - **CPU**：2+ 核心（约 100k LOC 以上的仓库推荐 4+ 核心）
+    - **RAM**：8GB+（在大型仓库上运行 `local` 沙箱时推荐 16GB）
+    - **存储**：60GB+ 可用空间（Postgres 保存 AST 图缓存；
       随仓库数量和 PR 量增长）
   </Accordion>
   <Accordion title="必需软件">
     - **Docker**（最新稳定版）以及 Compose 插件
-    - **域名或固定 IP**（如果您要从云端 Git 提供商
-      （GitHub.com、GitLab.com 等）接收 webhook）
+    - **域名或固定 IP**，如果你想从云端 Git 提供商
+      （GitHub.com、GitLab.com 等）接收 Git webhook
   </Accordion>
   <Accordion title="必需端口">
-    默认主机端口映射 — 如果发生冲突，请在 `.env` 中调整。
+    由安装程序的 Compose 文件发布在主机上。
 
-    - **3000** — Kodus Web App
+    - **3000** — Kodus Web App（`WEB_PORT`）
     - **3001** — API
-    - **3332** — Webhooks
-    - **5432** — PostgreSQL
-    - **27017** — MongoDB
-    - **5672, 15672, 15692** — RabbitMQ（AMQP、管理 UI、指标）
-    - **3101** — MCP Manager _（仅当 `API_MCP_SERVER_ENABLED=true` 时）_
+    - **3332** — Webhooks（`API_WEBHOOKS_PORT`）
+    - **3101** — MCP Manager（`API_MCP_MANAGER_PORT`），_仅当 `API_MCP_SERVER_ENABLED=true` 时_
+    - **15692** — RabbitMQ Prometheus 指标
+
+    PostgreSQL (5432)、MongoDB (27017) 和 RabbitMQ（5672 AMQP、15672
+    管理 UI）发布在随机的主机端口上。容器通过
+    Docker 网络访问它们；运行 `docker compose port <service> <port>` 即可
+    找到主机端口。
   </Accordion>
   <Accordion title="服务">
-    `./scripts/install.sh` 根据您的 `.env` 启动的内容。
+    `./scripts/install.sh` 会根据你的 `.env` 启动的内容。
 
     **核心（始终运行）：**
     - `api` — 主后端
     - `worker` — code review 作业
     - `webhooks` — Git 提供商 webhook 接收器
     - `kodus-web` — Next.js 前端
-    - `db_kodus_postgres`、`db_kodus_mongodb`、`rabbitmq` —
-      本地基础设施。使用 `USE_LOCAL_DB=false` /
-      `USE_LOCAL_RABBITMQ=false` 跳过以指向托管实例。
+    - `db_kodus_postgres`、`db_kodus_mongodb`、`rabbitmq` — 本地
+      基础设施。设置 `USE_LOCAL_DB=false` /
+      `USE_LOCAL_RABBITMQ=false` 即可指向托管实例。
+      这些容器仍会作为依赖项启动，但 Kodus 不会使用它们。
 
     **可选：**
     - `kodus-mcp-manager` — Model Context Protocol broker。通过
-      `API_MCP_SERVER_ENABLED=true` 启用。请参阅
-      [MCP Manager](/zh/how_to_deploy/deploy_kodus/mcp_manager)。
-    - `worker-analytics` — Cockpit 摄取（DORA 指标、PR classifier）。
-      **仅限自托管企业版**，默认不连接。请参阅
-      [Analytics Worker](/zh/how_to_deploy/deploy_kodus/analytics_worker)。
+      `API_MCP_SERVER_ENABLED=true` 启用。请参阅 [MCP Manager](/zh/how_to_deploy/deploy_kodus/mcp_manager)。
+    - `worker-analytics` — Cockpit 摄取（DORA 指标、PR
+      分类器）。**仅限自托管 Enterprise。** 位于 `analytics`
+      Compose profile 之后，因此安装程序不会启动它。
+      请参阅 [Analytics Worker](/zh/how_to_deploy/deploy_kodus/analytics_worker)。
   </Accordion>
 </AccordionGroup>
 
 <Note>
   Code review 使用在沙箱中运行的 AST 图 + cross-file 上下文 —
   `local`（默认，在 worker 内运行）或 `e2b`（付费远程沙箱）。
-  有关模式、缓存行为以及何时选择每种模式，请参阅
-  [Sandbox & AST Graph](/zh/how_to_deploy/deploy_kodus/sandbox)。
+  有关各模式、缓存行为以及何时选择哪一种，请参阅 [Sandbox & AST Graph](/zh/how_to_deploy/deploy_kodus/sandbox)。
 </Note>
 
 <Note>
-  **如果您计划连接云端 Git 服务（GitHub、GitLab、Bitbucket）或云端 LLM 提供商（OpenAI、Anthropic 等），则需要互联网访问。** 对于内网自托管的 Git 工具和本地/自托管 LLM，外网访问是可选的。
+  安装所需的镜像必须能从镜像仓库或镜像站获取，也可以提前加载到主机。内网部署请使用网络内可访问的 Git 服务和模型端点。可选的外部服务需要连接各自的端点。
 </Note>
 
 ## 域名设置（可选）
 
-If you're planning to integrate Kodus with cloud-based Git providers (GitHub, GitLab, or Bitbucket), you'll need public-facing URLs for both the Kodus Web App and its API. This allows your server to receive webhooks for proper Code Review functionality and ensures correct application behavior.
+Git 提供商必须能通过 HTTPS 访问 webhook URL。即使 Kodus 和 Git 都在私有网络内，安装程序也要求至少配置一个 HTTPS webhook URL。用户需要能够访问 Web 应用，包括登录完成或从 Git 提供商跳转返回时。
 
-We recommend setting up two subdomains:
-- One for the Web Application, e.g., `kodus-web.yourdomain.com`.
-- One for the API, e.g., `kodus-api.yourdomain.com`.
+我们建议设置两个子域名：
+- 一个用于 Web 应用，例如 `kodus-web.yourdomain.com`。
+- 一个用于 API，例如 `kodus-api.yourdomain.com`。
 
-Webhook 由独立服务处理（端口 3332）。您可以选择：
-- 使用独立的 webhook 子域名，例如 `kodus-webhooks.yourdomain.com`，或
-- 继续使用 API 域名，并在反向代理中将 `/github/webhook`、`/gitlab/webhook` 等路径转发到 webhook 服务。
+Webhook 由单独的服务处理（3332 端口）。你可以选择：
+- 使用专用的 webhook 子域名，例如 `kodus-webhooks.yourdomain.com`，或
+- 继续使用 API 域名，并在反向代理中将 `/github/webhook`、`/gitlab/webhook` 等路径路由到 webhook 服务。
 
-Both subdomains should have DNS A records pointing to your server's IP address. Later in this guide, we will configure a reverse proxy (Nginx) to route requests to these subdomains to the correct internal services. This setup is essential for full functionality, including webhooks and authentication.
+两个子域名都应有指向你服务器 IP 地址的 DNS A 记录。[反向代理](/zh/how_to_deploy/deploy_kodus/reverse_proxy)会将每个子域名路由到正确的内部服务。
 
-> **Note**: If you're only connecting to self-hosted Git tools on your network and do not require public access or webhooks, you might be able to use a simpler setup, but this guide focuses on public-facing deployments.
 
-## Setup
+## 设置
 
 <Steps>
-  <Step title="Clone the installer repository">
+  <Step title="克隆安装程序仓库">
     ```bash
     git clone https://github.com/kodustech/kodus-installer.git
     cd kodus-installer
     ```
   </Step>
-  <Step title="Copy the example environment file">
+  <Step title="复制示例环境文件">
     ```bash
     cp .env.example .env
     ```
   </Step>
-  <Step title="Generate secure keys for the required environment variables">
+  <Step title="为必需的环境变量生成安全密钥">
     ```bash
-    ./generate-keys.sh
+    ./scripts/generate-secrets.sh
     ```
+
+    <Warning>
+      请在首次安装之前只运行一次。再次运行会替换 `.env` 中的所有密钥，包括数据库密码和 `API_CRYPTO_KEY`，现有数据将无法再使用。
+    </Warning>
   </Step>
-  <Step title="Edit the environment file">
-    Edit `.env` with your values using your preferred text editor. 
+  <Step title="编辑环境文件">
+    使用你偏好的文本编辑器，用你的值编辑 `.env`。
     ```bash
     nano .env
     ```
 
-    详细说明请参见 [环境变量配置](/zh/how_to_deploy/deploy_kodus/generic_vm)。
+    添加 `IMAGE_TAG=<version>` 来固定你安装的发布版本，例如 `IMAGE_TAG=2.2.11`。不设置时，安装程序使用 `latest`。发布版本在 [kodus-ai releases 页面](https://github.com/kodustech/kodus-ai/releases)上以 _Self-Hosted Release_ 列出。
+
+    详细说明请参阅[环境变量配置](/zh/how_to_deploy/deploy_kodus/generic_vm#环境变量配置)。
   </Step>
 
-  <Step title="Run the installer">
+  <Step title="运行安装程序">
     ```bash
+    ./scripts/validate-env.sh
     ./scripts/install.sh
     ```
+
+    `validate-env.sh` 会根据 schema 检查 `.env`。`install.sh` 在必需变量设置完毕且至少一个 Git webhook URL 有效之前，会拒绝启动。`api` 容器在启动时会运行数据库迁移和种子数据。
   </Step>
-  <Step title="Success 🎉">
-  When complete, Kodus Services should be running on your machine.
-  You can verify your installation using the following script:
+  <Step title="验证安装">
+  安装程序完成后，服务就在运行了。可用以下命令检查：
   ```bash
   ./scripts/doctor.sh
   ```
-  </Step>
-  <Step title="Access the web interface">
-    Once you access the web interface for the first time, you'll need to:
 
-1. **Create your admin account** - This will be the first user with full system access
-2. **Configure your Git provider** - Connect GitHub, GitLab, or Bitbucket following the on-screen instructions
-3. **Select repositories** for analysis - Choose which code repositories Kody will review
+  第一行会说明审查是否在运行。之后的每个问题都会列出你会损失什么以及如何修复。添加 `--verbose` 可查看每一项检查。
+  </Step>
+  <Step title="访问 Web 界面">
+    首次访问 Web 界面时，你需要：
+
+1. **创建你的管理员账号** - 这将是第一个拥有完整系统访问权限的用户
+2. **连接 LLM 提供商** - Kodus 是自带密钥（bring-your-own-key）模式，没有模型就不会运行任何审查。在侧边栏中打开 **AI providers**，或在 `.env` 中设置模型（请参阅 [LLM 提供商配置](/zh/how_to_deploy/deploy_kodus/generic_vm#llm-提供商配置)）
+3. **配置你的 Git 提供商** - 按照屏幕上的说明连接 GitHub、GitLab、Bitbucket、Azure DevOps 或 Forgejo
+4. **选择要分析的仓库** - 选择 Kody 将审查哪些代码仓库
 
 <Info>
-  详细步骤请参见 [快速开始指南](/zh/how_to_use/quickstart)。
+  有关初始配置过程的详细步骤，请参阅我们的[快速开始
+  指南](/zh/how_to_use/quickstart)。
 </Info>
   </Step>
 </Steps>

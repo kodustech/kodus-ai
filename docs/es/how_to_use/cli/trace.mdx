@@ -1,0 +1,102 @@
+---
+title: "Kodus Trace"
+description: "Registra las decisiones detrás de los cambios que hace un agente de programación y léelas por ruta."
+---
+
+Un diff muestra qué cambió. Kodus Trace conserva el porqué. Captura las sesiones de agentes de programación en un repositorio, convierte la rama que envías en decisiones (elecciones de arquitectura, convenciones, compromisos) y te permite a ti o a un agente leer las decisiones registradas para una ruta antes de modificarla.
+
+La captura y la consulta locales funcionan en la CLI. El uso de decisiones de Trace con datos sensibles ocultos para revisar PRs del mismo repositorio está en **alfa privada** en Kodus Cloud.
+
+## Actívalo
+
+```bash
+kodus trace enable
+```
+
+Ejecútalo dentro del repositorio. Instala:
+
+- **Hooks de sesión** para Claude Code (el `.claude/settings.json` del repositorio), Cursor (el `.cursor/hooks.json` del repositorio) y Codex (`~/.codex/config.toml`, en tu carpeta personal). `--agents claude,cursor` limita cuáles, y `--codex-config <path>` apunta a otra configuración de Codex.
+- **Dos hooks de git.** `prepare-commit-msg` añade un trailer `Kodus-Trace:` a cada mensaje de commit, que vincula el commit con su sesión. `pre-push` inicia la destilación en segundo plano.
+- **Un ajuste de fetch** para que un simple `git fetch` también descargue las decisiones compartidas.
+
+<Warning>
+  El hook `pre-push` comparte su archivo con el hook de revisión de `kodus hook install`. Con ambos instalados, un envío no inicia la destilación, por lo que no se escriben decisiones nuevas. `kodus hook uninstall` elimina solo el hook de revisión y deja el de Trace.
+</Warning>
+
+Comprueba lo que hizo con `kodus trace status`: sesiones y turnos capturados, decisiones (locales y compartidas), hooks instalados y cualquier problema que haya encontrado. Elimina los hooks con `kodus trace disable` (añade `--dry-run` para previsualizar). Desactivar elimina solo los hooks: las sesiones capturadas se quedan en tu máquina, y los eventos ya enviados a Kodus se quedan allí.
+
+## Qué se captura
+
+Cada turno de una sesión de agente: el prompt y la respuesta, un resumen de una línea de cada herramienta que usó el agente, los archivos que leyó y modificó, sus comandos y el uso de tokens. Los registros viven en `~/.kodus/sessions`, fuera del repositorio, y se eliminan a los 90 días. Los secretos se redactan antes de almacenar nada: claves de API, tokens, claves privadas y contraseñas en URLs o asignaciones.
+
+La captura funciona sin cuenta.
+
+Cuando has iniciado sesión con un login o una clave de equipo, el CLI también envía a Kodus los eventos redactados de cada sesión: los prompts y las respuestas, las herramientas que el agente llamó con sus entradas y salidas, los archivos leídos y modificados, los comandos, el uso de tokens, la rama, la URL del remoto de git y los ids de commit. Kodus los almacena para tu organización. Cuando una sesión termina, un modelo los lee para extraer decisiones, con el modelo BYOK de tu organización si lo tiene y con un modelo gestionado por Kodus en caso contrario. Estos eventos cuentan para las 1000 solicitudes por hora del equipo.
+
+## Cómo se generan las decisiones
+
+En `git push`, un job en segundo plano resume cada commit de tu rama que no está en la rama predeterminada. Luego le pide a un CLI de agente de programación de tu máquina que convierta esos resúmenes y las sesiones capturadas de la rama en decisiones. Usa el primero de `claude`, `codex`, `gemini` y `cursor-agent` que encuentre. Esa herramienta recibe los mensajes de commit, los nombres de archivo y los prompts y respuestas redactados de las sesiones, por lo que llegan a su proveedor como en cualquier otro uso de ella. Si no hay ninguna instalada, la captura sigue funcionando y no se escriben decisiones.
+
+El job nunca retrasa ni hace fallar un envío. Escribe las decisiones en una rama llamada `kodus/trace/v1` y envía esa rama al mismo remoto, de modo que el clon de un compañero las obtiene con `git fetch`. Cada envío reemplaza el registro de esa rama.
+
+## Lee las decisiones
+
+Pasa las rutas que estás a punto de modificar. No hace falta ningún subcomando.
+
+```bash
+kodus trace src/billing/invoice.ts
+kodus trace src/billing src/payments --limit 10
+kodus trace src/billing --format json
+```
+
+Un directorio devuelve todo lo registrado bajo él. Un archivo devuelve todo aquello cuyo alcance lo cubre, incluidas las decisiones registradas para su directorio. La lectura usa lo que ya está en tu máquina y no hace ninguna llamada de red. `--remote <name>` elige el remoto cuya rama de decisiones se lee.
+
+Cada decisión muestra:
+
+- **Tipo:** `architectural_decision`, `convention`, `tradeoff`, `implementation_detail`, `tooling` u `other`.
+- **Origen:** `human` si lo pediste tú, `agent` si el agente lo eligió por iniciativa propia, `collaborative` si lo resolvieron juntos.
+- **Confianza**, de 0 a 1, según se juzgó cuando se escribió la decisión.
+- **Alcance**, las rutas a las que se aplica, y la **fuente**: `local` (registrada aquí) o `branch` (compartida por otra persona).
+- Un **id**, el identificador para `forget` y `pin`.
+
+Un resultado vacío es una respuesta normal, con código de salida 0. Significa que todavía no hay nada registrado para esas rutas, o que la captura está desactivada.
+
+Si una ruta tiene el nombre de un subcomando, como `status`, sepárala con `--`: `kodus trace -- status`.
+
+## Corrige el registro
+
+```bash
+kodus trace forget <id>      # The decision is wrong: stop returning it
+kodus trace pin <id>         # Always keep this decision
+kodus trace pin <id> --remove
+```
+
+Ambos se guardan localmente. Cuando la decisión está en la rama compartida, también se publican en ella, para que el equipo vea la corrección.
+
+## Explora las sesiones
+
+```bash
+kodus trace ui               # http://127.0.0.1:4711 by default
+kodus trace ui --port 5000 --no-open
+```
+
+Sirve tus sesiones locales en el navegador. Lee solo el almacén local.
+
+## Variables de entorno
+
+| Variable                | Descripción                                                              |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `KODUS_TRACE_HOME`      | Carpeta que contiene las sesiones, en lugar de `~/.kodus`                |
+| `KODUS_TRACE_AGENT_CMD` | El comando que escribe las decisiones, en lugar del primer CLI encontrado, por ejemplo `claude -p` |
+| `KODUS_TRACE_SKIP`      | Establécela en cualquier valor para que los hooks de sesión y el hook pre-push no hagan nada |
+
+## Relacionado
+
+<CardGroup cols={2}>
+  <Card title="Agentes de IA" icon="robot" href="/es/how_to_use/cli/ai_agents">
+    Skills y bucles para agentes de programación.
+  </Card>
+  <Card title="Referencia de Comandos" icon="book" href="/es/how_to_use/cli/commands#kodus-trace">
+    Todos los comandos de `kodus trace`.
+  </Card>
+</CardGroup>

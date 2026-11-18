@@ -6,42 +6,40 @@ description: "Compara cuántos pull requests abre tu equipo frente a cuántos ci
 ## Qué es PRs Abiertos vs Cerrados
 
 Este gráfico pone dos conteos semanales lado a lado: cuántos pull requests se **abrieron** y
-cuántos se **cerraron** en la misma semana. Responde una pregunta que ninguna métrica de
-velocidad responde — ¿tu equipo está siguiendo el ritmo de su propio throughput, o el trabajo se
-acumula más rápido de lo que se mergea?
+cuántos se **cerraron** en la misma semana. Muestra si el equipo sigue el ritmo del trabajo que abre,
+o si los pull requests se acumulan más rápido de lo que se cierran.
 
-## Cómo lo calculamos
+## Cómo lo Calculamos
 
-Para cada semana del período seleccionado contamos:
+Para cada semana del rango de fechas seleccionado:
 
-- **Abiertos** — pull requests creados esa semana.
-- **Cerrados** — pull requests cerrados esa semana (mergeados o cerrados de otro modo).
+- **Opened**: pull requests abiertos esa semana, sin importar su estado actual. Para un PR abierto
+  antes de que se conectara su repositorio, y que no esté entre los PRs importados al conectar, la fecha es cuando
+  Kodus lo registró por primera vez.
+- **Closed**: pull requests cerrados esa semana, mergeados o cerrados sin merge.
 
-Ambos se cuentan de forma independiente: un PR abierto en una semana y cerrado tres semanas
-después aparece en la barra de "abiertos" de la primera y en la de "cerrados" de la tercera. Es
-deliberado — es lo que hace visible el backlog.
+Ambos se cuentan de forma independiente: un PR abierto en una semana y cerrado tres semanas después cuenta en
+la barra **Opened** de la primera semana y en la barra **Closed** de la cuarta. Eso es lo que hace visible
+un backlog.
 
-## Cómo leerlo
+## Cómo Leerlo
 
-- **Cerrados ≈ Abiertos, semana tras semana** — estado estable. El equipo absorbe lo que asume.
-- **Abiertos consistentemente por encima de Cerrados** — el backlog crece. El cuello de botella
-  suele ser la capacidad de revisión, no la de escribir código.
-- **Picos de Cerrados muy por encima de Abiertos** — normalmente una limpieza: alguien cerró un
-  lote de PRs estancados. Conviene confirmarlo antes de leerlo como una mejora de productividad.
-- **Ambos caen a la vez** — suele ser efecto de calendario (festivo, freeze, incidente), no un
-  cambio de comportamiento.
+- **Closed cerca de Opened, semana tras semana**: estado estable. El equipo cierra lo que abre.
+- **Opened por encima de Closed durante varias semanas**: el backlog está creciendo.
+- **Closed muy por encima de Opened**: a menudo es un lote de PRs estancados cerrados de una sola vez. Confírmalo antes de
+  leerlo como una mejora de productividad.
+- **Ambos caen a la vez**: normalmente un festivo, un freeze o un incidente.
 
 <Tip>
-  Léelo junto a [PR Cycle Time](/es/how_to_use/cockpit/metrics/lead_time_for_changes). Una brecha
-  creciente aquí junto con un cycle time al alza es la señal más clara de que el cuello de botella
-  está en la revisión, no en el desarrollo.
+  Lee este gráfico junto a [Tiempo de Ciclo del PR](/es/how_to_use/cockpit/metrics/lead_time_for_changes).
+  Una brecha creciente aquí junto con un cycle time al alza apunta a la revisión como el cuello de botella.
 </Tip>
 
-## Dónde encontrarlo
+## Dónde Encontrarlo
 
-Cockpit → pestaña **Productivity**, en la sección de gráficos detallados.
+Cockpit → pestaña **Productivity**, en la sección de gráficos detallados. Las semanas empiezan el lunes, y puedes ocultar **Opened** o **Closed** haciendo clic en su nombre debajo del gráfico.
 
 <Note>
-  Este gráfico puede ocultarse para toda la organización. Si no lo ves, consulta
-  **Organization → Cockpit visibility** — consulta [Configuración de Cockpit](/es/how_to_use/cockpit/configuration).
+  Este gráfico puede ocultarse para toda tu organización. Si no lo ves, consulta
+  **Organization → Cockpit visibility**. Consulta [Configuración de Cockpit](/es/how_to_use/cockpit/configuration).
 </Note>

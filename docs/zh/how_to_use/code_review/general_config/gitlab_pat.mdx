@@ -17,27 +17,29 @@ Kody 以令牌所属的 GitLab 用户身份发布审查。使用个人访问令�
 
    - [点击此处访问个人资料设置页面](https://gitlab.com/-/user_settings/personal_access_tokens)。
 
-2. **导航到 `访问令牌`**:
+2. **导航到 `Access Tokens`**:
 
-   - 在左侧边栏中,滚动找到 `访问令牌` 并点击它。
+   - 在左侧边栏中,滚动找到 `Access Tokens` 并点击它。
 
 3. **添加新令牌**:
 
-   - 点击 `添加新令牌` 按钮。
+   - 点击 `Add new token` 按钮。在较新的 GitLab 版本中,请打开 `Generate token` 下拉菜单并选择 `Legacy token`。
 
 4. **使用以下规格设置新令牌**:
 
-   - **令牌名称**:选择一个容易识别的名称,例如 `kody_code_review`。
-   - **到期日期**:如果可能,选择较长的到期日期,最好至少 180 天。
-   - **权限**:设置以下权限:
+   - **Token Name**:选择一个容易识别的名称,例如 `kody_code_review`。
+   - **Expiration Date**:如果可能,选择较长的到期日期,最好至少 180 天。
+   - **Permissions**:设置以下权限:
      - **api**
      - **read_api**
      - **read_user**
      - **read_repository**
      - **write_repository**
 
+   在个人访问令牌上,`api` 已包含其他四个范围,因此只选 `api` 就足够了。Kody 从不通过 Git 推送。
+
 5. **完成并保存令牌**:
-   - 配置权限后,点击 `生成令牌`。
+   - 配置权限后,点击 `Generate token`。
    - 确保复制生成的令牌并安全存储,因为您需要它来配置 Kody。
 
 ## 使用群组访问令牌
@@ -50,21 +52,21 @@ Kody 以令牌所属的 GitLab 用户身份发布审查。使用个人访问令�
 
 1. **打开群组的访问令牌页面**:
 
-   - 在 GitLab 中,打开包含您代码库的群组,进入 `设置` > `访问令牌`。
+   - 在 GitLab 中,打开包含您代码库的群组,进入 `Settings` > `Access tokens`。
 
 2. **添加新令牌**:
 
-   - 点击 `添加新令牌` 按钮。
+   - 点击 `Add new token` 按钮。
 
 3. **使用以下规格设置新令牌**:
 
-   - **令牌名称**:Kody 的审查将显示的名称,例如 `Kody`。
-   - **到期日期**:如果可能,选择较长的到期日期,最好至少 180 天。
-   - **角色**:`Maintainer`。Kody 需要此角色才能在每个项目上创建 Webhook。
-   - **范围**:`api` 和 `read_repository`。Kody 会克隆您的代码库,而群组访问令牌的 `api` 不包含通过 HTTPS 的 Git 访问。
+   - **Token name**:Kody 的审查将显示的名称,例如 `Kody`。
+   - **Expiration date**:如果可能,选择较长的到期日期,最好至少 180 天。
+   - **Role**:`Maintainer`。Kody 需要此角色才能在每个项目上创建 webhook。
+   - **Scopes**:`api` 和 `read_repository`。Kody 会克隆您的代码库,而群组访问令牌的 `api` 不包含通过 HTTPS 的 Git 访问。
 
 4. **完成并保存令牌**:
-   - 点击 `创建群组访问令牌`。
+   - 点击 `Create group access token`。
    - 复制令牌并安全存储。GitLab 只显示一次。
 
 ## 将令牌添加到 Kody

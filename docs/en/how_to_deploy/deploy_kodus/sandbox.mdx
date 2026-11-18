@@ -10,6 +10,10 @@ context, validate suggestions, and feed the agent. The parser runs inside
 a **sandbox** so it can `git clone`, install dependencies, and execute the
 CLI in isolation from the API process.
 
+The same sandbox gives review agents their file tools (search, read file,
+list directory) over the checked-out repository, in reviews and in `@kody`
+conversations.
+
 This page explains the sandbox modes you can pick from, what the AST
 graph is, and how the cache keeps PR-level reviews fast.
 
@@ -17,8 +21,8 @@ graph is, and how the cache keeps PR-level reviews fast.
 
 Kodus uses [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-graph),
 a CLI that walks a repository and emits a JSON graph (functions, classes,
-files, imports, calls). The CLI is **pre-installed in the worker image**
-(`kodus-ai-worker`), so there is no extra setup step on `local` mode.
+files, imports, calls). The CLI is **pre-installed in the Kodus images**
+(including `kodus-ai-worker`), so there is no extra setup step on `local` mode.
 
 The lifecycle:
 
@@ -30,8 +34,8 @@ The lifecycle:
    it to finish before opening PRs.
 2. **When a PR is merged into the default branch** — webhook handlers
    enqueue an incremental rebuild that re-parses only the changed files
-   and merges the deltas into the cached graph. The cache stays fresh
-   without ever needing a full rebuild.
+   and merges the deltas into the cached graph. A merge that changes more
+   than 500 files triggers a full rebuild instead.
 3. **On every PR review** — Kodus loads the cached graph, parses only
    the files touched by the PR, and feeds the agent a focused subgraph.
    This is the hot path; it never re-parses the whole repo.
@@ -45,21 +49,26 @@ The sandbox is selected by `SANDBOX_PROVIDER` in `.env`:
 
 | Mode | What it does | Trade-off |
 |---|---|---|
-| **`local`** _(installer default)_ | Runs `kodus-graph` inside the `worker` container itself. Bun + the CLI are pre-installed. | No external dependency. Worker container needs more RAM on big repos. |
+| **`local`** _(installer default)_ | Runs `kodus-graph` inside the `worker` container itself. Bun + the CLI are pre-installed. | No external dependency. Shares the worker container's CPU and memory. |
 | **`e2b`** | Spins up a remote [E2B](https://e2b.dev) sandbox per job. Requires `API_E2B_KEY`. | Strong isolation, scales for huge repos. **Paid third-party service.** |
-| **`auto`** | Uses `e2b` when `API_E2B_KEY` is set, otherwise falls back to no sandbox. | Convenient for staged rollouts, e.g. when migrating from `none` to `e2b`. |
-| **`none`** | No sandbox. Disables AST graph and cross-file context. | Reviews are less rich (no call-graph context, no cross-file analysis). |
+| **`auto`** | Uses `e2b` when `API_E2B_KEY` is set, otherwise `local`. | What you get when `SANDBOX_PROVIDER` is not set. |
+| **`null`** | No sandbox. | Reviews see only the diff: no cross-file context and no code graph. |
 
 ### Picking a mode
 
 - **You're getting started, want it to "just work"** → `local`. This is
   the installer default and needs zero external accounts.
-- **Repos are huge (millions of LOC) or you want strict isolation** →
+- **Repos are very large or you want strict isolation** →
   `e2b`. Sign up at [e2b.dev](https://e2b.dev), set `API_E2B_KEY`, switch
   `SANDBOX_PROVIDER=e2b`.
-- **You explicitly don't want any sandbox to run** → `none`. The review
-  agent runs without cross-file context; suggestions still work but are
-  less informed.
+
+`SANDBOX_PROVIDER=e2b` without `API_E2B_KEY` leaves reviews with no sandbox:
+no cross-file context, and no code graph. Setting only `API_E2B_KEY` while
+`SANDBOX_PROVIDER=local` keeps the local sandbox.
+
+To turn the sandbox off, set `SANDBOX_PROVIDER=null`. `none` is not a valid
+value: any value other than `auto`, `local`, `e2b` or `null` behaves like `auto`.
+`./scripts/doctor.sh` warns while the sandbox is off.
 
 ## Migrating an existing self-hosted install
 
@@ -74,12 +83,12 @@ backfill script bundled with the installer:
 ```
 
 This walks every team in the instance and enqueues an `AstGraphBuild`
-job for each selected repo whose `astGraphStatus` is `NULL`, `PENDING`,
-or `FAILED`. Builds run in the background — you can keep using Kodus
+job for each selected repo whose graph status is not set, `pending` or
+`failed`. Builds run in the background — you can keep using Kodus
 while they finish.
 
 The script is **idempotent**: re-running skips repos that are already
-`READY`, never re-enqueues `BUILDING` jobs, and you can stop and resume
+`ready`, never re-enqueues `building` jobs, and you can stop and resume
 freely.
 
 Common flags:
@@ -87,7 +96,7 @@ Common flags:
 ```bash
 ./scripts/backfill-ast-graph.sh --org <id>          # restrict to one org
 ./scripts/backfill-ast-graph.sh --org <id> --team <id>  # one team only
-./scripts/backfill-ast-graph.sh --force             # also rebuild READY graphs
+./scripts/backfill-ast-graph.sh --force             # also rebuild ready graphs
 ./scripts/backfill-ast-graph.sh --limit 50          # cap jobs per team (default: 10)
 ./scripts/backfill-ast-graph.sh --dry-run           # list teams, enqueue nothing
 ```
@@ -110,7 +119,15 @@ API_E2B_KEY=your-e2b-api-key
 ```
 
 Sign up for E2B at [e2b.dev](https://e2b.dev), generate an API key in the
-dashboard, then drop it in `.env` and restart the stack.
+dashboard, then drop it in `.env` and run `./scripts/install.sh` again.
+
+In `local` mode the worker clones the repository with a 120 second budget. A
+slow clone of a very large monorepo can exceed it, and the review then runs
+without a sandbox. Raise the budget in milliseconds:
+
+```bash
+API_SANDBOX_CLONE_TIMEOUT_MS=300000
+```
 
 ## What runs where
 
@@ -127,42 +144,30 @@ flowchart LR
 ## Resource sizing
 
 The `local` sandbox runs `git clone` and `kodus-graph parse` inside the
-`worker` container, so worker RAM headroom matters:
-
-- **Small to medium repos (< 100k LOC)** — the default 8GB host is fine.
-- **Large repos (100k–1M LOC)** — give the worker container 4–8GB of RAM
-  on top of normal usage; consider 16GB total host RAM.
-- **Huge monorepos (> 1M LOC)** — switch to `e2b` so the parsing happens
-  off-box.
-
-The Postgres footprint scales with repo count and history depth — plan
-~10–50MB per indexed repo as a rough order of magnitude.
+`worker` container, so the worker's memory limit applies to them. The Helm
+chart sets a `1536Mi` limit on the worker. If the worker is killed for memory
+while it builds a graph, raise the limit under `services.worker.resources`, or
+use `e2b` to parse off the host.
 
 ## Troubleshooting
 
 **Reviews don't include cross-file context (`local` mode):**
 
-Check the worker logs for `kodus-graph` install or parse errors:
+Check the worker logs for clone or `kodus-graph` parse errors:
 
 ```bash
-docker compose logs -f worker | grep -i kodus-graph
+docker compose logs -f worker | grep -iE "sandbox|kodus-graph"
 ```
 
-If the install step fails, confirm that the worker container has
-internet access (it needs to fetch bun + the CLI on first boot if the
-image was built without them).
+The worker needs network access to your Git provider to clone. `./scripts/doctor.sh` runs a read-only
+`git ls-remote` against a selected repository and reports a failure.
 
 **`e2b` jobs hang or fail to start:**
 
 Verify `API_E2B_KEY` is set and valid:
 
 ```bash
-docker compose exec worker printenv API_E2B_KEY
+docker compose exec worker sh -c 'if [ -n "$API_E2B_KEY" ]; then echo "API_E2B_KEY is set"; else echo "API_E2B_KEY is missing"; fi'
 ```
 
 The E2B dashboard shows live sessions and quota usage.
-
-**You want to disable AST entirely (testing, debugging):**
-
-Set `SANDBOX_PROVIDER=none` and restart the worker. Reviews will skip
-the graph stage and run with the LLM's vanilla view of the diff.

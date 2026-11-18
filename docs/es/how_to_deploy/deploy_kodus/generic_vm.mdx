@@ -8,106 +8,142 @@ icon: "plug"
 
 ## Configuración de variables de entorno
 
-Usa esta sección para completar tu `.env`. Comienza con las URLs públicas, luego
-configura las bases de datos y RabbitMQ, y finalmente agrega la configuración
-específica de cada proveedor.
+Usa esta sección para completar tu `.env`. Comienza con las URLs públicas, luego configura el proveedor de LLM, las bases de datos y RabbitMQ, y finalmente agrega la configuración específica de cada proveedor. `./scripts/generate-secrets.sh` ya completó los secretos.
 
-### Configuración de espacio de nombres
+### URLs públicas
 
-Estas configuraciones definen las URLs públicas y el enlace de host utilizados por la aplicación web y la API.
-Si no usas MCP Manager, puedes omitir las entradas de MCP aquí y el
-bloque completo a continuación.
+Estas configuraciones le indican a Kodus dónde es accesible. Reemplaza los dominios de ejemplo por los tuyos.
 
 ```env
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    # Hostname público de la API (ej., kodus-api.yourdomain.com)
-NEXTAUTH_URL="https://kodus-web.yourdomain.com" # URL base pública completa para la aplicación web (ej., https://kodus-web.yourdomain.com)
-API_HOST=0.0.0.0                              # Host de la API (0.0.0.0 para desarrollo local)
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"          # Full public URL of the web app
+API_FRONTEND_URL="https://kodus-web.yourdomain.com"      # Same URL: CLI login, SSO and GitHub App redirects
+API_USER_INVITE_BASE_URL="https://kodus-web.yourdomain.com" # Same URL: links in emails and review comments
+API_HOST=0.0.0.0
 
-# Solo necesario si quieres usar las funcionalidades de MCP.
-API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101 # URL del MCP Manager
-API_KODUS_MCP_SERVER_URL=http://kodus-api.yourdomain.com/mcp # URL del servidor MCP de Kodus
+# How the web app's server reaches the API. Keep the defaults.
+WEB_HOSTNAME_API=localhost    # Kodus resolves this to GLOBAL_API_CONTAINER_NAME
+WEB_PORT_API=3001
+
+# Only for SSO (Enterprise): the public API URL your identity provider redirects back to.
+# API_URL="https://kodus-api.yourdomain.com"
 ```
 
-### Configuración del proveedor LLM
+<Info>
+  Con el valor predeterminado `WEB_HOSTNAME_API=localhost`, la aplicación web localiza la API mediante `GLOBAL_API_CONTAINER_NAME` (`kodus_api` en el instalador).
+
+  El navegador habla con la aplicación web, y el servidor de la aplicación web llama a la API. Cuando `WEB_PORT_API` está definido, la aplicación web llama a `http://<WEB_HOSTNAME_API>:<WEB_PORT_API>`, por lo que debe ser una dirección HTTP simple que el contenedor web pueda alcanzar. No lo definas con una dirección HTTPS pública en el puerto 443. `install.sh` muestra una advertencia cuando `WEB_HOSTNAME_API` es `localhost`. Puedes ignorarla: los proveedores Git alcanzan Kodus a través de las URLs de webhook de más abajo, no a través de esta variable.
+</Info>
+
+### Configuración de proveedores de LLM
+
+Kodus ejecuta las revisiones con tu propio modelo. Elige una forma de conectarlo:
+
+- **En la app (recomendado).** Abre **AI providers** en la barra lateral, conecta un proveedor con tu clave y enruta modelos a tareas. Consulta [BYOK](/es/how_to_use/byok). Un modelo conectado ahí reemplaza al definido en `.env`.
+- **En `.env`.** Un modelo para toda la instancia. Declara el proveedor, el modelo y la clave:
 
 ```env
-API_LLM_PROVIDER_MODEL="gpt-5"     # Modelo que deseas utilizar
-API_OPENAI_FORCE_BASE_URL="https://your-api.com/v1"  # URL de tu proveedor de API
-API_OPEN_AI_API_KEY="your-api-key"          # Clave de tu proveedor de API
+API_LLM_PROVIDER=openai_compatible        # See the table below
+API_LLM_PROVIDER_MODEL="your-model-id"
+API_LLM_BASE_URL="https://your-provider.example.com/v1"
+API_LLM_API_KEY="your-api-key"
 ```
 
-Consulta nuestras [guías específicas por modelo](https://docs.kodus.io/es/knowledge_base/can-i-use-my-own-llm-provider) para obtener instrucciones detalladas de configuración con proveedores populares como Novita, OpenAI, Anthropic y más.
+| `API_LLM_PROVIDER` | Además se necesita |
+| --- | --- |
+| `openai` | Una clave: `API_LLM_API_KEY` o `API_OPEN_AI_API_KEY`. `API_LLM_BASE_URL` es opcional y por defecto es `https://api.openai.com/v1`. |
+| `openai_compatible` | `API_LLM_BASE_URL` y una clave (`API_LLM_API_KEY` o `API_OPEN_AI_API_KEY`). Para cualquier endpoint con protocolo OpenAI, como un gateway o un modelo open-source alojado. |
+| `anthropic` | Una clave. `API_LLM_API_KEY` o `API_ANTHROPIC_API_KEY`. |
+| `anthropic_compatible` | `API_LLM_BASE_URL` y `API_LLM_API_KEY`. Para endpoints con protocolo Anthropic. |
+| `google_gemini` | Una clave. `API_LLM_API_KEY` o `API_GOOGLE_AI_API_KEY`. |
+| `google_vertex` | `API_LLM_API_KEY` como el JSON de la service account en base64, o déjalo vacío para usar Application Default Credentials con `GOOGLE_CLOUD_PROJECT`. `API_VERTEX_AI_LOCATION` define la ubicación. |
+
+Si `API_LLM_PROVIDER` está vacío, Kodus deduce el proveedor a partir del nombre del modelo y de las claves definidas. La página **AI providers** muestra qué modelo configura el entorno y cualquier problema con él.
+
+Guías de proveedores con valores listos para usar: [Chutes](/es/cookbook/chutes), [Fireworks](/es/cookbook/fireworks), [Groq](/es/cookbook/groq), [Moonshot](/es/cookbook/moonshot), [Novita](/es/cookbook/novita), [Synthetic](/es/cookbook/synthetic), [Together](/es/cookbook/together) y [Z.AI](/es/cookbook/z-ai).
+
+#### Aplicar cambios en el modelo
+
+Tras editar las variables de LLM en una instalación existente con Docker Compose, vuelve a ejecutar el instalador desde `kodus-installer` para aplicar los valores. Después comprueba el modelo con el script de diagnóstico.
+
+```bash
+./scripts/install.sh
+./scripts/doctor.sh
+```
 
 ### Configuración de base de datos
 
-Usa contenedores locales para Postgres y MongoDB de forma predeterminada. Actualiza las credenciales
-para que cumplan con tus requisitos de seguridad.
+Por defecto el instalador inicia contenedores de PostgreSQL y MongoDB. Los valores por defecto de `.env.example` funcionan tal como están; `generate-secrets.sh` define las contraseñas.
 
 ```env
-# Usar contenedores locales para Postgres y MongoDB
+# Use local containers for Postgres and MongoDB
 USE_LOCAL_DB=true
 
-# Configuración de PostgreSQL
+# PostgreSQL Settings
 API_DATABASE_ENV="development"                # development, production, test
-API_PG_DB_HOST=db_kodus_postgres              # Host de PostgreSQL
-API_PG_DB_PORT=5432                          # Puerto de PostgreSQL
-API_PG_DB_USERNAME=kodusdev                  # Nombre de usuario de la base de datos
-API_PG_DB_PASSWORD=                          # Contraseña de la base de datos
-API_PG_DB_DATABASE=kodus_db                  # Nombre de la base de datos
+API_PG_DB_HOST=db_kodus_postgres              # PostgreSQL host
+API_PG_DB_PORT=5432                           # PostgreSQL port
+API_PG_DB_USERNAME=kodusdev                   # Database username
+API_PG_DB_PASSWORD=                           # Database password
+API_PG_DB_DATABASE=kodus_db                   # Database name
 
-# Configuración de MongoDB
-API_MG_DB_HOST=db_kodus_mongodb              # Host de MongoDB
-API_MG_DB_PORT=27017                         # Puerto de MongoDB
-API_MG_DB_USERNAME=kodusdev                  # Nombre de usuario de la base de datos
-API_MG_DB_PASSWORD=                          # Contraseña de la base de datos
-API_MG_DB_DATABASE=kodus                     # Nombre de la base de datos
-API_MG_DB_PRODUCTION_CONFIG=''               # Configuración adicional de producción
+# MongoDB Settings
+API_MG_DB_HOST=db_kodus_mongodb               # MongoDB host
+API_MG_DB_PORT=27017                          # MongoDB port
+API_MG_DB_USERNAME=kodusdev                   # Database username
+API_MG_DB_PASSWORD=                           # Database password
+API_MG_DB_DATABASE=kodus_db                   # Database name
+API_MG_DB_PRODUCTION_CONFIG=''                # Additional production settings
 
-# SSL — el contenedor local de Postgres no usa SSL. Este switch global
-# cubre TODAS las conexiones (default + analytics). Si queda false, la api
-# entra en un bucle de reintentos intentando conectarse con SSL.
-API_DATABASE_DISABLE_SSL=true                # desactiva SSL para el Postgres local
+# SSL — the local Postgres container ships without SSL. This global switch
+# covers ALL data sources (default + analytics). Leaving it false makes the
+# api crash in a connect-retry loop.
+API_DATABASE_DISABLE_SSL=true                 # disable SSL for local DBs
 ```
 
 <Tip>
-  Para bases de datos integradas, deja `API_PG_DB_PASSWORD` y `API_MG_DB_PASSWORD` en blanco y ejecuta `./scripts/generate-secrets.sh` para generarlas, o define las tuyas. Para bases de datos externas, usa la contraseña de la base de datos existente.
+  Para bases de datos integradas, deja `API_PG_DB_PASSWORD` y `API_MG_DB_PASSWORD` en blanco y ejecuta `./scripts/generate-secrets.sh` una vez para generarlas, o define las tuyas. Para bases de datos externas, usa la contraseña de la base de datos existente.
 </Tip>
+
+Para usar tu propio PostgreSQL o MongoDB, define `USE_LOCAL_DB=false` y apunta las variables `API_PG_DB_*` y `API_MG_DB_*` hacia ellos. Los contenedores locales igualmente se inician, porque los servicios de Kodus dependen de ellos en el `docker-compose.yml` del instalador, pero Kodus no los usa. Tu PostgreSQL necesita la extensión `vector` (pgvector), y el usuario de Kodus debe poder crear schemas. Para un PostgreSQL gestionado que exige TLS, define `API_DATABASE_DISABLE_SSL=false`. Kodus se autentica en MongoDB contra la base de datos `admin`, así que crea el usuario ahí. También funciona una única cadena de conexión: `DATABASE_URL` para PostgreSQL y `MONGODB_URI` para MongoDB reemplazan las variables individuales de host, puerto y credenciales.
+
+La API acepta `DATABASE_URL` y `MONGODB_URI`. Con el instalador, mantén `API_PG_DB_PASSWORD` y `API_MG_DB_PASSWORD` definidos. El instalador exige ambos y Compose sigue arrancando los contenedores incluidos.
 
 ### Configuración de RabbitMQ
 
-RabbitMQ es obligatorio en la versión 2.0. Mantén la URI sincronizada con los valores a continuación.
+RabbitMQ es obligatorio. Mantén la URI sincronizada con el usuario, la contraseña y el virtual host.
 
 ```env
-# Configuración de RabbitMQ
+# RabbitMQ Configuration
 USE_LOCAL_RABBITMQ=true
-RABBITMQ_HOSTNAME=rabbitmq                   # Hostname de RabbitMQ en la red Docker
-RABBITMQ_DEFAULT_USER=kodus                  # Usuario de RabbitMQ (cambiar en producción)
-RABBITMQ_DEFAULT_PASS=kodus                  # Contraseña de RabbitMQ (cambiar en producción)
+RABBITMQ_HOSTNAME=rabbitmq                   # RabbitMQ hostname in Docker network
+RABBITMQ_DEFAULT_USER=kodus                  # RabbitMQ user (change in production)
+RABBITMQ_DEFAULT_PASS=kodus                  # RabbitMQ password (change in production)
 
-# Mantén la URI sincronizada con el usuario, contraseña y vhost de arriba
-API_RABBITMQ_URI=amqp://kodus:kodus@rabbitmq:5672/kodus-ai # URI de conexión a RabbitMQ
-API_RABBITMQ_ENABLED=true                    # RabbitMQ es obligatorio
+# Keep the URI in sync with the user, password, and vhost above
+API_RABBITMQ_URI=amqp://kodus:kodus@rabbitmq:5672/kodus-ai # RabbitMQ connection URI
+API_RABBITMQ_ENABLED=true                    # RabbitMQ is required
 ```
+
+El virtual host debe ser `kodus-ai`. Con tu propio broker, define `USE_LOCAL_RABBITMQ=false`, habilita el plugin `rabbitmq_delayed_message_exchange`, crea los virtual hosts `kodus-ai` y `kodus-ast`, y define `consumer_timeout = 7200000` en `rabbitmq.conf`. Los 30 minutos por defecto cierran el canal de las revisiones que duran más.
 
 ### Configuración del worker
 
-El contenedor del worker necesita un rol para saber qué carga manejar.
-Self-hosted solo ejecuta el rol de revisión de código; el rol de analytics
-es exclusivo de cloud.
+El contenedor del worker necesita un rol para saber qué carga manejar. El worker principal siempre ejecuta el rol de revisión de código.
 
 <Warning>
-  Dejar `WORKER_ROLE` vacío hace que el worker falle al iniciar. Como es el worker quien crea las colas `workflow.jobs.*` en la primera conexión, la api y los webhooks luego fallan cada evento de webhook con `QueueBind 404`.
+  Dejar `WORKER_ROLE` vacío hace que el worker falle al iniciar. Como es el worker quien crea las colas `workflow.jobs.*` en la primera conexión, la api y los webhooks luego fallan cada evento de webhook con un error `QueueBind 404`.
 </Warning>
 
 ```env
-# Rol del worker — requerido. Self-hosted = code-review.
+# Worker role — required.
 WORKER_ROLE=code-review
 ```
 
+El rol `analytics` corre en un contenedor separado y es exclusivo del self-hosted Enterprise. Consulta [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker).
+
 ### Configuración del proveedor Git
 
-Elige y configura tu proveedor Git preferido. Puedes configurar uno o más
-proveedores; para la autenticación básica basada en token, solo necesitas la URL del webhook.
+Elige y configura tu proveedor Git preferido. Puedes configurar uno o más proveedores; se requiere al menos una URL de webhook, y debe empezar con `https://`.
 
 <Info>
   Los webhooks son gestionados por un servicio separado (puerto 3332). Las URLs de tus webhooks deben llegar a ese servicio. Puedes usar un dominio dedicado para webhooks, o mantener el dominio de la API y enrutar las rutas `/.../webhook` al servicio de webhooks en tu proxy inverso.
@@ -117,34 +153,39 @@ proveedores; para la autenticación básica basada en token, solo necesitas la U
 <Tabs>
   <Tab title="Github">
     ```env
-    # Requerido para autenticación basada en token
-    API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"          # URL del webhook (usa el dominio de webhooks, o el dominio de la API si se enruta al servicio de webhooks)
+    API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
     ```
 
   </Tab>
   <Tab title="GitLab">
     ```env
-    # Requerido para autenticación basada en token
-    API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"          # URL del webhook (usa el dominio de webhooks, o el dominio de la API si se enruta al servicio de webhooks)
+    API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
     ```
 
   </Tab>
   <Tab title="Bitbucket">
     ```env
-    # Requerido para autenticación basada en token
-    GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"    # URL del webhook (usa el dominio de webhooks, o el dominio de la API si se enruta al servicio de webhooks)
+    GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
     ```
 
   </Tab>
 
   <Tab title="Azure DevOps">
     ```env
-    # Requerido para autenticación basada en token
-    GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/azure-repos/webhook"    # URL del webhook (usa el dominio de webhooks, o el dominio de la API si se enruta al servicio de webhooks)
+    GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/azure-repos/webhook"
+    ```
+
+  </Tab>
+
+  <Tab title="Forgejo">
+    ```env
+    API_FORGEJO_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/forgejo/webhook"
     ```
 
   </Tab>
 </Tabs>
+
+Usa el host dedicado de webhooks si tienes uno. Kodus usa estas URLs para registrar webhooks de repositorio. Si usas una [GitHub App](/es/how_to_deploy/platforms/github/github_app), configura la URL del webhook en los ajustes de la App.
 
 ### Configuración del MCP Manager
 
@@ -152,44 +193,35 @@ proveedores; para la autenticación básica basada en token, solo necesitas la U
   Solo necesario si deseas usar MCP Manager.
 </Info>
 
-MCP Manager es el servicio que conecta Kody con herramientas externas y las expone
-en la pantalla de Plugins. Consulta nuestra [documentación de MCP Manager](/es/how_to_deploy/deploy_kodus/mcp_manager)
-para más información.
+MCP Manager es el servicio que conecta Kody con herramientas externas y las expone en la pantalla de Plugins. Consulta nuestra [documentación de MCP Manager](/es/how_to_deploy/deploy_kodus/mcp_manager) para más información.
 
 ```env
-API_MCP_SERVER_ENABLED=false # Cambiar a true si deseas usar MCP Manager
----
+API_MCP_SERVER_ENABLED=true   # The installer starts kodus-mcp-manager when this is true
 API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101
-API_KODUS_MCP_SERVER_URL=http://localhost:3001/mcp
-
-# Configuración de MCP Manager
-API_MCP_MANAGER_LOG_LEVEL=info
-API_MCP_MANAGER_PORT=3101
-API_MCP_MANAGER_NODE_ENV=development
-API_MCP_MANAGER_DATABASE_ENV=development
-API_MCP_MANAGER_CORS_ORIGINS=*
-API_MCP_MANAGER_JWT_SECRET=
-API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,custom
-API_MCP_MANAGER_REDIRECT_URI=http://localhost:3000/setup/mcp/oauth
-API_MCP_MANAGER_PG_DB_SCHEMA=mcp-manager
-API_MCP_MANAGER_ENCRYPTION_SECRET=
+API_KODUS_MCP_SERVER_URL=https://kodus-api.yourdomain.com/mcp
+API_MCP_MANAGER_REDIRECT_URI=https://kodus-web.yourdomain.com/setup/mcp/oauth
 ```
+
+`generate-secrets.sh` genera `API_MCP_MANAGER_JWT_SECRET` y `API_MCP_MANAGER_ENCRYPTION_SECRET`. Las demás variables `API_MCP_MANAGER_*` de `.env.example` tienen valores por defecto que funcionan.
 
 ### Configuración de servicios externos (opcional)
 
-Estos servicios son opcionales pero mejoran significativamente la calidad de la revisión de código de Kodus. Cada uno requiere crear una cuenta y generar una clave de API.
+Estos servicios son opcionales pero mejoran la calidad de la revisión de código de Kodus. Cada uno requiere crear una cuenta y generar una clave de API.
 
 <AccordionGroup>
   <Accordion title="E2B — Sandbox de ejecución de código">
-    E2B proporciona un sandbox seguro que Kodus usa para ejecutar y validar código durante las revisiones.
+    Por defecto Kodus analiza los repositorios dentro del contenedor del worker (`SANDBOX_PROVIDER=local`). E2B ejecuta ese trabajo en un sandbox remoto, lo que lo aísla de tu host y se adapta a repositorios muy grandes.
 
     1. Crea una cuenta en [e2b.dev](https://e2b.dev)
     2. Genera una clave de API en tu panel de control
     3. Agrégala a tu `.env`:
 
     ```env
+    SANDBOX_PROVIDER=e2b
     API_E2B_KEY=your-e2b-api-key
     ```
+
+    Consulta [Sandbox & AST Graph](/es/how_to_deploy/deploy_kodus/sandbox) para conocer los modos.
   </Accordion>
 
   <Accordion title="MorphLLM — Modelo de edición de código">
@@ -203,7 +235,29 @@ Estos servicios son opcionales pero mejoran significativamente la calidad de la 
     API_MORPHLLM_API_KEY=your-morphllm-api-key
     ```
   </Accordion>
+
+  <Accordion title="Exa — Búsqueda de documentación">
+    Con una clave de Exa, Kody consulta la documentación de librerías mientras revisa. Sin ella, la búsqueda de documentación está desactivada.
+
+    1. Crea una cuenta en [exa.ai](https://exa.ai)
+    2. Genera una clave de API en tu panel de control
+    3. Agrégala a tu `.env`:
+
+    ```env
+    API_EXA_KEY=your-exa-api-key
+    ```
+  </Accordion>
 </AccordionGroup>
+
+### Beta
+
+Para activar las funciones que requieren la opción beta en instalaciones autoalojadas, añade `BETA_FEATURES=true` al archivo `.env` de `kodus-installer`. En una instalación existente, aplica el cambio con `docker compose up -d --no-deps kodus-web api worker webhooks` para que los contenedores reciban la variable. Cada función tiene sus requisitos de plan y configuración.
+
+## Próximos pasos
+
+- Coloca un [proxy inverso](/es/how_to_deploy/deploy_kodus/reverse_proxy) frente a la aplicación web, la API y el servicio de webhooks.
+- [Actualiza](/es/how_to_deploy/deploy_kodus/updating) la instalación cuando se publique una nueva versión.
+- Ejecuta `./scripts/doctor.sh` cuando algo parezca estar mal, y consulta [Solución de problemas](/es/how_to_deploy/deploy_kodus/troubleshooting).
 
 <Columns cols={2}>
   <Card

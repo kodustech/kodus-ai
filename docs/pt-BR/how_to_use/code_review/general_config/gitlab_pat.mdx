@@ -1,13 +1,13 @@
 ---
 title: "Token PAT do GitLab"
-description: "Gere o personal ou group access token do GitLab que o Kody precisa para ler seus repositórios e publicar comentários, com os escopos exatos."
+description: "Gere o personal ou group access token do GitLab que o Kody precisa para ler seus repositórios e publicar comentários de revisão, com os escopos exatos necessários."
 ---
 
 ## Introdução ao PAT
 
-Para habilitar Kody a realizar Code Reviews automáticos, você precisa gerar um Personal Access Token (PAT) no GitLab. Esse token permite que Kody acesse seus repositórios de forma segura e conduza análises de código de maneira controlada.
+Para habilitar o Kody a realizar Code Reviews automáticos, você precisa gerar um Personal Access Token (PAT) no GitLab. Esse token permite que o Kody acesse seus repositórios de forma segura e conduza a análise de código de maneira controlada.
 
-Kody publica os reviews como o usuário do GitLab dono do token. Com um personal access token, os reviews aparecem na sua própria conta, assim como acontece quando você conecta via OAuth. Para que apareçam em um usuário bot separado, use um group access token, descrito abaixo.
+O Kody publica as revisões como o usuário do GitLab dono do token. Com um personal access token, as revisões aparecem na sua própria conta, assim como quando você conecta com OAuth. Para que apareçam em um usuário bot separado, use um group access token, descrito abaixo.
 
 ## Gerando o PAT (Personal Access Token)
 
@@ -19,33 +19,35 @@ Siga estas etapas para configurar o token corretamente:
 
 2. **Navegue até `Access Tokens`**:
 
-   - Na barra lateral esquerda, role para encontrar `Access Tokens` e clique.
+   - Na barra lateral esquerda, role até encontrar `Access Tokens` e clique nele.
 
 3. **Adicione um novo token**:
 
-   - Clique no botão `Add new token`.
+   - Clique no botão `Add new token`. Nas versões recentes do GitLab, abra o dropdown `Generate token` e selecione `Legacy token`.
 
 4. **Configure o novo token com as seguintes especificações**:
 
-   - **Token Name**: Escolha um nome facilmente identificável, como `kody_code_review`.
-   - **Expiration Date**: Se possível, selecione uma data de expiração longa, de preferência pelo menos 180 dias.
-   - **Permissions**: Configure as seguintes permissões:
+   - **Token Name**: Escolha um nome fácil de identificar, como `kody_code_review`.
+   - **Expiration Date**: Se possível, selecione uma data de expiração longa, de preferência de pelo menos 180 dias.
+   - **Permissions**: Defina as seguintes permissões:
      - **api**
      - **read_api**
      - **read_user**
      - **read_repository**
      - **write_repository**
 
+   Em um personal access token, o `api` já inclui os outros quatro escopos, então o `api` sozinho basta. O Kody nunca faz push via Git.
+
 5. **Finalize e salve o token**:
-   - Após configurar as permissões, clique em `Generate token`.
-   - Certifique-se de copiar o token gerado e armazená-lo com segurança, pois você precisará dele para configurar Kody.
+   - Depois de configurar as permissões, clique em `Generate token`.
+   - Copie o token gerado e guarde-o com segurança, pois você precisará dele para configurar o Kody.
 
 ## Usando um Group Access Token
 
-Um group access token publica os reviews como um usuário bot que o GitLab cria para o token, com o nome do token. O bot tem acesso a todos os projetos do grupo e dos seus subgrupos.
+Um group access token publica as revisões como um usuário bot que o GitLab cria para o token, com o nome do token. O bot tem acesso a todos os projetos do grupo e dos seus subgrupos.
 
 <Note>
-  No GitLab.com, group access tokens exigem uma assinatura Premium ou Ultimate e não estão disponíveis durante o trial. No GitLab Self-Managed e no GitLab Dedicated, estão disponíveis em qualquer licença.
+  No GitLab.com, group access tokens exigem uma assinatura Premium ou Ultimate e não estão disponíveis durante um trial. No GitLab Self-Managed e no GitLab Dedicated, estão disponíveis em qualquer licença.
 </Note>
 
 1. **Abra os access tokens do grupo**:
@@ -58,20 +60,20 @@ Um group access token publica os reviews como um usuário bot que o GitLab cria 
 
 3. **Configure o novo token com as seguintes especificações**:
 
-   - **Token name**: O nome que os reviews do Kody vão mostrar, como `Kody`.
-   - **Expiration date**: Se possível, selecione uma data de expiração longa, de preferência pelo menos 180 dias.
-   - **Role**: `Maintainer`. Kody precisa dele para criar o webhook em cada projeto.
-   - **Scopes**: `api` e `read_repository`. Kody clona seus repositórios, e em um group access token o `api` não inclui Git over HTTPS.
+   - **Token name**: O nome que as revisões do Kody vão exibir, como `Kody`.
+   - **Expiration date**: Se possível, selecione uma data de expiração longa, de preferência de pelo menos 180 dias.
+   - **Role**: `Maintainer`. O Kody precisa dele para criar o webhook em cada projeto.
+   - **Scopes**: `api` e `read_repository`. O Kody clona seus repositórios, e em um group access token o `api` não inclui Git over HTTPS.
 
 4. **Finalize e salve o token**:
    - Clique em `Create group access token`.
-   - Copie o token e armazene-o com segurança. O GitLab só o mostra uma vez.
+   - Copie o token e guarde-o com segurança. O GitLab o mostra apenas uma vez.
 
 ## Adicionando o Token ao Kody
 
-Após gerar o token, cole-o no Kodus:
+Depois de gerar o token, cole-o no Kodus:
 
 - **Durante o onboarding**: em **Connect your Git tool**, escolha a aba **Gitlab** e clique em **Connect via token**.
 - **Depois**: na barra lateral, abra **Repositories**, clique em **Gitlab** em **Connect a provider**, mude para a aba **Token**, cole o token e clique em **Validate and save**. Para um GitLab self-managed, ative **Self-hosted** e informe a **Gitlab URL**.
-- **Trocando o token**: em **Repositories**, clique em **Update token** no card do **Gitlab**, cole o novo token e clique em **Update token**. Os webhooks e os repositórios selecionados são mantidos.
-- **Saindo do OAuth**: **Update token** não aparece em conexões feitas via OAuth. Clique em **Reset**, escolha **Just reset the integration**, conecte de novo com o token como descrito acima e selecione seus repositórios.
+- **Trocando um token**: em **Repositories**, clique em **Update token** no card **Gitlab**, cole o novo token e clique em **Update token**. Os webhooks e os repositórios selecionados são mantidos.
+- **Saindo do OAuth**: **Update token** não é oferecido para uma conexão feita com OAuth. Clique em **Reset**, escolha **Just reset the integration**, conecte novamente com o token como descrito acima e selecione seus repositórios.

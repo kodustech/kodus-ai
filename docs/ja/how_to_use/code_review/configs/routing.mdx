@@ -1,0 +1,49 @@
+---
+title: "ルーティング"
+description: "レビューの深さを選択し、どのモデルが適用されるかを確認します。"
+---
+
+Global、Repository、Directory のいずれかのスコープで **Code review → Routing** を開きます。**General** には解決済みのモードとモデルが表示されるため、Routing を開かなくても確認できます。
+
+Balanced はすべてのプランで利用できます。Heavy に対応するプランとライセンスは [Heavy mode](/ja/how_to_use/code_review/review_directive#heavy-mode) を参照してください。組織全体のモデルルーティングを変更できるのは Owner です。
+
+## レビューモード
+
+- **Balanced：** 標準のレビューです。
+- **Heavy (beta)：** 専門レビュアーによる、より深いレビューです。トライアルを含む Teams と Enterprise で利用できます。その他のプランでは **Heavy** を選択できず、Heavy レビュー（たとえば `--heavy`）は Balanced で実行されます。
+
+[リスク評価](/ja/how_to_use/code_review/configs/risk)を有効にすると、**No risk found** のデフォルトは Balanced、プランで利用できる場合は **Risk found** のデフォルトは Heavy です。**Risk assessment unavailable** は YAML の `reviewMode` で指定するデフォルトのモードを使用します。初期値は Balanced です。プランが対応していれば、フォールバックとして Heavy を選択できます。
+
+リスク評価がオフの場合は、**All PRs** に 1 つのモードが適用されます。デフォルトは常にあります。
+
+`--heavy` と `--balanced` のレビューコマンドを明示的に使用すると、ルーティングより優先されます。プランの制限は引き続き適用されます。レビューコマンドは、自動承認のためのリスクチェックをバイパスしません。
+
+## モデル
+
+Global スコープでは、**Models** カードで組織のデフォルトを設定します。
+
+- **Default model** と **Fallback model**（モデルが失敗したときに使用されます）。
+- **Risk assessment model**、**Balanced model**、**Heavy model**。Heavy は Teams と Enterprise で利用できます。
+- **Other task models** では、**Kody Rules**、**PR Summary**、**Conversation**、**Business Rules**、**Custom Agents** のモデルを設定します。
+
+設定していないモデルには、デフォルトモデルが使用されます。モデルの編集には組織の権限が必要です。Repository と Directory スコープでは、カードは読み取り専用で、組織のルーティングへのリンクが表示されます。プロバイダーは **AI providers** で接続します。
+
+Global スコープの **Repository overrides** には、リポジトリ、フォルダー、カスタムエージェントにすでに設定されているモデルが一覧表示されます。読み取り専用です。
+
+**Code review model override**（Repository と Directory スコープ）は、そのスコープでの Balanced と Heavy の両方のレビューに 1 つのモデルを設定します。リスク評価モデルは変更されません。解除するには、**Use routing models** または継承されたモデルを選択します。
+
+## YAML
+
+リポジトリの設定ファイルを使用する前に、**Code review → General**（リポジトリスコープ）で **Prefer kodus-config.yml settings** をオンにしてください。
+
+```yaml
+riskAssessmentActive: true
+reviewMode: balanced
+riskReviewRouting:
+  noRisk: balanced
+  riskFound: heavy
+```
+
+`reviewMode` は、リスク評価がオフの場合、または利用できない場合に使用されます。スコープ別のルーティングでは、一方の結果だけを上書きし、もう一方は継承できます。
+
+CLI は独自のレビューパイプラインを維持します。この PR リスクのルーティングは、カスタムエージェントの実行を含む、プロバイダー上の PR レビューに適用されます。

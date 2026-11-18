@@ -1,0 +1,49 @@
+---
+title: "Modos e modelos de revisão"
+description: "Escolha a profundidade do review e veja quais modelos se aplicam."
+---
+
+Abra **Code review → Routing** nos escopos Global, Repository ou Directory. **General** mostra os modos e modelos resolvidos para você conferi-los sem abrir o Routing.
+
+Balanced está disponível em todos os planos. Veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode) para os planos e licenças que dão acesso ao Heavy. Somente Owners podem alterar o roteamento global de modelos.
+
+## Modo de review
+
+- **Balanced:** o review padrão.
+- **Heavy (beta):** um review mais profundo, com revisores especialistas. Disponível nos planos Teams e Enterprise, incluindo trials. Em outros planos, **Heavy** não pode ser selecionado, e um review heavy (por exemplo `--heavy`) roda Balanced.
+
+Com a [avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) ligada, **No risk found** usa Balanced por padrão e **Risk found** usa Heavy quando o plano inclui esse modo. **Risk assessment unavailable** usa o modo padrão, `reviewMode` no YAML. Ele começa em Balanced. Você pode escolher Heavy como fallback se o plano incluir esse modo.
+
+Com o risk assessment desativado, um modo se aplica a **All PRs**. Sempre existe um padrão.
+
+Os comandos explícitos de review `--heavy` e `--balanced` têm precedência sobre o routing. As restrições do plano continuam valendo. O comando de review não ignora as verificações de risco da aprovação automática.
+
+## Modelos
+
+No escopo Global, o card **Models** define os padrões da organização:
+
+- **Default model** e **Fallback model** (usado quando um modelo falha).
+- **Risk assessment model**, **Balanced model** e **Heavy model**. O Heavy está disponível nos planos Teams e Enterprise.
+- **Other task models** define o modelo para **Kody Rules**, **PR Summary**, **Conversation**, **Business Rules** e **Custom Agents**.
+
+Um modelo que você não define usa o default model. Editar modelos exige permissão na organização. Nos escopos Repository e Directory, o card é somente leitura, com um link para o routing da organização. Conecte providers em **AI providers**.
+
+No escopo Global, **Repository overrides** lista os modelos já definidos para repositórios, pastas e custom agents. É somente leitura.
+
+**Code review model override** (escopos Repository e Directory) define um modelo para os reviews Balanced e Heavy nesse escopo. Ele não altera o modelo de risk assessment. Escolha **Use routing models**, ou o modelo herdado, para limpá-lo.
+
+## YAML
+
+Ative **Prefer kodus-config.yml settings** em **Code review → General** (escopo de repositório) antes de usar arquivos de configuração do repositório.
+
+```yaml
+riskAssessmentActive: true
+reviewMode: balanced
+riskReviewRouting:
+  noRisk: balanced
+  riskFound: heavy
+```
+
+`reviewMode` é usado quando o risk assessment está desativado ou indisponível. Um routing com escopo pode sobrescrever um resultado e herdar o outro.
+
+A CLI mantém o seu pipeline de review separado; esse routing por risco do PR se aplica aos reviews de PR dos providers, incluindo execuções de custom agents.

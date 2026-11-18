@@ -8,33 +8,33 @@ icon: webhook
   O suporte para Forgejo é mantido pela comunidade.
 </Note>
 
-O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga estas etapas para configurá-lo manualmente:
+O Kodus geralmente cria o webhook automaticamente quando você salva a seleção de repositórios. Isso exige acesso de admin ao repositório e o escopo `write:repository` no token. Se isso não aconteceu, **Repositories** lista o repositório com o motivo, e você pode configurar o webhook manualmente:
 
 <Note>
   As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Usar o domínio da API só funciona se seu proxy reverso rotear os caminhos `/.../webhook` para o serviço de webhooks.
 </Note>
 
 1. Navegue até seu repositório no Forgejo
-2. Clique em **Settings** na barra lateral direita
+2. Abra a aba **Settings** do repositório
 3. Selecione **Webhooks**
-4. Clique em **Add Webhook** → **Forgejo**
+4. Clique em **Add webhook** → **Forgejo**
 5. Configure seu webhook:
 
-   - **Target URL**: Insira a URL onde deseja receber as notificações, a URL que você colocou em `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` no arquivo `.env`
-   - **HTTP Method**: POST
-   - **POST Content Type**: `application/json`
-   - **Trigger On**: Selecione estes eventos:
-        - Push events
-        - Pull Request events
-        - Issue Comment events
+   - **Target URL**: Insira a URL que você definiu em `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` no seu arquivo `.env` (ela termina com `/forgejo/webhook`)
+   - **HTTP method**: POST
+   - **POST content type**: `application/json`
+   - **Trigger on**: **Custom events**, depois selecione:
+        - Repository events: **Push**
+        - Pull request events: **Modification**, **Synchronized** e **Comments**
    - **Active**: Marque
 
-6. Clique em **Add Webhook**
+6. Clique em **Add webhook**
 
-Pronto! Você configurou com sucesso um webhook para revisões de código no seu repositório Forgejo.
+Pronto! Você configurou com sucesso um webhook para reviews de código no seu repositório Forgejo.
 
 <Note>
-  O Kodus consome eventos de pull request, push, comentário de review e comentário em issue.
+  O Forgejo entrega os comentários de pull request como `issue_comment`, e o Kodus age sobre entregas de `pull_request`, `push` e `issue_comment`. Dos eventos de pull request, ele age sobre `opened`, `synchronized`, `reopened` e `closed`; **Synchronized** é o que entrega novos commits em um pull request.
+
   Eventos de push importam especificamente no Forgejo: são os únicos que carregam o head anterior
   e o atual da branch, que é como o Kodus detecta force-push e mapeia uma branch de volta aos seus
   pull requests abertos. Eventos de issue são descartados na chegada.

@@ -3,35 +3,37 @@ title: "Review every repository"
 description: "Have Kody review every repository your git integration can see, including repositories created later, without adding them one by one."
 ---
 
-By default Kody reviews the repositories you pick under **Settings → Git**. With **Review every
+By default Kody reviews the repositories you pick on **Repositories**. With **Review every
 repository** turned on, Kody reviews every repository the connected credential can see, and picks
 up repositories created later on its own. It works the same on GitHub, GitLab, Bitbucket Cloud,
 Bitbucket Data Center, Azure DevOps and Forgejo, in Cloud and self-hosted.
 
 ## Turn it on
 
-1. Open **Settings → Git**.
+1. Open **Repositories** in the sidebar.
 2. Switch on **Review every repository**.
 3. Check the count: Kody lists how many repositories it will start reviewing, and how many it skips.
-4. Confirm.
+4. Click **Review every repository**.
 
 Only organization owners can turn it on or off.
 
 Kody sets up the repositories in the background, and the card shows the progress
-("320 of 487 set up"). Pull request reviews start on each repository as soon as its webhook
+("Setting up repositories: 320 of 487."). Pull request reviews start on each repository as soon as its webhook
 is in place.
 
 <Note>
-  Reviews on these repositories use your credits (or your own model key with BYOK), and pull
-  request authors in them may take license seats, as on any reviewed repository.
+  Reviews on these repositories count like reviews on any other repository, and pull request
+  authors in them may take license seats.
 </Note>
 
 ## What gets reviewed
 
 - **Every repository the credential can see.** On GitHub with the Kodus app, that is the
-  repositories the app is installed on. With a token, it is every repository the token's account
-  can access.
-- **Not archived repositories.** They are always skipped.
+  repositories the app is installed on. With a GitHub token, it is the repositories of the
+  connected organization that the token can access (for a personal account, every repository the
+  account can access). On GitLab, it is the projects the token's user is a member of.
+- **Not archived repositories.** They are always skipped. Azure DevOps counts a disabled
+  repository as archived; Kody does not detect archived repositories on Bitbucket Cloud.
 - **Not forks and mirrors**, unless you tick **Also review forks and mirrors** when turning it on.
 
 ## New repositories
@@ -50,29 +52,24 @@ Self-hosted: the check interval is `API_CRON_SYNC_ALL_REPOSITORIES` (default eve
 
 ## Leave a repository out
 
-Open the repository's code review settings and turn off **automated review**. Kody keeps it that
+Open the repository's code review settings and turn off **Automated code review** (**Code review → General**). Kody keeps it that
 way after every sync, and its pull request authors do not take license seats from automatic
 reviews. `@kody` commands still work on it.
 
-While **Review every repository** is on, repositories cannot be removed from **Settings → Git**:
-the next sync would add them back.
+While **Review every repository** is on, repositories cannot be added or removed by hand on
+**Repositories**: the next sync would add removed ones back.
 
 ## When a repository cannot be set up
 
 Kody needs permission to create a webhook on each repository. When the provider refuses, the
-repository is listed under **Settings → Git** with the reason, and Kody retries it on every sync.
+repository is listed on **Repositories** with the reason, and Kody retries it on every sync.
 
-| Provider | What the credential needs |
-|---|---|
-| GitHub (token) | Read and write access to repository webhooks (`admin:repo_hook`, or **Webhooks: Read and write** on a fine-grained token) |
-| GitLab | **Maintainer** or **Owner** role on the project |
-| Bitbucket Cloud | Admin access to the repository and **Webhooks: Read and write** |
-| Bitbucket Data Center | **Repository admin** permission |
-| Azure DevOps | **Edit subscriptions** on the project (Project Administrators have it) |
-| Forgejo | Admin access to the repository and the `write:repository` scope |
+See [webhook permissions by provider](/en/knowledge_base/how-to-fix-webhook-issues#webhook-permissions-by-provider).
 
 If the provider rate-limits Kody while it sets up many repositories, Kody stops and continues on
-the next sync, so a large first run can take a few cycles.
+the next sync, so a large first run can take a few cycles. Code graphs and pull request histories
+also finish in the background over several cycles. The card shows the reason when a sync stops or
+fails, the time of the last successful sync, and how many code graphs and histories are left.
 
 ## Turn it off
 

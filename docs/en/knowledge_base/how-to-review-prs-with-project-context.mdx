@@ -28,7 +28,7 @@ in @file:docs/api-conventions.md and use the base classes
 defined in @file:src/shared/base-controller.ts.
 ```
 
-### Category instructions (formerly Custom Prompts)
+### Category instructions
 
 Add project-specific instructions that Kody includes in every review:
 
@@ -38,20 +38,19 @@ Add project-specific instructions that Kody includes in every review:
 
 To change how Kody phrases its suggestions (tone, length), use **Kody's personality** in **Code review → What Kody writes**.
 
-### MCP plugins
+### Task trackers
 
-Connect external tools to give Kody access to richer context:
+Connect Linear, Jira (**Atlassian Rovo**), Notion or Git Issues in **Plugins**. When a PR references a task, Kody checks the PR against the task's requirements and acceptance criteria. See [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).
 
-- **Jira/Linear** — task requirements and acceptance criteria
-- **Slack** — team discussions and decisions
-- **Google Docs** — specs and design documents
-- **Custom MCP servers** — any tool your team uses
+### Plugins
+
+Plugins you install are also tools Kody can use when you mention it in a PR comment, and tools you can turn on for a [custom agent](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp). Add your own MCP server as a custom plugin to bring in other tools.
 
 ## Example workflow
 
 1. Define architecture rules via **Memories**: `@kody remember: we follow CQRS pattern in this service`
 2. Create **Review Rules** that reference your docs: `@file:docs/architecture.md`
-3. Connect **Jira** so Kody validates PRs against task requirements
+3. Connect your task tracker so Kody validates PRs against task requirements
 4. Add category **Instructions** in **What to review** for domain-specific knowledge
 
-For details, see [Category instructions (formerly Custom Prompts)](/en/how_to_use/code_review/configs/custom_prompts) and [Plugins](/en/how_to_use/code_review/plugins).
+For details, see [Category instructions](/en/how_to_use/code_review/configs/custom_prompts) and [Plugins](/en/how_to_use/code_review/plugins).

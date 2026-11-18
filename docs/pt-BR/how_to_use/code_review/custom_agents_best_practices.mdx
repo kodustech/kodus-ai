@@ -1,10 +1,9 @@
 ---
-title: "Boas Práticas"
+title: "Boas práticas"
 description: "Escreva agentes personalizados que acham problemas reais nos seus pull requests e ficam quietos no resto."
-tag: 'beta'
 ---
 
-<Callout icon="alien" iconType="regular">Os agentes personalizados estão em beta. O comportamento e as telas ainda podem mudar.</Callout>
+Veja os [requisitos dos agentes personalizados](/pt-BR/how_to_use/code_review/custom_agents) para conferir os planos e a configuração self-hosted.
 
 ## Um agente por assunto
 
@@ -41,7 +40,7 @@ O agente reporta só o que as instruções pedem, e o verificador descarta o que
 
 Os apontamentos são conferidos antes de serem postados. Dê ao agente algo que ele consiga provar:
 
-- **Uma regra num guia**: vincule o doc ou a skill e peça para o agente citar a regra. A citação é conferida no guia na branch de destino.
+- **Uma regra num guia**: vincule o doc ou a skill e peça para o agente citar a regra. A citação é conferida no guia na branch de destino. Uma regra mantida em outro repositório funciona do mesmo jeito, conferida nesse repositório na branch padrão dele ou na branch ou tag que você definir.
 - **Um resultado de CLI**: as linhas da saída que citam o arquivo entram no comentário como evidência.
 - **Uma regra do ast-grep**: um match vale como prova sozinho, sem checagem pelo modelo.
 
@@ -72,7 +71,7 @@ Todo agente novo começa desligado. Antes de ligar:
 3. Ajuste as instruções, os globs ou a severidade mínima e rode de novo.
 4. Ligue o agente quando os comentários que seriam postados forem os que você quer ver num pull request.
 
-`@kody -v <nome>` faz o mesmo num pull request de verdade, postando os comentários, com o agente ainda desligado.
+`@kody -v <name>` faz o mesmo num pull request de verdade, postando os comentários, com o agente ainda desligado.
 
 ## Leia os motivos de descarte
 
@@ -83,10 +82,12 @@ Os apontamentos descartados mostram o que ajustar no agente:
 | Citação não encontrada | O guia na branch de destino não tem aquele texto. Vincule o guia certo, ou coloque a regra nas instruções. |
 | Fora do foco do agente | As instruções não pedem isso. Inclua, ou deixe para a Kody. |
 | Sem respaldo no código | O agente chutou. Peça prova concreta nas instruções. |
-| Abaixo da severidade mínima, ou acima do limite de comentários | Filtro esperado. Baixe o piso se quiser ver mais. |
+
+Um apontamento abaixo da severidade mínima, ou acima de **Max comments per pull request**, não é descartado: o **Try it** o mostra como **kept, not posted**. Baixe o piso ou aumente o limite para postá-lo.
 
 ## Controle o volume
 
 - Defina **Max comments per pull request** em agentes que podem gerar muitos apontamentos, como um agente de código duplicado. Ficam os mais graves.
 - Use **One PR comment** para agentes cujos apontamentos ficam melhores juntos, como um relatório de cobertura.
 - Use **Suggested fix: Never** quando a correção seria um palpite, como mover algo de camada.
+- Defina **Run automatically** como **When risk is found** para um agente que é lento ou que só importa em mudanças de risco. Isso exige que a [avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) esteja ligada, e `@kody -v <name>` ainda o executa sob demanda.

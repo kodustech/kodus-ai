@@ -5,16 +5,9 @@ icon: "chart-line"
 tag: "enterprise"
 ---
 
-The analytics worker is an **Enterprise-only** add-on. It runs the
-ingestion cron that powers the Cockpit dashboards (DORA-style metrics,
-PR lifecycle, LLM-based PR classifier).
+The analytics worker is an **Enterprise-only** add-on. It runs the ingestion cron that powers the [Cockpit](/en/how_to_use/cockpit/overview) dashboards (DORA-style metrics, PR lifecycle, LLM-based PR classifier).
 
-<Warning>
-The default installer **does not** ship this worker. Community self-hosted
-deployments don't need it and these vars are filtered out of the default
-`.env.example`. Stop here unless you have a self-hosted Enterprise
-license and want the Cockpit reports.
-</Warning>
+Self-hosted Enterprise with an active license. With Docker Compose, start the `analytics` profile. The [Helm chart](/en/how_to_deploy/deploy_kodus/kubernetes) enables `worker-analytics` by default.
 
 ## What it does
 
@@ -22,11 +15,11 @@ A separate Node process running the **same image as `worker`** (`kodus-ai-worker
 selected at boot via `WORKER_ROLE=analytics`. Two crons fire from this
 process and only this process:
 
-- **Ingestion** (`ANALYTICS_INGESTION_CRON`, default `*/30 * * * *`) — reads
+- **Ingestion** (`ANALYTICS_INGESTION_CRON`, default every 30 minutes) — reads
   pull requests and review sessions from Mongo + the OLTP Postgres, projects
-  them into the `analytics` schema.
-- **Classifier** (`ANALYTICS_CLASSIFIER_CRON`, default `*/15 * * * *`) — calls
-  an LLM to tag each PR with a type (feature/bugfix/refactor/etc).
+  them into the `analytics` schema. It also runs once when the container starts.
+- **Classifier** (`ANALYTICS_CLASSIFIER_CRON`, default every 30 minutes) — calls
+  an LLM to tag each PR with a type (feature/bugfix/refactor/etc). It uses the model configured through the environment variables (see [LLM Provider Configuration](/en/how_to_deploy/deploy_kodus/generic_vm#llm-provider-configuration)), not a model connected on the **AI providers** page.
 
 Isolating it from the main `worker` keeps the code-review event loop
 unaffected by long-running ingestion queries.
@@ -57,31 +50,9 @@ flowchart LR
 
 ## Enabling on self-hosted Enterprise
 
-### 1. Add the service to `docker-compose.yml`
+### 1. Activate your license
 
-```yaml
-worker-analytics:
-    image: ghcr.io/kodustech/kodus-ai-worker:latest
-    platform: linux/amd64
-    container_name: kodus-worker-analytics
-    environment:
-        - ENV=production
-        - NODE_ENV=production
-        - WORKER_ROLE=analytics
-    networks:
-        - shared-network
-        - kodus-backend-services
-    restart: unless-stopped
-    env_file:
-        - .env
-    depends_on:
-        - db_kodus_postgres
-        - db_kodus_mongodb
-        - rabbitmq
-```
-
-The image is identical to the `worker` service — only `WORKER_ROLE=analytics`
-flips it into ingestion mode.
+Set `KODUS_LICENSE_KEY` in `.env` before starting the stack, or activate the Enterprise key on the **Subscription** page. A key saved in the app takes precedence over the environment variable.
 
 ### 2. Add the analytics block to `.env`
 
@@ -95,7 +66,7 @@ ANALYTICS_PG_DB_SCHEMA=analytics
 
 # Cron schedules (UTC).
 ANALYTICS_INGESTION_CRON=*/30 * * * *
-ANALYTICS_CLASSIFIER_CRON=*/15 * * * *
+ANALYTICS_CLASSIFIER_CRON=*/30 * * * *
 ```
 
 **Dedicated Postgres:**
@@ -109,49 +80,54 @@ ANALYTICS_PG_DB_DATABASE=kodus_analytics
 ANALYTICS_PG_DB_SCHEMA=analytics
 
 ANALYTICS_INGESTION_CRON=*/30 * * * *
-ANALYTICS_CLASSIFIER_CRON=*/15 * * * *
+ANALYTICS_CLASSIFIER_CRON=*/30 * * * *
 ```
 
-### 3. Boot — migrations run automatically
+### 3. Start the worker
 
-The `worker-analytics` container shares the same `prod-entrypoint.sh` as
-`api`/`worker`/`webhooks`. With `RUN_MIGRATIONS=true` (installer default),
-the analytics warehouse migrations (`pnpm run analytics:migration:run:prod`)
-run on first boot, creating the `analytics` schema and its tables.
+The `analytics` profile is part of the installer's `docker-compose.yml`. Start the service from the `kodus-installer` directory:
+
+```bash
+docker compose --profile analytics up -d worker-analytics
+```
+
+The container is named `kodus-worker-analytics`. It uses the same image and `.env` as `worker`, with `WORKER_ROLE=analytics` set by Compose. After an upgrade, run the command again to recreate it on the new version.
+
+### 4. Migrations run in the `api` container
+
+Only the `api` container runs migrations. With `RUN_MIGRATIONS=true` (the default), it creates the `analytics` schema and runs the warehouse migrations on boot. The worker containers never migrate, so start `api` before `worker-analytics` on a fresh install.
 
 ## Reference
 
 | Variable | Description | Default |
 |---|---|---|
-| `WORKER_ROLE` | Must be set to `analytics` on this container. | _required_ |
+| `WORKER_ROLE` | Set to `analytics` on this container by Compose. | _required_ |
 | `ANALYTICS_PG_DB_HOST` | Analytics Postgres host. Empty → reuse main Postgres. | _empty_ |
-| `ANALYTICS_PG_DB_PORT` | Analytics Postgres port. | `5432` |
+| `ANALYTICS_PG_DB_PORT` | Analytics Postgres port. Empty → `API_PG_DB_PORT`. | _empty_ |
 | `ANALYTICS_PG_DB_USERNAME` | Analytics Postgres user. Empty → reuse `API_PG_DB_USERNAME`. | _empty_ |
 | `ANALYTICS_PG_DB_PASSWORD` | Analytics Postgres password. Empty → reuse `API_PG_DB_PASSWORD`. | _empty_ |
 | `ANALYTICS_PG_DB_DATABASE` | Analytics Postgres database. Empty → reuse `API_PG_DB_DATABASE`. | _empty_ |
 | `ANALYTICS_PG_DB_SCHEMA` | Schema name for the warehouse tables. | `analytics` |
 | `ANALYTICS_PG_POOL_MAX` | Upper bound on the analytics Postgres pool. | `5` |
-| `ANALYTICS_INGESTION_CRON` | Cron schedule for the ingestion run (UTC). | `*/30 * * * *` |
-| `ANALYTICS_CLASSIFIER_CRON` | Cron schedule for the LLM PR-type classifier (UTC). | `*/15 * * * *` |
+| `ANALYTICS_INGESTION_CRON` | Cron schedule for the ingestion run (UTC). | every 30 minutes |
+| `ANALYTICS_CLASSIFIER_CRON` | Cron schedule for the LLM PR-type classifier (UTC). | every 30 minutes |
+| `ANALYTICS_INGESTION_RUN_ON_BOOT` | Set to `false` to skip the ingestion run at container start. | run on boot |
 
 ### Pausing ingestion (advanced)
 
-To stop ingestion at runtime without removing the container, set
-`ANALYTICS_INGESTION_DISABLED=true` and/or `ANALYTICS_CLASSIFIER_DISABLED=true`
-and restart `worker-analytics`. The cron stays scheduled but each tick
-short-circuits. Use this for incident triage, not as a long-term config —
-they are managed primarily for cloud and may not appear in the installer
-template.
+To pause either analytics job, set `ANALYTICS_INGESTION_DISABLED=true` or `ANALYTICS_CLASSIFIER_DISABLED=true` (or both) in `.env` and apply the change with `docker compose --profile analytics up -d worker-analytics`.
 
 ## Verifying it's working
 
 After boot, tail the analytics worker logs:
 
 ```bash
-docker compose logs -f worker-analytics
+docker compose --profile analytics logs -f worker-analytics
 ```
 
-You should see lines like `analytics ingestion done in NNNms — {...}` every
-30 minutes and `analytics classifier done ...` every 15 minutes. If you
-don't, check that `WORKER_ROLE=analytics` is set on this container only
-(not on the main `worker` — that one must stay `code-review`).
+You should see `analytics ingestion (startup) done in NNNms` right after boot, then
+`analytics ingestion (cron) done ...` and `analytics classifier done ...` on each
+schedule. These are info-level lines, and the installer's `.env` sets `API_LOG_LEVEL=error`, so set
+`API_LOG_LEVEL=info` and recreate the container to see them. Only one replica runs a pass at a time. If you don't see these lines, check that
+`WORKER_ROLE=analytics` is set on this container only (not on the main `worker`, which must
+stay `code-review`). The worker also answers `GET /health` on port 3334 inside the container.

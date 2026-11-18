@@ -1,78 +1,60 @@
 ---
-title: "Herança de Regras"
-description: "Como as regras Global → Repositório → Diretório são herdadas e como interromper ou excluir a herança em níveis específicos."
+title: "Herança de regras"
+description: "Quais regras Global, Repository e Directory um review aplica, e o que os controles Inheritable e Override and disable alteram."
 ---
 
-## Visão Geral
+## Quais regras um review aplica
 
-Por padrão, as Kody Rules são herdadas pela hierarquia:
+Todo review aplica as regras ativas de três escopos: **Global → Repository → Directory**.
 
-**Global → Repositório → Diretório**
+- As regras **Global** se aplicam a todos os repositórios.
+- As regras de **Repository** se aplicam a todo pull request desse repositório.
+- As regras de **Directory** se aplicam quando o pull request é revisado com as configurações daquele escopo de diretório, o que acontece quando ele toca exatamente um escopo de diretório. As regras dos outros escopos de diretório do repositório não se aplicam.
+- Um pull request que não toca nenhum escopo de diretório, ou toca dois ou mais, é revisado com as configurações do repositório. Nesse caso, as regras de **todos** os escopos de diretório do repositório também se aplicam, a todos os arquivos do pull request.
 
-O conjunto de regras efetivo em cada nível é:
-- Regras definidas naquele nível, mais
-- Regras herdadas do nível pai,
-- Menos quaisquer regras explicitamente excluídas naquele nível.
+Uma regra escrita em um escopo pai é sempre herdada pelos escopos abaixo dele. Uma regra que aparece em dois escopos com instruções idênticas roda uma vez.
 
-## Comportamento Padrão
+<Note>
+  O switch **Inheritable** e **Override and disable for this scope** mudam como as regras são listadas na página **Kody Rules**. Eles não mudam quais regras um review aplica. Veja abaixo.
+</Note>
 
-- Regras globais se aplicam a todos os repositórios e diretórios por padrão.
-- Regras de repositório herdam todas as regras globais, mais quaisquer regras definidas especificamente para aquele repositório.
-- Regras de diretório herdam todas as regras do seu repositório, mais quaisquer regras definidas especificamente para aquele diretório.
+## No app
 
-Nenhuma ação é necessária para habilitar a herança — ela é automática.
+Na página **Kody Rules**, as regras herdadas de escopos mais altos são listadas junto com as regras do próprio escopo, marcadas com o escopo de origem. Ali elas são somente leitura: abra a regra e use **View**, ou vá ao escopo onde ela foi criada para editá-la. **Filters → View** mostra ou oculta **Inherited from Global**, **Inherited from Repository** e **Disabled Rules**.
 
-## Interrompendo a Herança
+### Inheritable
 
-Há duas formas de impedir que uma regra seja herdada:
+Em uma regra de qualquer escopo, abra **Advanced settings** no diálogo da regra e desative **Inheritable** (ativado por padrão).
 
-### 1) Marcar uma regra como não herdável (no momento da criação)
+- A regra deixa de ser listada como herdada nos escopos abaixo dela.
+- Um review ainda a aplica em todos os escopos, como descrito acima.
 
-Ao criar uma regra em qualquer nível (Global, Repositório ou Diretório), você pode marcá-la como "não herdável": no diálogo da regra, abra **Advanced settings** e desative **Inheritable** (ele vem ativado por padrão).
+### Override and disable for this scope
 
-Efeito:
-- A regra se aplica apenas no nível onde foi criada.
-- Ela não aparece nos níveis filhos.
+Em um escopo de repositório ou de diretório, abra uma regra herdada (**View**) e ative **Override and disable for this scope**.
 
-Use isso quando uma regra é intencionalmente específica para um escopo particular e não deve fluir pela hierarquia.
+- A regra aparece como **Disabled** nesse escopo e fica oculta quando **Disabled Rules** está desmarcado em **Filters → View**.
+- Ela não aparece como desabilitada nos escopos abaixo, que mantêm a própria configuração.
+- Um review ainda aplica a regra.
 
-### 2) Excluir uma regra pai de um nível filho
+Para impedir que uma regra se aplique, pause-a ou exclua-a no escopo onde ela foi criada.
 
-A partir de uma configuração filha (Repositório ou Diretório), você pode excluir explicitamente uma regra que de outra forma seria herdada do pai: em **Code review → Kody Rules** nesse escopo, abra a regra herdada e ative **Override and disable for this scope**. A regra passa a aparecer como **Disabled** nesse nível.
+## Centralized config
 
-Efeito:
-- A regra não é aplicada naquele nível filho exato.
-- A exclusão não se propaga adiante — os netos ainda veem a regra do pai, a menos que também a excluam (ou a regra foi criada como não herdável).
+Um arquivo de regra em um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config) pode trazer as mesmas configurações:
 
-Use isso para ajustar o comportamento de um repositório ou diretório específico sem afetar outros filhos.
+```yaml
+inheritance:
+  inheritable: true
+  exclude: []   # repository or directory IDs
+  include: []   # repository or directory IDs
+```
 
-## Exemplos
-
-### Excluindo no nível do repositório
-
-Suponha que exista uma regra Global "Exigir testes para novos endpoints". No repositório "shop", você exclui essa regra no nível do repositório.
-
-Resultado:
-- No nível do repositório, a regra não se aplica mais.
-- Se você tiver um diretório configurado dentro do mesmo repositório (ex.: `apps/api`), esse diretório ainda herda a regra Global e a aplicará — a menos que você também a exclua no nível do diretório, ou a regra Global original tenha sido criada como não herdável.
-
-### Criando uma regra Global não herdável
-
-Você cria uma regra Global e a marca como não herdável.
-
-Resultado:
-- A regra se aplica apenas no nível Global.
-- Repositórios e diretórios não a herdam.
-
-## Dicas Práticas
-
-- Mantenha as regras fundamentais no nível Global para que todos os repositórios se beneficiem por padrão.
-- Use regras não herdáveis para contextos altamente específicos que não devem afetar os filhos.
-- Use exclusões no nível filho para fazer exceções pontuais sem impactar outros repositórios ou diretórios.
+`inheritable` e `exclude` se comportam como descrito acima. `include` não tem controle no app e não tem efeito em um review; uma regra com uma lista `include` não vazia não aparece na lista de herdadas.
 
 ## Relacionados
 
 - <a href="/pt-BR/how_to_use/code_review/configs/kody_rules">Visão Geral das Kody Rules</a>
-- <a href="/pt-BR/how_to_use/code_review/configs/directory_level">Configurações por Diretório</a>
-- <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança e Sobrescrita de Configuração</a>
-- <a href="/pt-BR/how_to_use/code_review/configs/centralized_config">Configuração Centralizada</a> — gerencie regras como arquivos YAML em `.kody-rules/` em um único repositório.
+- <a href="/pt-BR/how_to_use/code_review/configs/directory_level">Configurações por diretório</a>
+- <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança de configurações</a>
+- <a href="/pt-BR/how_to_use/code_review/configs/centralized_config">Configuração centralizada</a>

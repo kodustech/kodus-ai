@@ -1,26 +1,35 @@
 ---
 title: "Atribuição Automática de Licenças"
-description: "Deixe o Kodus atribuir licenças automaticamente a quem contribui de fato, em vez de gerenciar cada assento na mão."
+description: "Deixe o Kodus atribuir licenças de desenvolvedor automaticamente a quem contribui de fato, em vez de gerenciar cada assento na mão."
 ---
 
 O recurso de Atribuição Automática de Licenças simplifica o gerenciamento de licenças de desenvolvedores dentro da sua organização. Em vez de atribuir licenças manualmente a cada desenvolvedor, o Kodus pode atribuir automaticamente uma licença a contribuidores ativos.
 
+Organizações com plano pago que usa assentos, incluindo instalações self-hosted licenciadas. Owners gerenciam a opção em **Subscription → PR licenses**.
+
 ## Como Funciona
 
-Quando habilitado, o Kodus monitora a atividade de pull requests nos seus repositórios.
+Em um plano pago, o Kodus verifica o autor de cada pull request que está prestes a revisar. Com **Auto-assign licenses** ativado:
 
--   **Atribuição Automática:** Se um usuário criar mais de um pull request, o Kodus verifica se há vagas de licença disponíveis na sua organização.
-    -   Se uma vaga estiver disponível, o usuário recebe automaticamente uma licença e seus PRs serão revisados.
-    -   Se não houver vagas disponíveis, o Kodus reagirá ao pull request com um emoji de polegar para baixo (👎) no Github ou um emoji de cadeado (🔒) no Gitlab para indicar que a revisão não pôde ser realizada por falta de licenças (somente quando **Show Status Feedback** está ativado em **Code review → General**).
+-   **O primeiro PR da pessoa é revisado sem um assento.** O Kodus conta os PRs que ele registrou para o autor.
+-   **A partir do segundo PR, o Kodus atribui uma licença** se houver uma disponível, e a revisão prossegue.
+-   **Se o autor não tem licença e nenhuma pode ser atribuída**, porque não há assento livre ou **Auto-assign licenses** está desativado, a revisão é ignorada e o Kodus reage ao pull request com um emoji de polegar para baixo (👎) no GitHub e no Forgejo, um emoji de cadeado (🔒) no GitLab, ou um comentário 👎 no Azure DevOps e no Bitbucket. A reação só aparece quando **Show status feedback** está ativado em **Code review → General**.
 
-## Usuários Ignorados
+As licenças só valem em um plano pago com assentos. O plano Free e o trial não têm; veja [Planos e Licenças](/pt-BR/how_to_use/pricing).
 
-Você pode configurar uma lista de **Usuários Ignorados**. Esses usuários serão excluídos do processo de atribuição automática. A lista é definida na página **Repositories**, aba **PR author filters**, com **Exclude PR authors** (ou, no sentido inverso, **Only these PR authors**).
+## Filtros de autor de PR
 
--   **Sem Revisões:** Pull requests criados por usuários ignorados não serão revisados pelo Kodus — a menos que esse usuário tenha uma licença, o que se sobrepõe ao filtro.
--   **Sem Reações:** O Kodus não reagirá aos PRs deles, mesmo que ultrapassem o limite de PRs. Será como se o Kodus ignorasse o PR completamente.
+Dois filtros decidem quais autores a Kody revisa. Eles são definidos na página **Repositories**, aba **PR author filters**:
 
-Isso é útil para bots, contas de serviço ou membros específicos da equipe que não precisam de revisões de código.
+-   **Exclude PR authors:** a Kody não revisa PRs abertos pelos autores que você listar.
+-   **Only these PR authors:** a Kody revisa PRs abertos pelos autores que você listar, e de mais ninguém.
+
+Os dois filtros também mantêm a pessoa fora da atribuição automática de licenças.
+
+-   **Sem Revisões:** pull requests de um autor filtrado não são revisados, a menos que esse autor tenha uma licença, o que se sobrepõe ao filtro.
+-   **Ignorado, não em silêncio:** a Kody registra o skip como "User is ignored by configuration" e lista o PR em **Kody skipped**. A menos que **Show status feedback** esteja desativado, ela também marca o PR com 👀 (um comentário 👀 no Azure DevOps e no Bitbucket). Ela nunca adiciona a reação de falta de licença (👎 ou 🔒) para esses autores.
+
+Isso é útil para bots, contas de serviço ou membros da equipe que não precisam de revisões de código. Bots que são autores de PRs são adicionados à lista de excluídos quando a integração com o Git é criada.
 
 ## Configuração
 
@@ -30,6 +39,10 @@ Para habilitar e configurar a Atribuição Automática de Licenças:
 2. Permaneça na aba **PR licenses**.
 3. Ative ou desative **Auto-assign licenses**.
     - **Release seats automatically** (no mesmo card) libera uma licença alguns dias (7 por padrão) depois que um membro sai da sua organização no git.
-    - Para excluir usuários, use **Repositories → PR author filters** (veja [Usuários Ignorados](#usuários-ignorados)).
+    - **Release N unused seats** lista as licenças de pessoas que não estão mais na sua organização no git e as libera em uma única etapa.
+    - **Assign by git ID** atribui um assento a alguém que não está na lista.
+    - Para filtrar autores, use **Repositories → PR author filters** (veja [Filtros de autor de PR](#filtros-de-autor-de-pr)).
 
-Esses toggles aparecem apenas com um plano pago ativo ou uma instância self-hosted licenciada, e apenas para membros que podem gerenciar assentos (Owners).
+Os dois toggles aparecem apenas com um plano pago ativo ou uma instância self-hosted licenciada, e apenas para membros que podem gerenciar assentos (Owners).
+
+No GitLab, se alguém com assento estiver ausente da lista de membros, o Kodus verifica se essa pessoa abriu um merge request recente em algum projeto conectado. Autores encontrados nessa consulta mantêm o assento. Se o provedor não concluir a verificação, os assentos são mantidos. Essa verificação do GitLab entrou depois da versão self-hosted 2.2.11.

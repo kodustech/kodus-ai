@@ -1,0 +1,77 @@
+---
+title: "Revisar todos os repositórios"
+description: "Faça o Kody revisar todos os repositórios que a sua integração git enxerga, inclusive os criados depois, sem adicioná-los um a um."
+---
+
+Por padrão, o Kody revisa os repositórios que você escolhe em **Repositories**. Com **Review every
+repository** ativado, o Kody revisa todos os repositórios que a credencial conectada enxerga e
+incorpora sozinho os repositórios criados depois. Funciona igual no GitHub, GitLab, Bitbucket Cloud,
+Bitbucket Data Center, Azure DevOps e Forgejo, na Cloud e no self-hosted.
+
+## Ative
+
+1. Abra **Repositories** na barra lateral.
+2. Ative **Review every repository**.
+3. Confira a contagem: o Kody lista quantos repositórios vai começar a revisar e quantos vai ignorar.
+4. Clique em **Review every repository**.
+
+Apenas os owners da organização podem ativar ou desativar.
+
+O Kody configura os repositórios em segundo plano, e o card mostra o progresso
+("Setting up repositories: 320 of 487."). Os reviews de pull request começam em cada repositório assim que o webhook
+dele está instalado.
+
+<Note>
+  Os reviews nesses repositórios contam como os reviews em qualquer outro repositório, e os autores
+  de pull request neles podem ocupar seats de licença.
+</Note>
+
+## O que é revisado
+
+- **Todo repositório que a credencial enxerga.** No GitHub com o app do Kodus, são os
+  repositórios nos quais o app está instalado. Com um token do GitHub, são os repositórios da
+  organização conectada aos quais o token tem acesso (em uma conta pessoal, todo repositório que a
+  conta pode acessar). No GitLab, são os projetos dos quais o usuário do token é membro.
+- **Repositórios não arquivados.** Os arquivados são sempre ignorados. O Azure DevOps conta um
+  repositório desabilitado como arquivado; o Kody não detecta repositórios arquivados no Bitbucket Cloud.
+- **Sem forks e mirrors**, a menos que você marque **Also review forks and mirrors** ao ativar.
+
+## Novos repositórios
+
+O Kody verifica novos repositórios a cada 10 minutos e os configura do mesmo jeito que um repositório
+que você adiciona manualmente: webhook, configurações, code graph e histórico recente de pull requests.
+
+- Um pull request aberto em um novo repositório **depois** de ele ser configurado recebe um review normalmente.
+- Um pull request aberto **antes** disso (nos primeiros minutos após a criação do repositório)
+  é revisado no próximo push, ou na hora com `@kody start-review`.
+- No GitHub com o app do Kodus, um novo repositório é configurado assim que o GitHub o reporta. Para
+  repositórios criados depois que o app foi instalado com acesso a todos os repositórios, o app precisa
+  do evento de webhook **Repository** (self-hosted: adicione nas configurações do seu GitHub App).
+
+Self-hosted: o intervalo de verificação é `API_CRON_SYNC_ALL_REPOSITORIES` (padrão: a cada 10 minutos).
+
+## Deixe um repositório de fora
+
+Abra as configurações de code review do repositório e desative **Automated code review** (**Code review → General**). O Kody mantém assim
+depois de cada sincronização, e os autores de pull request dele não ocupam seats de licença por reviews
+automáticos. Os comandos `@kody` continuam funcionando nele.
+
+Enquanto **Review every repository** está ativado, não é possível adicionar nem remover repositórios manualmente em
+**Repositories**: a próxima sincronização adicionaria de volta os removidos.
+
+## Quando um repositório não pode ser configurado
+
+O Kody precisa de permissão para criar um webhook em cada repositório. Quando o provider recusa, o
+repositório aparece listado em **Repositories** com o motivo, e o Kody tenta de novo a cada sincronização.
+
+Consulte as [permissões de webhook por provedor](/pt-BR/knowledge_base/how-to-fix-webhook-issues#permissões-de-webhook-por-provedor).
+
+Se o provider aplicar rate limit ao Kody enquanto ele configura muitos repositórios, o Kody para e continua
+na próxima sincronização, então uma primeira execução grande pode levar alguns ciclos. Os code graphs e os históricos de pull request
+também terminam em segundo plano ao longo de vários ciclos. O card mostra o motivo quando uma sincronização para ou
+falha, o horário da última sincronização bem-sucedida e quantos code graphs e históricos faltam.
+
+## Desative
+
+Desative **Review every repository**. Os repositórios revisados hoje continuam como estão; novos
+repositórios deixam de ser adicionados.

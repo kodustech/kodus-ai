@@ -1,0 +1,77 @@
+---
+title: "Solução de problemas e FAQ do BYOK"
+sidebarTitle: "Solução de problemas"
+description: "Resolva erros do Test, rate limits e custos inesperados, com respostas para dúvidas comuns sobre o BYOK."
+---
+
+Correções para os erros que você encontra ao conectar um provedor e rodar revisões nele, seguidas de respostas para dúvidas comuns.
+
+## Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="'Invalid API key' ao clicar em Test">
+    - Copie a chave sem espaços extras, aspas ou quebras de linha no final.
+    - Confirme que a cobrança está habilitada e que a conta tem créditos.
+    - Para chaves do GLM Coding Plan / Kimi Code Plan, certifique-se de que a **base URL** corresponde ao plano — chaves de assinatura não funcionam no endpoint da Developer API e vice-versa.
+  </Accordion>
+
+  <Accordion title="'Model not found' ao clicar em Test">
+    - O Test envia uma requisição real ao modelo, então um Model ID errado ou com erro de grafia falha aqui. Isso é esperado e melhor do que falhar na hora da revisão.
+    - Copie o Model ID exato do painel do provedor. Alguns provedores usam caminhos profundos (ex.: Fireworks `accounts/fireworks/models/kimi-k2p7-code`) ou escrevem versões de forma diferente (`k2p7` vs `k2.7`).
+  </Accordion>
+
+  <Accordion title="'Endpoint not found' ao clicar em Test">
+    - Verifique se a base URL corresponde exatamente ao provedor (a barra final importa em alguns).
+    - Para provedores compatíveis com OpenAI, o endpoint geralmente é `{baseURL}/chat/completions` (o Kodus adiciona o caminho), então cole a base URL sem ele. Uma URL que termina em `/chat/completions`, `/messages` ou `/responses` é rejeitada, e a mensagem informa o endereço a usar no lugar.
+    - Um `404` em uma URL OpenAI ou OpenAI-compatible sem versão geralmente significa que ela precisa de `/v1`. A mensagem sugere a URL corrigida.
+    - A URL deve usar `https://` e resolver para um endereço público. Uma URL que resolve para um endereço privado ou reservado é rejeitada.
+  </Accordion>
+
+  <Accordion title="O Test rejeita a temperature ou o reasoning que defini">
+    - Alguns modelos fixam a temperature ou sempre fazem reasoning (Kimi `k2p7-code`/`k3`, GLM-5.3; Claude 4.7+/GPT-5 removem a temperature por completo). O Test valida seu ajuste contra as regras do modelo e retorna uma mensagem específica — siga-a (deixe a temperature sem definir ou use o valor exigido; não coloque o reasoning em Off em um modelo que sempre faz reasoning). Veja [Temperature](/pt-BR/how_to_use/byok/model_settings#temperature).
+  </Accordion>
+
+  <Accordion title="'Rate limited' ou 'Too much concurrency'">
+    - Diminua **Max concurrent requests** em Advanced settings.
+    - No GLM Coding Plan Lite/Pro, fique em **1 simultânea**. Faça upgrade para o Max (30 simultâneas) se precisar de mais throughput.
+    - No Kimi Code Plan, o limite documentado é de **30 simultâneas**.
+  </Accordion>
+
+  <Accordion title="Variáveis de ambiente self-hosted não aparecem">
+    - Se o Kodus está configurado por variáveis de ambiente, a página **AI providers** mostra **Kodus is currently using an LLM configured via environment variables** com o modelo e o provedor (e se o provedor foi definido em `API_LLM_PROVIDER` ou deduzido), enquanto nenhum modelo estiver conectado ali. A chave nunca é exibida.
+    - Conectar um modelo e salvar substitui a configuração do ambiente.
+  </Accordion>
+
+  <Accordion title="Custos altos ou inesperados">
+    - O reasoning adiciona tokens. Se o custo está disparando, diminua **Thinking / Reasoning** de Medium para Low, ou roteie tarefas mais leves para um modelo mais barato em **Other task models** em **Code review → Routing**.
+    - Veja [Uso de tokens](/pt-BR/how_to_use/organization/token_usage) para saber o custo de cada modelo, PR, revisão e desenvolvedor, confira o painel do seu provedor para o detalhamento por modelo e defina um orçamento mensal com alertas de gasto na aba **Budget** (apenas alertas; defina um limite rígido no seu provedor).
+  </Accordion>
+</AccordionGroup>
+
+## Perguntas Frequentes
+
+<AccordionGroup>
+  <Accordion title="Posso trocar de provedor a qualquer momento?">
+    Sim. A mudança vale para a próxima revisão — sem necessidade de redeploy.
+  </Accordion>
+
+  <Accordion title="O que acontece se minha chave de API ficar sem créditos?">
+    As revisões passam para o Fallback model se houver um configurado. Sem um, a revisão falha e retorna um erro. Configure um fallback.
+  </Accordion>
+
+  <Accordion title="Como funciona o sistema de padrão / fallback?">
+    Toda tarefa usa o modelo padrão, a menos que você escolha outro para ela no Routing. Se o modelo de uma tarefa falha de um jeito que outro modelo pode resolver (uma chave inválida ou expirada, falta de crédito ou o provedor fora do ar após as próprias retentativas dele), a Kody tenta uma vez no Fallback model. Um rate limit que ela pode esperar passar, um prompt grande demais para o modelo ou um timeout não trocam de modelo. Você paga apenas ao provedor que de fato processou a chamada.
+  </Accordion>
+
+  <Accordion title="Tarefas diferentes podem usar modelos diferentes?">
+    Sim. É para isso que serve **Code review → Routing**: escolha um modelo por tarefa, como um forte para a revisão de código e um mais barato para resumos ou chat. Você precisa de pelo menos dois modelos conectados para que o routing faça sentido.
+  </Accordion>
+
+  <Accordion title="Vocês armazenam nossas chaves de API com segurança?">
+    Sim. As chaves são criptografadas em repouso e em trânsito e nunca são registradas em log em texto simples. O endpoint de status do BYOK nunca retorna a chave bruta.
+  </Accordion>
+
+  <Accordion title="Posso usar um LLM self-hosted (ex.: Ollama, vLLM)?">
+    Sim — pelo provedor **OpenAI-compatible** (em Custom). Informe a base URL do seu endpoint, o Model ID que ele expõe e uma chave de API qualquer (a maioria dos runtimes self-hosted ignora o header da chave, mas ainda exige um). A página **AI providers** só aceita uma URL `https://` que resolva para um endereço público, então `localhost` e endereços de rede privada são rejeitados. Em um Kodus self-hosted, defina um endpoint em uma rede privada com variáveis de ambiente; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
+  </Accordion>
+</AccordionGroup>

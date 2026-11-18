@@ -1,125 +1,125 @@
 ---
 title: "Limite Mensal de Gasto"
-description: "Seja alertado conforme o gasto com seus modelos BYOK se aproxima de um teto mensal. Só alertas — as revisões continuam rodando."
+description: "Seja alertado conforme o gasto com os seus modelos BYOK se aproxima de um teto mensal. Só alertas — os reviews continuam rodando."
 ---
 
-O limite mensal de gasto acompanha quanto você está gastando com seus **modelos BYOK** e notifica os Owners da sua organização conforme esse gasto se aproxima de um teto que você define. É um sinal de alerta antecipado, não uma trava.
+O limite mensal de gasto acompanha quanto você está gastando com os seus **modelos BYOK** e notifica os Owners da sua organização conforme esse gasto se aproxima de um teto que você define. É um sinal de alerta antecipado, não uma trava.
 
 <Warning>
-  **Isto é uma notificação, não um teto. O Kodus nunca bloqueia nem pausa revisões quando o limite é atingido.** O gasto continua acumulando na conta do seu provider depois dos 100%. Para de fato parar o gasto, configure um limite rígido no dashboard do **seu provider de modelo** (OpenAI, Anthropic, Google, etc.) — é a única coisa capaz de impor isso. Trate o limite do Kodus como um aviso para que o teto do provider nunca seja surpresa.
+  **Isto é uma notificação, não um teto. O Kodus nunca bloqueia nem pausa reviews quando o limite é atingido.** O gasto continua acumulando na conta do seu provider depois dos 100%. Para de fato parar o gasto, defina um limite rígido no dashboard do **seu provider de modelo** (OpenAI, Anthropic, Google, etc.) — é a única coisa capaz de impô-lo. Trate o limite do Kodus como um aviso, para que o teto do provider nunca seja uma surpresa.
 </Warning>
 
 ## O que é medido
 
-- **Apenas modelos BYOK.** O gasto é medido sobre os modelos que você configurou em [Bring Your Own Key](/pt-BR/how_to_use/byok) — as chaves que você paga diretamente ao provider. Modelos que o Kodus roda do lado dele não contam.
-- **Precificado pelas taxas atuais, por modelo.** Os tokens de cada modelo são precificados pela taxa atual daquele modelo. Não há snapshot — se o preço de um modelo mudar (atualização de catálogo ou edição manual), o uso daquele modelo no mês é recalculado pela nova taxa. Trocar de modelo não reprecifica o modelo que você usava antes.
-- **Por mês calendário (UTC).** A janela vai do dia 1º do mês ao dia 1º do mês seguinte. O uso zera automaticamente no início de cada mês — não há nada a resetar manualmente.
+- **Apenas modelos BYOK.** O gasto é medido sobre os modelos que você configurou em [Bring Your Own Key](/pt-BR/how_to_use/byok) — as chaves que você paga diretamente ao seu provider. Os modelos que o Kodus roda do lado dele não contam.
+- **Precificado pelas taxas atuais, por modelo.** Os tokens de cada modelo são precificados pela taxa atual daquele modelo. Não há snapshot — se o preço de um modelo mudar (atualização do catálogo ou edição manual), o uso daquele modelo no mês até agora é recalculado pela nova taxa. Trocar para outro modelo não reprecifica o modelo que você usava antes.
+- **Por mês calendário (UTC).** A janela vai do dia 1º do mês ao dia 1º do mês seguinte. O uso volta automaticamente a $0 no início de cada mês — não há nada para redefinir manualmente.
 
 <Info>
-  Para que o número reflita apenas o Kodus, recomendamos que a **chave de API que você dá ao Kodus seja usada exclusivamente com o Kodus**. Se a mesma chave também alimenta outras ferramentas, o uso no provider — e qualquer estimativa baseada nele — mistura os dois.
+  Para que o número reflita apenas o Kodus, recomendamos que a **chave de API que você dá ao Kodus seja usada exclusivamente com o Kodus**. Se a mesma chave também alimenta outras ferramentas, o uso no seu provider — e qualquer estimativa baseada nele — mistura os dois.
 </Info>
 
-## Como configurar
+## Configure
 
-O limite fica na página **AI providers**, na aba **Budget** (seção **Budget & alerts**).
+Owners configuram alertas na seção **Budget & alerts** em **AI providers → Budget**. Conecte pelo menos um modelo BYOK e defina o preço de todos os modelos BYOK antes de ativar os alertas.
 
 <Steps>
   <Step title="Abra a aba Budget">
-    Na barra lateral, abra **AI providers** e escolha a aba **Budget** ([app.kodus.io/byok?tab=budget](https://app.kodus.io/byok?tab=budget)). (As configurações aparecem quando você tem ao menos um modelo conectado com sua própria chave; até lá, a aba direciona você para **Go to Providers**.)
+    Na barra lateral, abra **AI providers** e escolha a aba **Budget** ([app.kodus.io/byok?tab=budget](https://app.kodus.io/byok?tab=budget)). (As configurações aparecem quando você tem pelo menos um modelo conectado com a sua própria chave; até lá, a aba leva você a **Go to Providers**.)
   </Step>
 
   <Step title="Confira os preços dos modelos">
-    Expanda **Adjust model prices**. Cada modelo configurado mostra seu preço por token — **Input, Output, Cache read, Cache write** — em **$ / 1M tokens**. Um badge **Catalog** significa que o Kodus encontrou o preço automaticamente; um badge **Manual** significa que você o informou.
+    Expanda **Adjust model prices**. Cada modelo configurado mostra o seu preço por token — **Input, Output, Cache read, Cache write** — em **$ / 1M tokens**. Um badge **Catalog** significa que o Kodus encontrou o preço automaticamente; um badge **Manual** significa que você mesmo o informou.
   </Step>
 
   <Step title="Corrija qualquer modelo sem preço">
-    Um modelo com badge **No price** não pôde ser precificado automaticamente (modelo customizado ou fora do catálogo). Informe os preços por token a partir da página de pricing do seu provider. Você não consegue habilitar o limite enquanto todo modelo não tiver preço — não dá para acompanhar gasto de um modelo que o Kodus não sabe precificar.
+    Um modelo com o badge **No price** não pôde ser precificado automaticamente (um modelo customizado ou fora do catálogo). Digite os preços por token da página de preços do seu provider. Você não consegue ativar o limite até que todo modelo tenha um preço — não dá para acompanhar o gasto de um modelo que o Kodus não consegue precificar.
   </Step>
 
-  <Step title="Defina o limite mensal e habilite">
-    Informe o valor em **Monthly limit (US$)**, ligue **Enable spend alerts** e clique em **Save budget & alerts**. A aba também mostra **Projected this month**, e **Open Costs** leva você ao detalhamento completo em **Organization → Token usage**.
+  <Step title="Defina o limite mensal e ative">
+    Informe o valor em **Monthly limit (US$)**, ative **Enable spend alerts** e clique em **Save budget & alerts**. A aba também mostra **Projected this month** e um switch **Break down by** (**Total**, **Per-model**, **Per-credential**) que só muda o que a aba exibe, nunca quais alertas disparam. **Open Costs** leva você ao detalhamento completo em [**Organization → Token usage**](/pt-BR/how_to_use/organization/token_usage), que também mostra o gasto do mês até agora em relação ao seu limite.
   </Step>
 </Steps>
 
 ### Preços de modelo
 
 <AccordionGroup>
-  <Accordion title="Preço de catálogo vs. manual">
-    O Kodus busca cada modelo num catálogo público de preços e pré-preenche o que encontra (**Catalog**). Se o catálogo estiver errado ou não tiver o modelo, informe as taxas por token corretas — o badge muda para **Manual** e seus valores passam a ser usados.
+  <Accordion title="Preços do catálogo vs. manuais">
+    O Kodus busca cada modelo em um catálogo público de preços e preenche o que encontra (**Catalog**). Se o catálogo estiver errado ou não tiver um modelo, digite as taxas por token corretas — o badge muda para **Manual** e os seus valores passam a ser usados.
   </Accordion>
 
-  <Accordion title="Voltar um preço manual para o catálogo">
-    Num modelo que você sobrescreveu, clique em **Revert to catalog price**. Os campos voltam aos valores do catálogo e o badge volta para **Catalog**. A partir daí, aquele modelo volta a seguir o preço vivo do catálogo (sem snapshot congelado).
+  <Accordion title="Voltar um preço manual para o do catálogo">
+    Em um modelo que você sobrescreveu, clique em **Revert to catalog price**. Os campos voltam aos valores do catálogo e o badge volta para **Catalog**. A partir daí, esse modelo volta a seguir o preço ao vivo do catálogo (sem snapshot congelado).
   </Accordion>
 
-  <Accordion title="Por que um modelo pode aparecer como 'No price'">
-    Endpoints customizados, modelos self-hosted ou modelos que o catálogo não indexou não têm preço automático. Informe as taxas manualmente para torná-los rastreáveis. Até lá, o limite não pode ser habilitado.
+  <Accordion title="Por que um modelo pode mostrar 'No price'">
+    Endpoints customizados, modelos self-hosted ou modelos que o catálogo não indexou não têm preço automático. Informe as taxas manualmente para que possam ser acompanhados. Até lá, o limite não pode ser ativado.
   </Accordion>
 </AccordionGroup>
 
 ## Alertas
 
-Uma vez habilitado, o Kodus verifica seu gasto acumulado no mês aproximadamente **uma vez por hora** e notifica os **Owners** da sua organização por **e-mail e na central de notificações do app** conforme você cruza cada faixa:
+Depois de ativado, o Kodus verifica o seu gasto do mês até agora aproximadamente **uma vez por hora** e notifica os **Owners** da sua organização por **e-mail e na central de notificações do app** conforme você cruza cada faixa:
 
-| Faixa | O que acontece |
+| Faixa | O que você recebe |
 | --- | --- |
 | **50%** | Alerta de aviso |
 | **75%** | Alerta de aviso |
 | **90%** | Alerta de aviso |
 | **100%** | Alerta de "limite atingido" |
-| **Acima de 100%** | Um aviso final de "você passou do seu limite — não vamos notificar de novo este mês", e então silêncio pelo resto do mês |
+| **Acima de 100%** | Um aviso final de "você passou do seu limite — não vamos notificar de novo este mês", na verificação horária seguinte ao alerta de 100%, e depois silêncio pelo resto do mês |
 
-Cada faixa dispara **no máximo uma vez por mês**, então você não recebe pings repetidos do mesmo nível. A contagem zera automaticamente quando o novo mês começa.
+Cada faixa dispara **no máximo uma vez por mês**, então você não recebe avisos repetidos para o mesmo nível. A contagem é limpa automaticamente quando o novo mês começa.
 
 <Note>
-  As revisões continuam rodando normalmente o tempo todo — a 50%, a 100% e além. Os alertas são a única coisa que acontece.
+  Os reviews continuam rodando normalmente o tempo todo — a 50%, a 100% e além. Os alertas são a única coisa que acontece.
 </Note>
 
-Você pode gerenciar onde eles chegam (e quais papéis os recebem) em **Spend Limit** nas [configurações de notificação](https://app.kodus.io/organization/notifications).
+Você pode gerenciar onde eles chegam (e quais funções os recebem) em **Spend Limit** nas [configurações de notificação](/pt-BR/how_to_use/organization/notifications).
 
 ## Precisão
 
-O gasto é uma **estimativa**. Ele é derivado dos tokens que suas revisões usaram e dos preços por token mostrados na aba **Budget** — não vai bater centavo a centavo com a fatura do seu provider.
+O gasto é uma **estimativa**. Ele é derivado dos tokens que os seus reviews usaram e dos preços por token mostrados na aba **Budget** — não vai bater centavo a centavo com a fatura do seu provider.
 
 <CardGroup cols={2}>
   <Card title="Mantenha os preços corretos" icon="tags">
-    Confira os preços do catálogo contra a página de pricing do seu provider e corrija o que estiver fora. Planos de assinatura/valor fixo especialmente não batem com preço de catálogo por token.
+    Confira os preços do catálogo com a página de preços do seu provider e corrija os que estiverem errados. Planos de assinatura/valor fixo especialmente não batem com o preço de catálogo por token.
   </Card>
   <Card title="Use a chave só com o Kodus" icon="key">
-    Uma chave dedicada significa que o uso que o Kodus enxerga é o uso que o Kodus causou — nada mais infla o número.
+    Uma chave dedicada significa que o uso que o Kodus vê é o uso que o Kodus causou — nada mais infla o número.
   </Card>
 </CardGroup>
 
 <Warning>
-  **Revisões concorrentes podem ultrapassar o teto brevemente.** Muitos PRs revisados ao mesmo tempo perto do limite podem empurrar o gasto do mês um pouco além dos 100% antes de a verificação horária seguinte pegar. Isso é esperado — mais um motivo para o teto de verdade ficar no seu provider.
+  **Reviews concorrentes podem ultrapassar o teto brevemente.** Muitos PRs revisados ao mesmo tempo perto do limite podem empurrar o gasto do mês até agora um pouco além dos 100% antes de a verificação horária seguinte pegar. Isso é esperado — mais um motivo para o teto de verdade ficar no seu provider.
 </Warning>
 
 ## Perguntas frequentes
 
 <AccordionGroup>
-  <Accordion title="Atingir o limite para minhas revisões?">
-    Não. É só notificação. Para parar o gasto, configure um limite rígido no dashboard de billing do seu provider de modelo.
+  <Accordion title="Atingir o limite para os meus reviews?">
+    Não. É só notificação. Para parar o gasto, defina um limite rígido no dashboard de billing do seu provider de modelo.
   </Accordion>
 
   <Accordion title="O que conta para o gasto?">
-    Apenas o uso de tokens nos seus modelos **BYOK**, precificado pelas taxas atuais mostradas na aba **Budget**. Modelos hospedados pelo Kodus não contam.
+    Apenas o uso de tokens nos seus modelos **BYOK**, precificado pelas taxas atuais mostradas na aba **Budget**. Os modelos hospedados pelo Kodus não contam.
   </Accordion>
 
-  <Accordion title="Quando o gasto zera?">
-    No dia 1º de cada mês calendário (UTC). O gasto do mês volta a $0 e todos os alertas de faixa são rearmados automaticamente.
+  <Accordion title="Quando o gasto é zerado?">
+    No dia 1º de cada mês calendário (UTC). O gasto do mês até agora volta a $0 e todos os alertas de faixa são rearmados automaticamente.
   </Accordion>
 
-  <Accordion title="Troquei de modelo no meio do mês — meu gasto pula?">
-    Não. O gasto é acompanhado **por modelo**: os tokens de cada modelo são precificados pela taxa *daquele* modelo. Se você gastou \$50 no modelo A e depois trocou para o modelo B, o uso do modelo A continua em \$50 — trocar para B nunca reprecifica os tokens de A pela taxa de B. Seu total apenas cresce conforme o que o modelo B então usar.
+  <Accordion title="Troquei de modelo no meio do mês — o meu gasto dá um salto?">
+    Não. O gasto é acompanhado **por modelo**: os tokens de cada modelo são precificados pela taxa *daquele* modelo. Se você gastou \$50 no modelo A e depois troca para o modelo B, o uso do modelo A continua em \$50 — trocar para o B nunca reprecifica os tokens do A pela taxa do B. O seu total só cresce pelo que o modelo B passar a usar.
 
-    A única coisa que reprecifica uso já incorrido é uma mudança no preço **daquele mesmo modelo** — quando o catálogo de preços atualiza a taxa de um modelo, ou você edita seu preço manual em **Adjust model prices**, o uso daquele modelo no mês é recalculado pela nova taxa (não há snapshot congelado).
+    A única coisa que reprecifica um uso já incorrido é uma mudança no preço **desse mesmo modelo** — quando o catálogo de preços atualiza a taxa de um modelo, ou você edita o preço manual dele em **Adjust model prices**, o uso desse modelo no mês até agora é recalculado pela nova taxa (não há snapshot congelado).
   </Accordion>
 
-  <Accordion title="Por que não consigo habilitar o limite?">
-    Todo modelo configurado precisa ter preço (de catálogo ou manual) e o limite mensal precisa ser maior que $0. Corrija qualquer modelo com **No price**, defina um valor positivo e salve.
+  <Accordion title="Por que não consigo ativar o limite?">
+    Todo modelo configurado precisa ter um preço (do catálogo ou manual) e o limite mensal precisa ser maior que $0. Corrija qualquer modelo com **No price** e defina um valor positivo, depois salve.
   </Accordion>
 
   <Accordion title="Quem recebe os alertas?">
-    Os Owners da sua organização, na central de notificações do app. Ajuste o roteamento em **Spend Limit** nas configurações de notificação.
+    Os Owners da sua organização, por e-mail e na central de notificações do app. Ajuste quem os recebe em **Spend Limit** nas [configurações de notificação](/pt-BR/how_to_use/organization/notifications).
   </Accordion>
 </AccordionGroup>

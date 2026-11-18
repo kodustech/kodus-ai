@@ -1,5 +1,5 @@
 ---
-title: "Herança e Sobrescrita de Configuração"
+title: "Herança de configurações"
 description: "Como as configurações Global → Repositório → Diretório herdam, sobrescrevem e se propagam."
 ---
 
@@ -13,10 +13,10 @@ O nível mais específico prevalece: Diretório > Repositório > Global
 
 ```
 Global
- ├─ Repositório A
- │   ├─ Diretório A1
- │   └─ Diretório A2
- └─ Repositório B
+ ├─ Repository A
+ │   ├─ Directory A1
+ │   └─ Directory A2
+ └─ Repository B
 ```
 
 ## Como Funciona
@@ -27,14 +27,30 @@ Os campos herdam do nível pai por padrão. Quando você altera um campo no Glob
 As sobrescritas são por campo. Você pode sobrescrever um campo e herdar todo o resto.
 </Info>
 
-Uma vez sobrescrito, um campo para de seguir o pai e usa seu valor local.
+Uma vez sobrescrito, um campo para de seguir o pai e usa o valor local no lugar.
 
 ## No app
 
-- **Trocando de nível:** o seletor de escopo no topo do grupo **Code review** da barra lateral lista **Global** ("applies to every repository"), depois cada repositório que tem sua própria configuração, com seus diretórios recuados abaixo. Trocar de escopo mantém você na mesma página (General, What to review, Kody Rules, What Kody writes).
-- **Adicionando um nível:** no seletor de escopo, escolha **Add repository configuration**. O diálogo **Create repository settings** pede para você usar **Select the target repository** e, opcionalmente, **Select the target directories**; clique em **Create settings**. Veja [Configurações por Diretório](/pt-BR/how_to_use/code_review/configs/directory_level).
+- **Trocando de nível:** o seletor de escopo no topo do grupo **Code review** da barra lateral lista **Global** ("applies to every repository"), depois cada repositório que o Kody revisa, com seus escopos de diretório recuados abaixo. Um repositório sem configurações próprias é marcado como **Inherits Global**. Trocar de escopo mantém você na mesma página quando ela existe no novo escopo.
+- **Adicionando um nível:** um repositório ganha configurações próprias na primeira vez que você salva uma alteração no escopo dele. Para adicionar um escopo de diretório, escolha o repositório e selecione **Add directory scope** no final do seletor. Veja [Configurações por diretório](/pt-BR/how_to_use/code_review/configs/directory_level).
 - **Vendo as sobrescritas:** um indicador numérico ao lado de um escopo ou página na barra lateral conta as configurações sobrescritas naquele nível ("N settings overridden at this level"). Na página, cada campo sobrescrito mostra um badge **Overridden**; o botão de desfazer dele devolve o campo à herança.
-- **Removendo um nível:** o menu **⋯** ao lado do seletor de escopo tem **Delete configuration** (e **Edit directories** para um escopo de diretório).
+- **Removendo um nível:** o menu **⋯** ao lado do seletor de escopo tem **Delete configuration**, e **Edit directories** para um escopo de diretório. Depois de excluir, um repositório usa a configuração Global e as pastas de um diretório usam a do repositório delas. A configuração de um repositório só pode ser excluída depois que os escopos de diretório dele forem removidos.
+
+## kodus-config.yml
+
+Quando **Prefer kodus-config.yml settings** está ligado para um repositório, o Kody lê o `kodus-config.yml` da raiz da branch padrão do repositório. Ele é aplicado por cima do Global e das configurações do próprio repositório, e abaixo de qualquer configuração que um escopo de diretório sobrescreva. Veja [Geral](/pt-BR/how_to_use/code_review/configs/general#prioridade-de-configuração).
+
+```
+Global
+ └─ Repository
+     └─ kodus-config.yml at the repository root (optional)
+         └─ Directory
+```
+
+- O arquivo da raiz é o único que o Kody lê. Ele não lê um `kodus-config.yml` dentro de uma pasta.
+- O arquivo da raiz só é lido quando a chave está ligada no escopo de **repositório**. A chave também aparece no escopo de diretório, mas não muda uma revisão.
+- Os escopos de diretório recebem as configurações do app ou de um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config), que grava nas mesmas configurações Global, de repositório e de diretório.
+- O nível de diretório só vale quando o pull request toca exatamente um escopo de diretório. Veja [Configurações por diretório](/pt-BR/how_to_use/code_review/configs/directory_level#regras-de-seleção).
 
 ## Exemplos
 
@@ -42,39 +58,39 @@ Uma vez sobrescrito, um campo para de seguir o pai e usa seu valor local.
   <Tab title="Alteração global se propaga">
     Você altera **Minimum severity to post** (em **What to review**) no Global.
     
-    Todos os repositórios e diretórios sem uma sobrescrita são atualizados automaticamente. Os que têm sobrescrita permanecem inalterados.
+    Todos os repositórios e diretórios sem uma sobrescrita são atualizados automaticamente. Os sobrescritos permanecem inalterados.
   </Tab>
 
   <Tab title="Sobrescrita de repositório">
     No Repositório X, você sobrescreve a mensagem **Review starts** (em **What Kody writes → Comments during the review**).
     
-    Os diretórios dentro do Repositório X agora herdam do Repositório X (a menos que tenham sua própria sobrescrita).
+    Os diretórios dentro do Repositório X agora herdam do Repositório X (a menos que tenham a própria sobrescrita).
   </Tab>
 
-  <Tab title="Retornar à herança">
-    No Repositório Y, você remove a sobrescrita dos switches de categoria em **What to review**.
+  <Tab title="Voltar à herança">
+    No Repositório Y, você remove a sobrescrita das chaves de categoria em **What to review**.
     
-    O campo segue o Global novamente e recebe futuras alterações globais.
+    O campo volta a seguir o Global e recebe as alterações futuras dele.
   </Tab>
 </Tabs>
 
 ## Boas Práticas
 
-- Comece no Global com padrões sólidos
-- Sobrescreva apenas quando tiver uma necessidade específica para aquele repositório/diretório
+- Comece no Global com bons padrões
+- Só sobrescreva quando houver uma necessidade específica para aquele repositório/diretório
 
 ## Perguntas Frequentes
 
 <AccordionGroup>
-  <Accordion title="Se eu alterar algo no Global, isso vai quebrar meus ajustes locais?">
+  <Accordion title="Se eu alterar algo no Global, isso quebra meus ajustes locais?">
     Não. As sobrescritas locais permanecem inalteradas.
   </Accordion>
 
-  <Accordion title="Posso sobrescrever apenas um campo e herdar o restante?">
+  <Accordion title="Posso sobrescrever apenas um campo e herdar o resto?">
     Sim. As sobrescritas são por campo.
   </Accordion>
 
   <Accordion title="Um Diretório herda do Repositório ou do Global?">
-    Do Repositório primeiro. Se o Repositório não tiver uma sobrescrita para aquele campo, herda do Global.
+    Primeiro do Repositório, incluindo o `kodus-config.yml` do repositório quando ele é o preferido. Se o Repositório não tiver sobrescrita para aquele campo, herda do Global.
   </Accordion>
 </AccordionGroup>

@@ -1,0 +1,35 @@
+---
+title: "Suggestions"
+description: "Liste as sugestões que o Kody enviou, filtre-as e veja quais o time implementou."
+---
+
+**Cockpit › Suggestions** lista as sugestões por trás de um número do [Kodus Review](/pt-BR/how_to_use/cockpit/kodus_review). Não há entrada na barra lateral: você chega nela clicando em uma barra de categoria (implementação ou feedback negativo) ou em uma linha de Kody Rule na aba Kodus Review. Ela exige o mesmo plano do Cockpit.
+
+## O que ela lista
+
+Toda sugestão que o Kody entregou como comentário de PR e que foi criada dentro do intervalo de datas do Cockpit, exibido no topo da página, 20 por página. Diferente dos gráficos do Kodus Review, que contam PRs pela data em que foram fechados, esta lista vai pela data em que a sugestão foi criada, então sugestões em pull requests ainda abertos também aparecem. Ela não segue o seletor de repositório do Cockpit.
+
+O topo da lista mostra quantas sugestões correspondem aos filtros e quantas das que estão na página atual foram implementadas.
+
+## Filtros
+
+- **Category**
+- **Severity**: critical, high, medium ou low
+- **Status**: **Implemented**, **Partially implemented**, **Not implemented** ou **Not measured**
+- **Search**: pressione Enter para buscar no resumo da sugestão ou no caminho do arquivo
+- **Rule**: quando você abre a página a partir de uma Kody Rule, um chip com o nome da regra restringe a lista a essa regra. Clique nele para remover a regra
+
+**Clear all** redefine todos os filtros.
+
+### Status
+
+| Status | Significado |
+| --- | --- |
+| **Implemented** | Uma mudança posterior fez o que a sugestão pedia |
+| **Partially implemented** | Uma mudança posterior fez parte do que ela pedia. Conta como implementada nas taxas do Cockpit |
+| **Not implemented** | Nenhuma mudança foi encontrada, ou a sugestão ainda não foi verificada |
+| **Not measured** | A verificação de implementação não conseguiu decidir. Ficam fora das taxas de implementação do Cockpit |
+
+## Detalhes da sugestão
+
+Cada linha mostra severidade, resumo, categoria, status, arquivo e número do PR. Clique em uma linha para abrir um painel lateral com o código existente e o código sugerido. **Open in PR review** abre a [tela de review](/pt-BR/how_to_use/reviews/pull_requests) do pull request naquela sugestão.

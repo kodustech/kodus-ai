@@ -1,0 +1,238 @@
+---
+title: "BYOK 提供商"
+sidebarTitle: "提供商"
+description: "如何获取密钥并连接每个受支持的提供商,包括 Kimi、GLM 和 OpenRouter 固定。"
+---
+
+请选择您的提供商,了解如何获取密钥以及需要输入什么。在 **AI providers** 页面添加模型;参见[连接提供商](/zh/how_to_use/byok#连接提供商)。
+
+## 受支持的提供商
+
+<Tabs>
+  <Tab title="OpenAI">
+    **最适合:** 最新的 GPT 模型和可靠的性能。
+
+    **获取 API 密钥:**
+    1. 访问 [OpenAI API Keys](https://platform.openai.com/api-keys)
+    2. 为 Kodus 创建新密钥
+    3. 添加账单信息
+
+    **通过您自己的网关:** 如果您的 OpenAI 流量经过提供 Responses API 的 OpenAI 协议网关,请在可选的 **Base URL** 中设置其地址,并使用网关所需的密钥。使用 OpenAI 自己的模型 ID 时,审查的运行方式与直接使用 OpenAI 密钥相同:Responses API、严格的结构化输出,以及您的推理级别。
+
+    - 包含 API 版本,例如 `https://your-gateway.example.com/v1`。Kodus 会调用 `<Base URL>/responses`,并从 `<Base URL>/models` 列出模型。
+    - 如果网关只提供 chat completions,请改为以 **OpenAI-compatible** 连接它。
+    - URL 必须使用 `https://` 并解析到公网地址,因为 Kodus 会把您的密钥发送到那里。不支持位于自托管安装私有网络中的网关。
+    - 请求以 `store: false` 发出,因此不会要求网关或 OpenAI 保留它们。
+    - 使用 OpenAI 自己的模型 ID(例如 `gpt-5.4`)。被网关重命名的模型不会被识别为推理模型,因此不会发送其推理级别。
+    - 此处不支持:除密钥外还需要自有请求头的网关(Portkey、Cloudflare AI Gateway),以及 Azure OpenAI,后者有自己的 **Azure OpenAI** 提供商。
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **最适合:** 大上下文审查(1M tokens)和有竞争力的价格。
+
+    **获取 API 密钥:**
+    1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)
+    2. 创建新密钥
+    3. 在 Google Cloud Console 中启用计费
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **最适合:** 细致入微的分析和自适应扩展思考。
+
+    **获取 API 密钥:**
+    1. 访问 [Anthropic Console](https://console.anthropic.com/)
+    2. 创建账号并生成密钥
+    3. 充值额度
+  </Tab>
+
+  <Tab title="Novita AI">
+    **最适合:** 价格有竞争力的开源和托管模型(Llama、DeepSeek、Kimi)。
+
+    **获取 API 密钥:**
+    1. 在 [Novita AI](https://novita.ai/) 注册
+    2. 进入 API 设置
+    3. 生成密钥
+
+    <Card title="Novita Setup Guide" icon="rocket" href="/zh/cookbook/novita">
+      带截图的详细设置。
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **最适合:** 跨多个模型的统一计费关系。
+
+    **获取 API 密钥:**
+    1. 在 [OpenRouter](https://openrouter.ai/) 创建账号
+    2. 充值额度
+    3. 在设置中生成密钥
+
+    <Warning>
+      OpenRouter 默认会把每个请求路由到不同的上游提供商,这可能导致调用之间的质量和延迟漂移。请在 Advanced settings → OpenRouter routing 下**固定特定的上游**以保持行为稳定。参见[固定 OpenRouter 提供商](#固定-openrouter-提供商)。
+    </Warning>
+  </Tab>
+
+  <Tab title="Google Vertex AI">
+    <Info>**Beta。** 比单密钥的常规做法更复杂的身份验证路径。</Info>
+
+    **最适合:** 已在使用 Google Cloud、需要在现有 GCP 计费、IAM 和数据驻留保证下使用 Gemini(或 Claude)的团队。
+
+    **如何配置:**
+    1. 在连接流程中,选择 **Google Vertex AI**(位于 Custom 下)。
+    2. 将**服务账号 JSON 文件的内容**粘贴到 Service Account JSON 字段中(base64 编码也可以)。Kodus 会自动从 JSON 中提取 `project_id`。
+    3. **Region** — 留空以使用全局端点(推荐)。仅当您有数据驻留要求时才固定区域(例如 `us-east5`)。
+
+    服务账号需要有权限调用该项目中的 Vertex AI 预测 API。Test 会探测*实际配置的模型*,因此不可用的模型/区域会在 Test 时失败。
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**Beta。** 比单密钥的常规做法更复杂的身份验证路径。</Info>
+
+    **最适合:** 标准化使用 AWS、希望通过其 AWS 账户为模型计费的团队。
+
+    **如何配置:**
+    1. 在连接流程中,选择 **Amazon Bedrock**(位于 Custom 下)。
+    2. 提供 **Bedrock API key**(bearer token)— 参见[如何生成 Bedrock API 密钥](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html)。
+    3. 设置 **Region**(例如 `us-east-1`、`us-west-2`、`eu-central-1`)。
+
+    <Accordion title="高级:改用 IAM 用户凭证">
+      如果您的团队尚未迁移到 Bedrock API 密钥,请展开 **Advanced — use IAM user credentials instead** 并提供静态的访问密钥 ID + 密钥(对于 STS 临时凭证,还需提供会话令牌)。IAM 主体需要 `bedrock:InvokeModel` 权限。
+
+      API 密钥优先:如果设置了 bearer token,IAM 字段会被忽略。
+    </Accordion>
+  </Tab>
+
+  <Tab title="Azure OpenAI">
+    **最适合:** 在自己的 Azure 资源中运行 OpenAI 模型的团队。
+
+    **如何配置:**
+    1. 在连接流程中,选择 **Azure OpenAI**(位于 Custom 下)。
+    2. 输入您的 **API key** 和 **Resource endpoint**,例如 `https://your-resource.openai.azure.com/openai`。
+    3. 将**部署名称**作为模型 ID 输入。Kodus 无法使用推理密钥列出 Azure 部署。
+  </Tab>
+
+  <Tab title="OpenAI-compatible">
+    **最适合:** 专业提供商(Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek)或自托管端点。
+
+    **如何配置:**
+    1. 在连接流程中,选择 **OpenAI-compatible**(位于 Custom 下)。
+    2. 输入 base URL(例如 `https://api.moonshot.ai/v1`、`https://api.z.ai/api/paas/v4/`、`https://api.fireworks.ai/inference/v1`)。
+    3. 提供密钥和模型 ID。
+
+    <Note>
+      模型 ID 因提供商而异 — 有些使用较深的路径(例如 Fireworks:`accounts/fireworks/models/kimi-k2p7-code`)。请从提供商的仪表板复制精确的 ID;Test 会发送真实请求,因此错误的 ID 会立即失败。
+    </Note>
+
+    <CardGroup cols={2}>
+      <Card title="Z.ai (GLM) guide" href="/zh/cookbook/z-ai" icon="bolt">
+        完整的 Z.ai 设置,含 Coding Plan 详情。
+      </Card>
+      <Card title="Moonshot (Kimi) guide" href="/zh/cookbook/moonshot" icon="moon">
+        Kimi + Kimi Code Plan 设置。
+      </Card>
+      <Card title="Fireworks AI" href="/zh/cookbook/fireworks" icon="fire">
+        Fireworks 专属设置。
+      </Card>
+      <Card title="Together AI" href="/zh/cookbook/together" icon="handshake">
+        Together AI 设置。
+      </Card>
+    </CardGroup>
+  </Tab>
+
+  <Tab title="Anthropic-compatible">
+    **最适合:** 使用 Anthropic Messages API 而非 OpenAI API 的端点 — 包括 Kimi 等编码套餐端点。
+
+    **如何配置:**
+    1. 在连接流程中,选择 **Anthropic-compatible**(位于 Custom 下)。
+    2. 输入 base URL、密钥和模型 ID。
+
+    <Note>
+      按提供商文档给出的任何形式粘贴 base URL — 带或不带结尾的 `/v1` 均可(例如 `https://api.kimi.com/coding` 或 `https://api.kimi.com/coding/v1`)。Kodus 会在内部对其规范化,因为两条 Anthropic SDK 路径对 `/v1` 应该在哪里并不一致。对于已知品牌,仅用密钥连接时会自动解析端点。
+    </Note>
+  </Tab>
+</Tabs>
+
+## 连接 Kimi(Moonshot)和 GLM(Z.ai)
+
+Moonshot 和 Z.ai 各自提供一个订阅套餐,其**端点**与各自按 token 付费的开发者 API 不同。每个套餐是独立的账号,有各自的密钥 — 请选择与您持有的密钥匹配的 base URL。
+
+**Providers** 下的 **Moonshot** 和 **Z.ai** 磁贴仅用密钥连接到开发者 API:Kodus 会填入 Anthropic 协议端点(`https://api.moonshot.ai/anthropic`、`https://api.z.ai/api/anthropic`),表单没有 base URL 字段。对于编码套餐密钥或其他端点,请在 **Custom** 下选择 **OpenAI-compatible** 或 **Anthropic-compatible**,并输入表中的 base URL。
+
+<Tabs>
+  <Tab title="Kimi (Moonshot AI)">
+    | 套餐 | 端点 | 密钥来源 | 最适合 |
+    | --- | --- | --- | --- |
+    | **开发者 API** | `https://api.moonshot.ai/v1`(OpenAI 兼容)或 `https://api.moonshot.ai/anthropic`(Anthropic 兼容) | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) | 按 token 付费,并发随充值档位伸缩 |
+    | **Kimi Code Plan** | `https://api.kimi.com/coding/v1` | [kimi.com/code](https://www.kimi.com/code) | 带专用编码端点的订阅 |
+
+    <Info>
+      Kimi Code Plan 的文档上限为 30 个并发请求 — 请设置 `maxConcurrentRequests=30`。始终推理的 Kimi 变体(例如 `kimi-k2p7-code`、`kimi-k3`)会把温度锁定为 `1`,且无法关闭推理 — 参见[温度](/zh/how_to_use/byok/model_settings#temperature)。
+    </Info>
+  </Tab>
+
+  <Tab title="GLM (Z.ai)">
+    | 套餐 | 端点 | 密钥来源 | 最适合 |
+    | --- | --- | --- | --- |
+    | **开发者 API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | 突发型工作负载,按 token 付费 |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | 可预测的团队用量,固定月费 |
+
+    <Warning>
+      请使用 **Developer API** 密钥在 Kodus 中运行审查。Z.AI 将 GLM Coding Plan 限定于[支持的工具](https://docs.z.ai/devpack/tool/others#supported-tools)。在 Kodus 中使用 Coding Plan 订阅前，请先向 Z.AI 确认可用资格。
+    </Warning>
+  </Tab>
+</Tabs>
+
+## 固定 OpenRouter 提供商
+
+OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/kimi-k2`)时,它会把调用转发给多个上游提供商之一(Moonshot 直连、Together、Groq、Fireworks、Novita……)。每次调用可能落到不同的后端。这很方便,但会带来无声的差异:
+
+- **质量漂移** — 上游以不同的精度运行(FP8、INT4、完整精度),对相同的提示给出略有差异的输出
+- **工具调用不一致** — 有些后端对函数调用的支持方式不同,导致工具使用格式错误
+- **推理格式差异** — 一个上游遵从 `reasoning_effort`,另一个只认 `thinking.enabled`,还有一个两者都忽略
+- **延迟波动** — 随着路由变化,p50 可能在调用之间从 800ms 跳到 4s
+- **速率限制意外** — 您在一个并非自己明确选择的后端上触及了配额
+
+### 如何固定
+
+当您的 BYOK 提供商是 **OpenRouter** 时,Advanced settings 面板会显示一个 **OpenRouter routing** 部分,包含两个字段:
+
+- **Pin providers (in order)** — 以逗号分隔的上游名称列表(例如 `moonshot, together`)。OpenRouter 按顺序尝试它们,并使用第一个可用的。
+- **Allow fallbacks** — 关闭时,如果所有固定的提供商都不可用,请求会直接失败。开启时(默认),OpenRouter 可以回退到任何其他提供该模型的上游。
+
+<Tip>
+  要获得**稳定**的配置,请固定单个提供商并关闭回退(`Pin: moonshot`、`Allow fallbacks: off`)。请求将始终命中同一个上游,否则明确失败 — 不会有无声的质量变化。代价是如果该上游宕机则毫无韧性;请搭配另一个提供商(例如 Anthropic)上的 **Fallback model** 来吸收故障。
+</Tip>
+
+<Warning>
+  上游名称必须与 OpenRouter 的目录一致。请查看 [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) 上的提供商标签 — 常见值包括 `moonshot`、`together`、`groq`、`fireworks`、`novita`。
+</Warning>
+
+在底层,Kodus 会把下面的内容传入 Vercel AI SDK 调用:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### 高级:原始 JSON 覆盖
+
+如果您需要 `order` 和 `allow_fallbacks` 之外的字段(例如 `ignore`、`data_collection`、`require_parameters`),请在 Advanced settings 中将 **Thinking / Reasoning** 切换为 **Custom**([自定义 JSON 覆盖](/zh/how_to_use/byok/model_settings#自定义-json-覆盖)),并粘贴完整的路由负载 — 它会与任何推理配置一起合并到 `providerOptions` 中:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```

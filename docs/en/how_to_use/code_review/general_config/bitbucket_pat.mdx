@@ -5,7 +5,7 @@ description: "Generate the Bitbucket Cloud API Token Kody needs for code review,
 
 ## Introduction
 
-To enable Kody to perform automatic code reviews on Bitbucket Cloud, you need to generate an **API Token**. This token allows Kody to access your repositories, pull requests, webhooks, issues, pipelines etc., with the specific permissions listed below.
+To enable Kody to perform automatic code reviews on Bitbucket Cloud, you need to generate an **API Token**. This token allows Kody to access your repositories, pull requests, webhooks and issues, with the specific permissions listed below.
 
 ---
 
@@ -31,14 +31,15 @@ The token must include **all** of the following scopes for full functionality wi
 | `read:workspace:bitbucket`    | Read information about the workspace (projects, members, repositories).                     |
 | `read:project:bitbucket`      | Read metadata about projects.                                                               |
 | `read:repository:bitbucket`   | Read code, branches, source files in repositories.                                          |
-| `write:repository:bitbucket`  | Modify repository contents where needed (comments, file updates, etc.).                     |
-| `admin:repository:bitbucket`  | Administrative operations on repository: manage webhooks, permissions, repository settings. |
+| `write:repository:bitbucket`  | Commit files for features that change repository files.                                     |
 | `read:pullrequest:bitbucket`  | View pull requests, their statuses, comments.                                               |
 | `write:pullrequest:bitbucket` | Create or modify pull request comments; approve, decline or merge PRs.                      |
 | `read:issue:bitbucket`        | Read issue tracker information.                                                             |
 | `read:webhook:bitbucket`      | View existing webhooks and their settings.                                                  |
 | `write:webhook:bitbucket`     | Create or update webhooks.                                                                  |
-| `read:pipeline:bitbucket`     | Read status/logs of pipelines associated with repositories or PRs.                          |
+| `delete:webhook:bitbucket`    | Remove Kodus webhooks when you delete the integration.                                      |
+
+Kody does not use `admin:repository:bitbucket` or `read:pipeline:bitbucket`. CI statuses are read with `read:repository:bitbucket`.
 
 > ⚠️ Ensure you grant only these necessary permissions; avoid granting more than required to reduce security risk.
 
@@ -47,7 +48,14 @@ The token must include **all** of the following scopes for full functionality wi
 ## Adding the Token to Kody
 
 - Once the token is generated with all the required scopes, paste it into Kodus: during onboarding (**Connect your Git tool** → **Bitbucket** tab → **Connect via token**), or later in the sidebar under **Repositories** → **Connect a provider** → **Bitbucket**. Fill in **Username**, **Email** and **API token**, then click **Validate and save**.
-- Make sure the token has `admin:repository:bitbucket` (or equivalent) if Kody needs to configure webhooks or listen for pull request events.
+- To create the webhook that delivers pull request events, Kody needs `read:webhook:bitbucket` and `write:webhook:bitbucket`, and the token's user must be an admin of the repository.
+- To replace a token, click **Reset** on the **Bitbucket** card on **Repositories**, choose **Just reset the integration**, then connect again with the new token.
+
+---
+
+## Bitbucket Data Center
+
+For a self-hosted Bitbucket Data Center, turn on **Bitbucket Data Center** (marked **Alpha**) in the same form. The API token and its scopes above apply to Bitbucket Cloud only. Data Center connects with basic authentication instead: fill in **Username**, **Bitbucket Data Center Base URL** (for example `https://bitbucket.your-company.com`) and **Basic auth password**, then click **Validate and save**.
 
 ---
 
@@ -57,4 +65,4 @@ The token must include **all** of the following scopes for full functionality wi
 - Set an **expiry date** if possible, to limit the token’s lifetime.
 - If the token is ever compromised, revoke it immediately and create a new one.
 - Periodically audit the tokens and their scopes to confirm they are still necessary and valid.
-- Check whether your Bitbucket plan / account allows all the above scopes; some scopes (project, workspace, admin) may depend on subscription / permissions.
+- Check whether your Bitbucket plan / account allows all the above scopes; some scopes (project, workspace) may depend on subscription / permissions.

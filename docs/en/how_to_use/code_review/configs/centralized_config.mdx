@@ -21,6 +21,8 @@ Use it when you want:
    - `manual` — Kodus generates the files; your team downloads and opens the PR.
 4. After the first merge, every future merge on the centralized repository automatically propagates changes to Kodus.
 
+Kody does not review pull requests on the centralized repository itself.
+
 The centralized repository mirrors Kodus's scope hierarchy (Global → Repository → Directory) through its folder layout.
 
 ## Repository Layout
@@ -40,7 +42,7 @@ kodus-config/
 │   └── memories/                         ← global memories
 │       └── logging-convention.yml
 │
-├── backend-api/                          ← matches a Kodus repo
+├── backend-api/                          ← matches a Kodus repository
 │   ├── kodus-config.yml                  ← repository-level overrides
 │   ├── .kody-rules/
 │   │   ├── review/
@@ -48,7 +50,7 @@ kodus-config/
 │   │   └── memories/
 │   │       └── auth-module-layout.yml
 │   │
-│   └── src/auth/                         ← matches a repo subdirectory
+│   └── src%2Fauth/                       ← a directory scope for src/auth
 │       ├── kodus-config.yml              ← directory-level overrides
 │       └── .kody-rules/
 │           ├── review/
@@ -61,15 +63,19 @@ kodus-config/
 Rules:
 
 - A `kodus-config.yml` at the **root** of the centralized repo applies globally.
-- A top-level folder whose name matches a Kodus repository (e.g. `backend-api/`) scopes files to that repository.
-- A nested path inside a repo folder (e.g. `backend-api/src/auth/`) scopes files to that directory, following the same inheritance model as the web UI.
+- A top-level folder named after a Kodus repository (for example `backend-api/`) scopes its files to that repository. On GitLab the name is the full path, so the folder is nested: `group/project/`.
+- A directory scope is one folder inside the repository folder, named after the paths it covers. Write each `/` as `%2F` and join several paths with `&`: `src%2Fauth`, or `apps%2Fweb&apps%2Fdocs` for a scope with two folders. A deeper nested path, such as `backend-api/src/auth/`, is skipped.
 - Rules under `.kody-rules/review/` become **review rules**; rules under `.kody-rules/memories/` become **memories**.
 
 Any file missing a matching scope is ignored on sync.
 
+Deleting a file from the centralized repository removes what it defined on the next sync: a deleted rule file deletes that rule, and a deleted `kodus-config.yml` that an earlier sync applied clears that scope's settings.
+
 ## Config Files
 
-Each `kodus-config.yml` uses the same schema as the per-repo `kodus-config.yml` documented in [General settings](/en/how_to_use/code_review/configs/general). Fields are applied at the level of the folder where the file lives and follow the usual inheritance rules (see [Config Inheritance & Overrides](/en/how_to_use/code_review/configs/inheritance_overrides)).
+Each `kodus-config.yml` uses the same schema as the per-repo `kodus-config.yml` documented in [General settings](/en/how_to_use/code_review/configs/general). Fields are applied at the level of the folder where the file lives and follow the usual inheritance rules (see [Config Inheritance & Overrides](/en/how_to_use/code_review/configs/inheritance_overrides)). Unlike a repository's own file, these files can also carry `customMessages` (see [Custom Messages](/en/how_to_use/code_review/configs/custom_messages)).
+
+[Custom agents](/en/how_to_use/code_review/custom_agents), and the skills and docs linked to them, are not part of Centralized Config. They are configured in the app, and `customAgents` and `knowledge` keys in these files are ignored.
 
 Minimal example:
 
@@ -91,7 +97,7 @@ automatedReviewActive: true
 
 ## Kody Rules Files
 
-Each rule is a single YAML file under `.kody-rules/review/` (standard rules) or `.kody-rules/memories/` (memories). The filename is arbitrary — Kodus identifies rules by the `title` field and by the canonical file path stored with the rule.
+Each rule is a single `.yml` or `.yaml` file under `.kody-rules/review/` (standard rules) or `.kody-rules/memories/` (memories). The filename is arbitrary, but Kodus ties a rule to its file path: renaming or moving a file deletes the old rule and creates a new one on the next sync. `title` and `rule` are required; a file that is missing them or fails validation is skipped, the sync reports the failure, and it does not delete removed rules until the file is fixed.
 
 Example review rule (`.kody-rules/review/require-tests-for-endpoints.yml`):
 
@@ -116,6 +122,8 @@ inheritance:
   include: []
 ```
 
+A paused rule is written with `enabled: false`.
+
 See [Kody Rules Overview](/en/how_to_use/code_review/configs/kody_rules) for the full field reference and [Rule Inheritance](/en/how_to_use/code_review/configs/rules_inheritance) for how `inheritance.inheritable`, `exclude`, and `include` behave.
 
 ## UI Workflow
@@ -130,27 +138,34 @@ open **Code review → General**:
 4. Pick the **Initial Sync Method**:
    - Automatic (Create PR now)
    - Manual (Sync later)
-5. Click **Initialize** (or **Save Changes**) and confirm the status.
+5. Click **Initialize** and confirm the status.
+
+Once enabled, the dialog shows the source repository and these buttons:
+
+- **Sync Now** applies the current contents of the centralized repository.
+- **Download** saves the configuration bundle (see below).
+- **Save Changes** saves what you changed in the dialog, for example turning **Enable centralized config** off.
+
+The source repository cannot be changed while it is enabled. To use another repository, turn **Enable centralized config** off, click **Save Changes**, then enable it again.
 
 ## Web UI Behavior When Enabled
 
-When Centralized Config is enabled, the source of truth for configuration is the centralized repository. The web UI reflects this:
+The centralized repository is the source of truth. The web UI reflects this:
 
-- **Global, repository and directory code review settings** (General, What to review, What Kody writes, Linked repositories) stay editable in the web UI, but saving does not apply the change directly. Each page shows a banner — "Centralized config is enabled. Changes on this page are proposed through pull requests in the `<repo>` repository and applied after merge." — with **View active pull request** when one is open, and **Save settings** proposes the change as a pull request on the centralized repository. Once the PR is merged, the change becomes active. You can also edit the files in the centralized repository directly.
-- **Kody Rules** work the same way. Saving an edit does not mutate the rule directly — Kodus opens a pull request on the centralized repository with the proposed change. Once the PR is merged, the change becomes active.
-
-This preserves the "everything is reviewed and versioned" guarantee while keeping the visual editing experience for settings, rules and messages.
+- **Code review settings** at Global, repository and directory scope stay editable in the web UI. Each page shows a banner — "Centralized config is enabled. Changes on this page are saved immediately and proposed through pull requests in the `<repo>` repository. Synchronization reapplies the configuration from that repository." — with **View active pull request** when one is open. **Save settings** applies the change in Kodus right away and opens a pull request with the same change on the centralized repository. If that pull request is closed without merging, the next sync restores the repository's version over the saved setting. Further changes made while that pull request is open are added to it. You can also edit the files in the centralized repository directly.
+- **Kody Rules** work differently. Creating or editing a rule does not change it directly: Kodus opens a pull request on the centralized repository with the proposed change, and the change becomes active once the pull request is merged.
 
 ### UI rules and repo rules coexist
 
-Enabling Centralized Config does **not** wipe rules that were previously created in the web UI, and it does **not** prevent new rules from being created through the UI. Both sources feed the same pool of active rules:
+Enabling Centralized Config does **not** wipe rules that were created in the web UI before, and the repository does not have to contain them. Both sources feed the same pool of active rules:
 
 - Rules imported from the centralized repository are persisted with status `SYNCED`.
-- Rules created directly in the web UI live alongside them and stay active.
+- Rules created in the web UI before you enabled it live alongside them and stay active.
 - At review time, Kodus loads **every active rule** from the database regardless of origin. A rule that exists only in the UI is applied exactly like a rule that exists only in the repo.
-- Rules in status `PENDING_ADD` (a UI/CLI edit that opened a PR not yet merged) are **excluded** from reviews until the PR is merged and the status transitions to `SYNCED`.
+- Rules in status `PENDING_ADD` (created through the UI/CLI, or exported by `init`, with a PR not yet merged) are **excluded** from reviews until the PR is merged and the status transitions to `SYNCED`. The Kody Rules list shows `PENDING_ADD`, `PENDING_EDIT` and `PENDING_DELETE` as **Pending add**, **Pending edit** and **Pending delete**.
+- `init` with the `pr` method puts every existing rule that has no file yet in the initialization PR and marks it `PENDING_ADD`, so those rules do not run in reviews until that PR is merged.
 
-In practice: if you bootstrap the centralized repo by hand and it's missing a rule you already had in the UI, that rule keeps running — it just isn't version-controlled in the repo. To bring it under version control, edit it once in the UI (which opens a PR) or use `init` so Kodus bundles every existing rule into the initialization PR.
+In practice: if you bootstrap the centralized repo by hand and it's missing a rule you already had in the UI, that rule keeps running — it just isn't version-controlled in the repo. To bring it under version control, edit it once in the UI (which opens a PR) or use `init` so Kodus bundles every existing rule into the initialization PR. Do not copy a rule's file into the repository by hand while the UI rule still exists: sync matches rules by file path, so the file becomes a second rule with the same title.
 
 ## Sync States
 
@@ -163,7 +178,7 @@ Each rule that comes from Centralized Config tracks its lifecycle through a stat
 | `PENDING_EDIT` | An edit was proposed via UI/CLI and a PR is open; the existing file has not been updated yet. |
 | `PENDING_DELETE` | A deletion was proposed via UI/CLI and a PR is open; the file still exists on the default branch. |
 
-`PENDING_*` transitions back to `SYNCED` once the corresponding PR is merged.
+`PENDING_ADD` and `PENDING_EDIT` become `SYNCED` once the corresponding PR is merged; a `PENDING_DELETE` rule is deleted. If Kodus's open pull request is closed without merging, a proposed new rule is rejected and a proposed edit or deletion is dropped.
 
 ## Sync Modes
 
@@ -180,7 +195,7 @@ Each rule that comes from Centralized Config tracks its lifecycle through a stat
 
 ## Download Configuration Bundle
 
-You can download a ZIP containing the generated `kodus-config.yml` files and `.kody-rules/` tree that reflect your current settings and rules.
+Click **Download** in the **Centralized Config** dialog to get a ZIP containing the generated `kodus-config.yml` files and `.kody-rules/` tree that reflect your current settings and rules.
 
 Use this when:
 
@@ -195,13 +210,15 @@ Disabling Centralized Config clears the selected source repository and returns a
 
 Rules and settings that were synced in remain in Kodus — they are not deleted on disable.
 
+<span id="cli-dedicated-section" />
+
 ## CLI
 
 Use these commands to manage Centralized Config from terminal workflows and CI scripts.
 
 ### Requirements
 
-- Team key authentication.
+- A team key with **Allow repository configuration via CLI** turned on (**Organization → CLI keys → Configure**).
 - At least one selected repository in Kodus.
 
 Authenticate with:
@@ -225,6 +242,7 @@ kodus config centralized init [owner/repo] --sync-option <pr|manual>
 Notes:
 
 - `--sync-option` defaults to `pr`.
+- Use `.` for the repository of the current directory.
 - If the repository is omitted in an interactive terminal, the CLI prompts for selection.
 - In non-interactive environments, the repository must be provided.
 

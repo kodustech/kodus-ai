@@ -8,192 +8,256 @@ icon: "plug"
 
 ## 环境变量配置
 
-使用此部分填写您的 `.env`。首先从公共 URL 开始，然后设置数据库和 RabbitMQ，最后添加特定于提供商的设置。
+使用本节来填写你的 `.env`。先从公开 URL 开始，然后设置 LLM 提供商、数据库和 RabbitMQ，最后添加特定提供商的设置。`./scripts/generate-secrets.sh` 已经填好了密钥。
 
-### 命名空间配置
+### 公开 URL
 
-这些设置定义了 Web 应用程序和 API 使用的公共 URL 和主机绑定。如果您不使用 MCP Manager，可以在此处跳过 MCP 条目和下面的完整块。
+这些设置告诉 Kodus 它可以通过哪里访问。请将示例域名替换为你自己的域名。
 
 ```env
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    # 公共 API 主机名（例如 kodus-api.yourdomain.com）
-NEXTAUTH_URL="https://kodus-web.yourdomain.com" # Web 应用程序的完整公共基本 URL（例如 https://kodus-web.yourdomain.com）
-API_HOST=0.0.0.0                              # API 主机（本地开发使用 0.0.0.0）
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"          # Full public URL of the web app
+API_FRONTEND_URL="https://kodus-web.yourdomain.com"      # Same URL: CLI login, SSO and GitHub App redirects
+API_USER_INVITE_BASE_URL="https://kodus-web.yourdomain.com" # Same URL: links in emails and review comments
+API_HOST=0.0.0.0
 
-# 仅在您想使用 MCP 功能时需要。
-API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101 # MCP Manager URL
-API_KODUS_MCP_SERVER_URL=http://kodus-api.yourdomain.com/mcp # Kodus MCP Server URL
+# How the web app's server reaches the API. Keep the defaults.
+WEB_HOSTNAME_API=localhost    # Kodus resolves this to GLOBAL_API_CONTAINER_NAME
+WEB_PORT_API=3001
+
+# Only for SSO (Enterprise): the public API URL your identity provider redirects back to.
+# API_URL="https://kodus-api.yourdomain.com"
 ```
+
+<Info>
+  使用默认值 `WEB_HOSTNAME_API=localhost` 时，Web 应用通过 `GLOBAL_API_CONTAINER_NAME`（安装程序默认是 `kodus_api`）访问 API。
+
+  浏览器与 Web 应用通信，而 Web 应用的服务器调用 API。设置了 `WEB_PORT_API` 时，Web 应用会调用 `http://<WEB_HOSTNAME_API>:<WEB_PORT_API>`，因此它必须是 Web 容器可以访问的纯 HTTP 地址。不要将其设置为使用 443 端口的公开 HTTPS 地址。当 `WEB_HOSTNAME_API` 为 `localhost` 时，`install.sh` 会给出警告。你可以忽略该警告：Git 提供商是通过下面的 webhook URL 访问 Kodus 的，而不是通过这个变量。
+</Info>
 
 ### LLM 提供商配置
 
+Kodus 使用你自己的模型运行审查。请选择一种方式来连接它：
+
+- **在应用中（推荐）。** 在侧边栏中打开 **AI providers**，用你的密钥连接提供商，并将模型路由到各项任务。请参阅 [BYOK](/zh/how_to_use/byok)。在那里连接的模型会覆盖 `.env` 中设置的模型。
+- **在 `.env` 中。** 整个实例使用一个模型。声明提供商、模型和密钥：
+
 ```env
-API_LLM_PROVIDER_MODEL="gpt-5"     # 您想要使用的模型
-API_OPENAI_FORCE_BASE_URL="https://your-api.com/v1"  # 您的 API 提供商 URL
-API_OPEN_AI_API_KEY="your-api-key"          # 您的 API 提供商密钥
+API_LLM_PROVIDER=openai_compatible        # See the table below
+API_LLM_PROVIDER_MODEL="your-model-id"
+API_LLM_BASE_URL="https://your-provider.example.com/v1"
+API_LLM_API_KEY="your-api-key"
 ```
 
-查看我们的[模型特定指南](https://docs.kodus.io/zh/knowledge_base/can-i-use-my-own-llm-provider)，获取热门提供商（如 Novita、OpenAI、Anthropic 等）的详细设置说明。
+| `API_LLM_PROVIDER` | 另外需要 |
+| --- | --- |
+| `openai` | 一个密钥：`API_LLM_API_KEY` 或 `API_OPEN_AI_API_KEY`。`API_LLM_BASE_URL` 可选，默认为 `https://api.openai.com/v1`。 |
+| `openai_compatible` | `API_LLM_BASE_URL` 和一个密钥（`API_LLM_API_KEY` 或 `API_OPEN_AI_API_KEY`）。适用于任何 OpenAI 协议的端点，例如网关或托管的开源模型。 |
+| `anthropic` | 一个密钥。`API_LLM_API_KEY` 或 `API_ANTHROPIC_API_KEY`。 |
+| `anthropic_compatible` | `API_LLM_BASE_URL` 和 `API_LLM_API_KEY`。适用于 Anthropic 协议的端点。 |
+| `google_gemini` | 一个密钥。`API_LLM_API_KEY` 或 `API_GOOGLE_AI_API_KEY`。 |
+| `google_vertex` | 将 `API_LLM_API_KEY` 设为 base64 编码的服务账号 JSON，或留空以配合 `GOOGLE_CLOUD_PROJECT` 使用 Application Default Credentials。`API_VERTEX_AI_LOCATION` 设置位置。 |
+
+如果 `API_LLM_PROVIDER` 为空，Kodus 会根据模型名称和已设置的密钥推测提供商。**AI providers** 页面会显示环境变量配置了哪个模型，以及它存在的任何问题。
+
+带有现成配置值的提供商指南：[Chutes](/zh/cookbook/chutes)、[Fireworks](/zh/cookbook/fireworks)、[Groq](/zh/cookbook/groq)、[Moonshot](/zh/cookbook/moonshot)、[Novita](/zh/cookbook/novita)、[Synthetic](/zh/cookbook/synthetic)、[Together](/zh/cookbook/together) 和 [Z.AI](/zh/cookbook/z-ai)。
+
+#### 应用模型配置变更
+
+在现有的 Docker Compose 部署中编辑 LLM 环境变量后，从 `kodus-installer` 目录重新运行安装脚本来应用配置，再用诊断脚本检查模型。
+
+```bash
+./scripts/install.sh
+./scripts/doctor.sh
+```
 
 ### 数据库配置
 
-默认情况下，使用本地容器运行 Postgres 和 MongoDB。更新凭据以符合您的安全要求。
+默认情况下，安装程序会启动 PostgreSQL 和 MongoDB 容器。`.env.example` 中的默认值可以直接使用；`generate-secrets.sh` 会设置密码。
 
 ```env
-# 使用本地容器运行 Postgres 和 MongoDB
+# Use local containers for Postgres and MongoDB
 USE_LOCAL_DB=true
 
-# PostgreSQL 设置
+# PostgreSQL Settings
 API_DATABASE_ENV="development"                # development, production, test
-API_PG_DB_HOST=db_kodus_postgres              # PostgreSQL 主机
-API_PG_DB_PORT=5432                          # PostgreSQL 端口
-API_PG_DB_USERNAME=kodusdev                  # 数据库用户名
-API_PG_DB_PASSWORD=                          # 数据库密码
-API_PG_DB_DATABASE=kodus_db                  # 数据库名称
+API_PG_DB_HOST=db_kodus_postgres              # PostgreSQL host
+API_PG_DB_PORT=5432                           # PostgreSQL port
+API_PG_DB_USERNAME=kodusdev                   # Database username
+API_PG_DB_PASSWORD=                           # Database password
+API_PG_DB_DATABASE=kodus_db                   # Database name
 
-# MongoDB 设置
-API_MG_DB_HOST=db_kodus_mongodb              # MongoDB 主机
-API_MG_DB_PORT=27017                         # MongoDB 端口
-API_MG_DB_USERNAME=kodusdev                  # 数据库用户名
-API_MG_DB_PASSWORD=                          # 数据库密码
-API_MG_DB_DATABASE=kodus                     # 数据库名称
-API_MG_DB_PRODUCTION_CONFIG=''               # 其他生产设置
+# MongoDB Settings
+API_MG_DB_HOST=db_kodus_mongodb               # MongoDB host
+API_MG_DB_PORT=27017                          # MongoDB port
+API_MG_DB_USERNAME=kodusdev                   # Database username
+API_MG_DB_PASSWORD=                           # Database password
+API_MG_DB_DATABASE=kodus_db                   # Database name
+API_MG_DB_PRODUCTION_CONFIG=''                # Additional production settings
 
-# SSL — 本地 Postgres 容器不支持 SSL。该全局开关覆盖所有数据源
-# （default + analytics）。如果保持 false，api 会陷入 SSL 重试连接循环。
-API_DATABASE_DISABLE_SSL=true                # 为本地数据库禁用 SSL
+# SSL — the local Postgres container ships without SSL. This global switch
+# covers ALL data sources (default + analytics). Leaving it false makes the
+# api crash in a connect-retry loop.
+API_DATABASE_DISABLE_SSL=true                 # disable SSL for local DBs
 ```
 
 <Tip>
-  对于内置数据库，可将 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD` 留空并运行 `./scripts/generate-secrets.sh` 来生成，或自行设置。对于外部数据库，请使用现有数据库的密码。
+  对于内置数据库，请将 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD` 留空，并运行一次 `./scripts/generate-secrets.sh` 来生成它们，或者设置你自己的密码。对于外部数据库，请使用现有数据库的密码。
 </Tip>
+
+要使用你自己的 PostgreSQL 或 MongoDB，请设置 `USE_LOCAL_DB=false`，并让 `API_PG_DB_*` 和 `API_MG_DB_*` 变量指向它们。本地容器仍会启动，因为 Kodus 服务在安装程序的 `docker-compose.yml` 中依赖它们，但 Kodus 不会使用它们。你的 PostgreSQL 需要 `vector` (pgvector) 扩展，并且 Kodus 用户必须能够创建 schema。对于强制使用 TLS 的托管 PostgreSQL，请设置 `API_DATABASE_DISABLE_SSL=false`。Kodus 针对 `admin` 数据库对 MongoDB 进行认证，因此请在那里创建用户。也可以使用单个连接字符串：PostgreSQL 用 `DATABASE_URL`，MongoDB 用 `MONGODB_URI`，它们会取代各个主机、端口和凭据变量。
+
+API 支持 `DATABASE_URL` 和 `MONGODB_URI`。使用安装程序时，仍需设置 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD`。安装程序要求这两个值，Compose 也仍会启动内置容器。
 
 ### RabbitMQ 配置
 
-2.0 需要 RabbitMQ。保持 URI 与以下值同步。
+RabbitMQ 是必需的。请保持 URI 与用户、密码和虚拟主机同步。
 
 ```env
-# RabbitMQ 配置
+# RabbitMQ Configuration
 USE_LOCAL_RABBITMQ=true
-RABBITMQ_HOSTNAME=rabbitmq                   # Docker 网络中的 RabbitMQ 主机名
-RABBITMQ_DEFAULT_USER=kodus                  # RabbitMQ 用户（在生产环境中更改）
-RABBITMQ_DEFAULT_PASS=kodus                  # RabbitMQ 密码（在生产环境中更改）
+RABBITMQ_HOSTNAME=rabbitmq                   # RabbitMQ hostname in Docker network
+RABBITMQ_DEFAULT_USER=kodus                  # RabbitMQ user (change in production)
+RABBITMQ_DEFAULT_PASS=kodus                  # RabbitMQ password (change in production)
 
-# 保持 URI 与上面的用户、密码和 vhost 同步
-API_RABBITMQ_URI=amqp://kodus:kodus@rabbitmq:5672/kodus-ai # RabbitMQ 连接 URI
-API_RABBITMQ_ENABLED=true                    # RabbitMQ 是必需的
+# Keep the URI in sync with the user, password, and vhost above
+API_RABBITMQ_URI=amqp://kodus:kodus@rabbitmq:5672/kodus-ai # RabbitMQ connection URI
+API_RABBITMQ_ENABLED=true                    # RabbitMQ is required
 ```
+
+虚拟主机必须是 `kodus-ai`。使用你自己的 broker 时，请设置 `USE_LOCAL_RABBITMQ=false`，启用 `rabbitmq_delayed_message_exchange` 插件，创建 `kodus-ai` 和 `kodus-ast` 虚拟主机，并在 `rabbitmq.conf` 中设置 `consumer_timeout = 7200000`。默认的 30 分钟会关闭运行时间更长的审查所使用的通道。
 
 ### Worker 配置
 
-Worker 容器需要一个角色来确定处理哪种工作负载。Self-hosted 仅运行代码审查
-角色；analytics 角色仅适用于云端。
+worker 容器需要一个角色，才能知道要处理哪种工作负载。主 worker 始终运行 code review 角色。
 
 <Warning>
-  如果将 `WORKER_ROLE` 留空，worker 会在启动时崩溃。由于 `workflow.jobs.*` 队列是 worker 首次连接时创建的，worker 崩溃后 api 和 webhooks 会对每个 webhook 事件抛出 `QueueBind 404` 错误。
+  不设置 `WORKER_ROLE` 会导致 worker 在启动时崩溃。由于 worker 是在首次连接时创建 `workflow.jobs.*` 队列的组件，api 和 webhooks 随后会让每个 webhook 事件都因 `QueueBind 404` 错误而失败。
 </Warning>
 
 ```env
-# Worker 角色 — 必填。Self-hosted = code-review。
+# Worker role — required.
 WORKER_ROLE=code-review
 ```
 
+`analytics` 角色在单独的容器中运行，仅适用于自托管 Enterprise。请参阅 [Analytics Worker](/zh/how_to_deploy/deploy_kodus/analytics_worker)。
+
 ### Git 提供商配置
 
-选择并配置您首选的 Git 提供商。您可以设置一个或多个提供商；对于基本的基于令牌的身份验证，您只需要 webhook URL。
+选择并配置你偏好的 Git 提供商。你可以设置一个或多个提供商；至少需要一个 webhook URL，并且必须以 `https://` 开头。
 
 <Info>
-  Webhook 由独立服务处理（端口 3332）。Webhook URL 必须指向该服务。您可以使用独立的 webhook 域名，或继续使用 API 域名并在反向代理中将 `/.../webhook` 路径转发到 webhook 服务。
-  如果您使用 GitHub 或 GitLab OAuth，请参见 <a href="/zh/how_to_deploy/platforms/github/github_oauth">GitHub OAuth App</a> 或 <a href="/zh/how_to_deploy/platforms/gitlab/gitlab_oauth">GitLab OAuth App</a>。如需 GitHub App 设置，请参见 <a href="/zh/how_to_deploy/platforms/github/github_app">GitHub App</a>。
+  Webhook 由单独的服务处理（3332 端口）。你的 webhook URL 必须能够访问该服务。你可以使用专用的 webhook 域名，也可以继续使用 API 域名，并在反向代理中将 `/.../webhook` 路径转发到 webhook 服务。
+  使用 GitHub 或 GitLab OAuth？请参阅 <a href="/zh/how_to_deploy/platforms/github/github_oauth">GitHub OAuth App</a> 或 <a href="/zh/how_to_deploy/platforms/gitlab/gitlab_oauth">GitLab OAuth App</a>。GitHub App 的设置请参阅 <a href="/zh/how_to_deploy/platforms/github/github_app">GitHub App</a>。
 </Info>
 
 <Tabs>
   <Tab title="Github">
     ```env
-    # 基于令牌的身份验证所需
-    API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"          # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
     ```
 
   </Tab>
   <Tab title="GitLab">
     ```env
-    # 基于令牌的身份验证所需
-    API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"          # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
     ```
 
   </Tab>
   <Tab title="Bitbucket">
     ```env
-    # 基于令牌的身份验证所需
-    GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"    # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
     ```
 
   </Tab>
 
   <Tab title="Azure DevOps">
     ```env
-    # 基于令牌的身份验证所需
-    GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/azure-repos/webhook"    # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/azure-repos/webhook"
+    ```
+
+  </Tab>
+
+  <Tab title="Forgejo">
+    ```env
+    API_FORGEJO_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/forgejo/webhook"
     ```
 
   </Tab>
 </Tabs>
 
+如果有专用的 webhook 主机，请使用该主机。Kodus 使用这些 URL 注册代码库 webhook。使用 [GitHub App](/zh/how_to_deploy/platforms/github/github_app) 时，请在 App 设置中配置 webhook URL。
+
 ### MCP Manager 配置
 
 <Info>
-  仅在您想使用 MCP Manager 时需要。
+  仅在你想使用 MCP Manager 时才需要。
 </Info>
 
-MCP Manager 是将 Kody 连接到外部工具并在插件屏幕中公开这些工具的服务。查看我们的 [MCP Manager 文档](/zh/how_to_deploy/deploy_kodus/mcp_manager)了解更多信息。
+MCP Manager 是将 Kody 连接到外部工具并在 Plugins 界面中展示它们的服务。更多信息请查看我们的 [MCP Manager 文档](/zh/how_to_deploy/deploy_kodus/mcp_manager)。
 
 ```env
-API_MCP_SERVER_ENABLED=false # 如果您想使用 MCP Manager，请更改为 true
----
+API_MCP_SERVER_ENABLED=true   # The installer starts kodus-mcp-manager when this is true
 API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101
-API_KODUS_MCP_SERVER_URL=http://localhost:3001/mcp
-
-# MCP Manager 配置
-API_MCP_MANAGER_LOG_LEVEL=info
-API_MCP_MANAGER_PORT=3101
-API_MCP_MANAGER_NODE_ENV=development
-API_MCP_MANAGER_DATABASE_ENV=development
-API_MCP_MANAGER_CORS_ORIGINS=*
-API_MCP_MANAGER_JWT_SECRET=
-API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,custom
-API_MCP_MANAGER_REDIRECT_URI=http://localhost:3000/setup/mcp/oauth
-API_MCP_MANAGER_PG_DB_SCHEMA=mcp-manager
-API_MCP_MANAGER_ENCRYPTION_SECRET=
+API_KODUS_MCP_SERVER_URL=https://kodus-api.yourdomain.com/mcp
+API_MCP_MANAGER_REDIRECT_URI=https://kodus-web.yourdomain.com/setup/mcp/oauth
 ```
+
+`API_MCP_MANAGER_JWT_SECRET` 和 `API_MCP_MANAGER_ENCRYPTION_SECRET` 由 `generate-secrets.sh` 生成。`.env.example` 中其他的 `API_MCP_MANAGER_*` 变量都有可用的默认值。
 
 ### 外部服务配置（可选）
 
-这些服务是可选的，但能显著提升 Kodus 的代码审查质量。每个服务都需要您创建账号并生成 API 密钥。
+这些服务是可选的，但能提升 Kodus 的代码审查质量。每项都需要你创建账号并生成 API 密钥。
 
 <AccordionGroup>
   <Accordion title="E2B — 代码执行沙箱">
-    E2B 提供安全的沙箱环境，Kodus 用它在审查过程中运行和验证代码。
+    默认情况下，Kodus 在 worker 容器内解析仓库（`SANDBOX_PROVIDER=local`）。E2B 则改为在远程沙箱中运行这项工作，使其与你的主机隔离，适合非常大的仓库。
 
     1. 在 [e2b.dev](https://e2b.dev) 创建账号
-    2. 在您的控制台中生成 API 密钥
-    3. 添加到您的 `.env`：
+    2. 在你的控制台中生成 API 密钥
+    3. 将其添加到你的 `.env`：
 
     ```env
+    SANDBOX_PROVIDER=e2b
     API_E2B_KEY=your-e2b-api-key
     ```
+
+    有关各模式，请参阅 [Sandbox & AST Graph](/zh/how_to_deploy/deploy_kodus/sandbox)。
   </Accordion>
 
   <Accordion title="MorphLLM — 代码编辑模型">
-    MorphLLM 是专为快速、精准代码编辑设计的模型。Kodus 用它更精确地应用审查建议。
+    MorphLLM 是一个专用于快速、准确代码编辑的模型。Kodus 用它来更精确地应用审查建议。
 
     1. 在 [morphllm.com](https://morphllm.com) 创建账号
-    2. 在您的控制台中生成 API 密钥
-    3. 添加到您的 `.env`：
+    2. 在你的控制台中生成 API 密钥
+    3. 将其添加到你的 `.env`：
 
     ```env
     API_MORPHLLM_API_KEY=your-morphllm-api-key
     ```
   </Accordion>
+
+  <Accordion title="Exa — 文档搜索">
+    有了 Exa 密钥，Kody 在审查时会查阅库的文档。没有密钥时，文档搜索处于关闭状态。
+
+    1. 在 [exa.ai](https://exa.ai) 创建账号
+    2. 在你的控制台中生成 API 密钥
+    3. 将其添加到你的 `.env`：
+
+    ```env
+    API_EXA_KEY=your-exa-api-key
+    ```
+  </Accordion>
 </AccordionGroup>
+
+### Beta
+
+要启用需要自托管 Beta 设置的功能，请在 `kodus-installer` 目录中的 `.env` 添加 `BETA_FEATURES=true`。已有部署可运行 `docker compose up -d --no-deps kodus-web api worker webhooks`，让容器加载新变量。各功能仍有各自的套餐和配置要求。
+
+## 后续步骤
+
+- 在 Web 应用、API 和 webhook 服务前面放置[反向代理](/zh/how_to_deploy/deploy_kodus/reverse_proxy)。
+- 新版本发布时[更新](/zh/how_to_deploy/deploy_kodus/updating)安装。
+- 只要发现异常，就运行 `./scripts/doctor.sh`，并参阅[故障排除](/zh/how_to_deploy/deploy_kodus/troubleshooting)。
 
 <Columns cols={2}>
   <Card
@@ -201,14 +265,14 @@ API_MCP_MANAGER_ENCRYPTION_SECRET=
     icon="headset"
     href="https://cal.com/gabrielmalinosqui/30min"
   >
-    与我们的创始人安排通话，获取部署帮助。
+    与我们的创始人预约通话，获取部署方面的帮助。
   </Card>
 
   <Card
-    title="从我们的社区获取帮助"
+    title="在社区获取帮助"
     icon="discord"
     href="https://discord.gg/TFZBRk9fT6"
   >
-    加入我们的社区以获取部署帮助。
+    加入我们的社区，获取部署方面的帮助。
   </Card>
 </Columns>

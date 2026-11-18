@@ -1,81 +1,47 @@
 ---
 title: "トラブルシューティング"
-description: "Kody コードレビューのトラブルシューティング"
+description: "Kody のレビューが始まらない、失敗した、または想定と異なる場合の原因を調べます。"
 ---
-
-## Kody コードレビューが機能しない場合の修正手順
-
-### トークンの問題
-
-トークン経由で接続されている場合は、以下の点を確認してください：
-
-- **GitHub ユーザー**：トークンが組織で有効になっていることを確認します：
-  1. 組織のオーナーである必要があります。
-  2. GitHub で組織の設定に移動します：
-     - 以下の URL を使用し、`YOUR_ORG_NAME` を組織名に置き換えてください：
-       <small>
-         `https://github.com/organizations/YOUR_ORG_NAME/settings/member_privileges`
-       </small>
-  3. **Fine-Grained Personal Access Tokens** の下で、**「Allow access via fine-grained personal access tokens」** が選択されていることを確認します。
-- **個人用アクセストークン（PAT）**：トークンが組織用に設定されており、必要な権限を持っていることを確認します。[トークンを管理](https://github.com/settings/tokens?type=beta)。
-- **トークンの有効期限**：トークンが有効であることを確認します。[トークンのステータスを確認](https://github.com/settings/tokens?type=beta)。
-
-<Frame caption="トークンには組織のロゴが表示されるはずです。個人のプロフィール写真が表示されている場合、トークンは組織アクセスではなく個人アクセスに設定されています。">
-    ![トークンの例](/images/token.png)
-
-</Frame>
-
----
-
-### 設定の問題
-
-- **自動レビュー**：Global スコープの **Code review → General** で **Enable Automated Code Review** がオンになっていることを確認します（[開く](https://app.kodus.io/settings/code-review/global/general)）。無効の場合は、`@kody start-review` で手動でレビューを開始します。
-- **レビューカテゴリ**：Kody がサジェストを提供するために少なくとも 1 つのカテゴリ（Bug、Performance、Security、Business Logic）がオンになっていることを確認し、**Minimum severity to post** も確認します。どちらも **Code review → What to review** にあります（[開く](https://app.kodus.io/settings/code-review/global/review-scope)）。
-- **ブランチレビュー**：デフォルトでは、Kody はデフォルトブランチにマージされる PR をレビューします。追加のブランチを含めるには、**Code review → General** の **Base Branches** を更新してください（[開く](https://app.kodus.io/settings/code-review/global/general)）。
-- **大きな PR**：変更数が多い PR は処理に時間がかかる場合があります。
-
----
-
-### グローバル設定対リポジトリ設定
-
-Kody は階層的な設定システムを使用します。仕組みは以下の通りです：
-
-- **グローバル設定**：デフォルトですべてのリポジトリに適用されます。
-- **リポジトリ固有の設定**：設定されている場合、その特定のリポジトリのグローバル設定をオーバーライドします。
-
-#### トラブルシューティングの手順
-
-1. **グローバル設定を確認**：グローバル設定が正しいことをレビューして確認します。[グローバル設定にアクセス](https://app.kodus.io/settings/code-review/global/general)。
-2. **リポジトリ設定を確認**：
-   - サイドバーの **Code review** グループ上部にあるスコープピッカーを開きます。独自の設定を持つリポジトリ（およびディレクトリ）は **Global** の下に一覧表示されます。
-   - 対象のリポジトリにカスタム設定が設定されているかどうかを確認します。
-   - また、**Repositories** ページ（サイドバー → **Repositories**）で、そのリポジトリがレビュー対象として選択されていることも確認します。
-3. **設定を整合または削除**：
-   - グローバル設定を適用するには、リポジトリ固有の設定をクリアします（スコープピッカーでそのリポジトリの **⋯** メニュー → **Delete configuration**）。
-   - あるいは、ニーズに合わせてリポジトリ固有の設定を調整します。
-
-#### 一般的な症状
-
-- リポジトリの自動レビューがトリガーされない。
-- Kody が予期しない設定やサジェストを適用する。
-- グローバル設定が特定のリポジトリに反映されない。
-
 
 ## Kody からの応答やコメントがない場合
 
-この簡単なチェックリストを実行してください：
+まず、PR のリアクションを確認してください。👀 は Kody がレビューをスキップしたこと、😕 は失敗したこと、🎉 は完了したことを意味します（クリーンなレビューではインラインコメントは投稿されません）。GitHub（GitHub App）と Forgejo では、**Kody Code Review** チェックにスキップの理由が表示されます。[Kody がスキップするタイミング](/ja/how_to_use/code_review/flow#kody-がスキップするタイミング) に、すべての理由とその対処方法が一覧表示されています。
 
-1. PR にレビュー可能なコードの変更が含まれているか（ドキュメントや画像のみでないか）？関連して分析するものがない場合、Kody はスキップする場合があります。
-2. ブランチがスコープ内にあるか？デフォルトでは、追加のベースブランチが設定されていない限り、デフォルトブランチを対象とする PR のみがレビューされます。
-3. **大きな PR：** Kody は最大 2,000 の**レビュー可能なファイル**（**Ignored files** 適用後）を含む PR をレビューします。例：合計 2,500 ファイルの PR で 600 が `.lock` ファイルの場合 → Kody は残りの 1,900 ファイルをレビューします ✅
-4. モード：自動レビューが無効の場合は、`@kody start-review` で手動でトリガーします。
-5. プッシュの頻度：自動一時停止を使用している場合は、クールダウンを待つか手動レビューをリクエストします。
-6. リポジトリのオーバーライド：リポジトリ固有の設定がグローバル設定をオーバーライドできます。必要に応じてクリアまたは整合させてください。
+### 自動レビューが始まらない場合
 
-<Card title="レビューモードと頻度" icon="clock" href="/ja/how_to_use/code_review/configs/general">
-  自動レビュー、頻度、ブランチフィルターを確認します。
-</Card>
+1. **Repositories** でリポジトリが選択されているか、**Review every repository** の対象であることを確認します。
+2. Git プロバイダーが PR イベントを配信したか確認します。[Webhook の配信を診断する方法](/ja/knowledge_base/how-to-fix-webhook-issues)を参照してください。
+3. リポジトリスコープで **Code review → General** を開き、**Automated code review** を確認します。[kodus-config.yml](/ja/how_to_use/code_review/configs/general#kodus-config-yml) を使っている場合は、ファイルの `automatedReviewActive` も確認します。
+4. すぐにレビューを依頼するには PR に `@kody start-review` とコメントします。スキップされた場合は[記録された理由](/ja/how_to_use/code_review/flow#kody-がスキップするタイミング)を確認します。
 
-<Card title="制限と料金" icon="scale-balanced" href="/ja/how_to_use/pricing">
-  サジェストされる制限とそれがレビューに与える影響について学びます。
-</Card>
+### レビューが完了しても提案がない場合
+
+Kody がサジェストを提供するために少なくとも 1 つのカテゴリ（Bug、Performance、Security、Business Logic）がオンになっていることを確認し、**Minimum severity to post** も確認します。どちらも **Code review → What to review** にあります（[開く](https://app.kodus.io/settings/code-review/global/review-scope)）。
+
+## プッシュ後にレビューが止まった場合
+
+一時停止した PR を再開する場合や **Manual** モードでレビューを依頼する場合は、`@kody start-review` とコメントします。毎回のプッシュを自動レビューするには **Automatic** を選びます。各モードの動作は[レビューの頻度](/ja/how_to_use/code_review/flow#レビューの頻度)を参照してください。
+
+## トークンの問題
+
+トークンが有効か、リポジトリにアクセスできるか、プロバイダーに必要な権限が付いているかを確認します。
+
+[GitHub](/ja/how_to_use/code_review/general_config/github_pat) · [GitLab](/ja/how_to_use/code_review/general_config/gitlab_pat) · [Bitbucket](/ja/how_to_use/code_review/general_config/bitbucket_pat) · [Azure DevOps](/ja/how_to_use/code_review/general_config/azure_devops_pat) · [Forgejo](/ja/how_to_use/code_review/general_config/forgejo_pat)
+
+## グローバル設定対リポジトリ設定
+
+**Code review** のスコープピッカーでリポジトリやディレクトリの設定を確認します。[設定の継承](/ja/how_to_use/code_review/configs/inheritance_overrides)で上書き元を確認してください。
+
+`kodus-config.yml` は、そのリポジトリの **Code review → General** で **Prefer kodus-config.yml settings** がオンの場合にのみ適用されます。スコープピッカーの下のバッジに、ファイルが適用されたか、見つからなかったか、利用できないかが表示されます。
+
+## Kody が、この PR はすでにレビュー中だと表示する
+
+同じ PR で別のレビューが実行されている間に送信されたレビューコマンド（`@kody review`、`@kody -v …`）は、待機し、現在のレビューが終了してから開始されます。Kody が待つのをやめた時点（最大で約 25 分）でそのレビューがまだ実行中の場合、Kody は "Kody is already reviewing this PR" とコメントし、そのコマンドを開始しません。レビューが終了するのを待ってから、もう一度依頼してください。
+
+## Kody Code Review の待機中にマージキューが PR を外す
+
+GitHub で `Kody Code Review` が必須チェックになっていて、PR がマージキューに入ると、Kody はキューがテストするコミットに、その PR の最後に完了したレビュー結果を報告します。新しいレビューは実行されません。これには、Kody が GitHub App を通じて接続されている必要があります。パーソナルアクセストークンでは、Kody はチェックを投稿しません。
+
+このチェックは、Kody が PR をレビューしたことを意味するもので、PR に問題がないことを意味するものではありません。クリティカルなサジェストが未対応のままでも成功し、PR 上では、レビュー自体を実行できなかった場合にのみ失敗します。必須にすると、レビューが行われたことは保証されますが、Kody の指摘によってマージがブロックされることはありません。
+
+PR がキューに入った時点で、その PR の最新コミットに完了した Kody のレビューがない場合（たとえば、管理者が必須チェックをバイパスした場合）、チェックは **No finished Kody review** ですぐに失敗し、キューは PR を外します。PR に `@kody start-review` とコメントし、レビューが終了するのを待ってから、もう一度キューに追加してください。**Could not carry Kody's review** は、GitHub がレビュー結果を返さなかったことを意味します。PR をもう一度キューに追加してください。

@@ -1,73 +1,82 @@
 ---
 title: "Arquitetura do Kodus"
-description: "Uma análise aprofundada da infraestrutura técnica do Kodus."
+description: "Os serviços, armazenamentos de dados e redes que uma implantação self-hosted do Kodus executa."
 icon: "puzzle-piece"
 ---
 
 ## Visão Geral
 
-Este documento descreve a arquitetura que sustenta a infraestrutura do Kodus. Nosso sistema é construído sobre uma arquitetura distribuída que utiliza contêinerização e segmentação de rede para garantir máxima escalabilidade, segurança e manutenibilidade.
-
-## Redes e Componentes Principais
-
-A infraestrutura é dividida em redes Docker que separam o acesso público
-do tráfego interno entre serviços:
-
-- shared-network: Serviços públicos e roteamento de borda
-- kodus-backend-services: Comunicação interna entre serviços
-- monitoring-network: Tráfego de métricas e observabilidade (opcional)
-
-## Componentes
+O Kodus roda como um conjunto de contêineres: um app web, uma API, um worker que executa os reviews, um receptor de webhooks e três armazenamentos de dados (PostgreSQL, MongoDB e RabbitMQ). As mesmas imagens rodam no Docker Compose e no Kubernetes.
 
 ```mermaid
 graph LR
-    Web[Kodus Web App] --> API[API Service]
-    API --> RabbitMQ[(RabbitMQ)]
-    Webhooks[Webhooks Service] --> API
-    API --> Worker[Worker Service]
-    Worker --> RabbitMQ
-    API --> Postgres[(Postgres)]
+    Git[Git provider] -->|webhook| Webhooks[Webhooks]
+    Browser[Browser] --> Web[Web app]
+    Web --> API[API]
+    API --> MCP[MCP Manager]
+    API -->|jobs| Postgres[(PostgreSQL)]
+    Webhooks -->|jobs| Postgres
     API --> Mongo[(MongoDB)]
-    Worker --> Postgres
+    Postgres -->|outbox relay| Worker[Worker]
+    Worker <--> RabbitMQ[(RabbitMQ)]
     Worker --> Mongo
+    Worker -->|reviews| LLM[Your LLM provider]
 ```
 
-### 1. Aplicação Web do Kodus
+## Serviços
 
-Nossa plataforma frontend é construída com Next.js, oferecendo uma experiência de usuário fluida por meio de comunicação direta com nossa camada de API.
+| Serviço | Imagem | Porta | O que faz |
+| --- | --- | --- | --- |
+| `kodus-web` | `kodus-ai-web` | 3000 | O dashboard. O servidor dele chama a API em nome do navegador. |
+| `api` | `kodus-ai-api` | 3001 | Autenticação, configurações, Kody Rules e integrações. No Docker Compose, também executa as migrações e os seeds do banco de dados na inicialização. |
+| `worker` | `kodus-ai-worker` | 3334 (health, interna) | Consome as filas de jobs e executa os code reviews. Precisa de `WORKER_ROLE=code-review`. |
+| `webhooks` | `kodus-ai-webhook` | 3332 | Recebe eventos do GitHub, GitLab, Bitbucket, Azure Repos e Forgejo e enfileira um job para cada um. |
+| `kodus-mcp-manager` | `kodus-mcp-manager` | 3101 | Opcional. Intermedeia os plugins MCP. Veja [MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager). |
+| `worker-analytics` | `kodus-ai-worker` | 3334 (health, interna) | Opcional, Enterprise. Mesma imagem do `worker` com `WORKER_ROLE=analytics`. Veja [Analytics Worker](/pt-BR/how_to_deploy/deploy_kodus/analytics_worker). |
 
-### 2. Serviços de Backend Principais
+As imagens são publicadas como `ghcr.io/kodustech/<image>`. As cinco imagens de aplicação compartilham uma única tag de versão por release; a imagem do RabbitMQ (`kodus-rabbitmq`) tem a sua própria.
 
-O stack 2.0 divide as responsabilidades do backend em serviços dedicados:
+O worker é o único serviço que executa reviews, então ele precisa de acesso de saída ao seu provedor Git e ao seu provedor de LLM. Ele analisa os repositórios em um sandbox; veja [Sandbox & AST Graph](/pt-BR/how_to_deploy/deploy_kodus/sandbox).
 
-- API: Camada de serviço central responsável pela lógica de negócios e processamento de requisições
-- Worker: Processamento assíncrono para filas e tarefas em segundo plano
-- Webhooks: Serviço dedicado para webhooks de provedores Git
-- Analytics Worker: Worker opcional de ingestão (`WORKER_ROLE=analytics`) que alimenta os dashboards do Cockpit. Apenas Enterprise — veja [Analytics Worker](/pt-BR/how_to_deploy/deploy_kodus/analytics_worker)
+### Endpoints de health
 
-### 3. MCP Manager
+| Serviço | Endpoint |
+| --- | --- |
+| Web | `GET /api/health` |
+| API | `GET /health` (verifica RabbitMQ e PostgreSQL), `GET /health/simple` |
+| Webhooks | `GET /health`, `/health/live`, `/health/ready` |
+| Worker | `GET /health` na porta 3334, não publicada pelo instalador |
+| MCP Manager | `GET /health` |
 
-O MCP Manager cataloga provedores e integrações, e os disponibiliza para o Kodus para que
-as equipes possam instalar MCPs pela tela de Plugins.
+## Como um review começa
 
-### 4. Armazenamentos de Dados
+1. O provedor Git chama o serviço de webhooks. Ele valida o evento e registra um job e uma mensagem de outbox no PostgreSQL, em uma única transação.
+2. O worker repassa a mensagem de outbox para o RabbitMQ, para que um evento não seja perdido se o broker ficar indisponível por um breve período.
+3. O worker consome o job do RabbitMQ, carrega o pull request, executa o review com o seu provedor de LLM e publica o resultado no pull request.
 
-O Kodus utiliza dois bancos de dados:
+O worker cria as filas `workflow.jobs.*` na sua primeira conexão. Se ele nunca iniciou, por exemplo porque `WORKER_ROLE` não está definido, os webhooks e a API falham com erros `QueueBind 404`.
 
-- Postgres: Dados relacionais e metadados de embeddings
-- MongoDB: Armazenamento flexível de documentos
+## Armazenamentos de dados
 
-### 5. Mensageria e Observabilidade
+- **PostgreSQL** (com a extensão pgvector): dados da aplicação, jobs de workflow e o outbox, o AST graph de cada repositório, e os schemas do MCP Manager e do data warehouse de analytics.
+- **MongoDB**: dados de pull requests e reviews, Kody Rules e leases de sandbox.
+- **RabbitMQ**: as filas de jobs nas quais o worker publica e das quais consome. A imagem RabbitMQ do Kodus inclui o plugin delayed message exchange e cria os virtual hosts `kodus-ai` e `kodus-ast`. Se você usa seu próprio broker, habilite o plugin `rabbitmq_delayed_message_exchange`, crie os dois virtual hosts e defina `consumer_timeout = 7200000`.
 
-O RabbitMQ é obrigatório na versão 2.0, fornecendo comunicação assíncrona confiável
-entre a API, o worker e os webhooks.
+Com o Docker Compose, você pode apontar o Kodus para o seu próprio PostgreSQL, MongoDB ou RabbitMQ; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#configuração-do-banco-de-dados).
 
-Prometheus e Grafana são opcionais e utilizados para monitoramento e visualização.
+## Redes
 
-### 6. Serviços Auxiliares (Kodus Cloud)
+O instalador cria três redes Docker externas:
 
-O Kodus Cloud inclui serviços auxiliares de código fechado (faturamento e
-integrações de chat) que não são necessários para implantações self-hosted. Analytics não é exclusivo da cloud: self-hosted Enterprise licenciado roda o mesmo worker de ingestão localmente.
+- `shared-network`: web, api, worker, webhooks, MCP Manager e RabbitMQ.
+- `kodus-backend-services`: todos os serviços do Kodus, além de PostgreSQL e MongoDB.
+- `monitoring-network`: somente o RabbitMQ.
+
+PostgreSQL e MongoDB ficam conectados apenas à `kodus-backend-services`. O RabbitMQ expõe métricas do Prometheus na porta 15692; o Kodus não inclui Prometheus nem Grafana.
+
+## Recursos Enterprise
+
+Uma chave de licença desbloqueia os recursos Enterprise em uma instância self-hosted. Defina `KODUS_LICENSE_KEY` no `.env` ou cole a chave na página **Subscription**. O analytics do Cockpit e o SSO precisam dela.
 
 ## Próximos Passos
 <CardGroup cols={2}>

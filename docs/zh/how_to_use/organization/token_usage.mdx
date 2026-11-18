@@ -1,0 +1,51 @@
+---
+title: "Token 用量"
+description: "按天、拉取请求、审查运行、开发者、模型和任务,查看您的审查使用了多少 token 以及成本。"
+---
+
+**Organization → Token usage** 显示审查消耗的 token 数量及预估费用。
+
+Owner、Billing Manager 和 Repo Admin 可以打开面板，或登录后运行 `kodus usage tokens` 查询用量。
+
+如需带提醒的月度预算,请参阅[月度支出上限](/zh/how_to_use/spend-limit),该页面会链接到这里查看完整明细。
+
+要在终端中查看 token 用量和估算费用，或将数据导出为 JSON，请使用 [`kodus usage tokens`](/zh/how_to_use/cli/commands#usage-tokens)。
+
+## 筛选器
+
+- **Models**:勾选要包含的模型。默认全部选中。
+- **Repository**:在您已连接代码库时显示。
+- **View**:**Daily**、**By PR**、**By Review** 或 **By Developer**。**By PR** 会增加一个 **PR Number** 输入框,**By Developer** 会增加一个开发者选择器。
+- **Date range**:**Last week**、**Last 15 days**、**Last month**、**Last 3 months** 或自定义日期。默认是最近 15 天。
+
+## 摘要卡片
+
+所选范围和筛选条件下的总计,并在显示时附上与相同时长的上一周期相比的变化。
+
+| 卡片 | 显示内容 |
+| --- | --- |
+| **Total cost** | 估算成本,以及每天和每个 PR 的平均值 |
+| **Total tokens** | 使用的全部 token,包括推理 token |
+| **Uncached input** | 按完整输入价格计费的输入 token |
+| **Cache read** | 由提供方的提示词缓存提供的输入 token,按折扣价计费,并显示由此节省的金额 |
+| **Output** | 输出 token,包括推理 |
+| **Cache write** | 填充缓存条目的输入 token。仅在有此类 token 时显示 |
+
+成本根据每个模型的单 token 价格估算。没有已知价格的模型会显示 **Price unavailable**,并按零计算。
+
+如果您设置了月度预算,**Monthly spend limit (BYOK)** 进度条会显示本月支出与预算的对比。它始终覆盖当前月份,并忽略日期范围。
+
+## 图表
+
+图表跟随您选择的 **View**,**Tokens** / **USD** 用于切换其单位。**By PR**、**By Review** 和 **By Developer** 按 token 显示消耗最多的 24 项:
+
+- **Daily**:**Usage over time**,按未缓存输入、缓存、输出和推理拆分。
+- **By PR**:**Top pull requests**,即使用 token 最多的 PR。
+- **By Review**:**Top review runs**。每个条形代表一次审查运行,因此审查了两次的 PR 会出现两次。下方的 **Review activity** 表按成本从高到低列出每次运行及其 PR、开始时间、模型、token 和成本,最多 100 次运行。缩小筛选范围可查看其余部分。
+- **By Developer**:**Top developers**,用量归属于 PR 作者。
+
+## Token 去向
+
+**Where tokens go** 按任务(例如 Code Review、Kody Rules Review、PR Summary、Conversation 和 Custom Agents)拆分支出,并用一个条形显示输入、缓存、输出和推理的构成。展开某个任务可查看它运行的步骤,以及哪些模型在何时运行了它。无法关联到任务的支出会列为 **Unrouted**。
+
+其下每个模型都有自己的一行及其成本。展开某一行可查看其 token 和按 token 类型划分的成本,将鼠标悬停在价格图标上可查看该模型的费率。

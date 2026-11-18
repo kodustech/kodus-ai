@@ -1,34 +1,35 @@
 ---
 title: "Qual é a diferença entre Regras de Revisão e Memórias"
-description: "Entenda quando usar Regras de Revisão vs Memórias no Kody para obter os melhores resultados de revisão de código."
+description: "Entenda quando usar Regras de Revisão ou Memórias no Kody para obter os melhores resultados de revisão de código."
 ---
 
-Na interface de Regras do Kody, você configura duas coisas diferentes, e saber quando usar cada uma torna suas revisões de código mais eficazes.
+Na interface de Kody Rules, você configura duas coisas diferentes, e saber quando usar cada uma torna suas revisões de código mais eficazes.
 
 Uma regra prática:
 
 - **Memórias** ensinam ao Kody como seu codebase funciona para que futuras revisões e sugestões sejam mais relevantes.
-- **Regras de Revisão** dizem ao Kody o que ele deve sinalizar quando um PR não estiver batendo com seus padrões.
+- **Regras de Revisão** dizem ao Kody o que sinalizar quando um PR não bate com seus padrões.
 
 ## Regras de Revisão
 
-Regras de Revisão são **verificações tradicionais de revisão de código** que são executadas durante a etapa dedicada de revisão. Elas analisam diffs de arquivos ou o PR completo em relação aos seus critérios definidos.
+Regras de Revisão são **verificações** que rodam durante o code review. Cada regra é aplicada ao diff de um arquivo ou ao PR inteiro, e o Kody reporta uma sugestão quando a mudança a quebra.
 
 **Melhores para:**
 - Limites de arquitetura ("a camada de domínio não deve importar infraestrutura")
 - Padrões de código ("evite `==` em condições de loop")
 - Requisitos de PR ("todo arquivo de serviço deve ter um teste")
-- Validação estrutural usando variáveis como `fileDiff`, `pr_files_diff`
+- Requisitos sobre o próprio PR, como a descrição ou o tamanho
 
 **Como funcionam:**
-- Executadas por arquivo ou por PR (o **Execution mode** da regra)
-- Executadas apenas durante a revisão de código
-- Suportam referências de arquivo (`@file`, `@repo`) e funções MCP
+- Rodam por arquivo ou por PR (o **Execution mode** da regra)
+- Rodam apenas durante o code review
+- Podem apontar para um arquivo do repositório com `@file:path/to/file`
 - Produzem sugestões com níveis de severidade
+- Podem ser limitadas a caminhos e adicionadas a partir da Rules Library
 
 ## Memórias
 
-Memórias são **instruções contextuais persistentes** injetadas em todas as interações — revisões de código, conversas e sugestões de IA. Elas representam o conhecimento de contexto que o Kody deve carregar sobre seu codebase, suas convenções e preferências.
+Memórias são **instruções contextuais persistentes** que o Kody usa em code reviews e em conversas com o Kody. Elas representam o conhecimento de contexto que o Kody deve carregar sobre seu codebase, suas convenções e suas preferências.
 
 **Melhores para:**
 - Contexto do codebase ("este repositório espelha uma API de terceiros, então alguns campos externos permanecem intencionalmente em snake_case")
@@ -37,11 +38,11 @@ Memórias são **instruções contextuais persistentes** injetadas em todas as i
 - Contexto arquitetural ("este serviço segue arquitetura hexagonal e mantém adapters nas bordas")
 
 **Como funcionam:**
-- Injetadas como contexto de alta prioridade em todos os prompts
+- Adicionadas como contexto de alta prioridade em code reviews e conversas
 - Melhoram sugestões futuras ao dar ao Kody contexto específico do repositório
 - Criadas via conversa (`@kody remember: ...`) ou manualmente com **New memory** na aba **Memories** de **Code review → Kody Rules**
-- Com escopo de diretório, repositório ou nível de organização
-- O Kody deduplica automaticamente e resolve conflitos entre memórias
+- Com escopo de diretório, repositório ou organização
+- O Kody confere as memórias existentes antes de salvar uma nova, e ignora duplicatas ou atualiza a memória existente
 
 ## Quando usar cada uma
 
@@ -50,12 +51,12 @@ Memórias são **instruções contextuais persistentes** injetadas em todas as i
 | Verificar se existe um arquivo de teste para cada serviço | Regra de Revisão |
 | "Este repositório espelha uma API externa, então alguns campos de resposta permanecem intencionalmente em snake_case" | Memória |
 | A descrição do PR deve seguir um template | Regra de Revisão |
-| "Neste serviço, os testes normalmente ficam ao lado da implementação, não em uma pasta central de testes" | Memória |
+| "Neste serviço, os testes normalmente ficam ao lado dos arquivos de implementação, não em uma pasta central de testes" | Memória |
 | Sinalizar importações que violam camadas de arquitetura | Regra de Revisão |
 | "O módulo de autenticação está no meio de uma migração, então prefira mudanças incrementais a refactors amplos" | Memória |
 
 ## Posso converter entre elas?
 
-Não diretamente — não há uma ação de conversão no app. Memórias pendentes aparecem na seção **Pending review** de **Code review → Kody Rules**, onde você pode aprová-las (**Approve**) ou descartá-las (**Discard**). Se uma memória precisar de uma aplicação mais estruturada com caminhos de arquivo e níveis de severidade, crie uma Regra de Revisão com **New rule** na aba **Review Rules** e exclua ou descarte a memória.
+Não diretamente — não há uma ação de conversão no app. Memórias pendentes aparecem na seção **Pending review** de **Code review → Kody Rules**, onde você pode usar **Approve** ou **Discard**. Se uma memória precisar de uma aplicação mais estruturada, com caminhos de arquivo e níveis de severidade, crie uma Regra de Revisão com **New rule** na aba **Review Rules** e exclua ou descarte a memória.
 
-Para detalhes, consulte [Regras do Kody](/pt-BR/how_to_use/code_review/configs/kody_rules).
+Para detalhes, consulte [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).

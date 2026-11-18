@@ -1,46 +1,40 @@
 ---
 title: "重大度しきい値"
-description: "Kody が PR に投稿するフィードバックの量を制御します — 投稿する最小重大度（旧 Review Filters / Suggestion Control）。"
+description: "投稿する最小重大度を設定して、Kody がプルリクエストに投稿するフィードバックの量を制御します。"
 ---
 
-重大度しきい値（旧 **Review filters**、さらにその前は **Suggestion Control**）は、Kody の検出結果のうち
-**どれを実際に投稿するか**を決めます。サイドバーで **Code review → What to review** を開くと、
-**Minimum severity to post** カードに設定があります。グローバル・リポジトリ・ディレクトリの各レベルで
-設定できます —
-[設定の継承とオーバーライド](/ja/how_to_use/code_review/configs/inheritance_overrides) を参照してください。
+重大度しきい値は、Kody の検出結果のうち **どれを** 投稿するかを決めます。**Code review → What to review** を開くと、**Minimum severity to post** カードに設定があります。Global、Repository、Directory の各スコープで設定できます。[設定の継承とオーバーライド](/ja/how_to_use/code_review/configs/inheritance_overrides) を参照してください。
 
 ## Minimum severity to post
 
-Kody はすべてのサジェストに重大度を割り当て、スライダーで選択したレベル以上のものだけを投稿します。
-デフォルトは **Medium** です。Kody はそれより低い重大度の問題も検出しますが、コメントしないだけです。
+Kody はすべての検出結果に重大度を割り当て、スライダーで選択したレベル以上のものだけを投稿します。デフォルトは **Medium** です。Kody はそれより低い重大度の問題も検出しますが、コメントしないだけです。
 
-| レベル | 対象 |
+| レベル | 主な検出結果 |
 | --- | --- |
-| **Low/All** | コード品質を少し良くする軽微な改善 — 小さな最適化、スタイルの改善、細かな洗練。 |
-| **Medium**（デフォルト） | 推奨されるが緊急ではない中程度の改善：ベストプラクティス、将来の技術的負債の予防。 |
-| **High** | 近いうちに対応すべき重大な問題 — 重要な品質改善、潜在的リスク、実質的な技術課題。 |
-| **Critical** | 即時対応が必要で、安定性・セキュリティ・機能に深刻な影響を与えうる問題。 |
+| **Low/All** | メンテナンス上や見た目の不整合、軽微な冗長な処理、誤解を招くログ行。 |
+| **Medium**（デフォルト） | 影響範囲が限られた不具合：誤ったメトリクスやメッセージ、単発のリクエスト失敗、通常の不正入力の処理、限定的なセキュリティ上の弱点、開発をブロックするだけの lint や CI の失敗。 |
+| **High** | サポート対象のパスが有効な入力で使えなくなる、必須の永続的な処理が失敗する、データが誤って破棄される、シートやクォータの上限といった受け入れ制御がバイパスされる。 |
+| **Critical** | 認証バイパス、広範な不正管理操作、攻撃者が制御するコード実行、キューに入った処理の全体的な損失につながる具体的な経路。 |
 
 <Tip>
   大きな PR でのノイズは、たいてい量ではなく重大度の問題です。他の手を打つ前にまず
-  **High** に上げてください — 実際のバグは残したまま、細かい指摘だけが落ちます。
+  **High** に上げてください。実際のバグはすべて残したまま、細かい指摘だけが落ちます。
   [レビューのノイズを減らす方法](/ja/knowledge_base/how-to-reduce-code-review-noise) を参照してください。
 </Tip>
 
+[コーディングエージェント向け指示](/ja/how_to_use/code_review/configs/rules_file_detection) による検出結果も、他と同じようにしきい値に従います。決定論的な検出結果（ベータ）は、どの重大度でも投稿されます。独自の最小重大度を設定しているカスタムエージェントは、その設定を使用します。
+
 ## Kody Rules にしきい値を適用
 
-同じカード内のトグルで、**デフォルトはオフ**です。
+同じカード内のスイッチで、**デフォルトはオフ** です。
 
-- **オフ** — [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) の検出結果は重大度
-  しきい値を**バイパス**します。チームが書いたルールは、割り当てられた重大度にかかわらず
-  常に報告されます。
-- **オン** — Kody Rules も他のサジェストと同じ重大度しきい値を通ります。
+- **オフ** — [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) の検出結果は、重大度しきい値を **バイパス** します。チームが書いたルールは、割り当てられた重大度にかかわらず常に報告されます。
+- **オン** — Kody Rules も、他のすべての検出結果と同じしきい値を通ります。
 
-ルールがシグナルよりノイズを生んでいる場合を除き、オフのままにしてください。Kody Rule の
-意義は、そもそもチームが「これは重要だ」と決めた点にあります。
+ルールがシグナルよりノイズを多く生んでいる場合を除き、オフのままにしてください。Kody Rule の意義は、そもそもチームが「これは重要だ」と決めた点にあります。
 
 <Note>
-  `kodus-config.yml` では、この 2 つの設定は `suggestionControl` の下にあります：
+  `kodus-config.yml` では、これらの設定は `suggestionControl` の下にあります。
 
   ```yaml
   suggestionControl:
@@ -48,19 +42,18 @@ Kody はすべてのサジェストに重大度を割り当て、スライダー
       applyFiltersToKodyRules: false
   ```
 
-  このファイルは `kodusConfigFileOverridesWebPreferences` を有効にして初めて読み込まれる点に
-  注意してください — [一般設定](/ja/how_to_use/code_review/configs/general) を参照。
+  このファイルは、**Prefer kodus-config.yml settings** がオンの場合にのみ読み込まれます。
+  [General](/ja/how_to_use/code_review/configs/general#設定の優先度) を参照してください。
 </Note>
 
 ## ノイズを減らす他の方法
 
-重大度しきい値は大雑把な道具です。より的を絞りたい場合は：
+重大度しきい値は大雑把な道具です。より的を絞りたい場合は、次の方法があります。
 
-- **Ignored files** — 生成コード、ロックファイル、vendored ディレクトリを丸ごとスキップします。
-  [一般設定](/ja/how_to_use/code_review/configs/general) を参照。
-- **カテゴリ** — 役に立たないリポジトリでは、**What to review** のスイッチでカテゴリごと（例：Performance）
-  オフにします。
-- **ディレクトリ単位の設定** — モノレポでフォルダごとに厳しめ／緩めのしきい値を適用します。
-  [ディレクトリレベル設定](/ja/how_to_use/code_review/configs/directory_level) を参照。
-- **Kody Rules** — チームが本当に重視することを明文化し、汎用的な助言ではなく自分たちの
-  基準からシグナルが出るようにします。
+- **Ignored files** — 生成コード、ロックファイル、vendored ディレクトリをスキップします。
+  [General](/ja/how_to_use/code_review/configs/general#無視するファイル) を参照してください。
+- **カテゴリ** — Performance などのカテゴリ全体を、
+  [What to review](/ja/how_to_use/code_review/configs/what_to_review) のスイッチでオフにします。
+- **ディレクトリレベルの設定** — モノレポでフォルダごとに厳しめまたは緩めのしきい値を設定します。
+  [ディレクトリレベル設定](/ja/how_to_use/code_review/configs/directory_level) を参照してください。
+- **Kody Rules** — チームが重視することを明文化し、汎用的な助言ではなく自分たちの基準からシグナルが出るようにします。

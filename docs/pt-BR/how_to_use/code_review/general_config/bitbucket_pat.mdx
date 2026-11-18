@@ -5,56 +5,64 @@ description: "Gere o API Token do Bitbucket Cloud que o Kody precisa para o code
 
 ## Introdução
 
-Para habilitar Kody a realizar code reviews automáticos no Bitbucket Cloud, você precisa gerar um **Token de API**. Esse token permite que Kody acesse seus repositórios, pull requests, webhooks, issues, pipelines etc., com as permissões específicas listadas abaixo.
+Para habilitar o Kody a realizar code reviews automáticos no Bitbucket Cloud, você precisa gerar um **API Token**. Esse token permite que o Kody acesse seus repositórios, pull requests, webhooks e issues, com as permissões específicas listadas abaixo.
 
 ---
 
-## Gerando o Token de API no Bitbucket
+## Gerando o API Token no Bitbucket
 
-1. Acesse diretamente a [página de tokens API do Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens) (ou, no seu perfil Atlassian, navegue até **Security → API tokens**).
+1. Abra diretamente a [página de API tokens da Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens) (ou, no seu perfil da Atlassian, navegue até **Security → API tokens**).
 2. Clique em **Create API token with scopes**.
 3. Dê um nome ao token (por exemplo `kody_code_review`) e defina uma data de expiração.
 4. Se solicitado, selecione **Bitbucket** como aplicativo.
 5. Selecione todos os escopos necessários (veja abaixo).
 6. Revise suas escolhas e clique em **Create token**.
-7. **Copie** o token imediatamente e armazene-o com segurança — após a criação você não poderá visualizá-lo novamente.
+7. **Copie** o token imediatamente e guarde-o com segurança — depois da criação você não poderá vê-lo novamente.
 
 ---
 
-## Escopos Necessários para Kody
+## Escopos necessários para o Kody
 
-O token deve incluir **todos** os seguintes escopos para funcionalidade completa com Kody:
+O token deve incluir **todos** os escopos a seguir para o funcionamento completo com o Kody:
 
-| Escopo                        | Finalidade / O que habilita                                                                  |
+| Escopo                        | Finalidade / O que habilita                                                                 |
 | ----------------------------- | ------------------------------------------------------------------------------------------- |
-| `read:user:bitbucket`         | Lê informações básicas do usuário ou conta.                                                  |
-| `read:workspace:bitbucket`    | Lê informações sobre o workspace (projetos, membros, repositórios).                          |
-| `read:project:bitbucket`      | Lê metadados sobre projetos.                                                                 |
-| `read:repository:bitbucket`   | Lê código, branches, arquivos fonte em repositórios.                                         |
-| `write:repository:bitbucket`  | Modifica conteúdos do repositório quando necessário (comentários, atualizações de arquivos, etc.). |
-| `admin:repository:bitbucket`  | Operações administrativas no repositório: gerenciar webhooks, permissões, configurações do repositório. |
-| `read:pullrequest:bitbucket`  | Visualiza pull requests, seus status e comentários.                                          |
-| `write:pullrequest:bitbucket` | Cria ou modifica comentários de pull request; aprova, recusa ou mescla PRs.                  |
-| `read:issue:bitbucket`        | Lê informações do rastreador de issues.                                                      |
-| `read:webhook:bitbucket`      | Visualiza webhooks existentes e suas configurações.                                          |
-| `write:webhook:bitbucket`     | Cria ou atualiza webhooks.                                                                   |
-| `read:pipeline:bitbucket`     | Lê status/logs de pipelines associados a repositórios ou PRs.                               |
+| `read:user:bitbucket`         | Ler informações básicas do usuário ou da conta.                                             |
+| `read:workspace:bitbucket`    | Ler informações do workspace (projetos, membros, repositórios).                             |
+| `read:project:bitbucket`      | Ler metadados dos projetos.                                                                 |
+| `read:repository:bitbucket`   | Ler código, branches e arquivos-fonte nos repositórios.                                     |
+| `write:repository:bitbucket`  | Fazer commit de arquivos nas funcionalidades que alteram arquivos do repositório.           |
+| `read:pullrequest:bitbucket`  | Ver pull requests, seus status e comentários.                                               |
+| `write:pullrequest:bitbucket` | Criar ou modificar comentários de pull request; aprovar, recusar ou fazer merge de PRs.     |
+| `read:issue:bitbucket`        | Ler informações do issue tracker.                                                           |
+| `read:webhook:bitbucket`      | Ver os webhooks existentes e suas configurações.                                            |
+| `write:webhook:bitbucket`     | Criar ou atualizar webhooks.                                                                |
+| `delete:webhook:bitbucket`    | Remover os webhooks do Kodus quando você exclui a integração.                               |
 
-> ⚠️ Certifique-se de conceder apenas essas permissões necessárias; evite conceder mais do que o necessário para reduzir o risco de segurança.
+O Kody não usa `admin:repository:bitbucket` nem `read:pipeline:bitbucket`. Os status de CI são lidos com `read:repository:bitbucket`.
+
+> ⚠️ Conceda apenas essas permissões necessárias; evite conceder mais do que o preciso para reduzir o risco de segurança.
 
 ---
 
 ## Adicionando o Token ao Kody
 
-- Uma vez que o token for gerado com todos os escopos necessários, cole-o no Kodus: durante o onboarding (**Connect your Git tool** → aba **Bitbucket** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Bitbucket**. Preencha **Username**, **Email** e **API token** e clique em **Validate and save**.
-- Certifique-se de que o token tem `admin:repository:bitbucket` (ou equivalente) se Kody precisar configurar webhooks ou ouvir eventos de pull request.
+- Com o token gerado e todos os escopos necessários selecionados, cole-o no Kodus: durante o onboarding (**Connect your Git tool** → aba **Bitbucket** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Bitbucket**. Preencha **Username**, **Email** e **API token** e clique em **Validate and save**.
+- Para criar o webhook que entrega os eventos de pull request, o Kody precisa de `read:webhook:bitbucket` e `write:webhook:bitbucket`, e o usuário do token precisa ser admin do repositório.
+- Para trocar um token, clique em **Reset** no card **Bitbucket** em **Repositories**, escolha **Just reset the integration** e conecte novamente com o novo token.
 
 ---
 
-## Notas Importantes
+## Bitbucket Data Center
 
-- O token será **exibido apenas uma vez** após a criação. Salve-o com segurança, pois você **não** poderá visualizá-lo novamente.
+Para um Bitbucket Data Center self-hosted, ative **Bitbucket Data Center** (marcado como **Alpha**) no mesmo formulário. O API token e seus escopos acima valem apenas para o Bitbucket Cloud. O Data Center se conecta com autenticação básica: preencha **Username**, **Bitbucket Data Center Base URL** (por exemplo `https://bitbucket.your-company.com`) e **Basic auth password** e clique em **Validate and save**.
+
+---
+
+## Notas importantes
+
+- O token será **exibido apenas uma vez** na criação. Guarde-o com segurança, porque você **não** poderá vê-lo novamente.
 - Defina uma **data de expiração** se possível, para limitar o tempo de vida do token.
 - Se o token for comprometido, revogue-o imediatamente e crie um novo.
 - Audite periodicamente os tokens e seus escopos para confirmar que ainda são necessários e válidos.
-- Verifique se o seu plano/conta do Bitbucket permite todos os escopos acima; alguns escopos (projeto, workspace, admin) podem depender da assinatura/permissões.
+- Verifique se o seu plano / conta do Bitbucket permite todos os escopos acima; alguns escopos (project, workspace) podem depender da assinatura / das permissões.

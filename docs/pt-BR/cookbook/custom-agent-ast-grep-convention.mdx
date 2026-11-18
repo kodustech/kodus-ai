@@ -10,9 +10,11 @@ Algumas convenções são estruturais: "nunca chame esta função aqui", "sempre
 
 O exemplo é um serviço de checkout com uma convenção: **valores são centavos inteiros tratados pelo helper `Money`, nunca floats.**
 
+Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial. O Kodus self-hosted também precisa de `BETA_FEATURES=true`.
+
 ## Passo 1 — Escreva as regras no repositório
 
-Faça commit de um arquivo de regras na branch padrão. A Kodus lê esse arquivo da branch de destino de cada pull request, então um pull request não consegue afrouxar as regras que o conferem.
+Faça commit de um arquivo de regras na branch padrão. O Kodus lê esse arquivo da branch de destino de cada pull request, então um pull request não consegue afrouxar as regras pelas quais ele é conferido.
 
 ```yaml rules/money.yml
 id: no-parsefloat-amount
@@ -83,9 +85,9 @@ A dica do campo lista as regras encontradas: `2 rules in rules/money.yml: no-par
 | **Minimum severity** | Team minimum |
 | **Suggested fix** | When confident |
 
-Clique em **Save**.
+Clique em **Save settings**.
 
-## Passo 5 — Try it
+## Passo 5 — Teste
 
 Rode o **Try it** num pull request que adiciona um `parseFloat` num preço. O apontamento fica como **kept**, e o comentário cita a regra:
 
@@ -94,7 +96,9 @@ Rode o **Try it** num pull request que adiciona um `parseFloat` num preço. O ap
 > Parse amounts with Money.parse; parseFloat turns cents into a float.
 ```
 
-Um apontamento que o agente tirou de `docs/money.md` cita o doc, e é descartado se a citação não estiver no doc na branch de destino.
+Um apontamento que o agente levantou a partir de `docs/money.md` cita o doc, e é descartado se a citação não estiver no doc na branch de destino.
+
+Se **Warnings** disser que o ast-grep não está instalado no sandbox, o agente rodou sem as regras.
 
 ## Checklist
 

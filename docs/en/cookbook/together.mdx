@@ -6,168 +6,96 @@ icon: "users"
 
 ## How Together AI works
 
-Together AI makes it easy to run leading open-source models using only a few lines of code. The platform provides fast inference, OpenAI-compatible APIs, and access to cutting-edge models like Llama 4, DeepSeek, and more. Built for developers who need reliable, scalable AI infrastructure without the complexity.
+Together AI serves open-source models, such as DeepSeek, Kimi, GLM and gpt-oss, through an **OpenAI-compatible** API. Kodus talks to it through the OpenAI-compatible provider, so there are no code changes, only BYOK credentials.
 
 ## Recommended Models
 
-We recommend good coding models with high context windows and competitive pricing.
-
 <Info>
-  For the most updated information, please visit [Together AI's pricing page](https://www.together.ai/pricing).
+  Together's serverless catalog changes often. See the [serverless models list](https://docs.together.ai/docs/serverless-models) for current model IDs, context lengths and pricing. Use the exact API model string.
 </Info>
 
-| Model                              | Pricing (1M tokens) | Context Window |
-| ---------------------------------- | ------------------- | -------------- |
-| **Llama 4 Maverick** `recommended` | $0.27/$0.85         | ~128k tokens   |
-| **DeepSeek-V3**                    | $1.25               | ~128k tokens   |
-| **Llama 3.1 70B Turbo**            | $0.88               | ~128k tokens   |
-| **Qwen 2.5 72B**                   | $1.20               | ~128k tokens   |
+Together lists these serverless chat models with function calling and structured outputs:
+
+| Model ID | Context Window |
+| -------- | -------------- |
+| `moonshotai/Kimi-K3` | ~1M tokens |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | ~1M tokens |
+| `zai-org/GLM-5.3` | ~1M tokens |
+| `openai/gpt-oss-120b` | ~131k tokens |
 
 ## Creating API Key
 
-<Warning>Together AI Account is required to create API Key.</Warning>
+<Warning>A Together AI account is required to create an API key. Together is prepaid: you must buy credits before you can create keys, and API access is suspended when the balance reaches zero. See [Together's billing docs](https://docs.together.ai/docs/billing).</Warning>
 
-Go directly to [Together AI Console](https://api.together.ai) to create a new API Key.
+Go directly to [Together's API keys page](https://api.together.ai/settings/projects/~current/api-keys) to create a new API Key.
 
 Or, follow these steps:
 
 1. Create an account at [api.together.ai](https://api.together.ai) or log in if you have one already
-2. In the main dashboard, scroll down to the "Manage Account" section  
-3. In the "API Keys" card, click on "Manage Keys" button
-4. Click on "Add Key" button 
-5. Give it a name like 'Kodus' or any descriptive name
-6. Copy your API key, and you're ready to go!
+2. Open the [API keys page](https://api.together.ai/settings/projects/~current/api-keys)
+3. Click **Create key**
+4. Give it a name like 'Kodus' or any descriptive name
+5. Copy your API key. Together shows a new key only once
 
-<Info>
-  New accounts come with $1 credit to get started for free.
-</Info>
+## Configure Together AI in Kodus
 
-## How to use
+### Option 1 — AI providers page (recommended)
 
-<Snippet file="deploy-basic-setup.mdx" />
+Follow [Connect a provider](/en/how_to_use/byok#connect-a-provider) and choose **Custom → OpenAI-compatible**. Use these values in the form.
 
-### Configure Together AI in Environment File
+| Field | Value |
+| --- | --- |
+| **Key** (in the **API key** card) | your Together API key |
+| **Base URL** | `https://api.together.ai/v1` |
+| **Model** | e.g. `zai-org/GLM-5.3` |
+| **Max concurrent requests** | optional; under **Advanced (optional)**, expand **Advanced settings**; lower it if you see rate-limit errors |
 
-Edit your `.env` file and configure the core settings. For **LLM Integration**, use Together AI in Fixed Mode:
-
-```env
-# Core System Settings (update with your domains)
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
-WEB_PORT_API=443                               
-NEXTAUTH_URL="https://kodus-web.yourdomain.com"
-
-# Security Keys (generate with openssl commands above)
-WEB_NEXTAUTH_SECRET="your-generated-secret"
-API_CRYPTO_KEY="your-generated-hex-key"
-API_JWT_SECRET="your-generated-secret"
-API_JWT_REFRESH_SECRET="your-generated-secret"
-
-# Database Configuration
-API_PG_DB_PASSWORD="your-secure-db-password"
-API_MG_DB_PASSWORD="your-secure-db-password"
-
-# Together AI Configuration (Fixed Mode) 
-API_LLM_PROVIDER_MODEL="meta-llama/Meta-Llama-4-Maverick-Instruct"  # Choose your preferred model
-API_OPENAI_FORCE_BASE_URL="https://api.together.xyz/v1"             # Together AI API URL  
-API_OPEN_AI_API_KEY="your-together-api-key"                         # Your Together AI API Key
-
-# Git Provider Webhooks (choose your provider)
-API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
-# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
-# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
-```
+Click **Test & save**, then choose the default and fallback under [Routing](/en/how_to_use/code_review/configs/routing).
 
 <Note>
-  Webhook URLs must reach the Webhooks service (port 3332). Use a dedicated webhooks domain or route `/.../webhook` to port 3332 in your reverse proxy.
+  Use the base URL without `/chat/completions`. Set a model from another provider as the **Fallback model** so reviews keep running if Together rate-limits you.
 </Note>
 
-<Info>
-  **Fixed Mode is ideal for Together AI** because it provides OpenAI-compatible APIs with competitive pricing and access to cutting-edge open-source models.
-</Info>
+### Option 2 — Self-hosted (environment variables)
 
-<Snippet file="deploy-installation.mdx" />
+To give a self-hosted instance one model through `.env`:
 
-### Set Up Reverse Proxy (For Production)
-
-For webhooks and external access, configure Nginx:
-
-```nginx
-# Web App (port 3000)
-server {
-    listen 80;
-    server_name kodus-web.yourdomain.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# API (port 3001)  
-server {
-    listen 80;
-    server_name kodus-api.yourdomain.com;
-    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
-        proxy_pass http://localhost:3332;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://api.together.ai/v1"
+API_LLM_API_KEY="your-together-api-key"
 ```
 
-### Verify Together AI Integration
+Follow the installation guide to [apply the model change](/en/how_to_deploy/deploy_kodus/generic_vm#apply-a-model-change).
 
-In addition to the basic installation verification, confirm that Together AI is working:
-
-```bash
-# Verify Together AI API connection specifically
-docker-compose logs api worker | grep -i together
-```
-
-<Tip>
-  For detailed information about SSL setup, monitoring, and advanced configurations, see our [complete deployment guide](https://docs.kodus.io/en/how_to_deploy/deploy_kodus/generic_vm).
-</Tip>
-
-### Troubleshooting
+## Troubleshooting
 
 <AccordionGroup>
   <Accordion title="API Key Issues">
-    - Verify your API key is correct and active in [Together AI Console](https://api.together.ai)
-    - Check if you have sufficient credits in your Together AI account
-    - Ensure there are no extra spaces in your `.env` file
-    - New accounts receive $1 in free credits
+    - Verify your API key is correct and active on the [API keys page](https://api.together.ai/settings/projects/~current/api-keys)
+    - Check that your Together AI account has a credit balance; API access is suspended at zero
+    - Make sure there are no trailing spaces or quotes in the `.env` value
   </Accordion>
-  
+
   <Accordion title="Model Not Found">
-    - Check if the model name is correctly spelled in your configuration
-    - Verify the model is available in Together AI's current model library
-    - Try with a different model from our recommended list
-    - Check the [Together AI models documentation](https://docs.together.ai/docs/serverless-models)
+    - Use the exact API model string from the [serverless models list](https://docs.together.ai/docs/serverless-models), including capitalization
+    - Serverless and dedicated endpoints support different models; a model that is not in the serverless list needs a dedicated endpoint
   </Accordion>
-  
+
   <Accordion title="Connection Errors">
-    - Verify your server has internet access to reach `api.together.xyz`
+    - Verify your server has internet access to reach `api.together.ai`
     - Check if there are any firewall restrictions
-    - Review the API/worker logs for detailed error messages
-    - Ensure you're using the correct API endpoint
+    - Review the API and worker logs for the exact upstream error
   </Accordion>
-  
+
   <Accordion title="Rate Limiting">
-    - Together AI provides generous rate limits (up to 6000 requests/min for LLMs)
-    - Check your current usage in the Together AI dashboard
-    - Consider upgrading to a higher tier for increased limits
-    - Monitor your usage patterns to optimize API calls
+    - Together returns HTTP 429 when a limit is exceeded. See Together's [rate limits documentation](https://docs.together.ai/docs/rate-limits)
+    - Lower **Max concurrent requests** on the model, or contact Together about higher limits
   </Accordion>
 </AccordionGroup>
+
+## Related
+
+- [Together AI serverless models](https://docs.together.ai/docs/serverless-models)
+- [BYOK overview](/en/how_to_use/byok)

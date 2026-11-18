@@ -1,37 +1,32 @@
 ---
 title: "Install custom MCP plugins"
-description: "Step-by-step instructions for connecting any custom Model Context Protocol plugin to Kodus."
+description: "Step-by-step instructions for connecting your own Model Context Protocol server to Kodus."
 icon: "plug"
 ---
 
-## Why custom plugins matter
+## Why custom plugins
 
-Custom MCP plugins let your team ground Kody on internal systems—knowledge bases, incident dashboards, policy engines, you name it. Once installed, every Kody interaction can call those tools with live data, so reviewers stop copying screenshots or stale snippets into pull requests.
-
-This guide shows the opinionated flow we recommend for any custom plugin, whether it is a simple read-only endpoint (like the Kodus Docs MCP) or a more advanced pipeline with authentication.
+A custom plugin lets Kody read your internal systems, such as a knowledge base, an incident dashboard or a policy engine, while it answers on a pull request. Reviewers stop pasting screenshots and stale snippets into comments.
 
 <Callout icon="globe">
-  Kodus supports **remote MCP servers only**—that means the plugin must be reachable from Kodus' infrastructure. 
+  Kodus supports **remote MCP servers only**. The server must be reachable from Kodus' infrastructure: no `localhost`, no desktop MCP endpoints.
 </Callout>
-
----
 
 ## Prepare your plugin info
 
-Gather these details before opening the Plugins catalog:
+Gather these details before opening the Plugins page:
 
 | Field | Why it matters |
 | ----- | -------------- |
-| **Public URL** | Endpoint where the MCP manifest is hosted (e.g., `https://acme-internal-tools.com/mcp`). |
-| **Protocol** | MCP implementation type (HTTP or SSE). |
-| **Hosting** | Must be a remote server accessible from Kodus (no localhost or desktop MCP endpoints). |
-| **Authentication** | Whether the plugin requires API keys, OAuth, or is open to your workspace IPs. |
-| **Description / Logo** | Helps other engineers understand what the plugin does when browsing the catalog. |
+| **URL** | The MCP endpoint, for example `https://acme-internal-tools.com/mcp`. |
+| **Protocol** | **HTTP** or **SSE**. |
+| **Authorization** | **None**, **Bearer Token**, **Basic Auth**, **API Key** (and the header it goes in) or **OAuth 2.0** (a client ID, or dynamic client registration). |
+| **Description and logo** | Optional. They help teammates recognize the plugin. |
 
-Looking for remote MCP servers to try out?
+Looking for remote MCP servers to try?
 
-- [Smithery.ai](https://smithery.ai/) curates deployable MCP services plus an easy launcher you can point at your own infra.
-- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) lists community-maintained endpoints spanning docs search, security scanners, and workflow bots.
+- [Smithery.ai](https://smithery.ai/) curates deployable MCP services.
+- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) lists community-maintained endpoints.
 
 ## Install the plugin in Kodus
 
@@ -39,46 +34,58 @@ Looking for remote MCP servers to try out?
   <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
 </Frame>
 
-1. In the sidebar, open **Plugins** (Beta) inside your Kodus workspace.
-2. On the **Add Custom Plugin** card, click **Add Plugin**.
-3. Fill in the form:
+<Steps>
+  <Step title="Open the form">
+    In the sidebar, open **Plugins**. On the **Add Custom Plugin** card, click **Add Plugin**.
+  </Step>
+  <Step title="Fill it in">
+    ```text
+    Plugin Name: Descriptive label (for example "Security Runbooks MCP")
+    Description: What data it exposes (optional)
+    Logo URL: Optional
+    URL: https://your-domain.com/mcp
+    Protocol: HTTP or SSE
+    Authorization: None, Bearer Token, Basic Auth, API Key or OAuth 2.0
+    Custom Headers: Any extra header your server needs (optional)
+    ```
 
-   ```text
-   Plugin Name: Descriptive label (e.g., "Security Runbooks MCP")
-   Description: What data/actions it exposes
-   Logo URL: Optional, but helpful for recognition
-   URL: https://your-domain.com/mcp
-   Protocol: HTTP or SSE
-   Authorization / Headers: Add if your MCP host requires them (e.g., API key, OAuth, etc.) (optional)
-   ```
+    Click **Create Plugin**.
+  </Step>
+  <Step title="Choose its tools and install">
+    The plugin opens. With OAuth 2.0, click **Authenticate with** the plugin first. Under **Selected tools**, keep only the tools Kody needs, then click **Install plugin**. An installed plugin shows **Installed** on its card.
+  </Step>
+</Steps>
 
-4. Hit **Create Plugin**. Once it appears in the list, it is instantly available to the entire workspace.
+If **Selected tools** shows 0 of 0, Kodus could not list the server's tools. Open the plugin, click **Edit Plugin**, and check the URL, protocol and authorization.
 
 <Warning>
-  Custom plugins run with the same permissions as the workspace. Only install endpoints your organization trusts and monitors.
+  Kody can call any tool you select. Install only endpoints your organization trusts, and select only the tools Kody needs.
 </Warning>
 
 ## Verify the connection
 
-1. Open any pull request where Kody is enabled.
-2. Mention `@kody` and include a question that forces the plugin to respond.
+1. Open a pull request in a repository where Kody is enabled.
+2. Comment with `@kody` and a question only the plugin can answer:
 
    ```
    @kody can you fetch the deployment checklist from our MCP and confirm whether feature flags are required?
    ```
 
-3. Check Kody's reply: it should include data returned by your new plugin. If it doesn't, confirm the plugin's URL, protocol, and authorization on the **Plugins** page.
+3. Check Kody's reply. It should include data your plugin returned. If it doesn't, open the plugin on the **Plugins** page and check its URL, protocol and authorization.
 
 <Info>
-  The Kodus Docs MCP (`https://docs.kodus.io/mcp`) is a quick sanity test—you can install it first to ensure your workspace can reach external hosts.
+  To rehearse the flow without building a server, add `https://docs.kodus.io/mcp` as a custom plugin: protocol **HTTP**, authorization **None**.
 </Info>
 
----
+## Use it in a custom agent
+
+A custom agent reads from an installed plugin when you turn it on under **Tools → Plugins** on the agent's page. Only read tools are offered. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp).
 
 ## Quick checklist
 
-- [ ] Plugin manifest is hosted and reachable.
-- [ ] Auth model (if any) is documented and tested.
-- [ ] Plugin is installed via **Add Custom Plugin** with the right URL + headers.
-- [ ] A sample PR proved Kody can call the plugin.
-- [ ] Owners know how to monitor and update the integration.
+- [ ] The server is reachable from Kodus over HTTP or SSE.
+- [ ] Its authorization works with the method you chose.
+- [ ] **Selected tools** lists tools, and only the ones Kody needs are selected.
+- [ ] The plugin shows **Installed**.
+- [ ] A test comment on a pull request returned data from the plugin.
+- [ ] Someone owns monitoring and updating the integration.

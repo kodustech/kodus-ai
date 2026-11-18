@@ -5,35 +5,36 @@ description: "Mide cuánto tiempo permanecen abiertos los pull requests, desde q
 
 ## Qué es el Tiempo de Ciclo del PR
 
-El Tiempo de Ciclo del PR mide cuánto tiempo permanece abierto un pull request: desde que se abre hasta que se cierra. Esta métrica representa la velocidad de revisión y merge de tu proceso de desarrollo.
+El Tiempo de Ciclo del PR (PR Cycle Time) mide cuánto tiempo permanece abierto un pull request: desde que se abre hasta que se cierra. Refleja la velocidad de revisión y merge de tu proceso.
 
 En el Cockpit, es la tarjeta **PR Cycle Time (p75)** y el gráfico **PR Cycle Time** de la pestaña **Productivity**.
 
 ## Cómo lo Calculamos
 
-Rastreamos automáticamente el tiempo entre el momento en que se abre cada pull request y el momento en que se cierra. Partimos de la fecha de apertura del PR y no de su primer commit, porque las ramas con rebase pueden arrastrar commits antiguos que inflarían el número. Para el tiempo dedicado antes de abrir el PR, consulta [Lead Time Breakdown](/es/how_to_use/cockpit/metrics/lead_time_breakdown).
-
-**Lo que Rastreamos:**
-- Tiempo desde la apertura del PR hasta su cierre
-- PRs cerrados en el rango de fechas seleccionado
-- Cuánto tiempo tarda el código en integrarse
-
-**Lo que No Contamos:**
-- Tiempo dedicado a planificar, diseñar o programar antes de abrir el PR
-- Tiempo después de la fusión (despliegue, adopción por parte del usuario, etc.)
-- Cambios fallidos o abandonados
-
-**Cómo se Calcula:**
 ```
-Tiempo de Ciclo del PR = (Hora de Cierre del PR) - (Hora de Apertura del PR)
+PR Cycle Time = (PR Closed Time) - (PR Opened Time)
 ```
 
-Usamos el percentil 75 (P75) para mostrarte el tiempo de ciclo típico, filtrando los valores atípicos inusualmente largos que podrían distorsionar tu comprensión del rendimiento normal.
+- Parte de la fecha de apertura del PR, no de su primer commit, porque las ramas con rebase pueden arrastrar commits antiguos que inflarían el número. Para el tiempo antes de que se abra el PR, consulta [Desglose del Lead Time](/es/how_to_use/cockpit/metrics/lead_time_breakdown).
+- Cubre los PRs cerrados en el rango de fechas seleccionado, mergeados o cerrados sin merge.
+- No se cuenta el tiempo posterior al cierre (despliegue, adopción por parte del usuario).
 
-## Por qué es Importante
+La tarjeta muestra el percentil 75 (P75): tres cuartas partes de los PRs se cerraron más rápido que este valor, de modo que los valores atípicos inusualmente largos no lo distorsionen. El gráfico traza el P75 por semana, en horas.
 
-El Tiempo de Ciclo del PR es una métrica crítica que mide la capacidad de tu equipo para completar el trabajo de desarrollo de manera eficiente. Los tiempos de ciclo altos pueden indicar tamaños de lote grandes, procesos de revisión extensos o cuellos de botella en el flujo de trabajo de desarrollo.
+## Cómo leer la tarjeta
 
+La tarjeta muestra el P75 en horas y minutos, una insignia de nivel y el valor del período anterior de la misma duración con el cambio porcentual. El pie dice "Last 2 weeks was …" sin importar qué rango esté seleccionado; el número corresponde al período anterior. Pasa el cursor sobre la insignia para ver los niveles:
+
+| Cycle time P75 | Nivel |
+| --- | --- |
+| Menos de 48 horas | Elite |
+| 48 a 84 horas | High |
+| 84 a 160 horas | Fair |
+| Más de 160 horas | Need focus |
+
+## Por qué Importa
+
+Los tiempos de ciclo altos pueden indicar tamaños de lote grandes, procesos de revisión extensos o cuellos de botella en el flujo de trabajo.
 
 ## Cómo Mejorar
 
@@ -41,5 +42,4 @@ El Tiempo de Ciclo del PR es una métrica crítica que mide la capacidad de tu e
 - Establecer expectativas y pautas de revisión claras
 - Usar verificaciones automatizadas para detectar problemas antes de la revisión
 - Distribuir la carga de trabajo de revisión en el equipo
-- Obtener retroalimentación temprana durante el desarrollo
-- Usar una estrategia de ramas consistente
+- Obtener feedback temprano durante el desarrollo

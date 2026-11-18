@@ -1,173 +1,101 @@
 ---
 title: "Together AI - オープンソースモデル"
-description: "Together AIのモデルをKodusで使用する方法"
+description: "Together AI のモデルを Kodus で使用する方法を説明します。"
 icon: "users"
 ---
 
-## Together AIの仕組み
+## Together AI の仕組み
 
-Together AIは、数行のコードだけで最先端のオープンソースモデルを簡単に実行できます。このプラットフォームは、高速推論、OpenAI互換のAPI、Llama 4、DeepSeekなどの最先端モデルへのアクセスを提供します。複雑さなしに信頼性が高くスケーラブルなAIインフラを必要とする開発者のために構築されています。
+Together AI は、DeepSeek、Kimi、GLM、gpt-oss などのオープンソースモデルを **OpenAI 互換**の API で提供します。Kodus は OpenAI 互換プロバイダーを通じて接続するため、コードの変更は不要で、必要なのは BYOK の認証情報だけです。
 
 ## 推奨モデル
 
-高いコンテキストウィンドウと競争力のある価格を持つ優れたコーディングモデルを推奨します。
-
 <Info>
-  最新情報については、[Together AIの価格ページ](https://www.together.ai/pricing) をご覧ください。
+  Together のサーバーレスカタログは頻繁に更新されます。最新のモデル ID、コンテキスト長、料金は[サーバーレスモデル一覧](https://docs.together.ai/docs/serverless-models)を参照してください。API のモデル文字列は正確に指定してください。
 </Info>
 
-| モデル                              | 価格（100万トークン） | コンテキストウィンドウ |
-| ---------------------------------- | ------------------- | -------------- |
-| **Llama 4 Maverick** `recommended` | $0.27/$0.85         | 約128kトークン   |
-| **DeepSeek-V3**                    | $1.25               | 約128kトークン   |
-| **Llama 3.1 70B Turbo**            | $0.88               | 約128kトークン   |
-| **Qwen 2.5 72B**                   | $1.20               | 約128kトークン   |
+Together では、次のサーバーレスのチャットモデルが関数呼び出しと構造化出力に対応していると記載されています。
+
+| モデル ID | コンテキストウィンドウ |
+| -------- | -------------- |
+| `moonshotai/Kimi-K3` | 約1M トークン |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | 約1M トークン |
+| `zai-org/GLM-5.3` | 約1M トークン |
+| `openai/gpt-oss-120b` | 約131k トークン |
 
 ## APIキーの作成
 
-<Warning>APIキーを作成するにはTogether AIアカウントが必要です。</Warning>
+<Warning>APIキーを作成するには Together AI アカウントが必要です。Together はプリペイド制です。キーを作成する前にクレジットを購入する必要があり、残高がゼロになると API へのアクセスは停止されます。[Together の課金に関するドキュメント](https://docs.together.ai/docs/billing)を参照してください。</Warning>
 
-[Together AI Console](https://api.together.ai) に直接アクセスして新しいAPIキーを作成してください。
+新しいAPIキーを作成するには、[Together の APIキーのページ](https://api.together.ai/settings/projects/~current/api-keys)に直接アクセスしてください。
 
-または、以下の手順に従ってください：
+または、次の手順に従います。
 
-1. [api.together.ai](https://api.together.ai) でアカウントを作成するか、既にある場合はログインする
-2. メインダッシュボードで「Manage Account」セクションまでスクロールする
-3. 「API Keys」カードの「Manage Keys」ボタンをクリックする
-4. 「Add Key」ボタンをクリックする
-5. 「Kodus」または説明的な名前を付ける
-6. APIキーをコピーして、準備完了です！
+1. [api.together.ai](https://api.together.ai) でアカウントを作成するか、すでにお持ちの場合はログインします
+2. [APIキーのページ](https://api.together.ai/settings/projects/~current/api-keys)を開きます
+3. **Create key** をクリックします
+4. 'Kodus' など、わかりやすい名前を付けます
+5. APIキーをコピーします。Together は新しいキーを 1 回しか表示しません
 
-<Info>
-  新しいアカウントには、無料で始めるための$1クレジットが付いています。
-</Info>
+## Kodus で Together AI を設定する
 
-## 使用方法
+### オプション1 — AI providers ページ（推奨）
 
-<Snippet file="deploy-basic-setup.mdx" />
+[プロバイダーを接続する](/ja/how_to_use/byok#プロバイダーを接続する)の手順に従い、**Custom → OpenAI-compatible** を選びます。フォームには次の値を指定します。
 
-### 環境ファイルでTogether AIを設定する
+| フィールド | 値 |
+| --- | --- |
+| **Key**（**API key** カード内） | Together の APIキー |
+| **Base URL** | `https://api.together.ai/v1` |
+| **Model** | 例：`zai-org/GLM-5.3` |
+| **Max concurrent requests** | 任意。**Advanced (optional)** 内の **Advanced settings** を展開します。レート制限エラーが出る場合は下げてください |
 
-`.env` ファイルを編集してコア設定を行います。**LLMインテグレーション**には、固定モードでTogether AIを使用します：
-
-```env
-# コアシステム設定（ドメインを更新してください）
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
-WEB_PORT_API=443                               
-NEXTAUTH_URL="https://kodus-web.yourdomain.com"
-
-# セキュリティキー（上記のopensslコマンドで生成）
-WEB_NEXTAUTH_SECRET="your-generated-secret"
-API_CRYPTO_KEY="your-generated-hex-key"
-API_JWT_SECRET="your-generated-secret"
-API_JWT_REFRESH_SECRET="your-generated-secret"
-
-# データベース設定
-API_PG_DB_PASSWORD="your-secure-db-password"
-API_MG_DB_PASSWORD="your-secure-db-password"
-
-# Together AI設定（固定モード） 
-API_LLM_PROVIDER_MODEL="meta-llama/Meta-Llama-4-Maverick-Instruct"  # 希望するモデルを選択
-API_OPENAI_FORCE_BASE_URL="https://api.together.xyz/v1"             # Together AI API URL  
-API_OPEN_AI_API_KEY="your-together-api-key"                         # Your Together AI API Key
-
-# Gitプロバイダーのウェブフック（プロバイダーを選択）
-API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
-# または API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
-# または GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
-```
+**Test & save** をクリックし、[Routing](/ja/how_to_use/code_review/configs/routing) でデフォルトモデルとフォールバックモデルを選びます。
 
 <Note>
-  ウェブフックURLはWebhooksサービス（ポート3332）に到達する必要があります。専用のウェブフックドメインを使用するか、リバースプロキシで `/.../webhook` をポート3332にルーティングしてください。
+  ベース URL は `/chat/completions` を付けずに指定してください。Together でレート制限を受けてもレビューを継続できるよう、他のプロバイダーのモデルを **Fallback model** に設定してください。
 </Note>
 
-<Info>
-  **固定モードはTogether AIに最適です。** 競争力のある価格設定と最先端のオープンソースモデルへのアクセスを持つOpenAI互換のAPIを提供します。
-</Info>
+### オプション2 — セルフホスト（環境変数）
 
-<Snippet file="deploy-installation.mdx" />
+セルフホスト環境で `.env` から 1 つのモデルを指定するには、次のように設定します。
 
-### リバースプロキシのセットアップ（本番環境向け）
-
-ウェブフックと外部アクセスのためにNginxを設定します：
-
-```nginx
-# Webアプリ（ポート3000）
-server {
-    listen 80;
-    server_name kodus-web.yourdomain.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# API（ポート3001）  
-server {
-    listen 80;
-    server_name kodus-api.yourdomain.com;
-    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
-        proxy_pass http://localhost:3332;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://api.together.ai/v1"
+API_LLM_API_KEY="your-together-api-key"
 ```
 
-### Together AIインテグレーションの確認
+インストールガイドに従って[モデルの変更を反映してください](/ja/how_to_deploy/deploy_kodus/generic_vm#モデルの変更を反映する)。
 
-基本インストールの確認に加えて、Together AIが動作していることを確認します：
-
-```bash
-# Together AI API接続を具体的に確認する
-docker-compose logs api worker | grep -i together
-```
-
-<Tip>
-  SSLセットアップ、監視、高度な設定の詳細については、[完全なデプロイガイド](https://docs.kodus.io/ja/how_to_deploy/deploy_kodus/generic_vm) を参照してください。
-</Tip>
-
-### トラブルシューティング
+## トラブルシューティング
 
 <AccordionGroup>
   <Accordion title="APIキーの問題">
-    - [Together AI Console](https://api.together.ai) でAPIキーが正しく有効であることを確認する
-    - Together AIアカウントに十分なクレジットがあるか確認する
-    - `.env` ファイルに余分なスペースがないことを確認する
-    - 新しいアカウントには$1の無料クレジットが付いています
+    - [APIキーのページ](https://api.together.ai/settings/projects/~current/api-keys)で、APIキーが正しく有効であることを確認します
+    - Together AI アカウントにクレジット残高があることを確認します。残高がゼロになると API へのアクセスは停止されます
+    - `.env` の値に末尾のスペースや引用符が含まれていないことを確認します
   </Accordion>
-  
+
   <Accordion title="モデルが見つからない">
-    - 設定でモデル名が正しくスペルされているか確認する
-    - Together AIの現在のモデルライブラリでモデルが利用可能か確認する
-    - 推奨リストの別のモデルを試してみる
-    - [Together AIのモデルドキュメント](https://docs.together.ai/docs/serverless-models) を確認する
+    - [サーバーレスモデル一覧](https://docs.together.ai/docs/serverless-models)にある API のモデル文字列を、大文字小文字を含めて正確に使用します
+    - サーバーレスと専用エンドポイントでは対応するモデルが異なります。サーバーレスの一覧にないモデルには専用エンドポイントが必要です
   </Accordion>
-  
+
   <Accordion title="接続エラー">
-    - サーバーが `api.together.xyz` にアクセスするインターネット接続があることを確認する
-    - ファイアウォールの制限がないか確認する
-    - 詳細なエラーメッセージについてAPI/ワーカーログを確認する
-    - 正しいAPIエンドポイントを使用していることを確認する
+    - サーバーがインターネット経由で `api.together.ai` に到達できることを確認します
+    - ファイアウォールの制限がないか確認します
+    - API とワーカーのログで、上流の正確なエラーを確認します
   </Accordion>
-  
+
   <Accordion title="レート制限">
-    - Together AIは寛大なレート制限を提供します（LLMの場合、最大6000リクエスト/分）
-    - Together AIダッシュボードで現在の使用量を確認する
-    - より高い制限のために上位プランへのアップグレードを検討する
-    - APIコールを最適化するために使用パターンを監視する
+    - Together は制限を超過すると HTTP 429 を返します。Together の[レート制限に関するドキュメント](https://docs.together.ai/docs/rate-limits)を参照してください
+    - モデルの **Max concurrent requests** を下げるか、より高い上限について Together に問い合わせてください
   </Accordion>
 </AccordionGroup>
+
+## 関連リンク
+
+- [Together AI サーバーレスモデル](https://docs.together.ai/docs/serverless-models)
+- [BYOK の概要](/ja/how_to_use/byok)

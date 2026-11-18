@@ -1,53 +1,64 @@
 ---
 title: "カスタムコードレビュールールを作成する方法"
-description: "チームのアーキテクチャ、パターン、コーディング設定に合わせたルールを定義し、すべてのPRで自動的に適用します。"
+description: "チームのアーキテクチャ、パターン、コーディングの好みに合わせたルールを定義し、すべての PR でチェックします。"
 ---
 
-すべてのチームには、汎用のリンターではカバーできない規約があります — アーキテクチャの境界、命名パターン、テスト要件、またはビジネス固有の制約など。カスタムコードレビュールールを使用すると、これらを自動チェックとしてエンコードできます。
+どのチームにも、汎用のリンターではカバーできない規約があります。アーキテクチャの境界、命名パターン、テスト要件、ビジネス固有の制約などです。カスタムコードレビュールールを使うと、それらを、Kody がすべての Pull Request で実行するチェックとして定義できます。
 
-## Kodusでルールを作成する
+## Kodus でルールを作成する
 
 1. サイドバーの **Code review** グループ上部にあるスコープピッカーで **Global**（またはリポジトリ / ディレクトリ）を選択し、**Kody Rules** を開きます
-2. **New rule** をクリックします
-3. 設定します：
-   - **Rule name** — ルールが確認する内容（例：「サービスファイルにはテストが必要です」）
-   - **Execution mode** — **Per file**（変更された各ファイルを分析）または **Per PR**（PR全体を分析）
-   - **Path** — 特定のファイルを対象とするglobパターン（例：`src/services/**/*.ts`）。Per PRルールでは使用されません
-   - **重要度** — 重大、高、中、または低
-   - **指示** — チェックする内容の詳細な説明
+2. **Review Rules** タブで **New rule** をクリックします
+3. 次を設定します。
+   - **Rule name**：ルールが確認する内容（例：「サービスファイルにはテストが必要です」）
+   - **Execution mode**：**Per file**（変更された各ファイルをチェックし、インラインでコメント）または **Per PR**（PR 全体をチェックし、PR コメントを 1 件投稿）
+   - **Path**：Per file ルールを特定のファイルに限定する glob パターン（例：`src/services/**/*.ts`）。Per PR ルールでは使用されません
+   - **Instructions**：何をチェックするか、どう判断するか
+   - **Severity**：Critical、High（デフォルト）、Medium、Low
 
-## ルールを強力にするもの
+**Advanced settings** では **Bad example** と **Good example** を追加でき、Kody が違反と準拠したコードを見分けるのに役立ちます。
 
-ルールはリッチなコンテキストにアクセスできます：
+## ルールが機能するための工夫
 
-- `fileDiff`、`pr_title`、`pr_description`、`pr_files_diff` などの**変数**
-- パターンと比較するための `@file:path/to/file.ts` による**ファイル参照**
-- 接続されたツール（Jira、リポジトリ構造など）からデータを取得する**MCP関数**
+- **具体的にする。** パターン、パス、何を違反とみなすかを明記します。
+- **標準を指し示す。** `@file:docs/architecture.md` のようにファイルをパスで指定すると、Kody はルールを判断するときにそれを読み取ります。ファイルは Pull Request のターゲットブランチから読み取られます。
+- **適切なモードを選ぶ。** 1 つのファイルで確認できる内容には Per file を、Pull Request 全体に関する要件（説明、サイズ、関連ファイルが一緒に変更されるかどうかなど）には Per PR を使います。
 
-### 例：アーキテクチャ境界ルール
+### 例：命名規則の適用
+
+次のようなファイルレベルのルールを作成できます。
+
+- **Rule name**：「React コンポーネントは PascalCase のファイル名を使用する必要があります」
+- **Path**：`src/components/**/*.tsx`
+- **Severity**：High
+- **Instructions**：「PascalCase の命名に従っていないコンポーネントファイルを指摘します。」
+
+### 例：アーキテクチャ境界のルール
 
 ```
-名前: ドメイン層はインフラストラクチャに依存してはいけません
+Name: Domain layer must not depend on infrastructure
 Execution mode: Per PR
-指示: pr_files_diffでsrc/domain/内のsrc/infrastructure/を参照するimportを確認します。
-許可された依存関係については@file:docs/architecture.mdを参照してください。
+Instructions: Flag any import added in src/domain/ that
+points to src/infrastructure/. The allowed dependencies are
+described in @file:docs/architecture.md.
 ```
 
-### 例：テストカバレッジルール
+### 例：テストカバレッジのルール
 
 ```
-名前: すべてのサービスにテストファイルが必要です
+Name: Every service change needs a test change
 Execution mode: Per PR
-指示: src/services/内で変更された各ファイルについて、
-対応するテストファイルがtest/services/に存在することを確認します。
-MCPを使用してリポジトリのファイルツリーを確認します。
+Instructions: For each file modified in src/services/, check that the
+PR also changes a matching test file under test/services/.
 ```
 
 ## ルールを追加するその他の方法
 
-- **ルールライブラリからインポート** — Kody Rulesページで **Discovery** をクリックし、言語とカテゴリ別に検証済みルールを参照
-- **IDEツールから同期** — Cursor、Copilot、Claudeからルールを自動インポート
-- **リポジトリルール** — リポジトリ内のmarkdownファイルでルールを定義
-- **自動生成** — Kodyがレビュー履歴に基づいてルールを提案
+- **Rules Library**：Kody Rules ページで **Discovery** をクリックして、既製のルールやパックを追加します
+- **リポジトリルール**：リポジトリの `.kody/rules` に、1 ルールにつき 1 つの markdown ファイルとして保存します
+- **自動生成**：Kody がレビュアーの過去のコメントからルールの下書きを作成します
+- **レビュースレッド内**：Kody にルールの作成や変更を依頼します。例：`@kody update this rule to ignore test files`
 
-完全なリファレンスについては、[Kodyルール](/ja/how_to_use/code_review/configs/kody_rules)を参照してください。
+Kody に Pull Request を `CLAUDE.md`、`AGENTS.md`、Cursor や Copilot の指示に照らしてチェックさせるには、[コーディングエージェントの指示](/ja/how_to_use/code_review/configs/rules_file_detection)を参照してください。
+
+完全なリファレンスについては、[Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) を参照してください。

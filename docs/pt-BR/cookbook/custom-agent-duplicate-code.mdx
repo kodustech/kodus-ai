@@ -10,6 +10,8 @@ Um modelo lendo o diff não tem como saber que as 30 linhas que acabou de ler j�
 
 O exemplo é um serviço de cobrança em TypeScript. Ajuste caminhos e limites ao seu repositório.
 
+Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial. O Kodus self-hosted também precisa de `BETA_FEATURES=true`.
+
 ## Passo 1 — Crie o agente
 
 Em **Code review → What to review → Custom agents**, clique em **New agent → Templates → Blank**. Na página do agente, preencha **Instructions**:
@@ -33,8 +35,6 @@ Ignore tests, fixtures, migrations, generated code, imports and type declaration
 For each finding, name both locations and say what to extract or reuse: an existing function when one copy already is one, or a new shared helper otherwise.
 ```
 
-As instruções podem ser escritas em português também; o exemplo fica em inglês para casar com o código.
-
 ## Passo 2 — Defina os arquivos
 
 Em **Files & knowledge**:
@@ -55,7 +55,7 @@ Em **Tools → CLIs**, clique em **Add CLI**:
 | **Install** | `npm i -g jscpd@5.4.1` |
 | **Allowed command prefixes** | `jscpd --reporters console` |
 | **Allowed domains** | *(vazio: o jscpd não usa rede)* |
-| **Runs project code** | Desligado: o jscpd lê arquivos, não executa |
+| **Runs project code** | Desligado: o jscpd lê arquivos, não os executa |
 | **Secrets** | *(nenhum)* |
 
 **Usage**:
@@ -67,7 +67,8 @@ Call it with the console reporter, the thresholds, and the directories the pull 
 
 --reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
 
-There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+There is no shell: do not quote arguments. Each clone prints both copies as `file [startLine:col - endLine:col]`,
+with the file relative to the directory scanned.
 Read both copies before reporting a clone.
 ```
 
@@ -79,26 +80,27 @@ Em **Comments & model**:
 | --- | --- | --- |
 | **Format** | Inline comments | Cada clone cai nas linhas copiadas. |
 | **Minimum severity** | Team minimum | |
-| **Max comments per pull request** | `5` | Um copia-e-cola grande gera muitos clones; ficam os mais graves. |
+| **Max comments per pull request** | `5` | Um copia-e-cola grande pode gerar muitos clones; ficam os mais graves. |
 | **Suggested fix** | Never | A correção é uma refatoração entre arquivos, não uma troca de linha. |
 | **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
 
-Clique em **Save**.
+Clique em **Save settings**.
 
-## Passo 5 — Try it
+## Passo 5 — Teste
 
 Cole o link de um pull request que copia uma função e clique em **Run agent**. Confira:
 
-- As chamadas de ferramenta mostram a chamada ao `jscpd` e a saída dela.
-- O **Comment** de cada apontamento mantido termina com um bloco **Evidence** com as linhas do jscpd que citam o arquivo:
+- A lista de chamadas de ferramenta mostra uma chamada `runCli` ao `jscpd` e a saída dela.
+- O **Comment** de cada apontamento mantido termina com um bloco **Evidence** que cita as linhas do jscpd com o arquivo do apontamento:
 
-```markdown
-**Evidence** (`jscpd`):
-> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
-> src/billing/credit-note.ts [8:1 - 37:2]
+````markdown
+**Evidence** (`jscpd` output):
+```text
+- invoice.ts [12:1 - 41:2] (30 lines, 212 tokens)
 ```
+````
 
-Se **Warnings** disser que a CLI não pôde ser instalada, confira o comando de instalação. CLIs precisam do sandbox da E2B; sem ele o agente roda sem o jscpd.
+Se **Warnings** disser que a CLI não pôde ser instalada, confira o comando de instalação. CLIs precisam do sandbox E2B; sem ele o agente roda sem o jscpd.
 
 Ligue o agente quando os apontamentos forem os que você quer.
 
@@ -110,4 +112,4 @@ Ligue o agente quando os apontamentos forem os que você quer.
 - [ ] **Max comments per pull request** definido
 - [ ] Testado num pull request com uma cópia conhecida
 
-Para todos os campos, veja [Skills, docs e ferramentas](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#clis-do-time).
+Para ver todos os campos, veja [Skills, documentação e ferramentas](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#clis-do-time).

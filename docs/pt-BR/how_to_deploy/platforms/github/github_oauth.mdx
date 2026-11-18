@@ -1,10 +1,10 @@
 ---
 title: OAuth App do GitHub (Entrar com GitHub)
-description: "Crie o OAuth App do GitHub que habilita o \"Sign in with GitHub\" para seus usuários — separado do GitHub App usado no code review."
+description: "Crie o OAuth App do GitHub que habilita o \"Sign in with GitHub\" para seus usuários do Kodus — separado do GitHub App usado no code review."
 icon: github
 ---
 
-Use isto se quiser que os usuários entrem no Kodus com GitHub. Isso é separado da integração com GitHub App usada para automação de revisão de código e webhooks.
+Use isto se quiser que os usuários entrem no Kodus com GitHub. Isso é separado da integração com GitHub App usada para automação de code review e webhooks.
 
 ## Pré-requisitos
 
@@ -14,11 +14,9 @@ Use isto se quiser que os usuários entrem no Kodus com GitHub. Isso é separado
 
 1. No GitHub, vá em **Settings** > **Developer Settings** > **OAuth Apps**
 2. Clique em **New OAuth App**
-3. Preencha as informações básicas (nome da aplicação, Homepage URL)
+3. Preencha as informações básicas (Application name, Homepage URL)
 
-<img src="https://www.oauth.com/wp-content/uploads/2018/07/github_create_new_application-1024x717.png" alt="Página de OAuth Apps do GitHub mostrando o formulário de nova aplicação" />
-
-## Passo 2: Configurar a URL de Callback
+## Passo 2: Configurar a Callback URL
 
 Defina a **Authorization callback URL** como:
 

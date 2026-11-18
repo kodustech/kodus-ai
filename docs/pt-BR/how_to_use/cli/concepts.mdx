@@ -9,37 +9,66 @@ Um breve tour pelas ideias que aparecem em todo o CLI. Leia isso uma vez e o res
 
 Cada revisão precisa responder a uma pergunta: *o que mudou?* O CLI suporta quatro modos de diff, cada um com uma fonte de verdade diferente.
 
-| Modo                | Fonte do diff                                 | Inclui arquivos? | Quando usar                                            |
-| ------------------- | --------------------------------------------- | ---------------- | ------------------------------------------------------ |
-| **Árvore de trabalho** (padrão) | Alterações não commitadas no seu diretório de trabalho | Sim | Durante o desenvolvimento, antes de fazer stage.  |
-| **Staged** (`--staged`)    | `git diff --cached`                           | Sim            | Prestes a commitar — mesmo escopo que `git commit`.    |
-| **Branch** (`--branch <base>`) | Diff commitado `base..HEAD`              | Não            | Revisão pré-merge de toda a branch.                    |
-| **Commit** (`--commit <sha>`) | O diff introduzido por um único commit     | Não            | Auditar um commit, revisão de cherry-pick.             |
+| Modo                           | Fonte do diff                                       | Envia o conteúdo dos arquivos? | Quando usar                                   |
+| ------------------------------ | --------------------------------------------------- | -------------------- | --------------------------------------------- |
+| **Árvore de trabalho** (padrão)     | Alterações rastreadas no seu diretório de trabalho, staged e unstaged | Sim   | Durante o desenvolvimento, antes de commitar.           |
+| **Staged** (`--staged`)        | `git diff --cached`                                 | Sim                  | Prestes a commitar — mesmo escopo que `git commit`. |
+| **Branch** (`--branch <base>`) | `git diff <base>...HEAD`: seus commits desde que a branch saiu de `<base>` | Não | Revisão pré-merge de toda a branch.   |
+| **Commit** (`--commit <sha>`)  | O diff introduzido por um único commit              | Não                  | Auditar um commit, revisão de cherry-pick.         |
+
+Arquivos informados na linha de comando (`kodus review src/auth.ts`) limitam uma revisão de árvore de trabalho a esses arquivos. Se você passar mais de um escopo, arquivos vencem `--branch`, `--branch` vence `--commit` e `--commit` vence `--staged`.
+
+Arquivos não rastreados não fazem parte de nenhum diff até você executar `git add` neles.
 
 <Tip>
-  **Por que a inclusão de arquivos importa?** Revisões de árvore de trabalho e staged enviam o conteúdo dos arquivos junto com o diff porque o backend não pode ver seu trabalho não commitado. Os modos branch e commit ignoram a inclusão — o backend clona o mesmo commit diretamente. É por isso que revisões de branch/commit funcionam em diffs grandes onde revisões de árvore de trabalho ultrapassariam os limites de tamanho de requisição.
+  **Por que importa o que é enviado?** Revisões de árvore de trabalho e staged enviam o conteúdo dos arquivos alterados junto com o diff, porque o backend não consegue ver seu trabalho não commitado. Revisões de branch e de commit enviam apenas o diff, já que o backend consegue ler esses commits por conta própria. `--fast` também envia apenas o diff. É por isso que esses modos funcionam em diffs enormes, onde uma revisão de árvore de trabalho ultrapassaria o limite de tamanho da requisição. Uma revisão trial envia apenas o diff em todos os modos.
 </Tip>
 
 ## Modos de Revisão
 
 Três estilos de saída, mesma revisão subjacente.
 
-- **Interativo** (padrão) — uma TUI que lista arquivos, expande problemas e aplica correções uma de cada vez com visualização prévia. A forma natural de trabalhar em um terminal.
-- **Correção automática** (`--fix`) — aplica todos os problemas corrigíveis de uma vez, com uma única confirmação. Use quando confiar nas regras e quiser aplicar em lote.
-- **Apenas prompt** (`--prompt-only`) — texto mínimo e estruturado projetado para agentes de IA analisarem e agirem. Combine com `--fail-on` em um loop de agente para que o loop termine de forma limpa quando a revisão estiver clean.
+- **Interativo** (padrão) — em um terminal no macOS e no Linux, os achados abrem no visualizador de diff Hunk, ao lado do código. No Windows, com `--no-hunk` ou com `--interactive`, você recebe uma lista que mostra a contagem de problemas por arquivo, exibe uma prévia das correções, aplica uma de cada vez e copia um prompt de correção para um agente de IA.
+- **Correção automática** (`--fix`) — aplica todos os problemas corrigíveis de uma vez, após uma única confirmação. Use quando confiar nas regras e quiser aplicar em lote.
+- **Apenas prompt** (`--prompt-only`) — texto mínimo e estruturado, projetado para agentes de IA analisarem e agirem. Combine com `--fail-on` em um loop de agente para que o loop termine de forma limpa quando a revisão estiver limpa.
 
-Você também pode usar `--format json` ou `--format markdown` com qualquer comando para consumidores não interativos (CI, scripts, webhooks).
+Você também pode usar `--format json` ou `--format markdown` para consumidores não interativos (CI, scripts, webhooks).
+
+## Profundidade da Revisão
+
+- **Padrão** — o modo de revisão definido para o repositório no Kodus (Balanced, a menos que você tenha alterado).
+- **`--fast`** — verificações mais leves e um orçamento menor de passos. O hook instalado por `kodus hook install` usa esse modo.
+- **`--heavy`** — adiciona revisores especialistas para maior recall, com mais custo. Roda para uma equipe logada nos planos Teams ou Enterprise; qualquer outra revisão roda em Balanced e avisa isso. `--balanced` força apenas a revisão principal em um repositório configurado como Heavy. Veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode).
+- **`--focus <text>`** — direciona a revisão para uma área. Veja [Direcionar a revisão](/pt-BR/how_to_use/code_review/review_directive).
 
 ## Modos de Autenticação
 
-Escolha um por máquina. O CLI detecta automaticamente o que está disponível.
+Escolha um por máquina. O CLI usa a primeira credencial que encontrar, nesta ordem: `KODUS_TOKEN`, `KODUS_TEAM_KEY`, um login armazenado, uma chave de equipe armazenada.
 
-- **Trial** — sem autenticação. 5 revisões por dia. Bom para "experimentar uma vez".
+- **Trial** — sem autenticação. 2 revisões por hora. Bom para "experimentar uma vez". Uma revisão trial não tem equipe, então roda com as configurações padrão e sem Kody Rules. Comandos que leem ou alteram os dados da sua equipe exigem login ou chave de equipe.
 - **Login pessoal** (`kodus auth login`) — uma conta individual. Tokens são atualizados automaticamente.
-- **Chave de equipe** (`kodus auth team-key --key kodus_xxxxx`) — uma chave compartilhada para uma equipe, gerada no web app em **Organization → CLI keys**. Recomendada para agentes de IA e onde não se deseja logins interativos.
-- **Token CI/CD** (`kodus auth token`) — um token de longa duração para pipelines. Gerado de uma máquina com login, usado via `KODUS_TOKEN`.
+- **Chave de equipe** (`kodus auth team-key --key kodus_xxxxx`) — uma chave compartilhada para uma equipe, gerada no web app em **Organization → CLI keys**. Recomendada para agentes de IA, CI e qualquer lugar onde você não queira logins interativos.
 
-Veja [Primeiros Passos](getting_started) para a árvore de decisão completa.
+Quais comandos cada um libera:
+
+| Comando                                                          | Trial | Chave de equipe                  | Login |
+| ---------------------------------------------------------------- | :---: | :-----------------------: | :---: |
+| `review`, `diff`, `hook`, `skills`, `status`, `update`, `trace`, `schema`, `config remote keys` | Sim | Sim | Sim |
+| `pr suggestions`, `pr business-validation`                       | —     | Sim                       | Sim   |
+| `pr reviews`, `agents`, `cockpit`, `usage`                       | —     | —                         | Sim   |
+| `rules view`, `create`, `update`                                 | —     | Sim, se a chave permitir | Sim |
+| `rules pause`, `resume`, `delete`                                | —     | —                         | Sim |
+| `config remote list`, `show`, `set`, e os atalhos de padrões   | —     | Sim, se a chave permitir. `show` e `set` cobrem seis configurações de um repositório | Todas as configurações, em qualquer escopo |
+| `config remote add`, `setup`, `open`, e `config centralized`   | —     | Sim, se a chave permitir | —     |
+| `config remote unset`, `model`, `messages`, `language`, `skills` | —     | —                         | Sim   |
+
+Uma chave de equipe pode receber permissão para configurar repositórios e gerenciar Kody Rules pelo CLI: abra **Organization → CLI keys** e clique em **Configure** na chave. As duas permissões vêm desativadas por padrão. Quando você está logado, valem as permissões do seu papel no web app.
+
+<Note>
+  Uma `KODUS_TEAM_KEY` definida no ambiente é usada por `rules` e `config remote` mesmo quando você está logado. Os comandos que exigem login a ignoram.
+</Note>
+
+Veja [Primeiros Passos](/pt-BR/how_to_use/cli/getting_started) para saber como fazer login.
 
 ## Kody Rules
 
@@ -50,37 +79,41 @@ Rule
 ├── title          "No console.log in production code"
 ├── rule           "Avoid leaving console.log in committed code"
 ├── severity       low | medium | high | critical
-├── scope          file | pull request
-├── path           **/*.ts       (glob para seleção de arquivos)
+├── scope          file | pull-request
+├── path           **/*.ts       (glob for file targeting)
 └── repo-id        <uuid> | global
 ```
 
 As regras se sobrepõem à revisão geral do Kodus — a IA as usa como critérios adicionais, não como substitutos.
 
-Gerencie regras pelo web app (**Code review → Kody Rules**) ou pelo CLI com `kodus rules create|update|view`. O CLI é útil quando você quer regras em controle de versão (gere-as a partir de um script, faça check-in em um repositório, reaplicar na provisionamento).
+Gerencie regras pelo web app (**Code review → Kody Rules**) ou pelo CLI com `kodus rules create|update|view|pause|resume|delete`. O CLI é útil quando você quer as regras em controle de versão (gere-as a partir de um script, faça check-in em um repositório, reaplique ao provisionar). Com a [Configuração Centralizada](#configuração-centralizada), uma mudança de regra vira um pull request em vez de uma gravação direta.
 
-## Configurações de Repositório
+## Configurações de Revisão
 
-Cada repositório no Kodus tem configurações que governam como as revisões se comportam: arquivos ignorados, padrões de branch base, filtros de título, alternâncias de recursos. Elas ficam no backend do Kodus e são espelhadas em qualquer lugar onde o repositório é revisado (PRs na web, revisões CLI, loops de agentes).
+As configurações de code review governam como o Kody revisa: quais categorias verificar, limites de severidade, arquivos ignorados, branches base, resumos de PR, aprovação e mais. Elas se aplicam em três níveis: **global**, **repositório** e **diretório**. O nível mais específico vence, e um nível sem valor próprio herda o do nível acima.
 
 Pelo CLI:
 
 ```bash
-kodus config repo list                 # Ver seus repositórios configurados
-kodus config repo show                 # Ver configurações do repositório atual
-kodus config repo setup                # Assistente guiado
-kodus config repo set . reviewEnabled true
-kodus config repo add-ignore-file . "**/*.generated.ts"
-kodus config repo open                 # Ir para o painel web
+kodus config remote list                       # Repositories added to Kodus
+kodus config remote show .                     # Settings of this repo, with the level each value comes from
+kodus config remote keys                       # Every setting you can change
+kodus config remote set . runOnDraft true
+kodus config remote set global suggestionControl.severityLevelFilter high
+kodus config remote unset . runOnDraft         # Inherit again
 ```
 
-`kodus config repo` e `kodus config remote` são aliases para o mesmo grupo de comandos.
+`show` também lê o `kodus-config.yml` do repositório, então você vê quais valores um arquivo sobrescreve. `keys` lista cada chave com seus valores permitidos e a página de configurações a que ela pertence. Para saber como os níveis se combinam, veja [Herança de configurações](/pt-BR/how_to_use/code_review/configs/inheritance_overrides).
+
+`kodus config repo` continua funcionando como alias de `kodus config remote`.
+
+Uma revisão pelo CLI usa as configurações globais e as Kody Rules da sua equipe, além das regras, do modo de revisão e das instruções do repositório correspondente. As demais configurações por repositório, como branches base e títulos ignorados, dizem respeito a pull requests.
 
 ## Configuração Centralizada
 
-Normalmente, as configurações de cada repositório ficam no Kodus. A **Configuração Centralizada** permite que uma equipe armazene essas configurações em um único repositório git como fonte de verdade — cada alteração se torna um pull request contra esse repositório, dando-lhe histórico de revisão e versão sobre sua configuração de revisão.
+Normalmente, as configurações de cada repositório ficam no Kodus. A **Configuração Centralizada** permite que uma equipe armazene essas configurações em um único repositório git como fonte de verdade — cada mudança vira um pull request nesse repositório, dando revisão e histórico de versões à própria configuração de revisão.
 
-Habilitar, sincronizar ou inspecionar estado:
+Ative, sincronize ou inspecione o estado (chave de equipe necessária):
 
 ```bash
 kodus config centralized status
@@ -89,38 +122,46 @@ kodus config centralized sync
 kodus config centralized disable
 ```
 
-Use a Configuração Centralizada quando sua equipe quiser controle auditável e versionado sobre as configurações de revisão. Mantenha o padrão (configurações por repositório no Kodus) quando essa cerimônia for desnecessária.
+Use a Configuração Centralizada quando sua equipe quiser controle auditável e versionado sobre as configurações de revisão. Mantenha o padrão (configurações por repositório no Kodus) quando esse cerimonial for exagero. Veja o [guia de Configuração Centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config#cli).
 
 ## Validação de Negócio
 
-Enquanto `kodus review` pergunta "este código está bom?", `kodus pr business-validation` pergunta "este diff faz o que a tarefa disse para fazer?". Você o aponta para uma tarefa baseada em Linear/Jira/URL e uma fonte de diff (árvore de trabalho, staged, branch, commit) e ele verifica a implementação em relação aos critérios de aceitação da tarefa.
+Enquanto `kodus review` pergunta "este código é bom?", `kodus pr business-validation` pergunta "este diff realmente faz o que a tarefa pedia?". Você aponta para uma tarefa (por id ou URL) e uma fonte de diff (árvore de trabalho, staged, branch, commit), e ele verifica a implementação contra os critérios de aceitação da tarefa. Exige login ou chave de equipe.
 
 ```bash
 kodus pr business-validation --task-id KC-1441 --branch main
-kodus pr business-validation --task-url https://linear.app/… --staged
+kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441 --staged
 ```
 
-Combine com uma verificação pré-merge para detectar "o código funciona, mas não é o que foi pedido" antes da revisão humana.
+Combine com uma verificação pré-merge para pegar o "o código funciona, mas não é o que foi pedido" antes da revisão humana. Veja [Validação de Lógica de Negócio](/pt-BR/how_to_use/code_review/business_logic_validation#pela-cli).
 
-## Saída para Agente de IA (`--prompt-only` e `--agent`)
+## Agentes Customizados
+
+Agentes customizados são revisores extras que sua equipe define, cada um com suas próprias instruções, arquivos e ferramentas. `kodus agents` lista, cria, edita, liga e desliga, exclui e testa esses agentes, com login. Um agente novo começa desligado: rode-o em um pull request com `kodus agents try` e depois ligue com `kodus agents enable`. Veja [Agentes customizados](/pt-BR/how_to_use/code_review/custom_agents).
+
+## Kodus Trace
+
+O Kodus Trace registra as decisões por trás das mudanças que um agente de código com IA faz, e `kodus trace <path>` lê de volta as registradas para um caminho. Veja [Kodus Trace](/pt-BR/how_to_use/cli/trace).
+
+## Saída para Agentes de IA (`--prompt-only` e `--agent`)
 
 Duas flags relacionadas, trabalhos diferentes.
 
-- **`--prompt-only`** — a saída é otimizada para um agente de IA analisar e agir. Funciona apenas em comandos que produzem saída no estilo de revisão (`review`, `pr suggestions`).
-- **`--agent`** — flag global que força saída **determinística e legível por máquina** em qualquer comando. Use quando um script ou agente analisa a saída do CLI; combine com `--format json` para maior rigor.
+- **`--prompt-only`** — a saída é otimizada para um agente de IA analisar e agir. Existe apenas em `kodus review`.
+- **`--agent`** — flag global que imprime um envelope JSON determinístico (`ok`, `command`, `data`, `error`, `meta`). Funciona em `review`, `pr`, `schema`, `hook install`, `hook uninstall`, `trace status`, `trace disable` e `trace <path>`. Os outros comandos aceitam `--json` para saída em JSON.
 
-A maioria das integrações de agentes precisa apenas de `--prompt-only`. Recorra a `--agent` quando estiver orquestrando o CLI a partir de um harness ou um loop de chamada de ferramentas com expectativas de formato rígidas.
+A maioria das integrações com agentes só precisa de `--prompt-only`. Use `--agent` quando estiver orquestrando o CLI a partir de um harness ou de um loop de chamada de ferramentas com expectativas rígidas de formato.
 
-## Próximos Passos
+## Próximos passos
 
 <CardGroup cols={2}>
-  <Card title="Referência de Comandos" icon="book" href="commands">
+  <Card title="Referência de Comandos" icon="book" href="/pt-BR/how_to_use/cli/commands">
     Listagem completa de comandos e flags.
   </Card>
-  <Card title="Agentes de IA" icon="robot" href="ai_agents">
-    Construa loops de revisão e correção com agentes de programação.
+  <Card title="Agentes de IA" icon="robot" href="/pt-BR/how_to_use/cli/ai_agents">
+    Crie loops de revisão e correção com agentes de código.
   </Card>
-  <Card title="Solução de Problemas" icon="life-ring" href="troubleshooting">
+  <Card title="Solução de Problemas" icon="life-ring" href="/pt-BR/how_to_use/cli/troubleshooting">
     Erros comuns e códigos de saída.
   </Card>
 </CardGroup>

@@ -1,90 +1,113 @@
 ---
 title: "自動承認"
-description: "Kody が pull request を承認するタイミング、承認できる PR を絞り込む方法、承認を保留したときの動作。"
+description: "名前付きポリシーと記録された判断で、問題のない PR を承認します。"
+tag: "beta"
 ---
 
-**Code review → General** で **Automatic PR approval** をオンにします（`pullRequestApprovalActive`、デフォルトはオフ）。Kody は Git プロバイダーのレビュー機能を通じて承認します。マージは行いません。
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-## Kody が承認するタイミング
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="基本の PR 自動承認はすべてのプランで利用できます。">
+    <Badge icon="layer-group" stroke>すべてのプラン</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="policies" detail="承認ポリシーと Human approval は Kodus Cloud の Teams、Enterprise、トライアルで利用できるベータ機能です。ワークスペースでベータ機能へのアクセスが必要です。">
+    <Badge icon="flask" color="orange" stroke>承認ポリシー・ベータ版</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="承認ポリシーと Human approval には Enterprise ライセンスと BETA_FEATURES=true が必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+</div>
 
-Kody は次のいずれかのタイミングで PR を承認します：
+レビューに問題がなければ、Kody は Git プロバイダーにレビューの承認を送信します。PR をマージすることはありません。
 
-- **クリーンなレビューの後。** レビューがサジェストを投稿せず、どのステップも失敗しなかった場合です。PR サマリーの生成失敗だけは承認を妨げません。
-- **Kody のコメントが解決された後。** Kody は 2 分ごとに、過去 7 日間にレビューしたオープンな PR を確認し、Kody が残したコメントがすべて解決済みの PR を承認します。
+## 自動承認を有効にする
 
-いずれの場合も、Kody が承認するのはレビューしたコミットです。Kody の最後のレビューの後に誰かがプッシュした場合は、次のレビューを待ちます。`@kody -v <agent>` で開始した実行はそのカスタムエージェントだけを実行するため、承認は行いません。
+**Code review → General** で **Automatic PR approval** をオンにし、**Save settings** をクリックします。承認ポリシーを利用できるワークスペースでは、PR が有効なポリシーにも一致する必要があります。
 
-## 条件付き承認（Beta）
+## 承認ポリシー
 
-**Teams と Enterprise** プランで、ベータアクセスがある場合に利用できます。条件は **Automatic PR approval** の下に表示され、他の設定と同様に Global、Repository、Directory のスコープで設定できます。条件は Kody の最後のレビュー以降のコミットだけでなく、PR 全体に適用されます。
+各ポリシーには、名前、スイッチ、任意の条件があります。ポリシー内のすべての条件に一致する必要があります。有効なポリシーのいずれかが承認を許可でき、保存された順序で最初に一致したものが PR に記録されます。
 
-### どの PR を自動承認できるか
+新しいポリシーは**オフ**の状態で作成されます。条件のないポリシーは **All clean PRs** を対象とし、エディターと一覧の両方にそう表示されます。ポリシーの追加や編集によって、自動承認がオンになることはありません。
 
-デフォルトでは、すべての PR が対象です。絞り込むには：
+ポリシーは Global、Repository、Directory のスコープをサポートします。インクリメンタルレビューでスキップされたファイルや、レビューコメントの対象外になっているファイルを含め、PR 全体に適用されます。
 
-- **PR labels**（`approvalLabels`）：PR にこれらのラベルのいずれかが付いている必要があります。
-- **PR authors**（`approvalAuthors`）：PR がこれらのプロバイダーログインのいずれかによって作成されている必要があります。
+### ドキュメントだけを変更した PR を承認する
 
-大文字と小文字は区別されません。両方を設定した場合、PR は両方に一致する必要があります。ラベルと作成者はそれぞれ最大 50 件です。
+`docs/` 内のファイルだけを変更し、レビューで問題が見つからなかった PR を Kody に承認させる例です。
 
-Kody は承認の前にラベルを再確認するため、レビューの後に承認ラベルを追加することもできます。それ以降にプッシュがなければ、Kody は数分以内に承認します。
+1. **Code review → General** の **Approval policies** で **Add policy** をクリックします。
+2. 名前を `Documentation only` にします。**Add condition** で **Changed files** を選びます。**Included files** の **Add files** をクリックし、`docs/**` を入力して Enter キーを押します。
+3. **Apply** をクリックしてポリシーをオンにします。**Automatic PR approval** をオンにし、**Save settings** をクリックします。
 
-### 人による承認が必要になるのはいつか
+`docs/` 内のファイルだけを変更し、レビューで問題がなかった PR は、このポリシーの対象です。アプリケーションコードも変更した PR には、別の一致するポリシーが必要です。
 
-- **Paths requiring human approval**（`approvalSensitivePaths`）：`src/auth/**` のような glob パターン（最大 100 件）。変更されたファイルのいずれかが一致すると、Kody は承認を保留します。リネームされたファイルは、旧パスと新パスの両方で判定されます。
-- **Assess PR risk**（`approvalRiskActive`）：Kody は低リスクと評価した PR だけを承認します。[リスク評価](#リスク評価)を参照してください。
-- **Additional team guidance**（`approvalRiskInstructions`）：**Assess PR risk** をオンにすると表示されます。評価に加えるコンテキストを最大 4,000 文字まで記述できます。例：*決済のリトライ処理の変更は人が承認すること*。
+### ポリシーの条件
 
-### リスク評価
+| 条件 | 要件 |
+| --- | --- |
+| PR labels | 一覧に挙げたラベルのうち、少なくとも1つに一致する必要があります。ラベル条件は Bitbucket と Azure Repos では使用できません。 |
+| PR author | PR を作成した人が、一覧に挙げたユーザー名またはボット、あるいは一覧に挙げたプロバイダーのチームの確認済みメンバーである必要があります。すべてのコミットの作成者が確認されるわけではありません。 |
+| Included files | 変更されたすべてのパスが、含めるパターンのいずれかに一致する必要があります。空の場合はすべてのファイルが対象です。 |
+| Excluded files | 一致するパスが1つでもあると、そのポリシーはスキップされます。 |
+| Changed lines | 追加行と削除行の合計が上限以内である必要があります。`yarn.lock` などの指定したファイルは、この集計から除外できます。 |
+| Eligibility instruction | PR がその指示を満たしていることを Kody が確認する必要があります。他の条件の後に、レビューモデルを使用して実行されます。 |
 
-Kody はコードレビューに使うモデル（BYOK モデルを設定している場合はそのモデル）で評価を行います。PR の差分全体（最大 50,000 文字）、タイトルと説明、チームのガイダンス、そして変更された各ファイルとディレクトリの履歴（それを変更したマージ済み PR の数と、そのうちバグを修正した PR の数）を読み取ります。
+ユーザー名とラベルは大文字と小文字を区別せずに比較されます。チームのメンバーシップは、評価のたびに再確認されます。GitHub のチーム、GitLab のグループ、Azure DevOps のチームがサポートされており、メンバーシップを取得できない場合は一致として扱われません。サポートされていないチームセレクターは、保存時に拒否されます。
 
-マージ済み PR は、`bug`、`defect`、`regression` のラベルが付いた issue をクローズする場合、またはタイトルに fix、bug、regression、hotfix が含まれる場合に、バグ修正として数えられます。Kody はこの履歴を **GitHub と GitLab** でのみ、バックグラウンドで 2 時間ごとに収集します。最初のスキャンは過去 30 日間を対象とし、その後、履歴は最大 1 年分まで蓄積されます。**Cockpit → Code hotspots** で確認できます。
+名前が変更されたファイルは、旧パスと新パスの両方でカウントされます。行数が不明またはバイナリのファイルは、そのファイルがこの集計から明示的に除外されていない限り、行数の上限を満たせません。ファイルパターンエディターで、glob 構文の検証とサンプルパスのテストができます。
 
-承認されるのはリスクが**低**の場合だけで、**中**と**高**の PR は人の判断のために保留されます。Kody は次の場合にも保留します：
+Eligibility instruction が失敗した場合、タイムアウトした場合、または根拠が不足している場合、そのポリシーは承認できません。他の有効なポリシーが一致する場合もあります。
 
-- PR がソースファイルの制御フロー（`if`、`return`、`throw`）を変更し、テストを追加していない場合
-- 評価を実行できなかった場合（例：モデルの呼び出しが失敗した）
+## すべてのポリシーに適用される要件
 
-履歴のないファイルは安全とはみなされません。Bitbucket、Azure Repos、Forgejo では、また最初のスキャンが終わる前は、Kody は履歴なしで評価します。
+- レビューは、ブロックする失敗や未解決の指摘なしに完了している必要があります。PR サマリーの生成失敗のみで、投稿済みの問題のないレビューが無効になることはありません。
+- [リスク評価](/ja/how_to_use/code_review/configs/risk)がオンの場合、リスクが見つかったとき、または評価を実行できないときは、すべてのポリシーがブロックされます。
+- **Human approval** に挙げたファイルは、ポリシーの内容にかかわらず、常に自動承認をブロックします。
+- PR の head と base が、レビューしたスナップショットと一致している必要があります。より新しいレビューが失敗または未完了の場合、古い問題のない結果は再利用されません。
 
-<Note>
-  **Assess PR risk** をオンにしても、既存の承認は取り消されません。Kody がすでに承認した PR はそのコミットに対する承認を維持し、Kody は次のコミットから評価します。以前にレビューしたものの承認しなかった PR は、次のコミットを待ちます。
-</Note>
+リスク評価がオフの場合でも、問題のないレビューとポリシーの要件は引き続き適用されます。ポリシーごとにリスクを回避する設定はありません。
 
-### Kody が PR に投稿する内容
+Kody は、ラベルが変更されたとき、または投稿済みの行コメントが解決されたときに、レビュー済みの PR を再検討できます。PR レベルの指摘がある場合は、新たに問題のないレビューが必要です。カスタムエージェントのみの実行が PR 全体を承認することはありません。
 
-条件を設定している場合、レビュー終了時のコメントの末尾に **Automatic approval eligible** または **Automatic approval held** と理由が表示されます。Kody はこれとは別のコメント（**Automatic approval completed** または **Automatic approval held**）を 1 つ維持し、以降のレビューでは新しく投稿せずにそのコメントを編集します。ラベルや作成者のフィルターに一致しない PR には、Kody が以前に承認またはコメントしていない限り、この別コメントは投稿されません。
+## 判断コメント
 
-Kody が承認した PR を後のレビューが保留にした場合（新しいコミットにサジェストが付いた、センシティブなパスを変更した、または PR から承認ラベルが外れた場合など）、Kody は自分の承認を取り消します。人による承認はそのまま残ります。
+Kody がポリシーに基づいて承認したとき、または承認を保留したときは、PR に判断コメントを投稿し、常に最新の状態に保ちます。コメントには、一致したポリシー名、または満たされなかった条件の説明が示されます。非公開の Eligibility instruction や、モデルの自由形式の推論は公開されません。
 
-コメントが投稿されたことを Kody が確認できない場合、**Reviews → Pull requests** でその PR に **Approval note unverified** が表示され、Kody が投稿しようとした理由も確認できます。PR のコメントとリポジトリ連携の権限を確認してください。
+コメントが PR に表示されたことを Kody が確認できない場合、[Pull requests](/ja/how_to_use/reviews/pull_requests) 一覧のその PR に **Approval note unverified** が表示され、ツールチップに Kody が投稿を試みた理由が示されます。PR のコメントとリポジトリ連携の権限を確認してください。
 
-<Note>
-  組織がベータアクセスを失った場合や Teams・Enterprise プランでなくなった場合も、保存済みの条件は承認を保留し続けます。Kody がクリーンな PR をすべて承認する動作に戻ることはありません。このとき **Code review → General** には **Saved conditions are holding automatic approval** と **Clear saved conditions** ボタンが表示されます。
-</Note>
+ポリシーを変更または無効にしても、プロバイダー上にすでにある承認は取り消されません。後のレビューが承認を保留した場合（たとえば、問題のない状態でなくなった、またはリスクが見つかった場合）、Kody は以前の承認を取り消し、その理由を示します。
 
-### 対応プラットフォーム
+## YAML
 
-| プロバイダー | ラベル | コード履歴 | 備考 |
-| --- | --- | --- | --- |
-| GitHub | 対応 | 対応 | |
-| GitLab | 対応 | 対応 | |
-| Forgejo | 対応 | 非対応 | 承認を取り消すには、トークンのユーザーがリポジトリの管理者である必要があります。[Forgejo アクセストークン](/ja/how_to_use/code_review/general_config/forgejo_pat)を参照してください。 |
-| Bitbucket | 無視 | 非対応 | 他の条件は引き続き適用されます。 |
-| Azure Repos | 非対応 | 非対応 | ラベルが設定されている間は、すべての PR が人の承認待ちになります。 |
-
-## kodus-config.yml
-
-Kody がこれらのキーを読み込むのは、**kodus Config File Overrides Web Preferences** がオンの場合だけです。[設定の優先度](/ja/how_to_use/code_review/configs/general#設定の優先度)を参照してください。
+リポジトリの設定ファイルを使用する前に、**Code review → General**（リポジトリスコープ）で **Prefer kodus-config.yml settings** をオンにしてください。
 
 ```yaml
 pullRequestApprovalActive: true
-approvalLabels: ['docs', 'chore'] # いずれかに一致; 空 = すべての PR
-approvalAuthors: [] # プロバイダーのログイン; 空 = すべての作成者
 approvalSensitivePaths:
-    - 'src/auth/**'
-    - '**/migrations/**'
-approvalRiskActive: true
-approvalRiskInstructions: '決済のリトライ処理の変更は人が承認すること。'
+  - 'src/payments/**'
+approvalPolicies:
+  - id: docs
+    name: Documentation
+    enabled: true
+    includedFiles:
+      - 'docs/**'
+  - id: dependency-updates
+    name: Dependency updates
+    enabled: false
+    authors:
+      - 'dependabot[bot]'
+    authorTeams:
+      - 'platform'
+    includedFiles:
+      - 'package.json'
+      - 'yarn.lock'
+    maxChangedLines: 150
+    lineCountExcludedFiles:
+      - 'yarn.lock'
+    instruction: 'Only dependency updates that keep the same major version.'
 ```
+
+`approvalSensitivePaths` は **Human approval** の一覧です。`authors` にはユーザー名とボット、`authorTeams` にはプロバイダーのチーム、`labels` には PR のラベルを指定します。ポリシー ID は変更せず、名前は重複しないようにしてください。ポリシーは最大50件、Eligibility instruction は最大4,000文字です。明示的に空のリストを指定すると、すべてのポリシーが無効になります。制限のない既存の承認は、マスタースイッチを維持したまま、有効な1つの **Existing approval policy** に変換されます。
+
+従来の `approvalLabels` と `approvalAuthors` は、移行されたそのポリシーのスコープとして引き続き機能します。優先度の高いファイルが従来のフィルターを使用していて、移行されたポリシーのない新しいポリシーリストと併用されている場合は、ファイルを `approvalPolicies` に更新してください。Kody は、制限を無視するのではなく、曖昧な設定を拒否します。

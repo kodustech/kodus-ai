@@ -1,43 +1,45 @@
 ---
 title: "Token PAT de Azure DevOps"
-description: "Genera el Personal Access Token de Azure DevOps que Kody necesita para leer tus repositorios y publicar comentarios, con los scopes exactos."
+description: "Genera el Personal Access Token de Azure DevOps que Kody necesita para leer tus repositorios y publicar comentarios de revisión, con los scopes exactos que se requieren."
 ---
 
 ## Introducción al PAT
 
-Para permitir que Kody realice Revisiones de Código automáticas, necesitas generar un Token de Acceso Personal (PAT) en Azure DevOps. Este token permite a Kody acceder de forma segura a tus repositorios y realizar análisis de código de manera controlada.
+Para permitir que Kody realice Revisiones de Código automáticas, necesitas generar un Personal Access Token (PAT) en Azure DevOps. Este token permite a Kody acceder de forma segura a tus repositorios y realizar análisis de código de manera controlada.
 
-## Generar el PAT (Token de Acceso Personal)
+## Generar el PAT (Personal Access Token)
 
-Puedes acceder a la configuración de PAT directamente usando este enlace: [Azure DevOps PATs](https://dev.azure.com/).
+Puedes abrir la configuración de PAT directamente en `https://dev.azure.com/<organization>/_usersSettings/tokens`.
 
 Sigue estos pasos para configurar el token correctamente:
 
-1. **Accede a Azure DevOps y ve a tu configuración de seguridad:**
+1. **Accede a Azure DevOps y ve a la configuración de tus tokens:**
 
-   - Ve a [Azure DevOps](https://dev.azure.com/) e inicia sesión.
-   - Haz clic en tu foto de perfil en la esquina superior derecha.
-   - Selecciona **"Seguridad"** del menú desplegable.
+   - Inicia sesión en tu organización en `https://dev.azure.com/<organization>`.
+   - Abre **User settings** (el ícono junto a tu foto de perfil, en la esquina superior derecha).
+   - Selecciona **Personal access tokens**.
 
 2. **Crea un nuevo PAT:**
 
-   - En la sección **Tokens de Acceso Personal**, haz clic en **"Nuevo Token"**.
+   - Haz clic en **+ New Token**.
 
 3. **Configura el nuevo token con las siguientes especificaciones:**
 
-   - **Nombre:** Elige un nombre fácilmente identificable, como `kody_code_review`.
-   - **Organización:** Selecciona tu organización de destino.
-   - **Vencimiento:** Elige un tiempo de vencimiento apropiado (p. ej., 90 o 180 días).
-   - **Alcances:** Selecciona los siguientes permisos:
+   - **Name:** Elige un nombre fácilmente identificable, como `kody_code_review`.
+   - **Organization:** Selecciona tu organización de destino, no **All accessible organizations**. Azure DevOps está retirando los tokens con alcance a todas las organizaciones.
+   - **Expiration:** Elige un tiempo de vencimiento apropiado (p. ej., 90 o 180 días).
+   - **Scopes:** Selecciona los siguientes permisos, con los nombres de la [lista de alcances](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/oauth#available-scopes) de Microsoft:
 
-     - **Analytics:** Lectura
-     - **Code:** Lectura y Escritura
-     - **Graph:** Lectura
-     - **Identities and Groups:** Lectura
-     - **Project and Team:** Lectura
-     - **User Profile:** Lectura
+     | Alcance | Id | Kody lo usa para |
+     | --- | --- | --- |
+     | **Code (read and write)** | `vso.code_write` | Leer repositorios y pull requests, publicar comentarios de revisión y crear los service hooks que entregan los eventos de pull request. |
+     | **Project and team (read)** | `vso.project` | Listar proyectos, equipos y miembros de equipo. |
+     | **Analytics (read)** | `vso.analytics` | Leer las métricas de lenguaje de los repositorios. |
+     | **Graph (read)** | `vso.graph` | Buscar usuarios de la organización. |
+     | **Identity (read)** | `vso.identity` | Leer identidades y grupos. |
+     | **User profile (read)** | `vso.profile` | Leer el perfil del propietario del token. |
 
-4. **Haz clic en Crear.**
+4. **Haz clic en Create.**
 
 Copia el token generado y guárdalo de forma segura, ya que lo necesitarás para configurar Kody.
 
@@ -45,17 +47,21 @@ Copia el token generado y guárdalo de forma segura, ya que lo necesitarás para
   Se requiere acceso de escritura a Code para que Kody pueda publicar comentarios y gestionar el feedback de los pull requests.
 </Note>
 
+<Note>
+  Kody crea una suscripción de service hook por cada evento de pull request y repositorio. El endpoint [Create Subscription](https://learn.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/create?view=azure-devops-rest-7.1) de Microsoft acepta `vso.code` para estos eventos, y **Code (read and write)** lo incluye, así que el token no necesita un alcance aparte para service hooks. El propietario del token también necesita el permiso **Edit subscriptions** en el proyecto. Los Project Administrators lo tienen.
+</Note>
+
 ## Agregar el Token a Kody
 
-Después de generar el token, pégalo en Kodus: durante el onboarding (**Connect your Git tool** → pestaña **Azure Repos** → **Connect via token**), o más tarde en la barra lateral en **Repositories** → **Connect a provider** → **Azure Repos**. Completa **Organization name** y **Personal Access Token**, y luego haz clic en **Validate and save**.
+Después de generar el token, pégalo en Kodus: durante el onboarding (**Connect your Git tool** → pestaña **Azure Repos** → **Connect via token**), o más tarde en la barra lateral en **Repositories** → **Connect a provider** → **Azure Repos**. Completa **Organization name** (el nombre en `dev.azure.com/<organization>`) y **Personal Access Token**, y luego haz clic en **Validate and save**. Kodus se conecta a Azure DevOps Services en `dev.azure.com`.
 
-## Solución de Problemas: Kody no revisa los PRs en Azure DevOps
+## Solución de problemas: Kody no revisa los PRs en Azure DevOps
 
 Si Kody está conectado pero **no ocurre nada en los nuevos pull requests** — sin reacciones, sin comentarios, sin PRs apareciendo en el panel de Kodus — la causa es casi siempre uno de tres problemas, en orden de frecuencia.
 
 ### 1. Verificar los alcances del PAT
 
-Abre el PAT en Azure DevOps y confirma que cada alcance listado en [Generar el PAT](#generar-el-pat-token-de-acceso-personal) esté habilitado. El que más frecuentemente se omite es **Code: Lectura y Escritura** — sin **Escritura**, Kody puede leer tus repositorios pero no puede publicar comentarios de revisión, por lo que las revisiones "se ejecutan silenciosamente".
+Abre el PAT en Azure DevOps y confirma que cada alcance listado en [Generar el PAT](#generar-el-pat-personal-access-token) esté habilitado. El que más frecuentemente se omite es **Code (read and write)**. Con solo **Code (read)**, Kody puede leer tus repositorios pero no puede publicar comentarios de revisión, por lo que las revisiones "se ejecutan silenciosamente".
 
 Si el PAT fue creado antes de que se agregara un alcance, Azure DevOps no lo añadirá retroactivamente. Crea un nuevo PAT con la lista completa de alcances y vuelve a conectarte con él (**Repositories** → **Reset** en la tarjeta del proveedor → **Just reset the integration**, y luego conecta Azure Repos de nuevo con el nuevo token).
 
@@ -75,9 +81,9 @@ Si alguno de los puntos anteriores falla para el usuario, Kody tampoco podrá ha
 
 Algunas organizaciones de Azure DevOps aplican políticas más estrictas a nivel de organización que bloquean incluso a usuarios con permisos correctos de publicar comentarios en PRs a través de un PAT. Si los pasos 1 y 2 parecen correctos pero Kody todavía no publica nada, agrega al propietario del PAT al grupo **Project Collection Administrators**:
 
-1. Abre **Configuración de Organización** → **Permisos** (barra lateral izquierda).
+1. Abre **Organization Settings** → **Permissions** (barra lateral izquierda).
 2. Haz clic en el grupo **Project Collection Administrators**.
-3. Abre la pestaña **Miembros** → haz clic en **Agregar**.
+3. Abre la pestaña **Members** → haz clic en **Add**.
 4. Agrega el usuario que generó el PAT de Kodus.
 
 <Warning>

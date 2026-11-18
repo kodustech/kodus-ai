@@ -1,42 +1,43 @@
 ---
-title: "Cómo conectar Jira a tu herramienta de revisión de código"
-description: "Vincula Jira a Kodus para que tus revisiones de código con IA validen automáticamente los PRs contra los requisitos y criterios de aceptación de las tareas."
+title: "Conecta Jira y valida pull requests"
+description: "Configura Atlassian Rovo en Kodus y comprueba un PR contra su ticket de Jira."
 ---
 
-Conectar Jira a Kodus habilita dos características poderosas: **validación automática de lógica de negocio** contra tickets de Jira, y un contexto más enriquecido para las sugerencias de revisión de código.
+Necesitas permiso de lectura en los proyectos de Jira que referencian tus pull requests.
 
 ## Cómo conectar
 
-1. En la barra lateral, abre **Plugins**
-2. Haz clic en el mosaico de **Jira**
-3. Autentícate (OAuth o token de API) y autoriza el acceso a tu espacio de trabajo de Jira
-4. Elige las herramientas que Kody puede usar y haz clic en **Install plugin**
+1. En la barra lateral, abre **Plugins** (instalar un plugin requiere el rol Owner)
+2. Haz clic en el mosaico de **Atlassian Rovo** (Jira)
+3. Haz clic en **Authenticate with** el plugin y autoriza el acceso a tu espacio de trabajo de Jira (OAuth), o ingresa tu correo de Atlassian y un token de API y haz clic en **Connect**
+4. El plugin se instala en cuanto se conecta, con sus herramientas de solo lectura seleccionadas. Para cambiarlas más tarde, ábrelo, edita **Selected tools** y haz clic en **Update Tools**
+
+Mantén seleccionadas estas herramientas, porque Kody lee los tickets con ellas: `getJiraIssue`, `getAccessibleAtlassianResources` y `getVisibleJiraProjects`. Una herramienta que desactives no se puede usar.
 
 ## Qué habilita
 
 ### Validación automática de lógica de negocio
 
-Cuando un PR está vinculado a un ticket de Jira y la categoría **Business Logic** está activada en **Code review → What to review**, Kodus automáticamente:
-- Obtiene el título, la descripción y los criterios de aceptación del ticket
-- Compara el diff del PR con los requisitos
-- Reporta implementaciones faltantes, desajustes de alcance y brechas
+Menciona el ticket de Jira en el título, la rama o la descripción del PR. Con **Business Logic** activado en **Code review → What to review** (el valor predeterminado), Kody comprueba el PR en la primera revisión. Kody lee el ticket, su tarea principal y sus subtareas.
 
 ### Validación bajo demanda
 
-Pega cualquier URL de Jira en un comentario de PR:
+Pega cualquier URL de Jira, o una clave de ticket, en un comentario de PR:
 
 ```
 @kody -v business-logic https://your-org.atlassian.net/browse/PROJ-123
 ```
 
-### Contexto de revisión de código más enriquecido
+## Qué obtienes
 
-Con Jira conectado, Kody puede usar funciones MCP en tus reglas para obtener contexto de tareas, verificar el estado de issues y hacer referencias cruzadas de requisitos.
+Kody publica un comentario **Kody · Business Logic** con los requisitos comprobados y el código en el que se basa cada resultado. Una nueva comprobación actualiza ese comentario. Consulta la [Validación de lógica de negocio](/es/how_to_use/code_review/business_logic_validation) para ver los estados y las opciones de comprobación.
 
-## Requisitos
+## Consejos para mejores resultados
 
-- Jira Cloud o Jira Data Center
-- Acceso mediante OAuth o token de API
-- Permisos para leer los proyectos relevantes
+- Agrega **criterios de aceptación** a tus tickets de Jira. Si están bajo un encabezado o en un campo personalizado, define **Requirements → Where acceptance criteria live** en los ajustes de Business Logic.
+- Una subtarea de Jira se verifica contra los requisitos de su tarea padre que su título cubre.
+- Después de corregir una brecha, comenta `@kody -v business-logic` para volver a verificar.
 
-Para detalles sobre la validación de lógica de negocio, consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation). Para la configuración de plugins, consulta [Plugins](/es/how_to_use/code_review/plugins).
+## Herramientas del plugin en conversaciones
+
+Kody puede usar el plugin cuando lo mencionas en un comentario de PR. También se puede activar para un [agente personalizado](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp).

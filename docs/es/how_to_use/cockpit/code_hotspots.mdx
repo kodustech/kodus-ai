@@ -1,0 +1,56 @@
+---
+title: "Code hotspots"
+description: "Consulta qué directorios de un repositorio cambian con más frecuencia y contienen funciones largas o complejas."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="providers" detail="Code hotspots analiza repositorios conectados a través de GitHub o GitLab.">
+    <Badge icon="code-branch" stroke>GitHub y GitLab</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="cloud" detail="Disponible en Kodus Cloud, incluido el trial.">
+    <Badge icon="cloud" stroke>Teams y Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requiere una licencia Enterprise y BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Autoalojado</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="El espacio de trabajo en Kodus Cloud necesita acceso a esta beta.">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+La pestaña **Code hotspots** mapea los directorios de un repositorio según la frecuencia con la que cambian y según si los archivos de JavaScript y TypeScript muestreados de ellos contienen funciones largas o complejas. Las correcciones de bugs vinculadas aportan contexto.
+
+Los Owners y Repo Admins pueden abrir la pestaña con [acceso a Cockpit](/es/how_to_use/cockpit/overview).
+
+La pestaña tiene su propio selector de **Repository**, que empieza en el repositorio seleccionado en la parte superior del Cockpit (o en el primer repositorio cuando está seleccionado **All repositories**). Los selectores de repositorio y de rango de fechas de la parte superior del Cockpit están ocultos aquí, porque la ventana de historial es fija (consulta [Cómo se calcula](#cómo-se-calcula)). **Organization → Cockpit visibility** no controla esta pestaña.
+
+## El mapa
+
+Cada tarjeta es un directorio. Las columnas separan los directorios en **Occasional changes** y **Frequent changes**, donde frecuente significa el cuarto superior de directorios por pull requests modificados. Las filas los separan según si se marcó alguna función muestreada.
+
+| Grupo | Significado |
+| --- | --- |
+| **Investigate first** | Cambios frecuentes, con funciones marcadas |
+| **Monitor** | Cambios ocasionales, con funciones marcadas |
+| **Watch changes** | Cambios frecuentes, sin funciones marcadas en la muestra |
+| **Less active** | Cambios ocasionales, sin funciones marcadas en la muestra |
+
+Cada tarjeta muestra sus **changed PRs** y, cuando los hay, sus **linked fixes**. Dentro de un grupo, los directorios con más correcciones vinculadas van primero. Los directorios con historial pero sin muestra de JavaScript o TypeScript aparecen en **Structure not measured**, fuera del mapa; **Find a directory** filtra esa lista. Cuando no se pudo muestrear ningún archivo del repositorio, el mapa muestra **Function analysis is not available yet** en su lugar.
+
+Selecciona una tarjeta para abrir **Area detail**: **Changed PRs**, **JS/TS files checked**, **Linked fix PRs**, por qué aparece el directorio, los **Files sampled** con sus funciones marcadas, y **PR and issue evidence**. Cada PR de la lista de evidencia está marcado como **Linked to a bug issue**, **Bug-fix wording in the title** o **Changed this area**.
+
+## Cómo se calcula
+
+- **Historial:** pull requests mergeados. El primer escaneo cubre los 30 días anteriores, y los nuevos pull requests mergeados lo extienden, hasta un año. Cuando una semana tiene 100 o más pull requests, o algunos no se pudieron leer por completo, la pestaña indica **Sampled history (up to 100 PRs per week)**.
+- **Actualización:** un job en segundo plano se ejecuta cada dos horas. Hasta que termina el primer escaneo de un repositorio, la pestaña muestra **History scan in progress**.
+- **Funciones:** Kodus lee hasta 60 archivos de JavaScript y TypeScript de la rama por defecto, como máximo tres por directorio, empezando por los más modificados. Omite los archivos de más de 150.000 caracteres y los archivos con errores de sintaxis. Una función se marca con 80 o más líneas, 12 o más ramas, o anidamiento de 4 o más.
+- **Correcciones vinculadas:** pull requests que modificaron el directorio y cuya descripción cierra un issue del mismo repositorio (por ejemplo `fixes #123`) etiquetado como bug, defect o regression. Aportan historial. No muestran dónde se originó un defecto ni predicen bugs futuros.
+
+**How this view is calculated**, al final de la pestaña, muestra los conteos del repositorio seleccionado.
+
+## Línea de comandos
+
+`kodus cockpit code-areas --repo org/repo` muestra esta pestaña en la terminal. Consulta [Comandos del CLI](/es/how_to_use/cli/commands).

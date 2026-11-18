@@ -1,14 +1,14 @@
 ---
-title: "Configuração Centralizada"
+title: "Configuração centralizada"
 description: "Gerencie toda a configuração de code review e as Kody Rules como código em um único repositório. As alterações são sincronizadas automaticamente após cada merge; o rollout é controlado pela UI ou pelo CLI."
 ---
 
-A Configuração Centralizada permite manter todas as configurações de code review e todas as Kody Rules em **um único repositório**, em vez de editá-las por repositório na interface web. Cada alteração passa por um pull request nesse repositório, fornecendo histórico de versões, revisão e rollback da sua configuração de revisão.
+A configuração centralizada permite manter todas as configurações de code review e todas as Kody Rules em **um único repositório**, em vez de editá-las por repositório na interface web. Cada alteração passa por um pull request nesse repositório, fornecendo histórico de versões, revisão e rollback da sua configuração de revisão.
 
 Use quando você quiser:
 
 - Uma fonte única de verdade para o comportamento das revisões em muitos repositórios.
-- Configuração-como-código: histórico, revisão de PR, rollback, validação em CI.
+- Code review como código: histórico, revisão de PR, rollback, validação em CI.
 - Kody Rules consistentes (regras de revisão e memórias) em toda a organização.
 - Alterações de configuração via CLI ou CI.
 
@@ -20,6 +20,8 @@ Use quando você quiser:
    - `pr` — Kodus abre o PR de inicialização com suas configurações e regras efetivas atuais.
    - `manual` — Kodus gera os arquivos; sua equipe faz o download e abre o PR.
 4. Após o primeiro merge, todo merge futuro no repositório centralizado propaga automaticamente as alterações para o Kodus.
+
+O Kody não revisa os pull requests do próprio repositório centralizado.
 
 O repositório centralizado espelha a hierarquia de escopos do Kodus (Global → Repositório → Diretório) por meio do seu layout de pastas.
 
@@ -33,23 +35,23 @@ O nome do repositório é arbitrário — escolha o que melhor se adapta à sua 
 
 ```
 kodus-config/
-├── kodus-config.yml                      ← configurações globais
+├── kodus-config.yml                      ← global settings
 ├── .kody-rules/
-│   ├── review/                           ← regras de revisão globais
+│   ├── review/                           ← global review rules
 │   │   └── require-tests-for-endpoints.yml
-│   └── memories/                         ← memórias globais
+│   └── memories/                         ← global memories
 │       └── logging-convention.yml
 │
-├── backend-api/                          ← corresponde a um repositório Kodus
-│   ├── kodus-config.yml                  ← sobrescritas no nível do repositório
+├── backend-api/                          ← matches a Kodus repository
+│   ├── kodus-config.yml                  ← repository-level overrides
 │   ├── .kody-rules/
 │   │   ├── review/
 │   │   │   └── no-raw-sql.yml
 │   │   └── memories/
 │   │       └── auth-module-layout.yml
 │   │
-│   └── src/auth/                         ← corresponde a um subdiretório do repositório
-│       ├── kodus-config.yml              ← sobrescritas no nível do diretório
+│   └── src%2Fauth/                       ← a directory scope for src/auth
+│       ├── kodus-config.yml              ← directory-level overrides
 │       └── .kody-rules/
 │           ├── review/
 │           └── memories/
@@ -60,16 +62,20 @@ kodus-config/
 
 Regras:
 
-- Um `kodus-config.yml` na **raiz** do repositório centralizado aplica-se globalmente.
-- Uma pasta de nível superior cujo nome corresponde a um repositório Kodus (ex.: `backend-api/`) escopa os arquivos para aquele repositório.
-- Um caminho aninhado dentro de uma pasta de repositório (ex.: `backend-api/src/auth/`) escopa os arquivos para aquele diretório, seguindo o mesmo modelo de herança da interface web.
-- Regras em `.kody-rules/review/` tornam-se **regras de revisão**; regras em `.kody-rules/memories/` tornam-se **memórias**.
+- Um `kodus-config.yml` na **raiz** do repositório centralizado vale globalmente.
+- Uma pasta de primeiro nível com o nome de um repositório do Kodus (por exemplo `backend-api/`) delimita os arquivos dela a esse repositório. No GitLab o nome é o caminho completo, então a pasta é aninhada: `group/project/`.
+- Um escopo de diretório é uma pasta dentro da pasta do repositório, nomeada com os caminhos que ela cobre. Escreva cada `/` como `%2F` e junte vários caminhos com `&`: `src%2Fauth`, ou `apps%2Fweb&apps%2Fdocs` para um escopo com duas pastas. Um caminho aninhado mais fundo, como `backend-api/src/auth/`, é ignorado.
+- Regras em `.kody-rules/review/` viram **regras de revisão**; regras em `.kody-rules/memories/` viram **memórias**.
 
 Qualquer arquivo sem um escopo correspondente é ignorado na sincronização.
 
+Excluir um arquivo do repositório centralizado remove o que ele definia na próxima sincronização: um arquivo de regra excluído apaga essa regra, e um `kodus-config.yml` excluído que uma sincronização anterior aplicou limpa as configurações desse escopo.
+
 ## Arquivos de Configuração
 
-Cada `kodus-config.yml` usa o mesmo schema que o `kodus-config.yml` por repositório documentado em [Configurações Gerais](/pt-BR/how_to_use/code_review/configs/general). Os campos são aplicados no nível da pasta onde o arquivo está e seguem as regras de herança usuais (veja [Herança e Sobrescrita de Configuração](/pt-BR/how_to_use/code_review/configs/inheritance_overrides)).
+Cada `kodus-config.yml` usa o mesmo schema do `kodus-config.yml` por repositório documentado em [Configurações gerais](/pt-BR/how_to_use/code_review/configs/general). Os campos são aplicados no nível da pasta onde o arquivo está e seguem as regras usuais de herança (veja [Herança de configurações](/pt-BR/how_to_use/code_review/configs/inheritance_overrides)). Diferente do arquivo do próprio repositório, esses arquivos também podem conter `customMessages` (veja [Mensagens personalizadas](/pt-BR/how_to_use/code_review/configs/custom_messages)).
+
+Os [agentes customizados](/pt-BR/how_to_use/code_review/custom_agents), e as skills e docs ligados a eles, não fazem parte da Configuração Centralizada. Eles são configurados no app, e as chaves `customAgents` e `knowledge` nesses arquivos são ignoradas.
 
 Exemplo mínimo:
 
@@ -91,7 +97,7 @@ automatedReviewActive: true
 
 ## Arquivos de Kody Rules
 
-Cada regra é um único arquivo YAML em `.kody-rules/review/` (regras padrão) ou `.kody-rules/memories/` (memórias). O nome do arquivo é arbitrário — Kodus identifica as regras pelo campo `title` e pelo caminho canônico do arquivo armazenado com a regra.
+Cada regra é um único arquivo `.yml` ou `.yaml` em `.kody-rules/review/` (regras padrão) ou `.kody-rules/memories/` (memórias). O nome do arquivo é arbitrário, mas o Kodus liga uma regra ao caminho do arquivo: renomear ou mover um arquivo apaga a regra antiga e cria uma nova na próxima sincronização. `title` e `rule` são obrigatórios; um arquivo que não os tenha ou que falhe na validação é ignorado, a sincronização reporta a falha e não apaga regras removidas até que o arquivo seja corrigido.
 
 Exemplo de regra de revisão (`.kody-rules/review/require-tests-for-endpoints.yml`):
 
@@ -116,92 +122,100 @@ inheritance:
   include: []
 ```
 
-Veja a [Visão Geral das Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules) para a referência completa de campos e [Herança de Regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance) para entender como `inheritance.inheritable`, `exclude` e `include` se comportam.
+Uma regra pausada é escrita com `enabled: false`.
 
-## Fluxo pela Interface Web
+Veja [Visão Geral das Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules) para a referência completa de campos e [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance) para saber como `inheritance.inheritable`, `exclude` e `include` se comportam.
 
-Na barra lateral, escolha **Global** no seletor de escopo no topo do grupo **Code review** e
+## Fluxo na UI
+
+Na barra lateral, escolha **Global** no seletor de escopo no topo do grupo **Code review** e depois
 abra **Code review → General**:
 
-1. Clique em **Configure centralized config** no cabeçalho da página (abre o diálogo
-   **Centralized Config**).
+1. Clique em **Configure centralized config** no cabeçalho da página (abre o diálogo **Centralized Config**).
 2. Ative **Enable centralized config**.
 3. Selecione o repositório de origem (**Selected repository**).
-4. Escolha o **Método de Sincronização Inicial**:
-   - Automático (Criar PR agora)
-   - Manual (Sincronizar depois)
-5. Clique em **Initialize** (ou **Save Changes**) e confirme o status.
+4. Escolha o **Initial Sync Method**:
+   - Automatic (Create PR now)
+   - Manual (Sync later)
+5. Clique em **Initialize** e confirme o status.
 
-## Comportamento da Interface Web Quando Habilitada
+Depois de habilitado, o diálogo mostra o repositório de origem e estes botões:
 
-Quando a Configuração Centralizada está habilitada, a fonte de verdade para a configuração é o repositório centralizado. A interface web reflete isso:
+- **Sync Now** aplica o conteúdo atual do repositório centralizado.
+- **Download** salva o pacote de configuração (veja abaixo).
+- **Save Changes** salva o que você alterou no diálogo, por exemplo ao desativar **Enable centralized config**.
 
-- **Configurações de code review globais, de repositório e de diretório** (General, What to review, What Kody writes, Linked repositories) continuam editáveis na interface web, mas salvar não aplica a alteração diretamente. Cada página mostra um banner — "Centralized config is enabled. Changes on this page are proposed through pull requests in the `<repo>` repository and applied after merge." — com **View active pull request** quando há um aberto, e **Save settings** propõe a alteração como um pull request no repositório centralizado. Uma vez que o PR é mesclado, a alteração entra em vigor. Você também pode editar os arquivos diretamente no repositório centralizado.
-- **Kody Rules** funcionam da mesma forma. Salvar uma edição não modifica a regra diretamente — Kodus abre um pull request no repositório centralizado com a alteração proposta. Uma vez que o PR é mesclado, a alteração entra em vigor.
+O repositório de origem não pode ser alterado enquanto estiver habilitado. Para usar outro repositório, desative **Enable centralized config**, clique em **Save Changes** e habilite novamente.
 
-Isso preserva a garantia de "tudo é revisado e versionado" enquanto mantém a experiência de edição visual para configurações, regras e mensagens.
+## Comportamento da UI Web Quando Habilitado
 
-### Regras da UI e regras do repo coexistem
+O repositório centralizado é a fonte de verdade. A UI web reflete isso:
 
-Habilitar a Configuração Centralizada **não** apaga regras criadas anteriormente na interface web, e **não** impede que novas regras sejam criadas pela UI. As duas origens alimentam o mesmo conjunto de regras ativas:
+- As **configurações de code review** nos escopos Global, de repositório e de diretório continuam editáveis na UI web. Cada página mostra um banner — "Centralized config is enabled. Changes on this page are saved immediately and proposed through pull requests in the `<repo>` repository. Synchronization reapplies the configuration from that repository." — com **View active pull request** quando há um aberto. **Save settings** aplica a alteração no Kodus na hora e abre um pull request com a mesma alteração no repositório centralizado. Se esse pull request for fechado sem merge, a próxima sincronização restaura a versão do repositório sobre a configuração salva. Alterações adicionais feitas enquanto esse pull request está aberto são adicionadas a ele. Você também pode editar os arquivos diretamente no repositório centralizado.
+- As **Kody Rules** funcionam de outra forma. Criar ou editar uma regra não a altera diretamente: o Kodus abre um pull request no repositório centralizado com a alteração proposta, e a alteração passa a valer quando o pull request recebe merge.
 
-- Regras importadas do repositório centralizado são persistidas com status `SYNCED`.
-- Regras criadas diretamente na interface web convivem com elas e continuam ativas.
-- Na hora da revisão, o Kodus carrega **todas as regras ativas** do banco de dados independentemente da origem. Uma regra que existe só na UI é aplicada exatamente como uma regra que existe só no repo.
-- Regras com status `PENDING_ADD` (edição pela UI/CLI que abriu um PR ainda não mesclado) são **excluídas** das revisões até o PR ser mesclado e o status passar para `SYNCED`.
+### Regras da UI e regras do repositório coexistem
 
-Na prática: se você criar o repositório centralizado manualmente e ele não tiver uma regra que você já havia cadastrado na UI, essa regra continua rodando — ela só não fica versionada no repo. Para trazê-la ao versionamento, edite-a uma vez pela UI (o que abre um PR) ou use `init` para o Kodus empacotar todas as regras existentes no PR de inicialização.
+Habilitar a Configuração Centralizada **não** apaga regras que foram criadas antes na UI web, e o repositório não precisa contê-las. As duas fontes alimentam o mesmo conjunto de regras ativas:
+
+- Regras importadas do repositório centralizado são persistidas com o status `SYNCED`.
+- Regras criadas na UI web antes de você habilitar convivem com elas e continuam ativas.
+- Na hora da revisão, o Kodus carrega **toda regra ativa** do banco de dados, independentemente da origem. Uma regra que existe só na UI é aplicada exatamente como uma regra que existe só no repositório.
+- Regras com status `PENDING_ADD` (criadas pela UI/CLI, ou exportadas pelo `init`, com um PR ainda sem merge) são **excluídas** das revisões até o PR receber merge e o status passar para `SYNCED`. A lista de Kody Rules mostra `PENDING_ADD`, `PENDING_EDIT` e `PENDING_DELETE` como **Pending add**, **Pending edit** e **Pending delete**.
+- O `init` com o método `pr` coloca no PR de inicialização toda regra existente que ainda não tem arquivo e a marca como `PENDING_ADD`, então essas regras não rodam nas revisões até esse PR receber merge.
+
+Na prática: se você montar o repositório centralizado à mão e faltar uma regra que você já tinha na UI, essa regra continua rodando — só não fica versionada no repositório. Para colocá-la sob controle de versão, edite-a uma vez na UI (o que abre um PR) ou use o `init` para que o Kodus inclua toda regra existente no PR de inicialização. Não copie o arquivo de uma regra para o repositório à mão enquanto a regra da UI ainda existir: a sincronização associa regras pelo caminho do arquivo, então o arquivo vira uma segunda regra com o mesmo título.
 
 ## Estados de Sincronização
 
-Cada regra proveniente da Configuração Centralizada acompanha seu ciclo de vida por meio de um status:
+Cada regra que vem da Configuração Centralizada acompanha seu ciclo de vida por meio de um status:
 
 | Status | Significado |
 |---|---|
 | `SYNCED` | A regra no Kodus corresponde ao arquivo no repositório centralizado. |
-| `PENDING_ADD` | Uma nova regra foi criada via UI/CLI e um PR foi aberto; o arquivo ainda não existe na branch padrão. |
-| `PENDING_EDIT` | Uma edição foi proposta via UI/CLI e um PR está aberto; o arquivo existente ainda não foi atualizado. |
-| `PENDING_DELETE` | Uma exclusão foi proposta via UI/CLI e um PR está aberto; o arquivo ainda existe na branch padrão. |
+| `PENDING_ADD` | Uma nova regra foi criada pela UI/CLI e um PR foi aberto; o arquivo ainda não existe na branch padrão. |
+| `PENDING_EDIT` | Uma edição foi proposta pela UI/CLI e há um PR aberto; o arquivo existente ainda não foi atualizado. |
+| `PENDING_DELETE` | Uma exclusão foi proposta pela UI/CLI e há um PR aberto; o arquivo ainda existe na branch padrão. |
 
-Os estados `PENDING_*` voltam para `SYNCED` quando o PR correspondente é mesclado.
+`PENDING_ADD` e `PENDING_EDIT` viram `SYNCED` quando o PR correspondente recebe merge; uma regra `PENDING_DELETE` é apagada. Se o pull request aberto pelo Kodus for fechado sem merge, uma nova regra proposta é rejeitada e uma edição ou exclusão proposta é descartada.
 
 ## Modos de Sincronização
 
 <Tabs>
   <Tab title="PR (padrão)">
-    Kodus abre o pull request de inicialização automaticamente com suas
+    O Kodus abre o pull request de inicialização automaticamente com suas
     configurações e regras efetivas atuais.
   </Tab>
   <Tab title="Manual">
-    Kodus gera os arquivos mas não abre um PR. Use o bundle de download
-    para exportar os arquivos, depois abra e mescle o PR vocês mesmos.
+    O Kodus gera os arquivos, mas não abre um PR. Use o pacote para download
+    para exportar os arquivos e depois abra e faça o merge do PR você mesmo.
   </Tab>
 </Tabs>
 
-## Download do Bundle de Configuração
+## Baixar o Pacote de Configuração
 
-Você pode baixar um ZIP contendo os arquivos `kodus-config.yml` gerados e a árvore `.kody-rules/` que refletem suas configurações e regras atuais.
+Clique em **Download** no diálogo **Centralized Config** para obter um ZIP com os arquivos `kodus-config.yml` gerados e a árvore `.kody-rules/` que refletem suas configurações e regras atuais.
 
-Use quando:
+Use quando for:
 
 - Auditar a configuração gerada.
-- Compartilhar artefatos de configuração com outra equipe.
+- Compartilhar artefatos de setup com outra equipe.
 - Manter um backup local antes de um rollout.
 - Inicializar o repositório centralizado no modo `manual`.
 
 ## Desabilitar a Configuração Centralizada
 
-Desabilitar a Configuração Centralizada limpa o repositório de origem selecionado e retorna todos os repositórios ao comportamento padrão não centralizado (configurações editadas na interface web, `kodus-config.yml` opcional por repositório).
+Desabilitar a Configuração Centralizada limpa o repositório de origem selecionado e devolve todos os repositórios ao comportamento padrão sem centralização (configurações editadas na UI web, `kodus-config.yml` por repositório opcional).
 
-As regras e configurações que foram sincronizadas permanecem no Kodus — elas não são excluídas ao desabilitar.
+Regras e configurações que já foram sincronizadas permanecem no Kodus — elas não são apagadas ao desabilitar.
 
 ## CLI
 
-Use estes comandos para gerenciar a Configuração Centralizada a partir de fluxos de trabalho no terminal e scripts de CI.
+Use estes comandos para gerenciar a Configuração Centralizada em fluxos de terminal e scripts de CI.
 
 ### Requisitos
 
-- Autenticação com team key.
+- Uma chave de equipe com **Allow repository configuration via CLI** ativado (**Organization → CLI keys → Configure**).
 - Pelo menos um repositório selecionado no Kodus.
 
 Autentique com:
@@ -210,7 +224,7 @@ Autentique com:
 kodus auth team-key --key <your-key>
 ```
 
-### Verificar Status
+### Verificar o Status
 
 ```bash
 kodus config centralized status
@@ -222,11 +236,12 @@ kodus config centralized status
 kodus config centralized init [owner/repo] --sync-option <pr|manual>
 ```
 
-Notas:
+Observações:
 
-- `--sync-option` tem padrão `pr`.
-- Se o repositório for omitido em um terminal interativo, o CLI solicita a seleção.
-- Em ambientes não interativos, o repositório deve ser fornecido.
+- `--sync-option` tem `pr` como padrão.
+- Use `.` para o repositório do diretório atual.
+- Se o repositório for omitido em um terminal interativo, o CLI pede a seleção.
+- Em ambientes não interativos, o repositório precisa ser informado.
 
 Exemplos:
 
@@ -235,7 +250,7 @@ kodus config centralized init kodustech/kodus-config --sync-option pr
 kodus config centralized init kodustech/kodus-config --sync-option manual
 ```
 
-### Executar Sincronização
+### Executar a Sincronização
 
 ```bash
 kodus config centralized sync
@@ -253,14 +268,14 @@ kodus config centralized disable
 kodus config centralized download --out ./centralized-config.zip
 ```
 
-Notas:
+Observações:
 
 - `--out` é obrigatório.
-- A saída é um bundle ZIP contendo os arquivos de configuração gerados e a árvore `.kody-rules/`.
+- A saída é um pacote ZIP com os arquivos de configuração gerados e a árvore `.kody-rules/`.
 
-### Saída em JSON
+### Saída JSON
 
-Todos os comandos centralizados suportam saída estruturada com `--json`.
+Todos os comandos de configuração centralizada suportam saída estruturada com `--json`.
 
 ```bash
 kodus config centralized status --json
@@ -273,7 +288,7 @@ kodus config centralized download --out ./centralized-config.zip --json
 ## Relacionados
 
 - [Configurações Gerais](/pt-BR/how_to_use/code_review/configs/general)
-- [Herança e Sobrescrita de Configuração](/pt-BR/how_to_use/code_review/configs/inheritance_overrides)
+- [Herança de configurações](/pt-BR/how_to_use/code_review/configs/inheritance_overrides)
 - [Visão Geral das Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules)
-- [Herança de Regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance)
-- [Referência de comandos CLI](/pt-BR/how_to_use/cli/commands)
+- [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance)
+- [Referência de comandos do CLI](/pt-BR/how_to_use/cli/commands)

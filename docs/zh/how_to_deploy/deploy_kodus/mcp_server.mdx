@@ -1,0 +1,101 @@
+---
+title: "Kodus MCP server"
+description: "使用 CLI 密钥将 MCP 客户端连接到自托管 Kodus，以读取仓库和拉取请求，并管理 Kody Issues、Kody Rules 和记忆。"
+---
+
+MCP 服务器仅适用于自托管 Kodus。它将工作区的代码库、拉取请求、[Kody Issues](/zh/how_to_use/issues/overview)、[Kody Rules](/zh/how_to_use/code_review/configs/kody_rules) 和记忆作为工具提供给 MCP 客户端。
+
+要通过 **Plugins** 为 Kody 接入外部工具，请配置 [MCP Manager](/zh/how_to_deploy/deploy_kodus/mcp_manager)。
+
+## 开启
+
+Docker Compose 安装程序默认关闭此端点。请在 `kodus-installer` 目录的 `.env` 中添加以下配置：
+
+```bash
+API_MCP_SERVER_ENABLED=true
+```
+
+在该目录运行 `docker compose up -d --no-deps api` 以应用新变量。
+
+Helm Chart 默认启用此端点。要关闭它，请在 values 文件中将 `global.config.API_MCP_SERVER_ENABLED` 设为 `"false"`，然后运行 `helm upgrade`。
+
+关闭时,API 不会提供 `/mcp`。该路由是 API 主机上的 `POST /mcp`,因此反向代理必须转发它。参见[反向代理](/zh/how_to_deploy/deploy_kodus/reverse_proxy)。
+
+## 连接客户端
+
+将客户端连接到自托管实例的 API 端点 `https://<your-api-host>/mcp`。服务器使用 Streamable HTTP。
+
+1. 打开 **Organization → CLI keys**,生成一个密钥并复制。只有组织所有者可以生成密钥。参见 [CLI 密钥](/zh/how_to_use/organization/organization_settings#cli-密钥)。
+2. 在每个请求中通过以下任一请求头发送该密钥:
+
+```
+x-team-key: kodus_xxxxx
+Authorization: Bearer kodus_xxxxx
+```
+
+要检查连接,请列出工具:
+
+```bash
+curl -X POST https://<your-api-host>/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'x-team-key: kodus_xxxxx' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+- 一个密钥属于一个团队。指向其他团队的 `teamId` 参数会被拒绝,省略 `teamId` 时会根据密钥自动填入。
+- 大多数工具接受 `organizationId` 参数。它必须是您组织的 ID,其他值会被拒绝。
+- `initialize`、`tools/list` 和 `ping` 无需密钥即可使用。其他任何调用都需要有效的密钥,缺失、无效或已撤销的密钥会返回 `401`。
+
+## 工具
+
+### 代码库和拉取请求
+
+| 工具 | 作用 |
+| --- | --- |
+| `KODUS_LIST_REPOSITORIES` | 列出团队的代码库。 |
+| `KODUS_LIST_PULL_REQUESTS` | 列出拉取请求,可按状态、代码库、作者或日期范围过滤。仅返回元数据。 |
+| `KODUS_LIST_COMMITS` | 列出提交,可按作者、日期范围或分支过滤。 |
+| `KODUS_GET_PULL_REQUEST` | 返回一个拉取请求及其描述、提交、审查和修改的文件。 |
+| `KODUS_GET_REPOSITORY_FILES` | 列出某个分支的文件路径,可按模式过滤。 |
+| `KODUS_GET_REPOSITORY_CONTENT` | 返回某个分支上一个文件的内容。 |
+| `KODUS_GET_PULL_REQUEST_FILE_CONTENT` | 返回应用拉取请求更改之后的文件。 |
+| `KODUS_GET_DIFF_FOR_FILE` | 返回拉取请求中一个文件的 diff。 |
+| `KODUS_GET_PULL_REQUEST_DIFF` | 返回整个拉取请求的 diff。 |
+
+### Kody Issues
+
+| 工具 | 作用 |
+| --- | --- |
+| `KODUS_CREATE_KODY_ISSUE` | 为拉取请求创建一个工单,并链接到它来源的 Kody 评论。 |
+| `KODUS_LIST_KODY_ISSUES` | 列出工单,可按代码库名称、严重性或标签过滤。 |
+| `KODUS_GET_KODY_ISSUE_DETAILS` | 返回一个工单。 |
+| `KODUS_UPDATE_KODY_ISSUE_STATUS` | 将状态设置为 `open`、`resolved` 或 `dismissed`。 |
+| `KODUS_UPDATE_KODY_ISSUE_CATEGORY` | 更改工单的标签。 |
+| `KODUS_DELETE_KODY_ISSUE` | 忽略该工单,但不会删除它。 |
+
+### Kody Rules 和记忆
+
+| 工具 | 作用 |
+| --- | --- |
+| `KODUS_GET_KODY_RULES` | 列出组织中处于活跃和待处理状态的规则。 |
+| `KODUS_GET_KODY_RULES_REPOSITORY` | 列出某个代码库中处于活跃和待处理状态的规则。 |
+| `KODUS_CREATE_KODY_RULE` | 创建一条规则,包含范围(**Per file** 或 **Per PR**)、严重性和可选的示例。 |
+| `KODUS_UPDATE_KODY_RULE` | 更改您为现有规则发送的字段。 |
+| `KODUS_DELETE_KODY_RULE` | 永久删除一条规则。 |
+| `KODUS_CREATE_MEMORY` | 保存一条记忆。如果已存在类似的记忆,Kody 会跳过它或更新那一条。 |
+| `KODUS_FIND_MEMORIES` | 按代码库、目录、路径 glob 或关键词搜索记忆。最多返回 20 条,最新的在前。 |
+
+## 管理规则和记忆
+
+`KODUS_CREATE_KODY_RULE`、`KODUS_UPDATE_KODY_RULE`、`KODUS_DELETE_KODY_RULE` 和 `KODUS_CREATE_MEMORY` 需要密钥具有 `kodyRules:manage` 能力。在 **Organization → CLI keys** 中,点击该密钥上的 **Configure** 并开启 **Allow Kody Rules management via CLI**。没有它,这些工具会返回错误结果(`isError: true`),提示该密钥无权管理 Kody Rules。其他工具不需要任何能力。
+
+- 通过该服务器创建的规则显示 **MCP/Agent** 来源,并在 **Pending review** 中等待,直到有人批准。
+- 只有在 **Kody knowledge approval** 开启时,记忆才会在那里等待。
+- 启用[集中配置](/zh/how_to_use/code_review/configs/centralized_config)后,创建、更改或删除规则或记忆会改为在配置代码库上打开一个拉取请求。
+
+## 限制
+
+- 仅支持 `POST`。
+- 无状态。服务器在请求之间不保留会话,也不返回 `Mcp-Session-Id`。
+- 除了对 `POST` 的响应之外,它不会向客户端发送任何内容。

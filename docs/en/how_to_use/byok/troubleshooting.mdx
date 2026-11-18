@@ -1,0 +1,77 @@
+---
+title: "BYOK troubleshooting and FAQ"
+sidebarTitle: "Troubleshooting"
+description: "Fix Test errors, rate limits and unexpected costs, and answers to common BYOK questions."
+---
+
+Fixes for the errors you meet when connecting a provider and running reviews on it, then answers to common questions.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="'Invalid API key' when clicking Test">
+    - Copy the key without extra spaces, quotes, or trailing newlines.
+    - Confirm billing is enabled and the account has credits.
+    - For GLM Coding Plan / Kimi Code Plan keys, make sure the **base URL** matches the plan — subscription keys don't work on the Developer API endpoint and vice versa.
+  </Accordion>
+
+  <Accordion title="'Model not found' when clicking Test">
+    - Test sends a real request to the model, so a wrong or misspelled model ID fails here. This is expected and better than failing at review time.
+    - Copy the exact model ID from the provider's dashboard. Some providers use deep paths (e.g. Fireworks `accounts/fireworks/models/kimi-k2p7-code`) or spell versions differently (`k2p7` vs `k2.7`).
+  </Accordion>
+
+  <Accordion title="'Endpoint not found' when clicking Test">
+    - Verify the base URL matches the provider exactly (trailing slash matters for some).
+    - For OpenAI-compatible providers, the endpoint is usually `{baseURL}/chat/completions` (Kodus adds the path), so paste the base URL without it. A URL that ends in `/chat/completions`, `/messages` or `/responses` is rejected, and the message gives the address to use instead.
+    - A `404` on an OpenAI or OpenAI-compatible URL with no version usually means it needs `/v1`. The message suggests the corrected URL.
+    - The URL must use `https://` and resolve to a public address. A URL that resolves to a private or reserved address is rejected.
+  </Accordion>
+
+  <Accordion title="Test rejects the temperature or reasoning I set">
+    - Some models pin temperature or always reason (Kimi `k2p7-code`/`k3`, GLM-5.3; Claude 4.7+/GPT-5 remove temperature entirely). Test validates your tuning against the model's rules and returns a specific message — follow it (leave temperature unset or use the required value; don't turn reasoning Off on an always-reasoning model). See [Temperature](/en/how_to_use/byok/model_settings#temperature).
+  </Accordion>
+
+  <Accordion title="'Rate limited' or 'Too much concurrency'">
+    - Lower **Max concurrent requests** in Advanced settings.
+    - On GLM Coding Plan Lite/Pro, stay at **1 concurrent**. Upgrade to Max (30 concurrent) if you need more throughput.
+    - On Kimi Code Plan, the documented cap is **30 concurrent**.
+  </Accordion>
+
+  <Accordion title="Self-hosted env vars not showing">
+    - If Kodus is configured through environment variables, the **AI providers** page shows **Kodus is currently using an LLM configured via environment variables** with the model and provider (and whether the provider was set in `API_LLM_PROVIDER` or guessed), while no model is connected there. The key is never displayed.
+    - Connecting a model and saving overrides the environment configuration.
+  </Accordion>
+
+  <Accordion title="High or unexpected costs">
+    - Reasoning adds tokens. If cost is spiking, lower **Thinking / Reasoning** from Medium to Low, or route lighter tasks to a cheaper model under **Other task models** on **Code review → Routing**.
+    - See [Token usage](/en/how_to_use/organization/token_usage) for what each model, PR, review, and developer cost, check your provider dashboard for the per-model breakdown, and set a monthly budget with spend alerts under the **Budget** tab (alerts only; set a hard cap with your provider).
+  </Accordion>
+</AccordionGroup>
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Can I switch providers anytime?">
+    Yes. The change takes effect for the next review — no redeploy required.
+  </Accordion>
+
+  <Accordion title="What happens if my API key runs out of credits?">
+    Reviews switch to the Fallback model if one is configured. Without one, the review fails and returns an error. Configure a fallback.
+  </Accordion>
+
+  <Accordion title="How does the default / fallback system work?">
+    Every task uses the default model unless you pick another for it in Routing. If a task's model fails in a way another model can fix (a bad or expired key, no credit, or the provider being down after its own retries), Kody retries once on the Fallback model. A rate limit it can wait out, a prompt too large for the model, or a timeout does not switch models. You pay only for the provider that actually processed the call.
+  </Accordion>
+
+  <Accordion title="Can different tasks use different models?">
+    Yes. That's what **Code review → Routing** is for: pick a model per task, such as a strong one for code review and a cheaper one for summaries or chat. You need at least two connected models for routing to be meaningful.
+  </Accordion>
+
+  <Accordion title="Do you store our API keys securely?">
+    Yes. Keys are encrypted at rest and in transit and never logged in plain text. The BYOK status endpoint never returns the raw key.
+  </Accordion>
+
+  <Accordion title="Can I use a self-hosted LLM (e.g. Ollama, vLLM)?">
+    Yes — via the **OpenAI-compatible** provider (under Custom). Enter your endpoint's base URL, the model ID it exposes, and a placeholder API key (most self-hosted runtimes ignore the key header but still require one). The **AI providers** page only accepts an `https://` URL that resolves to a public address, so `localhost` and private network addresses are rejected. On a self-hosted Kodus, set an endpoint on a private network with environment variables instead; see [Installation](/en/how_to_deploy/deploy_kodus/generic_vm).
+  </Accordion>
+</AccordionGroup>

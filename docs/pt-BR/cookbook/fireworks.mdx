@@ -1,180 +1,96 @@
 ---
-title: "Fireworks AI - Plataforma de Inferência Rápida"
+title: "Fireworks AI - Inferência Compatível com OpenAI"
 description: "Aprenda a usar os modelos do Fireworks AI com o Kodus"
 icon: "fire"
 ---
 
 ## Como o Fireworks AI funciona
 
-O Fireworks AI é a plataforma de inferência mais rápida para IA generativa, projetada para criar e executar aplicações de IA incríveis em segundos. A plataforma fornece acesso serverless a modelos open-source populares como DeepSeek, Llama, Qwen e Mistral com velocidade otimizada, alta taxa de transferência e latência mínima. Criado para desenvolvedores que precisam de infraestrutura de IA confiável e ultra-rápida sem a complexidade do gerenciamento de GPUs.
+O Fireworks AI é uma plataforma de inferência que serve modelos open-source populares, como DeepSeek, Kimi, GLM e Qwen, por meio de uma API **compatível com OpenAI**. O Kodus se comunica com ela pelo provedor compatível com OpenAI, então não há alterações de código — apenas credenciais BYOK.
 
 ## Modelos Recomendados
 
-Recomendamos bons modelos de codificação com preços competitivos e grandes janelas de contexto.
-
 <Info>
-  Para as informações mais atualizadas, visite a [página de preços do Fireworks AI](https://fireworks.ai/pricing).
+  O catálogo do Fireworks muda com frequência. Veja a [biblioteca de modelos do Fireworks](https://fireworks.ai/models) para os modelos atuais, janelas de contexto e preços.
 </Info>
 
-| Modelo                              | Preço (1M tokens) | Janela de Contexto |
-| ---------------------------------- | ------------------- | ------------------ |
-| **Llama 4 Maverick** `recommended` | $0.22/$0.88         | ~131k tokens   |
-| **Llama 4 Scout**                  | $0.15/$0.60         | ~131k tokens   |
-| **DeepSeek V3**                    | $0.90               | ~128k tokens   |
-| **Qwen3 235B**                     | $0.22/$0.88         | ~131k tokens   |
+Os IDs de modelo do Fireworks têm o formato `accounts/fireworks/models/<model>` e escrevem uma versão com `p`: o GLM 5.3 é `glm-5p3`. Copie o ID da página do modelo na biblioteca.
+
+| ID do Modelo | Janela de Contexto |
+| ------------ | ------------------ |
+| `accounts/fireworks/models/glm-5p3` | 1.048.576 tokens |
+
+Os agentes de revisão do Kodus chamam ferramentas e esperam saída estruturada. Escolha um modelo que suporte function calling, o que a página do modelo informa.
 
 ## Criando a Chave de API
 
 <Warning>Uma conta no Fireworks AI é necessária para criar a Chave de API.</Warning>
 
-Acesse diretamente o [Fireworks AI Console](https://app.fireworks.ai) para criar uma nova Chave de API.
+1. Entre em [app.fireworks.ai](https://app.fireworks.ai) ou crie uma conta.
+2. Abra a página de chaves de API: [app.fireworks.ai/settings/users/api-keys](https://app.fireworks.ai/settings/users/api-keys).
+3. Clique em **Create API key**.
+4. Copie a chave e guarde em um local seguro. O Fireworks não a mostra novamente.
 
-Ou siga estas etapas:
+## Configurar o Fireworks AI no Kodus
 
-1. Visite [app.fireworks.ai](https://app.fireworks.ai) e crie uma conta ou entre
-2. Após fazer login, navegue até a página **API Keys** nas configurações da sua conta
-3. Clique no botão **"Create API Key"**
-4. Dê à sua chave um nome descritivo (ex.: 'Kodus' ou qualquer nome que preferir)
-5. Clique em **"Create"** para gerar a chave
-6. Copie a chave de API imediatamente e salve em um local seguro — você não poderá vê-la novamente
+### Opção 1 — Página AI providers (recomendado)
 
-<Info>
-  Novas contas recebem $1 em créditos gratuitos para começar com seus projetos.
-</Info>
+Siga [Conectar um provedor](/pt-BR/how_to_use/byok#conectar-um-provedor) e escolha **Custom → OpenAI-compatible**. Preencha o formulário com estes valores.
 
-## Como usar
+| Campo | Valor |
+| --- | --- |
+| **Base URL** | `https://api.fireworks.ai/inference/v1` |
+| **Model** | ex.: `accounts/fireworks/models/glm-5p3` |
+| **API key** | sua chave de API do Fireworks |
+| **Max concurrent requests** | opcional; diminua se você vir erros de rate limit (em **Advanced (optional)**) |
 
-<Snippet file="deploy-basic-setup.mdx" />
-
-### Configure o Fireworks AI no Arquivo de Ambiente
-
-Edite seu arquivo `.env` e configure as definições principais. Para **Integração com LLM**, use o Fireworks AI no Modo Fixo:
-
-```env
-# Core System Settings (update with your domains)
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
-WEB_PORT_API=443                               
-NEXTAUTH_URL="https://kodus-web.yourdomain.com"
-
-# Security Keys (generate with openssl commands above)
-WEB_NEXTAUTH_SECRET="your-generated-secret"
-API_CRYPTO_KEY="your-generated-hex-key"
-API_JWT_SECRET="your-generated-secret"
-API_JWT_REFRESH_SECRET="your-generated-secret"
-
-# Database Configuration
-API_PG_DB_PASSWORD="your-secure-db-password"
-API_MG_DB_PASSWORD="your-secure-db-password"
-
-# Fireworks AI Configuration (Fixed Mode) 
-API_LLM_PROVIDER_MODEL="accounts/fireworks/models/llama4-maverick-instruct-basic"  # Choose your preferred model
-API_OPENAI_FORCE_BASE_URL="https://api.fireworks.ai/inference/v1"                  # Fireworks AI API URL  
-API_OPEN_AI_API_KEY="your-fireworks-api-key"                                       # Your Fireworks AI API Key
-
-# Git Provider Webhooks (choose your provider)
-API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
-# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
-# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
-```
+Clique em **Test & save** e escolha os modelos padrão e de fallback em [Modos e modelos de revisão](/pt-BR/how_to_use/code_review/configs/routing).
 
 <Note>
-  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Use um domínio dedicado para webhooks ou roteie `/.../webhook` para a porta 3332 no seu proxy reverso.
+  Use a base URL sem `/chat/completions`. Em **Code review → Routing**, defina um modelo de outro provedor como **Fallback model** para que as revisões continuem funcionando se o Fireworks falhar.
 </Note>
 
-<Info>
-  **O Modo Fixo é ideal para o Fireworks AI** porque fornece APIs compatíveis com OpenAI com velocidades de inferência ultra-rápidas e acesso a modelos open-source de ponta sem tempo de configuração.
-</Info>
+### Opção 2 — Self-hosted (variáveis de ambiente)
 
-<Snippet file="deploy-installation.mdx" />
+Para dar a uma instância self-hosted um modelo via `.env`:
 
-### Configure o Proxy Reverso (Para Produção)
-
-Para webhooks e acesso externo, configure o Nginx:
-
-```nginx
-# Web App (port 3000)
-server {
-    listen 80;
-    server_name kodus-web.yourdomain.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# API (port 3001)  
-server {
-    listen 80;
-    server_name kodus-api.yourdomain.com;
-    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
-        proxy_pass http://localhost:3332;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="accounts/fireworks/models/glm-5p3"
+API_LLM_BASE_URL="https://api.fireworks.ai/inference/v1"
+API_LLM_API_KEY="your-fireworks-api-key"
 ```
 
-### Verifique a Integração com o Fireworks AI
+Siga o guia de instalação para [aplicar a mudança de modelo](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#aplicar-mudanças-no-modelo).
 
-Além da verificação básica de instalação, confirme que o Fireworks AI está funcionando:
-
-```bash
-# Verify Fireworks AI API connection specifically
-docker-compose logs api worker | grep -i fireworks
-```
-
-<Tip>
-  Para informações detalhadas sobre configuração de SSL, monitoramento e configurações avançadas, consulte nosso [guia completo de implantação](https://docs.kodus.io/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
-</Tip>
-
-### Solução de Problemas
+## Solução de problemas
 
 <AccordionGroup>
   <Accordion title="Problemas com a Chave de API">
     - Verifique se sua chave de API está correta e ativa no [Fireworks AI Console](https://app.fireworks.ai)
-    - Verifique se você tem créditos suficientes em sua conta Fireworks AI
-    - Certifique-se de que não há espaços extras no seu arquivo `.env`
-    - Novas contas recebem $1 em créditos gratuitos para começar
+    - Confira se você tem créditos suficientes na sua conta do Fireworks AI
+    - Certifique-se de que não há espaços em excesso ou aspas no valor do `.env`
   </Accordion>
-  
+
   <Accordion title="Modelo Não Encontrado">
-    - Verifique se o nome do modelo está escrito corretamente na sua configuração
-    - Confirme se o modelo está disponível na biblioteca de modelos atual do Fireworks AI
-    - Tente com um modelo diferente da nossa lista recomendada
-    - Consulte a [documentação de modelos do Fireworks AI](https://docs.fireworks.ai/getting-started/recommended-open-models)
+    - Use o ID completo `accounts/fireworks/models/<model>`, escrito como na biblioteca de modelos
+    - Verifique se o modelo está disponível para inferência serverless; alguns modelos exigem um deployment dedicado
   </Accordion>
-  
+
   <Accordion title="Erros de Conexão">
     - Verifique se seu servidor tem acesso à internet para alcançar `api.fireworks.ai`
-    - Verifique se há restrições de firewall
-    - Revise os logs da API/worker para mensagens de erro detalhadas
-    - Certifique-se de que está usando o endpoint de API correto
+    - Confira se há restrições de firewall
+    - Revise os logs da API e do worker para o erro upstream exato
   </Accordion>
-  
-  <Accordion title="Problemas de Desempenho">
-    - O Fireworks AI oferece velocidades líderes da indústria com latência mínima
-    - Verifique sua conectividade de rede para desempenho ideal
-    - Considere usar implantações dedicadas para cargas de trabalho empresariais
-    - Monitore seus padrões de uso para otimizar as chamadas de API
-  </Accordion>
-  
-  <Accordion title="Limite de Taxa">
-    - O Fireworks AI fornece altos limites de taxa na infraestrutura serverless
-    - Verifique seu uso atual no painel do Fireworks AI
-    - Considere fazer upgrade para implantações dedicadas para maior throughput
-    - Entre em contato com o suporte do Fireworks AI para ajustes de limites empresariais
+
+  <Accordion title="Rate Limiting">
+    - Confira seu uso atual no painel do Fireworks AI
+    - Uma conta sem forma de pagamento ou créditos tem um limite de requisições muito menor. Veja os [rate limits](https://docs.fireworks.ai/guides/quotas_usage/rate-limits) do Fireworks
+    - Diminua **Max concurrent requests** no modelo, ou considere um deployment dedicado para maior throughput
   </Accordion>
 </AccordionGroup>
+
+## Relacionados
+
+- [Biblioteca de modelos do Fireworks](https://fireworks.ai/models)
+- [Visão geral do BYOK](/pt-BR/how_to_use/byok)

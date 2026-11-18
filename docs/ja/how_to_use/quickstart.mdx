@@ -1,97 +1,86 @@
 ---
 title: "はじめに"
-description: "Kody にプルリクエストをレビューさせるまで：アカウント作成、Git プロバイダーの接続、リポジトリの選択、最初のレビュー実行。"
+description: "Kody に Pull Request をレビューさせるまで：アカウント作成、Git プロバイダーの接続、リポジトリの選択、最初のレビューの実行。"
 ---
+
+接続するリポジトリにアクセスできる Git アカウントを用意してください。セルフホストの場合は、自分のインスタンスの URL からアカウントを作成します。
 
 <Steps>
   <Step title="アカウントを作成">
-    **Sign up with Github** または **Sign up with Gitlab**、あるいはメール（名前とパスワード）でサインアップします。メールでのサインアップには企業のメールアドレスが必要です — Gmail、Outlook、Hotmail、Yahoo などの無料ドメインは拒否されます。
+    Kodus Cloud では[サインアップページ](https://app.kodus.io/sign-up)を開きます。セルフホスト版では、ご利用のインスタンスのサインアップページを開きます。
+
+    **Sign up with Github** または **Sign up with Gitlab** をクリックするか、メールアドレスでサインアップします。メールでのサインアップには勤務先のアドレスが必要です。Gmail や Outlook などの無料ドメインは拒否されます。
+
+    <Frame caption="Kodus Cloud のサインアップ画面">
+      <img src="/images/cloud-sign-up.png" alt="GitHub、GitLab、勤務先メールアドレスでの登録オプション" width="440" />
+    </Frame>
   </Step>
 
   <Step title="ワークスペースを作成">
-    **Let's create a Workspace** で **Organization Name** を入力し（必要に応じて電話番号と、承認済みのメールドメイン向けの **Enable Auto Join** も設定）、2 問のアンケートに回答します。メールドメインのワークスペースがすでに存在する場合、Kodus はまずそのいずれかへの参加を提案します。
+    メールドメインに対して自動参加がオンのワークスペースがある場合、Kodus は **We found some organizations!** を表示します。それを選択して **Continue** をクリックすると Contributor として参加できます（Kodus Cloud では、その後メールを確認します）。または **Create a new organization** をクリックします。
+
+    **Let's create a Workspace** で、生成された **Organization Name** を自分のものに置き換えて **Next** をクリックします。**Phone** は任意です。**Enable Auto Join** は、メールドメインが公開ドメインでない限りオンで始まるため、そのドメインのアドレスを持つ全員が参加できます。それを望まない場合はオフにしてください。[自動参加](/ja/how_to_use/workspace_roles#ワークスペースメンバーの自動参加)を参照してください。その後の 2 問のアンケートには **Skip for now** があります。
   </Step>
 
   <Step title="Git ツールを接続">
-    **Connect your Git tool** で、プロバイダーのタブ（**Github**、**Gitlab**、**Bitbucket**、**Azure Repos**、**Forgejo**）を選択します。
-    <AccordionGroup>
-        <Accordion title="GitHub をセットアップ" icon="github">
-            アプリをインストールするか、トークンで GitHub を接続:
-              - **アプリ（推奨）**: **Install Github app** をクリックします。GitHub にリダイレクトされます。
-                - ✅ Kody が PR に専用ボットとして表示される
-                - ✅ より良い監査証跡（人間と AI のレビューの明確な区別）
-                - 組織の `owner` 権限が必要
-                - Kody に分析させたいすべてのリポジトリへのアクセスを許可する（後で調整可能）
-              - **トークン**: **Connect via token** をクリックします。レビューはあなたのユーザー名で表示されます。<a href="/ja/how_to_use/code_review/general_config/github_pat">詳細な手順については GitHub トークンセットアップページを参照してください。</a>
+    **Connect your Git tool** で、プロバイダーのタブを開き、アプリまたはトークンで接続します。
 
-            <Note>GitHub Enterprise を使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
-        </Accordion>
+    | プロバイダー | 接続方法 | トークンガイド |
+    | --- | --- | --- |
+    | GitHub | **Install Github app**（推奨）または **Connect via token** | [GitHub トークン](/ja/how_to_use/code_review/general_config/github_pat) |
+    | GitLab | **Install Gitlab app** で GitLab に OAuth サインインするか、**Connect via token** を選びます | [GitLab トークン](/ja/how_to_use/code_review/general_config/gitlab_pat) |
+    | Bitbucket | **Connect via token** | [Bitbucket トークン](/ja/how_to_use/code_review/general_config/bitbucket_pat) |
+    | Azure Repos | **Connect via token** | [Azure DevOps トークン](/ja/how_to_use/code_review/general_config/azure_devops_pat) |
+    | Forgejo | **Connect via token** | [Forgejo トークン](/ja/how_to_use/code_review/general_config/forgejo_pat) |
 
-        <Accordion title="GitLab をセットアップ" icon="gitlab">
-            アプリをインストールするか、トークンで GitLab を接続:
-              - **アプリ（推奨）**: **Install Gitlab app** をクリックすると、GitLab の認証ページにリダイレクトされます。
-                - ✅ Kody が PR に専用ボットとして表示される
-                - Kody に分析させたいすべてのリポジトリへのアクセスを許可する（後で調整可能）
-              - **トークン**: **Connect via token** をクリックします。レビューはあなたのユーザー名で表示されます。<a href="/ja/how_to_use/code_review/general_config/gitlab_pat">詳細な手順については GitLab トークンセットアップページを参照してください。</a>
+    GitHub アプリを使うと、Kody は専用のボットとして投稿します。それ以外の場合、レビューは接続したアカウント（トークンの所有者、または OAuth を承認した GitLab ユーザー）の名義で表示されます。
 
-            <Note>セルフホスト型 GitLab インスタンスを使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
-        </Accordion>
-              <Accordion title="Bitbucket をセットアップ" icon="bitbucket">
-            Bitbucket はトークンでのみ接続できます — **Connect via token** をクリックします:
-              - **トークン**: <a href="/ja/how_to_use/code_review/general_config/bitbucket_pat">詳細な手順については Bitbucket トークンセットアップページを参照してください。</a>
+    自社ネットワーク内のサーバー（GitHub Enterprise Server（Beta）、セルフマネージドの GitLab、Bitbucket Data Center、Forgejo）は、トークンとその URL で接続します。入力場所はトークンガイドに記載されています。
 
-            <Note>Bitbucket Data Center（セルフホスト）を使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
-        </Accordion>
-        <Accordion title="Azure DevOps をセットアップ" icon="microsoft">
-            Azure DevOps はトークンでのみ接続できます — **Azure Repos** タブを開き、**Connect via token** をクリックします:
-              - **トークン**: <a href="/ja/how_to_use/code_review/general_config/azure_devops_pat">詳細な手順については Azure DevOps トークンセットアップページを参照してください。</a>
-
-            <Note>Azure DevOps Server（セルフホスト）を使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
-        </Accordion>
-        <Accordion title="Forgejo をセットアップ" icon="/images/forgejo.svg">
-            Forgejo はトークンでのみ接続できます — **Connect via token** をクリックします:
-              - **トークン**: <a href="/ja/how_to_use/code_review/general_config/forgejo_pat">詳細な手順については Forgejo トークンセットアップページを参照してください。</a>
-
-            <Note>Forgejoのサポートはコミュニティによって維持されています。</Note>
-        </Accordion>
-    </AccordionGroup>
-
-
+    <Note>
+      Kodus Cloud を自社ネットワーク内のサーバーに接続しますか？先に、ファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。
+    </Note>
   </Step>
 
-<Step title="リポジトリを選択">
-  Kody に自動レビューと実用的なインサイトのためにアクセスさせたいリポジトリを選択します。**Who should Kody review?** で、**PRs opened by me**（チームに影響を与えずに試せます）または **All PRs in selected repos** を選びます。
-</Step>
+  <Step title="リポジトリを選択">
+    **Select repositories** でリポジトリを選びます。**Who should Kody review?** では、チームに影響を与えずに試すなら **PRs opened by me**、すべてなら **All PRs in selected repos**（デフォルト）を選びます。**Enable on my PRs** または **Enable for team** をクリックします。リポジトリは後から **Repositories** で追加できます。
 
-<Step title="Kody が学習するレビューを選択">
-  **Whose reviews should Kody learn from?** では、デフォルトで全員が含まれています。Kody に学習させたくないレビューを書く開発者を選択してください。
-</Step>
+    接続したアカウントにリポジトリが表示されない場合、画面に **No repositories found** と表示されます。**Update connection** または **Try again** から、別のアカウント、またはより多くの権限を持つトークンで再接続してください。
+  </Step>
 
-<Step title="最小重大度を設定">
-  **Minimum severity level** で、Kody が投稿する最も低い重大度を選択します：**Low/All**、**Medium**、**High**、**Critical**。
-</Step>
+  <Step title="Kody が過去のレビューから学習するかを選択">
+    **Learn from past reviews?** で、スイッチをオンにすると、Kody がチームのレビューコメントから Kody Rules の下書きを作成します。**Whose reviews should Kody learn from?** で、特定の開発者を除外することもできます。デフォルトではオフです。**Continue** または **Skip for now** をクリックします。[ルールの自動生成](/ja/how_to_use/code_review/learning/kody_rules_generation)を参照してください。
+  </Step>
 
-<Step title="Kody Rules を確認">
-  **Review your Kody Rules** では、Kody がリポジトリの設定ファイルから検出したルールが一覧表示されます。必要なものを選択して **Apply N and continue** をクリックするか、**I'll do this later** をクリックします。
-</Step>
+  <Step title="最小重要度を設定">
+    **Set up your first review** で、**Minimum severity level** から Kody が投稿する最も低い重要度を選びます：**Low/All**、**Medium**（デフォルト）、**High**、**Critical**。**Continue** をクリックします。[提案のコントロール](/ja/how_to_use/code_review/configs/suggestion_control)を参照してください。
+  </Step>
 
-<Step title="最初の PR レビューを実行">
-  **Kody is ready for your first PR review** で、**Select a PR to review** を使ってプルリクエスト（PR）を選択し、**Review now**（または **Skip for now**）をクリックします。これにより自動コードレビューの力を実感できます。選択すると、Kody は Git ツール内で直接レビューを実行します。これは最初だけです — その後、Kody は **Who should Kody review?** での選択に基づいて新しい PR を自動的にレビューします。
-</Step>
-<Step title="Kody の自動レビューを楽しんでください！🔥">
-  あとは Kody がインテリジェントな提案と実用的なインサイトでレビュープロセスを効率化するのを見守るだけです。
-</Step>
+  <Step title="チームのルールを取り込む">
+    **Teach Kody how your team builds software** では、Kody が `.kody/rules` で見つけた Kody Rule ファイルを一覧表示し、同期を保ちます。**Use your coding-agent instructions in reviews?** スイッチをオンにすると、レビューで `CLAUDE.md` や `AGENTS.md` などのファイルを読み取れるようになります。デフォルトではオフです。**Continue** または **Skip for now** をクリックします。[リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules)を参照してください。
+  </Step>
 
+  <Step title="最初のレビューを実行">
+    **Kody is ready for your first PR review** で、**Select a PR to review** から Pull Request を選んで **Review now** をクリックするか、**Skip for now** をクリックします。選択したリポジトリに最近の Pull Request がない場合、セットアップはこの画面なしで終了します。Kody は Git ツール上でレビューを投稿します。その後は、**Who should Kody review?** での選択に従って、新しい PR をレビューします。
+  </Step>
 </Steps>
+
+レビューが完了したら、[PR で結果を確認する方法](/ja/how_to_use/code_review/flow#得られるもの)を参照してください。
+
+## トライアルと AI キー
+
+Kodus Cloud の新しいワークスペースでは 14 日間のトライアルを利用できます。最初の 5 件の PR レビューのモデル費用は Kodus が負担します。対象件数を使い切った後もレビューを続けるには、**AI providers** で自分のキーを接続します。機能と追加レビューは [プランとライセンス](/ja/how_to_use/pricing) を参照してください。
 
 ## 次のステップ
 
-<CardGroup cols={1}>
-  <Card
-    title="チームルールで Kody を設定"
-    icon="Hand-love"
-    href="code_review/configs/kody_rules"
-  >
-    チームルールで Kody を設定する方法を学びます。
+<CardGroup cols={3}>
+  <Card title="AI プロバイダーを接続" icon="key" href="/ja/how_to_use/byok">
+    自分のキーを持ち込み、タスクごとにモデルを選びます。
+  </Card>
+  <Card title="チームのルールを書く" icon="sliders" href="/ja/how_to_use/code_review/configs/kody_rules">
+    Kody Rules で Kody にチームの基準を教えます。
+  </Card>
+  <Card title="レビューを調整" icon="gear" href="/ja/how_to_use/code_review/configs/general">
+    Kody がいつレビューし、何を指摘するかを選びます。
   </Card>
 </CardGroup>

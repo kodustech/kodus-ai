@@ -1,58 +1,84 @@
 ---
 title: "概述"
-description: "工程团队绩效的全面分析和指标"
+description: "在一个仪表盘中查看您仓库的审查有效性和交付指标。"
 ---
 
-## 什么是驾驶舱分析
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-驾驶舱分析通过衡量生产力、代码质量和交付效率的关键指标,为您的工程团队绩效提供全面的见解。这些指标帮助您识别改进领域并随时间跟踪进度。
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="适用于 Kodus Cloud，试用版也可使用。">
+    <Badge icon="cloud" stroke>Teams 和 Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Cockpit 需要 Enterprise 许可证，并要求 Analytics Worker 正在运行。">
+    <Badge icon="server" stroke>自托管</Badge>
+  </FeatureBadge>
+</div>
 
-<Warning>
-  驾驶舱需要付费档位:**云端的 Teams 或 Enterprise**(包括试用期),或**已授权的自托管 Enterprise**。未授权的自托管(Community)和 free BYOK 套餐不包含它:侧边栏中的 **Cockpit** 项仍会显示,但带有锁形图标,点击后会打开一个模糊的 **Unlock the Cockpit** 预览,其中有一个 **See plans** 按钮(自托管上为 **Activate a license**)。自托管 Enterprise 还需要运行 [Analytics Worker](/zh/how_to_deploy/deploy_kodus/analytics_worker)。
-</Warning>
+Cockpit 衡量两件事：Kodus 的审查在您的团队中落地得如何，以及您的团队如何交付。
+
+Owner 和 Repo Admin 可以打开 Cockpit。
+
+在自托管环境中，配置 [Analytics Worker](/zh/how_to_deploy/deploy_kodus/analytics_worker) 以收集 Cockpit 数据。
+
+套餐不包含 Cockpit 时，侧边栏会打开带 **See plans** 的锁定预览。自托管环境中对应的按钮是 **Activate a license**。
 
 <Frame caption="使用实时分析监控团队的绩效。">
   <img src="/images/cockpit.png" />
 </Frame>
 
-## 主要功能
-
-- 数据默认每 30 分钟刷新一次(`ANALYTICS_INGESTION_CRON`)
-- 云端的 Teams / Enterprise(包括试用期),或已授权的自托管 Enterprise
-- AI 驱动的指标计算
-- 8+ DORA 和自定义指标
+要在终端中查看 Cockpit 或将指标导出为 JSON，请使用 [`kodus cockpit`](/zh/how_to_use/cli/commands#kodus-cockpit)。
 
 ## 标签页
 
-驾驶舱分为两个指标标签页,后面还有一个 **Issues** 标签页:
+- **Kodus Review**（默认打开）：Kodus 的审查有多有效：实施率、严重程度校准、负面反馈，以及您的 Kody Rules 的健康状况。参见 [Kodus Review](/zh/how_to_use/cockpit/kodus_review)。
+- **Delivered as asked**：对照任务检查的 pull request。参见 [Delivered as asked](#delivered-as-asked)。
+- **Productivity**：交付类指标：部署频率、PR cycle time、bug ratio、PR 大小、lead time 拆解、打开与关闭的 PR、按开发者合并的 PR，以及团队活动。
+- **Code hotspots**（beta）：一个仓库中变更最多、且包含较长或复杂函数的目录。参见[代码热点](/zh/how_to_use/cockpit/code_hotspots)。
+- **Issues**：打开 [Issues](/zh/how_to_use/issues/overview) 列表，标签名旁边会显示未关闭 issue 的数量。
 
-- **Kodus Review**(默认打开)— 衡量 Kodus 审查的有效性:实施率、严重程度校准、负面反馈,以及 Kody 规则的健康状况。这关注的是 Kodus 本身,也是您采取行动的地方。参见 [Kodus 审查](/zh/how_to_use/cockpit/kodus_review)。
-- **Productivity** — 通用交付指标:部署频率、交付时间、PR 周期时间、PR 大小以及开发人员活动。
-- **Issues** — 打开 [Issues](/zh/how_to_use/issues/overview) 列表,标签名旁边会显示未关闭 issue 的数量。
-
-在页面顶部,您可以选择一个仓库(默认为 **All repositories**)和一个日期范围(默认为 **Last 15 days**;预设有 **Last week**、**Last 15 days**、**Last month**、**Last 3 months**,也可以自定义日期)。没有按开发人员筛选的选项。链接按钮(**Copy link to this view**)会复制一个 URL,用它可以重新打开相同的标签页、仓库和日期范围。
+在页面顶部，您可以选择一个仓库（默认为 **All repositories**）和一个日期范围（默认为 **Last 15 days**；预设有 **Last week**、**Last 15 days**、**Last month**、**Last 3 months**，也可以自定义最长 93 天的范围）。没有按开发者筛选的选项。**Copy link to this view** 会复制页面 URL，其中带有您在本次访问中选择的标签页、仓库和范围；您未更改的项会在接收者打开时使用其自己的默认值。**Code hotspots** 标签页有自己的仓库选择器，没有日期范围。
 
 <Note>
-  Owner 可以在 **Organization → Cockpit visibility** 中为整个组织隐藏整个标签页或单个指标 —— 参见
-  [驾驶舱配置](/zh/how_to_use/cockpit/configuration)。
+  Owner 可以在 **Organization → Cockpit visibility** 中为整个组织隐藏整个标签页或单个指标。参见 [Cockpit 配置](/zh/how_to_use/cockpit/configuration)。
 </Note>
 
-## 关键指标类别
+## 数据来源
 
-**可用指标:**
-- **Kodus 审查:**实施率(总体、按严重程度、按类别)、负面反馈、仓库和 Kody 规则健康状况
-- **生产力:**部署频率、交付时间、PR 周期时间
-- **质量:**PR 大小、代码审查有效性
-- **团队绩效:**协作模式、瓶颈识别
+Cockpit 衡量 Kodus 在您已连接的仓库中跟踪的 pull request：即仓库连接之后 Kodus 看到的 PR，加上连接时导入的、每个仓库最近两个月内最多 10 个近期 PR。数据默认每 30 分钟刷新一次（`ANALYTICS_INGESTION_CRON`）。在数据足够之前，会有一个横幅提示。
 
+大多数 Productivity 指标按 pull request 关闭的日期来统计，而“关闭”指已合并或未合并即关闭：Cockpit 不区分两者。
 
-## 开发人员匹配的工作原理
+一个范围从其第一天的开始，到其最后一天的开始。在最后一天当天关闭的 pull request，要等范围移过那一天之后才会被计入。Kodus Review 标签页上的 **PRs processed** 和 **Review processing outcomes**，以及 **Delivered as asked** 标签页，包含最后一天。
 
-驾驶舱的按开发人员图表(**PRs Merged By Developer**、**Team Activity**)会将每个拉取请求归属到其**作者在 Git 提供商上的用户名**。这可能与以下内容不同:
+## Delivered as asked
+
+基于 [Business Logic Validation](/zh/how_to_use/code_review/business_logic_validation) 的运行结果，显示 pull request 是否交付了其任务所要求的内容。它跟随仓库选择器和日期范围。当该期间内没有任何 pull request 对照其任务进行检查时，该标签页会改为链接到 Business Logic 设置。
+
+| 卡片 | 展示内容 |
+| --- | --- |
+| **Met their task** | 已检查的 PR 中满足其任务的占比，以及与上一周期相比的百分点变化 |
+| **Changes not in the task** | 至少有一处任务未要求的更改的 PR 占比 |
+| **Findings accepted** | 开发者认同 Kody 发现的频率 |
+| **Without a readable task** | 未引用任何任务，或其任务无法读取的 PR 占比 |
+
+在卡片下方，**By who wrote the code** 按名称给出每个编码 agent、**People** 和 **Not identified** 满足其任务的 PR 占比，数据读取自提交作者和 `Co-Authored-By` trailer。**Most often missed** 列出 PR 最常遗漏的需求主题；当有多个团队时，还会有一张表按团队拆分这些数字。
+
+## 邮件报告
+
+在云端，Kodus 会基于相同的数据发送两份报告邮件，当没有审查活动时两者都会跳过：
+
+- **Org report**：上一个日历月的月度摘要，于每月 1 日发送给 Owner。
+- **Repo report**：于每月 1 日和 16 日发送给 Repo Admin 的摘要，为分配给他们的每个仓库提供一个部分，涵盖前 15 天。
+
+每封邮件都会链接回同一范围的 Cockpit。在[通知](/zh/how_to_use/organization/notifications)中的 **Cockpit** 下选择谁会收到它们。
+
+## 开发者匹配的工作原理
+
+按开发者的图表（**PRs Merged By Developer**、**Team Activity**）会将每个 pull request 归属到其**作者在 Git 提供商上的用户名**。这可能与以下内容不同：
 - GitHub/GitLab 显示名称
 - 电子邮件地址
 - Kodus 工作区账户
 
 <Tip>
-  如果您在开发人员指标中看到差异,请检查同一个人是否使用多个 Git 提供商账户创建拉取请求。
+  如果您在开发者指标中看到差异，请检查同一个人是否使用多个 Git 提供商账户创建 pull request。
 </Tip>

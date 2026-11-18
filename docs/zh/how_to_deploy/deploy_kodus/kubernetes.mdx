@@ -1,82 +1,149 @@
 ---
-title: "Kubernetes 与 OpenShift"
-description: "使用官方 Helm charts 在 Kubernetes 或 OpenShift 上部署 Kodus。"
+title: "Kubernetes & OpenShift"
+description: "使用官方 Helm chart 在 Kubernetes 或 OpenShift 上部署 Kodus。"
 icon: "dharmachakra"
 ---
 
-相比单台虚拟机更倾向于使用集群？Kodus 在
-[kodus-installer](https://github.com/kodustech/kodus-installer) 仓库中提供了适用于
-Kubernetes 和 OpenShift 的 **Helm charts**。本页面是概览——charts 的
+更倾向于集群而不是单台虚拟机？Kodus 在
+[kodus-installer](https://github.com/kodustech/kodus-installer)
+仓库中提供了适用于 Kubernetes 和 OpenShift 的 **Helm chart**。本页是概览。这些 chart 的
 [README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
-才是完整参考（离线/隔离网络安装、ExternalSecrets、operator、可观测性，以及面向 SOC 2 的加固）。
+是完整的参考：离线安装、ExternalSecrets、operator、
+可观测性和加固。
 
-## 前提条件
+## 要求
 
 - Helm 3.8+
 - Kubernetes 1.28+ 或 OpenShift 4.14+
-- 对于 `mode: operator` 的数据存储，需在集群中安装对应的 operator
+- 对于 `mode: operator` 数据存储，集群上需要安装相应的 operator
 
 ## 快速开始（内置数据存储）
 
-默认的 `bundled` 模式会将 PostgreSQL（pgvector）、MongoDB 和 RabbitMQ 作为由 chart
-管理的 StatefulSet 启动——等同于 Docker Compose 的 `USE_LOCAL_DB=true`。一条命令，无需 operator：
+默认的 `bundled` 模式会将 PostgreSQL (pgvector)、MongoDB 和 RabbitMQ 作为
+由 chart 管理的 StatefulSet 运行，相当于 Docker Compose 的 `USE_LOCAL_DB=true`。
+克隆安装程序并构建 Chart 依赖。将示例主机名换成你自己的 DNS 名称，并指向已安装的 Ingress 控制器。默认 Ingress 类为 `nginx`。如果使用发布命名空间中的 TLS Secret，请设置 `ingress.tls.secretName`。证书须覆盖三个主机名。
 
 ```bash
-git clone https://github.com/kodustech/kodus-installer
+git clone https://github.com/kodustech/kodus-installer.git
 cd kodus-installer/charts/kodus
 helm dependency build
-helm install kodus . -n kodus --create-namespace \
-  --set imageTag=<版本> \
-  --set global.config.WEB_HOSTNAME_API=api.kodus.example.com \
-  --set global.config.NEXTAUTH_URL=https://kodus.example.com \
-  --set ingress.hosts.web.host=kodus.example.com \
-  --set ingress.hosts.api.host=api.kodus.example.com
+helm install kodus . \
+  -n kodus --create-namespace \
+  --set global.config.NEXTAUTH_URL=https://kodus.example.net \
+  --set global.config.API_FRONTEND_URL=https://kodus.example.net \
+  --set global.config.API_USER_INVITE_BASE_URL=https://kodus.example.net \
+  --set ingress.hosts.web.host=kodus.example.net \
+  --set ingress.hosts.api.host=api.kodus.example.net \
+  --set ingress.hosts.webhooks.host=webhooks.kodus.example.net
 ```
 
-`imageTag` 为整个技术栈固定 Kodus 版本（类似 Docker Compose 的 `IMAGE_TAG`）；生产环境
-请使用真实的 tag，切勿使用 `latest`。认证/加密所需的 secret 会以正确格式自动生成，并在升级
-之间保持稳定。
+Chart 版本独立于 Kodus 镜像版本。默认情况下，包括迁移 Job 在内的所有 Kodus 镜像都使用 Chart 的 `appVersion`。从 OCI 安装已发布的 Chart 版本，请参阅 [Chart README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)。
+
+将 `NEXTAUTH_URL`、`API_FRONTEND_URL` 和 `API_USER_INVITE_BASE_URL` 设为 Web 应用的公开 URL。这些值用于登录、GitHub App 返回地址、CLI 登录和邀请。使用 SAML SSO 时，还需将 `global.config.API_URL` 设为 API 的公开 URL。
 
 <Tip>
-  webhooks 服务需要它自己的公网主机名。将 `ingress.hosts.webhooks.host`（在 OpenShift 上为
-  `route.hosts.webhooks.host`）指向一个专用主机名，chart 会自动推导出
-  `API_<provider>_CODE_MANAGEMENT_WEBHOOK`。
+  webhook 服务需要自己的公开主机。将 `ingress.hosts.webhooks.host`
+  （OpenShift 上为 `route.hosts.webhooks.host`）设置为专用主机名，chart 会
+  为你推导出每个提供商的 `*_CODE_MANAGEMENT_WEBHOOK` URL。如果你保留
+  占位符不改，请自行设置 `global.config.API_GITHUB_CODE_MANAGEMENT_WEBHOOK`（或
+  你所用提供商对应的变量），否则已连接的仓库永远不会触发审查。
 </Tip>
+
+打开 Web 主机并创建账号，然后在 **AI providers** 中连接模型。如果在安装时配置模型，请将非机密设置放在 `global.config` 中，并将密钥放在 `global.secrets` 中。请参阅 [LLM 提供商配置](/zh/how_to_deploy/deploy_kodus/generic_vm#llm-提供商配置)。
+
+<Warning>
+  `WEB_HOSTNAME_API` 不是公开主机名。Web pod 通过 `/api/proxy` 在服务端调用 API，`WEB_HOSTNAME_API` 和 `WEB_PORT_API` 是 API 在集群内部的地址。Chart 默认将它们设为 `<release>-api` 和 `3001`。将 `WEB_HOSTNAME_API` 指向你的公开 Ingress 或 Route，会让 Web pod 先出到路由器再绕回来，这可能以 `fetch failed` 失败。Git 提供商将事件发送到各自配置的公开 Webhook URL。例如，Bitbucket 使用 `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` 中的 URL，Azure Repos 使用 `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK`。
+</Warning>
 
 ## 数据存储模式
 
 每个存储（`postgres`、`mongodb`、`rabbitmq`）都有独立的 `mode`：
 
 | mode | 作用 | 适用于 |
-|------|------|--------|
-| `bundled` *(默认)* | 由 chart 管理的 StatefulSet | 开发 / 试用 |
-| `external` | 通过 `existingSecret` 使用你自己托管/自管的服务 | 生产 |
-| `operator` | 由集群 operator 协调的 CR（高可用）——CloudNativePG、RabbitMQ Cluster Operator、MongoDB Community Operator | 生产 |
+|------|--------------|-----|
+| `bundled` *（默认）* | 由 chart 管理的 StatefulSet | 开发 / 试用 |
+| `external` | 通过 `existingSecret` 使用你的托管/自管服务 | 生产 |
+| `operator` | 由集群 operator 协调的 CR（高可用）：CloudNativePG、RabbitMQ Cluster Operator、MongoDB Community Operator | 生产 |
 
-生产环境请优先选择 `external` 或 `operator`——它们把数据库运维交给专门的组件处理。
+对于生产环境，建议使用 `external` 或 `operator`：它们把数据库运维交给
+专门构建的组件。外部 PostgreSQL 需要 `vector` 扩展，外部
+RabbitMQ 需要 delayed message exchange 插件、`kodus-ai` 和
+`kodus-ast` 虚拟主机以及 `consumer_timeout = 7200000`。Chart 的 README 列出了
+每个存储的先决条件。
+
+如果外部 PostgreSQL 要求 TLS，请将 `global.config.API_DATABASE_DISABLE_SSL` 设为 `"false"`。
 
 ## OpenShift
 
-添加 OpenShift overlay——用 Route 取代 Ingress，Pod 的 UID 交由命名空间的 SCC
-（`restricted-v2`）分配，因此不会硬编码 UID：
+OpenShift 需要仓库检出目录中的 `values-openshift.yaml` 覆盖文件。
+Route 取代 Ingress，pod 的 UID 交由命名空间的 SCC（`restricted-v2`）决定，
+因此不会硬编码任何 UID：
 
 ```bash
-helm install kodus . -f values.yaml -f values-openshift.yaml \
-  -n kodus --create-namespace --set imageTag=<版本>
+git clone https://github.com/kodustech/kodus-installer
+cd kodus-installer/charts/kodus
+helm dependency build
+helm install kodus . -f values-openshift.yaml \
+  -n kodus --create-namespace \
+  --set global.config.NEXTAUTH_URL=https://kodus.apps.cluster.example.net \
+  --set global.config.API_FRONTEND_URL=https://kodus.apps.cluster.example.net \
+  --set global.config.API_USER_INVITE_BASE_URL=https://kodus.apps.cluster.example.net \
+  --set route.hosts.web.host=kodus.apps.cluster.example.net \
+  --set route.hosts.api.host=kodus-api.apps.cluster.example.net \
+  --set route.hosts.webhooks.host=kodus-webhooks.apps.cluster.example.net
 ```
 
-将 `route.hosts.*.host` 留空，OpenShift 会自动分配 `<name>-<namespace>.apps…` 主机名。
-注意：某些集群会镜像或屏蔽 Docker Hub 的 `library/*` 镜像，因此内置的 `mongo` 镜像可能需要
-覆盖（`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8`），或改用 `external` /
-`operator` 数据存储。
+请使用 apps 域名之下只多一级标签的主机名，例如 `kodus-api.apps…`。
+默认的通配符证书只覆盖一级标签，更深层的主机会让
+验证 TLS 的客户端失败，包括 Git 提供商的 webhook 投递。
 
-## 可选服务与验证
+如果由 OpenShift 分配主机名，可运行 `oc get route -n kodus` 查看。更新上面的三个 Web 公开 URL 设置，并将提供商的 webhook 变量指向分配到的 webhook 主机上的 HTTPS URL。
 
-- **MCP manager** — `--set services.mcp-manager.enabled=true`
-- **Analytics worker** — `--set services.worker-analytics.enabled=true`
-- **健康检查** — `../../scripts/doctor-k8s.sh -n kodus` 会检查工作负载、配置以及真实的健康端点。
+有些集群会镜像或屏蔽 Docker Hub 的 `library/*` 镜像，因此内置的 `mongo`
+镜像可能需要用 chart 固定的相同标签进行覆盖（`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8.3.13`），
+或改用 `external` / `operator` 数据存储。
 
-<Card title="完整 Helm 参考" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
-  数据存储 operator 配置、复用现有数据库、离线/隔离网络安装、通过 ExternalSecrets 管理 secret、
-  可观测性以及安全默认值。
+## 可选服务
+
+`mcp-manager` 和 `worker-analytics` 默认都是启用的。为了最小化安装，可以关闭其中任何一个：
+
+```bash
+--set services.mcp-manager.enabled=false
+--set services.worker-analytics.enabled=false
+```
+
+- **MCP manager** 提供 Plugins 界面。请参阅 [MCP Manager](/zh/how_to_deploy/deploy_kodus/mcp_manager)。
+- **Analytics worker** 为 Cockpit 运行 `WORKER_ROLE=analytics`。它只在自托管 Enterprise 许可证下才有实际作用。请参阅 [Analytics Worker](/zh/how_to_deploy/deploy_kodus/analytics_worker)。
+
+### Beta
+
+要启用需要自托管 Beta 设置的功能，请在 values 文件的 `global.config` 下添加 `BETA_FEATURES: "true"`，并运行 `helm upgrade` 应用。各功能仍有各自的套餐和配置要求。
+
+## 升级
+
+保存自定义值，将安装程序更新到目标 Chart，然后从 `charts/kodus` 执行升级。对于 OpenShift，请在 values 文件中保留 Route 设置。如需使用新 Chart 的默认版本，请从文件中移除 `imageTag` 覆盖值。
+
+将自定义设置保存为 `kodus-values.yaml`。
+
+```bash
+helm dependency build
+helm upgrade kodus . -n kodus -f kodus-values.yaml
+```
+
+升级前请备份数据库并保留 Secret。Helm 回滚会恢复之前的部署。数据库迁移需要单独的恢复流程。
+
+## 验证
+
+```bash
+../../scripts/doctor-k8s.sh -n kodus
+helm test kodus -n kodus
+```
+
+`doctor-k8s.sh` 会检查工作负载、配置和真实的健康检查端点。如需经过脱敏的
+支持包，请运行 `../../scripts/collect-diagnostics.sh -n kodus`。两者都在仓库检出目录的
+`charts/kodus` 中运行。
+
+<Card title="完整的 Helm 参考" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
+  数据存储 operator 的设置、复用现有数据库、离线安装、
+  通过 ExternalSecrets 管理密钥、可观测性以及安全默认值。
 </Card>

@@ -1,23 +1,23 @@
 ---
-title: "Moonshot (Kimi) - OpenAI-Compatible Inference"
-description: "Learn how to connect Moonshot AI's Kimi K2.6 models to Kodus — via the Moonshot Developer API or the Kimi Code Plan."
+title: "Moonshot (Kimi)"
+description: "Connect Moonshot AI's Kimi models to Kodus with the Moonshot Developer API or the Kimi Code Plan."
 icon: "moon"
 ---
 
 ## How Moonshot works
 
-Moonshot AI publishes the **Kimi** family of models (K2, K2.5, K2.6, K2.6 Coding). Kimi is particularly strong on long-context code understanding and agentic workflows, and the API is fully OpenAI-compatible — Kodus can talk to it via the **OpenAI-compatible** provider. Kodus also has a dedicated **Moonshot** provider, which connects over Moonshot's Anthropic-compatible endpoint (`https://api.moonshot.ai/anthropic`).
+Moonshot AI publishes the **Kimi** models (K3.1 Pro, K3 and the earlier K2 series). Its API is both OpenAI-compatible and Anthropic-compatible. Kodus has a dedicated **Moonshot** provider, which connects over the Anthropic-compatible endpoint (`https://api.moonshot.ai/anthropic`). You can also reach Kimi through the **OpenAI-compatible** provider.
 
-Moonshot offers **two paths** to the same model family, each with its own endpoint:
+Moonshot offers **two paths** to the Kimi models, each with its own endpoint and keys:
 
-- **Developer API** (`platform.moonshot.ai`) — pay-per-token, billed per usage. Concurrency scales with your recharge tier.
-- **Kimi Code Plan** (`kimi.com/code`) — subscription with a **dedicated coding endpoint**. Flat pricing, capped concurrency (30 concurrent).
+- **Developer API** (`platform.kimi.ai`): pay per token. Rate limits depend on your cumulative recharge.
+- **Kimi Code Plan** (`kimi.com/code`): a Kimi membership with a **dedicated coding endpoint**. Usage is limited by a rolling 5-hour rate window and a monthly quota.
 
 <Note>
-  Moonshot's consumer Kimi.com chat subscriptions (Andante, Moderato, etc.) are separate from both API paths. Chat subscriptions do **not** grant API access. Kimi Code Plan is the API-specific subscription.
+  Kimi Code comes with a Kimi membership: Plus and above on the current plans, Andante and above on the legacy plans. Its keys are separate from Developer API keys.
 </Note>
 
-Moonshot also operates a China-only platform (`platform.moonshot.cn`, base URL `https://api.moonshot.cn/v1`) billed in CNY. Use that only if you operate inside mainland China.
+Moonshot also runs a China platform at `platform.kimi.com` (`platform.moonshot.cn` redirects there), with base URL `https://api.moonshot.cn/v1`. Keys from `platform.kimi.ai` are independent from keys from the China platform.
 
 ## Plans at a glance
 
@@ -25,20 +25,25 @@ Moonshot also operates a China-only platform (`platform.moonshot.cn`, base URL `
 
 | Attribute | Value |
 | --- | --- |
-| **Endpoint** | `https://api.kimi.com/coding/v1` |
-| **Concurrency** | Capped at 30 concurrent requests |
-| **Billing** | Flat-rate subscription |
-| **Keys from** | [kimi.com/code](https://www.kimi.com/code) |
+| **Endpoint** | `https://api.kimi.ai/coding/v1` (overseas)<br />`https://api.kimi.com/coding/v1` (China) |
+| **Models** | `k3.1-pro`, `k3`, `k3-256k`. The ids differ from the Developer API, and your plan decides which are available. See the [Kimi Code docs](https://www.kimi.com/code/docs/en/). |
+| **Limits** | Rolling 5-hour rate window and a monthly quota. See [membership benefits](https://www.kimi.com/code/docs/en/kimi-code/membership.html). |
+| **Billing** | Membership subscription |
+| **Keys from** | [Kimi Code Console](https://www.kimi.com/code/console) |
 
 ### Developer API (pay-per-token)
 
-| Model | Pricing (1M input / output tokens) | Context Window | Notes |
-| ----- | ---------------------------------- | -------------- | ----- |
-| **Kimi K2.6 Coding** `recommended` | ~$0.60 / $2.50 | ~256k tokens | Latest, tuned for code review. |
-| **Kimi K2.5**        | $0.60 / $2.50 | ~256k tokens | Previous generation, still capable. |
-| **Kimi K2 (0905)**   | lower tier | ~128k tokens | Stable general-purpose model. |
+<Info>
+  Moonshot publishes prices at [platform.kimi.ai/docs/pricing/chat](https://platform.kimi.ai/docs/pricing/chat) and rate limits at [platform.kimi.ai/docs/pricing/limits](https://platform.kimi.ai/docs/pricing/limits). Check them before choosing a model.
+</Info>
 
-Developer API endpoint: `https://api.moonshot.ai/v1` (international). Concurrency scales with recharge tier — Tier 1 ($10 recharge) starts at ~50 concurrent, up to ~1000 concurrent on Tier 5.
+| Model | Context Window | Notes |
+| ----- | -------------- | ----- |
+| **Kimi K3.1 Pro** (`kimi-k3.1-pro`) | 1,048,576 tokens | Latest flagship. |
+| **Kimi K3** (`kimi-k3`) | 1,048,576 tokens | Previous-generation flagship. |
+| **Kimi K2 series** | 262,144 tokens | Not available to newly registered users from October 31, 2026. All K2 models are planned for retirement by the end of December 2026. |
+
+Developer API endpoints: `https://api.moonshot.ai/v1` (OpenAI-compatible) and `https://api.moonshot.ai/anthropic` (Anthropic-compatible). Concurrency, requests per minute and tokens per minute depend on your cumulative recharge.
 
 ## Creating an API Key
 
@@ -46,78 +51,57 @@ Developer API endpoint: `https://api.moonshot.ai/v1` (international). Concurrenc
 
 <Tabs>
   <Tab title="Kimi Code Plan subscriber">
-    1. Go to [kimi.com/code](https://www.kimi.com/code) and subscribe to the plan.
-    2. Open the key management area for your subscription.
-    3. Create a Kimi Code key and copy it.
+    1. Go to [kimi.com/code](https://www.kimi.com/code) and subscribe to a membership that includes Kimi Code.
+    2. Open the [Kimi Code Console](https://www.kimi.com/code/console).
+    3. Click **Create API Key**, enter a name and confirm. Copy the key: the console does not show it again.
 
     <Note>
-      Kimi Code keys only work against `https://api.kimi.com/coding/v1`. They will return 401 if sent to `api.moonshot.ai`.
+      Kimi Code keys are for the Kimi Code endpoints. Using a Developer API key or base URL with Kimi Code returns 401.
     </Note>
   </Tab>
 
   <Tab title="Developer API (pay-per-token)">
-    1. Sign in at [platform.moonshot.ai](https://platform.moonshot.ai) (or [platform.moonshot.cn](https://platform.moonshot.cn) if you operate inside mainland China).
-    2. Add a payment method — Moonshot may grant a small starter balance when you first add billing.
-    3. Open the **API Keys** section at [platform.moonshot.ai/console/api-keys](https://platform.moonshot.ai/console/api-keys).
-    4. Click **Create API Key**, give it a descriptive name (e.g. `kodus-prod`), and copy the key immediately.
+    1. Sign in at [platform.kimi.ai](https://platform.kimi.ai), or at [platform.kimi.com](https://platform.kimi.com) for the China platform.
+    2. Recharge your account. On `platform.kimi.ai`, the minimum recharge to start using the API is $1.
+    3. Open [platform.kimi.ai/console/api-keys](https://platform.kimi.ai/console/api-keys) and create a key. Give it a descriptive name (for example `kodus-prod`) and copy it.
 
     <Note>
-      Developer API keys only work against `api.moonshot.ai/v1` (international) or `api.moonshot.cn/v1` (China). Keys are **not** portable between regions.
+      Keys from `platform.kimi.ai` are for `api.moonshot.ai`. They are independent from keys from the China platform, which are for `api.moonshot.cn`.
     </Note>
   </Tab>
 </Tabs>
 
 ## Configure Moonshot in Kodus
 
-The primary flow is the **AI providers** page on Kodus Cloud. Self-hosted users who prefer fixing the provider at the process level can use environment variables instead.
+The primary flow is the **AI providers** page, which is the same on Kodus Cloud and on a self-hosted instance. Self-hosted users who prefer fixing the provider at the process level can use environment variables instead.
 
-### Option 1 — Moonshot provider on Kodus Cloud (recommended for the Developer API)
+### Option 1 — Moonshot provider (recommended for the Developer API)
 
 <Steps>
   <Step title="Open AI providers and pick Moonshot">
-    In the sidebar, open **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)). On the **Providers** tab, click the **Moonshot** tile (under **Connect your first provider**, or **Add another provider** if you already connected one).
+    In the sidebar, open **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok) on Cloud, `/byok` on your own instance). On the **Providers** tab, click the **Moonshot** tile (under **Connect your first provider**, or **Add another provider** if you already connected one).
   </Step>
 
   <Step title="Paste your API key and pick the model">
-    Paste your Developer API key from [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) in the **API key** card. The **Model** picker then loads Moonshot's models — pick one (e.g. `kimi-k2.6`) or choose **Type model manually**. Kodus fills in the `https://api.moonshot.ai/anthropic` endpoint for you; this tile has no plan selector and no base URL field, so for a Kimi Code Plan key (or the China platform) use Option 2 below.
+    Paste your Developer API key from [platform.kimi.ai](https://platform.kimi.ai/console/api-keys) in the **API key** card. The **Model** picker then loads Moonshot's models. Pick one (for example `kimi-k3.1-pro`) or choose **Type model manually**. Kodus fills in the `https://api.moonshot.ai/anthropic` endpoint for you. This tile has no plan selector and no base URL field, so for a Kimi Code Plan key or the China platform use Option 2 below.
   </Step>
 
   <Step title="Test & save">
-    Click **Test & save**. Kodus tests the connection and saves the config on success. 401 means the key doesn't match the endpoint.
+    Click **Test & save**. Kodus tests the connection and saves the config on success. A 401 means the key is wrong or belongs to a different platform.
   </Step>
 </Steps>
 
-### Tuning reasoning (optional)
+### Reasoning
 
-**Thinking / Reasoning** is under **Advanced (optional)**. For Kimi, any level other than Off emits `thinking: { type: "enabled" }`. To override it, switch **Thinking / Reasoning** to **Custom** and paste one of these:
-
-- **Disable thinking** for faster/cheaper reviews on small PRs:
-
-  ```json
-  {
-    "thinking": { "type": "disabled" }
-  }
-  ```
-
-- **Force a specific token budget** (if Moonshot adds support for `budget_tokens` on your tier):
-
-  ```json
-  {
-    "thinking": { "type": "enabled", "budget_tokens": 25000 }
-  }
-  ```
-
-<Note>
-  No namespace wrapping needed — Kodus wraps the options under the active provider's namespace before sending. See the [main BYOK doc → Custom JSON override](/en/how_to_use/byok#custom-json-override) for details.
-</Note>
+Kimi K3.1 Pro and K3 always reason. Moonshot's API has no setting to turn it off and says not to send a `thinking` parameter for them. Leave **Thinking / Reasoning** under **Advanced (optional)** at its default, and do not add a `thinking` block with **Custom**. **Test & save** rejects **Off** for these models. See [Thinking models](https://platform.kimi.ai/docs/guide/use-thinking-models).
 
 ### Tuning concurrency
 
-- **Kimi Code Plan**: set **Max concurrent requests** (under **Advanced (optional)**) to `30` (the documented cap). Going higher returns 429.
-- **Developer API**: start empty (no cap). Your actual limit scales with your recharge tier — Tier 1 (~$10 recharge) allows ~50 concurrent; Tier 5 (~$3000) allows ~1000. Lower it explicitly if you see 429s at review time.
+- **Kimi Code Plan**: Moonshot does not publish a concurrency number for the plan. Set **Max concurrent requests** (under **Advanced (optional)**) to a low value and raise it while reviews run without 429 errors.
+- **Developer API**: leave it empty (no cap). Your limit depends on your cumulative recharge. Set it if you see 429 errors during reviews.
 
 <Note>
-  On the **Routing** tab, set Kimi as **Model for all tasks** and an OpenAI or Anthropic model as **Fallback (optional)** — if Moonshot returns 429 or 402, Kodus fails over automatically.
+  Under **Code review → Routing**, set **Default model** to Kimi and pick a model from another provider as **Fallback model**. Kodus re-runs a failed call on the fallback once. See [Routing](/en/how_to_use/byok#routing:-which-model-runs-each-task).
 </Note>
 
 ### Option 2 — OpenAI-compatible endpoint
@@ -126,75 +110,68 @@ For the Kimi Code Plan, the China platform, or Moonshot's OpenAI-compatible endp
 
 | Field | Value |
 | --- | --- |
-| **Base URL** | `https://api.moonshot.ai/v1` (Developer API)<br />`https://api.kimi.com/coding/v1` (Kimi Code Plan)<br />`https://api.moonshot.cn/v1` (mainland China only) |
-| **Model** | `kimi-k2.6`, `kimi-k2.6`, `kimi-k2.5`, `kimi-k2-0905`, `kimi-k2` |
+| **Base URL** | `https://api.moonshot.ai/v1` (Developer API)<br />`https://api.kimi.ai/coding/v1` (Kimi Code Plan, overseas)<br />`https://api.kimi.com/coding/v1` (Kimi Code Plan, China)<br />`https://api.moonshot.cn/v1` (China platform) |
+| **Model** | `kimi-k3.1-pro` or `kimi-k3` on the Developer API and the China platform<br />`k3.1-pro` or `k3` on Kimi Code |
 | **API key** | your Moonshot or Kimi Code key (matching the base URL above) |
-| **Max concurrent requests** (under **Advanced (optional)**) | `30` on Kimi Code Plan; leave empty on Developer API (scales with recharge tier) |
+| **Max concurrent requests** (under **Advanced (optional)**) | low on Kimi Code Plan, raised while reviews run without 429 errors; empty on the Developer API |
 
 ### Option 3 — Self-hosted (environment variables)
 
-If you run Kodus in Fixed Mode (single global provider, no per-org BYOK), configure Moonshot in the `.env` of your API + worker containers:
+To give a self-hosted instance one model through `.env`:
 
 ```env
-# Moonshot (Kimi) configuration (Fixed Mode)
-API_LLM_PROVIDER_MODEL="kimi-k2.6"
-API_OPENAI_FORCE_BASE_URL="https://api.moonshot.ai/v1"    # or https://api.kimi.com/coding/v1 for Kimi Code Plan
-API_OPEN_AI_API_KEY="your-moonshot-or-kimi-code-api-key"
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="kimi-k3.1-pro"
+API_LLM_BASE_URL="https://api.moonshot.ai/v1"    # or https://api.kimi.ai/coding/v1 for Kimi Code Plan (model k3.1-pro)
+API_LLM_API_KEY="your-moonshot-or-kimi-code-api-key"
 ```
 
-<Note>
-  This path is only needed for self-hosted Kodus installs that deliberately disable BYOK. If BYOK is enabled on your self-hosted instance, prefer **Option 1** or **Option 2** — the **AI providers** page works the same as on Cloud.
-</Note>
+To use the Anthropic-compatible endpoint instead, set `API_LLM_PROVIDER=anthropic_compatible` and `API_LLM_BASE_URL="https://api.moonshot.ai/anthropic"`.
 
-Restart the API and worker containers after editing `.env`, then verify the integration:
-
-```bash
-docker-compose logs api worker | grep -iE "moonshot|kimi"
-```
-
-For the full self-hosted setup (domains, security keys, database, webhooks, reverse proxy), follow the [generic VM deployment guide](https://docs.kodus.io/en/how_to_deploy/deploy_kodus/generic_vm) and only swap the LLM block for the one above.
+Follow the installation guide to [apply the model change](/en/how_to_deploy/deploy_kodus/generic_vm#apply-a-model-change).
 
 ## Choosing between Kimi Code Plan, Developer API, and aggregators
 
-- **Kimi Code Plan** — predictable flat-rate cost, 30-concurrent cap, dedicated `api.kimi.com/coding/v1` endpoint optimized for coding workflows. Best for steady-state teams with predictable PR volume.
-- **Moonshot Developer API** — pay-per-token, concurrency scales with recharge tier, largest flexibility. Best for bursty workloads.
-- **OpenRouter proxy** — if you want one billing relationship across many providers, OpenRouter exposes Kimi models with a small routing markup. Pick this when Kimi is part of a mixed-provider fleet, not a primary workload.
+- **Kimi Code Plan**: flat-rate membership on its own coding endpoint, with a rolling 5-hour rate window and a monthly quota. Best for steady PR volume. Check Moonshot's terms for using a Kimi Code key from third-party tools, and see [Subscriptions and coding plans](/en/how_to_use/byok#subscriptions-and-coding-plans).
+- **Moonshot Developer API**: pay per token, with rate limits that depend on your cumulative recharge. Best for bursty workloads.
+- **OpenRouter**: one billing relationship across many providers. OpenRouter does not mark up inference prices but charges a fee when you buy credits; see its [FAQ](https://openrouter.ai/docs/faq). Pick it when Kimi is one model in a mixed-provider setup.
 
 ## Troubleshooting
 
 <AccordionGroup>
   <Accordion title="401 after Test — key doesn't match endpoint">
-    - Kimi Code Plan keys only work against `api.kimi.com/coding/v1`.
-    - Developer API keys from `platform.moonshot.ai` only work against `api.moonshot.ai/v1`.
-    - Developer API keys from `platform.moonshot.cn` only work against `api.moonshot.cn/v1`.
-    - The **Moonshot** tile always uses `https://api.moonshot.ai/anthropic`, so it needs a `platform.moonshot.ai` key. Connect Kimi Code Plan or `platform.moonshot.cn` keys through **OpenAI-compatible** with the matching **Base URL**.
+    - Kimi Code keys are for the Kimi Code endpoints. Using a Developer API key or base URL with Kimi Code returns 401.
+    - Keys from `platform.kimi.ai` are for `api.moonshot.ai` (`/v1` and `/anthropic`).
+    - Keys from `platform.kimi.com` are for `api.moonshot.cn/v1`.
+    - The **Moonshot** tile always uses `https://api.moonshot.ai/anthropic`, so it needs a `platform.kimi.ai` key. Connect Kimi Code or China platform keys through **OpenAI-compatible** with the matching **Base URL**.
   </Accordion>
 
-  <Accordion title="Insufficient balance">
-    - Developer API bills pay-per-token. If balance runs out, requests return HTTP 402.
-    - Add funds in the billing section of the console or set a monthly cap to avoid surprises.
-    - Kimi Code Plan has flat pricing but is bound by its 30-concurrent cap and quota windows — 429 means you've hit one.
+  <Accordion title="429 errors and insufficient balance">
+    - On the Developer API, a depleted balance returns 429 with `exceeded_current_quota_error`. Recharge your account in the console.
+    - A 429 can also be a rate limit (concurrency, requests per minute or tokens per minute) or an overloaded engine. Lower **Max concurrent requests** for rate limits; recharging does not fix an overloaded engine.
+    - Kimi Code returns 429 when you reach the 5-hour window, the monthly quota or a concurrency limit. See Moonshot's [Kimi Code error reference](https://www.kimi.com/code/docs/en/kimi-code/error-reference) and [Developer API error codes](https://platform.kimi.ai/docs/api/errors).
   </Accordion>
 
   <Accordion title="Model not found">
-    - Confirm the model name matches the catalog (`kimi-k2.6`, `kimi-k2.6`, `kimi-k2.5`, `kimi-k2-0905`, `kimi-k2`).
-    - Check [platform.kimi.ai/docs](https://platform.kimi.ai/docs) for the current list — new versions ship regularly.
+    - Developer API ids are `kimi-k3.1-pro` and `kimi-k3`. Kimi Code ids are `k3.1-pro`, `k3` and `k3-256k`.
+    - Check [platform.kimi.ai/docs/models](https://platform.kimi.ai/docs/models) for the current Developer API list. Older models are retired.
   </Accordion>
 
-  <Accordion title="Slow first response">
-    - First call after idle periods may cold-start on Moonshot's side.
-    - If latency matters, `kimi-k2-0905` is generally faster than the K2.6 variants for routine reviews.
+  <Accordion title="Slow responses">
+    - Kimi K3.1 Pro and K3 always reason, and reasoning cannot be turned off, so a response can take a while.
+    - On the Developer API, Moonshot lists `kimi-k3.1-pro-highspeed` as a faster variant of K3.1 Pro.
   </Accordion>
 
   <Accordion title="Region / connectivity">
-    - Users outside China should always use `api.moonshot.ai` or `api.kimi.com`. `api.moonshot.cn` may be unreachable or rate-limited from outside mainland China.
+    - Developer API keys are tied to their platform: `platform.kimi.ai` for `api.moonshot.ai`, `platform.kimi.com` for `api.moonshot.cn`.
+    - Kimi Code has separate endpoints: `api.kimi.ai/coding/v1` (overseas) and `api.kimi.com/coding/v1` (China).
     - Confirm outbound HTTPS to the chosen endpoint is allowed from your Kodus deployment.
   </Accordion>
 </AccordionGroup>
 
 ## Related
 
-- [Moonshot platform (international)](https://platform.moonshot.ai)
+- [Kimi API Platform](https://platform.kimi.ai)
 - [Kimi Code Plan](https://www.kimi.com/code)
 - [Kimi API documentation](https://platform.kimi.ai/docs)
 - [BYOK overview](/en/how_to_use/byok)

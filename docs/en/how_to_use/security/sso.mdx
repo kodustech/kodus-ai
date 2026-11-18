@@ -3,9 +3,22 @@ title: "Single Sign-On"
 description: "Enable Single Sign-On (SSO) for secure and efficient access to Kodus."
 ---
 
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="Available on Kodus Cloud with Enterprise or an active trial.">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requires an Enterprise license.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
 ## Overview
 
-Single Sign-On (SSO) allows you to manage access to Kodus through a single identity provider, streamlining authentication and enhancing security.
+Single Sign-On (SSO) lets your team sign in to Kodus through your identity provider over SAML 2.0.
+
+Owners configure SAML SSO in **Organization → SSO**.
 
 ## Getting Started
 
@@ -17,7 +30,7 @@ Single Sign-On (SSO) allows you to manage access to Kodus through a single ident
     </Step>
 
     <Step title="Fill in your IdP configuration">
-        Under **SAML SSO Configuration**, fill in your IdP's settings: **IDP Issuer**, **SSO URL** and **X.509 Certificate**. These can be filled in manually or by providing either your IdP's **Metadata URL (optional)** (then **Fetch**) or a metadata XML file (**Upload Metadata XML File**).
+        Under **SAML SSO Configuration**, turn on **Enable SAML SSO** to show the settings, then fill in your IdP's settings: **IDP Issuer**, **SSO URL** and **X.509 Certificate**. These can be filled in manually or by providing either your IdP's **Metadata URL (optional)** (then **Fetch**) or a metadata XML file (**Upload Metadata XML File**).
 
         <Info>
             These values can usually be found in your IdP's documentation or in their admin console.
@@ -35,11 +48,11 @@ Single Sign-On (SSO) allows you to manage access to Kodus through a single ident
     </Step>
 
     <Step title="Verify your domains">
-        Add your email domains under **Allowed Domains** and click **Verify** on each one. In **Verify Enterprise Domain**, enter an email at that domain to receive a verification link (self-hosted instances verify immediately). Each domain must show **Verified** before SSO can be enabled.
+        Add your email domains under **Allowed Domains** (public domains such as gmail.com are not allowed) and click **Verify** on each one. In **Verify Enterprise Domain**, enter an email at that domain to receive a verification link (self-hosted instances verify immediately). Each domain must show **Verified** before SSO can be enabled.
     </Step>
 
     <Step title="Test and enable SSO">
-        Click **Test connection** and complete a login at your IdP. After a successful test, turn on **Enable SAML SSO** and click **Save settings**. When attempting to log in with an email domain associated with your IdP, you will see **Continue with SSO**.
+        Click **Test connection** and complete a login at your IdP. SSO can only be saved as enabled after a successful test, so run the test again after you change the IdP settings or domains. After a successful test, click **Save settings** with **Enable SAML SSO** on.
     </Step>
 
 </Steps>
@@ -52,3 +65,9 @@ You can map the following attributes from your IdP to Kodus users, improving the
 
 -   First Name, mapped to `firstName`
 -   Last Name, mapped to `lastName`
+
+## Signing in
+
+On the sign-in page, type your email. If its domain has SSO enabled, Kodus shows **Continue with SSO** instead of asking for a password, and sends you to your IdP.
+
+The first time someone signs in through SSO, Kodus creates their account in your organization with the **Contributor** role, without an email confirmation step. An Owner can change the role afterwards under **Organization → Subscription → Workspace members**; see [Workspace Roles](/en/how_to_use/workspace_roles).
