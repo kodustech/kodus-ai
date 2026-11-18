@@ -126,6 +126,23 @@ AgentSessionSchema.index(
     { name: 'idx_org_team', background: true },
 );
 
+// A conversation the thread has not touched in 30 days expires. `updatedAt`
+// (Mongoose `timestamps`) moves on every append, so the clock restarts with
+// each reply. The TTL that existed before pointed at a top-level
+// `lastActivityTimestamp` these documents never had (it lives under
+// `sessionData`, as a number, which a TTL ignores anyway), so nothing ever
+// expired. Documents written before `updatedAt` existed are not reached by
+// this; scripts/purge-legacy-agent-sessions.ts removes those once.
+export const AGENT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+AgentSessionSchema.index(
+    { updatedAt: 1 },
+    {
+        name: 'ttl_updatedAt',
+        expireAfterSeconds: AGENT_SESSION_TTL_SECONDS,
+        background: true,
+    },
+);
+
 export const AgentSessionModelInstance = {
     name: AgentSessionModel.name,
     schema: AgentSessionSchema,

@@ -15,6 +15,8 @@
 import { ConnectionString } from 'connection-string';
 import { Db, MongoClient } from 'mongodb';
 
+import { mongoAppName } from './mongo-app-name';
+
 /**
  * Builds the Mongo URI from the same env the API uses (mongodb.config.loader).
  * Prefers a full URI; otherwise assembles host/port/creds with the SAME
@@ -27,6 +29,11 @@ import { Db, MongoClient } from 'mongodb';
  * only test what boots the API. If a client's env boots the app it must also
  * boot migrations — we shouldn't have two independent URI dialects to keep in
  * sync.
+ *
+ * That includes the `API_MG_DB_PRODUCTION_CONFIG` suffix (the options after
+ * the host, e.g. `?retryWrites=true&w=majority&authSource=admin`), which the
+ * app appends outside development and test. Without it a migration connected
+ * with none of the options production runs with.
  */
 export function buildMongoUri(): string {
     const uri = process.env.MONGODB_URI ?? process.env.API_MG_DB_URI;
@@ -36,12 +43,20 @@ export function buildMongoUri(): string {
     const port = parseInt(process.env.API_MG_DB_PORT ?? '', 10);
     const hasPort = Number.isFinite(port);
 
-    return new ConnectionString('', {
+    const assembled = new ConnectionString('', {
         user: process.env.API_MG_DB_USERNAME,
         password: process.env.API_MG_DB_PASSWORD,
         protocol: hasPort ? 'mongodb' : 'mongodb+srv',
         hosts: [{ name: host, port: hasPort ? port : undefined }],
     }).toString();
+
+    const env = process.env.API_DATABASE_ENV ?? process.env.API_NODE_ENV;
+    const clusterConfig = process.env.API_MG_DB_PRODUCTION_CONFIG;
+    const isProduction = !['development', 'test'].includes(env ?? '');
+
+    return isProduction && clusterConfig
+        ? `${assembled}/${clusterConfig}`
+        : assembled;
 }
 
 export function mongoDatabaseName(): string {
@@ -71,7 +86,9 @@ export type MongoMigrationHandle = {
  * in a `finally` so a migration never leaks a socket into the boot sequence.
  */
 export async function mongoMigrationClient(): Promise<MongoMigrationHandle> {
-    const client = new MongoClient(buildMongoUri());
+    const client = new MongoClient(buildMongoUri(), {
+        appName: mongoAppName('migrations'),
+    });
     await client.connect();
     const db = client.db(mongoDatabaseName());
     return { client, db, close: () => client.close() };

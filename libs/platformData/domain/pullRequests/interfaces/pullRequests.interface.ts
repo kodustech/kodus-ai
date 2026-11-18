@@ -353,4 +353,10 @@ export type UpdateSuggestionOptions = {
     unset?: string[];
     /** The only paths of the PR document returned (e.g. `files.suggestions.id`); wins over `returnDocument: false`. */
     projection?: string[];
+    /**
+     * The PR the suggestion belongs to, when the caller has it. The write then
+     * finds the document by `_id` instead of searching the organization's PRs
+     * for one that holds the suggestion id.
+     */
+    pullRequestId?: string;
 };

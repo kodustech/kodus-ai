@@ -60,12 +60,20 @@ const pricingFromMillions = (opts: {
 describe('CostEstimateUseCase', () => {
     let useCase: CostEstimateUseCase;
     let tokenUsageService: { getUsageByPr: jest.Mock };
-    let pullRequestsService: { findOne: jest.Mock };
+    let pullRequestsService: { findManyByNumbers: jest.Mock };
+    let authors: (...usernames: Array<string | null>) => void;
     let tokenPricingUseCase: { execute: jest.Mock };
 
     beforeEach(() => {
         tokenUsageService = { getUsageByPr: jest.fn() };
-        pullRequestsService = { findOne: jest.fn() };
+        pullRequestsService = { findManyByNumbers: jest.fn() };
+        // The authors of PRs 1..n, in order, as the batch lookup returns them.
+        authors = (...usernames: Array<string | null>) =>
+            pullRequestsService.findManyByNumbers.mockResolvedValue(
+                usernames.flatMap((username, i) =>
+                    username ? [{ number: i + 1, user: { username } }] : [],
+                ),
+            );
         tokenPricingUseCase = { execute: jest.fn() };
         // Real calculator over the mocked pricing source: cost math is now
         // owned by ModelCostCalculator, so the end-to-end assertions below
@@ -186,9 +194,7 @@ describe('CostEstimateUseCase', () => {
             }));
 
         beforeEach(() => {
-            pullRequestsService.findOne.mockResolvedValue({
-                user: { username: 'alice' },
-            });
+            authors('alice', 'alice', 'alice', 'alice', 'alice');
         });
 
         it('returns zero cost and 1 developer when there is no usage', async () => {
@@ -253,9 +259,7 @@ describe('CostEstimateUseCase', () => {
                 ],
             }));
             tokenUsageService.getUsageByPr.mockResolvedValue(rows);
-            pullRequestsService.findOne
-                .mockResolvedValueOnce({ user: { username: 'alice' } })
-                .mockResolvedValueOnce({ user: { username: 'bob' } });
+            authors('alice', 'bob');
             tokenPricingUseCase.execute.mockResolvedValue(
                 pricingFromMillions({
                     inputPerM: 2,
@@ -410,10 +414,7 @@ describe('CostEstimateUseCase', () => {
                     { input: 100, output: 50, outputReasoning: 0 },
                 ]),
             );
-            pullRequestsService.findOne
-                .mockResolvedValueOnce({ user: { username: 'alice' } })
-                .mockResolvedValueOnce({ user: { username: 'alice' } })
-                .mockResolvedValueOnce({ user: { username: 'bob' } });
+            authors('alice', 'alice', 'bob');
             tokenPricingUseCase.execute.mockResolvedValue(
                 pricingFromMillions({ inputPerM: 0, outputPerM: 0 }),
             );
@@ -423,11 +424,52 @@ describe('CostEstimateUseCase', () => {
             expect(result.developerCount).toBe(2);
         });
 
+        it('looks every PR author up in one query', async () => {
+            tokenUsageService.getUsageByPr.mockResolvedValue(
+                buildUsage([
+                    { input: 100, output: 50, outputReasoning: 0 },
+                    { input: 100, output: 50, outputReasoning: 0 },
+                    { input: 100, output: 50, outputReasoning: 0 },
+                ]),
+            );
+            authors('alice', 'bob', 'carol');
+            tokenPricingUseCase.execute.mockResolvedValue(
+                pricingFromMillions({ inputPerM: 0, outputPerM: 0 }),
+            );
+
+            const result = await useCase.execute('org-1');
+
+            expect(result.developerCount).toBe(3);
+            expect(
+                pullRequestsService.findManyByNumbers,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                pullRequestsService.findManyByNumbers.mock.calls[0][0].sort(),
+            ).toEqual([1, 2, 3]);
+        });
+
+        it('counts one author for a PR number two repositories share', async () => {
+            tokenUsageService.getUsageByPr.mockResolvedValue(
+                buildUsage([{ input: 100, output: 50, outputReasoning: 0 }]),
+            );
+            pullRequestsService.findManyByNumbers.mockResolvedValue([
+                { number: 1, user: { username: 'alice' } },
+                { number: 1, user: { username: 'bob' } },
+            ]);
+            tokenPricingUseCase.execute.mockResolvedValue(
+                pricingFromMillions({ inputPerM: 0, outputPerM: 0 }),
+            );
+
+            const result = await useCase.execute('org-1');
+
+            expect(result.developerCount).toBe(1);
+        });
+
         it('falls back to developerCount=1 when no developers are resolved', async () => {
             tokenUsageService.getUsageByPr.mockResolvedValue(
                 buildUsage([{ input: 1000, output: 500, outputReasoning: 0 }]),
             );
-            pullRequestsService.findOne.mockResolvedValue(null);
+            authors(null);
             tokenPricingUseCase.execute.mockResolvedValue(
                 pricingFromMillions({ inputPerM: 1, outputPerM: 1 }),
             );

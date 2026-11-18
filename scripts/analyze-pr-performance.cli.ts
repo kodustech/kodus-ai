@@ -513,7 +513,7 @@ Examples:
 
         console.log(`Connecting to MongoDB (database: ${dbName})...`);
 
-        client = new MongoClient(uri);
+        client = new MongoClient(uri, { appName: 'kodus-script-analyze-pr-performance' });
         await client.connect();
 
         const db = client.db(dbName);

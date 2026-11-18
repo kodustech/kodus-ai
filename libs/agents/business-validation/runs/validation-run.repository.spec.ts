@@ -3,7 +3,12 @@ import { ValidationRunRepository } from './validation-run.repository';
 describe('ValidationRunRepository.latestPerPullRequest', () => {
     function repositoryReading() {
         const aggregate = jest.fn(() => ({
-            allowDiskUse: () => ({ exec: async () => [] }),
+            allowDiskUse: () => ({
+                exec: async () => [],
+                option() {
+                    return this;
+                },
+            }),
         }));
         return {
             aggregate,

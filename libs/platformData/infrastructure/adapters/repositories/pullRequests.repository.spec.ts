@@ -29,7 +29,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     beforeEach(() => {
         exec = jest.fn().mockResolvedValue(null);
         findOneAndUpdate = jest.fn().mockReturnValue({ exec });
-        aggregate = jest.fn().mockReturnValue({ exec });
+        aggregate = jest.fn().mockReturnValue({
+            exec,
+            option() {
+                return this;
+            },
+        });
 
         model = {
             findOneAndUpdate,
@@ -700,6 +705,42 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.suggestions.id': 'sugg-id-1',
             });
             expect(options).toMatchObject({ projection: { _id: 1 } });
+        });
+    });
+
+    describe('updateSuggestion for a known PR', () => {
+        it('finds the PR by its _id instead of searching the organization for the suggestion', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                { pullRequestId: 'pr-uuid-1', returnDocument: false },
+            );
+
+            const [filter] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toMatchObject({
+                '_id': 'pr-uuid-1',
+                'files.suggestions.id': 'sugg-id-1',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('keeps the PR _id under a status condition too', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                {
+                    pullRequestId: 'pr-uuid-1',
+                    implementationStatusNotIn: ['implemented'] as any,
+                },
+            );
+
+            const [filter] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toMatchObject({
+                _id: 'pr-uuid-1',
+                organizationId: 'org-A',
+            });
         });
     });
 

@@ -15,6 +15,8 @@ describe('buildMongoUri', () => {
         'API_MG_DB_USERNAME',
         'API_MG_DB_PASSWORD',
         'API_MG_DB_DATABASE',
+        'API_MG_DB_PRODUCTION_CONFIG',
+        'API_DATABASE_ENV',
     ];
     let saved: Record<string, string | undefined>;
 
@@ -89,6 +91,34 @@ describe('buildMongoUri', () => {
         process.env.API_MG_DB_HOST = 'h';
         process.env.API_MG_DB_PORT = 'notaport';
         expect(buildMongoUri()).toBe('mongodb+srv://h');
+    });
+
+    it('appends the production cluster options, as the app does', () => {
+        process.env.API_DATABASE_ENV = 'production';
+        process.env.API_MG_DB_HOST = 'cluster0.pdqbyxj.mongodb.net';
+        process.env.API_MG_DB_USERNAME = 'u';
+        process.env.API_MG_DB_PASSWORD = 'p';
+        process.env.API_MG_DB_PRODUCTION_CONFIG =
+            '?retryWrites=true&w=majority';
+        expect(buildMongoUri()).toBe(
+            'mongodb+srv://u:p@cluster0.pdqbyxj.mongodb.net/?retryWrites=true&w=majority',
+        );
+    });
+
+    it('leaves the cluster options out in development and test', () => {
+        process.env.API_DATABASE_ENV = 'development';
+        process.env.API_MG_DB_HOST = 'h';
+        process.env.API_MG_DB_PORT = '27017';
+        process.env.API_MG_DB_PRODUCTION_CONFIG =
+            '?retryWrites=true&w=majority';
+        expect(buildMongoUri()).toBe('mongodb://h:27017');
+    });
+
+    it('never touches a full URI, which already carries its options', () => {
+        process.env.API_DATABASE_ENV = 'production';
+        process.env.API_MG_DB_URI = 'mongodb://a:1,b:2,c:3/?replicaSet=rs0';
+        process.env.API_MG_DB_PRODUCTION_CONFIG = '?w=majority';
+        expect(buildMongoUri()).toBe('mongodb://a:1,b:2,c:3/?replicaSet=rs0');
     });
 
     it('mongoDatabaseName defaults to kodus, overridden by env', () => {

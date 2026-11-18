@@ -52,6 +52,22 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 // starving concurrent requests.
 const ISSUE_CREATE_CONCURRENCY = 5;
 
+/** Longest search text sent to MongoDB; a title search needs no more. */
+const MAX_SEARCH_LENGTH = 200;
+
+/**
+ * Case-insensitive "contains" on what the user typed, taken literally. The
+ * text arrives from a query string and became the server-side pattern as is:
+ * `.*` matched everything and a pattern like `(a+)+$` held a mongod thread
+ * on every scanned issue.
+ */
+function literalMatch(text: unknown): { $regex: string; $options: 'i' } {
+    const literal = String(text)
+        .slice(0, MAX_SEARCH_LENGTH)
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return { $regex: literal, $options: 'i' };
+}
+
 @Injectable()
 export class KodyIssuesManagementService implements IKodyIssuesManagementService {
     private readonly logger = createLogger(KodyIssuesManagementService.name);
@@ -687,7 +703,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         const filter: any = {};
 
         if (filters.title) {
-            filter['title'] = { $regex: filters.title, $options: 'i' };
+            filter['title'] = literalMatch(filters.title);
         }
 
         const exactMatchFields = [
@@ -708,10 +724,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         }
 
         if (filters.repositoryName) {
-            filter['repository.name'] = {
-                $regex: filters.repositoryName,
-                $options: 'i',
-            };
+            filter['repository.name'] = literalMatch(filters.repositoryName);
         }
 
         if (filters.repositoryIds && filters.repositoryIds) {

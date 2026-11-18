@@ -33,6 +33,7 @@ const chain = (result: unknown) => {
     q.sort = () => q;
     q.limit = () => q;
     q.lean = () => q;
+    q.option = () => q;
     q.exec = async () => result;
     return q;
 };

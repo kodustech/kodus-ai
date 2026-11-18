@@ -9,6 +9,7 @@ import {
     GEN_AI,
 } from '../types';
 import { createLogger, deepSanitize } from '@libs/core/log/logger';
+import { mongoAppName } from '@libs/core/infrastructure/database/mongo/mongo-app-name';
 import {
     LogLevel,
     MongoDBExporterConfig,
@@ -517,6 +518,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             const { MongoClient: mongoClient } = await import('mongodb');
 
             this.client = new mongoClient(this.config.connectionString, {
+                appName: mongoAppName('exporter'),
                 maxPoolSize: 20, // Aumentado para alto volume
                 minPoolSize: 5, // Pool mínimo sempre ativo
                 serverSelectionTimeoutMS: 3000, // Mais rápido
@@ -666,14 +668,13 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
                 // Ignore general index creation errors
             }
 
-            // Telemetry indexes
-            await this.collections.telemetry.createIndex({ timestamp: 1 });
-            await this.collections.telemetry.createIndex({ correlationId: 1 });
-            await this.collections.telemetry.createIndex({ tenantId: 1 });
-            await this.collections.telemetry.createIndex({ name: 1 });
-            await this.collections.telemetry.createIndex({ agentName: 1 });
-            await this.collections.telemetry.createIndex({ toolName: 1 });
-            await this.collections.telemetry.createIndex({ phase: 1 });
+            // Telemetry gets no index from here. The single-field indexes this
+            // used to create on every boot (timestamp, correlationId, tenantId,
+            // name, agentName, toolName, phase) serve no read: Token Usage reads
+            // through the tu_cover_* compounds the migrations build
+            // (database/mongo/token-usage/ensure-indexes.ts). Creating them on
+            // boot also meant a dropped index came back, rebuilt over the whole
+            // collection, on the next deploy of every service.
 
             this.logger.log({
                 message: 'Performance indexes created successfully',

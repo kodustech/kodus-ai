@@ -26,6 +26,8 @@ import {
 } from '@libs/issues/domain/interfaces/issues.interface';
 import { IContributingSuggestion } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
+
 import { IssuesModel } from './schemas/issues.model';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -124,7 +126,10 @@ export class IssuesRepository implements IIssuesRepository {
     }
 
     async count(filter?: Partial<IIssue>): Promise<number> {
-        return await this.issuesModel.countDocuments(filter).exec();
+        return await this.issuesModel
+            .countDocuments(filter)
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
     }
 
     //#region Update
