@@ -70,6 +70,8 @@ describe('logger err serializer — Postgres input in the error message', () => 
         `invalid input value for enum status: "${SECRET}"`,
         `malformed array literal: "${SECRET}"`,
         `value "${SECRET}" is out of range for type integer`,
+        `invalid input syntax for type uuid: "a\n${SECRET}"`,
+        `value "a\n${SECRET}" is out of range for type integer`,
     ])('keeps the type and drops the value of: %s', (message) => {
         const line = serialized(queryFailed('irrelevant detail', message));
 

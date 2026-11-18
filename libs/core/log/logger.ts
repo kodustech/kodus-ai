@@ -507,16 +507,28 @@ function sanitizeString(value: string): string {
  * pattern, no nesting.
  */
 const PG_INPUT_HINT = /invalid input|literal: "|out of range/;
+// The value closes the message and may hold a newline, so everything after
+// the prefix goes, up to the stack frames (same rule as the dup-key block).
 const PG_INPUT_AFTER_COLON =
-    /((?:invalid input (?:syntax|value) for (?:type|enum) [^:\n"]{1,100}|malformed (?:array|record|range) literal|date\/time field value out of range|invalid input syntax): )"[^\n]*/g;
-const PG_INPUT_OUT_OF_RANGE = /\bvalue "[^"\n]*"( is out of range for type)/g;
+    /(?:invalid input (?:syntax|value) for (?:type|enum) [^:\n"]{1,100}|malformed (?:array|record|range) literal|date\/time field value out of range|invalid input syntax): "/g;
+const PG_INPUT_OUT_OF_RANGE = /\bvalue "[^"]*"( is out of range for type)/g;
 function redactPostgresInputValues(value: string): string {
     if (!PG_INPUT_HINT.test(value)) {
         return value;
     }
-    return value
-        .replace(PG_INPUT_AFTER_COLON, '$1"[REDACTED]"')
-        .replace(PG_INPUT_OUT_OF_RANGE, 'value "[REDACTED]"$1');
+    let result = '';
+    let cursor = 0;
+    for (const match of value.matchAll(PG_INPUT_AFTER_COLON)) {
+        const start = match.index ?? 0;
+        if (start < cursor) {
+            continue;
+        }
+        const frames = value.indexOf(STACK_FRAME, start);
+        result += value.slice(cursor, start) + match[0] + '[REDACTED]"';
+        cursor = frames === -1 ? value.length : frames;
+    }
+    result += value.slice(cursor);
+    return result.replace(PG_INPUT_OUT_OF_RANGE, 'value "[REDACTED]"$1');
 }
 
 /**
