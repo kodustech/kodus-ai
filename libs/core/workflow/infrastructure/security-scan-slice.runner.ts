@@ -1,6 +1,10 @@
 import { spawn, type ChildProcess } from 'child_process';
 
 import { createLogger } from '@libs/core/log/logger';
+import {
+    isSliceChildExitError,
+    SliceChildExitError,
+} from '@libs/core/workflow/domain/errors/slice-child-exit.error';
 
 import {
     SECURITY_SCAN_PARENT_WAIT_MS,
@@ -51,22 +55,21 @@ function killChild(child: ChildProcess): void {
     killTimer.unref();
 }
 
-const SLICE_CHILD_EXIT_RE = /exited (\d+|SIG[A-Z]+) for job/;
-
 export function parseSliceChildExit(error: unknown): string | undefined {
-    if (!(error instanceof Error)) return undefined;
-    return error.message.match(SLICE_CHILD_EXIT_RE)?.[1];
+    if (!isSliceChildExitError(error)) return undefined;
+    if (error.code != null) return String(error.code);
+    return error.signal ?? undefined;
 }
 
 /** Child process ended with a code or signal the parent must classify. */
 export function isSliceChildNonZeroExit(error: unknown): boolean {
-    return parseSliceChildExit(error) !== undefined;
+    return isSliceChildExitError(error);
 }
 
 export function isSliceChildPreemptedExit(error: unknown): boolean {
     return (
-        parseSliceChildExit(error) ===
-        String(SECURITY_SCAN_SLICE_EXIT_PREEMPTED)
+        isSliceChildExitError(error) &&
+        error.code === SECURITY_SCAN_SLICE_EXIT_PREEMPTED
     );
 }
 
@@ -145,9 +148,11 @@ export async function runSecurityScanSliceChild(
                     return;
                 }
                 reject(
-                    new Error(
-                        `Security scan slice child exited ${code ?? signal} for job ${jobId}`,
-                    ),
+                    new SliceChildExitError({
+                        jobId,
+                        code,
+                        signal,
+                    }),
                 );
             });
         });

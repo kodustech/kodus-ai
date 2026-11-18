@@ -1,3 +1,4 @@
+import { createLogger } from '@libs/core/log/logger';
 import {
     isSlicePreemptedError,
     SlicePreemptedError,
@@ -8,7 +9,9 @@ import {
 } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
 import { SECURITY_SCAN_SLICE_EXIT_PREEMPTED } from '@libs/core/workflow/infrastructure/security-scan-runtime';
 
-type SliceAppContext = {
+const logger = createLogger('SecurityScanSliceProcess');
+
+export type SliceAppContext = {
     get<T>(token: unknown): T;
     close(): Promise<void>;
 };
@@ -42,21 +45,34 @@ export async function runSecurityScanSliceProcess(
             JOB_PROCESSOR_SERVICE_TOKEN,
         );
         await processor.process(jobId, abort.signal);
-        await appContext.close();
-        return 0;
     } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         options?.onError?.(err);
-        try {
-            await appContext.close();
-        } catch {
-            // exit below
-        }
+        await closeQuietly(appContext, jobId);
         return isSlicePreemptedError(err)
             ? SECURITY_SCAN_SLICE_EXIT_PREEMPTED
             : 1;
     } finally {
         proc.removeListener('SIGTERM', onStop);
         proc.removeListener('SIGINT', onStop);
+    }
+
+    await closeQuietly(appContext, jobId);
+    return 0;
+}
+
+async function closeQuietly(
+    appContext: SliceAppContext,
+    jobId: string,
+): Promise<void> {
+    try {
+        await appContext.close();
+    } catch (error) {
+        logger.error({
+            message: 'Security-scan slice child failed to close Nest',
+            context: 'SecurityScanSliceProcess',
+            error,
+            metadata: { jobId },
+        });
     }
 }

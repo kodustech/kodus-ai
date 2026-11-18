@@ -63,6 +63,59 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
         );
     }
 
+    private async handleSliceChildFailure(params: {
+        jobId: string;
+        error: unknown;
+        abort: AbortController;
+        abortReason?: string;
+        messageId: string;
+        consumerId: string;
+    }): Promise<void> {
+        const { jobId, error, abort, abortReason, messageId, consumerId } =
+            params;
+        if (abort.signal.aborted) {
+            throw this.sliceAbortedError(abortReason);
+        }
+        if (!isSliceChildNonZeroExit(error)) {
+            throw error;
+        }
+
+        let job: { status?: string } | undefined;
+        try {
+            job = await runWithBoundedTimeout(
+                this.jobRepository.findOne(jobId),
+                INBOX_RELEASE_TIMEOUT_MS,
+                'security-scan.job.findOne',
+            );
+        } catch (lookupError) {
+            this.logger.error({
+                message:
+                    'Security-scan job lookup failed after slice child exit',
+                context: 'SecurityScanJobConsumer',
+                error: lookupError,
+                metadata: { jobId, messageId, consumerId },
+            });
+        }
+
+        if (abort.signal.aborted) {
+            throw this.sliceAbortedError(abortReason);
+        }
+        if (job?.status === JobStatus.COMPLETED) {
+            return;
+        }
+        if (
+            job?.status === JobStatus.FAILED ||
+            job?.status === JobStatus.CANCELLED
+        ) {
+            throw error;
+        }
+        if (isSliceChildPreemptedExit(error)) {
+            throw this.sliceAbortedError(abortReason ?? 'child preempted');
+        }
+        await this.failJobIfStillProcessing(jobId, error);
+        throw error;
+    }
+
     private async failJobIfStillProcessing(
         jobId: string,
         error: unknown,
@@ -150,55 +203,14 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                 abortSignal: abort.signal,
             });
         } catch (error) {
-            if (abort.signal.aborted) {
-                throw this.sliceAbortedError(abortReason);
-            }
-            if (isSliceChildNonZeroExit(error)) {
-                let job: { status?: string } | undefined;
-                try {
-                    job = await runWithBoundedTimeout(
-                        this.jobRepository.findOne(jobId),
-                        INBOX_RELEASE_TIMEOUT_MS,
-                        'security-scan.job.findOne',
-                    );
-                } catch (lookupError) {
-                    this.logger.error({
-                        message:
-                            'Security-scan job lookup failed after slice child exit',
-                        context: 'SecurityScanJobConsumer',
-                        error: lookupError,
-                        metadata: { jobId, messageId, consumerId },
-                    });
-                    if (abort.signal.aborted) {
-                        throw this.sliceAbortedError(abortReason);
-                    }
-                    if (isSliceChildPreemptedExit(error)) {
-                        throw this.sliceAbortedError(
-                            abortReason ?? 'child preempted',
-                        );
-                    }
-                    await this.failJobIfStillProcessing(jobId, error);
-                    throw error;
-                }
-                if (abort.signal.aborted) {
-                    throw this.sliceAbortedError(abortReason);
-                }
-                if (
-                    job?.status === JobStatus.FAILED ||
-                    job?.status === JobStatus.COMPLETED ||
-                    job?.status === JobStatus.CANCELLED
-                ) {
-                    throw error;
-                }
-                if (isSliceChildPreemptedExit(error)) {
-                    throw this.sliceAbortedError(
-                        abortReason ?? 'child preempted',
-                    );
-                }
-                await this.failJobIfStillProcessing(jobId, error);
-                throw error;
-            }
-            throw error;
+            await this.handleSliceChildFailure({
+                jobId,
+                error,
+                abort,
+                abortReason,
+                messageId,
+                consumerId,
+            });
         } finally {
             clearInterval(beat);
             this.sliceAborts.delete(abort);

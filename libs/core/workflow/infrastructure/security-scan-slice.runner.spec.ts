@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
 
+import { SliceChildExitError } from '@libs/core/workflow/domain/errors/slice-child-exit.error';
+
 import {
     isSliceChildPreemptedExit,
     parseSliceChildExit,
@@ -173,21 +175,29 @@ describe('parseSliceChildExit', () => {
     it('reads numeric and signal exits', () => {
         expect(
             parseSliceChildExit(
-                new Error('Security scan slice child exited 1 for job job-1'),
+                new SliceChildExitError({
+                    jobId: 'job-1',
+                    code: 1,
+                    signal: null,
+                }),
             ),
         ).toBe('1');
         expect(
             parseSliceChildExit(
-                new Error(
-                    'Security scan slice child exited SIGKILL for job job-1',
-                ),
+                new SliceChildExitError({
+                    jobId: 'job-1',
+                    code: null,
+                    signal: 'SIGKILL',
+                }),
             ),
         ).toBe('SIGKILL');
         expect(
             isSliceChildPreemptedExit(
-                new Error(
-                    `Security scan slice child exited ${SECURITY_SCAN_SLICE_EXIT_PREEMPTED} for job job-1`,
-                ),
+                new SliceChildExitError({
+                    jobId: 'job-1',
+                    code: SECURITY_SCAN_SLICE_EXIT_PREEMPTED,
+                    signal: null,
+                }),
             ),
         ).toBe(true);
     });

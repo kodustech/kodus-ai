@@ -8,16 +8,19 @@ import {
 
 import { SECURITY_SCAN_SLICE_EXIT_PREEMPTED } from '@libs/core/workflow/infrastructure/security-scan-runtime';
 
-import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
+import {
+    runSecurityScanSliceProcess,
+    type SliceAppContext,
+} from './run-security-scan-slice-process';
 
 describe('runSecurityScanSliceProcess', () => {
     it('returns 0 when the processor finishes', async () => {
         const processor = { process: jest.fn().mockResolvedValue(undefined) };
-        const appContext = {
+        const appContext: SliceAppContext = {
             get: jest.fn((token) => {
                 expect(token).toBe(JOB_PROCESSOR_SERVICE_TOKEN);
                 return processor;
-            }),
+            }) as SliceAppContext['get'],
             close: jest.fn().mockResolvedValue(undefined),
         };
 
@@ -46,8 +49,8 @@ describe('runSecurityScanSliceProcess', () => {
                     }),
             ),
         };
-        const appContext = {
-            get: jest.fn(() => processor),
+        const appContext: SliceAppContext = {
+            get: jest.fn(() => processor) as SliceAppContext['get'],
             close: jest.fn().mockResolvedValue(undefined),
         };
         const fakeProcess = new EventEmitter();
@@ -64,10 +67,10 @@ describe('runSecurityScanSliceProcess', () => {
     });
 
     it('returns 1 after close when resolving the processor throws', async () => {
-        const appContext = {
+        const appContext: SliceAppContext = {
             get: jest.fn(() => {
                 throw new Error('no processor');
-            }),
+            }) as SliceAppContext['get'],
             close: jest.fn().mockResolvedValue(undefined),
         };
 
@@ -75,5 +78,17 @@ describe('runSecurityScanSliceProcess', () => {
             runSecurityScanSliceProcess(appContext, 'job-1'),
         ).resolves.toBe(1);
         expect(appContext.close).toHaveBeenCalled();
+    });
+
+    it('returns 0 when process finished and close throws', async () => {
+        const processor = { process: jest.fn().mockResolvedValue(undefined) };
+        const appContext: SliceAppContext = {
+            get: jest.fn(() => processor) as SliceAppContext['get'],
+            close: jest.fn().mockRejectedValue(new Error('langfuse flush')),
+        };
+
+        await expect(
+            runSecurityScanSliceProcess(appContext, 'job-1'),
+        ).resolves.toBe(0);
     });
 });
