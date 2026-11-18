@@ -1,0 +1,13 @@
+{
+  "name": "kody-browser-runner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kody Runtime browser runner (ADR-071): plays a closed list of browser steps and records screenshots, video, a trace and a HAR.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "runner.mjs",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  }
+}

@@ -1,0 +1,226 @@
+# golangci-lint v2 configuration for the Kody Runtime cell.
+# Version pinned in CI (.github/workflows/runtime-cell.yml) and in README.md.
+#   golangci-lint run ./...      lint
+#   golangci-lint fmt            format (gofumpt + goimports)
+#   golangci-lint config verify  check this file against the schema
+version: "2"
+
+run:
+  # The cell is linux-only in production; the linters see the same files the
+  # release build compiles. CI runs on linux, so `golangci-lint run` there
+  # covers the netns/seccomp/landlock code a darwin laptop skips.
+  tests: true
+  # The real-Docker/kernel smoke tests (README "Build and test") are linted
+  # too, though CI only compiles them through lint.
+  build-tags:
+    - dockersmoke
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      # Same rules everyone gets from `gofumpt`; the extra rules rewrite
+      # working code for taste only.
+      extra-rules: false
+    goimports:
+      local-prefixes:
+        - github.com/kodustech/kodus-ai/apps/runtime-cell
+
+linters:
+  # Start from nothing and name every linter: an upgrade of golangci-lint
+  # must not change what CI enforces without a diff to this file.
+  default: none
+  enable:
+    # Correctness
+    - govet
+    - staticcheck # includes the former gosimple and stylecheck in v2
+    - errcheck
+    - unused
+    - ineffassign
+    - wastedassign
+    - errorlint
+    - nilerr
+    - nilnil
+    - copyloopvar
+    - unparam
+    # Resources and contexts: the cell is a long-running daemon; a leaked
+    # body or a context-less request is a stuck claim.
+    - bodyclose
+    - noctx
+    - contextcheck
+    - rowserrcheck
+    - sqlclosecheck
+    # Security: the cell runs untrusted code.
+    - gosec
+    # Protocol enums: a new protocol state must be handled where we switch.
+    - exhaustive
+    # Style the community agrees on.
+    - misspell
+    - revive
+    - gocritic
+    - usestdlibvars
+    - forbidigo
+    # Every //nolint names its linter, says why, and still silences something.
+    - nolintlint
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        # Struct field reordering for padding: noise for a daemon whose hot
+        # structs are few, and it fights readable field grouping.
+        - fieldalignment
+        # Shadowing `err` in a nested scope is idiomatic Go; the analyzer's
+        # non-strict mode still reports it and drowns real cases.
+        - shadow
+
+    staticcheck:
+      checks:
+        - all
+        # Package comments on every package: the cell documents packages in
+        # doc.go where it matters, not on every internal helper.
+        - -ST1000
+        # Naming of initialisms (Id vs ID) is enforced by revive's
+        # var-naming, configured once below.
+        - -ST1003
+
+    errcheck:
+      check-type-assertions: true
+      exclude-functions:
+        # Writes to an in-memory buffer cannot fail (documented as always
+        # nil). fmt.Fprint* is how the cell writes to stderr, CLI stdout and
+        # HTTP responses: a failed write there (closed pipe, client gone)
+        # has no recovery. Data written to files goes through Write/Close,
+        # which stay checked.
+        - (*bytes.Buffer).Write
+        - (*bytes.Buffer).WriteString
+        - (*bytes.Buffer).WriteByte
+        - (*strings.Builder).Write
+        - (*strings.Builder).WriteString
+        - (*strings.Builder).WriteByte
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+
+    gosec:
+      excludes:
+        # G104 duplicates errcheck, which is configured above.
+        - G104
+
+    exhaustive:
+      # A `default:` that handles the rest on purpose is a decision, not an
+      # omission.
+      default-signifies-exhaustive: true
+
+    revive:
+      # Defaults of revive (golint successor) minus the doc-comment rules,
+      # which golint itself made optional for unexported/internal code.
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+          arguments:
+            # Test helpers take t first, then ctx: the Go testing convention.
+            - allowTypesBefore: "*testing.T"
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: increment-decrement
+        - name: var-naming
+          arguments:
+            - [] # allowlist
+            - [] # blocklist
+            - - skip-package-name-checks: true
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        # Value receivers/params under 512 bytes are the norm in this code;
+        # the check reports 80-byte config structs as "heavy".
+        - hugeParam
+        # Reports `if err = f(); err != nil` on an outer err; rewriting it to
+        # `:=` can change what a deferred check of a named err sees, so the
+        # suggestion is not mechanical-safe in this code.
+        - sloppyReassign
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    forbidigo:
+      # Packages under internal/ log through slog; printing to stdout from a
+      # library corrupts the JSON log stream the cell ships.
+      forbid:
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: use the injected slog.Logger, or return the value to the caller
+      analyze-types: true
+
+  exclusions:
+    generated: strict
+    presets: []
+    rules:
+      # cmd/ binaries own their stdout: printing there is the interface.
+      - path: ^cmd/
+        linters:
+          - forbidigo
+      # Test teardown: a failed Close/Remove of a fixture cannot change the
+      # verdict of a test that already ran, and an unchecked type assertion
+      # in a test panics, which fails the test.
+      - path: (_test\.go$|^test/)
+        linters:
+          - errcheck
+        text: "(Close|Remove|RemoveAll|Kill|Wait)` is not checked|^Error return value is not checked$"
+      # Test HTTP calls are bounded by the test binary's timeout and by the
+      # httptest server they target; a context adds nothing a reader needs.
+      # Helpers keep one signature across call sites, so unparam is noise;
+      # copying a struct per range iteration does not matter in a test.
+      - path: (_test\.go$|^test/)
+        linters:
+          - noctx
+          - unparam
+      # Shared test-suite packages: same helper-signature reason as above.
+      - path: ^internal/(driver/drivertest|testing)/
+        linters:
+          - unparam
+      - path: (_test\.go$|^test/)
+        linters:
+          - gocritic
+        text: rangeValCopy
+      # Tests write fixtures with fixed permissions and paths under
+      # t.TempDir(), exec test helpers by design, and the redaction and
+      # sandbox tests carry fake secret-shaped strings on purpose (G101);
+      # smoke tests run docker with argv they build and fetch the local
+      # services they started (G702, G704).
+      - path: (_test\.go$|^test/)
+        linters:
+          - gosec
+        text: "G(101|204|301|302|304|306|702|703|704)"
+      # The OpenBao test harness (a package so the injector's and the
+      # agent's smoke tests share it): it runs docker with argv it builds and
+      # reads the files it or the TypeScript integration wrote, as the smoke
+      # tests above do.
+      - path: ^internal/testopenbao/
+        linters:
+          - gosec
+        text: "G(204|304|703)"
+      # Test fixture binaries are main packages whose stdout is their
+      # interface, like cmd/.
+      - path: ^test/fixtures/
+        linters:
+          - forbidigo

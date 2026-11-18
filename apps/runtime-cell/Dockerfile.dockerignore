@@ -1,0 +1,8 @@
+# Build context: apps/runtime-cell. Only the Go module goes in.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+**/*_test.go
+**/testdata/

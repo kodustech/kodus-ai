@@ -1,0 +1,126 @@
+// Package reaper destroys what passed kodus:hard-expires, even while the hub
+// and the cell keep renewing (ADR-056, S-08). It runs apart from the cell
+// agent with its own credential, which can only list and destroy this
+// cell's machines: on AWS a role outside the cell's VPC, on Kubernetes a
+// service account, on a docker-gvisor or microvm host a timer that reads
+// only the host and the cell's state (cmd/reaper).
+package reaper
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"sync/atomic"
+	"time"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/metrics"
+)
+
+// MachineReaper is the part of MachineDriver the reaper is allowed to use:
+// list and destroy, nothing else.
+type MachineReaper interface {
+	List(ctx context.Context, selector map[string]string) ([]driver.MachineRef, error)
+	Destroy(ctx context.Context, ref driver.MachineRef) error
+}
+
+// OrphanReaper is a driver that can also end what it left on the host with
+// no record (a microVM's VMM, cgroup, jail or tap, after a crash): the
+// reaper runs that pass after the hard-expiry one.
+type OrphanReaper interface {
+	ReapOrphans(ctx context.Context) ([]string, error)
+}
+
+type Reaper struct {
+	CellID string
+	Driver MachineReaper
+	// Orphans is the driver's orphan pass, when it has one (microvm,
+	// docker-gvisor); nil: the hard-expiry pass alone.
+	Orphans OrphanReaper
+	Now     func() time.Time
+	Log     *slog.Logger
+	// Metrics, when set, gets cell_reaper_terminated_total (anything above
+	// zero means the sweep and the dead-man failed: it alerts) and
+	// cell_reaper_pass_failures_total.
+	Metrics *metrics.Registry
+	// Terminated counts what this reaper destroyed (the metric's value).
+	Terminated atomic.Int64
+}
+
+type Report struct {
+	Seen       int
+	Terminated []string
+	// Orphans are what the orphan pass removed (OrphanReaper drivers only).
+	Orphans []string
+}
+
+func (r *Reaper) Run(ctx context.Context) (Report, error) {
+	if r.CellID == "" {
+		return Report{}, errors.New("reaper: cell id required")
+	}
+	now := time.Now
+	if r.Now != nil {
+		now = r.Now
+	}
+	log := r.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	refs, err := r.Driver.List(ctx, map[string]string{driver.TagCell: r.CellID})
+	if err != nil {
+		return Report{}, err
+	}
+	rep := Report{Seen: len(refs)}
+	terminated := r.Metrics.Counter("cell_reaper_terminated_total", "Machines the reaper destroyed past kodus:hard-expires (alert above zero).")
+	var errs []error
+	t := now()
+	for _, ref := range refs {
+		// A machine nobody can date is past its ceiling.
+		if !driver.Expired(ref.Tags, t) {
+			continue
+		}
+		if err := r.Driver.Destroy(ctx, ref); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		rep.Terminated = append(rep.Terminated, ref.MachineID)
+		r.Terminated.Add(1)
+		terminated.Inc()
+		log.Error("reaper.terminated", "machine", ref.MachineID, "claim", ref.Tags[driver.TagClaim], "hardExpires", ref.Tags[driver.TagHardExpires])
+	}
+	if r.Orphans != nil {
+		gone, err := r.Orphans.ReapOrphans(ctx)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		rep.Orphans = gone
+		if len(gone) > 0 {
+			r.Metrics.Counter("cell_reaper_orphans_total", "Things the reaper removed that no machine record named (alert above zero).").Add(float64(len(gone)))
+			log.Error("reaper.orphans", "removed", gone)
+		}
+	}
+	return rep, errors.Join(errs...)
+}
+
+// Loop runs every interval until ctx ends (Docker and Kubernetes; on AWS it
+// is EventBridge every minute calling Run once).
+func (r *Reaper) Loop(ctx context.Context, every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	log := r.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	failures := r.Metrics.Counter("cell_reaper_pass_failures_total", "Reaper passes that ended with an error.")
+	for {
+		if rep, err := r.Run(ctx); err != nil && ctx.Err() == nil {
+			failures.Inc()
+			log.Error("reaper.pass.failed", "alarm", true, "seen", rep.Seen, "terminated", len(rep.Terminated), "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}

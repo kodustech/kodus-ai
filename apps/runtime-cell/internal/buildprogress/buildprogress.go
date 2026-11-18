@@ -1,0 +1,322 @@
+// Package buildprogress reads BuildKit's plain progress output (buildctl
+// --progress plain) into per-step durations, so a slow build says which of
+// its steps took the time. It keeps no output, only each step's name and
+// how it ended, and at most MaxSteps of them. Of what a step printed it keeps
+// only the first lines that read as errors and the last few (redacted and
+// bounded), so a failed build names what failed (Failure) instead of the
+// docker command that ran it.
+//
+// The lines it reads:
+//
+//	#5 [internal] load build context      the step's name (its first line)
+//	#5 transferring context: 1.2GB 40.1s  a status line
+//	#8 12.345 compiling...                a line the step printed
+//	#5 DONE 44.1s                         the step ended after 44.1 s
+//	#7 CACHED                             the step came from the cache
+//	#8 ERROR: process did not complete    the step failed
+//	#8 CANCELED                           the step was stopped
+package buildprogress
+
+import (
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
+)
+
+const (
+	// MaxSteps bounds the steps a Tracker keeps: a larger build's later steps
+	// are not counted.
+	MaxSteps = 1024
+	// MaxName bounds a step's name, in bytes; a longer one is cut.
+	MaxName = 160
+	// MaxErrorLines is how many error lines a step keeps (its first), and
+	// MaxTailLines how many of its last lines; MaxLine bounds each.
+	MaxErrorLines = 8
+	MaxTailLines  = 4
+	MaxLine       = 300
+	// maxKeptLines bounds the lines a Tracker keeps across all its steps.
+	maxKeptLines = 2048
+)
+
+// Step is one BuildKit step (vertex) as the build reported it.
+type Step struct {
+	Name     string `json:"name"`
+	Ms       int64  `json:"ms"`
+	Cached   bool   `json:"cached,omitempty"`
+	Errored  bool   `json:"errored,omitempty"`
+	Canceled bool   `json:"canceled,omitempty"`
+	done     bool
+}
+
+// Summary is what a build's steps came to.
+type Summary struct {
+	Steps    int `json:"steps"`
+	Done     int `json:"done"`
+	Cached   int `json:"cached"`
+	Errored  int `json:"errored"`
+	Canceled int `json:"canceled"`
+	// Slowest are the steps that ran longest, slowest first.
+	Slowest []Step `json:"slowest"`
+	// Phases are every phase of the build, slowest first (Phases).
+	Phases []Phase `json:"-"`
+}
+
+// Tracker turns progress lines into steps. Safe for concurrent use.
+type Tracker struct {
+	mu    sync.Mutex
+	steps map[int]*Step
+	order []int
+	// out is what each step printed that a failure may need.
+	out  map[int]*stepOutput
+	kept int
+	// failedFirst is the first step that reported ERROR (0: none).
+	failedFirst int
+	// solveFailed: buildctl reported the solve failed (a line outside the
+	// steps, "error: failed to solve: ...").
+	solveFailed bool
+	// times is when each step was seen (Phases); now is the clock.
+	times map[int]*stepTime
+	now   func() time.Time
+}
+
+// stepOutput is what a step printed, bounded: its first error lines, its
+// last lines, its ERROR line, and whether it mounts a build cache.
+type stepOutput struct {
+	errors     []string
+	tail       []string
+	errLine    string
+	cacheMount bool
+	exited     bool
+}
+
+func New() *Tracker { return NewAt(time.Now) }
+
+// NewAt is New on a clock of its own (tests): a step's phase while it runs
+// counts from the line that named it to now.
+func NewAt(now func() time.Time) *Tracker {
+	return &Tracker{steps: map[int]*Step{}, out: map[int]*stepOutput{}, times: map[int]*stepTime{}, now: now}
+}
+
+// Failure is the first step BuildKit reported failed.
+type Failure struct {
+	// Step is its name (redacted, bounded).
+	Step string
+	// Lines are the first lines it printed that read as errors, then its
+	// last lines when none did, then BuildKit's own ERROR line; redacted,
+	// each at most MaxLine bytes.
+	Lines []string
+	// ProcessExit: the step's command ran and exited unsuccessfully (a RUN
+	// that failed), not BuildKit failing around it.
+	ProcessExit bool
+	// CacheMount: the step mounts a build cache (RUN --mount=type=cache),
+	// which a build's persisted state provides.
+	CacheMount bool
+}
+
+// errorLine is a line a failing tool prints when it says why: npm, pnpm,
+// node-gyp, apt, a compiler, a resolver error.
+var errorLine = regexp.MustCompile(`(?i:\berr(or)?\b|\bfatal\b|\bfailed\b|\bcannot\b|\bcould not\b|\bnot found\b|\bpanic:|\bexception\b)|ERR!|\bERR_[A-Z0-9_]+|\bE[A-Z][A-Z_]{3,}\b|^E: `)
+
+var (
+	stepLine = regexp.MustCompile(`^#(\d{1,6}) (.+)$`)
+	doneIn   = regexp.MustCompile(`^DONE (\d+(?:\.\d+)?)s$`)
+	printed  = regexp.MustCompile(`^\d+\.\d+ `)
+)
+
+// Line reads one line of the build's progress output.
+func (t *Tracker) Line(line string) {
+	line = strings.TrimRight(line, "\r")
+	m := stepLine.FindStringSubmatch(line)
+	if m == nil {
+		if strings.Contains(line, "failed to solve") {
+			t.mu.Lock()
+			t.solveFailed = true
+			t.mu.Unlock()
+		}
+		return
+	}
+	id, err := strconv.Atoi(m[1])
+	if err != nil {
+		return
+	}
+	rest := strings.TrimSpace(m[2])
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	s := t.step(id)
+	if s == nil {
+		return
+	}
+	now := t.now()
+	t.seen(id, now)
+	switch {
+	case doneIn.MatchString(rest):
+		s.Ms, s.done = parseSecs(doneIn.FindStringSubmatch(rest)[1]), true
+	case rest == "CACHED":
+		s.Cached = true
+	case rest == "CANCELED":
+		s.Canceled = true
+	case rest == "ERROR" || strings.HasPrefix(rest, "ERROR:"):
+		s.Errored = true
+		if t.failedFirst == 0 {
+			t.failedFirst = id
+		}
+		o := t.output(id)
+		if o.errLine == "" {
+			o.errLine = cleanLine(rest)
+			o.exited = strings.Contains(rest, "did not complete successfully")
+		}
+	case printed.MatchString(rest):
+		t.printed(id, printed.ReplaceAllString(rest, ""))
+	case s.Name == "":
+		s.Name = cleanName(rest)
+		t.output(id).cacheMount = strings.Contains(rest, "--mount=type=cache")
+	default:
+		t.status(id, rest, now)
+	}
+}
+
+// parseSecs is BuildKit's "12.345" seconds, in ms.
+func parseSecs(s string) int64 {
+	secs, _ := strconv.ParseFloat(s, 64)
+	return int64(secs*1000 + 0.5)
+}
+
+func (t *Tracker) output(id int) *stepOutput {
+	o := t.out[id]
+	if o == nil {
+		o = &stepOutput{}
+		t.out[id] = o
+	}
+	return o
+}
+
+// printed keeps a line a step printed: among its first error lines, and
+// among its last lines, while the tracker has room.
+func (t *Tracker) printed(id int, line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	o := t.output(id)
+	if len(o.errors) < MaxErrorLines && errorLine.MatchString(line) && t.kept < maxKeptLines {
+		o.errors = append(o.errors, cleanLine(line))
+		t.kept++
+	}
+	switch {
+	case len(o.tail) == MaxTailLines:
+		o.tail = append(o.tail[:0], o.tail[1:]...)
+	case t.kept >= maxKeptLines:
+		return
+	default:
+		t.kept++
+	}
+	o.tail = append(o.tail, cleanLine(line))
+}
+
+// Failure is the first step that reported ERROR, with what it printed;
+// false when no step did (the builder ended some other way).
+func (t *Tracker) Failure() (Failure, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.failedFirst == 0 {
+		return Failure{}, false
+	}
+	s := t.steps[t.failedFirst]
+	f := Failure{Step: s.Name}
+	if f.Step == "" {
+		f.Step = "#" + strconv.Itoa(t.failedFirst)
+	}
+	if o := t.out[t.failedFirst]; o != nil {
+		f.ProcessExit, f.CacheMount = o.exited, o.cacheMount
+		lines := o.errors
+		if len(lines) == 0 {
+			lines = o.tail
+		}
+		f.Lines = append(f.Lines, lines...)
+		if o.errLine != "" {
+			f.Lines = append(f.Lines, o.errLine)
+		}
+	}
+	return f, true
+}
+
+// SolveFailed reports whether buildctl said the solve failed: BuildKit ran
+// the build and the build failed, as opposed to the builder itself ending.
+func (t *Tracker) SolveFailed() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.solveFailed
+}
+
+// step is the step with this id, made on its first line; nil past MaxSteps.
+func (t *Tracker) step(id int) *Step {
+	if s, ok := t.steps[id]; ok {
+		return s
+	}
+	if len(t.steps) >= MaxSteps {
+		return nil
+	}
+	s := &Step{}
+	t.steps[id] = s
+	t.order = append(t.order, id)
+	return s
+}
+
+// Summary counts the steps and names the slowest n that ran (cached steps
+// did not), in the order the build started them when they took as long.
+func (t *Tracker) Summary(n int) Summary {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := Summary{Steps: len(t.steps), Slowest: []Step{}}
+	var ran []Step
+	for _, id := range t.order {
+		s := *t.steps[id]
+		switch {
+		case s.Cached:
+			out.Cached++
+		case s.Errored:
+			out.Errored++
+		case s.Canceled:
+			out.Canceled++
+		case s.done:
+			out.Done++
+		}
+		if s.done && !s.Cached {
+			if s.Name == "" {
+				s.Name = "#" + strconv.Itoa(id)
+			}
+			ran = append(ran, s)
+		}
+	}
+	sort.SliceStable(ran, func(i, j int) bool { return ran[i].Ms > ran[j].Ms })
+	if n >= 0 && len(ran) > n {
+		ran = ran[:n]
+	}
+	out.Slowest = append(out.Slowest, ran...)
+	out.Phases = t.phasesLocked(-1)
+	return out
+}
+
+// A Dockerfile line can carry a value it should not (RUN TOKEN=... make):
+// the token rules first, then any KEY=value whose key names a secret.
+var secretAssign = regexp.MustCompile(`(?i)\b([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIALS?|AUTH)[A-Z0-9_]*)=("[^"]*"|'[^']*'|\S+)`)
+
+func cleanName(name string) string {
+	name, _ = redact.Patterns(name)
+	name = secretAssign.ReplaceAllString(name, "$1=[redacted]")
+	clipped, _ := redact.Clip(name, MaxName)
+	return clipped
+}
+
+// cleanLine is cleanName for a line a step printed, bounded by MaxLine.
+func cleanLine(line string) string {
+	line, _ = redact.Patterns(line)
+	line = secretAssign.ReplaceAllString(line, "$1=[redacted]")
+	clipped, _ := redact.Clip(line, MaxLine)
+	return clipped
+}

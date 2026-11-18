@@ -1,0 +1,85 @@
+# apps/runtime-cell/cmd/cell
+
+The cell binary: the composition root of the cell agent ([architecture.md](../../../../docs/runtime/architecture.md), "Cell agent"). It parses the settings, picks and opens one driver, builds `agent.Config` from its parts and runs the agent, the driver's sweep and the side loops until SIGTERM. It also carries the host's one-shot subcommands (`register`, `renew`, `update`, `update-watch`, `preflight`, `local-pki`, `issue-cert`, `template`, and `extract`, the no-network tarball child).
+
+## Owns
+- Settings: `config.go` `settings.register`, `parseSettings`; the config file (`-config`, YAML or JSON) sets any registered flag by name (`applyFile`, `loadFile`), and a flag wins over the file.
+- The driver registry: `drivers.go` `drivers` (one `driverEntry` per `Kind`: gate, validation, observer modes, `Open`), `selectDriver` (`-driver auto`, `-isolation-backend`), `flagOwners` and `checkFlagOwners`.
+- Opening each driver and filling `agent.Config.Parts`: `wire.go` `wireDockerGVisor`, `wireMicroVM`, `wireFake`, `wireLocalDocker`; per-driver flags in `microvm.go`, `sandbox.go`, `claim_limits.go`.
+- What the agent gets beside the driver: `main.go` `buildAgent` (observers, preview tunnel, egress control with `policyPusher`, alert feeds, denied and outbound readers), `memory.go` `observeDriver` (memory admission budget), `disk.go` `diskWatch`.
+- Trust: `roots.go` `loadRoots` (hub CA, cell-local CA, injector CA; refuses two that share a key), `trust.go` `trustSettings.write` (the files a claim with org secrets mounts), `main.go` `resolveCellID` (the id is the certificate's CN).
+- Shutdown order: `serve.go` `serveCell` (agent and loops stop, `sweepExpired` ends, then the driver closes, all within `shutdownGrace`).
+- `cell update`'s state dir: `config.go` `cellStateDir` (the `-state-dir` the cell runs with under a config file, by `parseSettings`), and `agent.Config.HubProtocolState` at `<state-dir>/hub-protocol.state` (`main.go`): the skew check reads it, and `cell update-watch` (`cellupdate.RunWatch`, run by the host's timer from the release before an update) takes its `at` after the swap as the new release's health signal.
+- Host preflight: `preflight.go` `runPreflight` parses the cell's own flags and `-config` (`parseSettings`, `selectDriver`), then runs `internal/preflight`'s checks for the driver they resolve to, with the host's probes (`hostPreflightProbes`) and the drivers' own rules (`dockergvisor.ValidateClaimLimitDaemon`, `microvm.Prerequisites` on `microvmConfig`, the settings `openMicroVM` opens with). With `-network`, `preflight_network.go` `checkNetwork` adds the read-only network checks: the hub over the agent's own TLS (`hubClientTLS`), the Git API and where its tarballs redirect (`gitHosts`), and on docker-gvisor the images `wireDockerGVisor` hands the driver (`gvisorImages`, the defaults included), `-gvisor-egress-container`, and the remote stores opened as `dockergvisor.New` opens them (`gvisorRegistries`, `remotecache.Registry.Check`).
+- Enrollment commands: `register.go` `runEnroll` (`register -bootstrap <file>` for a fleet host: reads the hub URL, hub CA and `kcf_` token its provider wrote, registers as a Kodus cell, and deletes the file once the hub answered); host PKI: `localpki.go`; template export and import: `template.go` `runTemplate`.
+
+## Does not own
+- Anything a claim does: `internal/agent`. A driver's own behavior: `internal/drivers/*`.
+- Enrollment's protocol and renewal loop: `internal/enrollment`. The release update: `internal/cellupdate`. The extraction child: `internal/tarball`.
+
+## Rules and limits
+- `main.go` only wires; see the `cmd/*` rules and the driver registry rules in [`apps/runtime-cell/AGENTS.md`](../../AGENTS.md) "Package boundaries".
+- A refused setting is `lifecycle.Usage` (exit 2), returned before keys, Docker or the hub are touched (`run`).
+- A driver flag set for another driver is refused, from the command line or the file (`checkFlagOwners`).
+- `-cell-id`, when given, must equal the certificate's CN, or every frame would be refused (`resolveCellID`).
+- A requirement the cell checks at start is checked by `cell preflight` too: its check in `internal/preflight`, called from `preflight.go`, from the same function the start calls, not a copy of its rule.
+- Without `-local-ca` the hub and the enforcers share one pool: allowed only with `-dev` (`loadRoots`, `trust.shared_pool` alarm).
+
+## Where new code goes
+- A new driver: an entry in `drivers` and a `wireX` in `wire.go`; its flags in a `xSettings` with a `flagOwners` line.
+- A new cell flag: `settings.register` (or the driver's settings type), and the README flag table; the file accepts it by name.
+- Logic beyond glue: a package under `internal/` with its own tests.
+
+## Tests
+- `go test ./cmd/cell` (no Docker, no root): flag ownership (`TestEveryDriverFlagIsOwned`), config file parity (`TestFileAndFlagGiveTheSameSettings`), shutdown order (`TestOnSIGTERMTheCellStopsTakingClaimsWaitsForTheSweepThenClosesTheDriver`), trust roots, enrollment against an in-test hub.
+
+<!-- module-map:start (generated by scripts/runtime/module-docs.mjs; do not edit) -->
+
+## Module map
+
+Files (17, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `preflight.go`, `preflight_network.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
+
+Imports these Runtime modules:
+
+- [`apps/runtime-cell/internal/agent`](../../internal/agent/AGENTS.md)
+- [`apps/runtime-cell/internal/agent/evidence`](../../internal/agent/evidence/AGENTS.md)
+- [`apps/runtime-cell/internal/buildmirror`](../../internal/buildmirror/AGENTS.md)
+- [`apps/runtime-cell/internal/cellupdate`](../../internal/cellupdate/AGENTS.md)
+- [`apps/runtime-cell/internal/claimlimits`](../../internal/claimlimits/AGENTS.md)
+- [`apps/runtime-cell/internal/dockercli`](../../internal/dockercli/AGENTS.md)
+- [`apps/runtime-cell/internal/driver`](../../internal/driver/AGENTS.md)
+- [`apps/runtime-cell/internal/driver/fake`](../../internal/driver/fake/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/dockergvisor`](../../internal/drivers/dockergvisor/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/dockergvisor/remotecache`](../../internal/drivers/dockergvisor/remotecache/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/localdocker`](../../internal/drivers/localdocker/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/microvm`](../../internal/drivers/microvm/AGENTS.md)
+- [`apps/runtime-cell/internal/enrollment`](../../internal/enrollment/AGENTS.md)
+- [`apps/runtime-cell/internal/gitsource`](../../internal/gitsource/AGENTS.md)
+- [`apps/runtime-cell/internal/hostcheck`](../../internal/hostcheck/AGENTS.md)
+- [`apps/runtime-cell/internal/hubprotocol`](../../internal/hubprotocol/AGENTS.md)
+- [`apps/runtime-cell/internal/injector`](../../internal/injector/AGENTS.md)
+- [`apps/runtime-cell/internal/isolation`](../../internal/isolation/AGENTS.md)
+- [`apps/runtime-cell/internal/isolation/vmsnap`](../../internal/isolation/vmsnap/AGENTS.md)
+- [`apps/runtime-cell/internal/lifecycle`](../../internal/lifecycle/AGENTS.md)
+- [`apps/runtime-cell/internal/localpki`](../../internal/localpki/AGENTS.md)
+- [`apps/runtime-cell/internal/machinetrust`](../../internal/machinetrust/AGENTS.md)
+- [`apps/runtime-cell/internal/metrics`](../../internal/metrics/AGENTS.md)
+- [`apps/runtime-cell/internal/netguard`](../../internal/netguard/AGENTS.md)
+- [`apps/runtime-cell/internal/observer`](../../internal/observer/AGENTS.md)
+- [`apps/runtime-cell/internal/observerclient`](../../internal/observerclient/AGENTS.md)
+- [`apps/runtime-cell/internal/policy`](../../internal/policy/AGENTS.md)
+- [`apps/runtime-cell/internal/policy/control`](../../internal/policy/control/AGENTS.md)
+- [`apps/runtime-cell/internal/preflight`](../../internal/preflight/AGENTS.md)
+- [`apps/runtime-cell/internal/preview`](../../internal/preview/AGENTS.md)
+- [`apps/runtime-cell/internal/protocol`](../../internal/protocol/AGENTS.md)
+- [`apps/runtime-cell/internal/tarball`](../../internal/tarball/AGENTS.md)
+- [`apps/runtime-cell/internal/telemetry`](../../internal/telemetry/AGENTS.md)
+- [`apps/runtime-cell/internal/tlsutil`](../../internal/tlsutil/AGENTS.md)
+- [`apps/runtime-cell/internal/transport`](../../internal/transport/AGENTS.md)
+- [`apps/runtime-cell/internal/version`](../../internal/version/AGENTS.md)
+
+Imported by:
+
+- none
+
+<!-- module-map:end -->
