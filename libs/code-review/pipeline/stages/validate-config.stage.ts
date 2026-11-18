@@ -366,12 +366,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     reason: trioRefusal?.reason ?? 'plan',
                 },
             });
-            // Settings asking for it: told once per PR, and only when the
-            // review would otherwise have run (not a draft, a skipped branch).
-            const firstReview = !context.pipelineMetadata?.lastExecution;
+            // Settings asking for it: told once per PR (no earlier review of
+            // it was skipped for this same reason), and only when the review
+            // would otherwise have run (not a draft, a skipped branch).
             const wouldRun =
                 askedByCommand ||
-                (firstReview &&
+                (!(await this.wasSkippedFor(context, message)) &&
                     (await this.evaluateReviewCadence(context)).shouldProcess);
             if (wouldRun) {
                 await this.replyToReviewCommand(context, message);
@@ -680,6 +680,26 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 currentStatus: ReviewCadenceState.AUTOMATIC,
             },
         };
+    }
+
+    /** An earlier review of this PR was skipped with this same message. */
+    private async wasSkippedFor(
+        context: CodeReviewPipelineContext,
+        message: string,
+    ): Promise<boolean> {
+        try {
+            return !!(await this.automationExecutionService.findLatestExecutionByFilters(
+                {
+                    status: AutomationStatus.SKIPPED,
+                    errorMessage: message,
+                    teamAutomation: { uuid: context.teamAutomationId },
+                    pullRequestNumber: context.pullRequest.number,
+                    repositoryId: context?.repository?.id,
+                },
+            ));
+        } catch {
+            return false;
+        }
     }
 
     private async hasExistingSuccessfulReview(

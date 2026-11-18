@@ -373,26 +373,61 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(comment()).toContain('was not reviewed');
         });
 
-        it('a trio still set after the trial ended runs nothing; the PR is told on its first review only', async () => {
+        it('a trio still set after the trial ended runs nothing; the PR is told once, on the first review skipped for it', async () => {
             validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
             mockOrganizationParametersService.findByKey.mockResolvedValue({
                 configValue: trioConfig(),
             });
+            // Production always carries the CURRENT execution here; it says
+            // nothing about earlier reviews of the PR.
+            const current = {
+                pipelineMetadata: { lastExecution: { uuid: 'now' } },
+            };
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
 
-            const first = await stage.execute(ultraContext());
+            const first = await stage.execute(ultraContext(undefined, current));
             expect(first.statusInfo?.status).toBe('skipped');
             expect(comment()).toContain('Ultra review is available');
-
-            mockCodeManagementService.createSingleIssueComment.mockClear();
-            const later = await stage.execute(
-                ultraContext(undefined, {
-                    pipelineMetadata: { lastExecution: { uuid: 'e1' } },
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: 'skipped',
+                    errorMessage: first.statusInfo?.message,
+                    pullRequestNumber: 1,
                 }),
             );
+
+            mockCodeManagementService.createSingleIssueComment.mockClear();
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) =>
+                    filters?.errorMessage ? { uuid: 'earlier-skip' } : null,
+            );
+            const later = await stage.execute(ultraContext(undefined, current));
             expect(later.statusInfo?.status).toBe('skipped');
             expect(
                 mockCodeManagementService.createSingleIssueComment,
             ).not.toHaveBeenCalled();
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('--ultra is always answered, even after an earlier skip for the same reason', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'earlier-skip' },
+            );
+            await stage.execute(ultraContext('ultra'));
+            expect(comment()).toContain('Ultra review is available');
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
         });
 
         it('with fewer than three own models, runs no review and says how many there are', async () => {
