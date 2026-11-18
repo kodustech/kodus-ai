@@ -620,11 +620,7 @@ describe('checkRepeats', () => {
             relevantFile: 'src/retry.ts',
             suggestionContent: 'first',
         };
-        const second = {
-            label: 'bug',
-            relevantFile: 'src/retry.ts',
-            suggestionContent: 'second',
-        };
+        const second = { ...bugComment };
         runSpy
             .mockResolvedValueOnce({
                 verdicts: [
@@ -644,7 +640,9 @@ describe('checkRepeats', () => {
             organizationId: 'org-1',
             byokConfig: slot,
         });
-        expect(runSpy.mock.calls[1][0].user).toContain('Finding: second');
+        expect(runSpy.mock.calls[1][0].user).toContain(
+            `Finding: ${second.suggestionContent}`,
+        );
         expect(runSpy.mock.calls[1][0].user).not.toContain('Finding: first');
         expect(result.kept).toEqual([second]);
         expect(result.repeats.map(({ finding }) => finding)).toEqual([first]);

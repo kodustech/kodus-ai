@@ -1,4 +1,10 @@
-import { hasRuleEvidence, hasSourceRefutation } from './kody-rule-evidence';
+import {
+    hasRuleEvidence,
+    hasSourceRefutation,
+    kodyRuleEvidenceVerifier,
+} from './kody-rule-evidence';
+import { LLM } from '@libs/llm/llm';
+import type { ReviewAgentInput } from '../review-agent.contract';
 
 const read = {
     path: 'src/controller.ts',
@@ -97,4 +103,62 @@ describe('Kody Rule evidence', () => {
         expect(hasRuleEvidence(metadata, true, [])).toBe(true);
         expect(hasRuleEvidence(metadata, false, [])).toBe(false);
     });
+});
+
+describe('Kody Rule evidence deadline', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    const candidate = {
+        ruleId: 1,
+        suggestionContent: 'Missing issue in title',
+    };
+    const shard = {
+        filename: null,
+        system: '',
+        user: '',
+        ruleUuids: ['rule'],
+        ruleUnits: [{ uuid: 'rule' }],
+        verifyRepositoryFacts: true,
+    };
+    const verify = () =>
+        kodyRuleEvidenceVerifier(
+            {
+                changedFiles: [],
+                prTitle: 'Update title',
+            } as unknown as ReviewAgentInput,
+            undefined,
+            false,
+        );
+
+    it('withholds a candidate once the deadline expires without asking for a verdict', async () => {
+        const judge = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ verdict: 'satisfied' });
+        const deadline = Date.now() + 50;
+        jest.spyOn(Date, 'now').mockReturnValue(deadline);
+        await expect(verify()(candidate, shard, deadline)).rejects.toThrow(
+            'deadline',
+        );
+        expect(judge).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [700, 700],
+        [180_000, 90_000],
+    ])(
+        'limits the verdict timeout with %i ms remaining',
+        async (remaining, expected) => {
+            const judge = jest
+                .spyOn(LLM, 'run')
+                .mockResolvedValue({ verdict: 'satisfied' });
+            const now = Date.now();
+            jest.spyOn(Date, 'now').mockReturnValue(now);
+            await expect(
+                verify()(candidate, shard, now + remaining),
+            ).resolves.toBe(false);
+            expect(judge).toHaveBeenCalledWith(
+                expect.objectContaining({ timeoutMs: expected }),
+            );
+        },
+    );
 });

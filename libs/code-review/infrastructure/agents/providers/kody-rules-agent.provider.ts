@@ -303,6 +303,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             );
             let evidenceChecks = 0;
             let evidenceFailures = 0;
+            let evidenceSkipped = 0;
             const runJudge: RunJudge = async (shard) => {
                 const { system, user, filename } = shard;
                 // The validate step recovers or rejects an off-shape reply but
@@ -357,11 +358,11 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             supported.push(candidate);
                             continue;
                         }
-                        evidenceChecks++;
                         if (Date.now() >= evidenceDeadline) {
-                            evidenceFailures++;
+                            evidenceSkipped++;
                             continue;
                         }
+                        evidenceChecks++;
                         try {
                             if (
                                 await verifyEvidence(
@@ -744,6 +745,16 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
+            if (evidenceSkipped) {
+                contextWarnings.push({
+                    kind: 'KODY_RULES_PARTIAL',
+                    reason: 'evidence_deadline',
+                    contextWindowTokens: 0,
+                    modelName: main.modelName,
+                    agentName: this.getIdentity().name,
+                    detail: `${evidenceSkipped} Kody Rules candidate(s) were not checked because the evidence time budget expired`,
+                });
+            }
             if (evidenceFailures) {
                 contextWarnings.push(
                     buildKodyRulesPartialWarning({

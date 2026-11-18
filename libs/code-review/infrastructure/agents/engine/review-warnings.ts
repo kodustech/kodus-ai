@@ -89,6 +89,7 @@ export type ReviewWarningReason =
     | 'path_mismatch'
     /** A Kody Rules judge shard errored. */
     | 'judge_shard_failed'
+    | 'evidence_deadline'
     /** The prompt did not fit the single-batch budget on a large PR. */
     | 'large_pr'
     /** The verifier's model call failed (provider error, 429, abort). */
