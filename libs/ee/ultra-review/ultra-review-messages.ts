@@ -47,7 +47,7 @@ export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
         case 'too_few_models':
             return `Ultra review runs on three of your own models, and this organization has ${refusal.ownModels} configured. Add models with your own keys in AI providers and pick three for Ultra in ${settings}. ${NOT_REVIEWED}`;
         case 'not_configured':
-            return `Ultra review runs on three different models set for it, and none are set for this organization. Pick them under Ultra models in ${settings}. ${NOT_REVIEWED}`;
+            return `Ultra review runs on three different models set for it, and this organization does not have three set. Pick them under Ultra models in ${settings}. ${NOT_REVIEWED}`;
         case 'unavailable_models':
             return `None of the three models set for Ultra review can run any more: they were removed, or their keys were. Pick three again under Ultra models in ${settings}. ${NOT_REVIEWED}`;
     }
