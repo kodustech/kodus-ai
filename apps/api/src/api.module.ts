@@ -37,6 +37,7 @@ import { IssuesModule } from '@libs/issues/issues.module';
 import { SecurityScanModule } from '@libs/security-scan/security-scan.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { KodusIssuesMcpModule } from '@libs/mcp-server/kodus-issues-mcp.module';
+import { EnvMcpModule } from '@libs/mcp-server/env-mcp.module';
 import { McpModule } from '@libs/mcp-server/mcp.module';
 import { OrganizationOnboardingModule } from '@libs/organization/modules/organization-onboarding.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
@@ -53,6 +54,7 @@ import { SharedCoreModule } from '@libs/shared/infrastructure/shared-core.module
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedObservabilityModule } from '@libs/shared/infrastructure/shared-observability.module';
 import { Module } from '@nestjs/common';
+import { RuntimeA2AController } from './controllers/runtime/runtime-a2a.controller';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AgentController } from './controllers/agent.controller';
 import { AuthController } from './controllers/auth.controller';
@@ -106,6 +108,22 @@ import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provi
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 import { NotificationController } from './controllers/notification.controller';
 import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
+import { RuntimeApiModule } from '@libs/runtime/api/runtime-api.module';
+import { RuntimeRunsController } from './controllers/runtime/runtime-runs.controller';
+import { RuntimeKeptChecksController } from './controllers/runtime/runtime-kept-checks.controller';
+import { RuntimePreviewsController } from './controllers/runtime/runtime-previews.controller';
+import { RuntimeOrgAdminController } from './controllers/runtime/runtime-org-admin.controller';
+import { RuntimeAuditController } from './controllers/runtime/runtime-audit.controller';
+import { RuntimeSecretsController } from './controllers/runtime/runtime-secrets.controller';
+import { RuntimeOpsController } from './controllers/runtime/runtime-ops.controller';
+import { RuntimeEnvironmentsController } from './controllers/runtime/runtime-environments.controller';
+import { RuntimeSettingsController } from './controllers/runtime/runtime-settings.controller';
+import { RuntimeLlmGatewayController } from './controllers/runtime/runtime-llm-gateway.controller';
+import { RuntimePullRequestRunsController } from './controllers/runtime/runtime-pull-request-runs.controller';
+import { TeamCliKeyRepositoriesController } from './controllers/runtime/team-cli-key-repositories.controller';
+import { RuntimeOncallGuard } from './controllers/runtime/runtime-oncall.guard';
+import { RuntimeReleaseGuard } from './controllers/runtime/runtime-release.guard';
+import { SetTeamCliKeyRepositoriesUseCase } from './use-cases/set-team-cli-key-repositories.use-case';
 
 @Module({
     imports: [
@@ -166,6 +184,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         LicenseModule,
         McpModule.forRoot(),
         KodusIssuesMcpModule.forRoot(),
+        EnvMcpModule,
         HealthModule,
         CronModule,
         SSOModule,
@@ -173,8 +192,10 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         CentralizedConfigModule,
         NotificationModule,
         SelfHostedDoctorModule,
+        RuntimeApiModule,
     ],
     controllers: [
+        RuntimeA2AController,
         CodeManagementController,
         CodeReviewSettingLogController,
         PullRequestMessagesController,
@@ -219,6 +240,18 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         CockpitProductivityController,
         CockpitReviewAnalyticsController,
         NotificationController,
+        RuntimeRunsController,
+        RuntimeKeptChecksController,
+        RuntimePreviewsController,
+        RuntimeOrgAdminController,
+        RuntimeAuditController,
+        RuntimeSecretsController,
+        RuntimeOpsController,
+        RuntimeEnvironmentsController,
+        RuntimeSettingsController,
+        RuntimeLlmGatewayController,
+        RuntimePullRequestRunsController,
+        TeamCliKeyRepositoriesController,
     ],
     providers: [
         LangfuseShutdownProvider,
@@ -228,6 +261,9 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
             useClass: ConditionalApprovalAccessService,
         },
         GetAreaRiskMapUseCase,
+        RuntimeOncallGuard,
+        RuntimeReleaseGuard,
+        SetTeamCliKeyRepositoriesUseCase,
     ],
 })
 export class ApiModule {}

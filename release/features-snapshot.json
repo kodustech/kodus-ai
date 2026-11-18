@@ -1,6 +1,6 @@
 {
     "schema_version": 1,
-    "generated_at": "2026-11-11T19:14:18.046Z",
+    "generated_at": "2026-11-17T23:09:24.727Z",
     "source": "manual",
     "features": {
         "conditional-pr-approval": {
@@ -71,6 +71,15 @@
             "description": "Use sanitized decisions distilled from local coding-agent sessions as repository-scoped context for Kody code reviews.",
             "audience": [
                 "cloud"
+            ]
+        },
+        "kody-runtime": {
+            "name": "Kody Runtime",
+            "stage": "alpha",
+            "description": "Kody boots your app for a pull request, runs the changed entry points against the base and the head, and reports what it saw break on the PR instead of guessing from the diff.",
+            "audience": [
+                "cloud",
+                "self-hosted"
             ]
         }
     }

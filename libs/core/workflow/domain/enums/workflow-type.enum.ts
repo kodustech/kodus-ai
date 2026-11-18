@@ -8,5 +8,12 @@ export enum WorkflowType {
     CHECK_SUGGESTION_IMPLEMENTATION = 'CHECK_SUGGESTION_IMPLEMENTATION',
     AST_GRAPH_BUILD = 'AST_GRAPH_BUILD',
     AST_GRAPH_INCREMENTAL = 'AST_GRAPH_INCREMENTAL',
+    // Kody Runtime (ADR-025, ADR-052): OutboxMessage without a job, full payload.
+    RUNTIME_RUN = 'RUNTIME_RUN',
+    RUNTIME_PUBLISH = 'RUNTIME_PUBLISH',
+    // Kody Runtime control commands (stop, revoke, approvals): never behind a backlog of Runs.
+    RUNTIME_CONTROL = 'RUNTIME_CONTROL',
+    // A pull request event the product worker turns into a Run, or not (PR 2).
+    RUNTIME_TRIGGER = 'RUNTIME_TRIGGER',
     SECURITY_SCAN = 'SECURITY_SCAN',
 }

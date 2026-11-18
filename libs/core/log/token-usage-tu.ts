@@ -184,6 +184,7 @@ export const ROUTING_TASKS: ReadonlySet<string> = new Set([
     'conversation',
     'customAgent',
     'securityScan',
+    'runtime',
 ]);
 
 export function routeFromArea(area: TokenUsageArea): string {

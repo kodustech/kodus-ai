@@ -49,9 +49,9 @@ import {
     syncE2BSandboxRepo,
 } from '../providers/e2b-sandbox.service';
 import {
-    isLocalSandboxPath,
-    deleteLocalSandbox,
-} from './local-sandbox-cleanup.service';
+    isImmediateCleanupSandbox,
+    deleteImmediateSandbox,
+} from './immediate-sandbox-cleanup';
 
 /**
  * Default idle timeout applied when the last lease on a sandbox is released.
@@ -591,7 +591,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         if (updated && updated.leaseCount <= 0 && updated.sandboxId) {
             // Local sandbox: immediate cleanup
-            if (isLocalSandboxPath(updated.sandboxId)) {
+            if (isImmediateCleanupSandbox(updated.sandboxId)) {
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
                     updated.sandboxId,
@@ -599,7 +599,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 );
                 if (claimed) {
                     try {
-                        await deleteLocalSandbox(updated.sandboxId);
+                        await deleteImmediateSandbox(updated.sandboxId);
                         await this.leaseRepo.completeCleanup(
                             prKey,
                             updated.sandboxId,
@@ -698,7 +698,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         if (doc.state === 'CREATING') {
             // Mid-create race: mark as INVALIDATED so the create path can detect and kill
             // Local sandbox: mark invalidated (cleanup on creator failure or final release)
-            if (isLocalSandboxPath(doc.sandboxId)) {
+            if (isImmediateCleanupSandbox(doc.sandboxId)) {
                 await this.leaseRepo.markInvalidated(prKey);
                 this.logger.log({
                     message: `SandboxLeaseManager: marked INVALIDATED (mid-create, local) prKey="${prKey}"`,
@@ -718,7 +718,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         // READY or PAUSED: soft-drain then delete
         // Local sandbox path
-        if (isLocalSandboxPath(doc.sandboxId)) {
+        if (isImmediateCleanupSandbox(doc.sandboxId)) {
             if (doc.leaseCount <= 0) {
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
@@ -727,7 +727,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 );
                 if (claimed) {
                     try {
-                        await deleteLocalSandbox(doc.sandboxId);
+                        await deleteImmediateSandbox(doc.sandboxId);
                         await this.leaseRepo.completeCleanup(
                             prKey,
                             doc.sandboxId,
@@ -896,9 +896,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 });
                 // Kill the sandbox we just created; it is orphaned
                 if (sandboxId) {
-                    if (isLocalSandboxPath(sandboxId)) {
+                    if (isImmediateCleanupSandbox(sandboxId)) {
                         try {
-                            await deleteLocalSandbox(sandboxId);
+                            await deleteImmediateSandbox(sandboxId);
                         } catch (localErr) {
                             this.logger.warn({
                                 message: `SandboxLeaseManager: Failed to clean local sandbox after mid-create invalidation prKey="${prKey}"`,
@@ -943,9 +943,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             return { sandbox, leaseId, sandboxId, wasCreated: true };
         } catch (err) {
             // Local sandbox cleanup on creator failure
-            if (sandboxId && isLocalSandboxPath(sandboxId)) {
+            if (sandboxId && isImmediateCleanupSandbox(sandboxId)) {
                 try {
-                    await deleteLocalSandbox(sandboxId);
+                    await deleteImmediateSandbox(sandboxId);
                 } catch (cleanupErr) {
                     // Claim cleanup first, then mark as failed
                     const claimed = await this.leaseRepo.claimCleanup(

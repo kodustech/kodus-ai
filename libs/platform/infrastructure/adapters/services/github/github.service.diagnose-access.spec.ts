@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 
-import { GithubService } from './github.service';
+import { GithubService, InstallationUnavailableError } from './github.service';
 
 jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
     MCPManagerService: jest.fn(),
@@ -294,5 +294,31 @@ describe('GithubService.diagnoseRepositoryAccess', () => {
             read: 'unknown',
             error: 'Instalation not found',
         });
+    });
+
+    // An org that removed or suspended the GitHub App keeps its integration;
+    // the client then cannot be built at all, and that is a refusal, not an unknown.
+    it('uninstalled or suspended GitHub App → read denied, not unknown', async () => {
+        const service = build({ authMode: AuthMode.OAUTH, octokit: octokit() });
+        jest.spyOn(service, 'getGithubAuthDetails').mockResolvedValue({
+            authMode: AuthMode.OAUTH,
+            installationId: '123',
+            org: 'acme',
+        } as any);
+        (service as any).cacheService = {
+            getFromCache: jest.fn(async () => null),
+            addToCache: jest.fn(async () => undefined),
+            removeFromCache: jest.fn(async () => undefined),
+        };
+        delete (service as any).instanceOctokit;
+        (service as any).getInstallationAuthentication = jest
+            .fn()
+            .mockRejectedValue(new InstallationUnavailableError('Not Found'));
+        await expect(
+            service.diagnoseRepositoryAccess({
+                organizationAndTeamData,
+                repository,
+            }),
+        ).resolves.toMatchObject({ read: 'denied' });
     });
 });

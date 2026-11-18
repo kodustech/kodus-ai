@@ -177,6 +177,17 @@ export class RabbitMQWrapperModule {
                             prefetchCount: 5,
                             default: false,
                         },
+                        // Kody Runtime publications (ADR-052): comment and
+                        // check per Run, consumed by RuntimePublishConsumer.
+                        'channel-runtime-publish': {
+                            prefetchCount: 5,
+                            default: false,
+                        },
+                        // Pull request events the Runtime trigger decides on (PR 2).
+                        'channel-runtime-trigger': {
+                            prefetchCount: 5,
+                            default: false,
+                        },
                         'channel-security-scan': {
                             prefetchCount:
                                 configService.get<number>(

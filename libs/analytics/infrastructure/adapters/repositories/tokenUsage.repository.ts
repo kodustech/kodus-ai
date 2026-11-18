@@ -16,6 +16,8 @@ import {
     UsageByPrResultContract,
     UsageByReviewResultContract,
     UsageSummaryContract,
+    RuntimeTokenUsageQueryContract,
+    RuntimeUsageRowContract,
 } from '@libs/analytics/domain/token-usage/types/tokenUsage.types';
 
 import { ObservabilityTelemetryModel } from './schemas/observabilityTelemetry.model';
@@ -38,6 +40,12 @@ type RawAggRow = {
     startedAt?: Date;
     area?: string;
     task?: string;
+    runId?: string;
+    agentName?: string;
+    runName?: string;
+    repositoryId?: string;
+    environmentId?: string;
+    isByok?: boolean;
 };
 
 /** Raw min/max window row from the taskModelSpan facet (no token math). */
@@ -109,6 +117,10 @@ const taskExpr = (areaField: unknown) => ({
 // beyond what the chart (top 24) or table (top 100) show, while bounding the
 // payload for an org with a huge date window.
 const REVIEW_ROWS_CAP = 8000;
+
+// Upper bound on the Runtime read (rows are per Run × agent × model × tier):
+// a month of an org's Runs, setups and agents, with room to spare.
+const RUNTIME_ROWS_CAP = 20000;
 
 @Injectable()
 export class TokenUsageRepository implements ITokenUsageRepository {
@@ -621,6 +633,84 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             return t !== 0 ? t : a.model.localeCompare(b.model);
         });
         return merged;
+    }
+
+    /**
+     * The Kody Runtime's spend (docs/runtime/usage-report.md): its usage spans
+     * (`attributes.tu.route = 'runtime'`, stamped by every Runtime call) by
+     * Run (`attributes.runId`), agent, repository, environment, BYOK or not,
+     * and model, split by tier bracket exactly as the Token Usage reads are,
+     * so the same calls price the same here and there.
+     */
+    async getRuntimeUsage(
+        query: RuntimeTokenUsageQueryContract,
+    ): Promise<RuntimeUsageRowContract[]> {
+        const thresholds = await this._thresholds();
+        const dims = {
+            runId: '$attributes.runId',
+            agentName: '$attributes.agentName',
+            task: '$attributes.task',
+            // A dotted key (not indexable): read off the fetched span.
+            runName: {
+                $getField: { field: 'gen_ai.run.name', input: '$attributes' },
+            },
+            repositoryId: '$attributes.repositoryId',
+            environmentId: '$attributes.environmentId',
+            isByok: '$attributes.tu.isByok',
+        };
+        const rows = await this._tuRows(
+            {
+                organizationId: query.organizationId,
+                start: query.start,
+                end: query.end,
+                byok: false,
+            },
+            thresholds,
+            dims,
+            Object.fromEntries(Object.keys(dims).map((k) => [k, `$_id.${k}`])),
+            false,
+            {
+                'attributes.tu.route': 'runtime',
+                ...(query.runIds
+                    ? { 'attributes.runId': { $in: query.runIds } }
+                    : {}),
+            },
+            {},
+            RUNTIME_ROWS_CAP,
+        );
+        return this._mergeTierRows<RuntimeUsageRowContract>(
+            rows,
+            thresholds,
+            (r) =>
+                [
+                    r.runId,
+                    r.agentName,
+                    r.task,
+                    r.runName,
+                    r.repositoryId,
+                    r.environmentId,
+                    r.isByok,
+                    r.model,
+                ].join('|'),
+            (base, row) => ({
+                ...base,
+                ...(typeof row.runId === 'string' ? { runId: row.runId } : {}),
+                ...(typeof row.agentName === 'string'
+                    ? { agentName: row.agentName }
+                    : {}),
+                ...(typeof row.task === 'string' ? { task: row.task } : {}),
+                ...(typeof row.runName === 'string'
+                    ? { runName: row.runName }
+                    : {}),
+                ...(typeof row.repositoryId === 'string'
+                    ? { repositoryId: row.repositoryId }
+                    : {}),
+                ...(typeof row.environmentId === 'string'
+                    ? { environmentId: row.environmentId }
+                    : {}),
+                isByok: row.isByok === true,
+            }),
+        );
     }
 
     /**

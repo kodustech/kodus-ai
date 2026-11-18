@@ -12,6 +12,7 @@ import {
     parseReviewDirective,
     normalizeReviewDirective,
     isReviewCommand,
+    isRuntimeCommand,
     isForceReviewCommand,
     isHeavyReviewCommand,
     isKodyMentionNonReview,
@@ -71,6 +72,45 @@ describe('isReviewCommand', () => {
             expect(isReviewCommand('@MyBot review', 'mybot')).toBe(true);
             expect(isReviewCommand('@MYBOT REVIEW', 'mybot')).toBe(true);
         });
+    });
+});
+
+describe('Runtime commands alongside review flags', () => {
+    it.each([
+        '@kody runtime',
+        '@kody runtime --force',
+        '@kody runtime --balanced',
+    ])('keeps %s out of the review path', (text) => {
+        expect(isRuntimeCommand(text)).toBe(true);
+        expect(isReviewCommand(text)).toBe(false);
+        expect(isForceReviewCommand(text)).toBe(false);
+        expect(requestedReviewModeOf(text)).toBeUndefined();
+        expect(parseReviewDirective(text)).toBeUndefined();
+    });
+
+    // Only a handler that knows the org has the Runtime takes it away from the chat.
+    it('is still a chat mention as far as the markers can tell', () => {
+        expect(isKodyMentionNonReview('@kody runtime please')).toBe(true);
+    });
+});
+
+describe('hasKodyMarker and the Kody Runtime', () => {
+    it.each([
+        '@kody runtime',
+        '  @kody runtime --again',
+        '### Kody Runtime · No regressions\n\n<!-- kody-runtime:comment -->',
+        'body\n<!-- kody-runtime:comment env=staging -->',
+        'reply\n<!-- kody-runtime:skipped:0123456789abcdef01234567 -->',
+    ])('marks the command and the Runtime own comments: %j', (text) => {
+        expect(hasKodyMarker(text)).toBe(true);
+    });
+
+    it.each([
+        'Kody Runtime flagged this race, can you look?',
+        'as @kody runtime said above, the retry is wrong',
+        'I think kody runtime is right here',
+    ])('keeps a human thread that only mentions it: %j', (text) => {
+        expect(hasKodyMarker(text)).toBe(false);
     });
 });
 

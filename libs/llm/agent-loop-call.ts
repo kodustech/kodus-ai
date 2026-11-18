@@ -25,10 +25,13 @@
  */
 import {
     generateText,
+    wrapLanguageModel,
     stepCountIs,
     type LanguageModel,
     type ModelMessage,
 } from 'ai';
+
+import type { LanguageModelV4CallOptions, LanguageModelV4Usage } from '@ai-sdk/provider';
 
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
@@ -64,9 +67,18 @@ const AGENT_STEP_MAX_RETRIES = 3;
 
 /** The loop seams the harness runner builds from its policies. Forwarded VERBATIM
  *  to `generateText` — this file does not interpret them (no harness knowledge). */
+export interface ModelCallBudget {
+    before(call: Pick<LanguageModelV4CallOptions, 'prompt' | 'tools' | 'providerOptions' | 'maxOutputTokens' | 'responseFormat'> & { modelId?: string }): Promise<{
+        maxOutputTokens: number;
+        finish(result: { outcome: 'completed' | 'failed' | 'not_started'; usage?: LanguageModelV4Usage }): void | Promise<void>;
+    }>;
+}
+
 export interface AgentLoopSeams {
     /** AI SDK tool map (already converted by the runner). */
     tools: Record<string, unknown>;
+    /** Trusted product-side lease before every raw attempt, including retry and repair. */
+    modelCallBudget?: ModelCallBudget;
     /** Hard ceiling on steps — `stepCountIs(maxSteps)` is appended to stopWhen. */
     maxSteps: number;
     /** Extra stop conditions (policy `shouldStop`), OR-ed with the step ceiling. */
@@ -163,6 +175,32 @@ export async function runAgentLoopCall(
         openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
         openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
     });
+    // Optional: default callers retain the exact resolved model. The same
+    // wrapper reaches retries and repair, so neither can spend outside a lease.
+    const model = loop.modelCallBudget ? wrapLanguageModel({
+        model: inv.model as any,
+        middleware: {
+            specificationVersion: 'v4',
+            wrapGenerate: async ({ doGenerate, params, model }) => {
+                const lease = await loop.modelCallBudget!.before({ prompt: params.prompt, tools: params.tools, providerOptions: params.providerOptions, responseFormat: params.responseFormat, maxOutputTokens: params.maxOutputTokens, modelId: model.modelId });
+                if (!Number.isInteger(lease.maxOutputTokens) || lease.maxOutputTokens < 1) {
+                    await lease.finish({ outcome: 'not_started' });
+                    throw new Error('Invalid model-call budget lease');
+                }
+                params.maxOutputTokens = Math.min(params.maxOutputTokens ?? lease.maxOutputTokens, lease.maxOutputTokens);
+                if (params.abortSignal?.aborted) {
+                    await lease.finish({ outcome: 'not_started' });
+                    throw params.abortSignal.reason;
+                }
+                let result;
+                try { result = await doGenerate(); }
+                catch (e) { await lease.finish({ outcome: 'failed' }); throw e; }
+                await lease.finish({ outcome: 'completed', usage: result.usage });
+                return result;
+            },
+            wrapStream: async () => { throw new Error('Budgeted model calls do not stream'); },
+        },
+    }) : inv.model;
     // The deadline, decided once and used twice: the signal asks the provider to
     // stop, the race below stops waiting for it.
     const hardTimeoutMs = params.hardTimeoutMs ?? AGENT_TIMEOUT_MS;
@@ -271,7 +309,7 @@ export async function runAgentLoopCall(
 
     const exec = () =>
         generateText({
-            model: inv.model as any,
+            model: model as any,
             maxRetries: AGENT_STEP_MAX_RETRIES,
             system: systemArg,
             messages: callMessages,
@@ -288,7 +326,7 @@ export async function runAgentLoopCall(
                 error: unknown;
             }) =>
                 repairInvalidToolInput({
-                    model: inv.model,
+                    model,
                     abortSignal: signal,
                     toolCall: opts.toolCall,
                     inputSchema: opts.inputSchema,

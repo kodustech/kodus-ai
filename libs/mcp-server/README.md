@@ -16,6 +16,15 @@ O endpoint HTTP MCP do Kodus roda em modo `Streamable HTTP` stateless.
 - `GET` e `DELETE` não fazem parte do contrato exposto neste deployment; o endpoint é `POST`-only.
 - O objetivo atual é previsibilidade operacional atrás de load balancer, sem reintroduzir estado local por instância.
 
+## `/mcp/env` (Kody Runtime)
+
+- Tools `env_up`, `env_exec`, `env_upload`, `env_validate`, `env_step`, `env_status`, `env_blockers`, `env_fix`, `env_down` (`tools/env.tools.ts`), sobre `RuntimeEnvToolsService` (`libs/runtime/api/application/env-tools.service.ts`).
+- Só aceita Team API key, inclusive na descoberta (`guards/mcp-env-team-key.guard.ts`); o token de serviço (chat da Kody) recebe 403.
+- Capability exata: `env:exec` para up/exec/step/down, `env:fix` para fix, qualquer das duas para status e blockers; o repo do objeto precisa estar em `config.repositoryIds` da chave. Fora disso: 404, e nada chega à célula (S-46).
+- `env_status` devolve o `EnvironmentHealth` (docs §5: estado, boots de setup dos últimos 7 dias, taxa, p50 até ready, imagem, célula, blockers por assinatura) calculado na API por `environmentHealthOf` sobre o registro de setup que o Runtime guarda (`runtime_environment_setups`, lido só-leitura por `kodus_runtime_reader` e filtrado pela org da chave). Não chama a célula; registro de outra org lê `not_set_up`.
+- `env_exec` não espera o comando: devolve o `stepId`, lido depois com `env_step`. Cota por chave e por org e auditoria de cada chamada (`GET /runtime/audit?kind=env_exec`).
+- Responde JSON (não SSE). As tools chamam o listener `env-session` do runtime-worker (`RUNTIME_ENV_SESSION_URL`), assinado com chave derivada de `RUNTIME_SECRET_SEAL_KEY`.
+
 ## Observabilidade e performance
 
 - Cada request MCP gera logs canônicos de início e fim com `method`, `path`, `jsonrpcMethod`, `toolName`, `organizationId`, `teamId`, `statusCode`, `latencyMs` e `instanceId` quando aplicável.

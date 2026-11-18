@@ -1,15 +1,25 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
+import { isKodyRuntimeEnabled } from '@libs/runtime-publish/runtime-feature';
+import { declareRuntimeRetryTopology } from './config/runtime-retry-topology';
 import {
     Injectable,
     OnApplicationBootstrap,
+    OnModuleDestroy,
     Optional,
 } from '@nestjs/common';
 
 type QueueBinding = {
     queue: string;
     routingKey: string;
+    /**
+     * Also bind it to workflow.exchange, where the outbox publishes. Set for
+     * the Kody Runtime queues, which are consumed by another app (the
+     * runtime-worker): until that app has declared its binding, a message the
+     * product publishes would find no queue and be dropped by the exchange.
+     */
+    bindMainExchange?: boolean;
 };
 
 // Queue ARGUMENTS deliberately live in WORKFLOW_JOB_QUEUE_ARGUMENTS (shared
@@ -42,6 +52,28 @@ const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
         queue: 'workflow.jobs.ast_graph_incremental.queue',
         routingKey: 'workflow.jobs.*.AST_GRAPH_INCREMENTAL',
     },
+    // Kody Runtime (docs §7): consumed by apps/runtime (runtime_run) and by
+    // the product worker (runtime_publish, runtime_trigger). Without the delayed binding the
+    // retry with delay is lost in silence.
+    {
+        queue: 'workflow.jobs.runtime_run.queue',
+        routingKey: 'workflow.jobs.*.RUNTIME_RUN',
+        bindMainExchange: true,
+    },
+    {
+        queue: 'workflow.jobs.runtime_control.queue',
+        routingKey: 'workflow.jobs.*.RUNTIME_CONTROL',
+        bindMainExchange: true,
+    },
+    {
+        queue: 'workflow.jobs.runtime_publish.queue',
+        routingKey: 'workflow.jobs.*.RUNTIME_PUBLISH',
+    },
+    // The PR trigger (product worker): its retries go through the shared error handler too.
+    {
+        queue: 'workflow.jobs.runtime_trigger.queue',
+        routingKey: 'workflow.jobs.*.RUNTIME_TRIGGER',
+    },
     {
         queue: 'workflow.jobs.security_scan.queue',
         routingKey: 'workflow.jobs.*.SECURITY_SCAN',
@@ -49,8 +81,11 @@ const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
 ];
 
 @Injectable()
-export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
+export class RabbitMQDLQInitializer
+    implements OnApplicationBootstrap, OnModuleDestroy
+{
     private readonly logger = createLogger(RabbitMQDLQInitializer.name);
+    private runtimeRetryChannel?: { close(): Promise<unknown> };
 
     constructor(@Optional() private readonly amqpConnection?: AmqpConnection) {}
 
@@ -115,6 +150,8 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
             }
         }
 
+        this.declareRuntimeRetryOnItsOwnChannel();
+
         // Also register the setup callback for connection re-establishments
         managedChannel.addSetup(async (setupChannel: any) => {
             try {
@@ -160,6 +197,55 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
                 });
             });
         }
+    }
+
+    async onModuleDestroy(): Promise<void> {
+        await this.runtimeRetryChannel?.close().catch(() => undefined);
+        this.runtimeRetryChannel = undefined;
+    }
+
+    /**
+     * The Kody Runtime's private retry (runtime-retry-topology.ts), declared
+     * only where the Runtime is on. The Runtime cannot publish to the
+     * product's shared delayed exchange (x-delayed does not enforce the
+     * topic-key permission boundary), and its own retry needs no plugin.
+     *
+     * It runs on a channel of its own, re-run on every reconnect by its
+     * wrapper. Its queues carry arguments a broker can refuse (quorum,
+     * at-least-once dead-lettering): a refusal closes the channel it ran on,
+     * and on the product's channel that would stop code review's consumers.
+     * Here it is logged and touches nothing else.
+     */
+    private declareRuntimeRetryOnItsOwnChannel(): void {
+        if (!isKodyRuntimeEnabled(process.env) || this.runtimeRetryChannel) {
+            return;
+        }
+        const managedConnection: any = (this.amqpConnection as any)
+            ?.managedConnection;
+        if (typeof managedConnection?.createChannel !== 'function') {
+            this.logger.warn({
+                message:
+                    'RabbitMQ managed connection not available; Runtime retry topology not declared',
+                context: RabbitMQDLQInitializer.name,
+            });
+            return;
+        }
+        const wrapper = managedConnection.createChannel({
+            name: 'kody-runtime-retry-topology',
+            confirm: false,
+            setup: async (channel: any) => {
+                await declareRuntimeRetryTopology(channel);
+            },
+        });
+        wrapper.on?.('error', (err: unknown) => {
+            this.logger.error({
+                message:
+                    'Runtime retry topology refused; Runtime retries will not be delivered (code review is not affected)',
+                context: RabbitMQDLQInitializer.name,
+                error: err instanceof Error ? err : undefined,
+            });
+        });
+        this.runtimeRetryChannel = wrapper;
     }
 
     private async declareDelayedExchanges(channel: any): Promise<void> {
@@ -260,6 +346,15 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
                 'workflow.exchange.delayed',
                 qb.routingKey,
             );
+            // The same binding the consumer makes: idempotent, and a queue
+            // bound twice still gets one copy of each message.
+            if (qb.bindMainExchange) {
+                await channel.bindQueue(
+                    qb.queue,
+                    'workflow.exchange',
+                    qb.routingKey,
+                );
+            }
         }
     }
 }

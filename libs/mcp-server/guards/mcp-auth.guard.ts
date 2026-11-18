@@ -97,6 +97,7 @@ export class McpAuthGuard implements CanActivate {
             kind: 'team-key',
             organizationId: data.organization.uuid,
             teamId: data.team.uuid,
+            keyId: data.keyId,
             config: data.config,
         };
     }

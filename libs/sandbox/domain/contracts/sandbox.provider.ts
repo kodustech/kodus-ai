@@ -30,7 +30,8 @@ export interface CreateSandboxParams {
     /**
      * The organization and team the sandbox works for. Decides whether it
      * needs the fixed egress IP (SandboxEgressPolicyService); without them
-     * it keeps the fixed IP. Never sent to the sandbox provider.
+     * it keeps the fixed IP. Never sent to the E2B API. The runtime-sandbox
+     * provider also needs the organization (a cell claim is an org's).
      */
     organizationId?: string;
     teamId?: string;
@@ -52,7 +53,7 @@ export interface SandboxInstance {
     remoteCommands: RemoteCommands;
     cleanup: () => Promise<void>;
     /** Which sandbox provider created this instance */
-    type: 'e2b' | 'local' | 'null';
+    type: 'e2b' | 'local' | 'runtime' | 'null';
     /**
      * Stable identifier the lease manager persists on the lease doc so a
      * second consumer can warm-resume by reconnecting via the provider.

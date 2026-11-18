@@ -191,8 +191,14 @@ export class TeamCliKeyService implements ITeamCliKeyService {
             capabilities.add(TEAM_CLI_KEY_CAPABILITIES.CONFIG_REPO_MANAGE);
         }
 
+        // The repositories the Runtime capabilities reach (ADR-057) are part
+        // of the config too: dropping them here made every write of the list
+        // a silent no-op.
         return {
             capabilities: Array.from(capabilities),
+            ...(Array.isArray(config?.repositoryIds)
+                ? { repositoryIds: config.repositoryIds }
+                : {}),
         };
     }
 }

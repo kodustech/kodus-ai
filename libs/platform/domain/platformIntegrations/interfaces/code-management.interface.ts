@@ -445,6 +445,28 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         login?: string;
     }): Promise<boolean | undefined>;
 
+    /**
+     * The default branch and the commit at its head, read from the Git API.
+     * Null when the repository or the branch is not there (empty repo).
+     * Optional: a provider without it cannot set up a Kody Runtime environment.
+     */
+    getDefaultBranchHead?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+    }): Promise<{ branch: string; sha: string } | null>;
+
+    /**
+     * One file's text at an exact commit (no branch fallback), or null when the
+     * file is not there. Larger than maxBytes is an error, never a truncation.
+     */
+    getFileContentAtRef?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        path: string;
+        ref: string;
+        maxBytes: number;
+    }): Promise<string | null>;
+
     diagnoseRepositoryAccess?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

@@ -2827,6 +2827,8 @@ export class BitbucketDataCenterService implements Omit<
         prNumber: number;
         commentId: number;
         body: any;
+        /** Throw the failure (with its HTTP status) instead of answering null. */
+        failOnError?: boolean;
     }): Promise<any | null> {
         try {
             const {
@@ -2844,7 +2846,13 @@ export class BitbucketDataCenterService implements Omit<
                 repository.id || repository.name,
             );
 
-            if (!authDetails || !repoConfig) return null;
+            if (!authDetails || !repoConfig) {
+                if (params.failOnError)
+                    throw new Error(
+                        'Bitbucket credentials or repository unavailable',
+                    );
+                return null;
+            }
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
@@ -2870,6 +2878,7 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
+            if (params.failOnError) throw error;
             return null;
         }
     }

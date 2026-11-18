@@ -1,3 +1,4 @@
+import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { createLogger } from '@libs/core/log/logger';
@@ -6,6 +7,7 @@ import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application
 import {
     hasReviewMarker,
     isForceReviewCommand,
+    isRuntimeCommand,
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
@@ -38,6 +40,16 @@ import {
     SANDBOX_INVALIDATE_ROUTING_KEY,
     SandboxInvalidatePayload,
 } from '@libs/sandbox/domain/events/sandbox-invalidate.event';
+import { randomUUID } from 'crypto';
+import {
+    runtimeTriggerOutboxMessage,
+    RuntimePullRequestObservedSchema,
+    type RuntimePullRequestObserved,
+} from '@libs/runtime/run/run-messages';
+import {
+    RUNTIME_PULL_REQUEST_GATE_TOKEN,
+    type RuntimePullRequestGate,
+} from '@libs/runtime-publish/domain/pull-request-observation-gate';
 import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
 import { isNewRepositoryEvent } from './new-repository-event';
 import { requestedReviewerOf } from './review-request';
@@ -66,6 +78,11 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         private readonly syncAllRepositoriesUseCase: SyncAllRepositoriesUseCase,
         @Optional()
         private readonly enqueueAstGraphUpdateOnMergedUseCase?: EnqueueAstGraphUpdateOnMergedUseCase,
+        // Provided only where Kody Runtime is on (RuntimePullRequestGateModule);
+        // without it no pull request event is written for the Runtime.
+        @Optional()
+        @Inject(RUNTIME_PULL_REQUEST_GATE_TOKEN)
+        private readonly runtimeGate?: RuntimePullRequestGate,
     ) {}
 
     public canHandle(params: IWebhookEventParams): boolean {
@@ -300,6 +317,15 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
 
         try {
             await this.savePullRequestUseCase.execute(params);
+
+            await this.recordPullRequestEventForRuntime({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository,
+                prNumber,
+                event: payload?.action,
+                pullRequest: payload?.pull_request,
+                correlationId: params.correlationId,
+            });
 
             if (this.enqueueCodeReviewJobUseCase) {
                 this.enqueueCodeReviewJobUseCase
@@ -604,6 +630,34 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                 return;
             }
 
+            // `@kody runtime` goes to the Runtime trigger (PR 2), not to a
+            // review, on a repository in a Runtime environment: only a new
+            // comment asks (an edit does not run it again). Anywhere else it
+            // stays what it was before the Runtime, a chat mention.
+            const runtimeCtx = isRuntimeCommand(comment.body)
+                ? await this.runtimeCommandContext(payload)
+                : undefined;
+            if (runtimeCtx) {
+                if (payload?.action === 'created' && payload?.sender?.type !== 'Bot') {
+                    const repositoryId = String(payload?.repository?.id);
+                    const number = payload?.issue?.number ?? payload?.pull_request?.number;
+                    const isPullRequest = !!payload?.pull_request || !!payload?.issue?.pull_request;
+                    if (number && isPullRequest) {
+                        await this.recordPullRequestEventForRuntime({
+                            organizationAndTeamData: runtimeCtx,
+                            repository: { id: repositoryId, name: payload?.repository?.name, fullName: payload?.repository?.full_name },
+                            prNumber: number,
+                            event: 'comment',
+                            pullRequest: payload?.pull_request,
+                            commenter: { id: payload?.sender?.id?.toString(), login: payload?.sender?.login },
+                            commentId: payload?.comment?.id,
+                            correlationId: params.correlationId,
+                        });
+                    }
+                }
+                return;
+            }
+
             // `@kody -v <agent>` reviews the PR again with that custom agent only.
 
             const customAgentSlug = parseCustomAgentCommand(comment.body);
@@ -794,4 +848,87 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             });
         }
     }
+
+    /**
+     * Writes the pull request event for the Runtime trigger (PR 2) to the
+     * outbox, only for a repository with a Runtime environment (the gate): any
+     * other repository costs no row. It only says what happened; the trigger
+     * reads the head, the diff and permissions from the Git API before it
+     * decides. A failure here never blocks the review.
+     */
+    /**
+     * The org and team of a repository whose `@kody runtime` belongs to the
+     * Runtime: the Runtime is on (the gate is provided) and the repository is
+     * in a Runtime environment. A gate that cannot answer counts as in: the
+     * command is not handed to the chat, and the record step logs the miss.
+     */
+    private async runtimeCommandContext(
+        payload: any,
+    ): Promise<{ organizationId?: string; teamId?: string } | undefined> {
+        if (!this.runtimeGate) return undefined;
+        const repositoryId = String(payload?.repository?.id);
+        const ctx = await this.webhookContextService.getContext(PlatformType.GITHUB, repositoryId);
+        const organizationId = ctx?.organizationAndTeamData?.organizationId;
+        if (!organizationId) return undefined;
+        const inRuntime = await this.runtimeGate
+            .shouldRecord({ organizationId, repositoryId })
+            .catch(() => true);
+        return inRuntime ? ctx.organizationAndTeamData : undefined;
+    }
+
+    private async recordPullRequestEventForRuntime(input: {
+        organizationAndTeamData: { organizationId?: string; teamId?: string };
+        repository: { id: string; name?: string; fullName?: string };
+        prNumber: number;
+        event: string;
+        pullRequest?: any;
+        commenter?: { id?: string; login?: string };
+        commentId?: unknown;
+        /** The webhook job's correlation id: the Run's trace continues it (traceparentFor). */
+        correlationId?: string;
+    }): Promise<void> {
+        const events: RuntimePullRequestObserved['event'][] = ['opened', 'reopened', 'ready_for_review', 'synchronize', 'closed', 'comment'];
+        const event = input.event as RuntimePullRequestObserved['event'];
+        const { organizationId, teamId } = input.organizationAndTeamData ?? {};
+        if (!this.runtimeGate || !events.includes(event) || !organizationId || !teamId || !input.repository.name || !input.prNumber) return;
+        try {
+            if (!(await this.runtimeGate.shouldRecord({ organizationId, repositoryId: input.repository.id }))) return;
+            const pr = input.pullRequest;
+            const headSha = pr?.head?.sha;
+            const payload: RuntimePullRequestObserved = {
+                organizationId,
+                teamId,
+                repository: { id: input.repository.id, name: input.repository.name, ...(input.repository.fullName ? { fullName: input.repository.fullName } : {}) },
+                prNumber: Number(input.prNumber),
+                event,
+                ...(typeof headSha === 'string' && /^[0-9a-f]{40}$/.test(headSha) ? { headSha } : {}),
+                ...(typeof pr?.draft === 'boolean' ? { draft: pr.draft } : {}),
+                labels: (Array.isArray(pr?.labels) ? pr.labels : [])
+                    .map((l: { name?: unknown }) => l?.name)
+                    .filter((n: unknown): n is string => typeof n === 'string')
+                    .slice(0, 100),
+                ...(pr?.user ? { author: { login: pr.user.login, isBot: pr.user.type === 'Bot' } } : {}),
+                ...(input.commenter ? { commenter: input.commenter } : {}),
+                // The comment id lets the trigger read the comment (and its
+                // author) back from the Git API; sent once the schema takes it.
+                ...(acceptsCommentId && isCommentId(input.commentId) ? { commentId: String(input.commentId) } : {}),
+                observedAt: new Date().toISOString(),
+                // The webhook has no live span (the product exports none); its correlation id names the trace.
+                ...(input.correlationId ? { traceparent: traceparentFor(input.correlationId) } : {}),
+            } as RuntimePullRequestObserved;
+            await this.outboxRepository.create(runtimeTriggerOutboxMessage(payload, randomUUID()));
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to record the pull request event for Kody Runtime',
+                context: GitHubPullRequestHandler.name,
+                error,
+                metadata: { prNumber: input.prNumber, repositoryId: input.repository.id, event },
+            });
+        }
+    }
 }
+
+const acceptsCommentId = 'commentId' in RuntimePullRequestObservedSchema.shape;
+const isCommentId = (value: unknown) =>
+    (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) ||
+    (typeof value === 'string' && /^[1-9]\d{0,19}$/.test(value));
