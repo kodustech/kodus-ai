@@ -13,6 +13,9 @@ export const AZURE_FILE_DIFF_TIMEOUT_MS = 60_000;
  */
 export const AZURE_FILE_DIFF_SYNC_BUDGET_MS = 250;
 
+/** Grace past the timeout before our own guard gives up on the library. */
+const AZURE_FILE_DIFF_GUARD_SLACK_MS = 5_000;
+
 /**
  * Unified patch of one file, without ever blocking the event loop for long.
  *
@@ -66,6 +69,12 @@ export function createFilePatchYielding(
     if (remainingMs <= 0) return Promise.resolve(undefined);
 
     return new Promise((resolve) => {
+        // Our own bound too: the promise settles even if the library never
+        // calls back, so a file can never hold the review forever.
+        const guard = setTimeout(
+            () => resolve(undefined),
+            remainingMs + AZURE_FILE_DIFF_GUARD_SLACK_MS,
+        );
         createTwoFilesPatch(
             oldFileName,
             newFileName,
@@ -76,7 +85,10 @@ export function createFilePatchYielding(
             {
                 context: 3,
                 timeout: remainingMs,
-                callback: (patch) => resolve(patch),
+                callback: (patch) => {
+                    clearTimeout(guard);
+                    resolve(patch);
+                },
             },
         );
     });
