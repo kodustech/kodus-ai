@@ -1,35 +1,27 @@
 import { stripCodeFence } from './validation-result.parser';
 
-// The regex stripCodeFence replaced; kept here as the reference contract.
-function legacyStripCodeFence(value: string): string {
-    const trimmed = value.trim();
-    const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-    if (!fencedMatch || !fencedMatch[1]) {
-        return trimmed;
-    }
-    return fencedMatch[1].trim();
-}
-
 describe('stripCodeFence', () => {
+    // The contract, as explicit input -> output pairs (the outputs the former
+    // regex produced, so callers see no change).
     it.each([
-        '```json\n{"needsMoreInfo": false}\n```',
-        '```JSON\n{"a": 1}\n```',
-        '```\n{"a": 1}\n```',
-        '  ```json {"a": 1} ```  ',
-        '```jsonx```',
-        '```json```',
-        '``````',
-        '````',
-        '```',
-        '{"a": 1}',
-        'plain text',
-        '```json\n{"a": "```"}\n```',
-        '```json\n\n   \n```',
-        '```json\n{"a": 1}',
-        '{"a": 1}\n```',
-        '',
-    ])('matches the former regex on %p', (input) => {
-        expect(stripCodeFence(input)).toBe(legacyStripCodeFence(input));
+        ['```json\n{"needsMoreInfo": false}\n```', '{"needsMoreInfo": false}'],
+        ['```JSON\n{"a": 1}\n```', '{"a": 1}'],
+        ['```\n{"a": 1}\n```', '{"a": 1}'],
+        ['  ```json {"a": 1} ```  ', '{"a": 1}'],
+        ['```jsonx```', 'x'],
+        ['```json```', '```json```'],
+        ['``````', '``````'],
+        ['````', '````'],
+        ['```', '```'],
+        ['{"a": 1}', '{"a": 1}'],
+        ['plain text', 'plain text'],
+        ['```json\n{"a": "```"}\n```', '{"a": "```"}'],
+        ['```json\n\n   \n```', '```json\n\n   \n```'],
+        ['```json\n{"a": 1}', '```json\n{"a": 1}'],
+        ['{"a": 1}\n```', '{"a": 1}\n```'],
+        ['', ''],
+    ])('strips %p to %p', (input, expected) => {
+        expect(stripCodeFence(input)).toBe(expected);
     });
 
     it('answers fast on a fenced reply that never closes', () => {
