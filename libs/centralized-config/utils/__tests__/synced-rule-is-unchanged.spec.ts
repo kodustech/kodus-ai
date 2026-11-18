@@ -121,6 +121,15 @@ describe('syncedRuleIsUnchanged', () => {
         ).toBe(true);
     });
 
+    it('writes a legacy mixed-case severity so the write normalizes it', () => {
+        expect(
+            syncedRuleIsUnchanged(
+                { ...stored(), severity: 'High' } as any,
+                { ...incoming(), severity: 'high' } as any,
+            ),
+        ).toBe(false);
+    });
+
     it('writes a rule the plan limit paused when the file asks for active, so a free slot lifts the lock', () => {
         expect(
             syncedRuleIsUnchanged(

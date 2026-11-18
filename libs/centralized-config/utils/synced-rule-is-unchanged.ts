@@ -17,8 +17,11 @@ export function syncedRuleIsUnchanged(
         if (key === 'uuid') continue;
         const current = (stored as Record<string, unknown>)[key];
 
+        // The write lowercases severity: a file saying `High` over a stored
+        // `high` changes nothing, while a legacy stored `High` still gets
+        // the write that normalizes it.
         if (key === 'severity') {
-            if (lower(value) !== lower(current)) return false;
+            if (lower(value) !== (current ?? null)) return false;
             continue;
         }
 
