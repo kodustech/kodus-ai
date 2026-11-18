@@ -63,7 +63,8 @@ export const getSpecialists = (metadata?: unknown): SpecialistRow[] | null => {
 
     const byLens = new Map<string, SpecialistEntry[]>();
     for (const entry of raw as SpecialistEntry[]) {
-        if (!entry?.label || !(entry.status in STATUS_RANK)) continue;
+        if (!entry?.label || !Object.hasOwn(STATUS_RANK, entry.status))
+            continue;
         byLens.set(entry.label, [...(byLens.get(entry.label) ?? []), entry]);
     }
 

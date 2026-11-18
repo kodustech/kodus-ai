@@ -64,6 +64,7 @@ describe("getSpecialists", () => {
                 { label: "lens-a", status: "success", batchIndex: 1, kept: 1 },
                 { label: "lens-a", status: "stopped", batchIndex: 2, kept: 4 },
                 { label: "lens-b", status: "bogus", batchIndex: 1, kept: 9 },
+                { label: "lens-c", status: "toString", batchIndex: 1 },
             ],
         });
 
