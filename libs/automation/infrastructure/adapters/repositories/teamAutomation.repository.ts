@@ -171,13 +171,9 @@ export class TeamAutomationRepository implements ITeamAutomationRepository {
             const automationModel =
                 await this.teamAutomationRepository.find(findOneOptions);
 
-            // Callers do `const [x] = await find(...)`; an empty lookup must
-            // stay an empty list (Promise<Entity[]>), never null.
-            return (
-                mapSimpleModelsToEntities(
-                    automationModel,
-                    TeamAutomationEntity,
-                ) ?? []
+            return mapSimpleModelsToEntities(
+                automationModel,
+                TeamAutomationEntity,
             );
         } catch (error) {
             this.logger.error({
