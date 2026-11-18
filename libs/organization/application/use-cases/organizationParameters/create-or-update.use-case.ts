@@ -204,21 +204,22 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             { organization: { uuid: organizationId } },
             [STATUS.ACTIVE],
         );
-        const scopes = (
-            await Promise.all(
-                teams.map(async (team) => {
-                    const stored = await this.parametersService!.findByKey(
-                        ParametersKey.CODE_REVIEW_CONFIG,
-                        { organizationId, teamId: team.uuid },
-                    );
-                    return ultraModeScopes(stored?.configValue).map((scope) =>
-                        teams.length > 1
-                            ? `${scope} of team "${team.name}"`
-                            : scope,
-                    );
-                }),
-            )
-        ).flat();
+        // One read at a time: an org's teams are few, and a failed read
+        // refuses the save rather than passing unchecked.
+        const scopes: string[] = [];
+        for (const team of teams) {
+            const stored = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                { organizationId, teamId: team.uuid },
+            );
+            for (const scope of ultraModeScopes(stored?.configValue)) {
+                scopes.push(
+                    teams.length > 1
+                        ? `${scope} of team "${team.name}"`
+                        : scope,
+                );
+            }
+        }
         if (scopes.length) {
             throw new BadRequestException(
                 `Ultra review is the review mode in ${scopes.join('; ')}. ` +
