@@ -17,6 +17,7 @@ function pair(id, family, base, head, rule, claim, pr = {}) {
             claims: [
                 {
                     ...claim,
+                    ...(violates && claim.missingBehavior ? { golden: claim.missingBehavior } : {}),
                     truth: violates ? 'true' : 'false',
                     expect: violates ? 'deliver' : 'not_deliver',
                 },
@@ -165,6 +166,7 @@ const regression = pair(
     },
     {
         id: 'uncovered-timeout',
+        missingBehavior: 'No test calls record with a nonzero exit after the 10-second cutoff and asserts executed is false; the pre-fix implementation still passes the suite.',
         ruleId: 'eval-h3-regression',
         golden: 'The recording tests do not pin the cut-short behavior against the previous revision, or a contrast case is claimed to be insufficient because it also passes on the previous revision.',
     },
@@ -223,4 +225,72 @@ const resume = pair(
     { prTitle: 'fix: fail attempts where the provider checked nothing new' },
 );
 
-module.exports = [...access, ...cloud, ...regression, ...resume];
+// Independent examples scored with the same production review and paired labels.
+const registry = pair(
+    'G1', 'incremental-registration',
+    (violates) => ({
+        'src/tasks.ts': lines(
+            'export async function purgeExpired() { return 0; }',
+            violates ? 'export const tasks: Record<string, () => Promise<number>> = {};' : 'export const tasks: Record<string, () => Promise<number>> = { purgeExpired };',
+        ),
+        'src/dispatch.ts': lines('import { tasks } from "./tasks";', 'export function run(name: string) { return tasks[name]?.(); }'),
+    }),
+    (previous) => ({ ...previous, 'config/nightly.ts': lines('export const nightly = { task: "purgeExpired", hour: 3 };') }),
+    { uuid: 'eval-g1-task', scope: 'pull-request', title: 'Register scheduled tasks', rule: 'A new schedule in config must reference a task registered by name in the dispatcher task table. A function declaration alone does not register it.' },
+    { id: 'missing-task-registration', ruleId: 'eval-g1-task', golden: 'The new purgeExpired schedule cannot dispatch because the tasks table has no purgeExpired entry.' },
+    { prBase: {}, prTitle: 'Schedule the expired-item cleanup overnight' },
+);
+
+const grace = pair(
+    'G2', 'cross-file-semantics',
+    (violates) => ({
+        'src/billing/invoice.ts': lines('export function due(day: number) { return day; }'),
+        'src/support/reminder.ts': lines(violates
+            ? 'export function invoiceDueDay(day: number) { return day + 5; }'
+            : 'export function retrySupportEmail(day: number) { return day + 5; }'),
+    }),
+    (previous) => ({ ...previous, 'src/billing/invoice.ts': lines('export function due(day: number) { return day + 5; }') }),
+    { uuid: 'eval-g2-policy', path: 'src/billing/**', title: 'Share invoice deadlines', rule: 'Two implementations of the invoice due date must use the same policy function. An unrelated timer with the same number of days is a separate policy.' },
+    { id: 'duplicated-deadline', ruleId: 'eval-g2-policy', golden: 'The invoice due date is independently computed as day plus five in billing and support. Share the invoice deadline calculation.' },
+    { prTitle: 'Allow a grace period on invoices' },
+);
+
+const freeShipping = pair(
+    'G3', 'behavioral-regression',
+    () => ({
+        'src/shipping.ts': lines('export const freeShipping = (cents: number) => cents > 5000;'),
+        'tests/shipping.spec.ts': lines('import { freeShipping } from "../src/shipping";'),
+    }),
+    (previous, violates) => ({
+        ...previous,
+        'src/shipping.ts': lines('export const freeShipping = (cents: number) => cents >= 5000;'),
+        'tests/shipping.spec.ts': lines(previous['tests/shipping.spec.ts'].trimEnd(),
+            'describe("free shipping threshold", () => {',
+            '    it("charges below the threshold", () => expect(freeShipping(4999)).toBe(false));',
+            ...(violates ? [] : ['    it("ships free at the threshold", () => expect(freeShipping(5000)).toBe(true));']),
+            '    it("ships free above the threshold", () => expect(freeShipping(5001)).toBe(true));',
+            '});'),
+    }),
+    { uuid: 'eval-g3-boundary', path: 'tests/**', title: 'Pin the changed behavior', rule: 'A regression suite accompanying a fix must fail on the previous implementation and pass with the fix.' },
+    { id: 'missing-equality-test', missingBehavior: 'No test asserts freeShipping(5000) is true; the old strict greater-than implementation passes all tests.', ruleId: 'eval-g3-boundary', golden: 'The suite lacks a test for exactly 5000 cents, the only input whose free-shipping outcome changes, or incorrectly claims the suite fails to pin the fix because an adjacent contrast case passes on the old implementation.' },
+    { prTitle: 'Include purchases of exactly fifty dollars in free shipping' },
+);
+
+const archive = pair(
+    'G4', 'generalist-consumer-contract',
+    (violates) => ({
+        'src/export.ts': lines('import { snapshot } from "./list";', 'export function exportNames(names: string[]) { return snapshot([...names]); }'),
+        'src/list.ts': lines('export function snapshot(names: string[]) {',
+            violates ? '    return names.sort();' : '    return [...names].sort();', '}'),
+    }),
+    (previous) => ({ ...previous, 'src/export.ts': lines(
+        'import { snapshot } from "./list";',
+        '// Export must leave the caller-owned list in its original order.',
+        'export function exportNames(names: string[]) { return snapshot(names); }',
+    ) }),
+    null,
+    { id: 'caller-list-mutated', golden: 'Removing the defensive copy lets snapshot sort the caller-owned input array in place, changing its order.' },
+    { prTitle: 'Reduce allocations while exporting names' },
+);
+
+module.exports = [...access, ...cloud, ...regression, ...resume, ...registry, ...grace, ...freeShipping, ...archive];

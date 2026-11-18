@@ -12,6 +12,23 @@ next round is shown a stale status for that suggestion), and a production report
 (2026-10-01) of Kody Rule findings reposted every round, reworded, after the
 developer declined or fixed them.
 
+## Does the whole change in #2597 improve review quality?
+
+Use `--set=review-quality-2597` on the base and the PR with the same eval files, model, judge, reasoning effort, concurrency and repetitions. Save both JSON outputs and run `node evals/review-rounds/compare-quality.js base.json pr.json` to see the result by contract, model usage and latency. The set scores the comments delivered by production. Compare each row of the table separately: suppressing every finding would look good on clean code alone.
+
+| Question | Cases | Expected delivery |
+| --- | --- | --- |
+| Can a rule check code outside an incremental patch? | H1 (permission enforcement), G1 (scheduled task registration) | Stay quiet when the earlier implementation satisfies the rule; flag the missing enforcement or registration. |
+| Does a shared value really represent the same policy? | H2 (production vs development config), G2 (invoice deadline vs support retry) | Suppress the superficial match; flag independent implementations of the same production policy. |
+| Does the whole test block detect the changed behavior? | H3 (interrupted work), G3 (inclusive shipping threshold) | Accept the suite with the decisive input; flag the suite that only covers its neighbors. |
+| Does the normal bug review follow the consumer's behavior? | H4 (resume after failure), G4 (caller-owned array) | Drop the refuted consequence; deliver the real data loss or mutation. |
+| Does history distinguish an old occurrence from a new one? | B1–B3 | Suppress the old occurrence and deliver its neighbor. Empty-history twins measure finder recall. |
+| Do later rounds still deliver revisions, unrelated bugs and moved repeats correctly? | R2, R8, R12, R13 | Ship the two consequences linked to the earlier suggestion, ship the unrelated bug, suppress the moved repeat. |
+
+H1–H4 reproduce the original failure shapes. G1–G4 are paired transfer cases written after the production change, with different repositories and rules. The two repetitions of a case measure model variability; they are not independent repositories. The score covers named claims; unrelated comments in the output require separate adjudication. Report model calls, tokens and review time along with false claims delivered and real findings missed.
+
+Use the existing `kody-rules` GitHub-cases suite for real violating lines and clean files, and `funnel/verify --set=controlled` for known bugs presented to the verifier. Forced timeout and degraded-evidence behavior are checked by the repeat-check and provider contracts. None of these measures establishes production timeout frequency or end-user acceptance.
+
 ## Similar comments across rounds
 
 Run the on-demand set with `node evals/review-rounds/run.js --set=repeat-boundaries --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=2 --output=/tmp/repeat-boundaries.json`.
@@ -66,9 +83,7 @@ Each pair checks that a refuted claim stays off the PR and that the correspondin
 real violation is delivered. H1 uses three commits (base, previously reviewed,
 head); `FetchChangedFilesStage` gets the incremental patches, and the sandbox
 still exposes the head, including files added before the last review.
-`ruleVerificationEvidence` and `ruleEvidenceDecisions` record tool locations and
-the decision on the evidence without changing what the model sees. The
-repeat-check stage contract forces a timeout and checks
+The repeat-check stage contract forces a timeout and checks
 that only the plausible repost is withheld, including when both findings cite the
 same rule.
 
