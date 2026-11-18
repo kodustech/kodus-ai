@@ -77,7 +77,7 @@ describe('buildMongoUri', () => {
         );
     });
 
-    it("uses mongodb+srv when port env is a non-numeric string (e.g. \"''\")", () => {
+    it('uses mongodb+srv when port env is a non-numeric string (e.g. "\'\'")', () => {
         // Reproduces the QA outage: SSM had API_MG_DB_PORT stored as the literal
         // two-char string "''". parseInt → NaN → SRV, matching the runtime app.
         process.env.API_MG_DB_HOST = 'cluster0.pdqbyxj.mongodb.net';
@@ -105,14 +105,17 @@ describe('buildMongoUri', () => {
         );
     });
 
-    it('leaves the cluster options out in development and test', () => {
-        process.env.API_DATABASE_ENV = 'development';
-        process.env.API_MG_DB_HOST = 'h';
-        process.env.API_MG_DB_PORT = '27017';
-        process.env.API_MG_DB_PRODUCTION_CONFIG =
-            '?retryWrites=true&w=majority';
-        expect(buildMongoUri()).toBe('mongodb://h:27017');
-    });
+    it.each(['development', 'test'])(
+        'leaves the cluster options out in %s',
+        (env) => {
+            process.env.API_DATABASE_ENV = env;
+            process.env.API_MG_DB_HOST = 'h';
+            process.env.API_MG_DB_PORT = '27017';
+            process.env.API_MG_DB_PRODUCTION_CONFIG =
+                '?retryWrites=true&w=majority';
+            expect(buildMongoUri()).toBe('mongodb://h:27017');
+        },
+    );
 
     it('never touches a full URI, which already carries its options', () => {
         process.env.API_DATABASE_ENV = 'production';
