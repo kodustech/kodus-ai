@@ -520,6 +520,23 @@ it('preserves the other legacy route when only one canonical route is edited', a
     });
 });
 
+it('keeps an Ultra default mode as the no-risk route when only the other route is edited', async () => {
+    const { run, save, stored } = setup(true);
+    stored.repositories[0].configs = { reviewMode: 'ultra' };
+    await run(
+        { riskReviewRouting: { riskFound: 'balanced' } },
+        { repositoryId: 'repo' },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    expect(
+        resolveReviewSettings(
+            getDefaultKodusConfigFile(),
+            stored.configs,
+            saved,
+        ).riskReviewRouting,
+    ).toMatchObject({ noRisk: 'ultra', riskFound: 'balanced' });
+});
+
 it.each(['edit', 'restore'])(
     'preserves an inherited canonical route when migrating the other legacy route: %s',
     async (action) => {

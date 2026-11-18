@@ -1244,8 +1244,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                       ...oldConfig,
                       riskReviewRouting: {
                           noRisk:
-                              oldConfig.reviewMode === 'heavy'
-                                  ? ('heavy' as const)
+                              oldConfig.reviewMode === 'heavy' ||
+                              oldConfig.reviewMode === 'ultra'
+                                  ? oldConfig.reviewMode
                                   : ('balanced' as const),
                       },
                   }

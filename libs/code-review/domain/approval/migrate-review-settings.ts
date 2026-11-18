@@ -143,7 +143,11 @@ export function resolveReviewSettings(
         riskCriteria: criteria,
         approvalPolicies: policies,
         riskReviewRouting: {
-            noRisk: legacyRoutingMode === 'heavy' ? 'heavy' : 'balanced',
+            // The default mode is the no-risk route, Ultra included.
+            noRisk:
+                legacyRoutingMode === 'heavy' || legacyRoutingMode === 'ultra'
+                    ? legacyRoutingMode
+                    : 'balanced',
             riskFound: 'heavy',
             ...saved.riskReviewRouting,
         },

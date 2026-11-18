@@ -58,6 +58,11 @@ it('preserves an explicitly selected Heavy review as the legacy default mapping'
         migratedReviewSettings({ reviewMode: 'heavy' }).riskReviewRouting,
     ).toEqual({ noRisk: 'heavy', riskFound: 'heavy' });
 });
+it('keeps an Ultra default mode as the no-risk route, so risk assessment does not change it', () => {
+    expect(
+        migratedReviewSettings({ reviewMode: 'ultra' }).riskReviewRouting,
+    ).toEqual({ noRisk: 'ultra', riskFound: 'heavy' });
+});
 it('resolves each scope without freezing policy arrays in storage', () => {
     const global = {
         pullRequestApprovalActive: true,
