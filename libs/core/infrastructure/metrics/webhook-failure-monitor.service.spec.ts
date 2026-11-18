@@ -50,4 +50,38 @@ describe('WebhookFailureMonitorService', () => {
             'Webhook failure monitor could not run: QueryFailedError (57014)',
         );
     });
+
+    it('says so when BetterStack cannot take the failed heartbeat either', async () => {
+        const queryBuilder: any = {
+            select: () => queryBuilder,
+            addSelect: () => queryBuilder,
+            where: () => queryBuilder,
+            andWhere: () => queryBuilder,
+            getRawOne: () => Promise.reject(new Error('statement timeout')),
+        };
+        const service = new WebhookFailureMonitorService(
+            { createQueryBuilder: () => queryBuilder } as any,
+            {
+                pingHeartbeat: jest.fn(async () => undefined),
+                failHeartbeat: jest.fn(async () => {
+                    throw new Error('betterstack unreachable');
+                }),
+            } as any,
+            { get: (_key: string, fallback: unknown) => fallback } as any,
+            {
+                acquire: async () => ({ release: async () => undefined }),
+            } as any,
+        );
+        const warn = (service as any).logger.warn as jest.Mock;
+
+        await expect(
+            service.checkWebhookFailureRate(),
+        ).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('BetterStack'),
+            }),
+        );
+    });
 });

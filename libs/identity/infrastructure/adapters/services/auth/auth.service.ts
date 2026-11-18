@@ -347,7 +347,11 @@ export class AuthService implements IAuthService {
                     message:
                         'Refresh token already stored by a concurrent refresh of the same token',
                     context: AuthService.name,
-                    metadata: { userUuid: userEntity?.uuid, authProvider },
+                    metadata: {
+                        userUuid: userEntity?.uuid,
+                        organizationId: userEntity?.organization?.uuid,
+                        authProvider,
+                    },
                 });
                 return;
             }
@@ -363,6 +367,7 @@ export class AuthService implements IAuthService {
                 context: AuthService.name,
                 metadata: {
                     userUuid: userEntity?.uuid,
+                    organizationId: userEntity?.organization?.uuid,
                     authProvider,
                 },
                 error,

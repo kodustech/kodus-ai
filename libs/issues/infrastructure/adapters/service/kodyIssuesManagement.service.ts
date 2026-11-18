@@ -472,7 +472,14 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                                     organizationId:
                                         context.organizationAndTeamData
                                             .organizationId,
+                                    teamId: context.organizationAndTeamData
+                                        .teamId,
+                                    repositoryId: context.repository?.id,
+                                    prNumber: context.pullRequest?.number,
                                     filePath: file.path,
+                                    // An issue id, not a secret: tells a
+                                    // truncated id from a made-up one.
+                                    rejectedIssueId: resolution.issueId,
                                 },
                             });
                             continue;

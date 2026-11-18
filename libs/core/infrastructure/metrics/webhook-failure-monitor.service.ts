@@ -1,6 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createLogger } from '@libs/core/log/logger';
@@ -37,7 +37,7 @@ export class WebhookFailureMonitorService {
         );
     }
 
-    @Cron('*/5 * * * *') // every 5 minutes
+    @GatedCron('*/5 * * * *') // every 5 minutes
     async checkWebhookFailureRate(): Promise<void> {
         const lock = await this.acquireCronLock();
         if (!lock) {
@@ -120,7 +120,16 @@ export class WebhookFailureMonitorService {
                     'API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL',
                     `Webhook failure monitor could not run: ${describeError(error)}`,
                 )
-                .catch(() => undefined);
+                .catch((heartbeatError) =>
+                    // BetterStack unreachable too: say so, or the monitor
+                    // goes quiet again (issue #2582).
+                    this.logger.warn({
+                        message:
+                            'Could not report the failed webhook monitor run to BetterStack',
+                        context: WebhookFailureMonitorService.name,
+                        error: heartbeatError as Error,
+                    }),
+                );
         } finally {
             await this.releaseCronLock(lock);
         }
