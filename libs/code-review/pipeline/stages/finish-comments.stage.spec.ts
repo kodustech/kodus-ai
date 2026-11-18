@@ -811,7 +811,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         ).toBeUndefined();
     });
 
-    it('says no comments were posted when no model completed', async () => {
+    it("says the models' comments were not posted when no model completed", async () => {
         const { stage, codeManagementService } = makeStage();
         await stage.execute(
             context(
@@ -826,7 +826,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         const body: string =
             codeManagementService.createIssueComment.mock.calls[0][0].body;
         expect(body).toContain(
-            'No model completed, so no comments were posted.',
+            "No model completed, so the models' comments were not posted.",
         );
     });
 

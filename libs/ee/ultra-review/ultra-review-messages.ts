@@ -78,12 +78,16 @@ const code = (text: string): string => `\`${text.replace(/`/g, "'")}\``;
 /** What each model run ended as, one line per model, for the notice. */
 function runLines(state: UltraReviewState): string[] {
     const lines: string[] = [];
-    for (const missing of state.unavailable ?? []) {
-        lines.push(
-            `- Model ${missing.position} (${code(missing.modelId)}) did not run: ${missing.reason}`,
-        );
-    }
     const runs = state.runs ?? [];
+    // Before the runs, a model the config no longer resolves; once they ran,
+    // it is among them as a failed run (runUltraModels), listed once.
+    if (!runs.length) {
+        for (const missing of state.unavailable ?? []) {
+            lines.push(
+                `- Model ${missing.position} (${code(missing.modelId)}) did not run: ${missing.reason}`,
+            );
+        }
+    }
     const byModelId = new Map(runs.map((r) => [r.modelId, r]));
     for (const run of runs) {
         if (run.position === 'fallback') continue;
@@ -147,7 +151,7 @@ export function ultraDegradedNotice(
         '',
         completed > 0
             ? `${completed} of 3 models completed, and their comments were posted. Automatic approval is held for this review.`
-            : 'No model completed, so no comments were posted.',
+            : "No model completed, so the models' comments were not posted.",
         '',
         `[See this review on the Pull Requests screen](${ultraPullRequestScreenUrl(link)})`,
         '',

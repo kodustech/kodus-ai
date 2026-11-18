@@ -204,6 +204,19 @@ describe('runUltraModels', () => {
         ]);
     });
 
+    it('a fallback in the trio that fails after another model failed reused nothing', async () => {
+        const inTrio = { ...model('fallback', 'c') };
+        const r = await run(
+            { models: trio, fallback: inTrio },
+            { a: fail('a'), b: ok('b'), c: fail('c') },
+            { a: 1, c: 20 },
+        );
+        expect(r.runs[0].replacedBy).toBeUndefined();
+        expect(r.runs[0].reusedRun).toBeUndefined();
+        // Nothing replaced it, so its partial output stays.
+        expect(r.outputs.map((o) => o.output[0])).toContain('a-partial');
+    });
+
     it('a fallback in the trio that fails itself replaces nothing', async () => {
         const inTrio = { ...model('fallback', 'c') };
         const r = await run(

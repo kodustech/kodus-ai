@@ -34,7 +34,7 @@ export const ULTRA_MERGE_RANKING: readonly string[] = [
  * underscores and Fireworks' `5p3` read as dashes.
  */
 export function normalizeModelId(modelId: string): string {
-    let id = (modelId ?? '').trim().toLowerCase();
+    let id = modelId.trim().toLowerCase();
     id = id.split('/').pop() ?? '';
     id = id.split('@')[0];
     id = id.replace(/^(?:(?:us|eu|apac|global)\.)?[a-z]+\.(?=[a-z])/, '');
@@ -46,6 +46,8 @@ export function normalizeModelId(modelId: string): string {
     return id;
 }
 
+const RANK_BY_ID = new Map(ULTRA_MERGE_RANKING.map((id, rank) => [id, rank]));
+
 /**
  * The index of the model that merges: the best ranked of the three, or the
  * first one (Model 1) when none is ranked.
@@ -54,8 +56,8 @@ export function pickMergeModelIndex(modelIds: readonly string[]): number {
     let best = 0;
     let bestRank = Number.POSITIVE_INFINITY;
     modelIds.forEach((id, index) => {
-        const rank = ULTRA_MERGE_RANKING.indexOf(normalizeModelId(id));
-        if (rank >= 0 && rank < bestRank) {
+        const rank = RANK_BY_ID.get(normalizeModelId(id));
+        if (rank !== undefined && rank < bestRank) {
             bestRank = rank;
             best = index;
         }

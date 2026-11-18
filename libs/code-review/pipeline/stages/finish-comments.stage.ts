@@ -669,15 +669,22 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         const ultra = context.ultra;
         if (!ultra?.outcome || ultra.outcome === 'success') return;
         try {
-            await this.codeManagementService.createIssueComment({
-                organizationAndTeamData: context.organizationAndTeamData,
-                repository: context.repository,
-                prNumber: context.pullRequest?.number,
-                body: ultraDegradedNotice(ultra, {
-                    repositoryName: context.repository?.name,
-                    prNumber: context.pullRequest?.number,
-                }),
-            });
+            // The team's only signal of a degraded Ultra review: a transient
+            // code host failure is retried before it is given up.
+            await retryWithBackoff(
+                () =>
+                    this.codeManagementService.createIssueComment({
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        repository: context.repository,
+                        prNumber: context.pullRequest?.number,
+                        body: ultraDegradedNotice(ultra, {
+                            repositoryName: context.repository?.name,
+                            prNumber: context.pullRequest?.number,
+                        }),
+                    }),
+                { maxAttempts: 3, shouldRetry: isTransientCodeHostError },
+            );
         } catch (error) {
             this.logger.error({
                 message: `Failed to post the Ultra review notice on PR#${context.pullRequest?.number}`,

@@ -146,6 +146,14 @@ export async function runUltraModels<T>(input: {
     const completedIds = new Set(
         outcomes.filter((o) => o.status === 'completed').map((o) => o.modelId),
     );
+    // A fallback in the trio whose own run failed reused nothing.
+    if (fallbackInTrio && !completedIds.has(fallback!.modelId)) {
+        for (const outcome of outcomes) {
+            if (!outcome.reusedRun) continue;
+            delete outcome.reusedRun;
+            delete outcome.replacedBy;
+        }
+    }
     const kept: UltraRunOutput<T>[] = [];
     for (const [outcome, out] of outputs) {
         const replacedByCompleted =
