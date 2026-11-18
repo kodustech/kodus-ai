@@ -17,7 +17,9 @@ export const snapshot: RiskSnapshot = {
     assessmentKey: 'config-and-diff',
 };
 
-const assessed = (riskIdentified: boolean): RiskAssessmentResult => ({
+const assessed = (
+    riskIdentified: boolean,
+): Extract<RiskAssessmentResult, { status: 'assessed' }> => ({
     status: 'assessed',
     riskIdentified,
     reason: 'Assessment reason.',
@@ -149,10 +151,16 @@ describe('shared PR risk contract', () => {
         'holds approval when the current base is %j',
         (baseSha) => {
             const identity = { ...current, baseSha };
-            expect(riskSnapshotMismatch(assessed(false), identity)).toContain(
+            const result = assessed(false);
+            // A persisted legacy snapshot can have the same unverified base.
+            const unverified = {
+                ...result,
+                snapshot: { ...result.snapshot, baseSha: baseSha as string },
+            };
+            expect(riskSnapshotMismatch(unverified, identity)).toContain(
                 'current PR base',
             );
-            expect(riskApprovalVeto(true, assessed(false), identity)).toContain(
+            expect(riskApprovalVeto(true, unverified, identity)).toContain(
                 'current PR base',
             );
         },

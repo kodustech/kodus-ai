@@ -79,13 +79,27 @@ beforeEach(() => {
     ]);
 });
 
-it.each([true, false])(
-    'consumes shared risk=%s without another risk model call',
-    async (riskIdentified) => {
+it.each([
+    {
+        riskIdentified: true,
+        liveBase: 'base',
+        kind: 'hold',
+        reason: 'Risk was identified in this PR.',
+    },
+    { riskIdentified: false, liveBase: 'base', kind: 'approve' },
+    {
+        riskIdentified: false,
+        liveBase: 'base-2',
+        kind: 'hold',
+        reason: 'Risk assessment is unavailable for the current PR base.',
+    },
+])(
+    'decides $kind for risk=$riskIdentified and base=$liveBase without another model call',
+    async ({ riskIdentified, liveBase, kind, reason }) => {
         codeManagement.getPullRequest.mockResolvedValueOnce({
             labels: ['ready'],
             head: { sha: 'head-1' },
-            base: { sha: 'base' },
+            base: { sha: liveBase },
             user: { login: 'alice' },
         });
         const ctx = {
@@ -106,9 +120,10 @@ it.each([true, false])(
             },
         };
         const result = await stage.execute(ctx);
-        expect(result.approvalDecision.kind).toBe(
-            riskIdentified ? 'hold' : 'approve',
-        );
+        expect(result.approvalDecision).toMatchObject({
+            kind,
+            ...(reason && { reason }),
+        });
         expect(LLM.run).not.toHaveBeenCalled();
         expect(areaMaps.read).not.toHaveBeenCalled();
     },

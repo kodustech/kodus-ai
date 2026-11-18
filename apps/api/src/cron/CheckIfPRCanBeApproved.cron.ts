@@ -1722,7 +1722,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                           lastExecution.dataExecution.riskAssessment,
                           {
                               headSha: currentHeadSha,
-                              baseSha: currentPullRequest?.base?.sha,
+                              baseSha: currentPullRequest?.base?.sha ?? '',
                               description: currentPullRequest ?? undefined,
                           },
                       )
