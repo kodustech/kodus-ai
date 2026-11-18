@@ -11,6 +11,12 @@ describe(PreviewPrApprovalUseCase.name, () => {
     };
     const policy = { id: 'docs', name: 'Docs', enabled: true };
     const prURL = 'https://github.com/acme/example/pull/42';
+    const pullRequest = {
+        prURL,
+        head: { sha: 'head' },
+        base: { sha: 'base' },
+        changedFilesCount: 1,
+    };
     const files = [{ filename: 'docs/changelog.mdx', status: 'modified' }];
 
     function setup(reviewedHeadSha = 'head') {
@@ -57,12 +63,7 @@ describe(PreviewPrApprovalUseCase.name, () => {
             getTypeIntegration: jest
                 .fn()
                 .mockResolvedValue(PlatformType.GITHUB),
-            getPullRequest: jest.fn().mockResolvedValue({
-                prURL,
-                head: { sha: 'head' },
-                base: { sha: 'base' },
-                changedFilesCount: 1,
-            }),
+            getPullRequest: jest.fn().mockResolvedValue(pullRequest),
             getFilesByPullRequestId: jest.fn().mockResolvedValue(files),
             getPullRequestReviewThreads: jest.fn(),
         };
@@ -182,6 +183,40 @@ describe(PreviewPrApprovalUseCase.name, () => {
             expect((await useCase.execute(input)).decision.kind).toBe(
                 'approve',
             );
+        },
+    );
+
+    it.each([
+        { stored: undefined, live: prURL },
+        { stored: 'invalid URL', live: prURL },
+        { stored: prURL, live: undefined },
+    ])(
+        'holds when a matching candidate has an unreadable host (%o)',
+        async ({ stored, live }) => {
+            const { useCase, evaluate, codeManagement, pullRequests } = setup();
+            codeManagement.getPullRequest.mockResolvedValue({
+                ...pullRequest,
+                prURL: live,
+            });
+            pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [
+                    {
+                        repository: { id: 'repo' },
+                        provider: 'github',
+                        url: stored,
+                        suggestions: [{ comment: { id: 'finding-1' } }],
+                    },
+                ],
+            );
+
+            expect((await useCase.execute(input)).decision).toEqual({
+                kind: 'hold',
+                reason: 'Review findings could not be verified.',
+            });
+            expect(
+                codeManagement.getPullRequestReviewThreads,
+            ).not.toHaveBeenCalled();
+            expect(evaluate).not.toHaveBeenCalled();
         },
     );
 

@@ -253,6 +253,7 @@ export class PreviewPrApprovalUseCase {
                 }
                 const reason = await deliveredReviewFindingsHoldReason(
                     commentIds,
+                    summary.lineFindings,
                     platformType,
                     () =>
                         platformType === PlatformType.GITHUB

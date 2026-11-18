@@ -6,12 +6,17 @@ export const REVIEW_FINDINGS_UNVERIFIED =
 
 export async function deliveredReviewFindingsHoldReason(
     commentIds: string[],
+    recordedLineFindings: number,
     platformType: PlatformType,
     loadComments: () => Promise<HostReviewComment[] | null | undefined>,
-    hasRecordedLineFindings = false,
 ): Promise<string | undefined> {
+    if (!Number.isInteger(recordedLineFindings) || recordedLineFindings < 0) {
+        return REVIEW_FINDINGS_UNVERIFIED;
+    }
     if (!commentIds.length) {
-        return hasRecordedLineFindings ? REVIEW_FINDINGS_UNVERIFIED : undefined;
+        return recordedLineFindings === 0
+            ? undefined
+            : REVIEW_FINDINGS_UNVERIFIED;
     }
     const comments = await loadComments();
     if (!Array.isArray(comments)) return REVIEW_FINDINGS_UNVERIFIED;

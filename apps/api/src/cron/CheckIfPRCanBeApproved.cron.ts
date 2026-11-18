@@ -1216,6 +1216,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
             const findingsHold = await deliveredReviewFindingsHoldReason(
                 pr.suggestions?.map(({ comment }) => String(comment?.id)) ?? [],
+                summary.lineFindings,
                 platformType,
                 () =>
                     runWithBoundedTimeout(
@@ -1231,7 +1232,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         FINAL_PROVIDER_TIMEOUT_MS,
                         'policy review findings',
                     ),
-                summary.lineFindings > 0,
             );
             if (findingsHold) return hold(findingsHold);
             if (

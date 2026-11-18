@@ -368,6 +368,32 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each([undefined, -1, 1])(
+        'holds a named approval with %s recorded line findings and no delivered comments',
+        async (lineFindings) => {
+            const { deps, execution, run } = namedPolicyCase();
+            Object.assign(execution.dataExecution.approvalReviewSummary, {
+                lineFindings,
+            });
+
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Review findings could not be verified.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
+
     it('holds a named approval when a delivered finding cannot be verified', async () => {
         const { input, deps, run } = namedPolicyCase();
         Object.assign(input.pr, {
