@@ -138,7 +138,7 @@ describe('runUltraModels', () => {
         expect(ultraReviewOutcome(r.runs, undefined)).toBe('failed');
     });
 
-    it('a model that throws is a failed run with no output', async () => {
+    it("a model that throws is a failed run with no output, and the error's text stays out of its reason", async () => {
         const r = await run(
             { models: trio },
             { a: 'throw', b: ok('b'), c: ok('c') },
@@ -146,7 +146,7 @@ describe('runUltraModels', () => {
         expect(r.runs[0]).toMatchObject({
             modelId: 'a',
             status: 'failed',
-            failureReason: 'a blew up',
+            failureReason: 'The review stopped on an internal error.',
         });
         expect(r.outputs).toHaveLength(2);
     });

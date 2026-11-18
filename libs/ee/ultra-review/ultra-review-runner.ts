@@ -7,6 +7,9 @@ import type {
     UltraReviewState,
     UltraRunOutcome,
 } from '@libs/code-review/domain/ultra-review-state';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('UltraReview');
 
 /** What one model's heavy run returned. */
 export interface UltraModelRunResult<T> {
@@ -40,6 +43,8 @@ export async function runUltraModels<T>(input: {
     state: Pick<UltraReviewState, 'models' | 'unavailable' | 'fallback'>;
     run: (model: UltraModel) => Promise<UltraModelRunResult<T>>;
     fallbackAllowed?: () => boolean;
+    /** organizationId, teamId and the PR, for the log of a run that threw. */
+    logMeta?: Record<string, unknown>;
     now?: () => number;
 }): Promise<{ runs: UltraRunOutcome[]; outputs: UltraRunOutput<T>[] }> {
     const now = input.now ?? Date.now;
@@ -58,10 +63,16 @@ export async function runUltraModels<T>(input: {
         try {
             result = await input.run(model);
         } catch (error) {
+            // The reason reaches the PR notice: the raw error stays in the log.
+            logger.error({
+                message: `[ULTRA] The ${model.modelName} run threw`,
+                context: 'UltraReview',
+                error,
+                metadata: { ...input.logMeta, model: model.modelName },
+            });
             result = {
                 completed: false,
-                failureReason:
-                    error instanceof Error ? error.message : String(error),
+                failureReason: 'The review stopped on an internal error.',
             };
         }
         const outcome: UltraRunOutcome = {

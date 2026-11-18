@@ -8,6 +8,8 @@ import type {
     ReviewPassCollected,
 } from '@libs/code-review/pipeline/stages/agent-review.stage';
 
+import { OTHER_LOCATIONS_HEADING } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
+
 import {
     executeUltraReview,
     ULTRA_REVIEW_DEGRADED_REASON,
@@ -71,6 +73,8 @@ type PassPlan =
 interface Fixture {
     passes: Record<string, PassPlan>;
     merge?: Record<string, 'ok' | 'fail' | 'throw' | 'hang'>;
+    /** Runs whose sandbox could not be created. */
+    noSandbox?: string[];
     context?: Partial<CodeReviewPipelineContext>;
     state?: Partial<UltraReviewState>;
 }
@@ -83,6 +87,7 @@ function setup(fx: Fixture) {
             sandbox?: string;
         }>,
         sandboxes: [] as string[],
+        sandboxKeys: [] as string[],
         released: [] as string[],
         leaseTtls: [] as number[],
         merges: [] as string[],
@@ -106,6 +111,7 @@ function setup(fx: Fixture) {
         changedFiles: [{ filename: 'a.ts' }],
         codeReviewConfig: { kodyRules: [{ uuid: 'r1' }] },
         sandboxHandle: { cleanup: baseCleanup },
+        pipelineMetadata: { pipelineId: 'Pipe-42' },
         ultra: state,
         errors: [],
         ...fx.context,
@@ -146,12 +152,16 @@ function setup(fx: Fixture) {
             } as any;
         },
         acquireRunSandbox: async (_ctx, suffix, leaseTtlMs) => {
-            calls.sandboxes.push(suffix);
+            // The run's place in the trio, without this review's tag.
+            const run = suffix.replace(/-pipe42$/, '');
+            calls.sandboxes.push(run);
+            calls.sandboxKeys.push(suffix);
             calls.leaseTtls.push(leaseTtlMs);
+            if (fx.noSandbox?.includes(run)) return undefined;
             return {
-                id: suffix,
+                id: run,
                 cleanup: async () => {
-                    calls.released.push(suffix);
+                    calls.released.push(run);
                 },
             } as any;
         },
@@ -520,5 +530,205 @@ describe('executeUltraReview', () => {
             expect(out.ultra?.outcome).toBe('success');
             expect(calls.released).toContain('base');
         });
+    });
+
+    describe('sandboxes', () => {
+        it("keys each run's sandbox to this review, so a later push's review never joins it", async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+            });
+            await executeUltraReview(context, host, LIMITS);
+            expect(calls.sandboxKeys.sort()).toEqual([
+                'ultra-1-pipe42',
+                'ultra-2-pipe42',
+                'ultra-3-pipe42',
+            ]);
+        });
+
+        it('a review a later push superseded takes no sandbox for its runs', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                context: {
+                    sandboxSuperseded: true,
+                    sandboxHandle: undefined,
+                } as any,
+            });
+            await executeUltraReview(context, host, LIMITS);
+            expect(calls.sandboxes).toEqual([]);
+        });
+
+        it('a run whose sandbox could not be created did not complete: the fallback replaces it', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b9']),
+                    c: collected(['c2']),
+                    f: collected(['f3']),
+                    auxiliary: collected([]),
+                },
+                noSandbox: ['ultra-2'],
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(
+                out.ultra?.runs?.find((r) => r.modelId === 'b'),
+            ).toMatchObject({
+                status: 'failed',
+                failureReason: expect.stringMatching(
+                    /sandbox could not be created/,
+                ),
+                replacedBy: 'f',
+            });
+            expect(out.ultra?.outcome).toBe('success');
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+                'f3',
+            ]);
+        });
+
+        it("with no fallback, that run's diff-only findings still post, degraded", async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b9']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                noSandbox: ['ultra-2'],
+                state: { fallback: undefined },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(out.ultra?.outcome).toBe('degraded');
+            expect(calls.published.deduped.map((f: any) => f.id)).toContain(
+                'b9',
+            );
+        });
+
+        it('with no sandbox for the PR either (none configured), the runs complete', async () => {
+            const { context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                noSandbox: ['ultra-1', 'ultra-2', 'ultra-3'],
+                context: { sandboxHandle: undefined } as any,
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(out.ultra?.outcome).toBe('success');
+        });
+    });
+
+    describe('merge', () => {
+        it('with one list alone, nothing is merged and no model is called', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1', 'a2']),
+                    b: 'throw',
+                    c: 'throw',
+                    f: 'throw',
+                    auxiliary: collected(['rule1']),
+                },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(calls.merges).toEqual([]);
+            expect(out.ultra?.merge?.status).toBe('skipped');
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'a2',
+                'rule1',
+            ]);
+        });
+
+        it("one model's list and the custom agents' are merged", async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: 'throw',
+                    c: 'throw',
+                    f: 'throw',
+                    auxiliary: collected(['custom1']),
+                },
+            });
+            await executeUltraReview(context, host, LIMITS);
+            expect(calls.merges).toEqual(['b']);
+        });
+
+        it('lists the places a kept comment absorbed from the other models, once', async () => {
+            const kept = {
+                ...finding('a1'),
+                suggestionContent: `a1\n\n${OTHER_LOCATIONS_HEADING}\n- \`a.ts:9-9\``,
+                fullExplanation: `why\n\n${OTHER_LOCATIONS_HEADING}\n- \`a.ts:9-9\``,
+                llmPrompt: `fix\n\n${OTHER_LOCATIONS_HEADING}\n- \`a.ts:9-9\``,
+                alsoFoundIn: ['a.ts:9-9'],
+            };
+            const { calls, context, host } = setup({
+                passes: {
+                    a: { ...collected([]), findings: [kept] },
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+            });
+            host.mergeFindings = async (findings) => {
+                const a1 = findings.find((f) => f.id === 'a1')!;
+                a1.alsoFoundIn = [...(a1.alsoFoundIn ?? []), 'b.ts:3-4'];
+                return {
+                    suggestions: findings.filter((f) => f.id !== 'b1'),
+                    trace: { status: 'success' } as any,
+                };
+            };
+            await executeUltraReview(context, host, LIMITS);
+            const out = calls.published.deduped.find((f: any) => f.id === 'a1');
+            const section = `${OTHER_LOCATIONS_HEADING}\n- \`a.ts:9-9\`\n- \`b.ts:3-4\``;
+            for (const field of [
+                'suggestionContent',
+                'fullExplanation',
+                'llmPrompt',
+            ]) {
+                expect(out[field]).toContain(section);
+                expect(out[field].split(OTHER_LOCATIONS_HEADING)).toHaveLength(
+                    2,
+                );
+            }
+        });
+    });
+
+    it("a failed review carries the models' error, not one the Kody Rules left", async () => {
+        const { context, host } = setup({
+            passes: {
+                a: collected([], false),
+                b: collected([], false),
+                c: collected([], false),
+                f: collected([], false),
+                auxiliary: collected(['rule1']),
+            },
+        });
+        const reviewPass = host.reviewPass;
+        host.reviewPass = async (ctx, pass) => {
+            const out = await reviewPass(ctx, pass);
+            return pass.scope === 'auxiliary'
+                ? ({
+                      ...out,
+                      lastReviewError: {
+                          category: 'rate_limit',
+                          model: 'rules',
+                      },
+                  } as any)
+                : out;
+        };
+        const out = await executeUltraReview(context, host, LIMITS);
+        expect(out.lastReviewError).toMatchObject({ model: 'a' });
     });
 });

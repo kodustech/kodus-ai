@@ -16,12 +16,17 @@ import type {
 } from '@libs/code-review/domain/ultra-review-state';
 import type { CustomAgentsById } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
 import {
+    OTHER_LOCATIONS_HEADING,
+    otherLocationsToRender,
+} from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
+import {
     dedupReviewWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { createLogger } from '@libs/core/log/logger';
+import { randomUUID } from 'node:crypto';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { runUltraModels, ultraReviewOutcome } from './ultra-review-runner';
@@ -171,10 +176,54 @@ export interface UltraReviewHost {
     ): Promise<void>;
 }
 
-const runSuffix = (model: UltraModel) =>
+/** A run's tag on the timeline: its place in the trio. */
+const runTag = (model: UltraModel) =>
     model.position === 'fallback'
         ? 'ultra-fallback'
         : `ultra-${model.position}`;
+
+/**
+ * A tag of this review alone, on its runs' sandbox keys: a review started by
+ * a later push never joins, or inherits the lease of, this one's sandboxes.
+ */
+function reviewSandboxTag(context: CodeReviewPipelineContext): string {
+    const fromPipeline = String(context.pipelineMetadata?.pipelineId ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 12);
+    return fromPipeline || randomUUID().replace(/-/g, '').slice(0, 12);
+}
+
+const otherLocationsSection = (locations: string[]) =>
+    `\n\n${OTHER_LOCATIONS_HEADING}\n${locations.map((l) => `- \`${l}\``).join('\n')}`;
+
+/**
+ * Each run listed its own comments' other locations; the merge across models
+ * and the dedup against Kody Rules add the places a kept comment absorbed.
+ * The list is rewritten in the body, the explanation and the prompt, so the
+ * developer sees every place to fix.
+ */
+function renderLocationsAddedAfterRuns(
+    findings: Partial<CodeSuggestion>[],
+    renderedBefore: (finding: Partial<CodeSuggestion>) => string[],
+): void {
+    for (const finding of findings) {
+        const before = renderedBefore(finding);
+        const after = otherLocationsToRender(finding);
+        if (after.every((l) => before.includes(l))) continue;
+        const previous = before.length ? otherLocationsSection(before) : '';
+        const next = otherLocationsSection(after);
+        const rewrite = (text: string) =>
+            previous && text.includes(previous)
+                ? text.replace(previous, next)
+                : `${text}${next}`;
+        finding.suggestionContent = rewrite(finding.suggestionContent || '');
+        if (finding.fullExplanation) {
+            finding.fullExplanation = rewrite(finding.fullExplanation);
+        }
+        if (finding.llmPrompt) finding.llmPrompt = rewrite(finding.llmPrompt);
+    }
+}
 
 /** Whether the auxiliary agents have anything to run on. */
 function hasAuxiliaryWork(context: CodeReviewPipelineContext): boolean {
@@ -194,7 +243,8 @@ const emptyCollected = (): ReviewPassCollected => ({
 
 /**
  * The cross-model merge: the production dedup on the merge model, then on the
- * org fallback; with both failing, the findings go out unmerged.
+ * org fallback; with both failing, the findings go out unmerged. `streams`
+ * counts the lists merged: each model's, and the custom agents'.
  */
 async function mergeAcrossModels(
     host: UltraReviewHost,
@@ -202,7 +252,7 @@ async function mergeAcrossModels(
     findings: Partial<CodeSuggestion>[],
     prNumber: number,
     state: UltraReviewState,
-    modelLists: number,
+    streams: number,
     logMeta: Record<string, unknown>,
     deadlineMs: number,
 ): Promise<{
@@ -211,8 +261,9 @@ async function mergeAcrossModels(
     merge: NonNullable<UltraReviewState['merge']>;
 }> {
     const inputCount = findings.length;
-    const skipped = modelLists < 2;
-    if (inputCount <= 1) {
+    // One list alone was deduplicated by its own run: nothing to merge.
+    const skipped = streams < 2;
+    if (skipped || inputCount <= 1) {
         return {
             merged: findings,
             merge: {
@@ -335,8 +386,19 @@ export async function executeUltraReview(
     // is released as soon as they are done: the models have their own. They
     // stop with the models; past the window the review goes on without them.
     let auxiliary = emptyCollected();
+    const releaseFailed = (sandbox: string) => (error: unknown) =>
+        logger.warn({
+            message: `[ULTRA] PR#${prNumber}: could not release the ${sandbox} sandbox; the lease reaper will`,
+            context: 'UltraReview',
+            error: error instanceof Error ? error : new Error(String(error)),
+            metadata: logMeta,
+        });
     const releaseBase = () =>
-        context.sandboxHandle?.cleanup?.().catch(() => undefined);
+        context.sandboxHandle?.cleanup?.().catch(releaseFailed('PR'));
+    const sandboxTag = reviewSandboxTag(context);
+    // The PR's own review had a checkout: a model's run without one did
+    // not review the repository and does not count as complete.
+    const checkoutExpected = !!context.sandboxHandle;
     let auxiliaryRun: Promise<CodeReviewPipelineContext> =
         Promise.resolve(context);
     if (hasAuxiliaryWork(context)) {
@@ -379,16 +441,21 @@ export async function executeUltraReview(
     const runErrors: CodeReviewPipelineContext['lastReviewError'][] = [];
     const { runs, outputs } = await runUltraModels<ReviewPassCollected>({
         state,
+        logMeta,
         fallbackAllowed: () => runWindow() >= limits.fallbackMinMs,
         run: async (model) => {
-            const suffix = runSuffix(model);
+            const tag = runTag(model);
             const window = runWindow();
-            const sandbox = await host.acquireRunSandbox(
-                context,
-                suffix,
-                ULTRA_RUN_LEASE_TTL_MS,
-            );
-            const release = () => sandbox?.cleanup?.().catch(() => undefined);
+            // A review a later push superseded takes no new sandboxes.
+            const sandbox = context.sandboxSuperseded
+                ? undefined
+                : await host.acquireRunSandbox(
+                      context,
+                      `${tag}-${sandboxTag}`,
+                      ULTRA_RUN_LEASE_TTL_MS,
+                  );
+            const release = () =>
+                sandbox?.cleanup?.().catch(releaseFailed(tag));
             const stop = deadlineSignal(context.parentSignal, window);
             // A run that outlives its grace is left behind: nothing it
             // reports afterwards reaches the review.
@@ -400,7 +467,7 @@ export async function executeUltraReview(
                     {
                         scope: 'native',
                         model,
-                        timelineTag: { key: suffix, label: model.modelName },
+                        timelineTag: { key: tag, label: model.modelName },
                         collect: (c) => {
                             if (!abandoned) collected = c;
                         },
@@ -439,10 +506,14 @@ export async function executeUltraReview(
             }
             const timedOut =
                 stop.signal.aborted && !context.parentSignal?.aborted;
-            const completed = collected.completion.completed && !timedOut;
+            const withoutCheckout = checkoutExpected && !sandbox;
+            const completed =
+                collected.completion.completed && !timedOut && !withoutCheckout;
             const failureReason = timedOut
                 ? `Its review was stopped after ${minutes(window)} minutes.`
-                : collected.completion.failureReason;
+                : withoutCheckout && collected.completion.completed
+                  ? 'Its sandbox could not be created, so it reviewed the diff without the repository.'
+                  : collected.completion.failureReason;
             logger.log({
                 message: `[ULTRA] PR#${prNumber}: ${model.modelName} ${completed ? 'completed' : 'failed'} with ${collected.findings.length} findings`,
                 context: 'UltraReview',
@@ -471,13 +542,20 @@ export async function executeUltraReview(
     const auxOthers = auxiliary.findings.filter(
         (s) => s.label !== 'kody_rules',
     );
+    // What each run already listed under "Also found in".
+    const renderedBefore = new Map(
+        [...nativeFindings, ...auxiliary.findings].map((f) => [
+            f,
+            otherLocationsToRender(f),
+        ]),
+    );
     const { merged, trace, merge } = await mergeAcrossModels(
         host,
         main,
         [...nativeFindings, ...auxOthers],
         prNumber,
         state,
-        outputs.length,
+        outputs.length + (auxOthers.length ? 1 : 0),
         logMeta,
         limits.mergeDeadlineMs,
     );
@@ -499,6 +577,12 @@ export async function executeUltraReview(
         auxRules,
         prNumber,
         main,
+    );
+    renderLocationsAddedAfterRuns(
+        deduped,
+        // A comment the runs did not hand over is left as it is.
+        (finding) =>
+            renderedBefore.get(finding) ?? otherLocationsToRender(finding),
     );
 
     const outcome = ultraReviewOutcome(runs, merge);
@@ -538,7 +622,8 @@ export async function executeUltraReview(
                 outcome,
             },
         });
-        if (outcome === 'failed' && !draft.lastReviewError && runErrors[0]) {
+        // The models' error, not a Kody Rules one the auxiliary pass left.
+        if (outcome === 'failed' && runErrors[0]) {
             draft.lastReviewError = runErrors[0];
         }
     });

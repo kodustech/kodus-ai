@@ -393,6 +393,12 @@ export interface ReviewPass {
     collect?: (collected: ReviewPassCollected) => void;
 }
 
+/**
+ * A run's failure reason with no friendly message: it reaches the PR notice of
+ * an Ultra review, so the provider's raw text stays in the logs.
+ */
+const ULTRA_RUN_GENERIC_FAILURE = 'The review stopped on an error.';
+
 /** A run's suffix on its timeline entries: the stage key and the label. */
 export interface AgentTimelineTag {
     key: string;
@@ -1396,7 +1402,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             error,
                             resolvedProvider(context, error),
                         )
-                    ).friendlyMessage || error.message,
+                    ).friendlyMessage || ULTRA_RUN_GENERIC_FAILURE,
             );
 
             for (const failure of result.failures || []) {
@@ -2114,7 +2120,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 completion: {
                     completed: false,
                     failureReason:
-                        classification.friendlyMessage || stageError.message,
+                        classification.friendlyMessage ||
+                        ULTRA_RUN_GENERIC_FAILURE,
                 },
             });
 
