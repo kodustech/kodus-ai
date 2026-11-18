@@ -280,23 +280,29 @@ describe('GithubService.getPullRequestAuthors', () => {
         );
     });
 
-    it('fails for the seat prune when the GitHub credential cannot be loaded, and answers [] otherwise', async () => {
-        const github = githubServing({ app: { pages: [newest100()] } });
-        const service = makeService(github.octokit, ['app']);
-        jest.spyOn(service as any, 'instanceOctokit').mockRejectedValue(
-            new Error('installation token unavailable'),
-        );
+    it.each([
+        ['the auth details', 'getGithubAuthDetails'],
+        ['the client', 'instanceOctokit'],
+    ])(
+        'fails for the seat prune when %s cannot be loaded, and answers [] otherwise',
+        async (_, step) => {
+            const github = githubServing({ app: { pages: [newest100()] } });
+            const service = makeService(github.octokit, ['app']);
+            jest.spyOn(service as any, step).mockRejectedValue(
+                new Error('credential unavailable'),
+            );
 
-        await expect(
-            service.getPullRequestAuthors({
-                organizationAndTeamData,
-                requireLoaded: true,
-            }),
-        ).rejects.toThrow('installation token unavailable');
-        await expect(
-            service.getPullRequestAuthors({ organizationAndTeamData }),
-        ).resolves.toEqual([]);
-    });
+            await expect(
+                service.getPullRequestAuthors({
+                    organizationAndTeamData,
+                    requireLoaded: true,
+                }),
+            ).rejects.toThrow('credential unavailable');
+            await expect(
+                service.getPullRequestAuthors({ organizationAndTeamData }),
+            ).resolves.toEqual([]);
+        },
+    );
 
     it('walks at most 10 repositories at once, under the 100 concurrent requests GitHub allows', async () => {
         const names = Array.from({ length: 40 }, (_, i) => `repo-${i}`);
