@@ -88,8 +88,9 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
         ]),
     ],
     providers: [
-        // Stops @GatedCron runs before the database closes, in every app
-        // that schedules crons (this module is in all of them).
+        // Stops @GatedCron runs before the database closes. Provided here
+        // only: api, worker and webhooks all import this module, and a second
+        // instance would hold shutdown for its own budget again.
         CronShutdownService,
         // ── Repositories ──────────────────────────────────────
         {

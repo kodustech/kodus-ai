@@ -24,6 +24,7 @@ export class CronRunGate {
     // Nest fires a tick even while the previous one still runs, so more
     // than one run can be in flight at shutdown.
     private readonly inFlight = new Set<Promise<unknown>>();
+    private stopped: Promise<number> | null = null;
 
     async run<T>(work: () => Promise<T>): Promise<T | undefined> {
         if (this.stopping) {
@@ -42,7 +43,13 @@ export class CronRunGate {
      * Waits for every run in progress, at most `budgetMs` in all, and
      * returns how many were still running when it gave up.
      */
-    async stop(budgetMs = CRON_SHUTDOWN_BUDGET_MS): Promise<number> {
+    stop(budgetMs = CRON_SHUTDOWN_BUDGET_MS): Promise<number> {
+        // A second caller waits for the same stop, not for a budget of its own.
+        this.stopped ??= this.drain(budgetMs);
+        return this.stopped;
+    }
+
+    private async drain(budgetMs: number): Promise<number> {
         this.stopping = true;
         if (this.inFlight.size === 0) {
             return 0;
@@ -93,8 +100,8 @@ export function GatedCron(
 }
 
 /**
- * Stops the @GatedCron runs before the database closes. Registered next to
- * every ScheduleModule.forRoot(); stopping twice is harmless.
+ * Stops the @GatedCron runs before the database closes. Provided once, by
+ * NotificationModule, which every app imports.
  */
 @Injectable()
 export class CronShutdownService implements BeforeApplicationShutdown {

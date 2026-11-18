@@ -124,6 +124,46 @@ describe('CronRunGate', () => {
         });
     });
 
+    it('makes a second stop wait for the first, not for a budget of its own', async () => {
+        // Nest awaits beforeApplicationShutdown module by module, so a second
+        // hook calls stop after the first one returned.
+        const gate = new CronRunGate();
+        void gate.run(() => new Promise<void>(() => undefined));
+
+        await expect(gate.stop(50)).resolves.toBe(1);
+        const started = Date.now();
+        await expect(gate.stop(50)).resolves.toBe(1);
+
+        expect(Date.now() - started).toBeLessThan(20);
+    });
+
+    it('has its shutdown hook provided by exactly one module', () => {
+        // Every app imports NotificationModule; a second provider holds
+        // shutdown for its own budget again.
+        const root = join(__dirname, '../../../..');
+        const providers: string[] = [];
+        const walk = (dir: string) => {
+            for (const name of readdirSync(dir)) {
+                if (name === 'node_modules' || name.startsWith('.')) continue;
+                const path = join(dir, name);
+                if (statSync(path).isDirectory()) {
+                    walk(path);
+                } else if (
+                    path.endsWith('.module.ts') &&
+                    /^\s*CronShutdownService,/m.test(readFileSync(path, 'utf8'))
+                ) {
+                    providers.push(path.slice(root.length + 1));
+                }
+            }
+        };
+        walk(join(root, 'apps'));
+        walk(join(root, 'libs'));
+
+        expect(providers).toEqual([
+            'libs/notifications/modules/notification.module.ts',
+        ]);
+    });
+
     it('is the only way the repository schedules a cron', () => {
         // A bare @Cron outlives the database on shutdown (#2589, row 11).
         const root = join(__dirname, '../../../..');
