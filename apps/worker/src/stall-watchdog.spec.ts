@@ -255,6 +255,11 @@ describe('startStallWatchdog (real worker thread)', () => {
         const kinds = reports.map((r) => r.kind);
         // Stall 1 is reported before its recovery, and stall 2 is a new one.
         expect(kinds.indexOf('stall')).toBeLessThan(kinds.indexOf('recovered'));
+        const firstStall = reports.find((r) => r.kind === 'stall');
+        // The stall report carries the stall's length (~1s), not the
+        // capture's (~2.4s).
+        expect(firstStall?.stalledMs).toBeGreaterThanOrEqual(800);
+        expect(firstStall?.stalledMs).toBeLessThan(1_800);
         const firstRecovery = reports.find((r) => r.kind === 'recovered');
         // Its length is the stall's (~1s), not the capture's (~2.4s).
         expect(firstRecovery?.stalledMs).toBeGreaterThanOrEqual(800);
@@ -293,5 +298,42 @@ describe('startStallWatchdog (real worker thread)', () => {
             expect(stall.stackUnavailable).toBe('ended-before-read');
             expect(stall.profileIncludesRecovery).toBe(true);
         }
+    });
+    it('reports and alerts a stall that starts and ends while an earlier capture is still running', async () => {
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                // Stall 1's capture outlives both stalls.
+                profileMs: 2_500,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: (r) => reports.push(r),
+            },
+            logger,
+        );
+        await settle(200);
+
+        burnCpuInATightLoopForTest(1_000); // stall 1: captured
+        await settle(200);
+        burnCpuInATightLoopForTest(800); // stall 2: ends before that capture
+        await settle(200);
+
+        const stalls = await waitFor(() => {
+            const found = reports.filter((r) => r.kind === 'stall');
+            return found.length >= 2 ? found : undefined;
+        }, 15_000);
+        const uncaptured = stalls.find(
+            (r) => r.stackUnavailable === 'not-captured',
+        );
+        // Not downgraded to a mere recovery: it is a stall report, with its
+        // own length and the reason it has no location.
+        expect(uncaptured).toBeDefined();
+        expect(uncaptured?.stalledMs).toBeGreaterThanOrEqual(400);
+        expect(uncaptured?.stalledMs).toBeLessThan(1_600);
+        expect(uncaptured?.location).toContain('not captured');
     });
 });

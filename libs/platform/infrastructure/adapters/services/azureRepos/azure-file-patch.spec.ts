@@ -163,6 +163,28 @@ describe('createFilePatchYielding', () => {
         expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
     });
 
+    it('never adds up the synchronous attempts of files diffed at once', async () => {
+        // The caller diffs many files concurrently; their synchronous
+        // attempts must not run back to back in one block.
+        const files = Array.from({ length: 6 }, () => fullyChangedFile(5_000));
+        const { result, maxGapMs } = await maxEventLoopGap(() =>
+            Promise.all(
+                files.map(({ before, after }) =>
+                    createFilePatchYielding(
+                        'big.ts',
+                        'big.ts',
+                        before,
+                        after,
+                        'b',
+                        'h',
+                    ),
+                ),
+            ),
+        );
+        expect(result.every((p) => p?.includes('@@'))).toBe(true);
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
+    });
+
     it('gives up on a pathological file instead of running unbounded', async () => {
         const { before, after } = fullyChangedFile(8_000);
         const started = Date.now();

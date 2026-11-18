@@ -16,6 +16,23 @@ export const AZURE_FILE_DIFF_SYNC_BUDGET_MS = 250;
 /** Grace past the timeout before our own guard gives up on the library. */
 const AZURE_FILE_DIFF_GUARD_SLACK_MS = 5_000;
 
+// Synchronous attempts take turns: one at a time, each in a later turn of
+// the event loop than the previous one finished in. Files diffed at once
+// (the caller fans out) would otherwise run their attempts back to back in
+// a single check phase and add up to one long block.
+let syncTurn: Promise<void> = Promise.resolve();
+
+function nextSyncTurn(): Promise<() => void> {
+    let release!: () => void;
+    const previous = syncTurn;
+    syncTurn = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    return previous.then(
+        () => new Promise((resolve) => setImmediate(() => resolve(release))),
+    );
+}
+
 /**
  * Unified patch of one file, without ever blocking the event loop for long.
  *
@@ -24,7 +41,8 @@ const AZURE_FILE_DIFF_GUARD_SLACK_MS = 5_000;
  * inside one call (Azure Repos, Nov 17–18 2026), freezing the worker until
  * the ECS health check killed it with every job in flight.
  *
- * Two steps:
+ * Two steps; the synchronous one takes its turn (see `nextSyncTurn`), so
+ * many files diffed at once never add their attempts into one long block:
  * 1. Synchronous, capped at {@link AZURE_FILE_DIFF_SYNC_BUDGET_MS}. Normal
  *    files keep their old latency (the yielding mode costs ~1ms per edit
  *    step: a 10k-line added file goes from ~15ms to ~11s).
@@ -36,7 +54,7 @@ const AZURE_FILE_DIFF_GUARD_SLACK_MS = 5_000;
  * caller then has no patch for the file, which the risk and approval checks
  * already treat as missing evidence.
  */
-export function createFilePatchYielding(
+export async function createFilePatchYielding(
     oldFileName: string,
     newFileName: string,
     oldStr: string,
@@ -51,22 +69,28 @@ export function createFilePatchYielding(
             : AZURE_FILE_DIFF_TIMEOUT_MS;
     const startedAt = Date.now();
 
-    const fast = createTwoFilesPatch(
-        oldFileName,
-        newFileName,
-        oldStr,
-        newStr,
-        oldHeader,
-        newHeader,
-        {
-            context: 3,
-            timeout: Math.min(AZURE_FILE_DIFF_SYNC_BUDGET_MS, limitMs),
-        },
-    );
-    if (fast !== undefined) return Promise.resolve(fast);
+    const release = await nextSyncTurn();
+    let fast: string | undefined;
+    try {
+        fast = createTwoFilesPatch(
+            oldFileName,
+            newFileName,
+            oldStr,
+            newStr,
+            oldHeader,
+            newHeader,
+            {
+                context: 3,
+                timeout: Math.min(AZURE_FILE_DIFF_SYNC_BUDGET_MS, limitMs),
+            },
+        );
+    } finally {
+        release();
+    }
+    if (fast !== undefined) return fast;
 
     const remainingMs = limitMs - (Date.now() - startedAt);
-    if (remainingMs <= 0) return Promise.resolve(undefined);
+    if (remainingMs <= 0) return undefined;
 
     return new Promise((resolve) => {
         // Our own bound too: the promise settles even if the library never
