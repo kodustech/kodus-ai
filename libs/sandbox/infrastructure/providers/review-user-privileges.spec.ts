@@ -85,10 +85,7 @@ const run = (opts: {
         `[ "$1" = -r ] || exit 2; for f in $READABLE; do [ "$f" = "$2" ] && exit 0; done; exit 1`,
     );
     stub('gpasswd', 'exit 0');
-    stub(
-        'find',
-        `case "$1" in /usr) cat '${setIdFile}';; esac; exit 0`,
-    );
+    stub('find', `case "$1" in /usr) cat '${setIdFile}';; esac; exit 0`);
     stub(
         'chmod',
         `[ "$CHMOD_WORKS" = 1 ] || exit 1; f="\${@: -1}"; grep -vxF "$f" '${setIdFile}' > '${setIdFile}.n' || true; mv '${setIdFile}.n' '${setIdFile}'`,

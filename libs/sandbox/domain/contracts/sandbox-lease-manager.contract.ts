@@ -199,8 +199,10 @@ export function assertValidPrKey(prKey: string): void {
             `Invalid prKey: missing prNumber/marker in ${JSON.stringify(prKey)}`,
         );
     }
-    const last = parts[parts.length - 1];
-    if (last.includes(PR_KEY_RUN_SEPARATOR)) {
+    // Only a PR key carries a run suffix; a CLI key's last segment is a
+    // branch name, which may contain '#'.
+    const last = parts[2];
+    if (parts.length === 3 && last.includes(PR_KEY_RUN_SEPARATOR)) {
         const [head, run, ...rest] = last.split(PR_KEY_RUN_SEPARATOR);
         if (!head || !run || rest.length || !RUN_RE.test(run)) {
             throw new Error(

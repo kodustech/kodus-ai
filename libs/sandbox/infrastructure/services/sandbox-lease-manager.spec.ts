@@ -2334,6 +2334,15 @@ describe('SandboxLeaseManager', () => {
             expect(() => runPrKey(prKey, 'Ultra 1')).toThrow();
         });
 
+        it("leaves a CLI key's branch alone, '#' included", async () => {
+            const cliKey =
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:cli:release#RC1';
+            expect(() => assertValidPrKey(cliKey)).not.toThrow();
+            leaseRepo.findByPrKey.mockResolvedValue(null);
+            await manager.invalidate(cliKey);
+            expect((leaseRepo as any).findRunKeys).not.toHaveBeenCalled();
+        });
+
         it("invalidating the PR retires its runs' sandboxes too", async () => {
             const runKeys = [
                 runPrKey(prKey, 'ultra-1'),

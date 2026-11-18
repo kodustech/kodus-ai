@@ -331,14 +331,14 @@ describe('LocalSandboxService sandbox file access', () => {
         // the immediate parent of the target file.
         const nestedDir = path.join(dir, 'escape', 'nested');
 
-        jest.spyOn(fsPromises, 'realpath').mockImplementation(
-            (async (p: string) => {
-                if (p === nestedDir) {
-                    return '/tmp/outside-escape';
-                }
-                return originalRealpath(p);
-            }) as unknown as typeof fsPromises.realpath,
-        );
+        jest.spyOn(fsPromises, 'realpath').mockImplementation((async (
+            p: string,
+        ) => {
+            if (p === nestedDir) {
+                return '/tmp/outside-escape';
+            }
+            return originalRealpath(p);
+        }) as unknown as typeof fsPromises.realpath);
 
         try {
             await expect(
@@ -393,7 +393,9 @@ onLinux('LocalSandboxService.openRepoWriteHandle (Linux openat)', () => {
 
     beforeEach(() => {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-openat-'));
-        outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-openat-out-'));
+        outsideDir = fs.mkdtempSync(
+            path.join(os.tmpdir(), 'kodus-openat-out-'),
+        );
         svc = new LocalSandboxService({} as any);
     });
 

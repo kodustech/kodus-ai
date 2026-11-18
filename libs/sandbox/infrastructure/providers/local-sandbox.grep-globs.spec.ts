@@ -16,10 +16,14 @@ describe('LocalSandboxService grep — language glob and scan excludes', () => {
     beforeAll(() => {
         repo = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-grep-globs-'));
         for (const file of ['src/a.js', 'vendor/c.js', 'src/x.spec.js']) {
-            fs.mkdirSync(path.join(repo, path.dirname(file)), { recursive: true });
+            fs.mkdirSync(path.join(repo, path.dirname(file)), {
+                recursive: true,
+            });
             fs.writeFileSync(path.join(repo, file), "app.get('/x', h);\n");
         }
-        rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(repo);
+        rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(
+            repo,
+        );
     });
 
     afterAll(() => {
