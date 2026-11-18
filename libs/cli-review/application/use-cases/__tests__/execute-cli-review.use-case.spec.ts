@@ -1088,6 +1088,52 @@ describe('ExecuteCliReviewUseCase', () => {
             mockExecute.mockRestore();
         });
 
+        it('runs heavy for a team set to Ultra: the CLI has no Ultra', async () => {
+            const { useCase } = createMocks();
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: {
+                    ...(useCase as any).getDefaultConfig(),
+                    reviewMode: 'ultra',
+                },
+                repositoryId: 'global',
+                repositoryName: null,
+            });
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+
+            for (const config of [{}, { balanced: true }]) {
+                await useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: { diff: '+ hello', config } as any,
+                    isTrialMode: false,
+                });
+            }
+
+            expect(seen.map((c) => c.heavy)).toEqual([true, false]);
+            expect(seen.every((c) => !c.ultra)).toBe(true);
+
+            mockExecute.mockRestore();
+        });
+
         it('should pass resolved repositoryId to pipeline context', async () => {
             const {
                 useCase,
