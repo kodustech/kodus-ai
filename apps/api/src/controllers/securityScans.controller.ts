@@ -126,10 +126,12 @@ export class SecurityScansController {
         return organizationId;
     }
 
-    private visibleRepositories(): Promise<string[] | null> {
+    private visibleRepositories(
+        action: Action = Action.Read,
+    ): Promise<string[] | null> {
         return this.authorizationService.getRepositoryScope({
             user: this.request.user,
-            action: Action.Read,
+            action,
             resource: ResourceType.SecurityScan,
         });
     }
@@ -200,7 +202,7 @@ export class SecurityScansController {
         const scan = await this.getSecurityScans.get(
             organizationId,
             id,
-            (await this.visibleRepositories()) ?? undefined,
+            (await this.visibleRepositories(Action.Create)) ?? undefined,
         );
         await this.authorizationService.ensure({
             user: this.request.user,
