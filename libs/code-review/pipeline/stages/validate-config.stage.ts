@@ -51,6 +51,7 @@ import {
 import {
     ULTRA_REVIEW_PLAN_REQUIRED,
     ultraTrioRefusalMessage,
+    ULTRA_REFUSAL_NOT_POSTED,
 } from '@libs/ee/ultra-review/ultra-review-messages';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
@@ -341,7 +342,11 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         context: CodeReviewPipelineContext,
         storedConfig: unknown,
     ): Promise<CodeReviewPipelineContext> {
-        const askedByCommand = context.requestedReviewMode === 'ultra';
+        // Any command gets the reason: `--ultra`, or a plain start-review
+        // on settings that ask for Ultra.
+        const askedByCommand =
+            context.requestedReviewMode === 'ultra' ||
+            !!context.origin?.startsWith('command');
         const planAllowed = await isUltraReviewPlanAllowed(
             this.licenseService,
             context.organizationAndTeamData,
@@ -369,11 +374,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             // Settings asking for it: told once per PR, and only when the
             // review would otherwise have run. One that would not (a draft, a
             // skipped branch) skips as any review would, so the reason is not
-            // recorded as told and goes out once the PR is ready.
-            if (
-                !askedByCommand &&
-                !(await this.wasSkippedFor(context, message))
-            ) {
+            // recorded as told and goes out once the PR is ready. A reply the
+            // platform did not take is not recorded as told either.
+            let recorded = message;
+            if (askedByCommand) {
+                await this.replyToReviewCommand(context, message);
+            } else if (!(await this.wasSkippedFor(context, message))) {
                 const cadence = await this.evaluateReviewCadence(context);
                 if (!cadence.shouldProcess) {
                     return this.updateContext(context, (draft) => {
@@ -387,14 +393,14 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                         }
                     });
                 }
-                await this.replyToReviewCommand(context, message);
-            } else if (askedByCommand) {
-                await this.replyToReviewCommand(context, message);
+                if (!(await this.replyToReviewCommand(context, message))) {
+                    recorded = ULTRA_REFUSAL_NOT_POSTED;
+                }
             }
             return this.updateContext(context, (draft) => {
                 draft.statusInfo = {
                     status: AutomationStatus.SKIPPED,
-                    message,
+                    message: recorded,
                 };
                 if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
                 draft.pipelineMetadata.notificationHandled = true;
@@ -737,6 +743,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 pullRequestNumber: context.pullRequest.number,
                 repositoryId: context?.repository?.id,
             },
+            { rethrow: true },
         ));
     }
 
@@ -862,17 +869,20 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         return false;
     }
 
+    /** Whether the platform took the reply (some return null on failure). */
     private async replyToReviewCommand(
         context: CodeReviewPipelineContext,
         body: string,
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
-            await this.codeManagementService.createSingleIssueComment({
-                organizationAndTeamData: context.organizationAndTeamData,
-                repository: context.repository,
-                prNumber: context.pullRequest.number,
-                body,
-            });
+            return !!(await this.codeManagementService.createSingleIssueComment(
+                {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository,
+                    prNumber: context.pullRequest.number,
+                    body,
+                },
+            ));
         } catch (error) {
             this.logger.error({
                 message: `Failed to reply to the review command on PR #${context.pullRequest?.number}`,
@@ -887,6 +897,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     prNumber: context.pullRequest?.number,
                 },
             });
+            return false;
         }
     }
 

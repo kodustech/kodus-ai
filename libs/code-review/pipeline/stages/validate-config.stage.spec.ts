@@ -92,7 +92,10 @@ describe('ValidateConfigStage — v2 routing', () => {
         };
         mockOrganizationParametersService = { findByKey: jest.fn() };
         mockCodeManagementService = {
-            createSingleIssueComment: jest.fn(),
+            // The platform returns the comment it posted.
+            createSingleIssueComment: jest
+                .fn()
+                .mockResolvedValue({ id: 'comment-1' }),
         };
         validateOrganizationLicense = jest.fn().mockResolvedValue(TEAMS);
 
@@ -312,6 +315,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             const context = buildContext(undefined);
             if (!requestedReviewMode) {
                 (context.codeReviewConfig as any).reviewMode = 'ultra';
+                // A push: the settings ask for Ultra, no command does.
+                (context as any).origin = 'github';
             }
             return { ...context, requestedReviewMode, ...extra } as any;
         };
@@ -398,6 +403,7 @@ describe('ValidateConfigStage — v2 routing', () => {
                     errorMessage: first.statusInfo?.message,
                     pullRequestNumber: 1,
                 }),
+                { rethrow: true },
             );
 
             mockCodeManagementService.createSingleIssueComment.mockClear();
@@ -516,6 +522,49 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(
                 mockCodeManagementService.createSingleIssueComment,
             ).not.toHaveBeenCalled();
+        });
+
+        it('the earlier-skips read asks the store to throw, not to read a failure as none', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            await stage.execute(ultraContext());
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(expect.anything(), { rethrow: true });
+        });
+
+        it('a refusal the platform did not take is not recorded as told: the next review tries again', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext());
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.statusInfo?.message).toContain('could not post why');
+        });
+
+        it('a plain start-review on settings that ask for Ultra is always answered', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'earlier-skip' },
+            );
+
+            await stage.execute(ultraContext(undefined, { origin: 'command' }));
+
+            expect(comment()).toContain('Ultra review is available');
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
         });
 
         it('a fallback on Kodus credits with none left is not used', async () => {

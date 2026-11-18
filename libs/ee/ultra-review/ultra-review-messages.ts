@@ -42,6 +42,10 @@ const NOT_REVIEWED =
 export const ULTRA_REVIEW_PLAN_REQUIRED =
     'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not confirm this organization is on one. This pull request was not reviewed. `@kody start-review --balanced` reviews it in Balanced mode.';
 
+/** The skip of a refusal whose reply the platform did not take. */
+export const ULTRA_REFUSAL_NOT_POSTED =
+    'Ultra review was refused, and Kody could not post why on the pull request. The next review of it tries again.';
+
 /** Why an Ultra review was refused on the org's models. */
 export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
     const settings = `[Settings › Code review › Routing](${ultraRoutingSettingsUrl()})`;
@@ -135,7 +139,7 @@ function mergeLine(state: UltraReviewState): string | undefined {
         case 'failed':
             return '- The comments were posted without the final merge: the merge model and the fallback failed, so some comments may repeat.';
         case 'skipped':
-            return '- Only one model completed, so there was nothing to merge.';
+            return '- Fewer than two models left comments, so there was nothing to merge.';
     }
 }
 

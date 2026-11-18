@@ -80,6 +80,8 @@ export interface IAutomationExecutionRepository {
     }>;
     findLatestExecutionByFilters(
         filters?: Partial<any>,
+        /** A failed read throws instead of reading as "none found". */
+        options?: { rethrow?: boolean },
     ): Promise<AutomationExecutionEntity | null>;
     findStaleInProgress(
         cutoffDate: Date,
