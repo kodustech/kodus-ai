@@ -2315,6 +2315,37 @@ export class ChatWithKodyFromGitUseCase {
                 { repositoryId: repository.id },
             );
 
+            // `getSimpleConfig` merges the deltas stored on the config row; the
+            // repository's `kodus-config.yml` is a separate layer of the same
+            // cascade (`getMergedCodeReviewConfigs` reads it, and this setting
+            // is documented in `default-kodus-config.yml`). Read it here and let
+            // it win over the stored deltas, as the review pipeline does. A file
+            // that cannot be read leaves the stored decision in place.
+            let fileValue: boolean | undefined;
+            try {
+                const fileConfig =
+                    await this.codeBaseConfigService.getKodusConfigFile({
+                        organizationAndTeamData,
+                        repository,
+                    });
+                fileValue = fileConfig?.conversation?.implicitReplies;
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'Could not read the repository kodus-config.yml: the stored conversation setting applies',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        repository: repository.name,
+                    },
+                });
+            }
+
+            if (fileValue !== undefined) {
+                return fileValue === false;
+            }
+
             return config?.conversation?.implicitReplies === false;
         } catch (error) {
             this.logger.warn({

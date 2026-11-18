@@ -42,8 +42,9 @@ function setup(config: unknown) {
             .mockResolvedValue({ allowed: true }),
         resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
     };
-    // The config cascade: `getSimpleConfig` resolves the repository's
-    // kodus-config.yml over the organization's.
+    // The config cascade: `getSimpleConfig` resolves the deltas stored on the
+    // config row, and `getKodusConfigFile` carries the repository's own
+    // kodus-config.yml layer, which wins over them.
     const codeBaseConfigService =
         config === undefined
             ? undefined
@@ -52,6 +53,7 @@ function setup(config: unknown) {
                       if (config instanceof Error) throw config;
                       return config;
                   }),
+                  getKodusConfigFile: jest.fn().mockResolvedValue(undefined),
               };
 
     const useCase = new ChatWithKodyFromGitUseCase(
@@ -168,23 +170,12 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
         );
     });
 
-    it('keeps the classifier deciding when the setting is on', async () => {
+    it.each([
+        ['the setting is on', { conversation: { implicitReplies: true } }],
+        ['the config says nothing', { reviewOptions: { bug: true } }],
+    ])('keeps the classifier deciding when %s', async (_label, config) => {
         const { useCase, codeManagementService, conversationAgentUseCase } =
-            setup({ conversation: { implicitReplies: true } });
-        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
-            kodyRoot,
-            agentReply,
-        ]);
-
-        await useCase.execute(params(agentReply));
-
-        expect(classify).toHaveBeenCalledTimes(1);
-        expect(conversationAgentUseCase.execute).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps the classifier deciding when the config says nothing', async () => {
-        const { useCase, codeManagementService, conversationAgentUseCase } =
-            setup({ reviewOptions: { bug: true } });
+            setup(config);
         codeManagementService.getPullRequestReviewComment.mockResolvedValue([
             kodyRoot,
             agentReply,
@@ -227,6 +218,66 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
             expect.objectContaining({ organizationId: ORG, teamId: TEAM }),
             expect.objectContaining({ repositoryId: 'repo-1' }),
         );
+    });
+
+    it('lets the repository kodus-config.yml turn replies off', async () => {
+        const {
+            useCase,
+            codeManagementService,
+            codeBaseConfigService,
+            conversationAgentUseCase,
+        } = setup({ conversation: { implicitReplies: true } });
+        codeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+            conversation: { implicitReplies: false },
+        });
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            kodyRoot,
+            agentReply,
+        ]);
+
+        await useCase.execute(params(agentReply));
+
+        expect(codeBaseConfigService.getKodusConfigFile).toHaveBeenCalledWith(
+            expect.objectContaining({ repository: expect.anything() }),
+        );
+        expect(classify).not.toHaveBeenCalled();
+        expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('lets the repository kodus-config.yml turn replies back on', async () => {
+        // The file is the later layer of the cascade: it wins over the
+        // organization's stored opt-out, as it does for the review pipeline.
+        const { useCase, codeManagementService, codeBaseConfigService } = setup(
+            { conversation: { implicitReplies: false } },
+        );
+        codeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+            conversation: { implicitReplies: true },
+        });
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            kodyRoot,
+            agentReply,
+        ]);
+
+        await useCase.execute(params(agentReply));
+
+        expect(classify).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the stored decision when the repository file cannot be read', async () => {
+        const { useCase, codeManagementService, codeBaseConfigService } = setup(
+            { conversation: { implicitReplies: false } },
+        );
+        codeBaseConfigService.getKodusConfigFile.mockRejectedValue(
+            new Error('file unavailable'),
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            kodyRoot,
+            agentReply,
+        ]);
+
+        await useCase.execute(params(agentReply));
+
+        expect(classify).not.toHaveBeenCalled();
     });
 
     it('changes nothing for a wiring without the config service', async () => {
