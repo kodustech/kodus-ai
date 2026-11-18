@@ -173,3 +173,38 @@ describe('findModelReferences', () => {
         expect(findModelReferences(v2(), '')).toEqual([]);
     });
 });
+
+describe('the Ultra models in routing', () => {
+    const three = v2({
+        models: [
+            { id: 'a', credentialId: 'cred-openai', model: 'gpt-5' },
+            { id: 'b', credentialId: 'cred-openai', model: 'gpt-5-mini' },
+            { id: 'c', credentialId: 'cred-openai', model: 'gpt-4o' },
+        ],
+    });
+
+    it('passes three different models that exist', () => {
+        expect(
+            validateByokConfigRefs({
+                ...three,
+                routing: { ultraModelIds: ['a', 'b', 'c'] },
+            }).valid,
+        ).toBe(true);
+    });
+
+    it('fails a missing model, a repeated one, or more than three', () => {
+        const check = (ultraModelIds: string[]) =>
+            validateByokConfigRefs({ ...three, routing: { ultraModelIds } })
+                .errors;
+        expect(check(['a', 'b', 'gone'])[0]).toContain('"gone"');
+        expect(check(['a', 'a', 'b'])[0]).toContain('three different models');
+        expect(check(['a', 'b', 'c', 'a'])[0]).toContain('up to three');
+    });
+
+    it('names the Ultra slot a model holds, so deleting it is refused', () => {
+        const config = { ...three, routing: { ultraModelIds: ['a', 'b', 'c'] } };
+        expect(findModelReferences(config, 'b')).toEqual([
+            'Ultra review model 2',
+        ]);
+    });
+});
