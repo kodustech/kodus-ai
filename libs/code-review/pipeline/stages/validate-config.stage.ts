@@ -454,14 +454,19 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         // Balanced review out of credits does, with the same comment, rather
         // than spend on Kody Rules for a review with no model.
         if (!models.length && !fallback && exhausted.length) {
-            if (context.pipelineMetadata?.showStatusFeedback !== false) {
-                await this.codeManagementService.createIssueComment({
-                    organizationAndTeamData: context.organizationAndTeamData,
-                    repository: context.repository,
-                    prNumber: context.pullRequest?.number,
-                    body: KODUS_CREDITS_EXHAUSTED_COMMENT,
-                });
-            }
+            // Handled only when the platform took the comment; otherwise the
+            // usual skip notification still runs.
+            const told =
+                context.pipelineMetadata?.showStatusFeedback !== false &&
+                !!(await this.codeManagementService
+                    .createIssueComment({
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        repository: context.repository,
+                        prNumber: context.pullRequest?.number,
+                        body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+                    })
+                    .catch(() => null));
             return this.updateContext(context, (draft) => {
                 draft.statusInfo = {
                     status: AutomationStatus.SKIPPED,
@@ -470,7 +475,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     ),
                 };
                 if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
-                draft.pipelineMetadata.notificationHandled = true;
+                if (told) draft.pipelineMetadata.notificationHandled = true;
             });
         }
 
