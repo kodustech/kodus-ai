@@ -50,6 +50,9 @@ function decomposePrKey(prKey: string): {
     };
 }
 
+/** The lease state whose sandbox is up (or paused and resumable). */
+const LIVE_LEASE_STATES = ['READY'];
+
 @Injectable()
 export class SandboxLeaseRepository {
     constructor(
@@ -89,12 +92,9 @@ export class SandboxLeaseRepository {
                 $setOnInsert: {
                     state: 'CREATING',
                     createdAt: now,
+                    expiresAt,
                     ...decomposed,
                 },
-                // Set on insert, and pushed out by a joiner that needs longer
-                // (an Ultra review's Kody Rules on the PR's lease): the reaper
-                // kills by this date, in use or not.
-                $max: { expiresAt },
                 // Track the most recent consumer label so it's queryable in
                 // Mongo without parsing logs. Updated on every acquire (both
                 // insert and update paths).
@@ -103,6 +103,27 @@ export class SandboxLeaseRepository {
             },
             { upsert: true, new: true },
         );
+
+        // A joiner that needs longer (an Ultra review's Kody Rules on the
+        // PR's lease) pushes the expiry of a live sandbox out; the reaper
+        // kills by this date, in use or not. A doc stuck CREATING (its
+        // worker died) or INVALIDATED keeps its expiry, so it is still reaped.
+        if (
+            doc &&
+            LIVE_LEASE_STATES.includes(doc.state) &&
+            doc.expiresAt < expiresAt
+        ) {
+            const extended = await this.leaseModel.findOneAndUpdate(
+                {
+                    _id: prKey,
+                    state: { $in: LIVE_LEASE_STATES },
+                    expiresAt: { $lt: expiresAt },
+                },
+                { $set: { expiresAt } },
+                { new: true },
+            );
+            if (extended) return extended;
+        }
 
         return doc;
     }

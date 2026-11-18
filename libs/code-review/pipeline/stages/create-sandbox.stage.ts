@@ -74,15 +74,25 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         super();
     }
 
-    /** A cleanup that releases the lease the first time it is called. */
+    /**
+     * A cleanup that releases the lease once. Calls while a release is in
+     * flight share it; a release that throws is not counted, so a later
+     * cleanup (the pipeline observer's) tries again.
+     */
     private releaseOnce(leaseId: string): () => Promise<void> {
         let released = false;
+        let inFlight: Promise<void> | undefined;
         return async () => {
             if (released) return;
-            released = true;
-            await this.leaseManager.release(leaseId, {
-                idleMs: REVIEW_IDLE_TIMEOUT_MS,
-            });
+            inFlight ??= this.leaseManager
+                .release(leaseId, { idleMs: REVIEW_IDLE_TIMEOUT_MS })
+                .then(() => {
+                    released = true;
+                })
+                .finally(() => {
+                    inFlight = undefined;
+                });
+            return inFlight;
         };
     }
 
