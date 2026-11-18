@@ -90,5 +90,6 @@ describe('runSecurityScanSliceProcess', () => {
         await expect(
             runSecurityScanSliceProcess(appContext, 'job-1'),
         ).resolves.toBe(0);
+        expect(appContext.close).toHaveBeenCalled();
     });
 });

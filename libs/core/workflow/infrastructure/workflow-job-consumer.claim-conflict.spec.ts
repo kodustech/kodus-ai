@@ -280,11 +280,12 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
 
     it('acks a completed job when the child exits non-zero after success', async () => {
         runChild.mockRejectedValue(childExit(1));
-        const { consumer, inboxRepository, jobRepository } = makeScanConsumer({
-            findJob: jest
-                .fn()
-                .mockResolvedValue({ status: JobStatus.COMPLETED }),
-        });
+        const { consumer, inboxRepository, jobProcessor, jobRepository } =
+            makeScanConsumer({
+                findJob: jest
+                    .fn()
+                    .mockResolvedValue({ status: JobStatus.COMPLETED }),
+            });
 
         await (consumer as any).processWorkflowJob(
             'workflow-job-consumer.security_scan',
@@ -293,6 +294,10 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
             amqpMsg('msg-1'),
         );
 
+        expect(runChild).toHaveBeenCalled();
+        expect(jobProcessor.process).not.toHaveBeenCalled();
+        expect(jobRepository.findOne).toHaveBeenCalledWith('job-1');
+        expect(inboxRepository.releaseIfHeldBy).not.toHaveBeenCalled();
         expect(inboxRepository.completeIfHeldBy).toHaveBeenCalled();
         expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
         expect(jobRepository.update).not.toHaveBeenCalled();
