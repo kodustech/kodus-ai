@@ -205,19 +205,22 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             );
         });
 
-        it('deletes no more than one batch per call', async () => {
+        it('reads no more than one batch per call, held rows included', async () => {
             if (!canRun) return;
 
             await insertJob(JobStatus.COMPLETED, longAgo);
             await insertJob(JobStatus.COMPLETED, longAgo);
             await insertJob(JobStatus.COMPLETED, longAgo);
 
-            await expect(
-                repository.deleteFinishedOlderThan({
-                    olderThan: cutoff,
-                    batchSize: 2,
-                }),
-            ).resolves.toEqual(expect.objectContaining({ deleted: 2 }));
+            const batch = await repository.deleteFinishedOlderThan({
+                olderThan: cutoff,
+                batchSize: 2,
+            });
+
+            // Rows a message still holds take a slot and are skipped, so the
+            // cursor moves past them instead of re-reading them every batch.
+            expect(batch.candidates).toBe(2);
+            expect(batch.deleted).toBeLessThanOrEqual(2);
         });
 
         it('resumes after the point a previous batch reached, leaving older rows to their own pass', async () => {

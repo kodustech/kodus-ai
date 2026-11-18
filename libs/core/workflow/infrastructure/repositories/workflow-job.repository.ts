@@ -346,21 +346,34 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         candidates: number;
         lastUpdatedAt?: string;
     }> {
+        // `scan` walks idx_workflow_jobs_updated_at for the next batch and
+        // stops there (MATERIALIZED keeps the LIMIT before the anti-joins):
+        // planned as one query, the anti-joins read all of inbox and outbox
+        // into hashes and sorted every finished job, which on a 12M-row copy
+        // spilled to disk until it ran out. The message checks then probe the
+        // job_id indexes for those rows only.
+        //
         // The DELETE repeats the candidate predicates: a row updated while
         // the DELETE waited on its lock (FAILED retried back to PENDING) is
         // re-checked against them and kept, not deleted by its uuid alone.
+        // Rows a message still holds are read and skipped, so the cursor
+        // moves past them.
         const raw = await this.repository.query(
-            `WITH doomed AS (
+            `WITH scan AS MATERIALIZED (
                     SELECT j."uuid", j."updatedAt"
                       FROM "kodus_workflow"."workflow_jobs" j
                      WHERE j."updatedAt" < $1
                        AND ($6::timestamp IS NULL OR j."updatedAt" >= $6::timestamp)
                        AND j."status" IN ($2, $3, $4)
                        AND j."workflowType"::text <> ALL($7::text[])
-                       AND NOT EXISTS (SELECT 1 FROM "kodus_workflow"."inbox_messages" i WHERE i."job_id" = j."uuid")
-                       AND NOT EXISTS (SELECT 1 FROM "kodus_workflow"."outbox_messages" o WHERE o."job_id" = j."uuid")
                      ORDER BY j."updatedAt"
                      LIMIT $5
+             ),
+             doomed AS (
+                    SELECT s."uuid"
+                      FROM scan s
+                     WHERE NOT EXISTS (SELECT 1 FROM "kodus_workflow"."inbox_messages" i WHERE i."job_id" = s."uuid")
+                       AND NOT EXISTS (SELECT 1 FROM "kodus_workflow"."outbox_messages" o WHERE o."job_id" = s."uuid")
              ),
              gone AS (
                 DELETE FROM "kodus_workflow"."workflow_jobs" w
@@ -371,9 +384,9 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                    AND w."workflowType"::text <> ALL($7::text[])
              RETURNING w."uuid"
              )
-             SELECT (SELECT count(*) FROM doomed)::int AS "candidates",
+             SELECT (SELECT count(*) FROM scan)::int AS "candidates",
                     (SELECT count(*) FROM gone)::int AS "deleted",
-                    (SELECT max(d."updatedAt")::text FROM doomed d) AS "lastUpdatedAt"`,
+                    (SELECT max(s."updatedAt")::text FROM scan s) AS "lastUpdatedAt"`,
             [
                 params.olderThan,
                 JobStatus.COMPLETED,
