@@ -321,8 +321,9 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
     /**
      * Deletes one batch of finished jobs last touched before `olderThan`,
      * oldest first, and returns how many it read, how many went, and the
-     * `updatedAt` of the newest one it read. Pass that back as `after` so the
-     * next batch starts there instead of re-walking rows it can never delete.
+     * `updatedAt` and uuid of the last one it read. Pass them back as `after`
+     * and `afterId` so the next batch starts right after it instead of
+     * re-walking rows it can never delete.
      *
      * Jobs an inbox or outbox row still references are kept (both FKs are
      * ON DELETE NO ACTION; the outbox relay deletes processed messages after
@@ -340,11 +341,13 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         olderThan: Date;
         batchSize: number;
         after?: string;
+        afterId?: string;
         keepWorkflowTypes?: WorkflowType[];
     }): Promise<{
         deleted: number;
         candidates: number;
         lastUpdatedAt?: string;
+        lastId?: string;
     }> {
         // `scan` walks idx_workflow_jobs_updated_at for the next batch and
         // stops there (MATERIALIZED keeps the LIMIT before the anti-joins):
@@ -357,21 +360,27 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         // the DELETE waited on its lock (FAILED retried back to PENDING) is
         // re-checked against them and kept, not deleted by its uuid alone.
         // Rows a message still holds are read and skipped, so the cursor
-        // moves past them. The resume is exclusive: a held row at the cursor
-        // would otherwise be read again by every batch, and a full batch of
-        // them sharing one timestamp would never move it. Rows tied with the
-        // last one read but past the LIMIT wait for the next run, which
-        // starts from the oldest again.
+        // moves past them. The cursor is ("updatedAt", uuid), exclusive: one
+        // UPDATE stamps many rows with the same updatedAt, so a timestamp
+        // alone either re-reads a held row forever or skips the rest of a
+        // tie. Without `afterId`, every row at `after` is included.
         const raw = await this.repository.query(
             `WITH scan AS MATERIALIZED (
                     SELECT j."uuid", j."updatedAt"
                       FROM "kodus_workflow"."workflow_jobs" j
                      WHERE j."updatedAt" < $1
-                       AND ($6::timestamp IS NULL OR j."updatedAt" > $6::timestamp)
+                       AND ($6::timestamp IS NULL
+                            OR (j."updatedAt", j."uuid") > ($6::timestamp, COALESCE($8::uuid, '00000000-0000-0000-0000-000000000000'::uuid)))
                        AND j."status" IN ($2, $3, $4)
                        AND j."workflowType"::text <> ALL($7::text[])
-                     ORDER BY j."updatedAt"
+                     ORDER BY j."updatedAt", j."uuid"
                      LIMIT $5
+             ),
+             last AS (
+                    SELECT s."updatedAt", s."uuid"
+                      FROM scan s
+                     ORDER BY s."updatedAt" DESC, s."uuid" DESC
+                     LIMIT 1
              ),
              doomed AS (
                     SELECT s."uuid"
@@ -390,7 +399,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
              )
              SELECT (SELECT count(*) FROM scan)::int AS "candidates",
                     (SELECT count(*) FROM gone)::int AS "deleted",
-                    (SELECT max(s."updatedAt")::text FROM scan s) AS "lastUpdatedAt"`,
+                    (SELECT l."updatedAt"::text FROM last l) AS "lastUpdatedAt",
+                    (SELECT l."uuid"::text FROM last l) AS "lastId"`,
             [
                 params.olderThan,
                 JobStatus.COMPLETED,
@@ -399,6 +409,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 params.batchSize,
                 params.after ?? null,
                 params.keepWorkflowTypes ?? [],
+                params.afterId ?? null,
             ],
         );
 
@@ -407,6 +418,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                   candidates: number;
                   deleted: number;
                   lastUpdatedAt: string | null;
+                  lastId: string | null;
               }
             | undefined;
 
@@ -421,6 +433,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             deleted: row.deleted,
             candidates: row.candidates,
             lastUpdatedAt: row.lastUpdatedAt ?? undefined,
+            lastId: row.lastId ?? undefined,
         };
     }
 

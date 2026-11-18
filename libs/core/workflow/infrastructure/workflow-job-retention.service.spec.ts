@@ -22,6 +22,7 @@ describe('WorkflowJobRetentionService.run', () => {
                 deleted,
                 candidates: deleted,
                 lastUpdatedAt: `2026-01-01 00:00:0${batch}`,
+                lastId: `job-${batch}`,
             };
         });
         const service = new WorkflowJobRetentionService(
@@ -76,12 +77,12 @@ describe('WorkflowJobRetentionService.run', () => {
         });
 
         const resumedFrom = service.deleteFinishedOlderThan.mock.calls.map(
-            ([params]: any) => params.after,
+            ([params]: any) => [params.after, params.afterId],
         );
         expect(resumedFrom).toEqual([
-            undefined,
-            '2026-01-01 00:00:01',
-            '2026-01-01 00:00:02',
+            [undefined, undefined],
+            ['2026-01-01 00:00:01', 'job-1'],
+            ['2026-01-01 00:00:02', 'job-2'],
         ]);
     });
 

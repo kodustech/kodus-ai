@@ -111,6 +111,7 @@ export class WorkflowJobRetentionService {
         // from the oldest row every time re-reads the rows that can never be
         // deleted (still referenced, CLI reviews) and grows with the backlog.
         let after: string | undefined;
+        let afterId: string | undefined;
 
         let referenceRaces = 0;
 
@@ -119,6 +120,7 @@ export class WorkflowJobRetentionService {
                 deleted: number;
                 candidates: number;
                 lastUpdatedAt?: string;
+                lastId?: string;
             };
             const startedAt = now();
             try {
@@ -126,6 +128,7 @@ export class WorkflowJobRetentionService {
                     olderThan: params.olderThan,
                     batchSize: WORKFLOW_JOB_RETENTION_BATCH_SIZE,
                     after,
+                    afterId,
                     // try.kodus.io share links (/r/<jobId>) read the CLI
                     // review job row, and a shared link must not die.
                     keepWorkflowTypes: [WorkflowType.CLI_CODE_REVIEW],
@@ -146,7 +149,10 @@ export class WorkflowJobRetentionService {
             referenceRaces = 0;
             deleted += batch.deleted;
             batches += 1;
-            after = batch.lastUpdatedAt ?? after;
+            if (batch.lastUpdatedAt) {
+                after = batch.lastUpdatedAt;
+                afterId = batch.lastId;
+            }
 
             // One line per batch: a run cut short still shows how far it
             // got, and the first prod run shows what a batch costs there.

@@ -238,6 +238,7 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
                 candidates: 2,
                 deleted: 1,
                 lastUpdatedAt: '2000-06-03 00:00:00',
+                lastId: held,
             });
 
             // Resuming on the held row would read it again and never move.
@@ -245,17 +246,48 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
                 olderThan: cutoff,
                 batchSize: 1,
                 after: batch.lastUpdatedAt,
+                afterId: batch.lastId,
             });
 
             expect(next).toEqual({
                 candidates: 1,
                 deleted: 1,
                 lastUpdatedAt: '2000-06-04 00:00:00',
+                lastId: second,
             });
             const left = await remaining();
             expect(left).toContain(held);
             expect(left).not.toEqual(expect.arrayContaining([first]));
             expect(left).not.toEqual(expect.arrayContaining([second]));
+        });
+
+        it('splits rows one UPDATE stamped with the same updatedAt across batches without skipping any', async () => {
+            if (!canRun) return;
+
+            const tie = '2000-07-01 00:00:00';
+            const tied = [
+                await insertJob(JobStatus.COMPLETED, tie),
+                await insertJob(JobStatus.COMPLETED, tie),
+                await insertJob(JobStatus.COMPLETED, tie),
+            ];
+
+            const window = { olderThan: cutoff, after: '2000-06-30 00:00:00' };
+            const first = await repository.deleteFinishedOlderThan({
+                ...window,
+                batchSize: 2,
+            });
+            const rest = await repository.deleteFinishedOlderThan({
+                olderThan: cutoff,
+                batchSize: 1,
+                after: first.lastUpdatedAt,
+                afterId: first.lastId,
+            });
+
+            expect(first.deleted + rest.deleted).toBe(3);
+            const left = await remaining();
+            for (const uuid of tied) {
+                expect(left).not.toContain(uuid);
+            }
         });
 
         it('resumes after the point a previous batch reached, leaving older rows to their own pass', async () => {
@@ -280,6 +312,7 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
                 deleted: 1,
                 candidates: 1,
                 lastUpdatedAt: '2001-01-20 00:00:00',
+                lastId: after,
             });
             expect(await remaining()).toEqual(expect.arrayContaining([before]));
             expect(await remaining()).not.toContain(after);

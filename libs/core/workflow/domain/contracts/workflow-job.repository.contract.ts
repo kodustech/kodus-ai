@@ -33,12 +33,14 @@ export interface IWorkflowJobRepository {
         olderThan: Date;
         batchSize: number;
         after?: string;
+        afterId?: string;
         keepWorkflowTypes?: string[];
     }): Promise<{
         deleted: number;
         /** Rows the batch read; fewer than `batchSize` means nothing is left. */
         candidates: number;
         lastUpdatedAt?: string;
+        lastId?: string;
     }>;
 }
 

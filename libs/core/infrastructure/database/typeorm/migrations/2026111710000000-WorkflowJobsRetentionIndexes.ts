@@ -4,13 +4,14 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Issue #2582: the webhook failure monitor timed out on ~85% of its runs, and
  * workflow_jobs (13.6M rows, never cleaned) needs a retention job.
  *
- *   1. `idx_workflow_jobs_updated_at` ("updatedAt") INCLUDE (workflowType,
- *      status) replaces `idx_workflow_jobs_webhook_monitor`. The old partial
+ *   1. `idx_workflow_jobs_updated_at` ("updatedAt", "uuid") INCLUDE
+ *      (workflowType, status) replaces `idx_workflow_jobs_webhook_monitor`. The old partial
  *      index led with "workflowType", the column its own WHERE already pins,
  *      so Postgres dropped that qual and walked the whole index (prod: 117k
  *      buffers / 35s for 3,461 rows). Leading with "updatedAt" bounds the scan
  *      to the 30-minute window, and the same index serves the retention
- *      cron's oldest-first walk. Measured on PG 16 with 3M rows: 8,127
+ *      cron's oldest-first walk; "uuid" makes its cursor exact when one
+ *      UPDATE gave many rows the same updatedAt. Measured on PG 16 with 3M rows: 8,127
  *      buffers / 189ms -> 5 buffers / 0.1ms.
  *
  *   2. `job_id` indexes on inbox_messages and outbox_messages. Both FKs to
@@ -57,7 +58,7 @@ export class WorkflowJobsRetentionIndexes2026111710000000 implements MigrationIn
         await this.dropIfInvalid(queryRunner, 'idx_workflow_jobs_updated_at');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_workflow_jobs_updated_at"
-                ON "kodus_workflow"."workflow_jobs" ("updatedAt")
+                ON "kodus_workflow"."workflow_jobs" ("updatedAt", "uuid")
                 INCLUDE ("workflowType", "status")
         `);
 
