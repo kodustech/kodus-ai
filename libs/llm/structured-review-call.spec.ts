@@ -66,6 +66,7 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import { retriesWereExhausted } from '@libs/llm/error-classifier';
 import { sleep } from '@libs/llm/retry-policy';
+import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
@@ -1786,5 +1787,57 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             promptCache: { userPrefix: head },
         });
         expect(sent().messages[0].content[0].text).toBe(head);
+    });
+});
+
+describe('runStructuredReviewCall — usage meter', () => {
+    it('reports a call that succeeds', async () => {
+        const record = jest.fn();
+        mockGenerate.mockResolvedValueOnce({
+            experimental_output: { violations: [] },
+            usage: { inputTokens: 900, outputTokens: 80 },
+        });
+
+        await runWithUsageMeter({ record }, () =>
+            runStructuredReviewCall({ ...base }),
+        );
+
+        expect(record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 900,
+                    outputTokens: 80,
+                }),
+                runName: 'test.run',
+            }),
+        );
+    });
+
+    it('reports a call whose answer did not parse: it was still billed', async () => {
+        const record = jest.fn();
+        const unparsed = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response.',
+            text: 'not json',
+            response: {} as any,
+            usage: { inputTokens: 700, outputTokens: 60 } as any,
+            finishReason: 'stop',
+        });
+        mockGenerate
+            .mockRejectedValueOnce(unparsed)
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runWithUsageMeter({ record }, () =>
+            runStructuredReviewCall({ ...base }),
+        );
+
+        expect(record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 700,
+                    outputTokens: 60,
+                }),
+                runName: expect.stringContaining('test.run'),
+            }),
+        );
     });
 });

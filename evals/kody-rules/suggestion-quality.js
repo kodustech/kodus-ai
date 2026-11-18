@@ -99,16 +99,21 @@ function addQuality(q, score) {
     return q;
 }
 
-/** The judge, routed as production routes the model (evals/shared/model-route.js). */
+/** The judge, routed as production routes the model (evals/shared/model-route.js).
+ *  The reviewed model's settings stay out of it: its id and its reasoning
+ *  effort, so runs at different efforts are graded by the same judge. */
 function judgeRoute(modelId) {
     const internals = require('../shared/model-route');
-    const previous = process.env.RECALL_MODEL;
+    const reviewed = { RECALL_MODEL: process.env.RECALL_MODEL, RECALL_REASONING_EFFORT: process.env.RECALL_REASONING_EFFORT };
     process.env.RECALL_MODEL = modelId;
+    delete process.env.RECALL_REASONING_EFFORT;
     try {
         return internals.resolveRoute({ provider: 'tier0', model: modelId });
     } finally {
-        if (previous === undefined) delete process.env.RECALL_MODEL;
-        else process.env.RECALL_MODEL = previous;
+        for (const [name, value] of Object.entries(reviewed)) {
+            if (value === undefined) delete process.env[name];
+            else process.env[name] = value;
+        }
     }
 }
 

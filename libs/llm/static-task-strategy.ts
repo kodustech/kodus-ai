@@ -84,6 +84,8 @@ const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     conversation: TOOL_CALLING_REQUIREMENT,
     // A custom agent investigates with tools (grep, ast-grep, MCP, CLIs).
     customAgent: TOOL_CALLING_REQUIREMENT,
+    // The deep scan's lenses read the repository with tools.
+    securityScan: TOOL_CALLING_REQUIREMENT,
 };
 
 /** One candidate the precedence chain will try, in order. */

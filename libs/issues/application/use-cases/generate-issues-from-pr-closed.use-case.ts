@@ -23,6 +23,7 @@ import {
     IRepositoryToIssues,
 } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { KodyIssuesManagementService } from '@libs/issues/infrastructure/adapters/service/kodyIssuesManagement.service';
+import { repositoryHost } from '@libs/issues/domain/scan-fingerprint';
 import { stripCurlyBracesFromUUIDs } from '@libs/platform/domain/platformIntegrations/types/webhooks/webhooks-bitbucket.type';
 import {
     IMappedPullRequest,
@@ -244,11 +245,12 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         const repositoryFullName = params?.repository?.fullName;
         const platformType = params?.platformType;
 
-        const organizationAndTeamData = await this.getOrganizationAndTeamData(
-            Number(pullRequest.number),
-            params?.repository,
-            platformType,
-        );
+        const { organizationAndTeamData, host } =
+            await this.getOrganizationAndTeamData(
+                Number(pullRequest.number),
+                params?.repository,
+                platformType,
+            );
 
         return {
             context: {
@@ -258,6 +260,9 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                     name: repositoryName,
                     full_name: repositoryFullName,
                     platform: platformType,
+                    // Its instance, as the team's integration lists it: a
+                    // security-scan issue only takes a suggestion of its own.
+                    ...(host ? { host } : {}),
                 },
                 organizationAndTeamData,
             },
@@ -268,7 +273,10 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         prNumber: number,
         repository: IRepositoryToIssues,
         platformType: PlatformType,
-    ): Promise<OrganizationAndTeamData | null> {
+    ): Promise<{
+        organizationAndTeamData: OrganizationAndTeamData | null;
+        host?: string;
+    }> {
         const foundConfigs =
             await this.integrationConfigService.findIntegrationConfigWithTeams(
                 IntegrationConfigKey.REPOSITORIES,
@@ -297,7 +305,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 },
             });
 
-            return null;
+            return { organizationAndTeamData: null };
         }
 
         const organizationAndTeamData: OrganizationAndTeamData[] = configs.map(
@@ -306,7 +314,39 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 teamId: config.team.uuid,
             }),
         );
-
-        return organizationAndTeamData?.[0] || null;
+        // The id alone can name a project on another server of the platform:
+        // the instance is the one the PR's own repository URL is on, and only
+        // a config listing the repository there is known to be this one.
+        const prHost = repositoryHost(
+            (repository as { url?: string } | undefined)?.url,
+        );
+        const listedHost = (i: number) =>
+            repositoryHost(
+                (Array.isArray(configs[i]?.configValue)
+                    ? configs[i].configValue
+                    : []
+                ).find((r) => String(r?.id) === String(repository?.id))
+                    ?.http_url,
+            );
+        if (prHost) {
+            const onInstance = configs.findIndex(
+                (_, i) => listedHost(i) === prHost,
+            );
+            return {
+                organizationAndTeamData:
+                    organizationAndTeamData?.[
+                        onInstance >= 0 ? onInstance : 0
+                    ] || null,
+                ...(onInstance >= 0 ? { host: prHost } : {}),
+            };
+        }
+        // A payload that names no URL (Bitbucket Data Center's): the
+        // instance the configs list the repository on, when they all agree.
+        const hosts = new Set(configs.map((_, i) => listedHost(i)));
+        const [only] = hosts;
+        return {
+            organizationAndTeamData: organizationAndTeamData?.[0] || null,
+            ...(hosts.size === 1 && only ? { host: only } : {}),
+        };
     }
 }

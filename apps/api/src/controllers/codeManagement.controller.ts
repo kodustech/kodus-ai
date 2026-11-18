@@ -28,6 +28,7 @@ import {
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PullRequestState } from '@libs/core/domain/enums';
 import { GetCodeManagementMemberListUseCase } from '@libs/platform/application/use-cases/codeManagement/get-code-management-members-list.use-case';
+import { GetMemberLabelsUseCase } from '@libs/platform/application/use-cases/codeManagement/get-member-labels.use-case';
 import { CreateIntegrationUseCase } from '@libs/platform/application/use-cases/codeManagement/create-integration.use-case';
 import { CreateRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/create-repositories';
 import { GetRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/get-repositories';
@@ -80,6 +81,7 @@ import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 export class CodeManagementController {
     constructor(
         private readonly getCodeManagementMemberListUseCase: GetCodeManagementMemberListUseCase,
+        private readonly getMemberLabelsUseCase: GetMemberLabelsUseCase,
         private readonly createIntegrationUseCase: CreateIntegrationUseCase,
         private readonly createRepositoriesUseCase: CreateRepositoriesUseCase,
         private readonly getRepositoriesUseCase: GetRepositoriesUseCase,
@@ -274,7 +276,11 @@ export class CodeManagementController {
             'How many repositories turning on "review every repository" would add, without changing anything.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    @ApiQuery({ name: 'includeForksAndMirrors', required: false, type: Boolean })
+    @ApiQuery({
+        name: 'includeForksAndMirrors',
+        required: false,
+        type: Boolean,
+    })
     public async previewRepositorySelection(
         @Query() query: { teamId: string; includeForksAndMirrors?: string },
     ) {
@@ -335,6 +341,36 @@ export class CodeManagementController {
     @ApiQuery({ name: 'teamId', required: true })
     public async getOrganizationMembers(@Query() query: { teamId: string }) {
         return this.getCodeManagementMemberListUseCase.execute(query.teamId);
+    }
+
+    @Get('/organization-members/labels')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.UserSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Name seat holders by git id',
+        description:
+            'Maps git ids to the name stored on their pull requests. Ids with no stored pull request are left out.',
+    })
+    @ApiQuery({ name: 'teamId', required: true })
+    @ApiQuery({
+        name: 'ids',
+        required: true,
+        description: 'Comma-separated git ids',
+    })
+    public async getOrganizationMemberLabels(
+        @Query() query: { teamId: string; ids?: string | string[] },
+    ) {
+        const ids = [query.ids ?? []].flat().join(',');
+
+        return this.getMemberLabelsUseCase.execute(
+            query.teamId,
+            ids.split(','),
+        );
     }
 
     @Post('/organization-members/refresh')

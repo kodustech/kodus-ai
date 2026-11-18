@@ -84,11 +84,12 @@
 
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
-| `WORKER_ROLE` | ✅ | enum(code-review,analytics) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Every deployment runs code-review; analytics is a separate Cockpit worker when that feature is enabled. |
+| `WORKER_ROLE` | ✅ | enum(code-review,analytics,security-scan) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Every deployment runs code-review; analytics is a separate Cockpit worker when that feature is enabled. security-scan is the cloud's deep scan worker: only that queue. |
 | `WORKFLOW_QUEUE_WORKER_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_PUBLISHER_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_WEBHOOK_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_CODE_REVIEW_PREFETCH` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH` | – | number | ☁️ Cloud | Deep scans one security-scan worker runs at once. Each holds a sandbox and four model loops for up to half an hour per slice. |
 | `WORKFLOW_QUEUE_WEBHOOK_PROCESS_TIMEOUT_MS` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_CODE_REVIEW_PROCESS_TIMEOUT_MS` | – | number | ⚙️ Both |  |
 | `WORKFLOW_OUTBOX_MAX_ATTEMPTS` | – | number | ⚙️ Both | Max retries before a message is marked FAILED. |
@@ -130,6 +131,7 @@
 | `API_FIREWORKS_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_CREDITS_SERVICE_TOKEN` | – | secret | ☁️ Cloud | Kodus as a BYOK provider ("Kodus credits") — the org picks a model from the curated catalog and Kodus routes it over ITS OWN upstream accounts, billing the org's credits. Dedicated names on purpose: the generic API_*_API_KEY vars above are never used for this path, so a self-hosted install's keys can't be routed as Kodus credits. Cloud-only (libs/llm/providers/kodus). Private alpha allow-list AHEAD of the PostHog `kodus-provider` flag: `*` opens the provider to every org on this deployment (dev / e2e), a comma-separated list of organization ids pins it (PostHog-down fallback). Leave unset in production — the PostHog flag + alpha release track decide. OPTIONAL key separation for the billing `/credits/*` routes (the money surface: balance, ledger, checkout, debit, auto top-up). Those routes are authenticated with an HMAC signature (`x-kodus-signature`), and by default the secret is API_BILLING_WEBHOOK_SECRET below — the value both deployments already share for the webhooks in the other direction, so nothing new has to be provisioned. Set this only if you want the credit routes on a separate key — and then set it on BOTH SIDES OR NEITHER: billing accepts its own CREDITS_SERVICE_TOKEN and the shared webhook secret, but it cannot verify a dedicated key it was never given, so this set here and missing there answers 401 on every credit call. |
 | `API_KODUS_PROVIDER_ALPHA_ORGS` | – | string | ☁️ Cloud |  |
+| `API_DEEP_SCAN_ALPHA_ORGS` | – | string | ☁️ Cloud | Deep scan private alpha: `*` or comma-separated organization ids that get it without the release gate (dev VMs, previews, e2e). Read by the API's gate and the web page alike. Unset in production. |
 | `API_KODUS_PROVIDER_FIREWORKS_API_KEY` | – | secret | ☁️ Cloud | Fireworks carries today's catalog (DeepSeek / Kimi / GLM); endpoint from API_FIREWORKS_BASE_URL above. |
 | `API_KODUS_PROVIDER_ANTHROPIC_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_KODUS_PROVIDER_OPENAI_API_KEY` | – | secret | ☁️ Cloud |  |

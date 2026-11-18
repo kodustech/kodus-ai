@@ -8,6 +8,7 @@ import type {
     ConfigRepository,
     ConfigTeam,
 } from '../../types/config.js';
+import type { IssueListItem, IssuesFixPrompt } from '../../types/issues.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
 import type {
     CodeReviewScope,
@@ -211,6 +212,11 @@ export interface IRulesApi {
     ): Promise<KodyRulesStatusResult>;
 }
 
+export interface IIssuesApi {
+    listIssues(accessToken: string): Promise<IssueListItem[]>;
+    fixPrompt(accessToken: string, ids: string[]): Promise<IssuesFixPrompt>;
+}
+
 export interface IKodusApi {
     auth: IAuthApi;
     config: IConfigApi;
@@ -218,4 +224,5 @@ export interface IKodusApi {
     trial: ITrialApi;
     sessions: ISessionsApi;
     rules: IRulesApi;
+    issues: IIssuesApi;
 }

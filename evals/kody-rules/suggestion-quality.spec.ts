@@ -3,6 +3,7 @@ const {
     scoreVerdict,
     emptyQuality,
     addQuality,
+    judgeRoute,
 } = require('./suggestion-quality');
 
 const rule = {
@@ -138,5 +139,31 @@ describe('quality tallies', () => {
             fixPass: 1,
             judgeErrors: 0,
         });
+    });
+});
+
+describe('judgeRoute — the judge runs as itself, whatever the reviewed model is set to', () => {
+    const OLD_ENV = process.env;
+    beforeEach(() => {
+        process.env = {
+            ...OLD_ENV,
+            RECALL_MODEL: 'claude-sonnet-5-5',
+            RECALL_REASONING_EFFORT: 'high',
+            EVAL_FAKE_LLM_URL: 'http://127.0.0.1:9/v1',
+            EVAL_FAKE_LLM_KEY: 'fake',
+        };
+    });
+    afterAll(() => {
+        process.env = OLD_ENV;
+    });
+
+    it('ignores the reviewed model and its reasoning effort, and leaves both set for the review', () => {
+        const route = judgeRoute('eval-fake');
+        expect(route).toMatchObject({
+            modelId: 'eval-fake',
+            reasoningEffort: null,
+        });
+        expect(process.env.RECALL_MODEL).toBe('claude-sonnet-5-5');
+        expect(process.env.RECALL_REASONING_EFFORT).toBe('high');
     });
 });

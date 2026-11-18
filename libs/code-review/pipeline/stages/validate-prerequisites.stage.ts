@@ -87,6 +87,7 @@ const ERROR_TO_MESSAGE_TYPE: Record<
     NoActiveSubscriptionType
 > = {
     [ValidationErrorType.INVALID_LICENSE]: 'general',
+    [ValidationErrorType.LICENSE_UNAVAILABLE]: 'license_unavailable',
     [ValidationErrorType.USER_NOT_LICENSED]: 'user',
     [ValidationErrorType.BYOK_REQUIRED]: 'byok_required',
     [ValidationErrorType.PLAN_LIMIT_EXCEEDED]: 'general',
@@ -484,6 +485,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return PipelineReasons.PREREQUISITES.PLAN_LIMIT;
             case ValidationErrorType.CREDITS_EXHAUSTED:
                 return PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED;
+            case ValidationErrorType.LICENSE_UNAVAILABLE:
+                // The license read failed; the org's entitlement is unknown.
+                return PipelineReasons.PREREQUISITES.LICENSE_UNAVAILABLE;
             case ValidationErrorType.USER_NOT_LICENSED:
                 return PipelineReasons.PREREQUISITES.USER_NO_LICENSE;
             case ValidationErrorType.INVALID_LICENSE:

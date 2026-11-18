@@ -325,6 +325,16 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    findPullRequestAuthorLabelsByIds(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorLabelsByIds(
+            organizationId,
+            userIds,
+        );
+    }
+
     hasStoredPullRequests(
         organizationId: string,
         repositoryIds: string[],

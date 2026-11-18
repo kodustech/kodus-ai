@@ -159,7 +159,12 @@ describe('review result helpers', () => {
     });
 
     it('carries the heavy notice in a trial result for callers that read no spinner', () => {
-        const trial = { summary: '', issues: [], filesAnalyzed: 1, duration: 1 } as unknown as TrialReviewResult;
+        const trial = {
+            summary: '',
+            issues: [],
+            filesAnalyzed: 1,
+            duration: 1,
+        } as unknown as TrialReviewResult;
 
         expect(withHeavyTrialNotice(trial, true).notices).toEqual([
             expect.stringContaining('kodus auth login'),

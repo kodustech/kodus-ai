@@ -186,6 +186,56 @@ services:
             - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
             - WORKER_ROLE=code-review
 
+    # Deep scan worker (#2451) — only the security-scan queue, so a scan's
+    # long model loops never share a process with reviews. Cloud-only
+    # feature: opt-in here, like analytics. Bring it up with
+    # `KODUS_DEV_EXTRAS=security-scan pnpm run docker:start` (or `=extras`).
+    worker-security-scan:
+        <<: *app-service-defaults
+        container_name: kodus_security_scan_worker
+        profiles:
+            - security-scan
+            - extras
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                required: false
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
+        volumes:
+            - .:/usr/src/app:delegated
+            - node_modules_cache:/usr/src/app/node_modules:nocopy
+            - pnpm_store:/usr/src/app/.pnpm-store
+            - logs_data:/usr/src/app/logs
+        ports:
+            # Same image as the code-review worker; host ports offset so all
+            # workers can run side by side.
+            - '${API_WORKER_SECURITY_SCAN_DEBUG_PORT:-9251}:9251'
+            - '${API_WORKER_SECURITY_SCAN_METRICS_PORT:-8021}:8001'
+        command: pnpm run start:dev:worker
+        deploy:
+            resources:
+                limits:
+                    memory: 2G
+                reservations:
+                    memory: 256M
+        healthcheck:
+            test: ['CMD-SHELL', 'pgrep -f "nest start worker" >/dev/null']
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+        environment:
+            - CI=true
+            - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+            - NODE_OPTIONS=--max-old-space-size=1536 --max-semi-space-size=64
+            - DEBUG_PORT=9251
+            - COMPONENT_TYPE=worker
+            - API_LOG_PRETTY=true
+            - WORKER_ROLE=security-scan
+
     # Analytics-only worker — isolates the cockpit ingestion cron from
     # the code review event loop / pools. Runs in both cloud and
     # self-hosted so the topology stays identical across environments

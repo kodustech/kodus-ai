@@ -50,6 +50,16 @@ export function mapPrLevelSuggestions(
     }));
 }
 
+export function normalizeReviewResult<T extends ReviewResult>(result: T): T {
+    return {
+        ...result,
+        issues: (result.issues ?? []).map((issue) => ({
+            ...issue,
+            severity: normalizeSeverity(issue.severity),
+        })),
+    };
+}
+
 export function normalizeSuggestionsResponse(
     response: PullRequestSuggestionsResponse,
 ): ReviewResult {
@@ -69,6 +79,11 @@ export function normalizeSuggestionsResponse(
             ...mapPrLevelSuggestions(suggestionsObj.prLevel ?? []),
         ];
     }
+
+    issues = issues.map((issue) => ({
+        ...issue,
+        severity: normalizeSeverity(issue.severity),
+    }));
 
     return {
         summary: response.summary ?? 'Pull request suggestions',

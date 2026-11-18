@@ -27,3 +27,25 @@ export const changeIssueParameter = async ({
         value,
     });
 };
+
+export type IssuesFixPrompt = {
+    /** Empty when none of the issues could be included. */
+    prompt: string;
+    included: string[];
+    /** Unknown, or in a repository the caller cannot read. */
+    skipped: string[];
+};
+
+/** At most this many issues go into one prompt (the API refuses more). */
+export const FIX_PROMPT_MAX_ISSUES = 25;
+
+export const getIssuesFixPrompt = async (
+    ids: string[],
+): Promise<IssuesFixPrompt> => {
+    const response = await axiosAuthorized.post<{ data: IssuesFixPrompt }>(
+        pathToApiUrl("/issues/fix-prompt"),
+        { ids: ids.slice(0, FIX_PROMPT_MAX_ISSUES) },
+    );
+
+    return response.data;
+};
