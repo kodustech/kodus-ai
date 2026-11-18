@@ -167,27 +167,27 @@ describe('CreateSandboxStage lease on an Ultra review', () => {
         provision.mockResolvedValue(undefined);
     });
 
-    it("keeps the PR's sandbox as long as the Ultra models run", async () => {
-        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
-        context.ultra = { models: [] };
-        await (stage as any).executeStage(context);
-        expect(leaseManager.acquire.mock.calls[0][2]).toBe(
+    it("keeps the PR's sandbox as long as the Ultra models run; another review keeps the default", async () => {
+        const ultra = build({ sandboxType: 'e2b' });
+        ultra.context.ultra = { models: [] };
+        await (ultra.stage as any).executeStage(ultra.context);
+        expect(ultra.leaseManager.acquire.mock.calls[0][2]).toBe(
             ULTRA_RUN_LEASE_TTL_MS,
         );
+
+        const balanced = build({ sandboxType: 'e2b' });
+        await (balanced.stage as any).executeStage(balanced.context);
+        expect(balanced.leaseManager.acquire.mock.calls[0][2]).toBeUndefined();
     });
 
-    it('a run sandbox gets its own key and the lease asked for', async () => {
+    it('a run sandbox gets its own key and the lease asked for; zero is no lease asked', async () => {
         const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
         await stage.acquireRunSandbox(context, 'ultra-2', 1234);
         expect(leaseManager.acquire.mock.calls[0][0]).toBe(
             'org-1:repo-1:7#ultra-2',
         );
         expect(leaseManager.acquire.mock.calls[0][2]).toBe(1234);
-    });
-
-    it('a review that is not Ultra keeps the default lease', async () => {
-        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
-        await (stage as any).executeStage(context);
-        expect(leaseManager.acquire.mock.calls[0][2]).toBeUndefined();
+        await stage.acquireRunSandbox(context, 'ultra-3', 0);
+        expect(leaseManager.acquire.mock.calls[1][2]).toBeUndefined();
     });
 });

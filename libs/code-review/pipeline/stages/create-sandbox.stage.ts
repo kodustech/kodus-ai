@@ -122,7 +122,8 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
-                leaseTtlMs,
+                // Zero or less is no TTL: the manager's default applies.
+                leaseTtlMs && leaseTtlMs > 0 ? leaseTtlMs : undefined,
                 {
                     cloneUrl: cloneInfo.url,
                     authToken: cloneInfo.authToken,
