@@ -11,9 +11,7 @@ describe("isUltraReviewPlan", () => {
         const license = (subscriptionStatus: string, planType?: string) =>
             ({ valid: true, subscriptionStatus, planType }) as any;
         expect(isUltraReviewPlan(license("active", "teams_byok"))).toBe(true);
-        expect(isUltraReviewPlan(license("trial", "teams_managed"))).toBe(
-            true,
-        );
+        expect(isUltraReviewPlan(license("trial", "teams_managed"))).toBe(true);
         expect(isUltraReviewPlan(license("active", "free_byok"))).toBe(false);
         expect(isUltraReviewPlan(null)).toBe(false);
     });
@@ -43,8 +41,9 @@ describe("the Ultra trio", () => {
             ultraModelIds: ["c", "a", "b"],
         });
         expect(routing.ultraModelIds).toEqual(["c", "a", "b"]);
-        expect(normalizeRouting({ ultraModelIds: ["", "", ""] }).ultraModelIds)
-            .toBeUndefined();
+        expect(
+            normalizeRouting({ ultraModelIds: ["", "", ""] }).ultraModelIds,
+        ).toBeUndefined();
         expect(
             sameRouting(
                 { ultraModelIds: ["a", "b", "c"] },

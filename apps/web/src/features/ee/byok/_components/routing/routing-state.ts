@@ -1,5 +1,6 @@
 import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+import { ULTRA_MODEL_COUNT } from "src/features/ee/ultra-review/plan";
 
 import { formatModelLabel } from "../../_data/model-label";
 import { PROVIDER_LABELS } from "../../_data/provider-labels";
@@ -95,7 +96,10 @@ export function hasRoutingProvider(status: LLMConfigStatus | null | undefined) {
 
 /** The three Ultra slots, or nothing when none is picked. */
 function normalizeUltraModels(ids?: string[]): string[] | undefined {
-    const slots = [0, 1, 2].map((i) => ids?.[i] || "");
+    const slots = Array.from(
+        { length: ULTRA_MODEL_COUNT },
+        (_, i) => ids?.[i] || "",
+    );
     return slots.some(Boolean) ? slots : undefined;
 }
 

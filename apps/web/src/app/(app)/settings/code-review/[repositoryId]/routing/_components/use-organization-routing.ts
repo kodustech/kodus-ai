@@ -26,7 +26,10 @@ import {
     groupModelsByProvider,
     hasVisibleModels,
 } from "src/features/ee/byok/_utils";
-import { ultraTrioError } from "src/features/ee/ultra-review/plan";
+import {
+    ULTRA_MODEL_COUNT,
+    ultraTrioError,
+} from "src/features/ee/ultra-review/plan";
 
 type Edit = { baseline: BYOKRouting; routing: BYOKRouting };
 
@@ -108,8 +111,9 @@ export function useOrganizationRouting({
     /** Picks Model `index + 1` of the Ultra trio; no id clears the slot. */
     const setUltraModel = (index: number, id?: string) =>
         setRouting((current) => {
-            const slots = [0, 1, 2].map(
-                (i) => current.ultraModelIds?.[i] ?? "",
+            const slots = Array.from(
+                { length: ULTRA_MODEL_COUNT },
+                (_, i) => current.ultraModelIds?.[i] ?? "",
             );
             slots[index] = id ?? "";
             return { ...current, ultraModelIds: slots };

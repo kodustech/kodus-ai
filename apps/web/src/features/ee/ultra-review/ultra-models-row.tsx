@@ -36,7 +36,10 @@ export function UltraModelsRow({
 }) {
     const usable = pool.filter((model) => !model.disabled);
     const enough = usable.length >= ULTRA_MODEL_COUNT;
-    const slots = [0, 1, 2].map((i) => ultraModelIds?.[i] || undefined);
+    const slots = Array.from(
+        { length: ULTRA_MODEL_COUNT },
+        (_, i) => ultraModelIds?.[i] || undefined,
+    );
     const fallback = pool.find((model) => model.id === fallbackModelId);
     const fallbackInTrio = !!fallbackModelId && slots.includes(fallbackModelId);
 
@@ -63,9 +66,8 @@ export function UltraModelsRow({
                         and merges them into one.
                     </p>
                     <p className="text-text-secondary">
-                        Different models catch different bugs: on our
-                        benchmark, three-model trios find more bugs than any
-                        single model.
+                        Different models catch different bugs: on our benchmark,
+                        three-model trios find more bugs than any single model.
                     </p>
                     <Link href="/settings/subscription" className="text-sm">
                         See plans ↗
@@ -151,8 +153,8 @@ export function UltraModelsRow({
                         <p className="text-warning text-xs">
                             The fallback, {fallback?.label ?? "your fallback"},
                             is also an Ultra model: if another model fails, its
-                            review counts once and Ultra runs with fewer
-                            models. Pick a fallback outside the three.
+                            review counts once and Ultra runs with fewer models.
+                            Pick a fallback outside the three.
                         </p>
                     )}
                 </div>

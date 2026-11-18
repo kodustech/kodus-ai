@@ -478,10 +478,18 @@ describe("Ultra models", () => {
     });
 
     it("warns when the fallback is one of the three, without blocking the save", async () => {
-        config.routing!.ultraModelIds = ["a", "b", "c"];
-        status = metadata(config);
         mount({ ultraAllowed: true });
+        await choose("Ultra Model 1", /Model Alpha/);
+        await choose("Ultra Model 2", /Model Beta/);
+        await choose("Ultra Model 3", /Model Gamma/);
+        // Model Beta is the saved fallback.
         expect(await screen.findByText(/is also an Ultra model/)).toBeVisible();
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Save models" }));
+        await waitFor(() => expect(put).toHaveBeenCalled());
+        const saved = put.mock.calls[0][1] as BYOKConfig;
+        expect(saved.routing?.ultraModelIds).toEqual(["a", "b", "c"]);
+        expect(saved.routing?.fallbackModelId).toBe("b");
     });
 
     it("with fewer than three models of the team, says how many and keeps the boxes off", async () => {
