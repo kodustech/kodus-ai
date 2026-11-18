@@ -1034,6 +1034,44 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         }));
     }
 
+    // Display labels for git ids from any PR the organization ever stored, the
+    // most recent first. Names seat holders the member list no longer has; it
+    // must never feed membership, since an old PR proves nothing about access.
+    async findPullRequestAuthorLabelsByIds(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        if (!userIds.length) {
+            return [];
+        }
+
+        const rows = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        organizationId,
+                        'user.id': { $in: userIds },
+                    },
+                },
+                { $sort: { createdAt: -1 } },
+                {
+                    $group: {
+                        _id: '$user.id',
+                        name: { $first: '$user.name' },
+                        username: { $first: '$user.username' },
+                    },
+                },
+            ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
+
+        return rows.map((r: any) => ({
+            id: String(r._id),
+            name: r.name ?? '',
+            username: r.username ?? '',
+        }));
+    }
+
     async hasStoredPullRequests(
         organizationId: string,
         repositoryIds: string[],
