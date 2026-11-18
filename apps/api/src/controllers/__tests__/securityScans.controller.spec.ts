@@ -161,4 +161,16 @@ describe('SecurityScansController.cancel', () => {
         );
         expect(cancelSecurityScan.execute).not.toHaveBeenCalled();
     });
+
+    it('cancels nothing when the resolved write set does not include the scan', async () => {
+        const { controller, getSecurityScans, cancelSecurityScan } = setup([
+            'repo-allowed',
+        ]);
+        getSecurityScans.isInRepositoryScope.mockResolvedValueOnce(false);
+
+        await expect(controller.cancel(scan.uuid)).rejects.toThrow(
+            ForbiddenException,
+        );
+        expect(cancelSecurityScan.execute).not.toHaveBeenCalled();
+    });
 });
