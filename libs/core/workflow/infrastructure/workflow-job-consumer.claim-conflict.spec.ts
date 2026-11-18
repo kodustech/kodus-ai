@@ -359,6 +359,55 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         );
     });
 
+    it('marks FAILED when the job lookup fails after a child exit', async () => {
+        runChild.mockRejectedValue(
+            new Error('Security scan slice child exited 1 for job job-1'),
+        );
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockRejectedValue(new Error('bounded timeout after 10000ms')),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/status unknown after slice child exit/);
+
+        expect(jobRepository.update).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({ status: JobStatus.FAILED }),
+        );
+    });
+
+    it('requeues a preempted child when the job lookup fails', async () => {
+        runChild.mockRejectedValue(
+            new Error(
+                `Security scan slice child exited ${SECURITY_SCAN_SLICE_EXIT_PREEMPTED} for job job-1`,
+            ),
+        );
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockRejectedValue(new Error('bounded timeout after 10000ms')),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toBeInstanceOf(ClaimConflictError);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+    });
+
     it('does not abort a slice on a single heartbeat error', async () => {
         jest.useFakeTimers();
         let aborted = false;

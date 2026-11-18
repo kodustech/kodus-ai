@@ -134,8 +134,25 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                         INBOX_RELEASE_TIMEOUT_MS,
                         'security-scan.job.findOne',
                     );
-                } catch {
-                    throw error;
+                } catch (lookupError) {
+                    this.logger.error({
+                        message:
+                            'Security-scan job lookup failed after slice child exit',
+                        context: 'SecurityScanJobConsumer',
+                        error: lookupError,
+                        metadata: { jobId, messageId, consumerId },
+                    });
+                    if (abort.signal.aborted) {
+                        throw this.sliceAbortedError(abortReason);
+                    }
+                    if (isSliceChildPreemptedExit(error)) {
+                        throw this.sliceAbortedError(
+                            abortReason ?? 'child preempted',
+                        );
+                    }
+                    throw new Error(
+                        `Security-scan job ${jobId} status unknown after slice child exit`,
+                    );
                 }
                 if (abort.signal.aborted) {
                     throw this.sliceAbortedError(abortReason);
