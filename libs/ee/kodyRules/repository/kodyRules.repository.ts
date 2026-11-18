@@ -331,12 +331,21 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null> {
         const setFields = ruleFieldSet(updateData);
+        // Every caller reads back only the rule it wrote
+        // (`entity.rules.find(r => r.uuid === ruleId)`), so the document
+        // returned carries that rule alone instead of every rule of the
+        // organization.
+        const projection = {
+            organizationId: 1,
+            rules: { $elemMatch: { uuid: ruleId } },
+        };
 
         // Nothing concrete to set (all-undefined patch) — avoid an empty $set,
         // which Mongo rejects. Return the current doc unchanged.
         if (!setFields) {
             const current = await this.kodyRulesModel
-                .findOne({ '_id': uuid, 'rules.uuid': ruleId })
+                .findOne({ '_id': uuid, 'rules.uuid': ruleId }, projection)
+                .lean()
                 .exec();
             return current
                 ? mapSimpleModelToEntity(current, KodyRulesEntity)
@@ -347,8 +356,9 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             .findOneAndUpdate(
                 { '_id': uuid, 'rules.uuid': ruleId },
                 { $set: setFields },
-                { new: true },
+                { new: true, projection },
             )
+            .lean()
             .exec();
         return updated
             ? mapSimpleModelToEntity(updated, KodyRulesEntity)
@@ -426,20 +436,19 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         return deleted.acknowledged;
     }
 
+    // updateOne: the caller only needs to know the rule was found. A
+    // findAndModify with `new: true` sent the whole rules document back.
     async deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null> {
-        const updated = await this.kodyRulesModel
-            .findOneAndUpdate(
-                { '_id': uuid, 'rules.uuid': ruleId },
+    ): Promise<boolean> {
+        const result = await this.kodyRulesModel
+            .updateOne(
+                { organizationId, 'rules.uuid': ruleId },
                 { $set: { 'rules.$.status': KodyRulesStatus.DELETED } },
-                { new: true },
             )
             .exec();
-        return updated
-            ? mapSimpleModelToEntity(updated, KodyRulesEntity)
-            : null;
+        return result.matchedCount > 0;
     }
 
     async markAutoPausesDigested(

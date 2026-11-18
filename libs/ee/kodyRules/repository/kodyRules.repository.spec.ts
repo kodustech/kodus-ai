@@ -127,8 +127,9 @@ describe('KodyRulesRepository.updateRulesStatusByFilter', () => {
 describe('KodyRulesRepository.updateRule — clearing a field', () => {
     function build() {
         const exec = jest.fn().mockResolvedValue(null);
-        const findOneAndUpdate = jest.fn().mockReturnValue({ exec });
-        const findOne = jest.fn().mockReturnValue({ exec });
+        const query = { exec, lean: () => ({ exec }) };
+        const findOneAndUpdate = jest.fn().mockReturnValue(query);
+        const findOne = jest.fn().mockReturnValue(query);
         const repo = new KodyRulesRepository(
             { findOneAndUpdate, findOne } as any,
             {} as any,
@@ -261,8 +262,9 @@ describe('KodyRulesRepository.countRulesByRepository', () => {
 describe('KodyRulesRepository.updateRule (field-level merge)', () => {
     const buildRepo = () => {
         const exec = jest.fn().mockResolvedValue(null);
-        const findOneAndUpdate = jest.fn().mockReturnValue({ exec });
-        const findOne = jest.fn().mockReturnValue({ exec });
+        const query = { exec, lean: () => ({ exec }) };
+        const findOneAndUpdate = jest.fn().mockReturnValue(query);
+        const findOne = jest.fn().mockReturnValue(query);
         const modelMock = { findOneAndUpdate, findOne } as any;
         const repo = new KodyRulesRepository(modelMock, {} as any);
         return { repo, findOneAndUpdate, findOne };
@@ -309,9 +311,20 @@ describe('KodyRulesRepository.updateRule (field-level merge)', () => {
 
         // Empty $set is rejected by Mongo — must fall back to a read.
         expect(findOneAndUpdate).not.toHaveBeenCalled();
-        expect(findOne).toHaveBeenCalledWith({
-            '_id': 'doc-1',
-            'rules.uuid': 'rule-1',
+        expect(findOne).toHaveBeenCalledWith(
+            { '_id': 'doc-1', 'rules.uuid': 'rule-1' },
+            expect.anything(),
+        );
+    });
+
+    it('returns the rule it wrote, not every rule of the organization', async () => {
+        const { repo, findOneAndUpdate } = buildRepo();
+
+        await repo.updateRule('doc-1', 'rule-1', { title: 'New' } as any);
+
+        const [, , options] = findOneAndUpdate.mock.calls[0];
+        expect(options.projection.rules).toEqual({
+            $elemMatch: { uuid: 'rule-1' },
         });
     });
 });
