@@ -466,6 +466,88 @@ describe('ValidateConfigStage — v2 routing', () => {
             gate.mockResolvedValue(null);
         });
 
+        it('settings asking for it on a draft skip as any draft does, and the PR is told once it is ready', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            // Nothing was recorded as told: the draft skip carried its own reason.
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+            const cadence = jest
+                .spyOn(stage as any, 'evaluateReviewCadence')
+                .mockResolvedValueOnce({
+                    shouldProcess: false,
+                    reason: 'Pull request is a draft',
+                    shouldSaveSkipped: false,
+                });
+
+            const draft = await stage.execute(ultraContext());
+            expect(draft.statusInfo).toMatchObject({
+                status: 'skipped',
+                message: 'Pull request is a draft',
+            });
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+
+            const ready = await stage.execute(ultraContext());
+            expect(ready.statusInfo?.message).toContain(
+                'Ultra review is available',
+            );
+            expect(comment()).toContain('Ultra review is available');
+            cadence.mockRestore();
+        });
+
+        it('a fallback on Kodus credits with none left is not used', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-6-luna' ? { allowed: false } : null,
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models).toHaveLength(3);
+            expect(result.ultra?.fallback).toBeUndefined();
+            gate.mockResolvedValue(null);
+        });
+
+        it('with the three out of credits, the merge runs on the fallback', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-6-luna' ? null : { allowed: false },
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models).toEqual([]);
+            expect(result.ultra?.mergeModel.slot.model).toBe('gpt-6-luna');
+            gate.mockResolvedValue(null);
+        });
+
+        it("Kody Rules and the summary run on the org's default model, not a repository's override", async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const context = ultraContext('ultra');
+            context.codeReviewConfig.byokModelId = 'm-B';
+
+            const result = await stage.execute(context);
+
+            expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
+                'gpt-4o',
+            );
+        });
+
         it('@kody -v runs its one custom agent, not Ultra', async () => {
             mockOrganizationParametersService.findByKey.mockResolvedValue({
                 configValue: trioConfig(),

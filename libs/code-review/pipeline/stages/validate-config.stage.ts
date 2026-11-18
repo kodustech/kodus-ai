@@ -366,14 +366,29 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     reason: trioRefusal?.reason ?? 'plan',
                 },
             });
-            // Settings asking for it: told once per PR (no earlier review of
-            // it was skipped for this same reason), and only when the review
-            // would otherwise have run (not a draft, a skipped branch).
-            const wouldRun =
-                askedByCommand ||
-                (!(await this.wasSkippedFor(context, message)) &&
-                    (await this.evaluateReviewCadence(context)).shouldProcess);
-            if (wouldRun) {
+            // Settings asking for it: told once per PR, and only when the
+            // review would otherwise have run. One that would not (a draft, a
+            // skipped branch) skips as any review would, so the reason is not
+            // recorded as told and goes out once the PR is ready.
+            if (
+                !askedByCommand &&
+                !(await this.wasSkippedFor(context, message))
+            ) {
+                const cadence = await this.evaluateReviewCadence(context);
+                if (!cadence.shouldProcess) {
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: cadence.reason,
+                        };
+                        if (cadence.shouldSaveSkipped) {
+                            draft.automaticReviewStatus =
+                                cadence.automaticReviewStatus;
+                        }
+                    });
+                }
+                await this.replyToReviewCommand(context, message);
+            } else if (askedByCommand) {
                 await this.replyToReviewCommand(context, message);
             }
             return this.updateContext(context, (draft) => {
@@ -387,19 +402,22 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         }
 
         // A model on Kodus credits with none left counts as failed: the
-        // fallback takes its place, like any model that cannot run.
+        // fallback takes its place, like any model that cannot run. A
+        // fallback with none left is not used.
+        const creditsExhausted = async (model: UltraModel) =>
+            !!(await this.permissionValidationService.gateKodusCreditsForSlot(
+                model.slot,
+                context.organizationAndTeamData,
+                this.stageName,
+            ));
         const models: UltraModel[] = [];
         const unavailable = [...(trio.unavailable ?? [])];
+        const exhausted: string[] = [];
         for (const model of trio.models) {
-            const gate =
-                await this.permissionValidationService.gateKodusCreditsForSlot(
-                    model.slot,
-                    context.organizationAndTeamData,
-                    this.stageName,
-                );
-            if (gate && model.position !== 'fallback') {
+            if (await creditsExhausted(model)) {
+                exhausted.push(model.modelId);
                 unavailable.push({
-                    position: model.position,
+                    position: model.position as 1 | 2 | 3,
                     modelId: model.modelId,
                     reason: 'Its Kodus credits are exhausted.',
                 });
@@ -407,23 +425,43 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 models.push(model);
             }
         }
+        const fallback =
+            trio.fallback && !(await creditsExhausted(trio.fallback))
+                ? trio.fallback
+                : undefined;
+        if (trio.fallback && !fallback) exhausted.push(trio.fallback.modelId);
+        if (exhausted.length) {
+            this.logger.warn({
+                message: 'Ultra review models out of Kodus credits',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    repositoryId: context.repository?.id,
+                    models: exhausted,
+                },
+            });
+        }
+        // The merge model is one that can still run: the trio's pick, else
+        // the first left of the three, else the fallback.
+        const mergeModel = models.some(
+            (m) => m.modelId === trio.mergeModel.modelId,
+        )
+            ? trio.mergeModel
+            : (models[0] ?? fallback ?? trio.mergeModel);
 
-        const routed = routeCodeReviewModel(
-            storedConfig,
-            context.codeReviewConfig,
-            false,
-        );
+        // Kody Rules, the summary and the other single-model steps run on the
+        // org's default model, which the prerequisites already checked for
+        // credits; a repository's model override applies to Balanced and
+        // Heavy only.
+        const routed = routeCodeReviewModel(storedConfig, {}, false);
         return this.updateContext(context, (draft) => {
             draft.heavy = false;
             draft.ultra = {
                 models,
                 ...(unavailable.length && { unavailable }),
-                ...(trio.fallback && { fallback: trio.fallback }),
-                mergeModel: models.some(
-                    (m) => m.modelId === trio.mergeModel.modelId,
-                )
-                    ? trio.mergeModel
-                    : (models[0] ?? trio.mergeModel),
+                ...(fallback && { fallback }),
+                mergeModel,
             };
             draft.codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
             draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
@@ -697,7 +735,18 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     repositoryId: context?.repository?.id,
                 },
             ));
-        } catch {
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read earlier skips of this PR; the Ultra refusal is posted again',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    repositoryId: context.repository?.id,
+                },
+            });
             return false;
         }
     }
