@@ -610,6 +610,61 @@ describe('checkRepeats', () => {
         expect(result.repeats).toEqual([]);
     });
 
+    it.each([
+        {
+            name: 'outer whitespace on the same claim',
+            previous: 'Missing test for PDF.',
+            current: '  Missing test for PDF.  ',
+            hold: true,
+        },
+        {
+            name: 'case-sensitive identifiers',
+            previous: 'Missing test for `encodeID`.',
+            current: 'Missing test for `encodeId`.',
+            hold: false,
+        },
+        {
+            name: 'different thresholds',
+            previous: 'The retry limit must be 10.',
+            current: 'The retry limit must be 100.',
+            hold: false,
+        },
+        {
+            name: 'a paraphrase without a verdict',
+            previous: 'Missing test for PDF.',
+            current: 'PDF export is untested.',
+            hold: false,
+        },
+        {
+            name: 'empty claim with only a summary',
+            previous: '',
+            current: '',
+            hold: false,
+        },
+    ])('on timeout: $name', async ({ previous, current, hold }) => {
+        const old = earlier({
+            suggestionId: 'pr-comment-timeout',
+            relevantFile: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-a'],
+            suggestionContent: previous,
+        });
+        const candidate = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-a'],
+            oneSentenceSummary: 'Review the implementation',
+            suggestionContent: current,
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([candidate], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy).toHaveBeenCalledTimes(2);
+        expect(result.kept).toEqual(hold ? [] : [candidate]);
+        expect(result.withheld).toEqual(hold ? [candidate] : []);
+    });
+
     it('retries only missing verdicts and lets an explicit new-place verdict through', async () => {
         const first = {
             label: 'bug',

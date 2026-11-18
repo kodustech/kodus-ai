@@ -12,6 +12,20 @@ next round is shown a stale status for that suggestion), and a production report
 (2026-10-01) of Kody Rule findings reposted every round, reworded, after the
 developer declined or fixed them.
 
+## Similar comments across rounds
+
+Run the on-demand set with `node evals/review-rounds/run.js --set=repeat-boundaries --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=2 --output=/tmp/repeat-boundaries.json`.
+
+| Case | What distinguishes the new finding from the earlier one |
+| --- | --- |
+| B1 | The same coverage rule applies to two export formats, PDF and CSV. |
+| B2 | Two CLI command names overlap, `pack` and `unpack`; each needs its own changelog entry. |
+| B3 | The worker and scheduler used identical logging code at the same line in different files; the scheduler now edits that call. |
+
+Each case reviews the same change three times with different history. A prior comment about the target should suppress a repost. A comment about the neighboring target should allow delivery. Empty history checks that the pipeline can find the target in the first place. Compare the per-case `new-site` and `no-history` rows before attributing a miss to deduplication. The existing summary counts reposts separately from missed findings. This set has no calibrated floor.
+
+The real-model replay measures ordinary reviews. Two forced timeouts are covered separately by the repeat-check and stage contracts: exact repost, whitespace, changed format, identifier case, numeric threshold, paraphrase and empty claim. A paraphrase can ship after timeout because the model did not establish that it refers to the same occurrence.
+
 ## What it drives
 
 Each round is one pull request through production's review
