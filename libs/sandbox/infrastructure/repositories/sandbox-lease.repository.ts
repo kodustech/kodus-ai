@@ -89,9 +89,12 @@ export class SandboxLeaseRepository {
                 $setOnInsert: {
                     state: 'CREATING',
                     createdAt: now,
-                    expiresAt,
                     ...decomposed,
                 },
+                // Set on insert, and pushed out by a joiner that needs longer
+                // (an Ultra review's Kody Rules on the PR's lease): the reaper
+                // kills by this date, in use or not.
+                $max: { expiresAt },
                 // Track the most recent consumer label so it's queryable in
                 // Mongo without parsing logs. Updated on every acquire (both
                 // insert and update paths).
