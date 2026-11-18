@@ -368,6 +368,32 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('holds a named approval when a delivered finding cannot be verified', async () => {
+        const { input, deps, run } = namedPolicyCase();
+        Object.assign(input.pr, {
+            suggestions: [{ comment: { id: 'finding-1' } }],
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            null,
+        );
+
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'Review findings could not be verified.',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
     it.each([
         AutomationStatus.PARTIAL_ERROR,
         AutomationStatus.ERROR,

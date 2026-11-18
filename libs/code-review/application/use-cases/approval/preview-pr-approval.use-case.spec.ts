@@ -144,37 +144,46 @@ describe(PreviewPrApprovalUseCase.name, () => {
         );
     });
 
-    it('holds a clean-looking review when an older delivered finding remains open', async () => {
-        const { useCase, evaluate, pullRequests, codeManagement } = setup();
-        pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
-            [
-                {
-                    repository: { id: 'repo' },
-                    provider: 'github',
-                    url: prURL,
-                    suggestions: [{ comment: { id: 'finding-1' } }],
-                },
-            ],
-        );
-        codeManagement.getPullRequestReviewThreads.mockResolvedValue([
-            { id: 'finding-1', isResolved: false },
-        ]);
-        expect((await useCase.execute(input)).decision).toEqual({
-            kind: 'hold',
-            reason: 'Review findings remain unresolved.',
-        });
-        expect(evaluate).not.toHaveBeenCalled();
-        codeManagement.getPullRequestReviewThreads.mockResolvedValueOnce(
-            undefined,
-        );
-        expect((await useCase.execute(input)).decision.reason).toBe(
-            'Review findings could not be verified.',
-        );
-        codeManagement.getPullRequestReviewThreads.mockResolvedValue([
-            { id: 'finding-1', isResolved: true },
-        ]);
-        expect((await useCase.execute(input)).decision.kind).toBe('approve');
-    });
+    it.each([
+        prURL,
+        'https://github.com/previous-owner/previous-name/pull/42',
+        'http://github.com/acme/example/pull/42',
+    ])(
+        'holds a clean-looking review when a finding stored at %s remains open',
+        async (url) => {
+            const { useCase, evaluate, pullRequests, codeManagement } = setup();
+            pullRequests.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [
+                    {
+                        repository: { id: 'repo' },
+                        provider: 'github',
+                        url,
+                        suggestions: [{ comment: { id: 'finding-1' } }],
+                    },
+                ],
+            );
+            codeManagement.getPullRequestReviewThreads.mockResolvedValue([
+                { id: 'finding-1', isResolved: false },
+            ]);
+            expect((await useCase.execute(input)).decision).toEqual({
+                kind: 'hold',
+                reason: 'Review findings remain unresolved.',
+            });
+            expect(evaluate).not.toHaveBeenCalled();
+            codeManagement.getPullRequestReviewThreads.mockResolvedValueOnce(
+                undefined,
+            );
+            expect((await useCase.execute(input)).decision.reason).toBe(
+                'Review findings could not be verified.',
+            );
+            codeManagement.getPullRequestReviewThreads.mockResolvedValue([
+                { id: 'finding-1', isResolved: true },
+            ]);
+            expect((await useCase.execute(input)).decision.kind).toBe(
+                'approve',
+            );
+        },
+    );
 
     it('excludes findings from colliding IDs on other platforms and hosts', async () => {
         const { useCase, codeManagement, pullRequests } = setup();

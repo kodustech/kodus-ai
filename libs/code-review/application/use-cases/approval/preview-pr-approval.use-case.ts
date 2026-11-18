@@ -12,14 +12,17 @@ import { AutomationStatus } from '@libs/automation/domain/automation/enum/automa
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
 import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
-import { hasOpenFinding } from '@libs/code-review/domain/approval/own-change-request';
+import {
+    REVIEW_FINDINGS_UNVERIFIED,
+    deliveredReviewFindingsHoldReason,
+} from '@libs/code-review/domain/approval/verify-delivered-review-findings';
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     type ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
-import { pullRequestLocation } from '@libs/code-review/domain/pull-request-identity';
+import { pullRequestHost } from '@libs/code-review/domain/pull-request-identity';
 import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { PrRiskAssessmentService } from '@libs/code-review/pipeline/services/pr-risk-assessment.service';
@@ -231,7 +234,7 @@ export class PreviewPrApprovalUseCase {
                             PullRequestState.MERGED,
                         ],
                     );
-                const location = pullRequestLocation(pr.prURL);
+                const host = pullRequestHost(pr.prURL);
                 const commentIds: string[] = [];
                 for (const candidate of candidates) {
                     const provider = parsePlatformType(candidate.provider);
@@ -240,33 +243,31 @@ export class PreviewPrApprovalUseCase {
                         (provider && provider !== platformType)
                     )
                         continue;
-                    const storedLocation = pullRequestLocation(candidate.url);
-                    if (!location || !storedLocation)
-                        return hold('Review findings could not be verified.');
-                    if (storedLocation !== location) continue;
+                    const storedHost = pullRequestHost(candidate.url);
+                    if (!host || !storedHost)
+                        return hold(REVIEW_FINDINGS_UNVERIFIED);
+                    if (storedHost !== host) continue;
                     for (const { comment } of candidate.suggestions) {
                         commentIds.push(String(comment?.id));
                     }
                 }
-                if (commentIds.length) {
-                    const comments =
+                const reason = await deliveredReviewFindingsHoldReason(
+                    commentIds,
+                    platformType,
+                    () =>
                         platformType === PlatformType.GITHUB
-                            ? await this.codeManagement.getPullRequestReviewThreads(
+                            ? this.codeManagement.getPullRequestReviewThreads(
                                   request,
                                   platformType,
                               )
-                            : await this.codeManagement.getPullRequestReviewComments(
+                            : this.codeManagement.getPullRequestReviewComments(
                                   request,
                                   platformType,
-                              );
-                    if (!Array.isArray(comments))
-                        return hold('Review findings could not be verified.');
-                    if (hasOpenFinding(commentIds, comments, platformType)) {
-                        return hold('Review findings remain unresolved.');
-                    }
-                }
+                              ),
+                );
+                if (reason) return hold(reason);
             } catch {
-                return hold('Review findings could not be verified.');
+                return hold(REVIEW_FINDINGS_UNVERIFIED);
             }
             previousHeavy = data.heavy;
         }
