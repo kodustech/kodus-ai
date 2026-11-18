@@ -191,15 +191,12 @@ describe('CreateSandboxStage lease on an Ultra review', () => {
         expect(leaseManager.acquire.mock.calls[1][2]).toBeUndefined();
     });
 
-    it('a release that throws is tried again by the next cleanup; one that succeeds is not repeated', async () => {
+    it('a release is never repeated, even after one that threw: a second decrement could free a sandbox in use', async () => {
         const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
-        leaseManager.release
-            .mockRejectedValueOnce(new Error('mongo blip'))
-            .mockResolvedValue(undefined);
+        leaseManager.release.mockRejectedValueOnce(new Error('mongo blip'));
         const sandbox = await stage.acquireRunSandbox(context, 'ultra-1', 1);
         await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
         await sandbox!.cleanup!();
-        await sandbox!.cleanup!();
-        expect(leaseManager.release).toHaveBeenCalledTimes(2);
+        expect(leaseManager.release).toHaveBeenCalledTimes(1);
     });
 });

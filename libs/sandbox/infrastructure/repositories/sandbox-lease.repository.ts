@@ -50,8 +50,17 @@ function decomposePrKey(prKey: string): {
     };
 }
 
-/** The lease state whose sandbox is up (or paused and resumable). */
-const LIVE_LEASE_STATES = ['READY'];
+/**
+ * The states a joiner may extend: a sandbox that is up, or being created.
+ * An INVALIDATED lease keeps its expiry.
+ */
+const EXTENDABLE_LEASE_STATES = ['READY', 'CREATING'];
+/**
+ * No join pushes a lease past this long after it was created, so a lease
+ * stuck CREATING (its worker died) is still reaped, however often it is
+ * joined. Above the longest lease asked for (an Ultra run's, 80 min).
+ */
+export const MAX_LEASE_LIFETIME_MS = 90 * 60 * 1000;
 
 @Injectable()
 export class SandboxLeaseRepository {
@@ -105,21 +114,26 @@ export class SandboxLeaseRepository {
         );
 
         // A joiner that needs longer (an Ultra review's Kody Rules on the
-        // PR's lease) pushes the expiry of a live sandbox out; the reaper
-        // kills by this date, in use or not. A doc stuck CREATING (its
-        // worker died) or INVALIDATED keeps its expiry, so it is still reaped.
+        // PR's lease) pushes the expiry out, up to MAX_LEASE_LIFETIME_MS after
+        // the lease was created; the reaper kills by this date, in use or not.
+        const createdAt = doc?.createdAt
+            ? new Date(doc.createdAt).getTime()
+            : now.getTime();
+        const target = new Date(
+            Math.min(expiresAt.getTime(), createdAt + MAX_LEASE_LIFETIME_MS),
+        );
         if (
             doc &&
-            LIVE_LEASE_STATES.includes(doc.state) &&
-            doc.expiresAt < expiresAt
+            EXTENDABLE_LEASE_STATES.includes(doc.state) &&
+            doc.expiresAt < target
         ) {
             const extended = await this.leaseModel.findOneAndUpdate(
                 {
                     _id: prKey,
-                    state: { $in: LIVE_LEASE_STATES },
-                    expiresAt: { $lt: expiresAt },
+                    state: { $in: EXTENDABLE_LEASE_STATES },
+                    expiresAt: { $lt: target },
                 },
-                { $set: { expiresAt } },
+                { $set: { expiresAt: target } },
                 { new: true },
             );
             if (extended) return extended;
