@@ -12,9 +12,8 @@ import {
     screen,
     waitFor,
 } from "@testing-library/react";
-import type { BYOKConfig } from "src/features/ee/byok/_types";
-
 import { FeatureFlagsProvider } from "src/app/(app)/settings/_components/context";
+import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { OrganizationModels, OtherTaskModels } from "./organization-models";
 import {
@@ -105,9 +104,11 @@ const metadata = (value: BYOKConfig): LLMConfigStatus => ({
 function Harness({
     canEdit = true,
     heavyAllowed = true,
+    ultraAllowed = false,
 }: {
     canEdit?: boolean;
     heavyAllowed?: boolean;
+    ultraAllowed?: boolean;
 }) {
     const controller = useOrganizationRouting({
         teamId: "team",
@@ -125,6 +126,7 @@ function Harness({
                 controller={controller}
                 canEdit={canEdit}
                 heavyAllowed={heavyAllowed}
+                ultraAllowed={ultraAllowed}
             />
             <OtherTaskModels
                 controller={controller}
@@ -156,7 +158,12 @@ function Harness({
     );
 }
 function mount(
-    props: { canEdit?: boolean; heavyAllowed?: boolean; deepScan?: boolean } = {},
+    props: {
+        canEdit?: boolean;
+        heavyAllowed?: boolean;
+        ultraAllowed?: boolean;
+        deepScan?: boolean;
+    } = {},
 ) {
     const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
@@ -165,7 +172,8 @@ function mount(
         client,
         ...render(
             <QueryClientProvider client={client}>
-                <FeatureFlagsProvider featureFlags={{ deepScan: props.deepScan }}>
+                <FeatureFlagsProvider
+                    featureFlags={{ deepScan: props.deepScan }}>
                     <TooltipProvider>
                         <Harness {...props} />
                     </TooltipProvider>
@@ -424,4 +432,81 @@ it("disables unsupported review picks before save", async () => {
         "true",
     );
     expect(put).not.toHaveBeenCalled();
+});
+
+describe("Ultra models", () => {
+    it("on a plan without Ultra, shows what it adds and where the plans are, with no picker", async () => {
+        mount({ ultraAllowed: false });
+        expect(
+            await screen.findByText(
+                "Ultra runs a full Heavy review on three of your models and merges them into one.",
+            ),
+        ).toBeVisible();
+        expect(screen.getByRole("link", { name: /See plans/ })).toBeVisible();
+        expect(
+            screen.queryByRole("combobox", { name: "Ultra Model 1" }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("picks three different models in order and saves them in routing, keeping the rest", async () => {
+        mount({ ultraAllowed: true });
+        await choose("Ultra Model 1", /Model Gamma/);
+        // A model already picked is disabled in the other boxes.
+        fireEvent.click(
+            await screen.findByRole("combobox", { name: "Ultra Model 2" }),
+        );
+        expect(
+            screen.getByRole("option", { name: /Model Gamma/ }),
+        ).toHaveAttribute("aria-disabled", "true");
+        fireEvent.click(screen.getByRole("option", { name: /Model Alpha/ }));
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "Select three different models to save Ultra.",
+        );
+        expect(
+            screen.getByRole("button", { name: "Save models" }),
+        ).toBeDisabled();
+        await choose("Ultra Model 3", /Model Beta/);
+        expect(draft().ultraModelIds).toEqual(["c", "a", "b"]);
+
+        fireEvent.click(screen.getByRole("button", { name: "Save models" }));
+        await waitFor(() => expect(put).toHaveBeenCalled());
+        const saved = put.mock.calls[0][1] as BYOKConfig;
+        expect(saved.routing?.ultraModelIds).toEqual(["c", "a", "b"]);
+        expect(saved.routing?.taskOverrides).toEqual(
+            config.routing?.taskOverrides,
+        );
+    });
+
+    it("warns when the fallback is one of the three, without blocking the save", async () => {
+        config.routing!.ultraModelIds = ["a", "b", "c"];
+        status = metadata(config);
+        mount({ ultraAllowed: true });
+        expect(await screen.findByText(/is also an Ultra model/)).toBeVisible();
+    });
+
+    it("with fewer than three models of the team, says how many and keeps the boxes off", async () => {
+        config.models = config.models.slice(0, 2);
+        config.routing!.taskOverrides = {};
+        status = metadata(config);
+        mount({ ultraAllowed: true });
+        expect(
+            await screen.findByText(
+                /Ultra needs at least three of your own models\. You have 2\./,
+            ),
+        ).toBeVisible();
+        expect(
+            screen.getByRole("combobox", { name: "Ultra Model 1" }),
+        ).toBeDisabled();
+    });
+
+    it("a routing save from this screen keeps a saved trio", async () => {
+        config.routing!.ultraModelIds = ["a", "b", "c"];
+        status = metadata(config);
+        mount({ ultraAllowed: true });
+        await choose("Default model", /Model Gamma/);
+        fireEvent.click(screen.getByRole("button", { name: "Save models" }));
+        await waitFor(() => expect(put).toHaveBeenCalled());
+        const saved = put.mock.calls[0][1] as BYOKConfig;
+        expect(saved.routing?.ultraModelIds).toEqual(["a", "b", "c"]);
+    });
 });

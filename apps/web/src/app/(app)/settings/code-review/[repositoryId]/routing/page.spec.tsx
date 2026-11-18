@@ -821,3 +821,54 @@ it.each([
         ).toHaveTextContent("Heavy");
     },
 );
+
+describe("Ultra review mode", () => {
+    it("is offered only once the three Ultra models are set", async () => {
+        mount(false);
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "All PRs" }), {
+            key: "Enter",
+        });
+        expect(
+            screen.getByRole("option", { name: /Ultra · set up 3 models/ }),
+        ).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("saves Ultra and names the three models it runs on", async () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mount(false);
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "All PRs" }), {
+            key: "Enter",
+        });
+        fireEvent.click(
+            screen.getByRole("option", { name: /Ultra · 3 models/ }),
+        );
+        expect(
+            screen.getByText("All PRs").closest("[role=group]"),
+        ).toHaveTextContent("Uses Risk Model, Model A, Model B.");
+        await waitFor(() =>
+            expect(
+                screen.getByRole("button", { name: "Save settings" }),
+            ).toBeEnabled(),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+        expect(save.mock.calls[0][0]).toEqual({ reviewMode: "ultra" });
+    });
+
+    it("on a plan without Ultra, a saved Ultra says reviews do not run", () => {
+        mockHeavy = false;
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mount(false, false, { reviewMode: leaf("ultra") });
+        expect(
+            screen.getByText(/Ultra requires Teams or Enterprise/),
+        ).toHaveTextContent("Reviews in this mode do not run until then.");
+    });
+
+    it("the General summary shows Ultra with its models", () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mount(false, true, { reviewMode: leaf("ultra") });
+        expect(screen.getByText("All PRs").parentElement).toHaveTextContent(
+            "Ultra Uses Risk Model, Model A, Model B.",
+        );
+    });
+});

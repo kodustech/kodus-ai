@@ -14,12 +14,16 @@ import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
 import type { BYOKRouting } from "src/features/ee/byok/_types";
 import { isHeavyModePlan } from "src/features/ee/heavy-mode/plan";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
+import {
+    isUltraReviewPlan,
+    isUltraTrioSet,
+} from "src/features/ee/ultra-review/plan";
 
 import type { CodeReviewFormType } from "../../../_types";
 
-export type Mode = "balanced" | "heavy";
+export type Mode = "balanced" | "heavy" | "ultra";
 export const modeLabel = (mode: Mode) =>
-    mode === "heavy" ? "Heavy" : "Balanced";
+    mode === "ultra" ? "Ultra" : mode === "heavy" ? "Heavy" : "Balanced";
 
 /** The same effective plan fallback and scope override the review uses. */
 export function useReviewRouting(modelDraft?: BYOKRouting) {
@@ -27,7 +31,13 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
     const config = useCodeReviewConfig();
     const { llmConfigStatus: status, hasConnectedProvider } =
         useCodeReviewModelData();
-    const heavyAllowed = isHeavyModePlan(useSubscriptionContext().license);
+    const license = useSubscriptionContext().license;
+    const heavyAllowed = isHeavyModePlan(license);
+    const ultraAllowed = isUltraReviewPlan(license);
+    // The trio being edited on this page, else the one saved.
+    const ultraModelIds =
+        modelDraft?.ultraModelIds ?? status?.modelRouting?.ultraModelIds;
+    const ultraSet = isUltraTrioSet(ultraModelIds);
     const active =
         useWatch({ control, name: "riskAssessmentActive.value" }) ??
         config?.riskAssessmentActive?.value ??
@@ -62,9 +72,20 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
             );
         return name ? formatModelLabel(name) : "Kodus default";
     };
+    // Ultra refused at review time runs no review, so it reads as Ultra and
+    // the row says why (page.tsx); heavy refused runs Balanced.
     const effectiveMode = (mode: string): Mode =>
-        mode === "heavy" && heavyAllowed ? "heavy" : "balanced";
+        mode === "ultra"
+            ? "ultra"
+            : mode === "heavy" && heavyAllowed
+              ? "heavy"
+              : "balanced";
     const modelFor = (mode: Mode) => {
+        if (mode === "ultra") {
+            return ultraSet
+                ? `Uses ${ultraModelIds!.map((id) => labelOf(id)).join(", ")}.`
+                : "Set up three Ultra models under Models.";
+        }
         if (modelDraft && status) {
             const id = draftTaskModel(
                 mode === "heavy" ? "codeReviewHeavy" : "codeReview",
@@ -111,6 +132,8 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
                 status?.modelRouting?.defaultModelId,
         active,
         heavyAllowed,
+        ultraAllowed,
+        ultraSet,
         configuredDefault,
         noRisk,
         riskFound,

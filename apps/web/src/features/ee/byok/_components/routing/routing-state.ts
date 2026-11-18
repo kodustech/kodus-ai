@@ -93,7 +93,14 @@ export function hasRoutingProvider(status: LLMConfigStatus | null | undefined) {
     );
 }
 
+/** The three Ultra slots, or nothing when none is picked. */
+function normalizeUltraModels(ids?: string[]): string[] | undefined {
+    const slots = [0, 1, 2].map((i) => ids?.[i] || "");
+    return slots.some(Boolean) ? slots : undefined;
+}
+
 export function normalizeRouting(routing: BYOKRouting = {}): BYOKRouting {
+    const ultraModelIds = normalizeUltraModels(routing.ultraModelIds);
     return {
         mode: "manual",
         defaultModelId: routing.defaultModelId || undefined,
@@ -103,13 +110,19 @@ export function normalizeRouting(routing: BYOKRouting = {}): BYOKRouting {
                 .filter(([, id]) => id && id !== routing.defaultModelId)
                 .sort(([a], [b]) => a.localeCompare(b)),
         ),
+        ...(ultraModelIds && { ultraModelIds }),
     };
 }
+
+const sameUltraModels = (a?: string[], b?: string[]) =>
+    (normalizeUltraModels(a) ?? []).join("|") ===
+    (normalizeUltraModels(b) ?? []).join("|");
 
 export function sameRouting(a: BYOKRouting, b: BYOKRouting): boolean {
     return (
         a.defaultModelId === b.defaultModelId &&
         a.fallbackModelId === b.fallbackModelId &&
+        sameUltraModels(a.ultraModelIds, b.ultraModelIds) &&
         [
             ...new Set([
                 ...Object.keys(a.taskOverrides ?? {}),
@@ -132,6 +145,10 @@ export function mergeRoutingEdits(
     const next = { ...current, mode: "manual" as const };
     for (const key of ["defaultModelId", "fallbackModelId"] as const) {
         if (baseline[key] !== draft[key]) next[key] = draft[key];
+    }
+    if (!sameUltraModels(baseline.ultraModelIds, draft.ultraModelIds)) {
+        next.ultraModelIds = draft.ultraModelIds;
+        if (!draft.ultraModelIds) delete next.ultraModelIds;
     }
     const overrides = { ...current.taskOverrides };
     const tasks = new Set([

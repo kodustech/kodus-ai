@@ -26,6 +26,7 @@ import {
     groupModelsByProvider,
     hasVisibleModels,
 } from "src/features/ee/byok/_utils";
+import { ultraTrioError } from "src/features/ee/ultra-review/plan";
 
 type Edit = { baseline: BYOKRouting; routing: BYOKRouting };
 
@@ -104,13 +105,24 @@ export function useOrganizationRouting({
                     ? undefined
                     : current.fallbackModelId,
         }));
+    /** Picks Model `index + 1` of the Ultra trio; no id clears the slot. */
+    const setUltraModel = (index: number, id?: string) =>
+        setRouting((current) => {
+            const slots = [0, 1, 2].map(
+                (i) => current.ultraModelIds?.[i] ?? "",
+            );
+            slots[index] = id ?? "";
+            return { ...current, ultraModelIds: slots };
+        });
     const validationError =
         dirty &&
         !pool.some(
             (model) => model.id === routing.defaultModelId && !model.disabled,
         )
             ? "Select a connected default model."
-            : undefined;
+            : dirty
+              ? ultraTrioError(routing.ultraModelIds)
+              : undefined;
 
     useUnsavedChangesGuard({
         id: `organization-routing-${teamId}`,
@@ -155,6 +167,9 @@ export function useOrganizationRouting({
                         edit.baseline.taskOverrides?.[task as LlmTask] !== id,
                 )
                 .map(([, id]) => id),
+            ...(edit.routing.ultraModelIds ?? []).filter(
+                (id, i) => edit.baseline.ultraModelIds?.[i] !== id,
+            ),
         ].filter((id): id is string => !!id);
         const freshModelIds = new Set(fresh.models.map((model) => model.id));
         if (changedIds.some((id) => !freshModelIds.has(id)))
@@ -214,6 +229,7 @@ export function useOrganizationRouting({
         setTask,
         setFallback: (id?: string) =>
             setRouting((current) => ({ ...current, fallbackModelId: id })),
+        setUltraModel,
         reset: () => setEdit(null),
         save,
     };
