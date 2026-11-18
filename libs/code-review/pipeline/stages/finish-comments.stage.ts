@@ -1,3 +1,7 @@
+import {
+    ultraDegradedNotice,
+    ultraFallbackInfoLine,
+} from '@libs/ee/ultra-review/ultra-review-messages';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { Injectable, Inject } from '@nestjs/common';
 import {
@@ -166,6 +170,16 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             initialCommentData,
             lineComments,
         } = context;
+
+        // An Ultra review that did not run as configured says so in a comment
+        // of its own, whatever the final comment's settings: OFF, inactive or
+        // only-when-opened cannot hide it, and custom messages cannot edit it.
+        await this.postUltraReviewNotice(context);
+        // One that needed its fallback and still ran as configured adds a
+        // line to the final comment.
+        const ultraInfoLine = context.ultra
+            ? ultraFallbackInfoLine(context.ultra)
+            : undefined;
 
         // A "failed" review (from the user's perspective) is one with a
         // critical pipeline error — main agent rejected, sandbox blew up,
@@ -524,6 +538,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
+                undefined,
+                ultraInfoLine,
             );
             return context;
         }
@@ -596,6 +612,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
+                undefined,
+                ultraInfoLine,
             );
             return context;
         }
@@ -639,5 +657,40 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         }
 
         return context;
+    }
+
+    /**
+     * The system notice of a degraded Ultra review: posted as a comment of
+     * its own, never through the final comment's settings or templates.
+     */
+    private async postUltraReviewNotice(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        const ultra = context.ultra;
+        if (!ultra?.outcome || ultra.outcome === 'success') return;
+        try {
+            await this.codeManagementService.createIssueComment({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: context.repository,
+                prNumber: context.pullRequest?.number,
+                body: ultraDegradedNotice(ultra, {
+                    repositoryName: context.repository?.name,
+                    prNumber: context.pullRequest?.number,
+                }),
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to post the Ultra review notice on PR#${context.pullRequest?.number}`,
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    outcome: ultra.outcome,
+                },
+            });
+        }
     }
 }

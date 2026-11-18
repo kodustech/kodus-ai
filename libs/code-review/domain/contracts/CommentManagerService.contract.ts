@@ -98,6 +98,7 @@ export interface ICommentManagerService {
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         singleAgentRun?: boolean,
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        extraLine?: string,
     ): Promise<void>;
 
     updateSummarizationInPR(

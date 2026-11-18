@@ -1310,6 +1310,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        /** A line the review adds at the end (an Ultra review's fallback). */
+        extraLine?: string,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1376,6 +1378,10 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 commentBody = `${commentBody}\n\n**Automatic approval held:** ${approvalDecision.reason}`;
             } else if (approvalDecision?.kind === 'approve') {
                 commentBody = `${commentBody}\n\n**Automatic approval eligible:** ${approvalDecision.reason}`;
+            }
+
+            if (extraLine) {
+                commentBody = `${commentBody}\n\n${extraLine}`;
             }
 
             await this.codeManagementService.updateIssueComment(

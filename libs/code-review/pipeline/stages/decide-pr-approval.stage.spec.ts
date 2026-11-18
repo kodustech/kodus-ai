@@ -449,3 +449,31 @@ it.each([
 
     expect(result.approvalDecision).toEqual({ kind: 'hold', reason });
 });
+
+it('counts a degraded Ultra review as an unclean review for named policies', async () => {
+    const evaluate = jest.fn().mockResolvedValue({
+        decision: { kind: 'hold', reason: 'The review did not complete.' },
+        eligibility: {},
+    });
+    const policyStage = new DecidePrApprovalStage(
+        codeManagement as unknown as CodeManagementService,
+        areaMaps as unknown as CodeAreaRiskMapService,
+        conditionalApprovalAccess as any,
+        { evaluate } as any,
+    );
+    await policyStage.execute({
+        ...context({ approvalPolicies: [] }),
+        errors: [
+            {
+                stage: 'AgentReviewStage',
+                substage: 'ultra',
+                severity: 'partial' as const,
+                error: new Error('Ultra review did not run as configured'),
+                metadata: { reason: 'ULTRA_REVIEW_DEGRADED' },
+            },
+        ],
+    });
+    expect(evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ reviewClean: false }),
+    );
+});
