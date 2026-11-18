@@ -37,33 +37,67 @@ describe('GithubService.getPullRequestAuthors', () => {
     };
     const formerDev = { id: 2, login: 'former-dev', type: 'User' as const };
 
-    // Serves `pages` newest-first, 100 per page, with the Link header GitHub
-    // sends, and records every page that was requested.
-    const githubServing = (pages: unknown[][]) => {
-        const requestedPages: number[] = [];
+    const newest100 = () =>
+        Array.from({ length: 100 }, (_, i) => pr(1000 - i, daysAgo(1), dev));
+
+    type Repo = {
+        pages: unknown[][];
+        // Page number answered with this HTTP status instead of its PRs.
+        fail?: { page: number; status: number };
+    };
+
+    // Serves each repository's `pages` newest-first, 100 per page, with the
+    // Link header GitHub sends. Records every request and how many were in
+    // flight at once.
+    const githubServing = (repos: Record<string, Repo>) => {
+        const requests: URL[] = [];
+        let inFlight = 0;
+        let maxInFlight = 0;
         const fetch = jest.fn(async (url: string) => {
-            const page = Number(new URL(url).searchParams.get('page') ?? '1');
-            requestedPages.push(page);
+            const request = new URL(url);
+            requests.push(request);
+            inFlight += 1;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            inFlight -= 1;
+
+            const name = request.pathname.split('/')[3];
+            const repo = repos[name];
+            const page = Number(request.searchParams.get('page') ?? '1');
+            if (!repo || repo.fail?.page === page) {
+                return new Response(JSON.stringify({ message: 'fail' }), {
+                    status: repo?.fail?.status ?? 404,
+                    headers: { 'content-type': 'application/json' },
+                });
+            }
             const headers: Record<string, string> = {
                 'content-type': 'application/json',
             };
-            if (page < pages.length) {
+            if (page < repo.pages.length) {
                 const next = new URL(url);
                 next.searchParams.set('page', String(page + 1));
                 headers.link = `<${next.toString()}>; rel="next"`;
             }
-            return new Response(JSON.stringify(pages[page - 1] ?? []), {
+            return new Response(JSON.stringify(repo.pages[page - 1] ?? []), {
                 status: 200,
                 headers,
             });
         });
         return {
-            octokit: new Octokit({ request: { fetch } }),
-            requestedPages,
+            octokit: new Octokit({
+                request: { fetch },
+                log: { debug() {}, info() {}, warn() {}, error() {} },
+            }),
+            requests,
+            pagesOf: (name: string) =>
+                requests
+                    .filter((r) => r.pathname.split('/')[3] === name)
+                    .map((r) => Number(r.searchParams.get('page') ?? '1')),
+            maxInFlight: () => maxInFlight,
         };
     };
 
-    const makeService = (octokit: Octokit) => {
+    const makeService = (octokit: Octokit, repoNames: string[]) => {
         const service = new GithubService(
             {
                 getPlatformAuthDetails: jest.fn().mockResolvedValue({
@@ -77,10 +111,21 @@ describe('GithubService.getPullRequestAuthors', () => {
             {} as any,
             { get: jest.fn() } as unknown as ConfigService,
         );
+        (service as any).logger = {
+            error: jest.fn(),
+            warn: jest.fn(),
+            log: jest.fn(),
+        };
         jest.spyOn(
             service as any,
             'findOneByOrganizationAndTeamDataAndConfigKey',
-        ).mockResolvedValue([{ id: '10', name: 'app', full_name: 'acme/app' }]);
+        ).mockResolvedValue(
+            repoNames.map((name, i) => ({
+                id: String(10 + i),
+                name,
+                full_name: `acme/${name}`,
+            })),
+        );
         jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue(
             octokit,
         );
@@ -88,17 +133,13 @@ describe('GithubService.getPullRequestAuthors', () => {
     };
 
     it('lists an author whose last PR is older than the newest 100 but inside 60 days', async () => {
-        const newest100 = Array.from({ length: 100 }, (_, i) =>
-            pr(1000 - i, daysAgo(1), dev),
-        );
-        const { octokit } = githubServing([
-            newest100,
-            [pr(800, daysAgo(10), dependabot)],
-        ]);
-
-        const authors = await makeService(octokit).getPullRequestAuthors({
-            organizationAndTeamData,
+        const github = githubServing({
+            app: { pages: [newest100(), [pr(800, daysAgo(10), dependabot)]] },
         });
+
+        const authors = await makeService(github.octokit, [
+            'app',
+        ]).getPullRequestAuthors({ organizationAndTeamData });
 
         expect(authors).toEqual(
             expect.arrayContaining([
@@ -107,24 +148,110 @@ describe('GithubService.getPullRequestAuthors', () => {
         );
     });
 
-    it('leaves out an author whose last PR is older than 60 days, and stops reading there', async () => {
-        const newest100 = Array.from({ length: 100 }, (_, i) =>
-            pr(1000 - i, daysAgo(1), dev),
-        );
-        const { octokit, requestedPages } = githubServing([
-            newest100,
-            [pr(800, daysAgo(10), dependabot), pr(700, daysAgo(61), formerDev)],
-            [pr(600, daysAgo(90), formerDev)],
-        ]);
+    it('asks for every state, newest created first, which the early stop relies on', async () => {
+        const github = githubServing({ app: { pages: [newest100()] } });
 
-        const authors = await makeService(octokit).getPullRequestAuthors({
+        await makeService(github.octokit, ['app']).getPullRequestAuthors({
             organizationAndTeamData,
         });
+
+        const params = Object.fromEntries(github.requests[0].searchParams);
+        expect(params).toEqual(
+            expect.objectContaining({
+                state: 'all',
+                sort: 'created',
+                direction: 'desc',
+                per_page: '100',
+            }),
+        );
+    });
+
+    it('leaves out an author whose last PR is older than 60 days, and stops reading there', async () => {
+        const github = githubServing({
+            app: {
+                pages: [
+                    newest100(),
+                    [
+                        pr(800, daysAgo(10), dependabot),
+                        pr(700, daysAgo(61), formerDev),
+                    ],
+                    [pr(600, daysAgo(90), formerDev)],
+                ],
+            },
+        });
+
+        const authors = await makeService(github.octokit, [
+            'app',
+        ]).getPullRequestAuthors({ organizationAndTeamData });
 
         expect(authors.map((a) => a.name).sort()).toEqual([
             'dependabot[bot]',
             'dev',
         ]);
-        expect(requestedPages).toEqual([1, 2]);
+        expect(github.pagesOf('app')).toEqual([1, 2]);
+    });
+
+    it('keeps the authors of pages already read when a later page fails', async () => {
+        const github = githubServing({
+            app: {
+                pages: [newest100(), [pr(800, daysAgo(10), dependabot)]],
+                fail: { page: 2, status: 403 },
+            },
+        });
+
+        const authors = await makeService(github.octokit, [
+            'app',
+        ]).getPullRequestAuthors({ organizationAndTeamData });
+
+        expect(authors.map((a) => a.name)).toEqual(['dev']);
+    });
+
+    it('fails for the seat prune when a repository could not be read, instead of passing for no authors', async () => {
+        const github = githubServing({
+            app: { pages: [newest100()] },
+            api: {
+                pages: [newest100(), [pr(800, daysAgo(10), dependabot)]],
+                fail: { page: 2, status: 403 },
+            },
+        });
+
+        await expect(
+            makeService(github.octokit, ['app', 'api']).getPullRequestAuthors({
+                organizationAndTeamData,
+                requireLoaded: true,
+            }),
+        ).rejects.toThrow('1 of the configured GitHub repositories');
+    });
+
+    it('does not fail the seat prune for a configured repository that no longer exists', async () => {
+        const github = githubServing({ app: { pages: [newest100()] } });
+
+        const authors = await makeService(github.octokit, [
+            'app',
+            'deleted',
+        ]).getPullRequestAuthors({
+            organizationAndTeamData,
+            requireLoaded: true,
+        });
+
+        expect(authors.map((a) => a.name)).toEqual(['dev']);
+    });
+
+    it('walks at most 10 repositories at once, under the 100 concurrent requests GitHub allows', async () => {
+        const names = Array.from({ length: 40 }, (_, i) => `repo-${i}`);
+        const github = githubServing(
+            Object.fromEntries(
+                names.map((name) => [name, { pages: [newest100()] }]),
+            ),
+        );
+
+        const authors = await makeService(
+            github.octokit,
+            names,
+        ).getPullRequestAuthors({ organizationAndTeamData });
+
+        expect(authors.map((a) => a.name)).toEqual(['dev']);
+        expect(github.requests).toHaveLength(40);
+        expect(github.maxInFlight()).toBe(10);
     });
 });
