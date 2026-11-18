@@ -492,6 +492,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         };
         await judgeKodyRulesSharded({
             incrementalDiff: true,
+            prFilePaths: ['src/odd\n```.ts'],
             changedFiles: [
                 file(
                     'db/migrate/add_index.rb',
@@ -512,6 +513,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(prUser).toContain('add_index :cases');
         expect(prUser).toContain('belongs_to :provider');
         expect(prUser).toContain('Incremental round');
+        expect(prUser).toContain('````\n"src/odd\\n```.ts"\n````');
         expect(prUser).not.toMatch(/full diff of every/i);
     });
 

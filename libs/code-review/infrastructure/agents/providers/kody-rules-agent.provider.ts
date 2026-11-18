@@ -341,6 +341,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     });
                     const candidates = parsed?.violations ?? [];
                     const supported: RawShardViolation[] = [];
+                    // Bound serial model work per shard. Already verified findings and
+                    // local detector findings survive a slow evidence provider.
+                    const evidenceDeadline = Date.now() + 180_000;
                     for (const candidate of candidates) {
                         const rule = ruleForCandidate(candidate, shard);
                         if (
@@ -355,8 +358,18 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             continue;
                         }
                         evidenceChecks++;
+                        if (Date.now() >= evidenceDeadline) {
+                            evidenceFailures++;
+                            continue;
+                        }
                         try {
-                            if (await verifyEvidence(candidate, shard)) {
+                            if (
+                                await verifyEvidence(
+                                    candidate,
+                                    shard,
+                                    evidenceDeadline,
+                                )
+                            ) {
                                 supported.push({
                                     ...candidate,
                                     evidenceVerified: true,
@@ -370,6 +383,8 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                                 context: this.getIdentity().name,
                                 error,
                                 metadata: {
+                                    organizationAndTeamData:
+                                        input.organizationAndTeamData,
                                     prNumber: input.prNumber,
                                     filename,
                                     ruleId: candidate.ruleId,

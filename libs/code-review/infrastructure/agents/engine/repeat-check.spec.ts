@@ -637,7 +637,7 @@ describe('checkRepeats', () => {
             })
             .mockResolvedValueOnce({
                 verdicts: [
-                    { finding: 0, verdict: 'new_place', earlierId: 'bug-old' },
+                    { finding: 0, verdict: 'new_place', earlierId: null },
                 ],
             });
         const result = await checkRepeats([first, second], [bugComment], {
@@ -653,7 +653,7 @@ describe('checkRepeats', () => {
 
     it('without a model, posts what it could not match by code', async () => {
         hasManagedModelKeyMock.mockReturnValue(false);
-        const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
+        const finding = { ...bugComment };
 
         const result = await checkRepeats([finding], [bugComment], {
             organizationId: 'org-1',

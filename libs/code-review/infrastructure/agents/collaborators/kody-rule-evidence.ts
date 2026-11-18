@@ -176,7 +176,13 @@ export function kodyRuleEvidenceVerifier(
     const filesByPath = new Map(
         input.changedFiles.map((file) => [file.filename, file]),
     );
-    return async (violation: RawShardViolation, shard: RuleShard) => {
+    return async (
+        violation: RawShardViolation,
+        shard: RuleShard,
+        deadline: number,
+    ) => {
+        const remainingMs = () =>
+            Math.max(1, Math.min(90_000, deadline - Date.now()));
         const rule = ruleForCandidate(violation, shard);
         if (!rule) return false;
         const metadataAllowed =
@@ -209,7 +215,7 @@ export function kodyRuleEvidenceVerifier(
                 },
                 {
                     runId: `kody-rule-verify:${input.prNumber}:${rule.uuid}`,
-                    signal: AbortSignal.timeout(90_000),
+                    signal: AbortSignal.timeout(remainingMs()),
                     services: { readEvidence },
                 },
             );
@@ -240,6 +246,8 @@ export function kodyRuleEvidenceVerifier(
             })
             .join('\n')
             .slice(0, 8000);
+        if (Date.now() >= deadline)
+            throw new Error('Kody Rule evidence deadline reached');
         const verdict = await LLM.run({
             byokConfig: slot,
             suppressReasoning: true,
@@ -248,7 +256,7 @@ export function kodyRuleEvidenceVerifier(
             user: JSON.stringify({ ...candidate, excerpts, relatedPatches }),
             runName: 'code-review-kody-rule-evidence-verdict',
             organizationId,
-            timeoutMs: 90_000,
+            timeoutMs: remainingMs(),
             attrs: { prNumber: input.prNumber, ruleId: rule.uuid },
         });
         return hasRuleEvidence(verdict, metadataAllowed, excerpts);

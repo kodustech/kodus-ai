@@ -183,7 +183,7 @@ describe('KodyIssuesManagementService', () => {
     // #2097: a finding the repeat check kept off the PR is stored not sent,
     // with the schema's default implementationStatus; the earlier comment
     // already tracks it, so it never becomes an issue.
-    it('leaves a suggestion discarded as a repeat out of the issues', async () => {
+    it.each([PriorityStatus.DISCARDED_BY_REPEAT, PriorityStatus.WITHHELD_BY_REPEAT_CHECK])('leaves a %s suggestion out of the issues', async (priorityStatus) => {
         const valid = await (
             service as any
         ).filterValidSuggestionsFromPrByStatus([
@@ -195,7 +195,7 @@ describe('KodyIssuesManagementService', () => {
                         ...mockSuggestion,
                         id: 'suggestion-repeat',
                         deliveryStatus: DeliveryStatus.NOT_SENT,
-                        priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                        priorityStatus,
                     },
                 ],
             },

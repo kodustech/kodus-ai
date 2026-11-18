@@ -312,7 +312,7 @@ function parseVerdicts(
             continue;
         const n = Number(e.finding);
         if (!Number.isInteger(n) || n < 0 || n >= batch.length) continue;
-        if (e.verdict === 'different_problem') {
+        if (e.verdict === 'different_problem' || e.verdict === 'new_place') {
             decided.add(n);
             continue;
         }
@@ -327,8 +327,6 @@ function parseVerdicts(
         } else if (e.verdict === 'caused_by_earlier') {
             decided.add(n);
             if (!repeats.has(n) && !revisions.has(n)) revisions.set(n, earlier);
-        } else if (e.verdict === 'new_place') {
-            decided.add(n);
         }
     }
     return { repeats, revisions, decided };
@@ -483,7 +481,7 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     }
 
     const withheld = new Set(
-        [...unresolved]
+        (result.model === 'failed' ? [...unresolved] : [])
             .filter(({ finding, candidates }) =>
                 candidates.some((earlier) => plausibleRepeat(finding, earlier)),
             )
