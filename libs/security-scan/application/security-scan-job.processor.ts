@@ -621,7 +621,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         ],
                     };
                 }
-                await this.scans.recordUnit(
+                const recorded = await this.scans.recordUnit(
                     scan.uuid,
                     progress,
                     {
@@ -644,6 +644,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     ],
                     jobId,
                 );
+                // Cancelled, or lost to another job, since the unit began.
+                if (!recorded) {
+                    throw new Error(
+                        `Security scan ${scan.uuid} is no longer run by job ${jobId}`,
+                    );
+                }
             },
         });
 
@@ -726,6 +732,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         // A job aborted (timed out) resolves nothing: another may run next.
         signal?.throwIfAborted();
+        // Nor does a scan cancelled, or taken by another job, after its last
+        // unit: resolving would close issues for a scan that did not finish.
+        await stillOwned();
 
         // What this scan carries from an earlier one's plan, in an area it
         // did not read again, it holds as found: seen by it, not resolved
