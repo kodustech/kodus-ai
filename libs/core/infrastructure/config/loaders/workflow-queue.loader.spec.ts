@@ -12,7 +12,7 @@ describe('security scan queue prefetch', () => {
         'keeps a bounded default for invalid configuration %j',
         (value) => {
             process.env[name] = value;
-            expect(WorkflowQueueLoader()[name]).toBe(5);
+            expect(WorkflowQueueLoader()[name]).toBe(1);
         },
     );
 

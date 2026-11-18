@@ -19,8 +19,9 @@ import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
     /**
      * Security scan slices (#2451). One slice per sandbox lifetime; a scan
-     * that needs more re-enqueues itself. Prefetch is low: every slice holds
-     * a sandbox and runs model calls for up to half an hour.
+     * that needs more re-enqueues itself. The parent only claims and waits;
+     * the engine runs in a child so AMQP and ECS health stay on a free
+     * event loop. Prefetch defaults to 1: each slice forks a Nest heap.
      */
     @RabbitSubscribe({
         name: 'security-scan',

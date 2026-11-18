@@ -19,6 +19,12 @@ import { NestFactory } from '@nestjs/core';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
+import {
+    IJobProcessorService,
+    JOB_PROCESSOR_SERVICE_TOKEN,
+} from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
+import { securityScanSliceJobId } from '@libs/core/workflow/infrastructure/security-scan-runtime';
+
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
 import { startEventLoopMonitor } from './event-loop-monitor';
@@ -100,6 +106,48 @@ async function bootstrap() {
 
         appContext.enableShutdownHooks();
 
+        // A slice child runs the engine only: no health port (the parent
+        // already bound :3334) and no queue consumer.
+        const sliceJobId = securityScanSliceJobId();
+
+        // Kept running through shutdown (unref'd): the drain is when we most
+        // need to see whether the thread is blocked.
+        startEventLoopMonitor();
+
+        if (sliceJobId) {
+            logger?.log(
+                `Running security-scan slice ${sliceJobId}`,
+                'Bootstrap',
+            );
+            const processor = appContext.get<IJobProcessorService>(
+                JOB_PROCESSOR_SERVICE_TOKEN,
+            );
+            const abort = new AbortController();
+            const onStop = () => abort.abort();
+            process.once('SIGTERM', onStop);
+            process.once('SIGINT', onStop);
+            try {
+                await processor.process(sliceJobId, abort.signal);
+                await appContext.close();
+                process.exit(0);
+            } catch (error) {
+                const err =
+                    error instanceof Error ? error : new Error(String(error));
+                logger?.error({
+                    message: `Security-scan slice failed: ${err.message}`,
+                    context: 'Bootstrap',
+                    error: err,
+                    metadata: { jobId: sliceJobId },
+                });
+                try {
+                    await appContext.close();
+                } catch {
+                    // exit below
+                }
+                process.exit(1);
+            }
+        }
+
         // ECS-facing health probe: returns 503 when AMQP is disconnected so
         // the ECS task health check can detect a zombie worker (live Node
         // process but no consumers) and recycle the task. Port is
@@ -123,9 +171,6 @@ async function bootstrap() {
                 ? { requiredChannels: SECURITY_SCAN_WORKER_CHANNELS }
                 : {}),
         });
-        // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked.
-        startEventLoopMonitor();
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks
         // (enableShutdownHooks) fire after this on the same signal.
