@@ -96,6 +96,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             createSingleIssueComment: jest
                 .fn()
                 .mockResolvedValue({ id: 'comment-1' }),
+            createIssueComment: jest.fn().mockResolvedValue({}),
         };
         validateOrganizationLicense = jest.fn().mockResolvedValue(TEAMS);
 
@@ -595,6 +596,28 @@ describe('ValidateConfigStage — v2 routing', () => {
 
             expect(result.ultra?.models).toHaveLength(3);
             expect(result.ultra?.fallback).toBeUndefined();
+            gate.mockResolvedValue(null);
+        });
+
+        it('with the three and the fallback out of credits, skips as Balanced does, with the credits comment', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.ultra).toBeUndefined();
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringMatching(/credit/i),
+                }),
+            );
             gate.mockResolvedValue(null);
         });
 

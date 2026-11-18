@@ -450,6 +450,30 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 },
             });
         }
+        // No model left with credits, the fallback included: skip as a
+        // Balanced review out of credits does, with the same comment, rather
+        // than spend on Kody Rules for a review with no model.
+        if (!models.length && !fallback && exhausted.length) {
+            if (context.pipelineMetadata?.showStatusFeedback !== false) {
+                await this.codeManagementService.createIssueComment({
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository,
+                    prNumber: context.pullRequest?.number,
+                    body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+                });
+            }
+            return this.updateContext(context, (draft) => {
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED,
+                    ),
+                };
+                if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
+                draft.pipelineMetadata.notificationHandled = true;
+            });
+        }
+
         // The merge model is one that can still run: the trio's pick, else
         // the first left of the three, else the fallback.
         const mergeModel = models.some(
