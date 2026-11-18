@@ -87,6 +87,10 @@ export function buildOrchestratorInput(
     return {
         organizationAndTeamData: context.organizationAndTeamData,
         changedFiles: computed.changedFiles,
+        incrementalDiff:
+            !context.pipelineMetadata?.forceFullRerun &&
+            !!context.lastExecution?.lastAnalyzedCommit,
+        prFilePaths: context.prFilePaths,
         // remoteCommands is undefined when no sandbox is available (e.g. trial
         // mode). The agent loop detects the empty-tools case and switches to a
         // self-contained analysis variant.

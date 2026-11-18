@@ -116,6 +116,30 @@ const FALSE_CLAIM = finding(
     '        sum += items[i].price * items[i].qty;',
 );
 
+const resumeControls = require('../review-rounds/hallucination-cases')
+    .filter(({ family }) => family === 'verify-complete-condition')
+    .map((c) => ({
+        id: `control-${c.id}`,
+        set: 'hallucinations-2528',
+        checks: c.claims[0].expect === 'deliver'
+            ? 'Keeps the finding when the full condition excludes FAILED from resumability'
+            : 'Drops the finding when the preceding branch of the condition makes FAILED resumable',
+        pr: {
+            caseId: c.id,
+            prTitle: c.prTitle,
+            repositoryFullName: 'eval/resume-verify-controls',
+            repoBase: require('../review-rounds/pr-of-case').baseTreeOf(c),
+            repoFiles: c.repo,
+        },
+        findings: [{
+            ...finding([4, 5], 'high', 'A failed attempt loses saved progress',
+                'When a resumed run processes nothing new and all its remaining work fails, finish records FAILED. planForNextAttempt in src/worker/resume.ts only resumes PAUSED or COMPLETED with pending work, so the retry discards its saved progress. Allow FAILED attempts to resume.',
+                '    if (result.checkedNow === 0 && result.errors > 0) {\n        return saveStatus("FAILED");'),
+            relevantFile: 'src/worker/run.ts',
+        }],
+        owed: [c.claims[0].expect === 'deliver' ? 'kept' : 'removed'],
+    }));
+
 // Per stage: the control pair. `findings` is what reaches the stage; `owed`
 // says, for each, whether it must come out ('kept') or not ('removed'); a
 // dedup pair owes a number of survivors instead.
@@ -175,6 +199,7 @@ const CONTROLS = {
             findings: [FALSE_CLAIM],
             owed: ['removed'],
         },
+        ...resumeControls,
     ],
 };
 
