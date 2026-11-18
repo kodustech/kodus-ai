@@ -241,7 +241,9 @@ export const IssueDetailsRightSheet = ({
                     reproduction) and pushes every line past the sheet's
                     edge. As a block, the content keeps the sheet's width and
                     the code block scrolls sideways instead. */}
-                <ScrollArea className="flex-1 *:py-6 [&_[data-radix-scroll-area-viewport]>div]:block!">
+                <ScrollArea
+                    className="flex-1 *:py-6"
+                    viewportClassName="[&>div]:block!">
                     <div className="list-outside space-y-4 px-6 text-sm *:break-all">
                         <div className="flex gap-3">
                             <FolderGit2Icon className="text-secondary-light size-4.5" />
