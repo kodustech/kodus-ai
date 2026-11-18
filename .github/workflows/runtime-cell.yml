@@ -1,0 +1,139 @@
+name: "Runtime cell: Go tests"
+
+# The Kody Runtime cell (apps/runtime-cell) runs untrusted code; its security
+# properties are tests (S-03, S-08, S-29, S-50, S-51, S-52, ...). They run on
+# every change to the cell, to the protocol it shares with the hub, and to the
+# redaction rules and golden variants its tests compare byte for byte with
+# libs/runtime/redaction; and on main after the merge.
+on:
+    pull_request:
+        branches:
+            - main
+        paths:
+            - "apps/runtime-cell/**"
+            - "libs/runtime/protocol/**"
+            - "libs/runtime/redaction/**"
+            - "docker-bake.hcl"
+            - ".github/workflows/runtime-cell.yml"
+            - ".github/workflows/runtime-cell-release.yml"
+    push:
+        branches:
+            - main
+        paths:
+            - "apps/runtime-cell/**"
+            - "libs/runtime/protocol/**"
+            - "libs/runtime/redaction/**"
+            - "docker-bake.hcl"
+            - ".github/workflows/runtime-cell.yml"
+            - ".github/workflows/runtime-cell-release.yml"
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: lint, vet, go test -race, govulncheck
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: apps/runtime-cell
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Set up Node for browser runner tests
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version: '22.23.4'
+
+            - name: Browser runner Node tests (no browser or install)
+              run: node --test --test-timeout=10000 browser-runner/*.test.mjs
+
+            - name: Set up Go
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache-dependency-path: apps/runtime-cell/go.sum
+
+            # go.mod/go.sum say exactly what the code imports, and the
+            # module cache matches the checksums in go.sum.
+            - name: go mod tidy (no diff)
+              run: |
+                  go mod tidy
+                  git diff --exit-code -- go.mod go.sum
+
+            - name: go mod verify
+              run: go mod verify
+
+            # Formatters (gofumpt, goimports) and linters from .golangci.yml.
+            # Built with the job's Go so it understands go.mod's language
+            # version. Bump the version here and in README.md together.
+            - name: golangci-lint run
+              uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+              with:
+                  version: v2.15.0
+                  install-mode: goinstall
+                  working-directory: apps/runtime-cell
+                  verify: true
+
+            # Prints the diff and exits 1 when a file is not formatted; fix
+            # with `golangci-lint fmt` in apps/runtime-cell.
+            - name: golangci-lint fmt (no diff)
+              run: golangci-lint fmt --diff ./...
+
+            - name: go vet
+              run: go vet ./...
+
+            - name: go test -race
+              run: go test -race -count=1 ./...
+
+            # Known vulnerabilities in the cell's dependencies and the Go
+            # standard library it is built with: the cell runs untrusted code.
+            # Same version as runtime-supply-chain.yml.
+            - name: govulncheck
+              run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+    # The cell pins its image builder by digest (cmd/cell/config.go,
+    # defaultBuilderImage); the release builds it again and stops when the
+    # digest differs. This job builds it the release's way, pushing nothing, so
+    # a change to builder-image/ or a pin that does not match fails here first.
+    builder-image:
+        name: image builder reproduces the pinned digest
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+              with:
+                  driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+
+            - name: Build, both platforms, nothing pushed
+              id: build
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              env:
+                  SOURCE_DATE_EPOCH: "1791400699"
+              with:
+                  context: apps/runtime-cell/builder-image
+                  file: apps/runtime-cell/builder-image/Dockerfile
+                  platforms: linux/amd64,linux/arm64
+                  sbom: false
+                  provenance: false
+                  outputs: type=image,push=false,rewrite-timestamp=true
+                  no-cache: true
+                  pull: true
+
+            - name: Same digest as the pin
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+              run: |
+                  set -eu
+                  pinned="$(sed -nE 's/^const defaultBuilderImage = "[^"@]+@(sha256:[a-f0-9]{64})"$/\1/p' apps/runtime-cell/cmd/cell/config.go)"
+                  if [ -z "$pinned" ] || [ "$DIGEST" != "$pinned" ]; then
+                      echo "::error::The builder image builds as $DIGEST; cmd/cell/config.go pins '${pinned}'. Set defaultBuilderImage to the digest this build gives (apps/runtime-cell/builder-image/README.md)."
+                      exit 1
+                  fi

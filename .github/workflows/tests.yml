@@ -9,6 +9,7 @@ on:
             - "apps/web/**"
             - "apps/worker/**"
             - "apps/webhooks/**"
+            - "apps/runtime/**"
             - "libs/**"
             - "packages/**"
             - "test/**"

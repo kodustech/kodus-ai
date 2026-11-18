@@ -1,0 +1,35 @@
+{
+    "licenses": {
+        "BlueOak-1.0.0": "Permissive and OSI approved (Blue Oak Model License): use, change and redistribution with the notice kept, no copyleft. The isaacs packages (glob, minimatch, lru-cache, tar...) use it.",
+        "Python-2.0": "Permissive and OSI approved (PSF licence): redistribution with the notice kept, no copyleft. argparse uses it.",
+        "Zlib": "Permissive and OSI approved: redistribution with the notice kept, no copyleft. pako dual-states it with MIT.",
+        "CC0-1.0": "A public-domain dedication with a permissive fallback: no condition on redistribution.",
+        "Unlicense": "A public-domain dedication: no condition on redistribution."
+    },
+    "packages": [
+        {
+            "package": "@img/sharp-libvips-*",
+            "license": "LGPL-3.0-or-later",
+            "images": ["web"],
+            "reason": "libvips, shipped unmodified as a separate shared library that sharp loads at run time (Next.js image optimisation). LGPL allows distributing it with a non-LGPL program when it stays dynamically linked and replaceable by the user, and its licence and source location travel with the package. Only the web image contains it: in the backend tree it comes from a dev dependency (@react-email/ui)."
+        },
+        {
+            "package": "caniuse-lite",
+            "license": "CC-BY-4.0",
+            "images": ["web"],
+            "reason": "Browser-support data, not code (browserslist via Next.js). CC-BY-4.0 asks only for attribution, which the package's own LICENSE carries."
+        },
+        {
+            "package": "pause",
+            "license": "UNKNOWN",
+            "images": ["backend"],
+            "reason": "pause@0.0.1 (passport) has no licence field; its Readme states the MIT License with its full text. Recheck if the version changes."
+        },
+        {
+            "package": "url-template",
+            "license": "BSD",
+            "images": ["backend"],
+            "reason": "url-template@2.0.8 declares the non-SPDX id BSD; its LICENSE file is the BSD-3-Clause text."
+        }
+    ]
+}

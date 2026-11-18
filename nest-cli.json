@@ -106,6 +106,36 @@
                     }
                 ]
             }
+        },
+        "runtime-worker": {
+            "type": "application",
+            "root": "apps/runtime",
+            "entryFile": "worker/main",
+            "sourceRoot": "apps/runtime/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/runtime/tsconfig.json",
+                "deleteOutDir": false
+            }
+        },
+        "runtime-hub": {
+            "type": "application",
+            "root": "apps/runtime",
+            "entryFile": "hub/main",
+            "sourceRoot": "apps/runtime/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/runtime/tsconfig.json",
+                "deleteOutDir": false
+            }
+        },
+        "runtime-preview-edge": {
+            "type": "application",
+            "root": "apps/runtime",
+            "entryFile": "edge/main",
+            "sourceRoot": "apps/runtime/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/runtime/tsconfig.json",
+                "deleteOutDir": false
+            }
         }
     }
 }

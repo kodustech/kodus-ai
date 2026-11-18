@@ -1,0 +1,106 @@
+[
+    {
+        "id": "grafana-4-health-breaks",
+        "checks": "A changed helper with no route of its own (databaseHealthy breaks) is probed through the route that reaches it, GET /api/health via pkg/api/health.go (the real Run found 200 → 503)",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 4, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "523456e9973423626c00c9ee42ba65a2b66bf4dd" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": {
+            "routes": [{ "entryPoint": "^GET /api/health$", "via": "pkg/api/health.go", "path": "^/api/health$" }],
+            "allowedPaths": ["^/api/health$"],
+            "cannotProve": []
+        }
+    },
+    {
+        "id": "grafana-5-health-branch-field",
+        "checks": "A new field in the /api/health response (healthResponse in http_server.go) is probed on GET /api/health comparing the JSON body",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 5, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "a7dc74d48e1848b2c21de292e1ff64a935ea3c30" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": {
+            "routes": [{ "entryPoint": "^GET /api/health$", "via": "pkg/api/http_server.go", "path": "^/api/health$", "compare": "json" }],
+            "allowedPaths": ["^/api/health$"],
+            "cannotProve": []
+        }
+    },
+    {
+        "id": "grafana-9-health-failure-ttl",
+        "checks": "A change on the failure path of the health check (cache TTL) is still probed on GET /api/health via pkg/api/health.go; base and PR are expected to answer the same",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 9, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "c81bdf0a958998240e006c540063c01449535527" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": {
+            "routes": [{ "entryPoint": "^GET /api/health$", "via": "pkg/api/health.go", "path": "^/api/health$" }],
+            "allowedPaths": ["^/api/health$"],
+            "cannotProve": []
+        }
+    },
+    {
+        "id": "grafana-6-dependency-bump",
+        "checks": "A go.mod/go.sum bump only (control): no behavior probe, go.mod named in cannotProve as a dependency surface",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 6, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "f449ba6e966bfe831059ebd997b21bd55653eb1f" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": { "routes": [], "allowedPaths": [], "cannotProve": ["go.mod"] }
+    },
+    {
+        "id": "grafana-7-recipe-only",
+        "checks": "A change to the recipe only (.kodus/compose.yaml, control): nothing to probe, the Run uses the base's recipe",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 7, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "6b7c44af3e11211556f0cf49d878212f0eeaa7ed" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": { "routes": [], "allowedPaths": [], "cannotProve": [] }
+    },
+    {
+        "id": "grafana-8-cli-text",
+        "checks": "A text change in a CLI command (reset-admin-password, control): no HTTP probe, the file in cannotProve because only the CLI reaches it",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 8, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "cbd3ee292794bfc0126bd2107512fe12e19ea19e" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": { "routes": [], "allowedPaths": [], "cannotProve": ["pkg/cmd/grafana-cli/commands/reset_password_command.go"] }
+    },
+    {
+        "id": "grafana-3-comment-only",
+        "checks": "A comment added to pkg/cmd/grafana/main.go (control): no probe, the file in cannotProve with a reason",
+        "source": { "github": { "repo": "Wellington01/kr-grafana", "pr": 3, "baseSha": "ee53311688d72098e87a4e1ac463a7ef2877f727", "headSha": "5d49b8adb1e48d3831c9cae2fdf8c692ed26aeab" } },
+        "machine": "grafana",
+        "targets": [{ "service": "grafana", "port": 3000, "kind": "http" }],
+        "expected": { "routes": [], "allowedPaths": [], "cannotProve": ["pkg/cmd/grafana/main.go"] }
+    },
+    {
+        "id": "express-route-mounted",
+        "checks": "A changed Express handler (GET /orders/:id on a router mounted at /api) is probed on the path the app really serves, /api/orders/<id>, and the untouched POST /orders and /health are left alone",
+        "source": { "fixture": "express-route-mounted" },
+        "machine": "source",
+        "targets": [{ "service": "app", "port": 3000, "kind": "http" }],
+        "expected": {
+            "routes": [{ "entryPoint": "^GET /orders/:id$", "path": "^/api/orders/[^/]+$" }],
+            "allowedPaths": ["^/api/orders/[^/]+$"],
+            "cannotProve": []
+        }
+    },
+    {
+        "id": "nest-service-via-controller",
+        "checks": "A changed Nest service with no route of its own is probed through the controller route that calls it, GET /api/pricing/quote (global prefix api) via src/pricing/pricing.service.ts",
+        "source": { "fixture": "nest-service-via-controller" },
+        "machine": "source",
+        "targets": [{ "service": "app", "port": 3000, "kind": "http" }],
+        "expected": {
+            "routes": [{ "entryPoint": "^GET (/api)?/pricing/quote$", "via": "src/pricing/pricing.service.ts", "path": "^/api/pricing/quote(\\?.*)?$" }],
+            "allowedPaths": ["^/api/pricing/quote(\\?.*)?$"],
+            "cannotProve": []
+        }
+    },
+    {
+        "id": "django-view-via-urls",
+        "checks": "A changed Django view (items/views.py, item_detail) is probed through the URL that routes to it, GET /api/items/<pk>/ via items/views.py, read from shop/urls.py and items/urls.py",
+        "source": { "fixture": "django-view-via-urls" },
+        "machine": "source",
+        "targets": [{ "service": "web", "port": 8000, "kind": "http" }],
+        "expected": {
+            "routes": [{ "entryPoint": "^GET /api/items/[^ ]+$", "via": "items/views.py", "path": "^/api/items/\\d+/?$" }],
+            "allowedPaths": ["^/api/items/\\d+/?$"],
+            "cannotProve": []
+        }
+    }
+]

@@ -1,0 +1,44 @@
+# Kody Runtime recipe: how the cell boots kodus-ai to test a PR against its
+# base. The product reads this file before workspace.yaml (Runo's), from the
+# default branch, and the cell writes it over the PR's copy.
+#
+# The cell takes nothing from a developer's machine (files.copy is refused).
+# Setup derives .env from .env.template the way PR previews do
+# (scripts/preview/neutralize-preview-env.sh): every vault-backed value
+# becomes a placeholder, the keys the app signs with are random, and a
+# secret added to the template later is neutralized by default. Compose
+# reads that .env both for interpolation (the databases' credentials) and as
+# the services' env_file. With no real key, LLM, Git and billing calls fail
+# closed; the probes exercise the API, its databases and the queue.
+version: 1
+setup:
+    - >-
+        [ -e .env ] || { cp .env.template .env
+        && bash scripts/preview/neutralize-preview-env.sh .env .env.template
+        && { [ ! -f .kodus/runtime/overrides.env ] || cat .kodus/runtime/overrides.env >> .env; }; }
+services:
+    compose:
+        # dev compose plus an overlay that leaves out what a PR probe does not
+        # reach (web, try, the Runtime's own hub and worker) and runs the
+        # API, the worker and webhooks from their production images
+        # (docker/Dockerfile), not the dev watch mode
+        files: [docker-compose.dev.yml, .kodus/runtime/compose.yml]
+        public: kodus-api
+        health: /health/simple
+        # the first boot builds the production images (install and compile)
+        # and the API runs its migrations and seeds before it answers
+        health_timeout: 20m
+    expose:
+        - { service: kodus-api, port: 3001, kind: http }
+        - { service: webhooks, port: 3332, kind: http }
+        - { service: db_postgres, port: 5432, kind: postgres }
+# The API migrates and seeds itself on the first boot (RUN_MIGRATIONS,
+# RUN_SEEDS, set in a local .kodus/runtime/overrides.env, which is not
+# committed). Once it is ready, the cell copies the
+# project's data volumes (Postgres, Mongo, RabbitMQ) into snapshots; every
+# reset stops the services, copies the snapshots back and starts them again,
+# with no build, migration or seed, so every round starts from that first
+# ready state. When a snapshot cannot be taken or restored, the reset
+# recreates (down -v, up, migrations, seeds) instead.
+data:
+    reset: snapshot

@@ -1,0 +1,121 @@
+# ADR-068: third-party dependencies of
+# the Kody Runtime and of the images self-hosted customers receive must be
+# MIT, Apache-2.0, BSD or ISC, transitive ones included, and are scanned for
+# known vulnerabilities. Licenses fail the job; vulnerabilities are reported
+# as SARIF (informative until the baseline is clean). Each image is gated on
+# what it ships: the backend images (api, worker, webhooks, mcp-manager and
+# the runtime-* ones) share the root production install (docker/Dockerfile
+# prod-deps), the web image ships apps/web's. Reviewed exceptions, each with
+# its reason, live in scripts/runtime/license-exceptions.json.
+name: Runtime supply chain
+
+on:
+    pull_request:
+        paths:
+            - "apps/runtime-cell/**"
+            - "apps/runtime/**"
+            - "libs/runtime/**"
+            - "libs/runtime-publish/**"
+            - "package.json"
+            - "pnpm-lock.yaml"
+            - "apps/web/package.json"
+            - "apps/web/pnpm-lock.yaml"
+            - "scripts/runtime/license-*"
+            - ".github/workflows/runtime-supply-chain.yml"
+    schedule:
+        - cron: "17 6 * * *"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    cell-go:
+        name: Cell (Go) licenses and vulnerabilities
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: apps/runtime-cell
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache-dependency-path: apps/runtime-cell/go.sum
+            - name: Licenses (allowlist, transitive)
+              run: |
+                  go install github.com/google/go-licenses@v1.6.0
+                  # The cell's own packages are first party (license.md at the
+                  # repository root, outside the module go-licenses searches).
+                  go-licenses check ./... \
+                      --allowed_licenses=MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC \
+                      --ignore github.com/kodustech/kodus-ai/apps/runtime-cell
+            - name: Known vulnerabilities in reachable code
+              run: |
+                  # Same version as runtime-cell.yml.
+                  go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+                  govulncheck ./...
+
+    node:
+        name: Node lockfile licenses and vulnerabilities
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            security-events: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+            # pnpm-lock.yaml carries no license field. The installed tree's
+            # package.json files do. No install script runs: the gate reads
+            # metadata only.
+            - name: Install locked dependencies (no scripts)
+              run: |
+                  corepack enable
+                  corepack prepare pnpm@11.9.0 --activate
+                  pnpm install --frozen-lockfile --ignore-scripts
+                  # apps/web is its own pnpm project (docker/Dockerfile.web).
+                  (cd apps/web && pnpm install --frozen-lockfile --ignore-scripts)
+            - name: SBOM (CycloneDX)
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  scan-type: fs
+                  scan-ref: .
+                  format: cyclonedx
+                  output: runtime-sbom.cdx.json
+            # The production closure of each image (devDependencies are never
+            # followed) against the allowlist. A missing or unparsable licence,
+            # copyleft, MPL and source-available licences all fail unless a
+            # reviewed exception names the package, the image and the licence.
+            - name: Licenses of each shipped image (allowlist)
+              run: |
+                  node --test scripts/runtime/license-gate.test.mjs
+                  node scripts/runtime/license-gate.mjs --image=backend --project=.
+                  node scripts/runtime/license-gate.mjs --image=web --project=apps/web
+            - name: Vulnerabilities (informative)
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  scan-type: fs
+                  scan-ref: .
+                  scanners: vuln
+                  format: sarif
+                  output: runtime-vuln.sarif
+                  severity: CRITICAL,HIGH
+                  ignore-unfixed: true
+                  exit-code: "0"
+            # A fork's pull request gets a read-only token, so the upload is skipped there.
+            - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+              if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+              with:
+                  sarif_file: runtime-vuln.sarif
+                  category: runtime-supply-chain
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              if: always()
+              with:
+                  name: runtime-sbom
+                  path: runtime-sbom.cdx.json

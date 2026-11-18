@@ -1,0 +1,128 @@
+# Kody Runtime control plane, locally (apps/runtime). Brings up the Runtime's
+# own Postgres (DBOS + runtime_* tables, the Run projection included), a broker,
+# the runtime-hub, the runtime-worker and a fake cell.
+#
+#   export RUNTIME_SECRET_SEAL_KEY="$(openssl rand -hex 32)"
+#   docker compose -f docker-compose.runtime.yml up -d
+#   pnpm run runtime:e2e      # one Run with the fake cell, until the verdict
+#   docker compose -f docker-compose.runtime.yml down -v
+#
+# Source and node_modules are mounted from the host (pure-JS dependencies
+# only); TypeScript runs through ts-node in transpile-only mode.
+
+x-runtime-node: &runtime-node
+    # By digest (the multi-arch index), as the Runtime Dockerfiles pin their bases.
+    image: node:22.23.4-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
+    working_dir: /app
+    volumes:
+        - .:/app:delegated
+        - ${RUNTIME_NODE_MODULES:-./node_modules}:/app/node_modules:ro
+        - ./.runtime-data/streams:/data/streams
+    environment: &runtime-env
+        TS_NODE_PROJECT: apps/runtime/tsconfig.json
+        TS_NODE_TRANSPILE_ONLY: 'true'
+        RUNTIME_DATABASE_URL: postgres://runtime:runtime@runtime-postgres:5432/kodus_runtime
+        RUNTIME_RABBITMQ_URL: amqp://guest:guest@runtime-rabbitmq:5672
+        RUNTIME_STREAM_DIR: /data/streams
+        # TEST ONLY: plain HTTP + shared tokens for the TS fake cell e2e. Production runs mTLS (scripts/runtime/dev-ca.sh).
+        RUNTIME_TEST_ONLY_PLAINTEXT: '1'
+        RUNTIME_INTERNAL_TOKEN: dev-internal-token
+        # The worker talks to the hub's internal listener (RUNTIME_HUB_INTERNAL_PORT,
+        # default the public port + 1); cells use the public one, 3410.
+        RUNTIME_HUB_URL: http://runtime-hub:3411
+        RUNTIME_CELL_TOKENS: '{"fake-cell":{"token":"dev-cell-token","owner":"kodus"},"rogue-cell":{"token":"dev-rogue-token","owner":"kodus"}}'
+        DBOS_LOG_LEVEL: warn
+    restart: unless-stopped
+
+services:
+    runtime-postgres:
+        image: pgvector/pgvector:pg16@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f
+        container_name: kodus_runtime_postgres
+        environment:
+            POSTGRES_USER: runtime
+            POSTGRES_PASSWORD: runtime
+            POSTGRES_DB: kodus_runtime
+        ports:
+            - '127.0.0.1:${RUNTIME_PG_PORT:-5442}:5432'
+        volumes:
+            - runtime_pg:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U runtime -d kodus_runtime']
+            interval: 2s
+            retries: 30
+
+    runtime-rabbitmq:
+        build:
+            context: ./docker/rabbitMQ
+        image: kodus-ai-rabbitmq:latest
+        container_name: kodus_runtime_rabbitmq
+        volumes:
+            - ./docker/runtime/rabbitmq-disk.conf:/etc/rabbitmq/conf.d/90-runtime-disk.conf:ro
+        ports:
+            - '127.0.0.1:${RUNTIME_RABBITMQ_PORT:-5673}:5672'
+        healthcheck:
+            test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+            interval: 5s
+            retries: 30
+
+    runtime-hub:
+        <<: *runtime-node
+        container_name: kodus_runtime_hub
+        command: node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/hub/main.ts
+        environment:
+            <<: *runtime-env
+            RUNTIME_REPLICA_ID: hub-1
+            RUNTIME_REPLICA_URL: http://runtime-hub:3411
+            RUNTIME_METRICS_PORT: '9464'
+        ports:
+            - '127.0.0.1:${RUNTIME_HUB_PORT:-3410}:3410'
+            - '127.0.0.1:${RUNTIME_HUB_METRICS_PORT:-9464}:9464'
+        depends_on:
+            runtime-postgres:
+                condition: service_healthy
+
+    runtime-worker:
+        <<: *runtime-node
+        container_name: kodus_runtime_worker
+        command: node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/worker/main.ts
+        environment:
+            <<: *runtime-env
+            RUNTIME_RELEASE_VERSION: ${RUNTIME_RELEASE_VERSION-development}
+            RUNTIME_ENV_DRIVER: hub
+            # Opens the sealed repo and Run tokens. Required, never committed:
+            # export one before `pnpm run runtime:up`, and keep it exported for
+            # `pnpm run runtime:e2e`, which seals with the same variable. Unset,
+            # the worker refuses to start ("RUNTIME_SECRET_SEAL_KEY is required"
+            # in `pnpm run runtime:logs`). It is not a compose-level requirement,
+            # so `runtime:down` and `runtime:logs` work from a new shell.
+            RUNTIME_SECRET_SEAL_KEY: ${RUNTIME_SECRET_SEAL_KEY:-}
+            RUNTIME_METRICS_PORT: '9465'
+            RUNTIME_ORG_CONCURRENCY: '2'
+            # 1 (default): round snapshots on cells that keep them; the fake cell keeps none (compose resets).
+            RUNTIME_ROUND_SNAPSHOTS: ${RUNTIME_ROUND_SNAPSHOTS:-1}
+        ports:
+            - '127.0.0.1:${RUNTIME_WORKER_METRICS_PORT:-9465}:9465'
+        depends_on:
+            runtime-postgres:
+                condition: service_healthy
+            runtime-rabbitmq:
+                condition: service_healthy
+            runtime-hub:
+                condition: service_started
+
+    runtime-fake-cell:
+        <<: *runtime-node
+        container_name: kodus_runtime_fake_cell
+        command: node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/fake-cell/main.ts
+        environment:
+            <<: *runtime-env
+            RUNTIME_HUB_WS_URL: ws://runtime-hub:3410/cells
+            RUNTIME_CELL_ID: fake-cell
+            RUNTIME_CELL_TOKEN: dev-cell-token
+            # The fake proxy reports this host as denied during the PR test phase.
+            RUNTIME_FAKE_BLOCKED_HOSTS: ${RUNTIME_FAKE_BLOCKED_HOSTS:-}
+        depends_on:
+            - runtime-hub
+
+volumes:
+    runtime_pg:

@@ -172,7 +172,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
     rm -f /etc/apt/apt.conf.d/docker-clean \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
-    ca-certificates procps git ripgrep
+    ca-certificates procps git ripgrep openssh-client
 
 # Copy the bun binary from the official image.
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
@@ -221,6 +221,36 @@ COPY --from=analyzer-source /osv-scanner /usr/local/bin/osv-scanner
 # `ast-grep` name: on Linux `sg` is util-linux's setgroups.
 COPY --from=analyzer-source /ast-grep /usr/local/bin/ast-grep
 CMD ["node", "dist/apps/worker/main.js"]
+# Kody Runtime control plane (ADR-045): the hub (WebSocket + mTLS for the
+# cells, internal HTTP for the worker) and the runtime-worker (DBOS). Their
+# own slim base: no bun, kodus-graph, git, ripgrep, ssh, scripts or skills
+# (the hub faces the internet). Neither runs product migrations; each applies
+# the versioned Runtime migrations it owns. RUNTIME_PRODUCTION_IMAGE=1 makes
+# both refuse the test-only and dev switches (plaintext mode, insecure cells,
+# the fake environment driver). The base is pinned by digest, as the cell's
+# images are: the hub faces the internet.
+FROM docker.io/library/node:22.23.4-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d AS runtime-control-plane
+LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
+WORKDIR /usr/src/app
+ENV NODE_ENV=production \
+    RUNTIME_PRODUCTION_IMAGE=1 \
+    RUN_MIGRATIONS=false
+COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules
+COPY --chown=1000:1000 --from=build /usr/src/app/dist/apps/runtime ./dist/apps/runtime
+COPY --chown=1000:1000 --from=build /usr/src/app/package.json ./package.json
+USER 1000
+
+FROM runtime-control-plane AS runtime-hub
+CMD ["node", "dist/apps/runtime/hub/main.js"]
+
+FROM runtime-control-plane AS runtime-worker
+CMD ["node", "dist/apps/runtime/worker/main.js"]
+
+# The preview edge (docs/runtime/preview-urls.md): serves *.RUNTIME_PREVIEW_DOMAIN to
+# browsers and takes the cells' preview tunnels (mTLS). Its own deployment, same image.
+FROM runtime-control-plane AS runtime-preview-edge
+CMD ["node", "dist/apps/runtime/edge/main.js"]
+
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]
 CMD ["node", "dist/apps/mcp-manager/main.js"]

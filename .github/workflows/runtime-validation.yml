@@ -1,0 +1,195 @@
+name: Runtime validation
+
+on:
+    pull_request:
+        paths:
+            - 'apps/runtime/**'
+            # Covers the generated constants_gen.go and schema/ (generated-go.spec.ts fails on a hand edit).
+            - 'apps/runtime-cell/**'
+            - 'apps/api/src/controllers/runtime/**'
+            - 'apps/web/src/**/runtime/**'
+            - 'apps/web/src/app/(app)/organization/cli-keys/**'
+            - 'libs/runtime/**'
+            - 'libs/runtime-publish/**'
+            - 'libs/mcp-server/**'
+            - 'libs/llm/**'
+            - 'libs/agent-harness/**'
+            - 'evals/runtime-*/**'
+            - 'scripts/runtime/**'
+            - 'scripts/runtime-validation/**'
+            - 'test/jest.setup.ts'
+            - 'jest.config.ts'
+            - 'jest.integration.config.ts'
+            - 'test/jest.integration.global-*.ts'
+            - 'jest-resolver.cjs'
+            - 'tsconfig*.json'
+            - 'package.json'
+            - 'pnpm-lock.yaml'
+            - 'pnpm-workspace.yaml'
+            - '.github/workflows/runtime-validation.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: runtime-validation-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    offline:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        env:
+            API_NODE_ENV: test
+            NODE_ENV: test
+            HUSKY: '0'
+            TMPDIR: ${{ runner.temp }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Setup Node
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+
+            - name: Check exact inventory
+              run: node scripts/runtime-validation/run.mjs --plan --layers=unit,browser,planner-options,planner-host
+
+            - name: Install locked workspace dependencies
+              run: |
+                  corepack enable
+                  corepack prepare pnpm@11.9.0 --activate
+                  pnpm install --frozen-lockfile --ignore-scripts
+
+            - name: Test validation harness
+              run: node --test scripts/runtime-validation/run.test.mjs
+
+            # The scorers' "prove it can fail" tests: an edit to a scorer would
+            # otherwise move the H2 call or the planner baseline unnoticed.
+            - name: Test the Runtime eval scorers and the E2B metrics analyzer
+              run: |
+                  node --test evals/runtime-h2-backtest/score.test.js evals/runtime-planner-quality/score.test.js
+                  node --test scripts/runtime-validation/resource-profile/e2b-metrics.test.mjs
+
+            - name: Prepare test-only EE configuration
+              run: |
+                  test ! -e libs/ee/configs/environment/environment.ts
+                  cat <<'CONFIG' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+                  export const environment = devEnvironment;
+                  CONFIG
+
+            - name: Run exact offline test layers
+              run: node scripts/runtime-validation/run.mjs --run --layers=unit,browser,planner-options,planner-host
+
+            - name: Run local MCP and A2A SDK fixtures
+              run: node scripts/runtime-validation/run.mjs --run --layers=sdk --allow-fixture=sdk
+
+            - name: Retain manifests
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: runtime-validation-manifests
+                  path: ${{ runner.temp }}/kody-runtime-validation-*/manifest.json
+                  if-no-files-found: ignore
+                  retention-days: 14
+
+    # The Runtime's integration project (jest.integration.config.ts), which the
+    # default jest run leaves out: the postgres layer against a disposable
+    # service (each suite takes a database of its own on it), the go-cell
+    # layer (the real Go cell, built once by the project's globalSetup), and
+    # the Runtime retry on a real broker without the delayed-message plugin
+    # (its own vhost and restricted user, made by the spec through the
+    # management API). No repository secret reaches it.
+    integration:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        services:
+            postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_USER: runtime
+                    POSTGRES_PASSWORD: runtime
+                    POSTGRES_DB: kodus_runtime_it
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U runtime -d kodus_runtime_it"
+                    --health-interval 2s
+                    --health-timeout 5s
+                    --health-retries 30
+            rabbitmq:
+                # The broker the product runs, without the delayed-message plugin.
+                image: rabbitmq:4.3.7-management
+                env:
+                    RABBITMQ_DEFAULT_USER: runtime_it
+                    RABBITMQ_DEFAULT_PASS: runtime_it
+                ports:
+                    - 5672:5672
+                    - 15672:15672
+                options: >-
+                    --health-cmd "rabbitmq-diagnostics -q check_port_connectivity"
+                    --health-interval 5s
+                    --health-timeout 10s
+                    --health-retries 30
+        env:
+            API_NODE_ENV: test
+            NODE_ENV: test
+            HUSKY: '0'
+            RUNTIME_IT_DATABASE_URL: postgres://runtime:runtime@localhost:5432/kodus_runtime_it
+            RUNTIME_IT_GO_CELL: '1'
+            # Loopback only (the spec refuses any other host); the management URL carries no credentials.
+            RUNTIME_RETRY_IT_ADMIN_URL: amqp://runtime_it:runtime_it@127.0.0.1:5672
+            RUNTIME_RETRY_IT_MANAGEMENT_URL: http://127.0.0.1:15672
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Setup Node
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+
+            - name: Setup Go
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache-dependency-path: apps/runtime-cell/go.sum
+
+            - name: Install locked workspace dependencies
+              run: |
+                  corepack enable
+                  corepack prepare pnpm@11.9.0 --activate
+                  pnpm install --frozen-lockfile --ignore-scripts
+
+            - name: Prepare test-only EE configuration
+              run: |
+                  test ! -e libs/ee/configs/environment/environment.ts
+                  cat <<'CONFIG' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+                  export const environment = devEnvironment;
+                  CONFIG
+
+            - name: Run the Runtime integration project (postgres, go-cell)
+              run: pnpm run test:runtime-integration
+
+    resource-profile-contract:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - name: Test offline resource-profile analyzer
+              run: python3 -m unittest discover -s scripts/runtime-validation/resource-profile -p 'test_*.py'
+            # promtool from the pinned Prometheus image: the alert rules, their
+            # unit tests, and every dashboard query parses.
+            - name: Test the Runtime alert rules and dashboard queries
+              run: scripts/runtime/test-alert-rules.sh
