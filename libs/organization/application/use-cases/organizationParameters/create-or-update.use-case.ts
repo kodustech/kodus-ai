@@ -36,6 +36,7 @@ import {
 } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { ultraModeScopes } from '@libs/code-review/domain/review-mode';
+import { normalizeModelId } from '@libs/ee/ultra-review/ultra-merge-ranking';
 import {
     BadRequestException,
     HttpException,
@@ -172,13 +173,21 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         previous: BYOKConfig | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
-        const isSet = (ids?: string[]) => {
-            const picked = (ids ?? []).filter(Boolean);
-            return picked.length === 3 && new Set(picked).size === 3;
+        // Three different models, counted as the review counts them: one
+        // model through two providers is one.
+        const isSet = (config: BYOKConfig | undefined) => {
+            const picked = (config?.routing?.ultraModelIds ?? []).filter(
+                Boolean,
+            );
+            const models = picked.map((id) => {
+                const model = config?.models?.find((m) => m?.id === id)?.model;
+                return model ? normalizeModelId(model) : id;
+            });
+            return picked.length === 3 && new Set(models).size === 3;
         };
         if (
-            !isSet(previous?.routing?.ultraModelIds) ||
-            isSet(next.routing?.ultraModelIds) ||
+            !isSet(previous) ||
+            isSet(next) ||
             !this.parametersService ||
             !this.teamService
         ) {

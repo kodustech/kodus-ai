@@ -1226,6 +1226,23 @@ describe('the Ultra trio while a review mode is Ultra', () => {
         expect(createOrUpdateConfig).not.toHaveBeenCalled();
     });
 
+    it('refuses a trio that becomes one model through two providers while a scope runs Ultra', async () => {
+        const existing = withTrio(['a', 'b', 'c']);
+        const next = withTrio(['a', 'b', 'd']);
+        next.models.push({
+            id: 'd',
+            credentialId: 'cred-openai',
+            model: 'openai/gpt-5',
+        });
+        const { useCase, createOrUpdateConfig } = buildUseCase(existing, {
+            teamConfigs: [{ configs: { reviewMode: 'ultra' } }],
+        });
+        await expect(saveByok(useCase, next)).rejects.toThrow(
+            /Ultra review is the review mode in the global settings/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
     it('saves a cleared trio when no scope runs Ultra', async () => {
         const { useCase, createOrUpdateConfig } = buildUseCase(
             withTrio(['a', 'b', 'c']),
