@@ -165,7 +165,13 @@ describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', 
             pullRequestNumber: 1000,
             repositoryId: 'repo-1',
         };
-        await useCase.execute(query);
+        const history = await useCase.execute(query);
+        expect(history.reviewIdentity).toEqual({
+            repositoryId: 'repo-1',
+            location: makePrDoc(1000).url,
+            provider: 'GITHUB',
+        });
+        expect(history.currentHeadSha).toBeUndefined();
         expect(getPullRequest).not.toHaveBeenCalled();
 
         const first = await useCase.execute({ ...query, explain: 'true' });

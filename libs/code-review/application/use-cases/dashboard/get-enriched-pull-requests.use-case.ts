@@ -793,6 +793,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
             });
 
+            // The CLI requests the live head once and checks the identity on each page.
             const reviewIdentity =
                 pullRequestNumber && (repositoryId || repositoryName)
                     ? this.getReviewHistoryIdentity(paginatedData)
