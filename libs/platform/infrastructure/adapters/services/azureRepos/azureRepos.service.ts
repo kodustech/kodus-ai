@@ -4436,7 +4436,8 @@ export class AzureReposService implements Omit<
         additions: number;
         deletions: number;
         changes: number;
-        patch: string;
+        /** Undefined when the diff could not be computed (timed out). */
+        patch: string | undefined;
         content: string; // Added content
     } | null> {
         const {
@@ -4452,7 +4453,7 @@ export class AzureReposService implements Omit<
 
         let originalFileContent = '';
         let modifiedFileContent = '';
-        let patch = '';
+        let patch: string | undefined = '';
         let additions = 0;
         let deletions = 0;
         const status: FileChange['status'] = // Use correct type from FileChange
@@ -4548,7 +4549,7 @@ export class AzureReposService implements Omit<
                 );
                 if (computed === undefined) {
                     this.logger.warn({
-                        message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; reviewing the file without a patch`,
+                        message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; the file has no patch (unavailable, not empty)`,
                         context: this._generateFileDiffForAzure.name,
                         metadata: {
                             filePath,
@@ -4560,16 +4561,24 @@ export class AzureReposService implements Omit<
                         },
                     });
                 }
-                patch = computed ?? '';
+                // A timed-out diff stays unavailable (undefined), the shape
+                // providers use for an omitted oversized patch, never an
+                // empty patch that reads as "no changes". Risk and approval
+                // checks treat a missing patch as missing evidence.
+                patch = computed;
 
-                // Calculate additions and deletions from the patch
-                const diffLines = patch.split('\n');
-                additions = diffLines.filter(
-                    (line) => line.startsWith('+') && !line.startsWith('+++'),
-                ).length;
-                deletions = diffLines.filter(
-                    (line) => line.startsWith('-') && !line.startsWith('---'),
-                ).length;
+                if (patch !== undefined) {
+                    // Calculate additions and deletions from the patch
+                    const diffLines = patch.split('\n');
+                    additions = diffLines.filter(
+                        (line) =>
+                            line.startsWith('+') && !line.startsWith('+++'),
+                    ).length;
+                    deletions = diffLines.filter(
+                        (line) =>
+                            line.startsWith('-') && !line.startsWith('---'),
+                    ).length;
+                }
             } else if (status === 'removed') {
                 // Compare with 'removed'
                 // Handle deleted files explicitly if needed (e.g., create a dummy patch or specific log)

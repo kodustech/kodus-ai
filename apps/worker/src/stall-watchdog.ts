@@ -491,7 +491,12 @@ export function stallWatchdogThread(): void {
                         recoveredBeforeRead: false,
                         stackUnavailable:
                             undefined as StallReport['stackUnavailable'],
-                        error: String(e?.message ?? e),
+                        // Never empty: an empty error would read as a
+                        // capture that worked and found nothing.
+                        error:
+                            (e && typeof e.message === 'string' && e.message) ||
+                            String(e) ||
+                            'capture failed without a message',
                     }))
                     .then(
                         ({
@@ -532,7 +537,7 @@ export function stallWatchdogThread(): void {
                                     ...(profileIncludesRecovery
                                         ? { profileIncludesRecovery: true }
                                         : {}),
-                                    ...(error ? { error } : {}),
+                                    ...(error !== undefined ? { error } : {}),
                                 },
                             );
                             if (n === 1) {
@@ -561,7 +566,7 @@ export function stallWatchdogThread(): void {
                         // report, never before it.
                         if (s.recoveryPending) {
                             s.recoveryPending = false;
-                            emitRecovered(s.endedMs ?? 0);
+                            emitRecovered(s.endedMs ?? Date.now() - s.start);
                         }
                     });
             }

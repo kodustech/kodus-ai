@@ -108,18 +108,30 @@ describe('createFilePatchYielding', () => {
     });
 
     it('treats a zero or invalid timeout as the default', async () => {
+        // Slow enough (~100ms) that a raw 0 or -1 aborts the diff before it
+        // ends; only the default bound yields the real patch.
+        const { before, after } = fullyChangedFile(1_000);
+        const expected = createTwoFilesPatch(
+            'f.ts',
+            'f.ts',
+            before,
+            after,
+            'x',
+            'y',
+            { context: 3 },
+        );
         for (const timeout of [0, -1, Number.NaN]) {
             await expect(
                 createFilePatchYielding(
                     'f.ts',
                     'f.ts',
-                    'a\n',
-                    'b\n',
+                    before,
+                    after,
                     'x',
                     'y',
                     timeout,
                 ),
-            ).resolves.toEqual(expect.stringContaining('@@'));
+            ).resolves.toBe(expected);
         }
     });
 
