@@ -24,10 +24,7 @@ export interface ISecurityScanQueueProbe {
 @Injectable()
 export class SecurityScanQueueProbe implements ISecurityScanQueueProbe {
     async consumerCount(): Promise<number | null> {
-        if (
-            (process.env.API_RABBITMQ_ENABLED ?? 'true').toLowerCase() ===
-            'false'
-        ) {
+        if (process.env.API_RABBITMQ_ENABLED === 'false') {
             return null;
         }
 

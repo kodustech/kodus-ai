@@ -10,7 +10,6 @@ import {
     IWorkflowJobRepository,
     WORKFLOW_JOB_REPOSITORY_TOKEN,
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
-import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 import {
@@ -65,25 +64,15 @@ export class CancelSecurityScanUseCase {
 
         // The scan record is what locks the repository. A job left PENDING
         // is skipped by the processor once it arrives; marking it cancelled
-        // keeps it from looking stuck.
-        await this.cancelJobs(scan.uuid).catch(() => undefined);
-        return updated;
-    }
-
-    private async cancelJobs(scanId: string): Promise<void> {
-        for (const status of [JobStatus.PENDING, JobStatus.PROCESSING]) {
-            const { data } = await this.jobs.findMany({
-                correlationId: scanId,
+        // keeps it from looking stuck. One UPDATE so a job that finished
+        // in between is not overwritten, and every matching row is hit.
+        const cancelJobs = this.jobs.cancelActiveByCorrelation;
+        if (cancelJobs) {
+            await cancelJobs({
+                correlationId: scan.uuid,
                 workflowType: WorkflowType.SECURITY_SCAN,
-                status,
-                limit: 20,
-            });
-            for (const job of data) {
-                await this.jobs.update(job.id, {
-                    status: JobStatus.CANCELLED,
-                    completedAt: new Date(),
-                });
-            }
+            }).catch(() => undefined);
         }
+        return updated;
     }
 }

@@ -20,8 +20,7 @@ function setup(
         ),
     };
     const jobs = {
-        findMany: jest.fn(async () => ({ data: [{ id: 'job-1' }] })),
-        update: jest.fn(async () => undefined),
+        cancelActiveByCorrelation: jest.fn(async () => 1),
     };
     return {
         scans,
@@ -52,13 +51,10 @@ describe('CancelSecurityScanUseCase', () => {
                 ],
             },
         );
-        expect(jobs.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ correlationId: id, status: 'PENDING' }),
-        );
-        expect(jobs.update).toHaveBeenCalledWith(
-            'job-1',
-            expect.objectContaining({ status: 'CANCELLED' }),
-        );
+        expect(jobs.cancelActiveByCorrelation).toHaveBeenCalledWith({
+            correlationId: id,
+            workflowType: 'SECURITY_SCAN',
+        });
     });
 
     it('cancels a running scan the same way', async () => {
@@ -87,7 +83,7 @@ describe('CancelSecurityScanUseCase', () => {
             useCase.execute({ organizationId: 'org-1', scanId: id }),
         ).rejects.toThrow(SCAN_NOT_CANCELLABLE_MESSAGE);
         expect(scans.update).not.toHaveBeenCalled();
-        expect(jobs.findMany).not.toHaveBeenCalled();
+        expect(jobs.cancelActiveByCorrelation).not.toHaveBeenCalled();
     });
 
     it('does not cancel a scan of another organization', async () => {
@@ -114,7 +110,9 @@ describe('CancelSecurityScanUseCase', () => {
 
     it('still cancels the scan when marking its jobs fails', async () => {
         const { useCase, jobs } = setup();
-        jobs.findMany.mockRejectedValue(new Error('postgres down'));
+        jobs.cancelActiveByCorrelation.mockRejectedValue(
+            new Error('postgres down'),
+        );
 
         await expect(
             useCase.execute({ organizationId: 'org-1', scanId: id }),

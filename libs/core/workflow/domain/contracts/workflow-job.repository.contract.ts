@@ -24,6 +24,15 @@ export interface IWorkflowJobRepository {
         lastError: string;
         errorClassification: unknown;
     }): Promise<StaleWorkflowJobReapResult[]>;
+    /**
+     * Cancels PENDING and PROCESSING jobs of one workflow run. The status
+     * filter is in the UPDATE itself, so a job that finished between the
+     * scan cancel and this write is left alone.
+     */
+    cancelActiveByCorrelation?(params: {
+        correlationId: string;
+        workflowType: string;
+    }): Promise<number>;
 }
 
 export const WORKFLOW_JOB_REPOSITORY_TOKEN = Symbol.for(

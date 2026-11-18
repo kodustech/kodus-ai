@@ -87,3 +87,51 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
         expect(result).toEqual(reaped);
     });
 });
+
+describe('WorkflowJobRepository.cancelActiveByCorrelation', () => {
+    let qb: {
+        update: jest.Mock;
+        set: jest.Mock;
+        where: jest.Mock;
+        andWhere: jest.Mock;
+        execute: jest.Mock;
+    };
+    let repo: WorkflowJobRepository;
+
+    beforeEach(() => {
+        qb = {
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ affected: 2 }),
+        };
+        repo = new WorkflowJobRepository({
+            createQueryBuilder: jest.fn().mockReturnValue(qb),
+        } as any);
+    });
+
+    it('cancels only PENDING and PROCESSING jobs of that run', async () => {
+        const affected = await repo.cancelActiveByCorrelation({
+            correlationId: 'scan-1',
+            workflowType: 'SECURITY_SCAN',
+        });
+
+        expect(affected).toBe(2);
+        expect(qb.update).toHaveBeenCalledWith(WorkflowJobModel);
+        expect(qb.set).toHaveBeenCalledWith(
+            expect.objectContaining({ status: JobStatus.CANCELLED }),
+        );
+        expect(qb.where).toHaveBeenCalledWith(
+            '"correlationId" = :correlationId',
+            { correlationId: 'scan-1' },
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+            '"workflowType" = :workflowType',
+            { workflowType: 'SECURITY_SCAN' },
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith('status IN (:...statuses)', {
+            statuses: [JobStatus.PENDING, JobStatus.PROCESSING],
+        });
+    });
+});

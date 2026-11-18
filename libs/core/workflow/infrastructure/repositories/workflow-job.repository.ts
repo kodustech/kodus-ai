@@ -320,6 +320,43 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
+    async cancelActiveByCorrelation(params: {
+        correlationId: string;
+        workflowType: string;
+    }): Promise<number> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.CANCELLED,
+                    completedAt: () => 'NOW()',
+                })
+                .where('"correlationId" = :correlationId', {
+                    correlationId: params.correlationId,
+                })
+                .andWhere('"workflowType" = :workflowType', {
+                    workflowType: params.workflowType,
+                })
+                .andWhere('status IN (:...statuses)', {
+                    statuses: [JobStatus.PENDING, JobStatus.PROCESSING],
+                })
+                .execute();
+            return result.affected ?? 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to cancel active workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: {
+                    correlationId: params.correlationId,
+                    workflowType: params.workflowType,
+                },
+            });
+            throw error;
+        }
+    }
+
     async getExecutionHistory(_jobId: string): Promise<IJobExecutionHistory[]> {
         // TODO: Implement execution history tracking if needed
         // For now, return empty array as we don't have a separate execution_history table
