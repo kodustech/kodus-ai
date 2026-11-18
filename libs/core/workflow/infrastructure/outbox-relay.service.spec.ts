@@ -23,9 +23,11 @@ describe('INBOX_REAPER_CONSUMER_TIMEOUTS', () => {
                 'workflow-job-consumer.ast_graph_build',
                 'workflow-job-consumer.ast_graph_incremental',
                 'workflow-job-consumer.check_implementation',
+                'workflow-job-consumer.cli_code_review',
                 'workflow-job-consumer.code_review',
                 'workflow-job-consumer.security_scan',
                 'workflow-job-consumer.webhook',
+                'chat-with-kody-from-git',
             ].sort(),
         );
     });
@@ -34,14 +36,29 @@ describe('INBOX_REAPER_CONSUMER_TIMEOUTS', () => {
 describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     const DEFAULT_TIMEOUT_MIN = 180;
 
-    let jobRepository: { failStaleProcessing: jest.Mock };
+    let jobRepository: {
+        failStaleProcessing: jest.Mock;
+        failStalePending: jest.Mock;
+        countReapedSince: jest.Mock;
+    };
     let lock: { release: jest.Mock };
     let distributedLockService: { acquire: jest.Mock };
     let incidentManager: { failHeartbeat: jest.Mock };
 
+    const jobs = (n: number, workflowType = 'CODE_REVIEW') =>
+        Array.from({ length: n }, (_, i) => ({
+            uuid: `job-${workflowType}-${i}`,
+            workflowType,
+            organizationId: `org-${i % 2}`,
+            startedAt: new Date(),
+        }));
+
     const build = () => {
         jobRepository = {
             failStaleProcessing: jest.fn().mockResolvedValue([]),
+            failStalePending: jest.fn().mockResolvedValue([]),
+            // undefined: no window count available, alert on the pass alone
+            countReapedSince: jest.fn().mockResolvedValue(undefined),
         };
         lock = { release: jest.fn().mockResolvedValue(undefined) };
         distributedLockService = {
@@ -148,6 +165,72 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         await service.reapStaleProcessingJobs();
 
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('reaps jobs that never started (PENDING) with a 6h cutoff', async () => {
+        const service = build();
+        const before = Date.now();
+        jobRepository.failStalePending.mockResolvedValue(jobs(2, 'WEBHOOK_PROCESSING'));
+
+        await service.reapStaleProcessingJobs();
+
+        expect(jobRepository.failStalePending).toHaveBeenCalledTimes(1);
+        const arg = jobRepository.failStalePending.mock.calls[0][0];
+        expect(arg.errorClassification).toBe(ErrorClassification.PERMANENT);
+        expect(arg.lastError).toMatch(/^Orphaned: never started/);
+        const expected = before - 360 * 60 * 1000;
+        expect(arg.olderThan.getTime()).toBeGreaterThanOrEqual(expected - 5000);
+        expect(arg.olderThan.getTime()).toBeLessThanOrEqual(expected + 5000);
+    });
+
+    it('alerts once when small passes add up past the threshold in the window', async () => {
+        const service = build();
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(2));
+        jobRepository.countReapedSince.mockResolvedValue(5); // 3 before + 2 now
+
+        await service.reapStaleProcessingJobs();
+
+        expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+        expect(jobRepository.countReapedSince).toHaveBeenCalledWith(
+            expect.any(Date),
+            'Orphaned:',
+        );
+    });
+
+    it('does not alert again while the window is already past the threshold', async () => {
+        const service = build();
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(3));
+        jobRepository.countReapedSince.mockResolvedValue(9); // 6 before + 3 now
+
+        await service.reapStaleProcessingJobs();
+
+        expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('says what was lost and where to look, without guessing OOM', async () => {
+        const service = build();
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(6));
+
+        await service.reapStaleProcessingJobs();
+
+        const [url, message] = incidentManager.failHeartbeat.mock.calls[0];
+        expect(url).toBe('API_BETTERSTACK_HEARTBEAT_OUTBOX_URL');
+        expect(message).toContain('6 workflow jobs lost');
+        expect(message).toContain('CODE_REVIEW: 6');
+        expect(message).toContain('2 orgs');
+        expect(message).toContain('StallWatchdog');
+        expect(message).toContain('monitor=workflow_job_loss');
+        expect(message).not.toMatch(/OOM|node pressure/);
+    });
+
+    it('still alerts on the pass alone when the window count fails', async () => {
+        const service = build();
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(6));
+        jobRepository.countReapedSince.mockRejectedValue(new Error('db slow'));
+
+        await service.reapStaleProcessingJobs();
+
+        expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
     });
 
     it('always releases the lock, even when the repository throws', async () => {
