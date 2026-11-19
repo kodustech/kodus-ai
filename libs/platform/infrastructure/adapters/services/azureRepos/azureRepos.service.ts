@@ -1662,6 +1662,12 @@ export class AzureReposService implements Omit<
                             targetCommitId: headSha,
                             changeType: change.changeType,
                             rethrowRateLimit: true,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
                         }),
                     ),
                 ),
@@ -1863,6 +1869,11 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
+                    logContext: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        prNumber,
+                    },
                 });
 
                 if (fileDiff) {
@@ -4304,6 +4315,12 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
                         }),
                     ),
                 ),
@@ -4412,6 +4429,12 @@ export class AzureReposService implements Omit<
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
         /** Let a rate limit through instead of answering null. */
         rethrowRateLimit?: boolean;
+        /** Ties this file's warnings to the org, team and PR. */
+        logContext?: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        };
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4535,6 +4558,7 @@ export class AzureReposService implements Omit<
                         message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; the file has no patch (unavailable, not empty)`,
                         context: this._generateFileDiffForAzure.name,
                         metadata: {
+                            ...params.logContext,
                             filePath,
                             baseCommitId,
                             targetCommitId,

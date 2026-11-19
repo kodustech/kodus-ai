@@ -49,9 +49,9 @@ describe('AzureReposService.getFilesByPullRequestId — a diff that times out', 
             'getProjectIdFromRepository',
         ).mockResolvedValue('project');
         // The timeout warning is expected; keep the test output quiet.
-        jest.spyOn((service as any).logger, 'warn').mockImplementation(
-            () => undefined,
-        );
+        const warn = jest
+            .spyOn((service as any).logger, 'warn')
+            .mockImplementation(() => undefined);
 
         const files = await service.getFilesByPullRequestId({
             organizationAndTeamData: {
@@ -70,5 +70,18 @@ describe('AzureReposService.getFilesByPullRequestId — a diff that times out', 
         // an omitted oversized diff, which risk/approval treat as missing.
         expect(huge?.patch).toBeUndefined();
         expect(small?.patch).toEqual(expect.stringContaining('@@'));
+        // The warning is the trace that a file went without its diff: it
+        // names the org, team and PR so it can be found.
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('/src/huge.ts'),
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    prNumber: 42,
+                    filePath: '/src/huge.ts',
+                }),
+            }),
+        );
     });
 });
