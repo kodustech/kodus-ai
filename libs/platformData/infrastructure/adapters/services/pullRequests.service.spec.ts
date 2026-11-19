@@ -639,3 +639,80 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — an event that ch
         expect(written).toHaveProperty('commits', []);
     });
 });
+
+// A file whose rewrite would change nothing is not rewritten. The check has to
+// tell a real change from the shapes Mongo hands back (absent vs empty, keys
+// in another order).
+describe('PullRequestsService — when a stored file counts as unchanged', () => {
+    const unchanged = (
+        stored: Record<string, unknown>,
+        fields: Record<string, unknown>,
+        budgeted: { patch: string; truncated?: boolean },
+    ): boolean =>
+        (PullRequestsService as any).fileIsUnchanged(stored, fields, budgeted);
+
+    const stored = {
+        patch: '@@ -1 +1 @@',
+        patchTruncated: false,
+        status: 'modified',
+        added: 3,
+        deleted: 1,
+        changes: 4,
+        reviewMode: 'heavy',
+        codeReviewModelUsed: { generateSuggestions: 'gen', safeguard: 'safe' },
+    };
+    const fields = {
+        status: 'modified',
+        added: 3,
+        deleted: 1,
+        changes: 4,
+        reviewMode: 'heavy',
+        // Same object, keys in another order.
+        codeReviewModelUsed: { safeguard: 'safe', generateSuggestions: 'gen' },
+    };
+    const budgeted = { patch: '@@ -1 +1 @@', truncated: false };
+
+    it('is unchanged when every compared field matches, whatever the key order', () => {
+        expect(unchanged(stored, fields, budgeted)).toBe(true);
+    });
+
+    it('reads absent, null and empty the same', () => {
+        expect(
+            unchanged(
+                { ...stored, reviewMode: undefined, patchTruncated: undefined },
+                { ...fields, reviewMode: '' },
+                { patch: '@@ -1 +1 @@' },
+            ),
+        ).toBe(true);
+        expect(
+            unchanged(
+                { ...stored, added: null },
+                { ...fields, added: 0 },
+                budgeted,
+            ),
+        ).toBe(true);
+    });
+
+    it.each([
+        ['the patch', {}, { patch: '@@ -1 +2 @@' }],
+        ['the truncation flag', {}, { patch: '@@ -1 +1 @@', truncated: true }],
+        ['the status', { status: 'renamed' }, undefined],
+        ['the lines added', { added: 4 }, undefined],
+        ['the lines deleted', { deleted: 2 }, undefined],
+        ['the changes', { changes: 5 }, undefined],
+        ['the review mode', { reviewMode: 'light' }, undefined],
+        [
+            'the model used',
+            { codeReviewModelUsed: { generateSuggestions: 'other', safeguard: 'safe' } },
+            undefined,
+        ],
+    ])('is changed when %s differs', (_label, fieldChange, patchChange) => {
+        expect(
+            unchanged(
+                stored,
+                { ...fields, ...fieldChange },
+                patchChange ?? budgeted,
+            ),
+        ).toBe(false);
+    });
+});
