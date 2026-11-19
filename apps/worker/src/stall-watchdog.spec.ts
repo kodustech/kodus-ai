@@ -83,10 +83,12 @@ describe('startStallWatchdog (real worker thread)', () => {
             // stack it carried is not trusted, and the reason is given.
             expect(stall.stackUnavailable).toBe('answered-late');
         }
-        if (stall.hottest?.length) {
-            // The profile was taken during the stall: one place holds the CPU.
-            expect(stall.hottest[0].pct).toBeGreaterThan(50);
-            expect(stall.hottest[0].file).toContain('stall-watchdog.spec');
+        if (stall.stackUnavailable === undefined) {
+            // The inspector answered in time, so the profile belongs to the
+            // stall: one place holds the CPU.
+            expect(stall.hottest?.length).toBeGreaterThan(0);
+            expect(stall.hottest?.[0].pct).toBeGreaterThan(50);
+            expect(stall.hottest?.[0].file).toContain('stall-watchdog.spec');
         }
         if (stall.stack || stall.hottest?.length) {
             expect(stall.location).toContain('stall-watchdog.spec');
@@ -294,10 +296,17 @@ describe('startStallWatchdog (real worker thread)', () => {
         // instead of blaming a native call that never happened.
         expect(stall.location).toContain('stall-watchdog.spec');
         expect(stall.location).not.toContain('could not interrupt');
-        if (stall.stackUnavailable !== 'answered-late') {
-            expect(stall.stackUnavailable).toBe('ended-before-read');
-            expect(stall.profileIncludesRecovery).toBe(true);
-        }
+        // The profile started inside the stall and ran past its end.
+        expect(stall.profileIncludesRecovery).toBe(true);
+        // The reason follows from the measured answer time, not from the
+        // value under test: in time -> the stall had simply ended; late
+        // (a slow Debugger.enable, as in a long in-band CI run) -> late.
+        expect(stall.inspectorAnswerMs).toEqual(expect.any(Number));
+        expect(stall.stackUnavailable).toBe(
+            stall.inspectorAnswerMs! > 1_000
+                ? 'answered-late'
+                : 'ended-before-read',
+        );
     });
     it('reports and alerts a stall that starts and ends while an earlier capture is still running', async () => {
         const reports: StallReport[] = [];
