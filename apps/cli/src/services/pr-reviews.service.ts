@@ -1,4 +1,7 @@
-import type { PullRequestReviewRun } from '../types/pr-reviews.js';
+import type {
+    PullRequestExecutionsPage,
+    PullRequestReviewRun,
+} from '../types/pr-reviews.js';
 import { CommandError } from '../utils/command-errors.js';
 import { pullRequestsApi } from './api/pull-requests.api.js';
 import { gitService } from './git.service.js';
@@ -13,6 +16,7 @@ export type PullRequestReviewsInput = {
     team?: string;
     /** Most recent runs to return. */
     limit?: number;
+    explain?: boolean;
 };
 
 export type PullRequestReviewsResult = {
@@ -22,6 +26,7 @@ export type PullRequestReviewsResult = {
     runs: PullRequestReviewRun[];
     /** True when more runs exist than `limit` returned. */
     truncated: boolean;
+    currentHeadSha?: string;
 };
 
 const PAGE_SIZE = 20;
@@ -63,8 +68,11 @@ class PullRequestReviewsService {
             : await this.resolveRepositoryName(input.repository);
 
         const runs: PullRequestReviewRun[] = [];
+        const identities: PullRequestExecutionsPage['reviewIdentity'][] = [];
         let cursor: string | undefined;
         let hasMore = true;
+        let currentHeadSha: string | undefined;
+        let headIdentity: PullRequestExecutionsPage['reviewIdentity'];
 
         // Cursor paging, as the web PR page does: a page can return fewer rows
         // than it read, so `nextCursor` (not the page number) is the resume point.
@@ -76,7 +84,15 @@ class PullRequestReviewsService {
                 pullRequestNumber: input.prNumber,
                 limit: PAGE_SIZE,
                 cursor,
+                ...(input.explain && runs.length === 0 && { explain: true }),
             });
+            if (input.explain && page?.data?.length) {
+                identities.push(page.reviewIdentity);
+                if (page.currentHeadSha) {
+                    currentHeadSha = page.currentHeadSha;
+                    headIdentity = page.reviewIdentity;
+                }
+            }
             runs.push(
                 ...(page?.data ?? []).filter(
                     (run) => run.prNumber === input.prNumber,
@@ -87,6 +103,17 @@ class PullRequestReviewsService {
         }
 
         runs.sort((a, b) => runTime(b) - runTime(a));
+        const verifiedIdentity = headIdentity;
+        const singlePullRequest =
+            verifiedIdentity?.location &&
+            verifiedIdentity.provider &&
+            identities.every(
+                (identity) =>
+                    identity?.repositoryId === verifiedIdentity.repositoryId &&
+                    identity.location === verifiedIdentity.location &&
+                    (!identity.provider ||
+                        identity.provider === verifiedIdentity.provider),
+            );
 
         return {
             prNumber: input.prNumber,
@@ -94,6 +121,7 @@ class PullRequestReviewsService {
             team: ctx.teamName,
             runs: runs.slice(0, limit),
             truncated: runs.length > limit || hasMore,
+            ...(currentHeadSha && singlePullRequest && { currentHeadSha }),
         };
     }
 

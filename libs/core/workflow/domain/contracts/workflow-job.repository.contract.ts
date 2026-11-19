@@ -5,6 +5,8 @@ export interface StaleWorkflowJobReapResult {
     workflowType: string;
     organizationId: string | null;
     startedAt: Date | null;
+    /** To name the PR the reaped job was about. */
+    payload?: Record<string, unknown> | null;
 }
 
 export interface IWorkflowJobRepository {
@@ -26,6 +28,15 @@ export interface IWorkflowJobRepository {
         lastError: string;
         errorClassification: unknown;
     }): Promise<StaleWorkflowJobReapResult[]>;
+    /**
+     * Cancels PENDING and PROCESSING jobs of one workflow run. The status
+     * filter is in the UPDATE itself, so a job that finished between the
+     * scan cancel and this write is left alone.
+     */
+    cancelActiveByCorrelation(params: {
+        correlationId: string;
+        workflowType: string;
+    }): Promise<number>;
     /**
      * Deletes one batch of finished jobs last updated before `olderThan`
      * that no inbox/outbox message references, except `keepWorkflowTypes`.

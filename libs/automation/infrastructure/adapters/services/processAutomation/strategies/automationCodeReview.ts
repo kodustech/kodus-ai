@@ -921,6 +921,7 @@ export class AutomationCodeReviewService implements Omit<
                 heavy: !!result.heavy,
                 // Read by the Pull Requests screen (reviewModeOfExecution).
                 reviewMode: result.heavy ? 'heavy' : 'balanced',
+                reviewRoutingReason: result.reviewRoutingReason,
             });
         }
 

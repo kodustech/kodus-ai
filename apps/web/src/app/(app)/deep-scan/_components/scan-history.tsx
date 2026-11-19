@@ -29,6 +29,7 @@ import {
     formatScanSpend,
     SCAN_STATUS_LABEL,
 } from "../../issues/_components/security-scan/format";
+import { CancelScanButton } from "./cancel-scan-button";
 
 const STATUS_ICON: Record<SecurityScanStatus, ReactNode> = {
     queued: <CircleDashedIcon className="text-info" />,
@@ -36,6 +37,7 @@ const STATUS_ICON: Record<SecurityScanStatus, ReactNode> = {
     completed: <CheckCircle2Icon className="text-success" />,
     stopped_by_budget: <CircleSlashIcon className="text-warning" />,
     failed: <XCircleIcon className="text-danger" />,
+    cancelled: <CircleSlashIcon className="text-text-tertiary" />,
 };
 
 /**
@@ -110,10 +112,14 @@ const ScanRow = ({ scan }: { scan: SecurityScan }) => (
                           .join(" · ")}
             </span>
         </span>
-        <span className="text-text-tertiary text-xs whitespace-nowrap">
-            {formatDistanceToNow(new Date(scan.startedAt ?? scan.createdAt), {
-                addSuffix: true,
-            })}
+        <span className="flex flex-col items-end gap-1">
+            <span className="text-text-tertiary text-xs whitespace-nowrap">
+                {formatDistanceToNow(
+                    new Date(scan.startedAt ?? scan.createdAt),
+                    { addSuffix: true },
+                )}
+            </span>
+            <CancelScanButton scan={scan} size="xs" />
         </span>
     </li>
 );
