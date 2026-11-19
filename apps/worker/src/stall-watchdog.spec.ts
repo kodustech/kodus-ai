@@ -178,6 +178,8 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
                 pingIntervalMs: 0,
+                // Alert on the first report: these stalls are short.
+                alertMs: 1,
                 writeFd: null,
                 identity: { role: 'test', instanceId: 'ip-test' },
                 onReport: keep(reports),
@@ -224,6 +226,8 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
                 pingIntervalMs: 0,
+                // Alert on the first report: these stalls are short.
+                alertMs: 1,
                 writeFd: null,
                 identity: { role: 'test' },
                 onReport: keep(reports),
@@ -460,6 +464,184 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(stall.stack).toBeNull();
         expect(stall.inspectorAnswerMs!).toBeGreaterThan(1_000);
         expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
+    });
+    it('offers the pause it read in time as unverifiedStack when only the profiler was late, never as the location', async () => {
+        const { execSync } = await import('child_process');
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 200,
+                maxCapturesPerStall: 1,
+                // High enough that even a slow in-band CI inspector reads
+                // the pause in time, while the native call below holds the
+                // profiler start well past it: the verdict is deterministic.
+                lateAnswerMs: 8_000,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+
+        await arm();
+        // The native call holds the profiler start past lateAnswerMs; the
+        // pause then lands, in time and without a tick, in the JavaScript
+        // that follows.
+        execSync('sleep 10');
+        burnCpuInATightLoopForTest(8_000);
+
+        const stall = await waitFor(
+            () => reports.find((r) => r.kind === 'stall'),
+            25_000,
+        );
+        expect(stall.profilerAnswerMs!).toBeGreaterThan(8_000);
+        expect(stall.inspectorAnswerMs!).toBeLessThanOrEqual(8_000);
+        expect(stall.stack).toBeNull();
+        expect(stall.stackUnavailable).toBe('answered-late');
+        expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
+        // Offered as a lead, which here names the code after the native
+        // call: that is why it is not the location.
+        expect(stall.unverifiedStack?.[0]?.fn).toBe(
+            'burnCpuInATightLoopForTest',
+        );
+    }, 60_000);
+    it('warns every stall at its first report and alerts critical only past alertMs, once each', async () => {
+        const http = await import('http');
+        const hits: { path: string; body: string }[] = [];
+        const server = http.createServer((req, res) => {
+            let body = '';
+            req.on('data', (c) => (body += c));
+            req.on('end', () => {
+                hits.push({ path: req.url ?? '', body });
+                res.end('ok');
+            });
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        const { port } = server.address() as { port: number };
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 0,
+                maxCapturesPerStall: 1,
+                alertMs: 2_500,
+                heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/critical`,
+                warnHeartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/warn`,
+                pingIntervalMs: 0,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+        const failsFor = (which: string, startedAt?: number) =>
+            hits.filter(
+                (h) =>
+                    h.path === `/api/v1/heartbeat/${which}/fail` &&
+                    JSON.parse(h.body).context?.startedAt === startedAt,
+            );
+
+        // Short: warned, not alerted critical.
+        await arm();
+        burnCpuInATightLoopForTest(1_200);
+        const short = await waitFor(() =>
+            reports.find((r) => r.kind === 'recovered'),
+        );
+        await waitFor(() => {
+            const f = failsFor('warn', short.startedAt);
+            return f.length ? f : undefined;
+        });
+        await settle(300);
+        expect(failsFor('warn', short.startedAt)).toHaveLength(1);
+        expect(failsFor('critical', short.startedAt)).toHaveLength(0);
+        expect(
+            JSON.parse(failsFor('warn', short.startedAt)[0].body).context.level,
+        ).toBe('warning');
+
+        // Long: warned once and alerted critical once.
+        await arm();
+        burnCpuInATightLoopForTest(4_500);
+        const long = await waitFor(
+            () =>
+                reports.find(
+                    (r) =>
+                        r.kind === 'recovered' &&
+                        r.startedAt !== short.startedAt,
+                ),
+            15_000,
+        );
+        const critical = await waitFor(() => {
+            const f = failsFor('critical', long.startedAt);
+            return f.length ? f : undefined;
+        });
+        await settle(300);
+        server.close();
+        expect(critical).toHaveLength(1);
+        expect(failsFor('warn', long.startedAt)).toHaveLength(1);
+        const context = JSON.parse(critical[0].body).context;
+        expect(context.level).toBe('critical');
+        expect(context.stalledMs).toBeGreaterThanOrEqual(2_500);
+    });
+    it('names the job, PR, stage and tool call that were running when the stall began', async () => {
+        const { runActivity, updateActivity, beginToolActivity } =
+            await import('@libs/core/infrastructure/activity/activity-registry');
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 0,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+
+        await runActivity('job-77', { queue: 'code_review' }, async () => {
+            updateActivity({
+                stage: 'AgentReviewStage',
+                organizationId: 'org-1',
+                repository: 'acme/app',
+                prNumber: 8132,
+            });
+            const end = beginToolActivity('grep', 'pattern=foo path=.');
+            // The tool's own await: the snapshot leaves before the freeze.
+            await settle(100);
+            await arm();
+            burnCpuInATightLoopForTest(1_500);
+            end();
+        });
+
+        const stall = await waitFor(() =>
+            reports.find((r) => r.kind === 'stall'),
+        );
+        expect(stall.activeJobs).toEqual([
+            expect.objectContaining({
+                jobId: 'job-77',
+                queue: 'code_review',
+                stage: 'AgentReviewStage',
+                organizationId: 'org-1',
+                repository: 'acme/app',
+                prNumber: 8132,
+                tools: [
+                    expect.objectContaining({
+                        tool: 'grep',
+                        args: 'pattern=foo path=.',
+                    }),
+                ],
+            }),
+        ]);
     });
     it('treats a zero or invalid lateAnswerMs as the 1s default, so stacks are still trusted', async () => {
         for (const lateAnswerMs of [0, -1, Number.NaN]) {
