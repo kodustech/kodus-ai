@@ -178,6 +178,8 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
                 pingIntervalMs: 0,
+                // Alert on the first report: these stalls are short.
+                alertMs: 0,
                 writeFd: null,
                 identity: { role: 'test', instanceId: 'ip-test' },
                 onReport: keep(reports),
@@ -224,6 +226,8 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
                 pingIntervalMs: 0,
+                // Alert on the first report: these stalls are short.
+                alertMs: 0,
                 writeFd: null,
                 identity: { role: 'test' },
                 onReport: keep(reports),
@@ -460,6 +464,119 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(stall.stack).toBeNull();
         expect(stall.inspectorAnswerMs!).toBeGreaterThan(1_000);
         expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
+    });
+    it('offers the pause it read in time as unverifiedStack when only the profiler was late, never as the location', async () => {
+        const { execSync } = await import('child_process');
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 200,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+
+        await arm();
+        // The native call holds the profiler start past the limit; the
+        // pause then lands, in time and without a tick, in the JavaScript
+        // that follows.
+        execSync('sleep 2');
+        burnCpuInATightLoopForTest(6_000);
+
+        const stall = await waitFor(
+            () => reports.find((r) => r.kind === 'stall'),
+            15_000,
+        );
+        expect(stall.profilerAnswerMs!).toBeGreaterThan(1_000);
+        expect(stall.stack).toBeNull();
+        expect(stall.stackUnavailable).toBe('answered-late');
+        expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
+        if (stall.inspectorAnswerMs! <= 1_000) {
+            // Read in time: offered as a lead, which here names the code
+            // after the native call. That is why it is not the location.
+            expect(stall.unverifiedStack?.[0]?.fn).toBe(
+                'burnCpuInATightLoopForTest',
+            );
+        } else {
+            // A slow inspector (huge in-band CI process): nothing offered.
+            expect(stall.unverifiedStack).toBeUndefined();
+        }
+    });
+    it('alerts only a stall that outlasts alertMs, once, and only logs a shorter one', async () => {
+        const http = await import('http');
+        const hits: { path: string; body: string }[] = [];
+        const server = http.createServer((req, res) => {
+            let body = '';
+            req.on('data', (c) => (body += c));
+            req.on('end', () => {
+                hits.push({ path: req.url ?? '', body });
+                res.end('ok');
+            });
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        const { port } = server.address() as { port: number };
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 0,
+                maxCapturesPerStall: 1,
+                alertMs: 2_500,
+                heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
+                pingIntervalMs: 0,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+
+        // Short: reported, not alerted.
+        await arm();
+        burnCpuInATightLoopForTest(1_200);
+        const short = await waitFor(() =>
+            reports.find((r) => r.kind === 'recovered'),
+        );
+        await settle(300);
+        const failsFor = (startedAt?: number) =>
+            hits.filter(
+                (h) =>
+                    h.path.endsWith('/fail') &&
+                    JSON.parse(h.body).context?.startedAt === startedAt,
+            );
+        expect(reports.some((r) => r.kind === 'stall')).toBe(true);
+        expect(failsFor(short.startedAt)).toHaveLength(0);
+
+        // Long: alerted once, with the place the report found.
+        await arm();
+        burnCpuInATightLoopForTest(4_500);
+        const long = await waitFor(
+            () =>
+                reports.find(
+                    (r) =>
+                        r.kind === 'recovered' &&
+                        r.startedAt !== short.startedAt,
+                ),
+            15_000,
+        );
+        const fails = await waitFor(() => {
+            const f = failsFor(long.startedAt);
+            return f.length ? f : undefined;
+        });
+        server.close();
+        expect(fails).toHaveLength(1);
+        const context = JSON.parse(fails[0].body).context;
+        expect(context.stalledMs).toBeGreaterThanOrEqual(2_500);
     });
     it('treats a zero or invalid lateAnswerMs as the 1s default, so stacks are still trusted', async () => {
         for (const lateAnswerMs of [0, -1, Number.NaN]) {

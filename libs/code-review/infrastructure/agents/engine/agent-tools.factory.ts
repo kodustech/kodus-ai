@@ -13,6 +13,10 @@ import {
     withoutSecretFileLines,
 } from '@libs/code-review/infrastructure/agents/engine/secret-files';
 import {
+    cutLongLines,
+    MAX_TOOL_LINE_CHARS,
+} from '@libs/code-review/infrastructure/agents/engine/long-lines';
+import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
     isProjectLevelTypeScriptLine,
@@ -1884,7 +1888,38 @@ function guardSecretFiles(tools: Record<string, any>): void {
                 return secretFileRefusal(searchPath);
             }
             const out = await execute(args);
-            return typeof out === 'string' ? withoutSecretFileLines(out) : out;
+            if (typeof out !== 'string') return out;
+            // Secret lines leave first, on the whole line; then no line the
+            // agent gets is longer than MAX_TOOL_LINE_CHARS.
+            const capped = cutLongLines(withoutSecretFileLines(out));
+            if (capped.cut > 0) {
+                // The trace of a search that returned a huge line: which
+                // search, so the file behind it can be found.
+                logger.warn({
+                    message: `[AGENT-TOOLS] ${name} returned ${capped.cut} line(s) longer than ${MAX_TOOL_LINE_CHARS} characters; cut before the agent`,
+                    context: 'agent-tools.factory',
+                    metadata: {
+                        tool: name,
+                        pattern: String(
+                            args?.pattern ??
+                                args?.regex ??
+                                args?.functionName ??
+                                '',
+                        ).slice(0, 200),
+                        path: searchPath.slice(0, 300),
+                        glob: args?.glob
+                            ? String(args.glob).slice(0, 200)
+                            : undefined,
+                        repo: args?.repo
+                            ? String(args.repo).slice(0, 200)
+                            : undefined,
+                        outputChars: out.length,
+                        longestLine: capped.longest,
+                        linesCut: capped.cut,
+                    },
+                });
+            }
+            return capped.text;
         };
     }
 }
