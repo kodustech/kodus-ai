@@ -999,44 +999,27 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it.each([
-        [
-            'to each repository once when every ref names its own',
+    it('scopes the delivered-suggestions read to each repository once', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
             [
                 { repositoryId: 'repo-b', pullRequestNumber: 2 },
                 { repositoryId: 'repo-b', pullRequestNumber: 3 },
                 { repositoryId: 'repo-c', pullRequestNumber: 5 },
             ],
-            ['repo-b', 'repo-c'],
-        ],
-        [
-            'to no repository when a ref lacks its own, so its PR is not left out',
-            [
-                { repositoryId: 'repo-b', pullRequestNumber: 2 },
-                { repositoryId: '', pullRequestNumber: 4 },
-            ],
-            undefined,
-        ],
-    ])(
-        'scopes the delivered-suggestions read %s',
-        async (_label, refs, expected) => {
-            const { cron, deps } = makeCron();
-            deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
-                refs,
-            );
-            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
-                [],
-            );
-            jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [],
+        );
+        jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
 
-            await cron.handleCron();
+        await cron.handleCron();
 
-            const [, , , repositoryIds] =
-                deps.pullRequestService.findPullRequestsWithDeliveredSuggestions
-                    .mock.calls[0];
-            expect(repositoryIds).toEqual(expected);
-        },
-    );
+        const [, , , repositoryIds] =
+            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions
+                .mock.calls[0];
+        expect(repositoryIds).toEqual(['repo-b', 'repo-c']);
+    });
 
     it('processes a successful PR when a different PR is in progress for the same team', async () => {
         const { cron, deps } = makeCron();
