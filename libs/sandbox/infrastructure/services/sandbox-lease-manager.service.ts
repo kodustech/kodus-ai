@@ -445,10 +445,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             const deadline = Date.now() + MAX_POLL_WAIT_MS;
             // Doubling waits (0.5s, 1s, 2s, 2s...) instead of a read every
             // 0.5s: a cleanup takes seconds, and 60 reads per wait added up.
-            let wait = POLL_INTERVAL_MS;
-            while (Date.now() < deadline) {
-                await sleep(wait);
-                wait = Math.min(wait * 2, MAX_POLL_INTERVAL_MS);
+            for (let attempt = 0; Date.now() < deadline; attempt++) {
+                await sleep(
+                    calculateBackoffInterval(attempt, {
+                        baseInterval: POLL_INTERVAL_MS,
+                        maxInterval: MAX_POLL_INTERVAL_MS,
+                    }),
+                );
                 const check = await this.leaseRepo.findByPrKey(prKey);
                 if (!check) break; // Doc deleted — cleanup complete
             }

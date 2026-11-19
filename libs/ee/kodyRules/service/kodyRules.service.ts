@@ -265,26 +265,27 @@ export class KodyRulesService implements IKodyRulesService {
             ),
         );
 
-        // Given the entity, the sync hands the same one back when it changed
-        // nothing: in a limited plan the locked rules stay locked on every
-        // call, and re-running the whole find for that was a third read.
-        let changed = !wholeDocuments;
         syncResults.forEach((result, index) => {
-            const orgId = orgIdArray[index];
             if (result.status === 'rejected') {
                 this.logger.error({
                     message: 'Failed self-healing stale rules in find()',
                     context: KodyRulesService.name,
                     error: result.reason,
-                    metadata: { organizationId: orgId },
+                    metadata: { organizationId: orgIdArray[index] },
                 });
-                // A sync can fail after it wrote: read again rather than
-                // serve what was there before it.
-                changed = true;
-                return;
             }
-            if (result.value !== staleEntities.get(orgId)) changed = true;
         });
+        // Given the entity, the sync hands the same one back when it changed
+        // nothing: in a limited plan the locked rules stay locked on every
+        // call, and re-running the whole find for that was a third read. A
+        // failed sync may have written first, so it reads again too.
+        const changed =
+            !wholeDocuments ||
+            syncResults.some(
+                (result, index) =>
+                    result.status === 'rejected' ||
+                    result.value !== staleEntities.get(orgIdArray[index]),
+            );
         const normalized = (entitiesResult: KodyRulesEntity[]) =>
             entitiesResult?.map((entity) => {
                 const normalized = toObject(entity);
@@ -430,6 +431,7 @@ export class KodyRulesService implements IKodyRulesService {
         // in one round trip instead of one findAndModify per rule fired in
         // parallel against the same document.
         let failedRuleIds: string[];
+        let writeError: unknown;
         try {
             failedRuleIds = await this.kodyRulesRepository.updateRulesFields(
                 entity.uuid,
@@ -437,18 +439,14 @@ export class KodyRulesService implements IKodyRulesService {
             );
         } catch (error) {
             failedRuleIds = changedRules.map(({ ruleId }) => ruleId);
+            writeError = error;
+        }
+        if (failedRuleIds.length) {
             this.logger.error({
                 message: 'Failed per-rule updates in syncRulesWithPlanLimit',
                 context: KodyRulesService.name,
-                error,
+                error: writeError as Error | undefined,
                 metadata: { organizationId, ruleIds: failedRuleIds },
-            });
-        }
-        for (const ruleId of failedRuleIds) {
-            this.logger.error({
-                message: 'Failed per-rule update in syncRulesWithPlanLimit',
-                context: KodyRulesService.name,
-                metadata: { organizationId, ruleId },
             });
         }
 
