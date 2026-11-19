@@ -1855,12 +1855,13 @@ fi
     return tools;
 }
 
-/** Argument fields that say which call it was, in a few words. */
+/**
+ * Argument fields that say which call it was, in a few words. Never the
+ * agent's search text (pattern, regex, query, functionName): it can quote a
+ * secret or code from the diff, and this summary reaches the stall report
+ * and the BetterStack alert.
+ */
 const ACTIVITY_ARG_KEYS = [
-    'pattern',
-    'regex',
-    'functionName',
-    'query',
     'path',
     'filePath',
     'file',
