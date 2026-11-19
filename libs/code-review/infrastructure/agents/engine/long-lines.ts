@@ -25,10 +25,29 @@ export interface CutLongLines {
 
 const MAX_CUT_FILES = 5;
 
-/** The path rg printed before the line number, if the line has one. */
+/**
+ * The path rg printed before the line number, if the line has one. A match
+ * line is `path:N:`; only context lines are `path-N-`, so `:N:` is tried
+ * first. A `-N-` can also sit inside a path (`2024-11-19-add.sql`): the
+ * first `-N-` whose prefix ends in a file name with an extension wins, else
+ * the first one.
+ */
 function pathOf(line: string): string | undefined {
-    const m = /^(.{1,500}?)[:-]\d+[:-]/.exec(line);
-    return m ? m[1] : undefined;
+    const head = line.slice(0, 600);
+    const match = /^(.{1,500}?):\d+:/.exec(head);
+    if (match) return match[1];
+    const boundary = /-\d+-/g;
+    let first: string | undefined;
+    let m: RegExpExecArray | null;
+    while ((m = boundary.exec(head)) && m.index <= 500) {
+        if (m.index === 0) continue;
+        const prefix = head.slice(0, m.index);
+        first ??= prefix;
+        const base = prefix.slice(prefix.lastIndexOf('/') + 1);
+        if (base.includes('.')) return prefix;
+        boundary.lastIndex = m.index + 1;
+    }
+    return first;
 }
 
 /**

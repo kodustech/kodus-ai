@@ -86,6 +86,16 @@ describe('agent tools — long lines in search output', () => {
             expect(r.files).toEqual(['dist/a.min.js', '[acme/lib] out/b.json']);
         });
 
+        it.each([
+            ['a match line', ':3:'],
+            ['a context line', '-3-'],
+        ])('names a date-named file in full on %s', (_l, sep) => {
+            const r = cutLongLines(
+                `db/migrations/2024-11-19-add_users.sql${sep}${huge}`,
+            );
+            expect(r.files).toEqual(['db/migrations/2024-11-19-add_users.sql']);
+        });
+
         it('keeps empty lines and a trailing newline', () => {
             const r = cutLongLines(`a\n\n${'b'.repeat(5_000)}\n`);
             const lines = r.text.split('\n');
