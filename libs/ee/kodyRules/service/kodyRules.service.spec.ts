@@ -299,11 +299,17 @@ describe('KodyRulesService.find — rules the plan limit paused', () => {
             },
         ]);
 
-        await svc.find({
+        const result = await svc.find({
             organizationId: 'org-1',
             rules: [{ repositoryId: 'repo' }],
         } as any);
 
+        expect(result[0].rules).toEqual([
+            expect.objectContaining({
+                uuid: 'r1',
+                status: KodyRulesStatus.ACTIVE,
+            }),
+        ]);
         expect(repo.find).toHaveBeenCalledTimes(1);
         expect(repo.findByOrganizationId).not.toHaveBeenCalled();
     });

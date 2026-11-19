@@ -67,10 +67,16 @@ export class KodusCreditsSweepCronProvider {
             }
 
             const limit = pLimit(SWEEP_CONCURRENCY);
-            const deadline = Date.now() + SWEEP_RUN_BUDGET_MS;
+            const startedAt = Date.now();
+            const deadline = startedAt + SWEEP_RUN_BUDGET_MS;
+            // Each run starts one organization further along, so the ones a
+            // run defers lead a later one instead of trailing every tick.
+            const offset =
+                Math.floor(startedAt / SWEEP_RUN_BUDGET_MS) % orgs.length;
+            const ordered = [...orgs.slice(offset), ...orgs.slice(0, offset)];
             let started = 0;
             const results = await Promise.allSettled(
-                orgs.map((organizationId) =>
+                ordered.map((organizationId) =>
                     limit(async () => {
                         // Past the budget, or shutting down: the next tick
                         // (or the next process) sweeps it.

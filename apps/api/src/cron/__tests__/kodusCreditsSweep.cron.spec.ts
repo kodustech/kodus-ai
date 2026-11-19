@@ -80,6 +80,46 @@ describe('KodusCreditsSweepCronProvider', () => {
         ]);
     });
 
+    it('starts each run one organization further along, so a deferred one leads a later run', async () => {
+        // Two runs, one budget period apart, over the same six organizations.
+        const run = async (at: number) => {
+            let now = at;
+            const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+            const metering = {
+                listOrganizationsWithKodusCredential: jest
+                    .fn()
+                    .mockResolvedValue(['o1', 'o2', 'o3', 'o4', 'o5', 'o6']),
+                sweepOrganization: jest.fn(async (_organizationId: string) => {
+                    now += 60 * 1000;
+                    return { debited: 0, debitedUsd: 0 };
+                }),
+            };
+            const cron = new KodusCreditsSweepCronProvider(
+                metering as any,
+                {
+                    acquire: jest.fn().mockResolvedValue({
+                        release: jest.fn().mockResolvedValue(undefined),
+                    }),
+                } as any,
+            );
+            jest.spyOn((cron as any).logger, 'log').mockImplementation(
+                () => {},
+            );
+            await cron.handleCron();
+            clock.mockRestore();
+            return metering.sweepOrganization.mock.calls.map(([o]) => o);
+        };
+        const first = Date.parse('2026-11-19T00:00:00Z');
+
+        expect(await run(first)).toEqual(['o1', 'o2', 'o3', 'o4']);
+        expect(await run(first + 4 * 60 * 1000)).toEqual([
+            'o2',
+            'o3',
+            'o4',
+            'o5',
+        ]);
+    });
+
     it('sweeps at most four organizations at a time', async () => {
         const pending: Array<() => void> = [];
         const metering = {
