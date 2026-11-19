@@ -169,7 +169,10 @@ describe('createFilePatchYielding', () => {
     it('never adds up the synchronous attempts of files diffed at once', async () => {
         // The caller diffs many files concurrently; their synchronous
         // attempts must not run back to back in one block.
-        const files = Array.from({ length: 6 }, () => fullyChangedFile(5_000));
+        // ~100ms each, inside the sync budget: no slow fallback, so the
+        // test stays quick on a loaded CI runner, while six of them back to
+        // back (~600ms) would exceed one turn's bound.
+        const files = Array.from({ length: 6 }, () => fullyChangedFile(1_200));
         const { result, maxGapMs } = await maxEventLoopGap(() =>
             Promise.all(
                 files.map(({ before, after }) =>
@@ -185,9 +188,8 @@ describe('createFilePatchYielding', () => {
             ),
         );
         expect(result.every((p) => p?.includes('@@'))).toBe(true);
-        // Turns, not a sum: back to back, six attempts held the loop for
-        // ~6x the budget (1.5s). Under 3x leaves room for a slow CI runner.
-        expect(maxGapMs).toBeLessThan(3 * AZURE_FILE_DIFF_SYNC_BUDGET_MS);
+        // Turns, not a sum: one turn stays within the budget plus slack.
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
     });
 
     it('gives up on a pathological file instead of running unbounded', async () => {
