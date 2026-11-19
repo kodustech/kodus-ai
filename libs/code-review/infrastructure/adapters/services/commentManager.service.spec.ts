@@ -921,6 +921,51 @@ describe('CommentManagerService — pure helpers', () => {
         });
     });
 
+    describe('generateConfigReviewMarkdown — configuration link', () => {
+        const KEY = 'API_USER_INVITE_BASE_URL';
+        let saved: string | undefined;
+        beforeEach(() => {
+            saved = process.env[KEY];
+        });
+        afterEach(() => {
+            if (saved === undefined) delete process.env[KEY];
+            else process.env[KEY] = saved;
+        });
+
+        const render = () =>
+            (
+                new CommentManagerService(
+                    {} as any,
+                    { processTemplate: async () => '' } as any,
+                    {} as any,
+                    {} as any,
+                    {} as any,
+                    {} as any,
+                ) as any
+            ).generateConfigReviewMarkdown(
+                { organizationId: 'org' } as any,
+                1,
+                { languageResultPrompt: LanguageValue.ENGLISH } as any,
+            );
+
+        it('falls back to the public dashboard when no env is set', async () => {
+            delete process.env[KEY];
+            const out = await render();
+            expect(out).toContain(
+                '(https://app.kodus.io/settings/code-review/global/general)',
+            );
+        });
+
+        it('points at the self-hosted dashboard and strips trailing slashes', async () => {
+            process.env[KEY] = 'https://kodus.example.com//';
+            const out = await render();
+            expect(out).toContain(
+                '(https://kodus.example.com/settings/code-review/global/general)',
+            );
+            expect(out).not.toContain('app.kodus.io');
+        });
+    });
+
     describe('resolveSkippedRulesNotice (KRC-16)', () => {
         const skipWarning = (titles: string[]) => ({
             kind: 'RULE_CONTEXT_UNAVAILABLE' as const,

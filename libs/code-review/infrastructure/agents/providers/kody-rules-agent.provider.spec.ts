@@ -472,6 +472,94 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         ...over,
     });
 
+    it('surfaces a partial review when a rule needs repository evidence and the sandbox is unavailable', async () => {
+        const { provider } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1,
+                        suggestionContent:
+                            'Missing implementation in another file',
+                        needsRepositoryEvidence: true,
+                        relevantLinesStart: 10,
+                        relevantLinesEnd: 10,
+                    },
+                ],
+            },
+        ]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'cross-file',
+                        title: 'Implementation',
+                        rule: 'Verify the implementation',
+                        scope: KodyRulesScope.FILE,
+                        status: 'active',
+                        severity: 'high',
+                    },
+                ],
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(0);
+        expect(out.warnings).toContainEqual(
+            expect.objectContaining({ kind: 'KODY_RULES_PARTIAL' }),
+        );
+    });
+
+    it('reports a candidate skipped after the evidence budget separately from failed checks', async () => {
+        const { provider, judge } = makeProvider([]);
+        const candidate = {
+            ruleId: 1,
+            suggestionContent: 'Missing issue in title',
+        };
+        const clock = jest.spyOn(Date, 'now');
+        let now = Date.now();
+        clock.mockImplementation(() => now);
+        try {
+            let active = 0;
+            let peak = 0;
+            judge
+                .mockResolvedValueOnce({
+                    violations: Array(15).fill(candidate),
+                })
+                .mockImplementation(async () => {
+                    peak = Math.max(peak, ++active);
+                    await new Promise((resolve) => setImmediate(resolve));
+                    now += 180_001;
+                    active--;
+                    return { verdict: 'satisfied' };
+                });
+            const out = await provider.execute(
+                input({
+                    kodyRules: [
+                        {
+                            uuid: 'title-rule',
+                            title: 'Issue in title',
+                            rule: 'Include the issue in the PR title',
+                            scope: KodyRulesScope.PULL_REQUEST,
+                            status: 'active',
+                            severity: 'high',
+                        },
+                    ],
+                }) as any,
+            );
+            expect(peak).toBe(4);
+            expect(judge).toHaveBeenCalledTimes(5);
+            expect(out.suggestions).toHaveLength(0);
+            expect(
+                out.warnings?.filter((w) => w.kind === 'KODY_RULES_PARTIAL'),
+            ).toEqual([
+                expect.objectContaining({
+                    reason: 'evidence_deadline',
+                    detail: expect.stringContaining('11 Kody Rules candidate'),
+                }),
+            ]);
+        } finally {
+            clock.mockRestore();
+        }
+    });
+
     it('semantic path: judge violations become tagged CodeSuggestions', async () => {
         const { provider } = makeProvider([
             {
@@ -542,6 +630,51 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         const lastCall =
             mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
         expect(lastCall.previousDecisions).toBe(previousDecisions);
+    });
+
+    // #2509: the provider's mechanical-atom filter reads the review unit, not the
+    // rule's uuid. The atoms of one rule share that uuid, so a uuid-keyed read
+    // sends an atom whose own detector fired nowhere into the sweep.
+    it('judges only the atom whose own detector fired', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const atom = (over: any) => ({
+            uuid: 'parent-1',
+            title: 'atom',
+            rule: 'condition',
+            status: 'active',
+            severity: 'high',
+            path: '**/*.ts',
+            ...over,
+        });
+        const units = [
+            atom({
+                reviewUnitId: 'parent-1-atom-1',
+                parentTitle: 'Parent rule',
+                title: 'Console log',
+                detector: { type: 'regex', pattern: 'console\\.log' },
+            }),
+            atom({
+                reviewUnitId: 'parent-1-atom-2',
+                parentTitle: 'Parent rule',
+                title: 'No debugger',
+                detector: { type: 'regex', pattern: '\\bdebugger\\b' },
+            }),
+            atom({
+                reviewUnitId: 'parent-1-atom-3',
+                parentTitle: 'Parent rule',
+                title: 'No eval',
+            }),
+        ];
+
+        await provider.execute(input({ kodyRules: units }) as any);
+
+        const sent = mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        // The atom with no detector is semantic, so it always goes in (the
+        // semantic half is listed first). The `\bdebugger\b` atom fired nowhere
+        // in src/a.ts and must not.
+        expect(sent.rules.map((rule: any) => rule.reviewUnitId).sort()).toEqual(
+            ['parent-1-atom-1', 'parent-1-atom-3'],
+        );
     });
 
     // #2508: a rule decomposed into atoms reaches the provider as one unit per
@@ -2302,6 +2435,25 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         const out = await provider.execute(
             input({
                 repoLookup: lookup,
+                // The hunk must define a symbol: one that defines none asks
+                // the repository nothing, so the flip would never be reached.
+                changedFiles: [
+                    {
+                        filename: 'src/a.ts',
+                        status: 'modified',
+                        patch: [
+                            '@@ -1,2 +1,4 @@',
+                            ' line one',
+                            ' line two',
+                            "+import { formatDate } from '../shared/date';",
+                            '+export function renderInvoice(order) {}',
+                        ].join('\n'),
+                        patchWithLinesStr: [
+                            "3 +import { formatDate } from '../shared/date';",
+                            '4 +export function renderInvoice(order) {}',
+                        ].join('\n'),
+                    },
+                ],
                 kodyRules: [
                     RULE,
                     {

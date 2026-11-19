@@ -3,9 +3,19 @@ import { reviewService } from '../review.service.js';
 import { api } from '../api/index.js';
 import * as rateLimit from '../../utils/rate-limit.js';
 import { setCliOutputMode } from '../../utils/logger.js';
-import type { PullRequestSuggestionsResponse } from '../../types/review.js';
+import type {
+    PullRequestSuggestionsResponse,
+    Severity,
+} from '../../types/review.js';
 import { normalizeSuggestionsResponse } from '../review-normalizer.js';
 import { filterReviewFiles } from '../review-file-filter.js';
+import { authService } from '../auth.service.js';
+import { loadConfig, type CliConfig } from '../../utils/config.js';
+
+vi.mock('../../utils/config.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../utils/config.js')>()),
+    loadConfig: vi.fn(),
+}));
 
 describe('normalizeSeverity', () => {
     it('maps critical to critical', () => {
@@ -206,6 +216,103 @@ describe('filterFiles logging behavior', () => {
 
         expect(result).toHaveLength(0);
         expect(warnSpy).toHaveBeenCalled();
+    });
+});
+
+describe('analyze result normalization', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.mocked(loadConfig).mockReset();
+    });
+
+    it('normalizes trial analyze severities at the service boundary', async () => {
+        vi.spyOn(rateLimit, 'getTrialIdentifier').mockResolvedValue(
+            'fingerprint-test',
+        );
+        vi.spyOn(api.review, 'trialAnalyze').mockResolvedValue({
+            summary: 'Found 2 issues',
+            issues: [
+                {
+                    file: 'a.ts',
+                    line: 1,
+                    severity: 'high' as Severity,
+                    message: 'bug',
+                },
+                {
+                    file: 'b.ts',
+                    line: 2,
+                    severity: 'medium' as Severity,
+                    message: 'style',
+                },
+            ],
+            filesAnalyzed: 2,
+            duration: 1,
+        });
+
+        const result = await reviewService.trialAnalyze('diff content');
+
+        expect(result.issues.map((issue) => issue.severity)).toEqual([
+            'error',
+            'warning',
+        ]);
+    });
+
+    it('normalizes team-key analyze severities at the service boundary', async () => {
+        vi.spyOn(authService, 'getValidToken').mockResolvedValue(
+            'kodus_team-key',
+        );
+        vi.mocked(loadConfig).mockResolvedValue({
+            teamId: 'team',
+        } as CliConfig);
+        vi.spyOn(api.review, 'analyzeWithMetrics').mockResolvedValue({
+            summary: 'Found 1 issue',
+            issues: [
+                {
+                    file: 'a.ts',
+                    line: 1,
+                    severity: 'high' as Severity,
+                    message: 'bug',
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        });
+
+        const result = await reviewService.analyze(
+            'diff content',
+            undefined,
+            true,
+        );
+
+        expect(result.issues.map((issue) => issue.severity)).toEqual(['error']);
+    });
+
+    it('normalizes personal-token analyze severities at the service boundary', async () => {
+        vi.spyOn(authService, 'getValidToken').mockResolvedValue(
+            'ghp_personal-token',
+        );
+        vi.mocked(loadConfig).mockResolvedValue(null);
+        vi.spyOn(api.review, 'analyzeWithMetrics').mockResolvedValue({
+            summary: 'Found 1 issue',
+            issues: [
+                {
+                    file: 'a.ts',
+                    line: 1,
+                    severity: 'high' as Severity,
+                    message: 'bug',
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        });
+
+        const result = await reviewService.analyze(
+            'diff content',
+            undefined,
+            true,
+        );
+
+        expect(result.issues.map((issue) => issue.severity)).toEqual(['error']);
     });
 });
 

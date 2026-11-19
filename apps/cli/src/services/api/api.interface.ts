@@ -8,6 +8,7 @@ import type {
     ConfigRepository,
     ConfigTeam,
 } from '../../types/config.js';
+import type { IssueListItem, IssuesFixPrompt } from '../../types/issues.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
 import type {
     CodeReviewScope,
@@ -15,6 +16,10 @@ import type {
     LLMConfigStatus,
     SaveCodeReviewConfigParams,
     SaveCodeReviewConfigResult,
+    PreviewPrRiskParams,
+    PreviewPrRiskResult,
+    PreviewPrApprovalParams,
+    PreviewPrApprovalResult,
     TestByokModelResult,
 } from '../../types/review-settings.js';
 import type {
@@ -172,6 +177,14 @@ export interface IConfigApi {
         accessToken: string,
         params: SaveCodeReviewConfigParams,
     ): Promise<SaveCodeReviewConfigResult>;
+    previewPrRisk(
+        accessToken: string,
+        params: PreviewPrRiskParams,
+    ): Promise<PreviewPrRiskResult>;
+    previewPrApproval(
+        accessToken: string,
+        params: PreviewPrApprovalParams,
+    ): Promise<PreviewPrApprovalResult>;
     getLLMConfigStatus(accessToken: string): Promise<LLMConfigStatus>;
     testByokModel(
         accessToken: string,
@@ -211,6 +224,11 @@ export interface IRulesApi {
     ): Promise<KodyRulesStatusResult>;
 }
 
+export interface IIssuesApi {
+    listIssues(accessToken: string): Promise<IssueListItem[]>;
+    fixPrompt(accessToken: string, ids: string[]): Promise<IssuesFixPrompt>;
+}
+
 export interface IKodusApi {
     auth: IAuthApi;
     config: IConfigApi;
@@ -218,4 +236,5 @@ export interface IKodusApi {
     trial: ITrialApi;
     sessions: ISessionsApi;
     rules: IRulesApi;
+    issues: IIssuesApi;
 }

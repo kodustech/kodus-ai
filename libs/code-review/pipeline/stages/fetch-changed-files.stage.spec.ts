@@ -6,6 +6,7 @@ import { AutomationStatus } from '@libs/automation/domain/automation/enum/automa
 import { AutomationMessage } from '@libs/automation/domain/automation/enum/automation-status';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 describe('FetchChangedFilesStage', () => {
     let stage: FetchChangedFilesStage;
@@ -156,10 +157,39 @@ describe('FetchChangedFilesStage', () => {
         );
     });
 
-    it('reuses preliminaryFiles from the context instead of fetching', async () => {
-        const files = [
-            { filename: 'src/a.ts', status: 'modified', patch: '' },
+    it('supplies previous-round filenames for PR rules without loading their patches into the review', async () => {
+        context.lastExecution = { lastAnalyzedCommit: 'sha-prev' };
+        context.codeReviewConfig.kodyRules = [
+            { scope: KodyRulesScope.PULL_REQUEST },
         ];
+        const recent = {
+            filename: 'web/page.ts',
+            status: 'modified',
+            patch: '',
+        };
+        mockPullRequestManagerService.getChangedFilesMetadata
+            .mockResolvedValueOnce([recent])
+            .mockResolvedValueOnce([{ filename: 'api/controller.ts' }, recent]);
+        mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue([
+            recent,
+        ]);
+
+        const result = await stage.execute(context);
+
+        expect(result.prFilePaths).toEqual([
+            'api/controller.ts',
+            'web/page.ts',
+        ]);
+        expect(result.changedFiles.map(({ filename }) => filename)).toEqual([
+            'web/page.ts',
+        ]);
+        expect(
+            mockPullRequestManagerService.enrichFilesWithContent,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it('reuses preliminaryFiles from the context instead of fetching', async () => {
+        const files = [{ filename: 'src/a.ts', status: 'modified', patch: '' }];
         context.preliminaryFiles = files as any;
         mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
             files,
@@ -186,9 +216,21 @@ describe('FetchChangedFilesStage', () => {
 
     it('computes the PR stats from the files it will review', async () => {
         const files = [
-            { filename: 'a.ts', status: 'modified', additions: 10, deletions: 3, patch: '' },
+            {
+                filename: 'a.ts',
+                status: 'modified',
+                additions: 10,
+                deletions: 3,
+                patch: '',
+            },
             { filename: 'b.ts', status: 'added', additions: 50, patch: '' },
-            { filename: 'c.ts', status: 'modified', additions: 5, deletions: 20, patch: '' },
+            {
+                filename: 'c.ts',
+                status: 'modified',
+                additions: 5,
+                deletions: 20,
+                patch: '',
+            },
         ];
         mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
             files,
@@ -251,6 +293,102 @@ describe('FetchChangedFilesStage', () => {
             'malformed.ts',
         ]);
         expect(result.changedFiles[0]).toEqual(binary);
+    });
+
+    describe('a patch longer than the line limit (#2206)', () => {
+        const bigPatch = [
+            '@@ -0,0 +1,50005 @@',
+            ...Array.from({ length: 50005 }, (_, i) => `+row ${i}`),
+        ].join('\n');
+        const smallFile = {
+            filename: 'src/small.ts',
+            status: 'modified',
+            patch: '@@ -1,1 +1,2 @@\n a\n+b',
+        };
+
+        it('notes the cut in the diff and records DIFF_TRUNCATED naming the file', async () => {
+            const files = [
+                { filename: 'data/big.sql', status: 'added', patch: bigPatch },
+                smallFile,
+            ];
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+                files,
+            );
+
+            const result = await stage.execute(context);
+
+            const [big, small] = result.changedFiles;
+            expect(big.patchWithLinesStr).toMatch(
+                /\n\.\.\. \(diff truncated: first 50000 of 50006 lines shown;[^\n]*\)$/,
+            );
+            expect(small.patchWithLinesStr).not.toContain('diff truncated');
+            expect(result.reviewWarnings).toEqual([
+                expect.objectContaining({
+                    kind: 'DIFF_TRUNCATED',
+                    reason: 'patch_line_limit',
+                    detail: '1 file diff(s) cut at 50000 lines, the rest was not reviewed: data/big.sql',
+                }),
+            ]);
+        });
+
+        it('records the cut of an ignored file a custom agent names', async () => {
+            const files = [
+                { filename: 'data/big.sql', status: 'added', patch: bigPatch },
+                {
+                    filename: 'data/seed.sql',
+                    status: 'added',
+                    patch: bigPatch,
+                },
+                smallFile,
+            ];
+            context.codeReviewConfig.ignorePaths = ['data/**'];
+            context.codeReviewConfig.customAgents = [
+                {
+                    id: 'agent-1',
+                    name: 'Seeds',
+                    enabled: true,
+                    instructions: 'Check the seed.',
+                    scope: { include: ['data/seed.sql'] },
+                },
+            ] as any;
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockImplementation(
+                async (_o: any, _r: any, _p: any, list: any[]) => list,
+            );
+
+            const result = await stage.execute(context);
+
+            const seed = result.ignoredFileChanges.find(
+                (f) => f.filename === 'data/seed.sql',
+            );
+            expect(seed.patchWithLinesStr).toContain('diff truncated');
+            expect(result.reviewWarnings).toEqual([
+                expect.objectContaining({
+                    kind: 'DIFF_TRUNCATED',
+                    reason: 'patch_line_limit',
+                    detail: '1 file diff(s) cut at 50000 lines, the rest was not reviewed: data/seed.sql',
+                }),
+            ]);
+        });
+
+        it('records no warning when every patch fits', async () => {
+            const files = [smallFile];
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+                files,
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.reviewWarnings).toBeUndefined();
+        });
     });
 
     describe('ignored files a custom agent names (#2172)', () => {

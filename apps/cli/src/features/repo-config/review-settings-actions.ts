@@ -7,13 +7,17 @@ import {
     type SettingsShowResult,
 } from '../../services/review-settings.service.js';
 import { exitWithCode, isCliExitError } from '../../utils/cli-exit.js';
-import { normalizeCommandError } from '../../utils/command-errors.js';
+import {
+    CommandError,
+    normalizeCommandError,
+} from '../../utils/command-errors.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 import {
     REVIEW_SETTINGS,
     type ReviewSettingSection,
 } from '../../utils/review-settings-catalog.js';
 import type {
+    ApprovalPolicy,
     FormattedConfigLevel,
     TestByokModelResult,
 } from '../../types/review-settings.js';
@@ -34,6 +38,20 @@ export type ReviewSettingsSetOptions = ReviewSettingsTargetOptions & {
 
 export type ReviewModelSetOptions = ReviewSettingsTargetOptions & {
     force?: boolean;
+};
+
+export type RiskPreviewOptions = ReviewSettingsTargetOptions & {
+    pr: string;
+    criteria?: string;
+};
+
+export type ApprovalPreviewOptions = {
+    team?: string;
+    json?: boolean;
+    pr: string;
+    policies?: string;
+    assumeClean?: boolean;
+    assumeEnabled?: boolean;
 };
 
 const LEVEL_LABEL: Record<FormattedConfigLevel, string> = {
@@ -185,6 +203,202 @@ export async function reviewSettingsShowAction(
         }
         for (const line of formatSettingsShow(result)) {
             cliInfo(line);
+        }
+    } catch (error) {
+        fail(error);
+    }
+}
+
+export async function riskPreviewAction(
+    repository: string,
+    options: RiskPreviewOptions,
+): Promise<void> {
+    try {
+        const result = await reviewSettingsService.previewRisk(
+            { repository, directory: options.directory, team: options.team },
+            /^\d+$/.test(options.pr) ? Number(options.pr) : NaN,
+            options.criteria,
+        );
+        const { assessment, files } = result;
+        if (options.json) {
+            cliInfo(
+                JSON.stringify(
+                    {
+                        status: assessment.status,
+                        ...(assessment.status === 'assessed' && {
+                            riskIdentified: assessment.riskIdentified,
+                        }),
+                        changedFiles: files.length,
+                    },
+                    null,
+                    2,
+                ),
+            );
+            return;
+        }
+
+        if (assessment.status === 'assessed') {
+            cliInfo(assessment.riskIdentified ? 'Risk found' : 'No risk found');
+        } else {
+            cliInfo(
+                assessment.status === 'unavailable'
+                    ? 'Assessment unavailable'
+                    : 'Assessment disabled',
+            );
+        }
+        if ('reason' in assessment) {
+            cliInfo(assessment.reason);
+        }
+        cliInfo(`Changed files: ${files.length}`);
+    } catch (error) {
+        fail(error);
+    }
+}
+
+function approvalPolicyOutput(policy: ApprovalPolicy) {
+    return {
+        id: policy.id,
+        name: policy.name,
+        enabled: policy.enabled,
+        labels: policy.labels,
+        authors: policy.authors,
+        authorTeams: policy.authorTeams,
+        includedFiles: policy.includedFiles,
+        excludedFiles: policy.excludedFiles,
+        maxChangedLines: policy.maxChangedLines,
+        lineCountExcludedFiles: policy.lineCountExcludedFiles,
+        hasEligibilityInstruction: !!policy.instruction?.trim(),
+    };
+}
+
+export async function listApprovalsAction(
+    repository: string,
+    options: ReviewSettingsTargetOptions,
+    policyId?: string,
+): Promise<void> {
+    try {
+        const result = await reviewSettingsService.listApprovalPolicies({
+            repository,
+            ...options,
+        });
+        if (policyId) {
+            const policy = result.policies.find(({ id }) => id === policyId);
+            if (!policy) {
+                throw new CommandError(
+                    'INVALID_INPUT',
+                    `Approval policy '${policyId}' was not found at this scope.`,
+                );
+            }
+            cliInfo(JSON.stringify(approvalPolicyOutput(policy), null, 2));
+        } else if (options.json) {
+            cliInfo(
+                JSON.stringify(
+                    {
+                        scope: result.scope,
+                        level: result.level,
+                        policies: result.policies.map(approvalPolicyOutput),
+                    },
+                    null,
+                    2,
+                ),
+            );
+        } else {
+            cliInfo(
+                `Approval policies for ${describeScope(result.scope)} ${formatOrigin(result.level, result.scope)}`,
+            );
+            for (const { id, name, enabled } of result.policies) {
+                cliInfo(
+                    `  ${id} · ${name} · ${enabled ? 'enabled' : 'disabled'}`,
+                );
+            }
+            if (!result.policies.length) {
+                cliInfo('  No approval policies configured.');
+            }
+        }
+    } catch (error) {
+        fail(error);
+    }
+}
+
+export async function toggleApprovalAction(
+    repository: string,
+    policyId: string,
+    enabled: boolean,
+    options: ReviewSettingsTargetOptions,
+): Promise<void> {
+    try {
+        const result = await reviewSettingsService.setApprovalPolicyEnabled(
+            { repository, ...options },
+            policyId,
+            enabled,
+        );
+        const { scope, policy, changed, centralized } = result;
+        if (options.json) {
+            cliInfo(
+                JSON.stringify(
+                    {
+                        scope,
+                        policy: approvalPolicyOutput(policy),
+                        changed,
+                        prUrl: centralized?.prUrl,
+                    },
+                    null,
+                    2,
+                ),
+            );
+            return;
+        }
+        const state = enabled ? 'enabled' : 'disabled';
+        cliInfo(
+            changed === true
+                ? `${policyId} ${state} at ${describeScope(scope)}.`
+                : changed === false
+                  ? `${policyId} already ${state} at ${describeScope(scope)}.`
+                  : `Change to ${policyId} could not be confirmed at ${describeScope(scope)}.`,
+        );
+        if (result.centralized?.prUrl) {
+            cliInfo(`Pull request: ${result.centralized.prUrl}`);
+        }
+    } catch (error) {
+        fail(error);
+    }
+}
+
+export async function previewApprovalAction(
+    repository: string,
+    options: ApprovalPreviewOptions,
+): Promise<void> {
+    try {
+        const result = await reviewSettingsService.previewApproval(
+            { repository, team: options.team },
+            {
+                prNumber: /^\d+$/.test(options.pr) ? Number(options.pr) : NaN,
+                rawPolicies: options.policies,
+                assumeClean: options.assumeClean,
+                assumeEnabled: options.assumeEnabled,
+            },
+        );
+        if (options.json) {
+            cliInfo(JSON.stringify(result, null, 2));
+            return;
+        }
+        const { assumptions, decision } = result;
+        cliInfo(
+            `Approval preview: ${decision.kind === 'approve' ? 'would approve' : decision.kind}. ${decision.reason}`,
+        );
+        if (assumptions.cleanReview) {
+            cliInfo('  Assumption: review is clean.');
+        }
+        if (assumptions.automaticApproval) {
+            cliInfo('  Assumption: automatic approval is enabled.');
+        }
+        if (assumptions.draftPolicies) {
+            cliInfo('  Using policies supplied for this preview.');
+        }
+        for (const policy of decision.policies ?? []) {
+            cliInfo(
+                `  ${policy.policyName}: ${policy.status} (${policy.reason})`,
+            );
         }
     } catch (error) {
         fail(error);

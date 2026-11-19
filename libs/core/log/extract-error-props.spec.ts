@@ -358,9 +358,15 @@ describe('boundErrorForLog (#1835 review)', () => {
             ),
         );
 
-        // The Postgres code/detail/constraint an operator filters on.
-        expect(bounded.driverError).toEqual(driverError);
-        expect(bounded.parameters).toEqual([2, 'repo-1', 'org-1']);
+        // The Postgres code/constraint/columns an operator filters on. The
+        // bound values are not kept: they leaked a live refresh token
+        // (sql-bound-values.security.spec.ts).
+        expect(bounded.driverError).toEqual({
+            code: '23505',
+            detail: 'Key (number, repository_id)=([REDACTED]) already exists.',
+            constraint: 'number_1_repository.id_1_organizationId_1',
+        });
+        expect(bounded.parameters).toBe('[3 values]');
         expect(() => JSON.stringify(bounded)).not.toThrow();
     });
 
@@ -400,13 +406,15 @@ describe('boundErrorForLog (#1835 review)', () => {
 
         const bounded = boundErrorForLog(mongo);
 
+        // Which index and fields collided stays; the values do not
+        // (sql-bound-values.security.spec.ts).
         expect(bounded.keyValue).toEqual({
-            'number': 2,
-            'repository.id': 'repo-1',
+            'number': '[REDACTED]',
+            'repository.id': '[REDACTED]',
         });
         expect(bounded.errInfo).toEqual({
             keyPattern: { number: 1 },
-            keyValue: { number: 2 },
+            keyValue: { number: '[REDACTED]' },
         });
     });
 

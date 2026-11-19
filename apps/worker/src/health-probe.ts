@@ -50,6 +50,9 @@ const DEFAULT_WORKER_CHANNELS = [
     'channel-ast-graph-incremental',
 ];
 
+/** The security-scan role consumes only the deep scan's channel. */
+export const SECURITY_SCAN_WORKER_CHANNELS = ['channel-security-scan'];
+
 interface HealthStatus {
     ok: boolean;
     status: string;

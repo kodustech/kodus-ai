@@ -14,12 +14,17 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+
 describe('OrganizationMemberListService', () => {
     let service: OrganizationMemberListService;
     let mockCodeManagementService: {
         getListMembers: jest.Mock;
         getPullRequestAuthors: jest.Mock;
+        canFindRecentPullRequestAuthors: jest.Mock;
+        findRecentPullRequestAuthors: jest.Mock;
     };
+    let mockLicenseService: { getAllUsersWithLicense: jest.Mock };
     let mockCacheService: {
         getFromCache: jest.Mock;
         addToCache: jest.Mock;
@@ -35,6 +40,11 @@ describe('OrganizationMemberListService', () => {
         mockCodeManagementService = {
             getListMembers: jest.fn(),
             getPullRequestAuthors: jest.fn().mockResolvedValue([]),
+            canFindRecentPullRequestAuthors: jest.fn().mockResolvedValue(false),
+            findRecentPullRequestAuthors: jest.fn().mockResolvedValue([]),
+        };
+        mockLicenseService = {
+            getAllUsersWithLicense: jest.fn().mockResolvedValue([]),
         };
 
         mockCacheService = {
@@ -54,6 +64,10 @@ describe('OrganizationMemberListService', () => {
                     provide: CacheService,
                     useValue: mockCacheService,
                 },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: mockLicenseService,
+                },
             ],
         }).compile();
 
@@ -71,6 +85,7 @@ describe('OrganizationMemberListService', () => {
 
             expect(result).toEqual({
                 status: 'ok',
+                complete: true,
                 members: [
                     { id: 1, name: 'Alice', type: 'user' },
                     { id: 2, name: 'Bob', type: 'user' },
@@ -124,6 +139,7 @@ describe('OrganizationMemberListService', () => {
 
             expect(result).toEqual({
                 status: 'ok',
+                complete: true,
                 members: [
                     { id: 1, name: 'Alice', type: 'user' },
                     { id: '99', name: 'ci-agent', type: 'bot' },
@@ -134,7 +150,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
-                requireLoaded: false,
+                requireLoaded: true,
             });
         });
 
@@ -153,7 +169,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
-                requireComplete: false,
+                requireComplete: true,
             });
         });
 
@@ -167,8 +183,10 @@ describe('OrganizationMemberListService', () => {
 
             const result = await service.fetch(organizationAndTeamData);
 
+            // Shown, but incomplete: absence from it proves nothing.
             expect(result).toEqual({
                 status: 'ok',
+                complete: false,
                 members: [{ id: '4242', name: 'personal-owner', type: 'user' }],
             });
         });
@@ -185,6 +203,7 @@ describe('OrganizationMemberListService', () => {
 
             expect(result).toEqual({
                 status: 'ok',
+                complete: false,
                 members: [{ id: 1, name: 'Alice', type: 'user' }],
             });
         });
@@ -220,13 +239,16 @@ describe('OrganizationMemberListService', () => {
             const lenient = await service.fetch(organizationAndTeamData);
 
             expect(strict).toEqual({ status: 'unavailable', members: [] });
-            expect(lenient.status).toBe('ok');
-            // Only the strict caller asks the provider to fail on "not loaded yet"
+            expect(lenient).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+            // Every caller asks for a trustworthy read; the page keeps the
+            // other source as partial data instead of dropping it.
             expect(
                 mockCodeManagementService.getPullRequestAuthors.mock.calls.map(
                     ([params]) => params.requireLoaded,
                 ),
-            ).toEqual([true, false]);
+            ).toEqual([true, true]);
         });
 
         it('is unavailable when the member read fails, even with stored authors', async () => {
@@ -243,13 +265,14 @@ describe('OrganizationMemberListService', () => {
             const lenient = await service.fetch(organizationAndTeamData);
 
             expect(strict).toEqual({ status: 'unavailable', members: [] });
-            expect(lenient.status).toBe('ok');
-            // Only the strict caller asks the provider for a complete list
+            expect(lenient).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
             expect(
                 mockCodeManagementService.getListMembers.mock.calls.map(
                     ([params]) => params.requireComplete,
                 ),
-            ).toEqual([true, false]);
+            ).toEqual([true, true]);
         });
 
         it('stays ok when the lookup succeeds with no recent authors', async () => {
@@ -357,7 +380,7 @@ describe('OrganizationMemberListService', () => {
             await service.fetch(organizationAndTeamData);
 
             expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-                'org_member_pr_authors_org-uuid-123_team-uuid-456',
+                'org_member_pr_authors_v2_org-uuid-123_team-uuid-456',
                 [{ id: '99', name: 'ci-agent', type: 'bot' }],
                 10 * 60 * 1000,
             );
@@ -376,9 +399,49 @@ describe('OrganizationMemberListService', () => {
             await service.fetch(organizationAndTeamData, { skipCache: true });
 
             expect(mockCacheService.getFromCache).not.toHaveBeenCalled();
+            expect(mockCacheService.removeFromCache).toHaveBeenCalledWith(
+                expect.stringContaining('org_member_pr_authors_v2_'),
+            );
             expect(
                 mockCodeManagementService.getPullRequestAuthors,
             ).toHaveBeenCalled();
+        });
+
+        it('does not answer the read after a failed refresh from the authors cached before it', async () => {
+            const cache = new Map<string, unknown>();
+            mockCacheService.getFromCache.mockImplementation(async (key) =>
+                cache.get(key),
+            );
+            mockCacheService.addToCache.mockImplementation(
+                async (key, value) => {
+                    cache.set(key, value);
+                },
+            );
+            mockCacheService.removeFromCache.mockImplementation(async (key) => {
+                cache.delete(key);
+            });
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValueOnce(
+                [{ id: 2, name: 'Bob' }],
+            );
+            await service.fetch(organizationAndTeamData);
+
+            mockCodeManagementService.getPullRequestAuthors.mockRejectedValue(
+                new Error('HTTP 429'),
+            );
+            const refreshed = await service.fetch(organizationAndTeamData, {
+                skipCache: true,
+            });
+            const reread = await service.fetch(organizationAndTeamData);
+
+            expect(refreshed).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+            expect(reread).toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
         });
 
         // An empty author scan is indistinguishable from a transient one: the
@@ -433,6 +496,117 @@ describe('OrganizationMemberListService', () => {
             expect(
                 mockCodeManagementService.getPullRequestAuthors,
             ).toHaveBeenCalled();
+        });
+    });
+    describe('unlisted seat holders', () => {
+        beforeEach(() => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.canFindRecentPullRequestAuthors.mockResolvedValue(
+                true,
+            );
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: '1' },
+                { git_id: '8' },
+                { git_id: '9' },
+            ]);
+        });
+
+        it('lists a seat holder the provider confirms as a recent author', async () => {
+            mockCodeManagementService.findRecentPullRequestAuthors.mockResolvedValue(
+                [{ id: '8', name: 'Dana', type: 'user' }],
+            );
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.findRecentPullRequestAuthors,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData,
+                authorIds: ['8', '9'],
+            });
+            expect(result).toEqual({
+                status: 'ok',
+                complete: true,
+                members: [
+                    { id: 1, name: 'Alice', type: 'user' },
+                    { id: '8', name: 'Dana', type: 'user' },
+                ],
+                absentSeatHolderIds: ['9'],
+            });
+        });
+
+        it('reads the list as incomplete when the check fails', async () => {
+            mockCodeManagementService.findRecentPullRequestAuthors.mockRejectedValue(
+                new Error('HTTP 429'),
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+            await expect(
+                service.fetch(organizationAndTeamData, {
+                    requireAuthors: true,
+                }),
+            ).resolves.toEqual({ status: 'unavailable', members: [] });
+        });
+
+        it('reads the list as incomplete when the provider turns out unable to check', async () => {
+            mockCodeManagementService.findRecentPullRequestAuthors.mockResolvedValue(
+                null,
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+        });
+
+        it('reads the list as incomplete when the seats cannot be read', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockRejectedValue(
+                new Error('timeout'),
+            );
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({ status: 'ok', complete: false }),
+            );
+        });
+
+        it('reads no seats for a provider that cannot check', async () => {
+            mockCodeManagementService.canFindRecentPullRequestAuthors.mockResolvedValue(
+                false,
+            );
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result).toEqual(
+                expect.objectContaining({ status: 'ok', complete: true }),
+            );
+            expect(result).not.toHaveProperty('absentSeatHolderIds');
+            expect(
+                mockLicenseService.getAllUsersWithLicense,
+            ).not.toHaveBeenCalled();
+        });
+
+        // The license services resolve [] on a timeout: nobody is confirmed
+        // absent, so the page badges nobody it did not check.
+        it('confirms nobody absent when the seat read comes back empty', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([]);
+
+            await expect(
+                service.fetch(organizationAndTeamData),
+            ).resolves.toEqual(
+                expect.objectContaining({
+                    complete: true,
+                    absentSeatHolderIds: [],
+                }),
+            );
         });
     });
 });

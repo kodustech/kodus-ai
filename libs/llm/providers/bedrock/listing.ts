@@ -4,16 +4,14 @@ import { catalogWithReasoning } from '../kernel/listing-helpers';
 /**
  * Curated fallback — the well-known `us.*` cross-region inference profiles for
  * common code-review use. Used when the LIVE listing can't run (no bearer token,
- * IAM-only creds, or the AWS call failed). The EOL Claude 3.5 Haiku profile is
- * deliberately NOT here — AWS retired it, so it must never be offered as a pick.
+ * IAM-only creds, or the AWS call failed). EOL profiles (Claude 3.5 Haiku,
+ * Claude Sonnet 4, Claude 3.7 Sonnet and 3.5 Sonnet v2) are deliberately NOT
+ * here, so they are never offered as a pick.
  */
 const CURATED: Array<{ id: string; name: string }> = [
     { id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0', name: 'Claude Sonnet 4.5 (us, cross-region)' },
-    { id: 'us.anthropic.claude-sonnet-4-20250514-v1:0', name: 'Claude Sonnet 4 (us, cross-region)' },
     { id: 'us.anthropic.claude-opus-4-1-20250805-v1:0', name: 'Claude Opus 4.1 (us, cross-region)' },
     { id: 'us.anthropic.claude-opus-4-20250514-v1:0', name: 'Claude Opus 4 (us, cross-region)' },
-    { id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', name: 'Claude 3.7 Sonnet (us, cross-region)' },
-    { id: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', name: 'Claude 3.5 Sonnet v2 (us, cross-region)' },
 ];
 
 // Look up caps by the Anthropic-style suffix (after "anthropic." — the

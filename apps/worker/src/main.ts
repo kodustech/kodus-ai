@@ -20,10 +20,16 @@ import { NestFactory } from '@nestjs/core';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
+import { securityScanSliceJobId } from '@libs/core/workflow/infrastructure/security-scan-runtime';
+import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
+
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
 import { startEventLoopMonitor } from './event-loop-monitor';
-import { startHealthProbe } from './health-probe';
+import {
+    SECURITY_SCAN_WORKER_CHANNELS,
+    startHealthProbe,
+} from './health-probe';
 
 declare const module: any;
 
@@ -96,6 +102,52 @@ async function bootstrap() {
 
         await appContext.get(ObservabilityService).init('worker');
 
+        // A slice child runs the engine only: no health port (the parent
+        // already bound :3334) and no queue consumer. Skip Nest shutdown
+        // hooks so SIGTERM is ours: abort the processor, release the
+        // sandbox, then close.
+        const sliceJobId = securityScanSliceJobId();
+
+        // Kept running through shutdown (unref'd): the drain is when we most
+        // need to see whether the thread is blocked. The stall watchdog
+        // captures where a stall is stuck and alerts while it happens; not in
+        // a slice child, whose whole point is to run heavy work off the
+        // consumer's event loop.
+        startEventLoopMonitor(
+            sliceJobId
+                ? {}
+                : {
+                      stallWatchdog: {
+                          heartbeatUrl:
+                              process.env
+                                  .API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL ??
+                              '',
+                          identity: { role, instanceId: hostname() },
+                      },
+                  },
+        );
+
+        if (sliceJobId) {
+            logger?.log(
+                `Running security-scan slice ${sliceJobId}`,
+                'Bootstrap',
+            );
+            const code = await runSecurityScanSliceProcess(
+                appContext,
+                sliceJobId,
+                {
+                    onError: (err) =>
+                        logger?.error({
+                            message: `Security-scan slice failed: ${err.message}`,
+                            context: 'Bootstrap',
+                            error: err,
+                            metadata: { jobId: sliceJobId },
+                        }),
+                },
+            );
+            process.exit(code);
+        }
+
         appContext.enableShutdownHooks();
 
         // ECS-facing health probe: returns 503 when AMQP is disconnected so
@@ -107,26 +159,19 @@ async function bootstrap() {
             process.env.WORKER_HEALTH_PORT ?? '3334',
             10,
         );
-        // Only the code-review role subscribes to AMQP; the analytics
-        // role has no RabbitMQ consumers, so checking AMQP health there
-        // would flap the task unhealthy permanently.
+        // The code-review and security-scan roles subscribe to AMQP, each
+        // on its own channels; the analytics role has no RabbitMQ consumers,
+        // so checking AMQP health there would flap the task unhealthy
+        // permanently.
         const healthServer = startHealthProbe({
             port: healthPort,
             appContext,
             requireAmqp:
-                role === 'code-review' &&
+                role !== 'analytics' &&
                 process.env.API_RABBITMQ_ENABLED !== 'false',
-        });
-        // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked. The stall watchdog
-        // captures where a stall is stuck and alerts while it happens.
-        startEventLoopMonitor({
-            stallWatchdog: {
-                heartbeatUrl:
-                    process.env.API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL ??
-                    '',
-                identity: { role, instanceId: hostname() },
-            },
+            ...(role === 'security-scan'
+                ? { requiredChannels: SECURITY_SCAN_WORKER_CHANNELS }
+                : {}),
         });
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks

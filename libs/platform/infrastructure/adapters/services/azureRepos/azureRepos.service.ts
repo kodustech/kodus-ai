@@ -1661,7 +1661,7 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId: headSha,
                             changeType: change.changeType,
-                            rethrowRateLimit: true,
+                            rethrowRetryable: true,
                             logContext: {
                                 organizationId:
                                     organizationAndTeamData?.organizationId,
@@ -1869,6 +1869,8 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
+                    // A rate-limited or unreachable file is not an unchanged one
+                    rethrowRetryable: true,
                     logContext: {
                         organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
@@ -1895,7 +1897,8 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,
@@ -4315,6 +4318,7 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
+                            rethrowRetryable: true,
                             logContext: {
                                 organizationId:
                                     organizationAndTeamData?.organizationId,
@@ -4325,6 +4329,17 @@ export class AzureReposService implements Omit<
                     ),
                 ),
             );
+
+            // A rate-limited or unreachable file is not a missing one: the
+            // whole listing fails so the job retries instead of reviewing
+            // part of the PR.
+            const retryable = settled.find(
+                (result): result is PromiseRejectedResult =>
+                    result.status === 'rejected' &&
+                    (is429Error(result.reason) ||
+                        isTransientFetchError(result.reason)),
+            );
+            if (retryable) throw retryable.reason;
 
             const successfulFiles: Array<
                 NonNullable<
@@ -4406,6 +4421,8 @@ export class AzureReposService implements Omit<
 
             return fileChanges;
         } catch (error: any) {
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get files for Azure Repos PR #${params.prNumber} in repo ${params.repository.name}`,
                 context: this.getFilesByPullRequestId.name,
@@ -4428,7 +4445,7 @@ export class AzureReposService implements Omit<
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
         /** Let a rate limit through instead of answering null. */
-        rethrowRateLimit?: boolean;
+        rethrowRetryable?: boolean;
         /** Ties this file's warnings to the org, team and PR. */
         logContext?: {
             organizationId?: string;
@@ -4609,7 +4626,12 @@ export class AzureReposService implements Omit<
                 content: modifiedFileContent, // Added content
             };
         } catch (error: any) {
-            if (params.rethrowRateLimit && is429Error(error)) throw error;
+            if (
+                params.rethrowRetryable &&
+                (is429Error(error) || isTransientFetchError(error))
+            ) {
+                throw error;
+            }
             this.logger.error({
                 message: `Error generating diff for file "${filePath}" between commits "${baseCommitId}" and "${targetCommitId}"`,
                 context: this._generateFileDiffForAzure.name,

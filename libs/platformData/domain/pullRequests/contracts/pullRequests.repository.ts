@@ -162,6 +162,10 @@ export interface IPullRequestsRepository {
         organizationId: string,
         repositoryIds: string[],
     ): Promise<boolean>;
+    findPullRequestAuthorLabelsByIds(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>>;
     // Keys of open PRs, optionally only those with an unresolved delivered
     // suggestion. `truncated` = more than `limit` exist; the keys are partial.
     findOpenPullRequestKeys(

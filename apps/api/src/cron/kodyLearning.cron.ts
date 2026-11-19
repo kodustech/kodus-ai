@@ -1,6 +1,9 @@
+import {
+    cronRunGate,
+    GatedCron,
+} from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
@@ -54,11 +57,15 @@ export class KodyLearningCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(CRON_KODY_LEARNING, {
+    @GatedCron(CRON_KODY_LEARNING, {
         name: 'Kody Learning',
         timeZone: 'America/Sao_Paulo',
     })
     async handleCron() {
+        await this.runCron();
+    }
+
+    private async runCron() {
         // We run many app instances; the @Cron fires on every one. Acquire a
         // distributed lock so only a single instance runs the sweep.
         const lockKey = 'CRON:KODY_LEARNING';
@@ -117,6 +124,7 @@ export class KodyLearningCronProvider {
             }
 
             for (const team of teams) {
+                if (cronRunGate.stopping) break;
                 const organizationId = team.organization?.uuid;
                 const teamId = team.uuid;
 
@@ -376,6 +384,8 @@ export class KodyLearningCronProvider {
                 offset < backfillRepoIds.length;
                 offset += BACKFILL_LOCK_CHUNK_SIZE
             ) {
+                // Shutdown began: the rest is picked up on the next run.
+                if (cronRunGate.stopping) break;
                 const repoIdsChunk = backfillRepoIds.slice(
                     offset,
                     offset + BACKFILL_LOCK_CHUNK_SIZE,

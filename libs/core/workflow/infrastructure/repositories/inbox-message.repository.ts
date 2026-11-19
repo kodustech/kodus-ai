@@ -232,6 +232,37 @@ export class InboxMessageRepository implements IInboxMessageRepository {
     }
 
     /**
+     * Touches `lockedAt` only while this holder still has the message in
+     * PROCESSING. A stolen or completed claim returns false.
+     */
+    async heartbeat(
+        messageId: string,
+        consumerId: string,
+        lockedBy: string,
+    ): Promise<boolean> {
+        try {
+            const result = await this.repository.update(
+                {
+                    messageId,
+                    consumerId,
+                    lockedBy,
+                    status: InboxStatus.PROCESSING,
+                },
+                { lockedAt: new Date() },
+            );
+            return (result.affected ?? 0) > 0;
+        } catch (err) {
+            this.logger.error({
+                message: 'Failed to heartbeat inbox lock',
+                context: InboxMessageRepository.name,
+                error: err,
+                metadata: { messageId, consumerId },
+            });
+            throw err;
+        }
+    }
+
+    /**
      * Reclaims messages stuck in PROCESSING status for too long.
      * These messages will be re-processed when RabbitMQ redelivers them.
      */

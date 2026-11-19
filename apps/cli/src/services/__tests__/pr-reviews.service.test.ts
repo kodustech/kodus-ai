@@ -57,6 +57,14 @@ function page(data: unknown[], nextCursor?: string) {
     } as any;
 }
 
+const azureLocation =
+    'https://dev.azure.com/acme/project/_git/api/pullrequest/42';
+const azureIdentity = {
+    location: azureLocation,
+    provider: 'AZURE_REPOS',
+    repositoryId: 'repo-1',
+};
+
 describe('pullRequestReviewsService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -136,6 +144,106 @@ describe('pullRequestReviewsService', () => {
         expect(result.runs).toHaveLength(2);
         expect(result.truncated).toBe(true);
     });
+
+    it.each(['AZUREDEVOPS', undefined])(
+        'keeps the verified head for canonical matches with stored provider %s',
+        async (provider) => {
+            mockApi.getExecutions
+                .mockResolvedValueOnce({
+                    ...page(
+                        [
+                            {
+                                ...run(42, '2026-10-03T10:00:00Z'),
+                                provider: 'AZURE_REPOS',
+                                url: azureLocation,
+                            },
+                        ],
+                        'cursor-1',
+                    ),
+                    currentHeadSha: 'verified-head',
+                    reviewIdentity: azureIdentity,
+                })
+                .mockResolvedValueOnce({
+                    ...page([
+                        {
+                            ...run(42, '2026-10-01T10:00:00Z'),
+                            provider,
+                            url: `${azureLocation}/?tab=files`,
+                        },
+                    ]),
+                    reviewIdentity: {
+                        ...azureIdentity,
+                        provider: provider ? 'AZURE_REPOS' : undefined,
+                    },
+                });
+
+            const result = await pullRequestReviewsService.list({
+                prNumber: 42,
+                repositoryId: 'repo-1',
+                explain: true,
+            });
+
+            expect(result.currentHeadSha).toBe('verified-head');
+        },
+    );
+
+    it.each([
+        {
+            name: 'an unverified location',
+            url: undefined,
+            identity: undefined,
+        },
+        {
+            name: 'a different host',
+            url: 'https://azure.example/acme/project/_git/api/pullrequest/42',
+            identity: {
+                ...azureIdentity,
+                location:
+                    'https://azure.example/acme/project/_git/api/pullrequest/42',
+            },
+        },
+        {
+            name: 'a different provider',
+            url: azureLocation,
+            identity: { ...azureIdentity, provider: 'GITLAB' },
+        },
+    ])(
+        'omits the live head for $name on another page',
+        async ({ url, identity }) => {
+            mockApi.getExecutions
+                .mockResolvedValueOnce({
+                    ...page(
+                        [
+                            {
+                                ...run(42, '2026-10-03T10:00:00Z'),
+                                url: azureLocation,
+                            },
+                        ],
+                        'cursor-1',
+                    ),
+                    currentHeadSha: 'verified-head',
+                    reviewIdentity: azureIdentity,
+                })
+                .mockResolvedValueOnce({
+                    ...page([
+                        {
+                            ...run(42, '2026-10-01T10:00:00Z'),
+                            url,
+                        },
+                    ]),
+                    reviewIdentity: identity,
+                });
+
+            const result = await pullRequestReviewsService.list({
+                prNumber: 42,
+                repositoryId: 'repo-1',
+                explain: true,
+            });
+
+            expect(result.runs).toHaveLength(2);
+            expect(result.currentHeadSha).toBeUndefined();
+        },
+    );
 
     it('uses --repo over the git remote', async () => {
         mockApi.getExecutions.mockResolvedValue(page([]));

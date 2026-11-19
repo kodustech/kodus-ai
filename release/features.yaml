@@ -72,6 +72,14 @@ features:
             Use sanitized decisions distilled from local coding-agent sessions
             as repository-scoped context for Kody code reviews.
 
+    deep-scan:
+        name: "Deep scan"
+        stage: alpha
+        audience: [cloud]
+        description: >-
+            Scan a whole repository for exploitable vulnerabilities on demand,
+            with findings, attack paths and reproduction tests in Kody Issues.
+
     kodus-provider:
         name: "Kodus as a provider (prepaid credits)"
         stage: alpha

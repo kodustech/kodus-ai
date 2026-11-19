@@ -395,6 +395,14 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         requireLoaded?: boolean;
     }): Promise<PullRequestAuthor[]>;
 
+    // Which of these ids opened a pull request on the configured repositories
+    // in the recent window, asked of the provider rather than stored PRs.
+    // Optional: providers without it cannot confirm absence this way.
+    findRecentPullRequestAuthors?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        authorIds: string[];
+    }): Promise<PullRequestAuthor[]>;
+
     checkIfPullRequestShouldBeApproved(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;

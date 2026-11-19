@@ -118,7 +118,7 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
 
         await expect(read(service)).rejects.toMatchObject({ status: 429 });
         expect(generate).toHaveBeenCalledWith(
-            expect.objectContaining({ rethrowRateLimit: true }),
+            expect.objectContaining({ rethrowRetryable: true }),
         );
     });
 
@@ -168,7 +168,7 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
         };
         const generate = (
             service: AzureReposService,
-            rethrowRateLimit?: boolean,
+            rethrowRetryable?: boolean,
         ) =>
             (service as any)._generateFileDiffForAzure({
                 orgName: 'o',
@@ -179,7 +179,7 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
                 baseCommitId: 'base',
                 targetCommitId: 'head',
                 changeType: 'edit',
-                rethrowRateLimit,
+                rethrowRetryable,
             });
 
         it('rethrows a rate limit when asked to', async () => {
@@ -196,6 +196,16 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
             await expect(generate(service, true)).rejects.toMatchObject({
                 status: 429,
             });
+        });
+
+        it('rethrows a transport failure when asked to', async () => {
+            const service = build(
+                jest.fn().mockRejectedValue(new TypeError('fetch failed')),
+            );
+
+            await expect(generate(service, true)).rejects.toThrow(
+                'fetch failed',
+            );
         });
 
         it('still answers null for its other callers', async () => {

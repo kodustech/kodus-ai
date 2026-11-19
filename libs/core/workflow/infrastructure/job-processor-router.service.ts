@@ -19,6 +19,8 @@ import { ImplementationVerificationProcessor } from '@libs/code-review/workflow/
 import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-build-job.processor';
 import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
 import { CliReviewJobProcessorService } from '@libs/cli-review/workflow/cli-review-job-processor.service';
+import { SecurityScanJobProcessor } from '@libs/security-scan/application/security-scan-job.processor';
+import { isSlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 
 // App-level timeouts MUST be strictly less than the broker's consumer_timeout
 // (7200000ms / 2h in prod — see envs/aws/prod/rabbitmq-ec2.tfvars in kodus-infra).
@@ -32,6 +34,9 @@ const CLI_CODE_REVIEW_PROCESS_TIMEOUT_MS = 28 * 60 * 1000; // 28 min
 const CHECK_IMPLEMENTATION_TIMEOUT_MS = 9 * 60 * 1000; // 9 min
 const AST_GRAPH_BUILD_TIMEOUT_MS = 19 * 60 * 1000; // 19 min
 const AST_GRAPH_INCREMENTAL_TIMEOUT_MS = 9 * 60 * 1000; // 9 min
+// One scan slice: the engine stops starting units at 20 min, the last unit and
+// the bookkeeping finish inside this.
+const SECURITY_SCAN_TIMEOUT_MS = 34 * 60 * 1000; // 34 min
 
 @Injectable()
 export class JobProcessorRouterService
@@ -48,9 +53,10 @@ export class JobProcessorRouterService
         private readonly astGraphBuildProcessor: AstGraphBuildJobProcessor,
         private readonly astGraphIncrementalProcessor: AstGraphIncrementalJobProcessor,
         private readonly cliReviewProcessor: CliReviewJobProcessorService,
+        private readonly securityScanProcessor: SecurityScanJobProcessor,
     ) {}
 
-    async process(jobId: string): Promise<void> {
+    async process(jobId: string, signal?: AbortSignal): Promise<void> {
         const job = await this.jobRepository.findOne(jobId);
 
         if (!job) {
@@ -62,11 +68,21 @@ export class JobProcessorRouterService
 
         try {
             return await runWithTimeout(
-                (signal) => processor.process(jobId, signal),
+                (timeoutSignal) =>
+                    processor.process(
+                        jobId,
+                        signal
+                            ? AbortSignal.any([timeoutSignal, signal])
+                            : timeoutSignal,
+                    ),
                 timeoutMs,
                 `Workflow job ${jobId} timeout after ${timeoutMs}ms`,
             );
         } catch (error) {
+            if (isSlicePreemptedError(error)) {
+                throw error;
+            }
+
             const isTimeout = error.message?.includes('timeout after');
 
             // Always mark job as FAILED when an error occurs (including timeout)
@@ -139,6 +155,8 @@ export class JobProcessorRouterService
                 return this.astGraphBuildProcessor;
             case WorkflowType.AST_GRAPH_INCREMENTAL:
                 return this.astGraphIncrementalProcessor;
+            case WorkflowType.SECURITY_SCAN:
+                return this.securityScanProcessor;
             default:
                 throw new Error(
                     `No processor found for workflow type: ${workflowType}`,
@@ -160,9 +178,10 @@ export class JobProcessorRouterService
                 return AST_GRAPH_BUILD_TIMEOUT_MS;
             case WorkflowType.AST_GRAPH_INCREMENTAL:
                 return AST_GRAPH_INCREMENTAL_TIMEOUT_MS;
+            case WorkflowType.SECURITY_SCAN:
+                return SECURITY_SCAN_TIMEOUT_MS;
             default:
                 return CODE_REVIEW_PROCESS_TIMEOUT_MS;
         }
     }
-
 }

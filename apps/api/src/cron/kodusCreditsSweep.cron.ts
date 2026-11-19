@@ -1,3 +1,4 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import {
     KODUS_CREDITS_METERING_SERVICE_TOKEN,
@@ -8,7 +9,6 @@ import {
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { Injectable, Inject } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 const API_CRON_KODUS_CREDITS_SWEEP =
     process.env.API_CRON_KODUS_CREDITS_SWEEP || '*/5 * * * *';
@@ -29,7 +29,7 @@ export class KodusCreditsSweepCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_KODUS_CREDITS_SWEEP, {
+    @GatedCron(API_CRON_KODUS_CREDITS_SWEEP, {
         name: 'Kodus Credits Sweep',
         timeZone: 'America/Sao_Paulo',
     })

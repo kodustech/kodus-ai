@@ -18,6 +18,8 @@ vi.mock('../api/index.js', () => ({
             getCodeReviewScopes: vi.fn(),
             getFormattedCodeReviewParameter: vi.fn(),
             saveCodeReviewConfig: vi.fn(),
+            previewPrRisk: vi.fn(),
+            previewPrApproval: vi.fn(),
             getLLMConfigStatus: vi.fn(),
             testByokModel: vi.fn(),
         },
@@ -55,6 +57,13 @@ const CTX = {
     teamName: 'Core',
 };
 
+const RISK_CRITERION = {
+    id: 'approval-snapshot',
+    name: 'Approval snapshot',
+    enabled: true,
+    instructions: 'Check changes to the reviewed PR snapshot.',
+};
+
 const SCOPES = [
     {
         id: 'repo-1',
@@ -89,6 +98,7 @@ const leaf = (
 });
 
 const FORMATTED = {
+    uuid: 'config-1',
     configValue: {
         configs: {
             runOnDraft: leaf(true, 'default'),
@@ -106,6 +116,25 @@ const FORMATTED = {
                 kodusConfigFile: { status: 'loaded' },
                 configs: {
                     runOnDraft: leaf(false, 'repository', [true, 'default']),
+                    riskCriteria: leaf([RISK_CRITERION], 'repository'),
+                    approvalPolicies: leaf(
+                        [
+                            {
+                                id: 'docs',
+                                name: 'Docs',
+                                enabled: false,
+                                includedFiles: ['docs/**'],
+                            },
+                            { id: 'ops', name: 'Operations', enabled: true },
+                        ],
+                        'repository',
+                    ),
+                    riskReviewRouting: {
+                        riskFound: leaf('heavy', 'repository', [
+                            'balanced',
+                            'global',
+                        ]),
+                    },
                     ignorePaths: leaf(['dist/**'], 'repository_file', [
                         [],
                         'default',
@@ -628,6 +657,20 @@ describe('reviewSettingsService', () => {
     });
 
     describe('unset', () => {
+        it('restores one risk route through the API without writing the parent value', async () => {
+            await reviewSettingsService.unset(
+                { repository: 'kodus-ai' },
+                'riskReviewRouting.riskFound',
+            );
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: {},
+                    repositoryId: 'repo-1',
+                    inheritFields: ['riskReviewRouting.riskFound'],
+                }),
+            );
+        });
         it('fails an unset the plan left out, instead of reporting it reverted', async () => {
             const base = FORMATTED as any;
             // The override is still there after the save.
@@ -700,6 +743,99 @@ describe('reviewSettingsService', () => {
                 'suggestionControl.severityLevelFilter',
             );
             expect(result.changed).toBe(false);
+            expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+        });
+    });
+
+    it('changes one named policy and sends the active config revision', async () => {
+        await reviewSettingsService.setApprovalPolicyEnabled(
+            { repository: 'kodus-ai' },
+            'docs',
+            true,
+        );
+        expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+            CTX.accessToken,
+            expect.objectContaining({
+                expectedConfigId: 'config-1',
+                repositoryId: 'repo-1',
+                configValue: {
+                    approvalPolicies: [
+                        {
+                            id: 'docs',
+                            name: 'Docs',
+                            enabled: true,
+                            includedFiles: ['docs/**'],
+                        },
+                        { id: 'ops', name: 'Operations', enabled: true },
+                    ],
+                },
+            }),
+        );
+    });
+
+    it('forwards preview assumptions and draft policies without saving', async () => {
+        await reviewSettingsService.previewApproval(
+            { repository: 'kodus-ai' },
+            {
+                prNumber: 42,
+                rawPolicies: '[]',
+                assumeClean: true,
+            },
+        );
+        expect(configApi.previewPrApproval).toHaveBeenCalledWith(
+            CTX.accessToken,
+            expect.objectContaining({
+                repositoryId: 'repo-1',
+                policies: [],
+                assumeClean: true,
+            }),
+        );
+        expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+    });
+
+    describe('risk preview', () => {
+        it('rejects an unreadable scope rather than using standard criteria silently', async () => {
+            configApi.getFormattedCodeReviewParameter.mockResolvedValueOnce({
+                configValue: {},
+            });
+            await expect(
+                reviewSettingsService.previewRisk(
+                    { repository: 'kodus-ai' },
+                    42,
+                ),
+            ).rejects.toThrow(/Could not read risk criteria/);
+            expect(configApi.previewPrRisk).not.toHaveBeenCalled();
+        });
+        it('previews the effective criteria for a PR without saving', async () => {
+            await reviewSettingsService.previewRisk(
+                { repository: 'kodus-ai' },
+                42,
+            );
+            expect(configApi.previewPrRisk).toHaveBeenCalledWith(
+                CTX.accessToken,
+                {
+                    teamId: 'team-1',
+                    repositoryId: 'repo-1',
+                    prNumber: 42,
+                    criteria: [RISK_CRITERION],
+                },
+            );
+            expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+        });
+
+        it('uses explicit criteria, including an empty list, for this preview only', async () => {
+            await reviewSettingsService.previewRisk(
+                { repository: 'kodus-ai' },
+                42,
+                '[]',
+            );
+            expect(configApi.previewPrRisk).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({ criteria: [] }),
+            );
+            expect(
+                configApi.getFormattedCodeReviewParameter,
+            ).not.toHaveBeenCalled();
             expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
         });
     });

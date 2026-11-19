@@ -40,10 +40,42 @@ export class GetIssuesUseCase implements IUseCase {
 
             const cacheKey = `issues_${filters.organizationId}`;
 
-            let allIssues =
-                await this.cacheService.getFromCache<IIssue[]>(cacheKey);
+            // The list and when it was read, in one entry: two reads racing
+            // can never pair one's list with the other's time.
+            const cached = await this.cacheService.getFromCache<{
+                issues: IIssue[];
+                readAt: string;
+            }>(cacheKey);
+            let allIssues = cached?.issues;
+            // The cache is this process's own: a worker storing or resolving
+            // issues (a deep scan, a closed PR) clears only its own copy.
+            // A list read before the last write is read again.
+            if (allIssues) {
+                const stale = await this.issuesService
+                    .changedSince(
+                        filters.organizationId,
+                        new Date(cached.readAt),
+                    )
+                    .catch((error) => {
+                        // Unknown: the cached list is served as before.
+                        this.logger.warn({
+                            message: 'Could not check the cached issues list',
+                            context: GetIssuesUseCase.name,
+                            error,
+                            metadata: {
+                                organizationId: filters.organizationId,
+                            },
+                        });
+                        return false;
+                    });
+                if (stale) {
+                    allIssues = undefined;
+                }
+            }
 
             if (!allIssues) {
+                // Taken before the read, so a write during it is not missed.
+                const readAt = new Date().toISOString();
                 allIssues = await this.issuesService.find(
                     filters.organizationId,
                 );
@@ -68,7 +100,11 @@ export class GetIssuesUseCase implements IUseCase {
                         new Date(a.createdAt).getTime(),
                 );
 
-                await this.cacheService.addToCache(cacheKey, allIssues, 900000); //15 minutos
+                await this.cacheService.addToCache(
+                    cacheKey,
+                    { issues: allIssues, readAt },
+                    900000,
+                ); //15 minutos
             }
 
             if (!allIssues || allIssues.length === 0) {

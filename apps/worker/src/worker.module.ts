@@ -14,8 +14,9 @@ import { ReviewResponseMonitorService } from '@libs/core/infrastructure/metrics/
 import { WebhookFailureMonitorService } from '@libs/core/infrastructure/metrics/webhook-failure-monitor.service';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
-import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { OutboxRelayService } from '@libs/core/workflow/infrastructure/outbox-relay.service';
+import { WorkflowJobRetentionService } from '@libs/core/workflow/infrastructure/workflow-job-retention.service';
+import { isSecurityScanSliceProcess } from '@libs/core/workflow/infrastructure/security-scan-runtime';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
@@ -79,6 +80,46 @@ export class WorkerModule {
             SharedMongoModule.forRoot(),
         ];
 
+        // The modules the job pipeline needs, for either consuming role.
+        const jobImports = [
+            CodebaseModule,
+            CodeReviewFeedbackModule,
+            AutomationModule,
+            PlatformModule,
+            PlatformDataModule,
+            ParametersModule,
+            TeamModule,
+            OrganizationModule,
+            LicenseModule,
+            SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
+            NotificationModule,
+        ];
+
+        if (role === 'security-scan') {
+            return {
+                module: WorkerModule,
+                imports: [
+                    ...baseImports,
+                    SharedPostgresModule.forRoot({ poolSize: 6 }),
+                    RabbitMQWrapperModule.register({
+                        enableConsumers: !isSecurityScanSliceProcess(),
+                        securityScanOnly: true,
+                    }),
+                    WorkflowModule.register({ type: 'security-scan-worker' }),
+                    ...jobImports,
+                ],
+                providers: [
+                    WorkerDrainService,
+                    WorkerHealthGuardService,
+                    {
+                        provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+                        useClass: ConditionalApprovalAccessService,
+                    },
+                    LangfuseShutdownProvider,
+                ] satisfies Provider[],
+            };
+        }
+
         if (role === 'code-review') {
             return {
                 module: WorkerModule,
@@ -87,17 +128,7 @@ export class WorkerModule {
                     SharedPostgresModule.forRoot({ poolSize: 12 }),
                     RabbitMQWrapperModule.register({ enableConsumers: true }),
                     WorkflowModule.register({ type: 'worker' }),
-                    CodebaseModule,
-                    CodeReviewFeedbackModule,
-                    AutomationModule,
-                    PlatformModule,
-                    PlatformDataModule,
-                    ParametersModule,
-                    TeamModule,
-                    OrganizationModule,
-                    LicenseModule,
-                    SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
-                    NotificationModule,
+                    ...jobImports,
                     SelfHostedBeaconModule,
                 ],
                 providers: [
@@ -107,6 +138,7 @@ export class WorkerModule {
                     ErrorRateMonitorService,
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
+                    WorkflowJobRetentionService,
                     SelfHostedBeaconCron,
                     {
                         provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,

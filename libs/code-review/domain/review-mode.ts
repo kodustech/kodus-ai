@@ -6,6 +6,14 @@ import type { RiskAssessmentResult } from './risk/risk-assessment';
  *  mode set in settings. */
 export type RequestedReviewMode = 'balanced' | 'heavy';
 
+export type ReviewRoutingReason =
+    | 'requested'
+    | 'risk-found'
+    | 'no-risk-found'
+    | 'risk-unavailable'
+    | 'default'
+    | 'heavy-unavailable';
+
 /** Resolve before model selection. Commands win; unavailable risk uses settings. */
 export function resolveRiskReviewMode(input: {
     requested?: RequestedReviewMode;
@@ -54,4 +62,27 @@ export function agentReviewMode(
     return configured === 'fast' || configured === 'deep'
         ? configured
         : 'balanced';
+}
+
+/**
+ * The mode a review execution ran in, as the Pull Requests screen shows it.
+ * Undefined for an execution that reviewed nothing (skipped, failed before the
+ * review). An execution recorded before the mode was stored reads `heavy`, and
+ * one older than that reads as balanced.
+ */
+export function reviewModeOfExecution(
+    dataExecution: Record<string, any> | null | undefined,
+): RequestedReviewMode | undefined {
+    const reviewed =
+        !!dataExecution?.lastAnalyzedCommit &&
+        typeof dataExecution.lastAnalyzedCommit === 'object' &&
+        Object.keys(dataExecution.lastAnalyzedCommit).length > 0;
+    if (!reviewed) return undefined;
+    if (
+        dataExecution.reviewMode === 'heavy' ||
+        dataExecution.reviewMode === 'balanced'
+    ) {
+        return dataExecution.reviewMode;
+    }
+    return dataExecution.heavy === true ? 'heavy' : 'balanced';
 }

@@ -1,5 +1,9 @@
 // @ts-nocheck
 import { GetEnrichedPullRequestsUseCase } from './get-enriched-pull-requests.use-case';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 /**
  * A page must start where the previous page STOPPED READING, not where it
@@ -77,15 +81,18 @@ const makePrDoc = (prNumber: number) => ({
 
 const buildUseCase = () => {
     const findExecutions = jest.fn(async (params) => {
-        let rows = ALL_EXECUTIONS;
+        const matching = params.pullRequestNumber
+            ? ALL_EXECUTIONS.filter(
+                  (run) => run.pullRequestNumber === params.pullRequestNumber,
+              )
+            : ALL_EXECUTIONS;
+        let rows = matching;
 
         if (params.cursor) {
-            const at = ALL_EXECUTIONS.findIndex(
-                (e) => e.uuid === params.cursor.uuid,
-            );
-            rows = ALL_EXECUTIONS.slice(at + 1);
+            const at = matching.findIndex((e) => e.uuid === params.cursor.uuid);
+            rows = matching.slice(at + 1);
         } else {
-            rows = ALL_EXECUTIONS.slice(params.skip ?? 0);
+            rows = matching.slice(params.skip ?? 0);
         }
 
         return {
@@ -143,6 +150,144 @@ const idsOf = (response) =>
     response.data.map((row) => row.executionId ?? row.automationExecution?.uuid);
 
 describe('GetEnrichedPullRequestsUseCase — paging across post-query filters', () => {
+    it('looks up the live head only for an explanation and logs provider failures without dropping history', async () => {
+        const { useCase } = buildUseCase();
+        const failure = Object.assign(new Error('provider unavailable'), {
+            config: { headers: { Authorization: 'fixture-only' } },
+        });
+        const getPullRequest = jest
+            .fn()
+            .mockResolvedValueOnce({
+                head: { sha: 'latest' },
+                prURL: makePrDoc(1000).url,
+            })
+            .mockRejectedValueOnce(failure);
+        const getTypeIntegration = jest.fn().mockResolvedValue('GITHUB');
+        useCase.codeManagementService = { getPullRequest, getTypeIntegration };
+        const query = {
+            teamId: 't1',
+            pullRequestNumber: 1000,
+            repositoryId: 'repo-1',
+        };
+        const history = await useCase.execute(query);
+        expect(useCase.authorizationService.ensure).toHaveBeenCalledWith({
+            user: useCase.request.user,
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+            repoIds: ['repo-1'],
+        });
+        expect(history.reviewIdentity).toEqual({
+            repositoryId: 'repo-1',
+            location: makePrDoc(1000).url,
+            provider: 'GITHUB',
+        });
+        expect(history.currentHeadSha).toBeUndefined();
+        expect(getPullRequest).not.toHaveBeenCalled();
+
+        const first = await useCase.execute({ ...query, explain: 'true' });
+        expect(first.currentHeadSha).toBe('latest');
+        expect(getPullRequest).toHaveBeenCalledWith(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 't1',
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 1000,
+            },
+            'GITHUB',
+        );
+
+        const failed = await useCase.execute({ ...query, explain: 'true' });
+        expect(failed.currentHeadSha).toBeUndefined();
+        expect(failed.data).toHaveLength(1);
+        expect(useCase.logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({ message: failure.message }),
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 't1',
+                    repositoryId: 'repo-1',
+                    prNumber: 1000,
+                }),
+            }),
+        );
+        expect(useCase.logger.warn.mock.calls[0][0].error).not.toHaveProperty(
+            'config',
+        );
+        getTypeIntegration.mockResolvedValue('GITLAB');
+        const unrelated = await useCase.execute({ ...query, explain: 'true' });
+        expect(unrelated.currentHeadSha).toBeUndefined();
+        expect(getPullRequest).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([undefined, 'true'])(
+        'rejects history for an unauthorized repository with explain=%s',
+        async (explain) => {
+            const { useCase, findExecutions } = buildUseCase();
+            const getPullRequest = jest.fn();
+            useCase.codeManagementService = { getPullRequest };
+            useCase.authorizationService.ensure.mockRejectedValue(
+                new Error('Access denied to repository'),
+            );
+
+            await expect(
+                useCase.execute({
+                    teamId: 't1',
+                    pullRequestNumber: 1000,
+                    repositoryId: 'repo-1',
+                    explain,
+                }),
+            ).rejects.toThrow('Access denied to repository');
+            expect(findExecutions).not.toHaveBeenCalled();
+            expect(getPullRequest).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([undefined, 'azure-repositories', 'AZUREDEVOPS'])(
+        'checks provider aliases or legacy provider %s against the exact PR location',
+        async (provider) => {
+            const { useCase } = buildUseCase();
+            const url =
+                'https://dev.azure.com/acme/project/_git/api/pullrequest/1000';
+            const result = {
+                ...makePrDoc(1000),
+                provider,
+                url: `${url}/?tab=files#discussion`,
+            };
+            const getPullRequest = jest
+                .fn()
+                .mockResolvedValueOnce({ head: { sha: 'live' }, prURL: url })
+                .mockResolvedValueOnce({
+                    head: { sha: 'unrelated' },
+                    prURL: url.replace('dev.azure.com', 'azure.example'),
+                });
+            useCase.codeManagementService = {
+                getTypeIntegration: jest.fn().mockResolvedValue('AZURE_REPOS'),
+                getPullRequest,
+            };
+            useCase.pullRequestsService.findManyByNumbersAndRepositoryIds.mockResolvedValue(
+                [result],
+            );
+            const query = {
+                teamId: 't1',
+                pullRequestNumber: 1000,
+                repositoryId: 'repo-1',
+                explain: 'true',
+            };
+            expect(await useCase.execute(query)).toMatchObject({
+                currentHeadSha: 'live',
+                reviewIdentity: {
+                    repositoryId: 'repo-1',
+                    location: url,
+                    provider: 'AZURE_REPOS',
+                },
+            });
+            expect(
+                (await useCase.execute(query)).currentHeadSha,
+            ).toBeUndefined();
+        },
+    );
     it('does not serve the same execution on two consecutive pages', async () => {
         const { useCase } = buildUseCase();
 

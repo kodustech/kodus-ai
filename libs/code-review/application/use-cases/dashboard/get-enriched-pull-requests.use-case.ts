@@ -1,4 +1,5 @@
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import { reviewModeOfExecution } from '@libs/code-review/domain/review-mode';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -33,6 +34,8 @@ import {
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { createLogger } from '@libs/core/log/logger';
+import { parsePlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { pullRequestLocation } from '@libs/code-review/domain/pull-request-identity';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import {
@@ -48,11 +51,13 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import {
     PaginatedEnrichedPullRequestsResponse,
     PaginationMetadata,
+    ReviewHistoryIdentity,
     PullRequestExecutionsTotals,
 } from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
 import { EnrichedPullRequestResponse } from '@libs/code-review/dtos/dashboard/enriched-pull-request-response.dto';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -143,6 +148,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         @Inject(REQUEST)
         private readonly request: UserRequest,
         private readonly authorizationService: AuthorizationService,
+        private readonly codeManagementService: CodeManagementService,
     ) {}
 
     async execute(
@@ -643,13 +649,26 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             continue;
                         }
 
+                        const executionData = execution.dataExecution;
+                        const approval = executionData?.approvalReviewSummary
+                            ? executionData.approvalDecision
+                            : undefined;
                         const enrichedPR: EnrichedPullRequestResponse = {
                             prId: pullRequest.uuid!,
                             prNumber: pullRequest.number,
                             title: pullRequest.title,
                             status: pullRequest.status,
                             merged: pullRequest.merged,
-                            heavy: pullRequest.heavy,
+                            reviewMode: reviewModeOfExecution(executionData),
+                            reviewRoutingReason:
+                                executionData?.reviewRoutingReason,
+                            ...(approval && {
+                                approvalDecision: {
+                                    kind: approval.kind,
+                                    reason: approval.reason,
+                                    matchedPolicy: approval.matchedPolicy,
+                                },
+                            }),
                             url: pullRequest.url,
                             baseBranchRef: pullRequest.baseBranchRef,
                             headBranchRef: pullRequest.headBranchRef,
@@ -667,6 +686,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             },
                             isDraft: pullRequest.isDraft,
                             reviewedCommitSha: commitInfo.reviewedCommitSha,
+                            recordedReviewedHeadSha:
+                                commitInfo.recordedReviewedHeadSha,
                             reviewedCommitUrl: commitInfo.reviewedCommitUrl,
                             compareUrl: commitInfo.compareUrl,
                             executionId: execution.uuid,
@@ -772,9 +793,31 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
             });
 
+            // The CLI requests the live head once and checks the identity on each page.
+            const reviewIdentity =
+                pullRequestNumber && (repositoryId || repositoryName)
+                    ? this.getReviewHistoryIdentity(paginatedData)
+                    : undefined;
+            const currentHead = reviewIdentity
+                ? await this.getCurrentHeadForExplanation(
+                      query,
+                      organizationAndTeamData,
+                      paginatedData[0].repositoryName,
+                      reviewIdentity,
+                  )
+                : undefined;
             return {
                 data: paginatedData,
                 pagination: paginationMetadata,
+                ...(reviewIdentity && { reviewIdentity }),
+                ...(currentHead &&
+                    reviewIdentity && {
+                        currentHeadSha: currentHead.sha,
+                        reviewIdentity: {
+                            ...reviewIdentity,
+                            provider: currentHead.provider,
+                        },
+                    }),
             };
         } catch (error) {
             this.logger.error({
@@ -784,6 +827,96 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 metadata: { repositoryId, repositoryName, organizationId },
             });
             throw error;
+        }
+    }
+
+    private getReviewHistoryIdentity(
+        runs: EnrichedPullRequestResponse[],
+    ): ReviewHistoryIdentity | undefined {
+        const [first] = runs;
+        const location = pullRequestLocation(first?.url);
+        if (!first?.repositoryId || !location) return undefined;
+
+        let provider: ReviewHistoryIdentity['provider'];
+        for (const run of runs) {
+            if (
+                run.repositoryId !== first.repositoryId ||
+                pullRequestLocation(run.url) !== location
+            )
+                return undefined;
+            if (!run.provider) continue;
+            const platform = parsePlatformType(run.provider);
+            if (!platform || (provider && provider !== platform))
+                return undefined;
+            provider = platform;
+        }
+        return { repositoryId: first.repositoryId, location, provider };
+    }
+
+    private async getCurrentHeadForExplanation(
+        query: EnrichedPullRequestsQueryDto,
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryName: string,
+        identity: ReviewHistoryIdentity,
+    ): Promise<
+        | {
+              sha: string;
+              provider: NonNullable<ReviewHistoryIdentity['provider']>;
+          }
+        | undefined
+    > {
+        if (
+            query.explain !== 'true' ||
+            !query.teamId ||
+            !query.pullRequestNumber
+        )
+            return undefined;
+
+        const repository = {
+            id: identity.repositoryId,
+            name: repositoryName,
+        };
+        const prNumber = query.pullRequestNumber;
+        try {
+            const provider = parsePlatformType(
+                await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                ),
+            );
+            if (
+                !provider ||
+                (identity.provider && identity.provider !== provider)
+            ) {
+                return undefined;
+            }
+            const pullRequest = await this.codeManagementService.getPullRequest(
+                {
+                    organizationAndTeamData,
+                    repository,
+                    prNumber,
+                },
+                provider,
+            );
+            const sha = pullRequest?.head?.sha;
+            return sha &&
+                pullRequestLocation(pullRequest?.prURL) === identity.location
+                ? { sha, provider }
+                : undefined;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not fetch the current PR head for review history',
+                error:
+                    error instanceof Error
+                        ? new Error(error.message)
+                        : undefined,
+                metadata: {
+                    ...organizationAndTeamData,
+                    repositoryId: repository.id,
+                    prNumber,
+                },
+            });
+            return undefined;
         }
     }
 
@@ -1164,16 +1297,18 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         execution: any,
     ): {
         reviewedCommitSha?: string;
+        recordedReviewedHeadSha?: string;
         reviewedCommitUrl?: string;
         compareUrl?: string;
     } {
         const lastAnalyzedCommit = execution?.dataExecution?.lastAnalyzedCommit;
-        const reviewedCommitSha =
+        const recordedReviewedHeadSha =
             typeof lastAnalyzedCommit === 'string'
                 ? lastAnalyzedCommit
-                : lastAnalyzedCommit?.sha ||
-                  lastAnalyzedCommit?.commitSha ||
-                  pullRequest?.commits?.[pullRequest.commits.length - 1]?.sha;
+                : lastAnalyzedCommit?.sha || lastAnalyzedCommit?.commitSha;
+        const reviewedCommitSha =
+            recordedReviewedHeadSha ||
+            pullRequest?.commits?.[pullRequest.commits.length - 1]?.sha;
 
         const repoUrl = pullRequest?.repository?.url;
         const provider = pullRequest?.provider;
@@ -1188,7 +1323,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 ? this.buildCompareUrl(provider, repoUrl, baseRef, headRef)
                 : undefined;
 
-        return { reviewedCommitSha, reviewedCommitUrl, compareUrl };
+        return {
+            reviewedCommitSha,
+            recordedReviewedHeadSha,
+            reviewedCommitUrl,
+            compareUrl,
+        };
     }
 
     private buildCommitUrl(

@@ -397,7 +397,7 @@ async function teamStore({ language, memories = [], rules = [], codeReviewConfig
  * listing and reads the review does there (the coding-agent instructions a case
  * gives); without it that branch lists nothing.
  */
-function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {} }) {
+function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}, filesSinceLastReview }) {
     const onTarget = (ref) => ref === baseRef;
     return {
         // A read on the target branch answers from targetBranchFiles; any other
@@ -415,6 +415,7 @@ function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}
         getTypeIntegration: async () => 'GITHUB',
         getDefaultBranch: async () => baseRef,
         getFilesByPullRequestId: async () => prFiles,
+        ...(filesSinceLastReview ? { getChangedFilesSinceLastCommit: filesSinceLastReview } : {}),
         getCommitsForPullRequestForCodeReview: async () => prCommits,
         // Only when the case gives the target branch files: a review that lists
         // nothing there behaves as before this listing existed.
@@ -548,10 +549,10 @@ async function changedFilesThroughStage(context, codeManagement) {
 
 // The repository the review reads: a mirror of the platform's refs for the PR,
 // or a repository written for the eval. `head` is the ref content is read at.
-async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles }) {
+async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles, lastReviewedFiles }) {
     if (repoFiles) {
-        const inline = await inlineMirror(repoFiles, baseFiles ? { baseFiles } : { base: repoBase });
-        return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
+        const inline = await inlineMirror(repoFiles, baseFiles ? { baseFiles, lastReviewedFiles } : { base: repoBase });
+        return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, lastReviewed: inline.lastReviewed, prNumber: undefined, commit: false, cleanup: inline.cleanup };
     }
     const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef, baseSha });
     return { cloneUrl, branch: headRef, baseBranch: baseRef, head: prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`, prNumber: prNumber || undefined, commit: !prNumber && !!headSha, headSha, cleanup: async () => undefined };
@@ -640,6 +641,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
         repoFiles: pr.repoFiles,
         repoBase: pr.repoBase,
         baseFiles: pr.baseFiles,
+        lastReviewedFiles: pr.lastReviewedFiles,
     });
     try {
         // `baseFiles`: the platform's file list between the two trees, read from the mirror.
@@ -650,6 +652,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             prCommits: pr.commits || [],
             content: (file) => contentAt(repo.cloneUrl, repo.head, file),
             targetBranchFiles: pr.targetBranchFiles,
+            filesSinceLastReview: repo.lastReviewed && (({ lastCommit }) => pullRequestFiles(repo.cloneUrl, lastCommit.sha, repo.branch)),
         });
         const codeReviewConfig = await routedTeamConfig({
             team,
@@ -678,6 +681,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             // ValidateNewCommitsStage on a first review: every commit of the PR.
             prAllCommits: pr.commits || [],
             prCommits: pr.commits || [],
+            ...(repo.lastReviewed ? { lastExecution: { lastAnalyzedCommit: repo.lastReviewed } } : {}),
             previousDecisions,
             pipelineMetadata: {},
         };

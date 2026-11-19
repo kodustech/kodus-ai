@@ -11,15 +11,30 @@ import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-e
 
 const logger = createLogger('HeavyModePlan');
 
+/**
+ * The refusal for a feature on heavy mode's plans, said once: `subject` names
+ * the feature with its verb ("Heavy mode is"), `outcome` what happened instead.
+ */
+export function heavyModePlansRequired(
+    subject: string,
+    outcome?: string,
+): string {
+    return `${subject} available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one${outcome ? `, so ${outcome}` : ''}.`;
+}
+
 /** Why a settings save asking for heavy was refused. */
-export const HEAVY_MODE_SAVE_PLAN_REQUIRED =
-    'Heavy mode is available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one, so the review mode was not changed.';
+export const HEAVY_MODE_SAVE_PLAN_REQUIRED = heavyModePlansRequired(
+    'Heavy mode is',
+    'the review mode was not changed',
+);
 
 /** Why a review asked for heavy ran Balanced, said to the team. The license
  *  services answer a failed read as an invalid license, so the text holds for
  *  a plan without heavy and for a plan that could not be confirmed. */
-export const HEAVY_MODE_PLAN_REQUIRED =
-    'Heavy mode is available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one, so this review ran in Balanced mode.';
+export const HEAVY_MODE_PLAN_REQUIRED = heavyModePlansRequired(
+    'Heavy mode is',
+    'this review ran in Balanced mode',
+);
 
 /**
  * Heavy mode runs on Teams and Enterprise, in the cloud and self-hosted with a

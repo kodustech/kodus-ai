@@ -2,12 +2,101 @@ import { describe, expect, it } from 'vitest';
 import {
     mapFileSuggestions,
     mapPrLevelSuggestions,
+    normalizeReviewResult,
     normalizeSeverity,
     normalizeSuggestionsResponse,
 } from '../review-normalizer.js';
-import type { PullRequestSuggestionsResponse } from '../../types/review.js';
+import type {
+    PullRequestSuggestionsResponse,
+    ReviewResult,
+    Severity,
+} from '../../types/review.js';
 
 describe('review normalizer', () => {
+    it.each([
+        ['high', 'error'],
+        ['medium', 'warning'],
+        ['low', 'info'],
+    ])('normalizes issues-array severity %s to %s', (severity, expected) => {
+        const issue = {
+            file: 'a.ts',
+            line: 10,
+            endLine: 15,
+            severity: severity as Severity,
+            message: 'Fix this',
+            suggestion: 'Fix summary',
+            ruleId: 'security',
+        };
+
+        const result = normalizeSuggestionsResponse({ issues: [issue] });
+
+        expect(result.issues).toEqual([{ ...issue, severity: expected }]);
+    });
+
+    it('normalizes severity in the flat suggestions-array branch', () => {
+        const result = normalizeSuggestionsResponse({
+            suggestions: [
+                {
+                    file: 'b.ts',
+                    line: 5,
+                    severity: 'high' as Severity,
+                    message: 'style issue',
+                },
+            ],
+        });
+
+        expect(result.issues).toEqual([
+            {
+                file: 'b.ts',
+                line: 5,
+                severity: 'error',
+                message: 'style issue',
+            },
+        ]);
+    });
+
+    it('treats a missing issues array as empty instead of crashing', () => {
+        const result = normalizeReviewResult({
+            summary: 'Found nothing',
+            filesAnalyzed: 1,
+            duration: 0,
+        } as ReviewResult);
+
+        expect(result.issues).toEqual([]);
+        expect(result.summary).toBe('Found nothing');
+    });
+
+    it('normalizes every issue in a review result and keeps other fields', () => {
+        const result = {
+            summary: 'Found 2 issues',
+            issues: [
+                {
+                    file: 'a.ts',
+                    line: 1,
+                    severity: 'high' as Severity,
+                    message: 'a',
+                },
+                {
+                    file: 'b.ts',
+                    line: 2,
+                    severity: 'medium' as Severity,
+                    message: 'b',
+                },
+            ],
+            filesAnalyzed: 2,
+            duration: 10,
+            notices: ['heavy mode'],
+        };
+
+        expect(normalizeReviewResult(result)).toEqual({
+            ...result,
+            issues: [
+                { file: 'a.ts', line: 1, severity: 'error', message: 'a' },
+                { file: 'b.ts', line: 2, severity: 'warning', message: 'b' },
+            ],
+        });
+    });
+
     it('maps severities consistently', () => {
         expect(normalizeSeverity('critical')).toBe('critical');
         expect(normalizeSeverity('high')).toBe('error');
