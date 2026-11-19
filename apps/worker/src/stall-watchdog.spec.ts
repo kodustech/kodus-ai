@@ -449,7 +449,9 @@ describe('startStallWatchdog (real worker thread)', () => {
         // only once it returns, while JavaScript keeps the thread busy
         // without ticking. The pause then lands in that later JavaScript.
         execSync('sleep 2');
-        burnCpuInATightLoopForTest(1_500);
+        // Long enough that the pause still lands in it where Debugger.enable
+        // itself takes seconds (a huge in-band CI process).
+        burnCpuInATightLoopForTest(6_000);
 
         const stall = await waitFor(
             () => reports.find((r) => r.kind === 'stall'),
