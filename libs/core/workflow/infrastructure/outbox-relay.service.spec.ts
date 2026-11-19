@@ -235,8 +235,10 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
     it('does not hold the reaper pass (and its lock) on the heartbeat', async () => {
         const service = build();
-        jobRepository.failStaleProcessing.mockResolvedValue(jobs(6));
-        jobRepository.countReapedSince.mockResolvedValue(6);
+        // 2 jobs: below the old per-pass threshold, so only the window count
+        // (5) makes this pass alert; the pre-#2615 reaper never alerted here.
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(2));
+        jobRepository.countReapedSince.mockResolvedValue(5);
         incidentManager.failHeartbeat.mockReturnValue(new Promise(() => {}));
 
         await service.reapStaleProcessingJobs();
