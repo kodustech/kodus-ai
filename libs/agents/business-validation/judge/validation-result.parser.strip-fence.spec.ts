@@ -1,8 +1,9 @@
 import { stripCodeFence } from './validation-result.parser';
 
-describe('stripCodeFence', () => {
-    // The contract, as explicit input -> output pairs (the outputs the former
-    // regex produced, so callers see no change).
+// Compatibility cases, not fix coverage: the outputs callers have always
+// seen (the former regex produced them too, so these pass on both revisions
+// by design). The fix is pinned by the regression block below.
+describe('stripCodeFence compatibility', () => {
     it.each([
         ['```json\n{"needsMoreInfo": false}\n```', '{"needsMoreInfo": false}'],
         ['```JSON\n{"a": 1}\n```', '{"a": 1}'],
@@ -23,7 +24,10 @@ describe('stripCodeFence', () => {
     ])('strips %p to %p', (input, expected) => {
         expect(stripCodeFence(input)).toBe(expected);
     });
+});
 
+// Regression: fails on the former regex (~2.4s on this input).
+describe('stripCodeFence regression', () => {
     it('answers fast on a fenced reply that never closes', () => {
         // A model reply cut at max tokens: open fence, indented JSON, a long
         // whitespace run, no close. The former regex is quadratic in that

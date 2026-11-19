@@ -1661,7 +1661,17 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId: headSha,
                             changeType: change.changeType,
+<<<<<<< ours
                             rethrowRetryable: true,
+=======
+                            rethrowRateLimit: true,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
+>>>>>>> theirs
                         }),
                     ),
                 ),
@@ -1863,8 +1873,16 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
+<<<<<<< ours
                     // A rate-limited or unreachable file is not an unchanged one
                     rethrowRetryable: true,
+=======
+                    logContext: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        prNumber,
+                    },
+>>>>>>> theirs
                 });
 
                 if (fileDiff) {
@@ -4307,7 +4325,16 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
+<<<<<<< ours
                             rethrowRetryable: true,
+=======
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
+>>>>>>> theirs
                         }),
                     ),
                 ),
@@ -4428,7 +4455,17 @@ export class AzureReposService implements Omit<
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
         /** Let a rate limit through instead of answering null. */
+<<<<<<< ours
         rethrowRetryable?: boolean;
+=======
+        rethrowRateLimit?: boolean;
+        /** Ties this file's warnings to the org, team and PR. */
+        logContext?: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        };
+>>>>>>> theirs
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4552,6 +4589,7 @@ export class AzureReposService implements Omit<
                         message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; the file has no patch (unavailable, not empty)`,
                         context: this._generateFileDiffForAzure.name,
                         metadata: {
+                            ...params.logContext,
                             filePath,
                             baseCommitId,
                             targetCommitId,

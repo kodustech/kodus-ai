@@ -67,9 +67,10 @@ export async function createFilePatchYielding(
         Number.isFinite(timeoutMs) && timeoutMs > 0
             ? timeoutMs
             : AZURE_FILE_DIFF_TIMEOUT_MS;
-    const startedAt = Date.now();
-
     const release = await nextSyncTurn();
+    // The budget is this file's own diff time: waiting for the turn is not
+    // charged to it.
+    const startedAt = Date.now();
     let fast: string | undefined;
     try {
         fast = createTwoFilesPatch(

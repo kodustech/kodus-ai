@@ -562,7 +562,7 @@ export function stallWatchdogThread(): void {
         );
         if (n <= 1) {
             void heartbeat('/fail', {
-                message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. In-flight jobs on this worker will be lost if it does not recover. ${Object.entries(
+                message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. ${s.endedMs !== undefined ? 'It has recovered; jobs in flight may have lost their broker connection.' : 'In-flight jobs on this worker will be lost if it does not recover.'} ${Object.entries(
                     cfg.identity,
                 )
                     .map(([k, v]) => `${k}=${v}`)
@@ -571,6 +571,7 @@ export function stallWatchdogThread(): void {
                     monitor: 'worker_stall',
                     ...cfg.identity,
                     stalledMs,
+                    recovered: s.endedMs !== undefined,
                     location: where,
                     stackUnavailable,
                     stack: (stack ?? []).slice(0, 12),
@@ -612,10 +613,7 @@ export function stallWatchdogThread(): void {
                             undefined as StallReport['stackUnavailable'],
                         // Never empty: an empty error would read as a
                         // capture that worked and found nothing.
-                        error:
-                            (e && typeof e.message === 'string' && e.message) ||
-                            String(e) ||
-                            'capture failed without a message',
+                        error: e.message || String(e),
                     }))
                     .then((r) => reportStall(s, n, r))
                     .finally(() => {
