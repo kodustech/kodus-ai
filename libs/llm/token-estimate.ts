@@ -107,14 +107,21 @@ function remember(text: string, tokens: number): number {
 export const MAX_ENCODED_RUN_CHARS = 1_000;
 
 function isWhitespace(code: number): boolean {
-    // ASCII whitespace plus the common Unicode spaces: enough to bound the
-    // runs; a rarer separator only makes a run look longer (more conservative).
+    // Unicode White_Space, the set tiktoken's `\s` splits on: a character
+    // missing here would restart a whitespace run at every step, so a run
+    // alternating it with a space would never reach the limit while
+    // tiktoken still saw one quadratic piece.
     return (
-        code === 32 ||
         (code >= 9 && code <= 13) ||
+        code === 32 ||
+        code === 0x85 ||
         code === 0xa0 ||
+        code === 0x1680 ||
+        (code >= 0x2000 && code <= 0x200a) ||
         code === 0x2028 ||
         code === 0x2029 ||
+        code === 0x202f ||
+        code === 0x205f ||
         code === 0x3000
     );
 }

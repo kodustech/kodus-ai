@@ -38,8 +38,11 @@ const MAX_JOBS = 40;
 const MAX_TOOLS = 8;
 const MAX_TEXT = 300;
 
-const als = new AsyncLocalStorage<{ jobId: string }>();
-const active = new Map<string, Entry>();
+const als = new AsyncLocalStorage<{ run: number }>();
+// Keyed by run, not job: a job whose claim was taken over can run twice
+// on one process, and each run keeps its own entry.
+const active = new Map<number, Entry>();
+let nextRun = 1;
 let nextToolCall = 1;
 let listener: ((snapshot: ActivityInfo[]) => void) | null = null;
 let notifyQueued = false;
@@ -68,7 +71,8 @@ export async function runActivity<T>(
     info: Partial<Omit<ActivityInfo, 'jobId' | 'startedAt' | 'tools'>>,
     fn: () => Promise<T>,
 ): Promise<T> {
-    active.set(jobId, {
+    const run = nextRun++;
+    active.set(run, {
         ...info,
         jobId,
         startedAt: Date.now(),
@@ -76,9 +80,9 @@ export async function runActivity<T>(
     });
     notify();
     try {
-        return await als.run({ jobId }, fn);
+        return await als.run({ run }, fn);
     } finally {
-        active.delete(jobId);
+        active.delete(run);
         notify();
     }
 }
@@ -87,8 +91,8 @@ export async function runActivity<T>(
 export function updateActivity(
     patch: Partial<Omit<ActivityInfo, 'jobId' | 'startedAt' | 'tools'>>,
 ): void {
-    const id = als.getStore()?.jobId;
-    const entry = id ? active.get(id) : undefined;
+    const run = als.getStore()?.run;
+    const entry = run ? active.get(run) : undefined;
     if (!entry) return;
     for (const [k, v] of Object.entries(patch)) {
         if (v !== undefined)
@@ -102,8 +106,8 @@ export function updateActivity(
  * that ends it. Safe to call outside a job.
  */
 export function beginToolActivity(tool: string, args?: string): () => void {
-    const id = als.getStore()?.jobId;
-    const entry = id ? active.get(id) : undefined;
+    const run = als.getStore()?.run;
+    const entry = run ? active.get(run) : undefined;
     if (!entry) return () => undefined;
     const call = nextToolCall++;
     entry.toolCalls.set(call, {
@@ -124,7 +128,9 @@ export function activitySnapshot(): ActivityInfo[] {
     for (const e of active.values()) {
         if (out.length >= MAX_JOBS) break;
         const { toolCalls, ...info } = e;
-        const tools = [...toolCalls.values()].slice(-MAX_TOOLS);
+        // The oldest calls first: the long-running one is the likeliest to
+        // be what froze the thread.
+        const tools = [...toolCalls.values()].slice(0, MAX_TOOLS);
         out.push(tools.length ? { ...info, tools } : info);
     }
     return out;

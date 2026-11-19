@@ -96,6 +96,11 @@ describe('agent tools — long lines in search output', () => {
             expect(r.files).toEqual(['db/migrations/2024-11-19-add_users.sql']);
         });
 
+        it('names the file of a context line whose text holds a time', () => {
+            const r = cutLongLines(`src/a.ts-3-const t = "10:30:00";${huge}`);
+            expect(r.files).toEqual(['src/a.ts']);
+        });
+
         it('keeps empty lines and a trailing newline', () => {
             const r = cutLongLines(`a\n\n${'b'.repeat(5_000)}\n`);
             const lines = r.text.split('\n');

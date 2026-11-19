@@ -80,6 +80,19 @@ describe('estimateTextTokens — long runs without whitespace', () => {
         expect(tokens).toBeGreaterThanOrEqual(exact('start') + exact('end'));
     });
 
+    it.each([
+        ['space and U+2000', ' \u2000'],
+        ['no-break spaces', '\u00a0\u202f'],
+        ['ideographic space and newline', '\u3000\n'],
+    ])('answers fast on a long whitespace run mixing %s', (_l, unit) => {
+        // Every Unicode space tiktoken's \s splits on belongs to the run:
+        // one missing would restart it at every step.
+        const text = unit.repeat(40_000);
+        const started = Date.now();
+        fresh(text);
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
     it('encodes a whitespace run of exactly the limit, and estimates one past it', () => {
         const atLimit = `a${' '.repeat(MAX_ENCODED_RUN_CHARS)}b`;
         expect(fresh(atLimit)).toBe(exact(atLimit));

@@ -26,28 +26,28 @@ export interface CutLongLines {
 const MAX_CUT_FILES = 5;
 
 /**
- * The path rg printed before the line number, if the line has one. A match
- * line is `path:N:`; only context lines are `path-N-`, so `:N:` is tried
- * first. A `-N-` can also sit inside a path (`2024-11-19-add.sql`): the
- * first `-N-` whose prefix ends in a file name with an extension wins, else
- * the first one.
+ * The path rg printed before the line number, if the line has one: `path:N:`
+ * on a match line, `path-N-` on a context line. Boundaries are read in order:
+ * the first `:N:`, or an earlier `-N-` that follows a file name with an
+ * extension, wins (a `-N-` inside a path such as `2024-11-19-add.sql` is
+ * skipped; a `:N:` in a context line's text such as `10:30:00` is never
+ * reached). With neither, the first `-N-`.
  */
 function pathOf(line: string): string | undefined {
     const head = line.slice(0, 600);
-    const match = /^(.{1,500}?):\d+:/.exec(head);
-    if (match) return match[1];
-    const boundary = /-\d+-/g;
-    let first: string | undefined;
+    const boundary = /:\d+:|-\d+-/g;
+    let firstDash: string | undefined;
     let m: RegExpExecArray | null;
     while ((m = boundary.exec(head)) && m.index <= 500) {
+        boundary.lastIndex = m.index + 1;
         if (m.index === 0) continue;
         const prefix = head.slice(0, m.index);
-        first ??= prefix;
+        if (m[0][0] === ':') return prefix;
+        firstDash ??= prefix;
         const base = prefix.slice(prefix.lastIndexOf('/') + 1);
         if (base.includes('.')) return prefix;
-        boundary.lastIndex = m.index + 1;
     }
-    return first;
+    return firstDash;
 }
 
 /**

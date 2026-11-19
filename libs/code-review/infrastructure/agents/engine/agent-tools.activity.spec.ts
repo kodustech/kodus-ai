@@ -40,4 +40,26 @@ describe('agent tools — activity of a tool call', () => {
         // Ended with the call.
         expect(activitySnapshot()).toEqual([]);
     });
+
+    it('carries the line range of a read', async () => {
+        let during: ReturnType<typeof activitySnapshot> = [];
+        const remote: any = {
+            grep: async () => '',
+            read: async () => {
+                during = activitySnapshot();
+                return 'x';
+            },
+            listDir: async () => '',
+        };
+        await runActivity('job-2', {}, () =>
+            buildAgentTools(remote).readFile.execute({
+                path: 'src/a.ts',
+                startLine: 10,
+                endLine: 40,
+            }),
+        );
+        expect(during[0]?.tools?.[0]?.args).toBe(
+            'path=src/a.ts startLine=10 endLine=40',
+        );
+    });
 });

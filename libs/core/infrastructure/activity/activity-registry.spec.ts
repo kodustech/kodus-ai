@@ -63,6 +63,33 @@ describe('activity registry', () => {
         expect(b.prNumber).toBe(2);
     });
 
+    it('keeps two runs of the same job apart', async () => {
+        let release!: () => void;
+        const second = runActivity('job-x', {}, async () => {
+            updateActivity({ stage: 'second' });
+            await new Promise<void>((r) => (release = r));
+        });
+        await runActivity('job-x', {}, async () => {
+            updateActivity({ stage: 'first' });
+        });
+        // The first run ended: the second run's entry is still there.
+        expect(activitySnapshot()).toEqual([
+            expect.objectContaining({ jobId: 'job-x', stage: 'second' }),
+        ]);
+        release();
+        await second;
+        expect(activitySnapshot()).toEqual([]);
+    });
+
+    it('keeps the oldest tool calls when more are in flight than it shows', async () => {
+        await runActivity('job', {}, async () => {
+            for (let i = 0; i < 12; i++) beginToolActivity(`tool-${i}`);
+            const tools = activitySnapshot()[0].tools!;
+            expect(tools[0].tool).toBe('tool-0');
+            expect(tools.map((t) => t.tool)).not.toContain('tool-11');
+        });
+    });
+
     it('is a no-op outside a job', () => {
         updateActivity({ stage: 'x' });
         const end = beginToolActivity('grep');

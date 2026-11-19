@@ -76,16 +76,44 @@ const MAX_PATH_LENGTH = 4096;
 const SECRET_BASENAME =
     /^(?:\.env|id_(?:rsa|dsa|ecdsa|ed25519))|\.(?:pem|key|p12|pfx|jks|keystore)$/i;
 
-function mightBeSecretPrefix(line: string, end: number): boolean {
-    // isSecretFilePath reads a backslash as a separator too (normalizeFilename).
-    const sep = Math.max(
-        line.lastIndexOf('/', end - 1),
-        line.lastIndexOf('\\', end - 1),
-    );
-    const base = line.slice(sep + 1, end);
-    // `.`, `..` or a trailing slash: let normalization decide.
-    if (base === '' || base === '.' || base === '..') return true;
-    return SECRET_BASENAME.test(base);
+const isSeparator = (c: number) => c === 47 || c === 92; // `/` or `\\`
+
+/**
+ * Whether the path that ends at `end` could be a secret file: a cheap screen
+ * on its last segment before the glob. `lastSep` is the last separator
+ * before `end` (isSecretFilePath reads `\\` as one too), kept by the caller
+ * as it walks the line, so no boundary scans the prefix again.
+ */
+function mightBeSecretPrefix(
+    line: string,
+    lastSep: number,
+    end: number,
+): boolean {
+    const base = line.slice(lastSep + 1, end);
+    if (base !== '' && base !== '.' && base !== '..') {
+        return SECRET_BASENAME.test(base);
+    }
+    // A trailing slash or `.` names the segment before it: walk back over
+    // separators and `.` segments, then over that segment only.
+    let k = end;
+    for (;;) {
+        while (k > 0 && isSeparator(line.charCodeAt(k - 1))) k--;
+        if (
+            k > 0 &&
+            line.charCodeAt(k - 1) === 46 /* . */ &&
+            (k === 1 || isSeparator(line.charCodeAt(k - 2)))
+        ) {
+            k -= 1;
+            continue;
+        }
+        break;
+    }
+    let start = k;
+    while (start > 0 && !isSeparator(line.charCodeAt(start - 1))) start--;
+    const last = line.slice(start, k);
+    // `..` (or nothing left): only normalization knows the segment.
+    if (last === '' || last === '..') return true;
+    return SECRET_BASENAME.test(last);
 }
 
 function lineFromSecretFile(tagged: string): boolean {
@@ -93,11 +121,18 @@ function lineFromSecretFile(tagged: string): boolean {
     const boundary = /[:-]\d+[:-]/g;
     let match: RegExpExecArray | null;
     let prefixed = false;
+    // The last separator before the current boundary, found by one forward
+    // pass over the line (boundaries come in order).
+    let scanned = 0;
+    let lastSep = -1;
     while ((match = boundary.exec(line))) {
         prefixed = true;
         if (match.index > MAX_PATH_LENGTH) break;
+        for (; scanned < match.index; scanned++) {
+            if (isSeparator(line.charCodeAt(scanned))) lastSep = scanned;
+        }
         if (
-            mightBeSecretPrefix(line, match.index) &&
+            mightBeSecretPrefix(line, lastSep, match.index) &&
             isSecretFilePath(line.slice(0, match.index))
         )
             return true;

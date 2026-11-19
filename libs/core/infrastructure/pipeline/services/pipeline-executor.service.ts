@@ -92,6 +92,30 @@ export class PipelineExecutor<TContext extends PipelineContext> {
         rootPipelineId?: string,
         observers: IPipelineObserver[] = [],
     ): Promise<TContext> {
+        try {
+            return await this.runStages(
+                context,
+                stages,
+                pipelineName,
+                parentPipelineId,
+                rootPipelineId,
+                observers,
+            );
+        } finally {
+            // The caller keeps working after the pipeline (reactions,
+            // first-review capture): a stall there is not in its last stage.
+            updateActivity({ stage: `after ${pipelineName}` });
+        }
+    }
+
+    private async runStages(
+        context: TContext,
+        stages: PipelineStage<TContext>[],
+        pipelineName: string,
+        parentPipelineId?: string,
+        rootPipelineId?: string,
+        observers: IPipelineObserver[] = [],
+    ): Promise<TContext> {
         const pipelineId = uuid();
 
         context.pipelineMetadata = {

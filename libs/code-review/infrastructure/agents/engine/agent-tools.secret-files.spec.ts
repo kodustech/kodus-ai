@@ -274,6 +274,27 @@ describe('agent tools — secret files of the repository', () => {
         );
     });
 
+    it('answers fast on lines with a boundary after every slash', () => {
+        // `/-1-` puts an empty name before each boundary: screened on the
+        // segment the path really ends in, never sent to the glob each time.
+        const line = `src/a.txt:1:${'/-1-'.repeat(1_100)}`;
+        const out = Array.from({ length: 200 }, () => line).join('\n');
+        const started = Date.now();
+        expect(withoutSecretFileLines(out)).toBe(out);
+        expect(Date.now() - started).toBeLessThan(1_000);
+    });
+
+    it.each([
+        ['certs/.env/-1-x'],
+        ['certs/./.env-1-x'],
+        ['a/b/../.env:2:x'],
+        ['keys/id_rsa/.-1-x'],
+    ])('still drops %s, spelled with a trailing slash, `.` or `..`', (line) => {
+        expect(withoutSecretFileLines(`${line}\nsrc/a.ts:1:ok`)).toBe(
+            'src/a.ts:1:ok',
+        );
+    });
+
     it('keeps a match whose text names a secret file', () => {
         const lines = [
             'docs/setup.md:3:Put the certificate in server.pem',

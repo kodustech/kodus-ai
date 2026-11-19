@@ -1869,8 +1869,8 @@ const ACTIVITY_ARG_KEYS = [
     'dir',
     'glob',
     'repo',
-    'start',
-    'end',
+    'startLine',
+    'endLine',
 ];
 
 /**
