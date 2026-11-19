@@ -2,25 +2,9 @@
 
 AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps and 20 shared libs.
 
-## Structure
+## Layout notes
 
-- `apps/api/` - NestJS REST API (auth, code review orchestration, kody rules, integrations, permissions)
-- `apps/web/` - Next.js 15 dashboard (App Router, Radix UI, React Query, NextAuth)
-- `apps/worker/` - RabbitMQ consumer (webhook processing, code review execution, suggestion checks, monitoring crons)
-- `apps/webhooks/` - Webhook ingestion (GitHub, GitLab, Azure Repos, Bitbucket, Forgejo). Fire-and-forget with outbox pattern
-- `libs/` - 20 NestJS domain modules (core, code-review, ai-engine, agents, integrations, platform, identity, organization, etc.)
-- `libs/llm/` - In-repo LLM/BYOK layer (replaced the old `@kodus/kodus-common/llm` package). One format: a stored `BYOKConfig` routes to one resolved slot (`NormalizedModel`), and every call goes through the single `LLM.run` door. Providers: OpenAI, Anthropic, Gemini, Vertex AI, OpenAI-compatible. Full model in `libs/llm/README.md`
-
-## Stack
-
-- Node.js 22, TypeScript (ES2022), Yarn workspaces
-- Backend: NestJS with `@golevelup/nestjs-rabbitmq`
-- Frontend: Next.js 15 (App Router + Turbopack), Radix UI + TailwindCSS 4, React Query v5
-- Databases: PostgreSQL (TypeORM) + MongoDB (Mongoose)
-- Queue: RabbitMQ with delayed message exchange plugin (quorum queues)
-- Auth: JWT + refresh tokens, OAuth (GitHub/GitLab), SAML SSO, Team CLI keys (`kodus_*` prefix)
-- Observability: OpenTelemetry, Pyroscope profiling, BetterStack heartbeats, Sentry
-- LLM Providers: Anthropic, OpenAI, Google Gemini, Vertex AI, Novita (with BYOK support)
+- `libs/llm/` - In-repo LLM/BYOK layer (replaced the old `@kodus/kodus-common/llm` package). One format: a stored `BYOKConfig` routes to one resolved slot (`NormalizedModel`), and every call goes through the single `LLM.run` door. Full model in `libs/llm/README.md`
 
 ## Getting Started
 
@@ -29,25 +13,7 @@ AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps and 20 shar
 
 ## Commands
 
-Everything runs via Docker (`docker-compose.dev.yml`):
-
-- `pnpm run docker:start` - Start full dev environment (API + worker + webhooks + DBs)
-- `pnpm run docker:start:api` - Start only API + databases
-- `pnpm run docker:start:worker` - Start only worker + databases
-- `pnpm run docker:start:webhooks` - Start only webhooks + databases
-- `pnpm run docker:start:web` - Start web frontend
-- `pnpm run docker:start:all` - Start all services including web
-- `pnpm run docker:up:infra` - Start only infra (databases, RabbitMQ)
-- `pnpm run docker:down` - Stop all containers
-- `pnpm run docker:logs` - Follow logs (API, worker, webhooks)
-- `pnpm run docker:logs:api` / `docker:logs:worker` / `docker:logs:webhooks` - Logs per service
-- `pnpm run dev:restart` - Stop + rebuild + start
-- `pnpm run dev:clean` - Full reset (prune + restart)
-- `pnpm run test` - Jest test suite (API_NODE_ENV=test)
-- `pnpm run build:apps` - Build all apps in parallel
-- `pnpm run migration:generate` - Generate TypeORM migrations
-- `pnpm run lint` - ESLint with auto-fix
-- `pnpm run format` - Prettier
+Everything runs via Docker (`docker-compose.dev.yml`); the `docker:*` and `dev:*` scripts in `package.json` start, stop and reset it. Tests run with `pnpm run test`, which needs `API_NODE_ENV=test`.
 
 ## Architecture Patterns
 
