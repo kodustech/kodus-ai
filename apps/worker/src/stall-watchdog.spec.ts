@@ -40,13 +40,45 @@ describe('startStallWatchdog (real worker thread)', () => {
      * it began after that moment (minus a tick or two of slack: its start is
      * the last tick before the gap).
      */
+    /** Every report of the current watchdog, ours or not, with when it came. */
+    let seen: Array<{ r: StallReport; at: number }> = [];
+    /**
+     * Also waits for the watchdog to be idle: a stall of the test process
+     * before arming (a starved CI runner, the worker thread starting) can
+     * hold the capture slot, and a stall provoked while the slot is busy is
+     * reported `not-captured` instead of being captured. Idle: every stall
+     * seen has its recovery, and nothing was reported for a while.
+     */
     const arm = async () => {
+        const deadline = Date.now() + 10_000;
+        while (Date.now() < deadline) {
+            const open = seen.some(
+                ({ r }) =>
+                    r.kind === 'stall' &&
+                    !seen.some(
+                        (o) =>
+                            o.r.kind === 'recovered' &&
+                            o.r.startedAt === r.startedAt,
+                    ),
+            );
+            const last = seen.length ? seen[seen.length - 1].at : 0;
+            if (!open && Date.now() - last >= 1_500) break;
+            await settle(100);
+        }
         await settle(200);
         armedAt = Date.now();
     };
     const ours = (startedAt?: number) => (startedAt ?? 0) >= armedAt - 50;
-    const keep = (reports: StallReport[]) => (r: StallReport) => {
-        if (ours(r.startedAt)) reports.push(r);
+    // Each watchdog gets its own `seen`: a test that starts several in turn
+    // must not wait on a stall of one already stopped (its recovery never
+    // comes).
+    const keep = (reports: StallReport[]) => {
+        const mine: Array<{ r: StallReport; at: number }> = [];
+        seen = mine;
+        return (r: StallReport) => {
+            mine.push({ r, at: Date.now() });
+            if (ours(r.startedAt)) reports.push(r);
+        };
     };
     const ourFail = (h: { path: string; body: string }) =>
         h.path.endsWith('/fail') && ours(JSON.parse(h.body).context?.startedAt);
@@ -57,6 +89,7 @@ describe('startStallWatchdog (real worker thread)', () => {
 
     afterEach(() => {
         armedAt = Number.POSITIVE_INFINITY;
+        seen = [];
         stop?.();
         stop = undefined;
         jest.clearAllMocks();
