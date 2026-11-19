@@ -178,7 +178,7 @@ export default function ChooseWorkspacePage() {
 
     return (
         <Page.Root className="mx-auto flex min-h-full w-full flex-row p-6">
-            <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
+            <div className="bg-card-lv1 hidden flex-10 flex-col justify-center gap-10 rounded-3xl p-12 md:flex">
                 <div className="flex-1 overflow-hidden rounded-3xl">
                     <video
                         loop
@@ -192,9 +192,9 @@ export default function ChooseWorkspacePage() {
                 </div>
             </div>
 
-            <div className="flex flex-14 flex-col justify-start gap-20 px-10 pt-50 pb-10">
+            <div className="flex min-w-0 flex-14 flex-col justify-start gap-10 pt-6 pb-10 md:gap-20 md:px-10 md:pt-50">
                 <div className="flex flex-col items-center gap-10">
-                    <div className="flex max-w-96 flex-col gap-10">
+                    <div className="flex w-full max-w-96 flex-col gap-10">
                         <StepIndicators.Auto />
 
                         {isLoading ? loading : withData}
