@@ -44,6 +44,7 @@ import {
     BackoffOptions,
 } from '@libs/common/utils/polling';
 import { formatHeartbeatContext } from '@libs/core/infrastructure/incident/heartbeat-context.util';
+import { describeInboxReclaim, describeStaleJobReap } from './lost-work-alerts';
 import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
@@ -365,6 +366,15 @@ export class OutboxRelayService
                                 const threshold = new Date(
                                     Date.now() - timeoutMs,
                                 );
+                                // Read before the reclaim clears lockedBy:
+                                // which workers left these messages. Best
+                                // effort, the reclaim runs either way.
+                                const holders = await this.inboxRepository
+                                    .staleHoldersByConsumer(
+                                        consumerId,
+                                        threshold,
+                                    )
+                                    .catch(() => []);
                                 const reclaimed =
                                     await this.inboxRepository.reclaimStaleMessagesByConsumer(
                                         consumerId,
@@ -376,6 +386,7 @@ export class OutboxRelayService
                                     timeoutMs,
                                     threshold,
                                     reclaimed,
+                                    holders,
                                 };
                             },
                         ),
@@ -395,8 +406,13 @@ export class OutboxRelayService
                             continue;
                         }
 
-                        const { consumerId, timeoutMs, threshold, reclaimed } =
-                            result.value;
+                        const {
+                            consumerId,
+                            timeoutMs,
+                            threshold,
+                            reclaimed,
+                            holders,
+                        } = result.value;
 
                         if (reclaimed <= 0) {
                             continue;
@@ -411,6 +427,7 @@ export class OutboxRelayService
                                 thresholdMinutes: timeoutMs / 60000,
                                 reclaimedCount: reclaimed,
                                 ageThreshold: threshold.toISOString(),
+                                holders,
                             },
                         });
 
@@ -429,7 +446,7 @@ export class OutboxRelayService
                             this.incidentManager
                                 ?.failHeartbeat(
                                     'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                                    `High inbox reclaim rate for ${consumerId}: ${reclaimed} stale messages reclaimed. Possible cause: worker crashes, memory issues, or job timeouts. ${this.formatContext(
+                                    `${describeInboxReclaim(consumerId, reclaimed, timeoutMs, holders)} ${this.formatContext(
                                         {
                                             monitor: 'inbox_reclaim_rate',
                                             consumerId,
@@ -565,12 +582,17 @@ export class OutboxRelayService
                 this.incidentManager
                     ?.failHeartbeat(
                         'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                        `High stale-job reap rate: ${reapedCount} workflow jobs orphaned in PROCESSING. Possible cause: worker crashes/evictions (OOM, node pressure, restarts). ${this.formatContext(
-                            {
-                                monitor: 'stale_job_reap_rate',
-                                reapedCount,
-                            },
-                        )}`,
+                        `${describeStaleJobReap(
+                            reapedCount,
+                            this.staleJobTimeoutMinutes,
+                            (reaped ?? []).map((job) => ({
+                                startedAt: job.startedAt,
+                                ...jobFields({ payload: job.payload }),
+                            })),
+                        )} ${this.formatContext({
+                            monitor: 'stale_job_reap_rate',
+                            reapedCount,
+                        })}`,
                     )
                     .catch((err) => {
                         this.logger.error({
