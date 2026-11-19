@@ -60,6 +60,7 @@ const allCases = require('./' + DATASET);
 const { evalQuestion } = require('../shared/eval-result');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
 const quality = require('./suggestion-quality');
+const { TOKEN_FIELDS, snapshotTokens, restoreTokens } = quality;
 // --cases picks cases by id; --limit=N caps how many run (CI scopes to a few).
 const picked = args.cases ? allCases.filter((c) => String(args.cases).split(',').includes(c.caseId)) : allCases;
 const cases = args.limit ? picked.slice(0, +args.limit) : picked;
@@ -98,18 +99,6 @@ function caseTargets(c) {
     });
 }
 
-// The counted totals, to take out what a judge call added: TOKENS is the
-// review's cost, not the eval's.
-const TOKEN_FIELDS = ['in', 'out', 'cacheRead', 'cacheWrite', 'calls', 'ms'];
-function snapshotTokens() {
-    const t = tokensUsed();
-    return { ...Object.fromEntries(TOKEN_FIELDS.map((k) => [k, t[k]])), callMs: t.callMs.length };
-}
-function restoreTokens(snap) {
-    const t = tokensUsed();
-    for (const k of TOKEN_FIELDS) t[k] = snap[k];
-    t.callMs.length = snap.callMs;
-}
 function tokensSince(snap) {
     const t = tokensUsed();
     return Object.fromEntries(TOKEN_FIELDS.map((k) => [k, t[k] - snap[k]]));
@@ -374,8 +363,8 @@ async function main() {
     const tok = tokensUsed();
     console.log(`TOKENS: input=${tok.in}  output=${tok.out}  cacheRead=${tok.cacheRead}  cacheWrite=${tok.cacheWrite}  over ${totalRuns} agentic sessions`);
     tokensByRun.forEach((t, i) => console.log(`  run ${i} (${i === 0 ? 'cold' : 'warm'}): input=${t.in}  cacheRead=${t.cacheRead}  cacheWrite=${t.cacheWrite}  calls=${t.calls}`));
-    const latency = { stageMsP50: percentile(stageMs, 0.5), stageMsP95: percentile(stageMs, 0.95), runs: stageMs.length };
-    console.log(`review stage time:    p50 ${latency.stageMsP50 ?? '—'} ms  p95 ${latency.stageMsP95 ?? '—'} ms  over ${latency.runs} runs`);
+    const latency = { stageMsP50: percentile(stageMs, 0.5), stageMsP95: percentile(stageMs, 0.95), stages: stageMs.length };
+    console.log(`review stage time:    p50 ${latency.stageMsP50 ?? '—'} ms  p95 ${latency.stageMsP95 ?? '—'} ms  over ${latency.stages} measured review stages`);
     const q = QUALITY ? sumQuality(caseResults.map((c) => c.quality)) : null;
     if (q) {
         console.log(`title names problem:  ${pct(q.titleOk, q.graded)}%  (${q.titleOk}/${q.graded} findings on a real violation; judge ${JUDGE})`);

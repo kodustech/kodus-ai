@@ -13,6 +13,7 @@ const {
     SYSTEM,
     judgePrompt,
 } = require('../suggestion-enrichment/judge');
+const { tokensUsed } = require('../shared/eval-kit');
 
 const WINDOW_LINES = 20;
 
@@ -133,7 +134,28 @@ async function grade(route, s, rule, fileContent) {
     return { score: scoreVerdict(s, parsed), verdict: parsed };
 }
 
+// The counted totals, to take out what a judge call added: the tokens and
+// efforts are the review's, not the eval's (evals/shared/eval-kit.js tokensUsed).
+const TOKEN_FIELDS = ['in', 'out', 'cacheRead', 'cacheWrite', 'calls', 'ms'];
+function snapshotTokens() {
+    const t = tokensUsed();
+    return {
+        ...Object.fromEntries(TOKEN_FIELDS.map((k) => [k, t[k]])),
+        callMs: t.callMs.length,
+        efforts: JSON.parse(JSON.stringify(t.efforts || {})),
+    };
+}
+function restoreTokens(snap) {
+    const t = tokensUsed();
+    for (const k of TOKEN_FIELDS) t[k] = snap[k];
+    t.callMs.length = snap.callMs;
+    t.efforts = JSON.parse(JSON.stringify(snap.efforts));
+}
+
 module.exports = {
+    TOKEN_FIELDS,
+    snapshotTokens,
+    restoreTokens,
     judgeInputs,
     scoreVerdict,
     emptyQuality,
