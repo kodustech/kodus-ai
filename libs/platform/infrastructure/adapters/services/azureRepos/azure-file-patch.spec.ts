@@ -1,0 +1,215 @@
+import { createTwoFilesPatch } from 'diff';
+
+import {
+    AZURE_FILE_DIFF_SYNC_BUDGET_MS,
+    createFilePatchYielding,
+} from './azure-file-patch';
+
+// Longest the loop may be held: the synchronous attempt plus scheduling slack.
+const MAX_GAP_MS = AZURE_FILE_DIFF_SYNC_BUDGET_MS + 150;
+
+// A large file whose every line changed: Myers' O(N·D) worst case, the
+// shape that froze workers for minutes on Azure Repos PRs.
+function fullyChangedFile(lines: number) {
+    const before = Array.from(
+        { length: lines },
+        (_, i) => `const value${i} = compute(${i}, "before");`,
+    ).join('\n');
+    const after = Array.from(
+        { length: lines },
+        (_, i) => `let renamed${i * 7} = other(${i * 3}, "after");`,
+    ).join('\n');
+    return { before, after };
+}
+
+/** Longest gap between ticks of a 10ms interval while `work` runs. */
+async function maxEventLoopGap<T>(
+    work: () => Promise<T>,
+): Promise<{ result: T; maxGapMs: number }> {
+    let last = Date.now();
+    let maxGapMs = 0;
+    const ticker = setInterval(() => {
+        const now = Date.now();
+        maxGapMs = Math.max(maxGapMs, now - last);
+        last = now;
+    }, 10);
+    try {
+        const result = await work();
+        return { result, maxGapMs };
+    } finally {
+        clearInterval(ticker);
+    }
+}
+
+// Real clocks: retried on a starved CI machine.
+jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
+describe('createFilePatchYielding', () => {
+    jest.setTimeout(60_000);
+
+    it.each([
+        ['an edited file', 'a\nb\nc\nd\n', 'a\nB\nc\nd\ne\n'],
+        ['an added file', '', 'new line 1\nnew line 2\n'],
+        ['a removed file', 'old line 1\nold line 2\n', ''],
+        ['no change', 'same\n', 'same\n'],
+    ])(
+        'produces the same patch as the synchronous call for %s',
+        async (_l, a, b) => {
+            const expected = createTwoFilesPatch(
+                'f.ts',
+                'f.ts',
+                a,
+                b,
+                'base',
+                'head',
+                {
+                    context: 3,
+                },
+            );
+            await expect(
+                createFilePatchYielding('f.ts', 'f.ts', a, b, 'base', 'head'),
+            ).resolves.toBe(expected);
+        },
+    );
+
+    it('produces the same patch for a large realistic edit', async () => {
+        const base = Array.from({ length: 3_000 }, (_, i) => `line ${i}`);
+        const head = base.map((l, i) => (i % 97 === 0 ? `${l} changed` : l));
+        const a = base.join('\n');
+        const b = head.join('\n');
+        const expected = createTwoFilesPatch('x.ts', 'x.ts', a, b, 'b', 'h', {
+            context: 3,
+        });
+        await expect(
+            createFilePatchYielding('x.ts', 'x.ts', a, b, 'b', 'h'),
+        ).resolves.toBe(expected);
+    });
+
+    it('keeps the latency of the synchronous call on a large added file', async () => {
+        // The yielding mode costs ~1ms per edit step: on its own it turned
+        // this ~15ms diff into ~11s.
+        const added = Array.from(
+            { length: 10_000 },
+            (_, i) => `line ${i}`,
+        ).join('\n');
+        const expected = createTwoFilesPatch(
+            'n.ts',
+            'n.ts',
+            '',
+            added,
+            'b',
+            'h',
+            {
+                context: 3,
+            },
+        );
+        const started = Date.now();
+        await expect(
+            createFilePatchYielding('n.ts', 'n.ts', '', added, 'b', 'h'),
+        ).resolves.toBe(expected);
+        expect(Date.now() - started).toBeLessThan(1_000);
+    });
+
+    it('treats a zero or invalid timeout as the default', async () => {
+        // Slow enough (~100ms) that a raw 0 or -1 aborts the diff before it
+        // ends; only the default bound yields the real patch.
+        const { before, after } = fullyChangedFile(1_000);
+        const expected = createTwoFilesPatch(
+            'f.ts',
+            'f.ts',
+            before,
+            after,
+            'x',
+            'y',
+            { context: 3 },
+        );
+        for (const timeout of [0, -1, Number.NaN]) {
+            await expect(
+                createFilePatchYielding(
+                    'f.ts',
+                    'f.ts',
+                    before,
+                    after,
+                    'x',
+                    'y',
+                    timeout,
+                ),
+            ).resolves.toBe(expected);
+        }
+    });
+
+    it('keeps the event loop responsive on a file the sync call blocks on', async () => {
+        const { before, after } = fullyChangedFile(5_000);
+
+        // Reference: the synchronous call holds the thread for the whole diff.
+        const syncStart = Date.now();
+        createTwoFilesPatch('big.ts', 'big.ts', before, after, 'b', 'h', {
+            context: 3,
+        });
+        const syncMs = Date.now() - syncStart;
+
+        const { result, maxGapMs } = await maxEventLoopGap(() =>
+            createFilePatchYielding(
+                'big.ts',
+                'big.ts',
+                before,
+                after,
+                'b',
+                'h',
+            ),
+        );
+
+        expect(result).toEqual(expect.stringContaining('@@'));
+        // The sync call blocks for its whole duration; the yielding one never
+        // holds the loop for more than a small slice of it.
+        expect(syncMs).toBeGreaterThan(3 * MAX_GAP_MS);
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
+    });
+
+    it('never adds up the synchronous attempts of files diffed at once', async () => {
+        // The caller diffs many files concurrently; their synchronous
+        // attempts must not run back to back in one block.
+        // ~100ms each, inside the sync budget: no slow fallback, so the
+        // test stays quick on a loaded CI runner, while six of them back to
+        // back (~600ms) would exceed one turn's bound.
+        const files = Array.from({ length: 6 }, () => fullyChangedFile(1_200));
+        const { result, maxGapMs } = await maxEventLoopGap(() =>
+            Promise.all(
+                files.map(({ before, after }) =>
+                    createFilePatchYielding(
+                        'big.ts',
+                        'big.ts',
+                        before,
+                        after,
+                        'b',
+                        'h',
+                    ),
+                ),
+            ),
+        );
+        expect(result.every((p) => p?.includes('@@'))).toBe(true);
+        // Turns, not a sum: one turn stays within the budget plus slack.
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
+    });
+
+    it('gives up on a pathological file instead of running unbounded', async () => {
+        const { before, after } = fullyChangedFile(8_000);
+        const started = Date.now();
+
+        const { result, maxGapMs } = await maxEventLoopGap(() =>
+            createFilePatchYielding(
+                'big.ts',
+                'big.ts',
+                before,
+                after,
+                'b',
+                'h',
+                500,
+            ),
+        );
+
+        expect(result).toBeUndefined();
+        expect(Date.now() - started).toBeLessThan(5_000);
+        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
+    });
+});
