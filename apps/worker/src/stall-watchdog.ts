@@ -47,6 +47,8 @@ export interface StallReport {
         'ended-before-read' | 'answered-late' | 'no-answer' | 'not-captured';
     /** The profile also covers time after the stall ended. */
     profileIncludesRecovery?: boolean;
+    /** How long the main thread took to pause for the stack read. */
+    inspectorAnswerMs?: number;
     /** Human-readable location, as used in the log line and the alert. */
     location?: string;
     stack?: StallFrame[] | null;
@@ -265,15 +267,23 @@ export function stallWatchdogThread(): void {
     function pausedStack(
         session: InstanceType<typeof inspector.Session>,
         ranSinceStart: () => boolean,
-    ): Promise<{
-        frames: ReturnType<typeof frame>[];
-        recovered: boolean;
-        late: boolean;
-    } | null> {
+    ): Promise<
+        | {
+              frames: ReturnType<typeof frame>[];
+              recovered: boolean;
+              late: boolean;
+              answerMs: number;
+          }
+        // The inspector answered with an error: say so, never "no answer".
+        | { error: string }
+        // No answer within the bound.
+        | null
+    > {
         return new Promise((resolve) => {
             let done = false;
             let recovered = false;
             let late = false;
+            let answerMs = 0;
             const askedAt = Date.now();
             // CallFrame.url is deprecated and often empty; the script's url
             // comes from the scriptParsed events Debugger.enable replays.
@@ -282,20 +292,30 @@ export function stallWatchdogThread(): void {
                 if (msg.params?.scriptId)
                     scripts.set(msg.params.scriptId, msg.params.url ?? '');
             };
-            const finish = (frames: ReturnType<typeof frame>[] | null) => {
+            const finish = (
+                frames: ReturnType<typeof frame>[] | null,
+                error?: string,
+            ) => {
                 if (done) return;
                 done = true;
                 clearTimeout(timer);
                 session.removeListener('Debugger.paused', onPaused);
                 session.removeListener('Debugger.scriptParsed', onScript);
-                resolve(frames ? { frames, recovered, late } : null);
+                resolve(
+                    frames
+                        ? { frames, recovered, late, answerMs }
+                        : error
+                          ? { error }
+                          : null,
+                );
             };
             const timer = setTimeout(() => finish(null), 5_000);
             function onPaused(msg: any) {
                 // Read while the main thread is paused: if it ticked since
                 // the capture began, the stall had already ended.
                 recovered = ranSinceStart();
-                late = Date.now() - askedAt > LATE_ANSWER_MS;
+                answerMs = Date.now() - askedAt;
+                late = answerMs > LATE_ANSWER_MS;
                 const frames = (msg.params?.callFrames ?? [])
                     .slice(0, 40)
                     .map((f: any) =>
@@ -314,9 +334,17 @@ export function stallWatchdogThread(): void {
             session.on('Debugger.scriptParsed', onScript);
             session.on('Debugger.paused', onPaused);
             session.post('Debugger.enable', (err: Error | null) => {
-                if (err) return finish(null);
+                if (err)
+                    return finish(
+                        null,
+                        `Debugger.enable failed: ${err.message || String(err)}`,
+                    );
                 session.post('Debugger.pause', (e2: Error | null) => {
-                    if (e2) finish(null);
+                    if (e2)
+                        finish(
+                            null,
+                            `Debugger.pause failed: ${e2.message || String(e2)}`,
+                        );
                 });
             });
         });
@@ -340,8 +368,11 @@ export function stallWatchdogThread(): void {
             let profileLate = false;
             let profileSlow = false;
             if (cfg.profileMs > 0) {
+                // When the current inspector call was sent: a call that
+                // fails (5s bound) after more than LATE_ANSWER_MS means the
+                // main thread was blocked, so the stack is not trusted.
+                let askedAt = Date.now();
                 try {
-                    const askedAt = Date.now();
                     await post(session, 'Profiler.enable');
                     await post(session, 'Profiler.setSamplingInterval', {
                         interval: 1_000,
@@ -353,6 +384,7 @@ export function stallWatchdogThread(): void {
                     profileSlow = Date.now() - askedAt > LATE_ANSWER_MS;
                     profileLate = profileSlow || ranSinceStart();
                     await sleep(cfg.profileMs);
+                    askedAt = Date.now();
                     const { profile } = await post(session, 'Profiler.stop');
                     // Started inside the stall: its samples up to the
                     // recovery still name the code (idle time is ignored).
@@ -361,22 +393,33 @@ export function stallWatchdogThread(): void {
                     await post(session, 'Profiler.disable').catch(() => {});
                 } catch {
                     summary = null;
+                    if (Date.now() - askedAt > LATE_ANSWER_MS)
+                        profileSlow = true;
                 }
             }
             const paused = await pausedStack(session, ranSinceStart);
-            const stackUnavailable: StallReport['stackUnavailable'] = !paused
-                ? 'no-answer'
-                : paused.late || profileSlow
-                  ? 'answered-late'
-                  : paused.recovered
-                    ? 'ended-before-read'
-                    : undefined;
+            const pauseError =
+                paused && 'error' in paused ? paused.error : undefined;
+            const read = paused && !('error' in paused) ? paused : null;
+            const stackUnavailable: StallReport['stackUnavailable'] =
+                pauseError !== undefined
+                    ? undefined // reported as the capture error instead
+                    : !read
+                      ? 'no-answer'
+                      : read.late || profileSlow
+                        ? 'answered-late'
+                        : read.recovered
+                          ? 'ended-before-read'
+                          : undefined;
             return {
-                stack: stackUnavailable ? null : paused!.frames,
+                stack:
+                    read && stackUnavailable === undefined ? read.frames : null,
                 ...(summary ?? {}),
                 profileIncludesRecovery: !!summary && profileIncludesRecovery,
-                recoveredBeforeRead: !!paused?.recovered,
+                recoveredBeforeRead: !!read?.recovered,
                 stackUnavailable,
+                inspectorAnswerMs: read?.answerMs,
+                error: pauseError,
             };
         } finally {
             try {
@@ -449,7 +492,7 @@ export function stallWatchdogThread(): void {
         const hot = hottest?.[0];
         if (hot)
             return `${hot.fn} (${hot.file}:${hot.line}) per the CPU profile`;
-        if (reason && NO_PLACE[reason]) return NO_PLACE[reason];
+        if (reason && Object.hasOwn(NO_PLACE, reason)) return NO_PLACE[reason];
         return `an unknown place (capture failed${error ? `: ${error}` : ''})`;
     }
 
@@ -475,6 +518,7 @@ export function stallWatchdogThread(): void {
             profileIncludesRecovery?: boolean;
             recoveredBeforeRead?: boolean;
             stackUnavailable?: StallReport['stackUnavailable'];
+            inspectorAnswerMs?: number;
             error?: string;
         },
     ) {
@@ -485,6 +529,7 @@ export function stallWatchdogThread(): void {
             profileIncludesRecovery,
             recoveredBeforeRead,
             stackUnavailable,
+            inspectorAnswerMs,
             error,
         } = r;
         // A stall that ended during the capture keeps its real length, not
@@ -508,6 +553,9 @@ export function stallWatchdogThread(): void {
                 ...(stackUnavailable ? { stackUnavailable } : {}),
                 ...(profileIncludesRecovery
                     ? { profileIncludesRecovery: true }
+                    : {}),
+                ...(inspectorAnswerMs !== undefined
+                    ? { inspectorAnswerMs }
                     : {}),
                 ...(error !== undefined ? { error } : {}),
             },
@@ -554,10 +602,6 @@ export function stallWatchdogThread(): void {
                 // Every stall is reported and alerted, with or without a
                 // stack: a capture that fails still means a stuck worker.
                 capture(tick)
-                    .then((r) => ({
-                        ...r,
-                        error: undefined as string | undefined,
-                    }))
                     .catch((e: Error) => ({
                         stack: null,
                         hottest: undefined,
