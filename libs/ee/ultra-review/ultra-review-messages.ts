@@ -63,7 +63,10 @@ export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
     }
 }
 
-/** Why a saved Ultra mode was refused. */
+/**
+ * Why a saved Ultra mode was refused. Each starts with "Ultra review": the
+ * web shows the API's message only on that prefix.
+ */
 export function ultraSaveRefusalMessage(
     refusal: UltraTrioRefusal | 'plan',
 ): string {
@@ -78,9 +81,9 @@ export function ultraSaveRefusalMessage(
         case 'same_model':
             return `Ultra review needs three different models, and two of the three set for it are ${code(refusal.model)}, so the review mode was not changed.`;
         case 'unavailable_models':
-            return 'None of the three models set for Ultra review can run any more, so the review mode was not changed.';
+            return 'Ultra review cannot run on any of the three models set for it any more, so the review mode was not changed.';
         case 'some_unavailable':
-            return `${refusal.unavailable} of the three models set for Ultra review cannot run: each must be one of your own models, with its key. The review mode was not changed.`;
+            return `Ultra review cannot run on ${refusal.unavailable} of the three models set for it: each must be one of your own models, with its key. The review mode was not changed.`;
     }
 }
 

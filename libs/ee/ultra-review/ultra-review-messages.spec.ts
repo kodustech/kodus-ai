@@ -1,6 +1,9 @@
 import type { UltraReviewState } from '@libs/code-review/domain/ultra-review-state';
 
-import { ultraDegradedNotice } from './ultra-review-messages';
+import {
+    ultraDegradedNotice,
+    ultraSaveRefusalMessage,
+} from './ultra-review-messages';
 
 const model = (position: any, modelId: string) => ({
     position,
@@ -80,4 +83,20 @@ describe('ultraDegradedNotice', () => {
             );
         });
     });
+});
+
+describe('ultraSaveRefusalMessage', () => {
+    it.each([
+        'plan' as const,
+        { reason: 'too_few_models' as const, ownModels: 2 },
+        { reason: 'not_configured' as const, ownModels: 3 },
+        { reason: 'same_model' as const, ownModels: 3, model: 'm' },
+        { reason: 'unavailable_models' as const, ownModels: 3 },
+        { reason: 'some_unavailable' as const, ownModels: 3, unavailable: 1 },
+    ])(
+        'starts with "Ultra review", the prefix the web shows it on: %j',
+        (refusal) => {
+            expect(ultraSaveRefusalMessage(refusal)).toMatch(/^Ultra review/);
+        },
+    );
 });
