@@ -49,8 +49,26 @@ describe('KodusCreditsSweepCronProvider', () => {
             } as any,
         );
 
+        const log = jest
+            .spyOn((cron as any).logger, 'log')
+            .mockImplementation(() => {});
+
         await cron.handleCron();
         clock.mockRestore();
+
+        // The run reports what it swept and what it left for the next tick.
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Kodus credits sweep completed',
+                metadata: expect.objectContaining({
+                    orgs: 6,
+                    deferred: 2,
+                    failed: 0,
+                    debited: 4,
+                    debitedUsd: 0.04,
+                }),
+            }),
+        );
 
         // The first four start at once and end at minute 4; the budget is
         // spent, so o5 and o6 wait for the next tick.
@@ -91,5 +109,66 @@ describe('KodusCreditsSweepCronProvider', () => {
         }
         await run;
         expect(metering.sweepOrganization).toHaveBeenCalledTimes(6);
+    });
+
+    it('reports a failed organization apart, sums the rest, and releases the lock', async () => {
+        const release = jest.fn().mockResolvedValue(undefined);
+        const metering = {
+            listOrganizationsWithKodusCredential: jest
+                .fn()
+                .mockResolvedValue(['o1', 'o2', 'o3']),
+            sweepOrganization: jest.fn(async (organizationId: string) => {
+                if (organizationId === 'o2') throw new Error('billing down');
+                return { debited: 2, debitedUsd: 0.5 };
+            }),
+        };
+        const cron = new KodusCreditsSweepCronProvider(
+            metering as any,
+            { acquire: jest.fn().mockResolvedValue({ release }) } as any,
+        );
+        const log = jest
+            .spyOn((cron as any).logger, 'log')
+            .mockImplementation(() => {});
+        const error = jest
+            .spyOn((cron as any).logger, 'error')
+            .mockImplementation(() => {});
+
+        await cron.handleCron();
+
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    orgs: 3,
+                    deferred: 0,
+                    failed: 1,
+                    debited: 4,
+                    debitedUsd: 1,
+                }),
+            }),
+        );
+        expect(error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Some Kodus credits sweeps failed',
+                metadata: { failed: 1, total: 3 },
+            }),
+        );
+        expect(release).toHaveBeenCalledTimes(1);
+    });
+
+    it('sweeps nothing when another worker holds the lock', async () => {
+        const metering = {
+            listOrganizationsWithKodusCredential: jest.fn(),
+            sweepOrganization: jest.fn(),
+        };
+        const cron = new KodusCreditsSweepCronProvider(
+            metering as any,
+            { acquire: jest.fn().mockResolvedValue(null) } as any,
+        );
+
+        await cron.handleCron();
+
+        expect(
+            metering.listOrganizationsWithKodusCredential,
+        ).not.toHaveBeenCalled();
     });
 });

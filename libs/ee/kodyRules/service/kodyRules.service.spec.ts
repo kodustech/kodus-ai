@@ -190,12 +190,24 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             new Error('mongo write failed'),
         );
         const rules = Array.from({ length: 12 }, (_, i) => rule(i + 1));
-        // The failure is logged, not thrown.
+        // The failure is logged, not thrown: once, naming every rule the
+        // write carried (rules 11 and 12 pass the 10-rule cap) and the error.
         await svc.syncRulesWithPlanLimit(ORG, {
             entity: entityOf(rules) as any,
             limited: true,
         });
-        expect((svc as any).logger.error).toHaveBeenCalled();
+        expect((svc as any).logger.error).toHaveBeenCalledTimes(1);
+        expect((svc as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Failed per-rule updates in syncRulesWithPlanLimit',
+                error: expect.objectContaining({
+                    message: 'mongo write failed',
+                }),
+                metadata: expect.objectContaining({
+                    ruleIds: ['r11', 'r12'],
+                }),
+            }),
+        );
     });
 
     it('logs the rules whose patch the write reported as failed, once', async () => {
@@ -274,6 +286,26 @@ describe('KodyRulesService.find — rules the plan limit paused', () => {
 
         expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
         expect(repo.find).toHaveBeenCalledTimes(2);
+    });
+
+    it('reads once when the find filtered rules and none is plan-locked', async () => {
+        repo.find.mockResolvedValue([
+            {
+                uuid: 'doc-org-1',
+                toObject: () => ({
+                    organizationId: 'org-1',
+                    rules: [{ uuid: 'r1', status: KodyRulesStatus.ACTIVE }],
+                }),
+            },
+        ]);
+
+        await svc.find({
+            organizationId: 'org-1',
+            rules: [{ repositoryId: 'repo' }],
+        } as any);
+
+        expect(repo.find).toHaveBeenCalledTimes(1);
+        expect(repo.findByOrganizationId).not.toHaveBeenCalled();
     });
 
     it('lets the sync read the whole document when the find filtered rules', async () => {

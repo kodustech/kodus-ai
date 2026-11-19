@@ -6,6 +6,11 @@ describe('MongooseFactory connection options', () => {
         'MONGO_AUTO_INDEX',
         'MG_POOL_MIN_API',
         'MG_POOL_MAX_API',
+        'MG_POOL_MIN_WEBHOOK',
+        'MG_POOL_MAX_WEBHOOK',
+        'MG_POOL_MIN_WORKER',
+        'MG_POOL_MAX_WORKER',
+        'MG_SERVER_SELECTION_TIMEOUT_MS',
         'MG_WAIT_QUEUE_TIMEOUT_MS',
     ];
     let saved: Record<string, string | undefined>;
@@ -64,5 +69,19 @@ describe('MongooseFactory connection options', () => {
         // Previously forwarded to the driver as NaN.
         process.env.MG_POOL_MIN_API = 'abc';
         expect(options().minPoolSize).toBe(1);
+    });
+
+    it.each([
+        ['webhook', 'MG_POOL_MAX_WEBHOOK', 'maxPoolSize'],
+        ['webhook', 'MG_POOL_MIN_WEBHOOK', 'minPoolSize'],
+        ['api', 'MG_POOL_MAX_API', 'maxPoolSize'],
+        ['worker', 'MG_POOL_MAX_WORKER', 'maxPoolSize'],
+        ['worker', 'MG_POOL_MIN_WORKER', 'minPoolSize'],
+        ['api', 'MG_SERVER_SELECTION_TIMEOUT_MS', 'serverSelectionTimeoutMS'],
+        ['api', 'MG_WAIT_QUEUE_TIMEOUT_MS', 'waitQueueTimeoutMS'],
+    ])('a %s process reads %s into %s', (component, key, option) => {
+        process.env.COMPONENT_TYPE = component;
+        process.env[key] = '7';
+        expect(options()[option]).toBe(7);
     });
 });
