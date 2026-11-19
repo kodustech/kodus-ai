@@ -5,7 +5,10 @@ import { Repository, LessThan, EntityManager } from 'typeorm';
 import { createLogger } from '@libs/core/log/logger';
 
 import { InboxMessageModel, InboxStatus } from './schemas/inbox-message.model';
-import { IInboxMessageRepository } from '../../domain/contracts/inbox-message.repository.contract';
+import {
+    IInboxMessageRepository,
+    StaleInboxHolder,
+} from '../../domain/contracts/inbox-message.repository.contract';
 
 /**
  * Inbox Message Repository
@@ -289,6 +292,47 @@ export class InboxMessageRepository implements IInboxMessageRepository {
             });
             throw error;
         }
+    }
+
+    /**
+     * Who holds the messages a reclaim with the same arguments would take:
+     * one row per holder (`lockedBy`, the worker's hostname, one per ECS
+     * task) with how many and since when. Read just before the reclaim,
+     * which clears `lockedBy`, so the alert can name the workers that
+     * stopped processing them instead of the one that ran the reaper.
+     */
+    async staleHoldersByConsumer(
+        consumerId: string,
+        olderThan: Date,
+    ): Promise<StaleInboxHolder[]> {
+        const rows: Array<{
+            lockedBy: string | null;
+            count: string | number;
+            oldest: Date | string | null;
+            newest: Date | string | null;
+        }> = await this.repository
+            .createQueryBuilder('m')
+            .select('m.lockedBy', 'lockedBy')
+            .addSelect('COUNT(*)', 'count')
+            .addSelect('MIN(m.lockedAt)', 'oldest')
+            .addSelect('MAX(m.lockedAt)', 'newest')
+            .where('m.consumerId = :consumerId', { consumerId })
+            .andWhere('m.status = :status', {
+                status: InboxStatus.PROCESSING,
+            })
+            .andWhere('m.lockedAt < :olderThan', { olderThan })
+            .groupBy('m.lockedBy')
+            .getRawMany();
+        const iso = (v: Date | string | null) =>
+            v ? new Date(v).toISOString() : undefined;
+        return rows
+            .map((r) => ({
+                lockedBy: r.lockedBy ?? 'unknown',
+                count: Number(r.count) || 0,
+                oldestLockedAt: iso(r.oldest),
+                newestLockedAt: iso(r.newest),
+            }))
+            .sort((a, b) => b.count - a.count);
     }
 
     /**

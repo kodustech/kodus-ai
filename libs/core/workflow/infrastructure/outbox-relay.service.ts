@@ -44,6 +44,7 @@ import {
     BackoffOptions,
 } from '@libs/common/utils/polling';
 import { formatHeartbeatContext } from '@libs/core/infrastructure/incident/heartbeat-context.util';
+import { describeLostJobs, describeStaleHolders } from './lost-work-alerts';
 import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
@@ -382,6 +383,15 @@ export class OutboxRelayService
                                 const threshold = new Date(
                                     Date.now() - timeoutMs,
                                 );
+                                // Read before the reclaim clears lockedBy:
+                                // which workers left these messages. Best
+                                // effort, the reclaim runs either way.
+                                const holders = await this.inboxRepository
+                                    .staleHoldersByConsumer(
+                                        consumerId,
+                                        threshold,
+                                    )
+                                    .catch(() => []);
                                 const reclaimed =
                                     await this.inboxRepository.reclaimStaleMessagesByConsumer(
                                         consumerId,
@@ -393,6 +403,7 @@ export class OutboxRelayService
                                     timeoutMs,
                                     threshold,
                                     reclaimed,
+                                    holders,
                                 };
                             },
                         ),
@@ -412,8 +423,13 @@ export class OutboxRelayService
                             continue;
                         }
 
-                        const { consumerId, timeoutMs, threshold, reclaimed } =
-                            result.value;
+                        const {
+                            consumerId,
+                            timeoutMs,
+                            threshold,
+                            reclaimed,
+                            holders,
+                        } = result.value;
 
                         if (reclaimed <= 0) {
                             continue;
@@ -428,6 +444,7 @@ export class OutboxRelayService
                                 thresholdMinutes: timeoutMs / 60000,
                                 reclaimedCount: reclaimed,
                                 ageThreshold: threshold.toISOString(),
+                                holders,
                             },
                         });
 
@@ -438,7 +455,7 @@ export class OutboxRelayService
                         // reported one event twice.
                         if (reclaimed > 5) {
                             this.logger.error({
-                                message: `HIGH RECLAIM RATE: ${reclaimed} ${consumerId} locks held by a worker that stopped mid-job`,
+                                message: `HIGH RECLAIM RATE: ${reclaimed} ${consumerId} locks held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}`,
                                 context: OutboxRelayService.name,
                                 metadata: {
                                     consumerId,
@@ -886,7 +903,12 @@ export class OutboxRelayService
      * it was reported by the worker's StallWatchdog at the time.
      */
     private async alertOnJobLoss(
-        reaped: Array<{ workflowType: string; organizationId: string | null }>,
+        reaped: Array<{
+            workflowType: string;
+            organizationId: string | null;
+            startedAt?: Date | null;
+            payload?: Record<string, unknown> | null;
+        }>,
     ): Promise<void> {
         const reapedCount = reaped.length;
         const since = new Date(
@@ -924,7 +946,12 @@ export class OutboxRelayService
         const typeSummary = Object.entries(byType)
             .map(([type, n]) => `${type}: ${n}`)
             .join(', ');
-        const message = `${lostInWindow} workflow jobs lost in the last ${LOSS_ALERT_WINDOW_MINUTES} min (this pass: ${typeSummary}; ${orgs} orgs). The worker running them stopped mid-job (froze or was killed) about ${this.staleJobTimeoutMinutes} min ago; they were marked FAILED and are not retried. The stuck code is in that worker's StallWatchdog report / worker_stall alert from then.`;
+        const message = `${lostInWindow} workflow jobs lost in the last ${LOSS_ALERT_WINDOW_MINUTES} min (this pass: ${typeSummary}; ${orgs} orgs). The worker running them stopped mid-job (froze or was killed) about ${this.staleJobTimeoutMinutes} min ago; they were marked FAILED and are not retried.${describeLostJobs(
+            reaped.map((job) => ({
+                startedAt: job.startedAt,
+                ...jobFields({ payload: job.payload }),
+            })),
+        )} The stuck code is in that worker's StallWatchdog report / worker_stall alert from then; this alert's host only ran the reaper.`;
 
         this.logger.error({
             message: `JOB LOSS: ${message}`,
