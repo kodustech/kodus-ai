@@ -455,7 +455,9 @@ export function stallWatchdogThread(): void {
                         );
                         if (profilerAnswerMs > LATE_ANSWER_MS)
                             profileSlow = true;
-                    } else {
+                    } else if (failedCallMs > 0) {
+                        // Only when an inspector call did fail (not our own
+                        // work, e.g. summarize).
                         profilerFailedCallMs = failedCallMs;
                         if (failedCallMs > LATE_ANSWER_MS) profileSlow = true;
                     }
