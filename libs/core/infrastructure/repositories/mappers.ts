@@ -55,8 +55,10 @@ const mapSimpleModelToEntity = <T, U>(model: T, entityClass): U => {
  */
 const mapSimpleModelsToEntities = <T, U>(models: T[], entityClass): U[] => {
     try {
+        // An empty result is an empty list, as the return type says; null
+        // here crashed every caller that maps over it.
         if (!models || models.length === 0) {
-            return null;
+            return [];
         }
 
         return models.map((model) =>

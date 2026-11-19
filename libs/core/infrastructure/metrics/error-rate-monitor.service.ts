@@ -1,6 +1,7 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { createLogger } from '@libs/core/log/logger';
@@ -43,7 +44,7 @@ export class ErrorRateMonitorService {
         );
     }
 
-    @Cron(CronExpression.EVERY_MINUTE)
+    @GatedCron(CronExpression.EVERY_MINUTE)
     async checkErrorRate(): Promise<void> {
         const lock = await this.acquireCronLock();
         if (!lock) {

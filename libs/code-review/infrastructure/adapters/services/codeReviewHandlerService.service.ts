@@ -364,6 +364,7 @@ export class CodeReviewHandlerService {
                 approvalDecision: result?.approvalDecision,
                 approvalRisk: result?.approvalRisk,
                 riskAssessment: result?.riskAssessment,
+                reviewRoutingReason: result?.reviewRoutingReason,
                 approvalPolicyEligibility: result?.approvalPolicyEligibility,
                 approvalReviewSummary: result?.approvalReviewSummary,
                 customAgentRiskSkips: result?.customAgentRiskSkips,

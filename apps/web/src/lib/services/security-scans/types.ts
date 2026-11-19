@@ -1,5 +1,10 @@
 export type SecurityScanStatus =
-    "queued" | "running" | "completed" | "stopped_by_budget" | "failed";
+    | "queued"
+    | "running"
+    | "completed"
+    | "stopped_by_budget"
+    | "failed"
+    | "cancelled";
 
 export type SecurityScanBudget = {
     maxUsd?: number;

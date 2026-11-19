@@ -11,5 +11,6 @@ export interface IParametersService extends IParametersRepository {
         parametersKey: K,
         configValue: ParametersEntity<K>['configValue'],
         organizationAndTeamData: OrganizationAndTeamData,
+        expectedConfigId?: string,
     ): Promise<ParametersEntity<K> | boolean>;
 }

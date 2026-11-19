@@ -1154,6 +1154,11 @@ export class ExpectedCustomAgentsRevisionsDto {
 
 export class CreateOrUpdateCodeReviewParameterDto {
     @IsOptional()
+    @IsString()
+    @MaxLength(36)
+    expectedConfigId?: string;
+
+    @IsOptional()
     @IsArray()
     @ArrayMaxSize(REVIEW_SETTINGS_INHERITABLE_FIELDS.length)
     @IsIn(REVIEW_SETTINGS_INHERITABLE_FIELDS, { each: true })

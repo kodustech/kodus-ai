@@ -384,21 +384,10 @@ export class CommentManagerService implements ICommentManagerService {
         const merged = [
             ...(lineComments ?? []),
             ...(prLevelCommentResults ?? []),
-        ].filter(
-            (entry) =>
-                entry?.comment?.suggestion &&
-                // A REPLACED entry is the original of a fallback that was
-                // itself posted as a SENT entry in this same array, so counting
-                // both would double-count one comment on the PR. REPLACED is
-                // only ever recorded when the fallback succeeded, so dropping it
-                // never loses a finding.
-                entry.deliveryStatus !== DeliveryStatus.REPLACED,
-        );
+        ].filter((entry) => entry?.comment?.suggestion);
 
-        // Both arrays retain FAILED entries for persistence/auditing, so a
-        // comment that was never posted would otherwise be described here as a
-        // finding of the review. Mirrors the SENT filter the sibling consumer
-        // applies to these same arrays.
+        // Keep failed and replaced originals in the finding count. A fallback
+        // publishes a different suggestion, so only its comment is listed.
         const suggestions = merged
             .filter((entry) => entry?.deliveryStatus === DeliveryStatus.SENT)
             .map((entry) => entry.comment.suggestion);

@@ -2,6 +2,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 
 import { AutomationExecutionEntity } from '../entities/automation-execution.entity';
 import { IAutomationExecution } from '../interfaces/automation-execution.interface';
+import type { AutomationType } from '../../automation/enum/automation-type';
 
 export const AUTOMATION_EXECUTION_REPOSITORY_TOKEN = Symbol(
     'AutomationExecutionRepository',
@@ -24,6 +25,7 @@ export interface IAutomationExecutionRepository {
         filter?: Partial<IAutomationExecution>,
     ): Promise<AutomationExecutionEntity[]>;
     findPullRequestExecutionsByOrganizationAndTeam(params: {
+        automationType?: AutomationType;
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         repositoryName?: string;

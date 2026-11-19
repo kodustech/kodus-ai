@@ -189,6 +189,112 @@ describe('agent tools — secret files of the repository', () => {
         );
     });
 
+    // Regression: a long line (minified code, data) with many `-123-` /
+    // `:45:` runs re-tested the whole prefix at every one of them,
+    // O(length x boundaries): 135 KB took 21s, 291 KB 181s, freezing the
+    // worker until ECS killed it. Each must answer fast, same verdicts.
+    it.each([
+        ['a minified line', 'dist/app.min.js:1:', false],
+        ['a secret file with a long line', 'config/.env.production:3:', true],
+        ['a key file with a long line', 'certs/server.key:7:', true],
+    ])('answers fast on %s', (_label, prefix, dropped) => {
+        const body = Array.from(
+            { length: 20_000 },
+            (_, i) => `a-${i}-b:${i}:`,
+        ).join('');
+        const line = `${prefix}${body}`;
+        const output = `src/ok.ts:1:const a = 1;\n${line}`;
+        const started = Date.now();
+        const kept = withoutSecretFileLines(output);
+        expect(Date.now() - started).toBeLessThan(500);
+        expect(kept.includes(line)).toBe(!dropped);
+        expect(kept).toContain('src/ok.ts:1:const a = 1;');
+    });
+
+    // Same verdicts as before the bound and the name screen, at their edges.
+    it.each([
+        [
+            'a secret file path spelled with a trailing /.',
+            'keys/server.pem/.:3:x',
+            true,
+        ],
+        [
+            'a secret file path spelled with a trailing /..',
+            'config/.env/sub/..:3:x',
+            true,
+        ],
+        [
+            'an env template, which the name screen lets through',
+            'config/.env.example:1:API_URL=',
+            false,
+        ],
+        [
+            'a path whose name only starts like a key file',
+            'docs/server.key.md:2:x',
+            false,
+        ],
+        [
+            'a secret file whose path is exactly 4,096 characters',
+            `${'d/'.repeat(2_045)}xx.pem:7:x`,
+            true,
+        ],
+        [
+            // The former filter dropped this one: past 4,096 characters it is
+            // the matched text, not a path (no path is that long).
+            'a secret-looking name past 4,096 characters, inside the text',
+            `src/a.ts:1:${'y'.repeat(4_100)}/x.pem:7:x`,
+            false,
+        ],
+    ])('judges %s like before', (_label, line, dropped) => {
+        const kept = withoutSecretFileLines(`src/ok.ts:1:x\n${line}`);
+        expect(kept.includes(line)).toBe(!dropped);
+    });
+
+    // Many long lines (a grep across a minified bundle): only a prefix whose
+    // last segment looks like a secret file pays for the glob match.
+    it('answers fast on many long lines', () => {
+        const longLine = (i: number) =>
+            `dist/chunk-${i}.min.js:1:` +
+            Array.from({ length: 600 }, (_, k) => `v-${k}-w:${k}:`).join('');
+        const output = Array.from({ length: 300 }, (_, i) => longLine(i)).join(
+            '\n',
+        );
+        const started = Date.now();
+        expect(withoutSecretFileLines(output)).toBe(output);
+        expect(Date.now() - started).toBeLessThan(1_000);
+    });
+
+    it.each([
+        ['config\\.env:3:SECRET=x'],
+        ['keys\\id_rsa:1:x'],
+        ['certs\\server.pem-2-x'],
+    ])('drops %s: a backslash separates path segments too', (line) => {
+        expect(withoutSecretFileLines(`${line}\nsrc/a.ts:1:ok`)).toBe(
+            'src/a.ts:1:ok',
+        );
+    });
+
+    it('answers fast on lines with a boundary after every slash', () => {
+        // `/-1-` puts an empty name before each boundary: screened on the
+        // segment the path really ends in, never sent to the glob each time.
+        const line = `src/a.txt:1:${'/-1-'.repeat(1_100)}`;
+        const out = Array.from({ length: 200 }, () => line).join('\n');
+        const started = Date.now();
+        expect(withoutSecretFileLines(out)).toBe(out);
+        expect(Date.now() - started).toBeLessThan(1_000);
+    });
+
+    it.each([
+        ['certs/.env/-1-x'],
+        ['certs/./.env-1-x'],
+        ['a/b/../.env:2:x'],
+        ['keys/id_rsa/.-1-x'],
+    ])('still drops %s, spelled with a trailing slash, `.` or `..`', (line) => {
+        expect(withoutSecretFileLines(`${line}\nsrc/a.ts:1:ok`)).toBe(
+            'src/a.ts:1:ok',
+        );
+    });
+
     it('keeps a match whose text names a secret file', () => {
         const lines = [
             'docs/setup.md:3:Put the certificate in server.pem',

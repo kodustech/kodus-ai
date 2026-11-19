@@ -925,6 +925,7 @@ export class AutomationCodeReviewService implements Omit<
                     : result.heavy
                       ? 'heavy'
                       : 'balanced',
+                reviewRoutingReason: result.reviewRoutingReason,
                 // Each Ultra model's outcome and the merge, for the Pull
                 // Requests screen.
                 ...(result.ultra && { ultraReview: result.ultra }),

@@ -2768,6 +2768,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 deliveryStatus: DeliveryStatus.NOT_SENT,
             });
         }
+        for (const s of repeatCheck.withheld) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.WITHHELD_BY_REPEAT_CHECK,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
         const kept = repeatCheck.kept.map((s) => {
             const original = originalOf.get(s);
             if (!original) return s;
@@ -3289,13 +3296,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<{
         kept: Partial<CodeSuggestion>[];
         repeats: Partial<CodeSuggestion>[];
+        withheld: Partial<CodeSuggestion>[];
         history: readonly PrDecisionRecord[] | undefined;
     }> {
         const prNumber = context.pullRequest?.number;
         let history: readonly PrDecisionRecord[] | undefined =
             context.previousDecisions;
         if (!history?.length || !findings.length) {
-            return { kept: findings, repeats: [], history };
+            return { kept: findings, repeats: [], withheld: [], history };
         }
 
         const repositoryFullName =
@@ -3333,6 +3341,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const result = await checkRepeats(findings, history, {
             byokConfig: context.codeReviewConfig?.resolvedModelSlot,
             ruleTitleByUuid,
+            teamId: context.organizationAndTeamData.teamId,
             organizationId: context.organizationAndTeamData.organizationId,
             telemetryMetadata: telemetryMeta,
             prNumber,
@@ -3344,11 +3353,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         }
 
         this.logger.log({
-            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} not posted, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
+            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} repeats, ${result.withheld.length} withheld without a verdict, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
                 prNumber,
+                teamId: context.organizationAndTeamData.teamId,
+                withheld: result.withheld.map((finding) => ({
+                    file: finding.relevantFile,
+                    line: finding.relevantLinesStart,
+                    ruleIds: finding.brokenKodyRulesIds,
+                })),
                 repeats: result.repeats.map((r) => ({
                     file: r.finding.relevantFile,
                     line: r.finding.relevantLinesStart,
@@ -3363,6 +3378,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return {
             kept: result.kept,
             repeats: result.repeats.map((r) => r.finding),
+            withheld: result.withheld,
             history,
         };
     }

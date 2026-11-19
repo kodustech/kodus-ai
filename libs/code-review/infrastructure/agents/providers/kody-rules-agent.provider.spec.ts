@@ -472,6 +472,94 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         ...over,
     });
 
+    it('surfaces a partial review when a rule needs repository evidence and the sandbox is unavailable', async () => {
+        const { provider } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1,
+                        suggestionContent:
+                            'Missing implementation in another file',
+                        needsRepositoryEvidence: true,
+                        relevantLinesStart: 10,
+                        relevantLinesEnd: 10,
+                    },
+                ],
+            },
+        ]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'cross-file',
+                        title: 'Implementation',
+                        rule: 'Verify the implementation',
+                        scope: KodyRulesScope.FILE,
+                        status: 'active',
+                        severity: 'high',
+                    },
+                ],
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(0);
+        expect(out.warnings).toContainEqual(
+            expect.objectContaining({ kind: 'KODY_RULES_PARTIAL' }),
+        );
+    });
+
+    it('reports a candidate skipped after the evidence budget separately from failed checks', async () => {
+        const { provider, judge } = makeProvider([]);
+        const candidate = {
+            ruleId: 1,
+            suggestionContent: 'Missing issue in title',
+        };
+        const clock = jest.spyOn(Date, 'now');
+        let now = Date.now();
+        clock.mockImplementation(() => now);
+        try {
+            let active = 0;
+            let peak = 0;
+            judge
+                .mockResolvedValueOnce({
+                    violations: Array(15).fill(candidate),
+                })
+                .mockImplementation(async () => {
+                    peak = Math.max(peak, ++active);
+                    await new Promise((resolve) => setImmediate(resolve));
+                    now += 180_001;
+                    active--;
+                    return { verdict: 'satisfied' };
+                });
+            const out = await provider.execute(
+                input({
+                    kodyRules: [
+                        {
+                            uuid: 'title-rule',
+                            title: 'Issue in title',
+                            rule: 'Include the issue in the PR title',
+                            scope: KodyRulesScope.PULL_REQUEST,
+                            status: 'active',
+                            severity: 'high',
+                        },
+                    ],
+                }) as any,
+            );
+            expect(peak).toBe(4);
+            expect(judge).toHaveBeenCalledTimes(5);
+            expect(out.suggestions).toHaveLength(0);
+            expect(
+                out.warnings?.filter((w) => w.kind === 'KODY_RULES_PARTIAL'),
+            ).toEqual([
+                expect.objectContaining({
+                    reason: 'evidence_deadline',
+                    detail: expect.stringContaining('11 Kody Rules candidate'),
+                }),
+            ]);
+        } finally {
+            clock.mockRestore();
+        }
+    });
+
     it('semantic path: judge violations become tagged CodeSuggestions', async () => {
         const { provider } = makeProvider([
             {
@@ -1439,6 +1527,54 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         expect(call.byokConfig).toBeUndefined();
     });
 
+    it('declares the shard head as a shared prompt-cache prefix', async () => {
+        const runJudge = await captureRunJudge('anthropic');
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge, { user: 'HEAD\nTAIL', cachePrefix: 'HEAD\n' });
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.promptCache).toEqual({ userPrefix: 'HEAD\n' });
+    });
+
+    it('declares nothing for a shard that shares no head', async () => {
+        const runJudge = await captureRunJudge('anthropic');
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.promptCache).toBeUndefined();
+    });
+
+    it('logs how the shards were grouped for the prompt cache, with the org and PR', async () => {
+        const provider = makeBoundaryProvider();
+        const log = jest.spyOn((provider as any).shardLogger, 'log');
+        const promptCacheStats = {
+            fileShards: 5,
+            groups: 2,
+            sharedGroups: 1,
+            siblings: 3,
+            siblingsAfterLeader: 2,
+            siblingsEarly: 1,
+        };
+        mockJudge.mockImplementationOnce(async () => ({
+            violations: [],
+            shardsRun: 5,
+            shardsErrored: 0,
+            promptCacheStats,
+        }));
+        await provider.execute(boundaryInput() as any);
+        const entry = log.mock.calls
+            .map((c: any[]) => c[0])
+            .find((e: any) => /prompt cache/.test(e.message));
+        expect(entry).toBeDefined();
+        expect(entry.metadata).toMatchObject({
+            organizationAndTeamData: {
+                organizationId: 'org-xyz',
+                teamId: 'team-1',
+            },
+            prNumber: 42,
+            ...promptCacheStats,
+        });
+    });
+
     it('threads the resolved BYOK slot into the call unchanged', async () => {
         const runJudge = await captureRunJudge('openai');
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
@@ -2347,6 +2483,25 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         const out = await provider.execute(
             input({
                 repoLookup: lookup,
+                // The hunk must define a symbol: one that defines none asks
+                // the repository nothing, so the flip would never be reached.
+                changedFiles: [
+                    {
+                        filename: 'src/a.ts',
+                        status: 'modified',
+                        patch: [
+                            '@@ -1,2 +1,4 @@',
+                            ' line one',
+                            ' line two',
+                            "+import { formatDate } from '../shared/date';",
+                            '+export function renderInvoice(order) {}',
+                        ].join('\n'),
+                        patchWithLinesStr: [
+                            "3 +import { formatDate } from '../shared/date';",
+                            '4 +export function renderInvoice(order) {}',
+                        ].join('\n'),
+                    },
+                ],
                 kodyRules: [
                     RULE,
                     {

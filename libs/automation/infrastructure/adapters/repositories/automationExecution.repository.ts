@@ -13,6 +13,7 @@ import {
 
 import { createLogger } from '@libs/core/log/logger';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import type { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { IAutomationExecutionRepository } from '@libs/automation/domain/automationExecution/contracts/automation-execution.repository';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
 import { IAutomationExecution } from '@libs/automation/domain/automationExecution/interfaces/automation-execution.interface';
@@ -250,6 +251,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
     }
 
     async findPullRequestExecutionsByOrganizationAndTeam(params: {
+        automationType?: AutomationType;
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         repositoryName?: string;
@@ -312,6 +314,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             const scoped = await this.pullRequestExecutionsOfTeam(
                 organizationAndTeamData,
                 params.teamAutomationIds,
+                params.automationType,
             );
             if (!scoped) {
                 return { data: [], total: 0, distinctPrTotal: 0 };
@@ -1052,12 +1055,13 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
     private async findPullRequestTeamAutomationIds(
         organizationId: string | undefined,
         teamId: string | undefined,
+        automationType?: AutomationType,
     ): Promise<string[]> {
         if (!organizationId || !teamId) {
             return [];
         }
 
-        const rows = await this.automationExecutionRepository.manager
+        const query = this.automationExecutionRepository.manager
             .createQueryBuilder(TeamAutomationModel, 'teamAutomation')
             .select('teamAutomation.uuid', 'uuid')
             .innerJoin('teamAutomation.team', 'team')
@@ -1066,8 +1070,15 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             .andWhere('organization.uuid = :organizationId', { organizationId })
             .andWhere(
                 'EXISTS (SELECT 1 FROM "automation_execution" "pr_execution" WHERE "pr_execution"."team_automation_id" = "teamAutomation"."uuid" AND "pr_execution"."pullRequestNumber" IS NOT NULL AND "pr_execution"."repositoryId" IS NOT NULL)',
-            )
-            .getRawMany<{ uuid: string }>();
+            );
+        if (automationType) {
+            query
+                .innerJoin('teamAutomation.automation', 'automation')
+                .andWhere('automation.automationType = :automationType', {
+                    automationType,
+                });
+        }
+        const rows = await query.getRawMany<{ uuid: string }>();
 
         return rows.map((row) => row.uuid);
     }
@@ -1091,15 +1102,17 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
     private async pullRequestExecutionsOfTeam(
         organizationAndTeamData: OrganizationAndTeamData | undefined,
         knownTeamAutomationIds?: string[],
+        automationType?: AutomationType,
     ): Promise<{
         queryBuilder: SelectQueryBuilder<AutomationExecutionModel>;
         teamAutomationIds: string[];
     } | null> {
         const teamAutomationIds =
-            knownTeamAutomationIds ??
+            (automationType ? undefined : knownTeamAutomationIds) ??
             (await this.findPullRequestTeamAutomationIds(
                 organizationAndTeamData?.organizationId,
                 organizationAndTeamData?.teamId,
+                automationType,
             ));
         if (!teamAutomationIds.length) {
             return null;

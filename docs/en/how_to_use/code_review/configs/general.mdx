@@ -204,10 +204,10 @@ until you click **Save settings**. Default: `yarn.lock`, `package-lock.json`, `p
 **Base Branches:** Restricts *which* base branches get reviewed.
 
 <Info>
-  **Empty (the default) means every base branch is reviewed** — there is no built-in
-  `dev`/`release`/`master` list. Add entries only when you want to *narrow* the scope: once the
-  list is non-empty, Kody reviews only PRs targeting those branches (your repository's default
-  branch is always included).
+  **Empty (the default) reviews only the repository's default branch** — there is no built-in
+  `dev`/`release`/`master` list. Add entries when you want to review PRs into other branches as
+  well: once the list is non-empty, Kody reviews PRs targeting those entries, and your
+  repository's default branch stays included unless an entry excludes it with `!`.
 
   Entries are matched against the PR's **target** branch and support a small pattern syntax:
 

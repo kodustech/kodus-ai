@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidateConfigStage } from './validate-config.stage';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -166,6 +167,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             const ctx = buildContext(undefined);
             ctx.codeReviewConfig.riskAssessmentActive = true;
             ctx.pullRequest.head.sha = 'head';
+            ctx.pullRequest.base.sha = 'base';
             const early = await stage.execute(ctx);
             expect(early.codeReviewConfig.resolvedModelSlot).toBeUndefined();
             const result = await stage.resolveReviewRouting({
@@ -182,13 +184,32 @@ describe('ValidateConfigStage — v2 routing', () => {
                         baseSha: 'base',
                         headSha: ctx.pullRequest.head.sha,
                         assessmentKey: 'key',
+                        descriptionKey: prRiskDescriptionKey(ctx.pullRequest),
                     },
                 },
             });
             expect(result.heavy).toBe(heavy);
+            expect(result.reviewRoutingReason).toBe(
+                requestedReviewMode
+                    ? 'requested'
+                    : riskIdentified
+                      ? 'risk-found'
+                      : 'no-risk-found',
+            );
             expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
                 model,
             );
+            if (riskIdentified && !requestedReviewMode) {
+                const stale = await stage.resolveReviewRouting({
+                    ...result,
+                    pullRequest: {
+                        ...result.pullRequest,
+                        base: { ...result.pullRequest.base, sha: 'new-base' },
+                    },
+                });
+                expect(stale.heavy).toBe(false);
+                expect(stale.reviewRoutingReason).toBe('risk-unavailable');
+            }
         },
     );
 
@@ -349,6 +370,23 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
             expect(comment()).toBeUndefined();
         });
+
+        it.each([
+            ['--ultra', 'ultra' as const, 'requested'],
+            ['the settings', undefined, 'default'],
+        ])(
+            'an Ultra review asked by %s records why it routed there',
+            async (_, requested, reason) => {
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+
+                const result = await stage.execute(ultraContext(requested));
+
+                expect(result.ultra).toBeDefined();
+                expect(result.reviewRoutingReason).toBe(reason);
+            },
+        );
 
         it("runs Ultra on a trial with three of the team's own models", async () => {
             validateOrganizationLicense.mockResolvedValue({

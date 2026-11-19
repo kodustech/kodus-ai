@@ -37,7 +37,11 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
-import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
+import {
+    resolveRiskReviewMode,
+    type ReviewRoutingReason,
+} from '@libs/code-review/domain/review-mode';
+import { riskSnapshotMismatch } from '@libs/code-review/domain/risk/risk-assessment';
 import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
@@ -262,20 +266,51 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         // The mode the command asked for, else the one in settings. Heavy
         // runs on Teams and Enterprise only; elsewhere the review runs
         // Balanced, and a command that asked for heavy is told why.
-        const mode = resolveRiskReviewMode({
+        const { pullRequest, riskAssessment } = context;
+        // Exact configuration and diff identity are checked by the assessment
+        // service before it reuses a result. Keep routing on that PR snapshot.
+        const staleRisk =
+            riskAssessment?.status === 'assessed' &&
+            !!riskSnapshotMismatch(riskAssessment, {
+                headSha: pullRequest.head?.sha,
+                baseSha: pullRequest.base?.sha ?? '',
+                description: pullRequest,
+            });
+        const risk = staleRisk ? undefined : riskAssessment;
+        const selectedMode = resolveRiskReviewMode({
             requested: context.requestedReviewMode,
             configured: context.codeReviewConfig?.reviewMode,
             routing: context.codeReviewConfig?.riskReviewRouting,
-            risk: context.riskAssessment,
+            risk,
             currentHeadSha: context.pullRequest.head?.sha ?? '',
             heavyAllowed: true,
         });
+        let routingReason: ReviewRoutingReason;
+        if (context.codeReviewConfig?.reviewMode === 'fast') {
+            routingReason = 'default';
+        } else if (context.requestedReviewMode) {
+            routingReason = 'requested';
+        } else if (risk?.status === 'assessed') {
+            routingReason = risk.riskIdentified
+                ? 'risk-found'
+                : 'no-risk-found';
+        } else {
+            routingReason =
+                risk?.status === 'unavailable' || staleRisk
+                    ? 'risk-unavailable'
+                    : 'default';
+        }
         // `@kody -v <slug>` runs one custom agent alone, whatever the mode.
-        if (mode === 'ultra' && !context.onlyCustomAgent) {
-            return this.resolveUltraRouting(context, byokConfig?.configValue);
+        if (selectedMode === 'ultra' && !context.onlyCustomAgent) {
+            return this.resolveUltraRouting(
+                this.updateContext(context, (draft) => {
+                    draft.reviewRoutingReason = routingReason;
+                }),
+                byokConfig?.configValue,
+            );
         }
         const heavy =
-            mode === 'heavy' && (await this.heavyModeAllowed(context));
+            selectedMode === 'heavy' && (await this.heavyModeAllowed(context));
 
         // The review's routed slot, or none → the env/managed default
         // resolves downstream, matching a missing config.
@@ -320,6 +355,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
         context = this.updateContext(context, (draft) => {
             draft.heavy = heavy;
+            draft.reviewRoutingReason =
+                selectedMode === 'heavy' && !heavy
+                    ? 'heavy-unavailable'
+                    : routingReason;
             // Materialize the routed model into the resolved slot the pipeline
             // threads downstream (the handle stages read their limit/telemetry
             // metadata off).

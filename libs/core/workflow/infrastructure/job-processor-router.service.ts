@@ -1,4 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
+import { updateActivity } from '@libs/core/infrastructure/activity/activity-registry';
+import { jobFields } from '@libs/core/infrastructure/activity/job-fields';
 import { createLogger } from '@libs/core/log/logger';
 
 import { runWithTimeout } from './run-with-timeout';
@@ -20,6 +22,7 @@ import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-
 import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
 import { CliReviewJobProcessorService } from '@libs/cli-review/workflow/cli-review-job-processor.service';
 import { SecurityScanJobProcessor } from '@libs/security-scan/application/security-scan-job.processor';
+import { isSlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 
 // App-level timeouts MUST be strictly less than the broker's consumer_timeout
 // (7200000ms / 2h in prod — see envs/aws/prod/rabbitmq-ec2.tfvars in kodus-infra).
@@ -55,23 +58,37 @@ export class JobProcessorRouterService
         private readonly securityScanProcessor: SecurityScanJobProcessor,
     ) {}
 
-    async process(jobId: string): Promise<void> {
+    async process(jobId: string, signal?: AbortSignal): Promise<void> {
         const job = await this.jobRepository.findOne(jobId);
 
         if (!job) {
             throw new Error(`Workflow job ${jobId} not found`);
         }
 
+        // Names the job in stall reports even when no pipeline runs
+        // (webhooks, chat, AST, sync); a pipeline refines it with its stage.
+        updateActivity({ workflowType: job.workflowType, ...jobFields(job) });
+
         const processor = this.getProcessor(job.workflowType);
         const timeoutMs = this.getProcessTimeoutMs(job.workflowType);
 
         try {
             return await runWithTimeout(
-                (signal) => processor.process(jobId, signal),
+                (timeoutSignal) =>
+                    processor.process(
+                        jobId,
+                        signal
+                            ? AbortSignal.any([timeoutSignal, signal])
+                            : timeoutSignal,
+                    ),
                 timeoutMs,
                 `Workflow job ${jobId} timeout after ${timeoutMs}ms`,
             );
         } catch (error) {
+            if (isSlicePreemptedError(error)) {
+                throw error;
+            }
+
             const isTimeout = error.message?.includes('timeout after');
 
             // Always mark job as FAILED when an error occurs (including timeout)
@@ -173,5 +190,4 @@ export class JobProcessorRouterService
                 return CODE_REVIEW_PROCESS_TIMEOUT_MS;
         }
     }
-
 }

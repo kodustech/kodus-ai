@@ -8,6 +8,10 @@ import {
     calculateBackoffInterval,
 } from '@libs/common/utils/polling';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import {
+    CLAIM_CONFLICT_REQUEUE_DELAY_MS,
+    isClaimConflictError,
+} from '@libs/core/workflow/domain/errors/claim-conflict.error';
 
 /**
  * Backoff configuration for consumer retries.
@@ -93,7 +97,29 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const delayedExchange = `${baseExchange}.delayed`;
         const dlxExchange = `${baseExchange}.dlx`;
 
+        const metadata = {
+            messageId,
+            routingKey: msg.fields.routingKey,
+            originalError: error?.message,
+            retryCount,
+            dlqRoutingKey: options?.dlqRoutingKey,
+        };
+
+        // Nothing here may throw: the consumer callback does not await this
+        // handler, so a throw only becomes an unhandled rejection. The broker
+        // owns redelivery of any delivery left unacked.
         try {
+            if (isClaimConflictError(error)) {
+                await this.requeueHeldClaim(
+                    msg,
+                    headers,
+                    error,
+                    delayedExchange,
+                );
+                channel.ack(msg);
+                return;
+            }
+
             if (retryCount < this.maxRetriesConsumer) {
                 await this.retryWithDelay(
                     msg,
@@ -111,34 +137,78 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                     options?.dlqRoutingKey,
                 );
             }
-
-            channel.ack(msg);
         } catch (publishError) {
-            // CRITICAL: If we can't republish or ACK, leave the original
-            // delivery unacked so RabbitMQ can redeliver it when the channel
-            // closes instead of losing the message.
-            // Log as FATAL and throw to make this visible in monitoring
             this.logger.error({
                 message:
-                    'CRITICAL: Failed to republish or acknowledge message after error',
+                    'Could not republish failed message; left unacked for the broker to redeliver',
                 context: RabbitMQErrorHandler.name,
                 error: publishError,
-                metadata: {
-                    messageId,
-                    routingKey: msg.fields.routingKey,
-                    originalError: error?.message,
-                    retryCount,
-                    dlqRoutingKey: options?.dlqRoutingKey,
-                },
+                metadata,
             });
-
-            // Throw to ensure this is visible and potentially crash the process
-            // In production, you may want to implement a fallback (e.g., write to disk/DB)
-            throw new Error(
-                `CRITICAL: Message ${messageId} may be lost - republish failed: ${publishError.message}`,
-                { cause: publishError },
-            );
+            return;
         }
+
+        try {
+            channel.ack(msg);
+        } catch (ackError) {
+            // Usually the connection dropped. The retry copy is already
+            // published and the broker redelivers the original, so the
+            // message arrives twice. Workflow jobs dedupe it through the
+            // inbox claim on messageId (workflow-job-consumer.service.ts).
+            this.logger.warn({
+                message:
+                    'Republished failed message but could not ack the original; the broker will redeliver it',
+                context: RabbitMQErrorHandler.name,
+                error: ackError,
+                metadata,
+            });
+        }
+    }
+
+    /**
+     * Another worker still holds the inbox claim. Republish with a delay
+     * and leave x-retry-count alone so a dead holder is not DLQ'd after
+     * two collisions.
+     */
+    private async requeueHeldClaim(
+        msg: ConsumeMessage,
+        headers: Record<string, any>,
+        error: { message?: string; requeueDelayMs?: number },
+        delayedExchange: string,
+    ): Promise<void> {
+        const delayMs =
+            typeof error.requeueDelayMs === 'number' && error.requeueDelayMs > 0
+                ? error.requeueDelayMs
+                : CLAIM_CONFLICT_REQUEUE_DELAY_MS;
+
+        headers['x-delay'] = delayMs;
+
+        this.logger.warn({
+            message:
+                'Inbox claim held by another worker, requeueing without burning retries',
+            context: RabbitMQErrorHandler.name,
+            metadata: {
+                messageId: msg.properties.messageId,
+                routingKey: msg.fields.routingKey,
+                retryCount: headers[this.RETRY_COUNT_HEADER] || 0,
+                delayMs,
+                error: error?.message,
+            },
+        });
+
+        await this.amqpConnection.publish(
+            delayedExchange,
+            msg.fields.routingKey,
+            msg.content,
+            {
+                messageId: msg.properties.messageId,
+                correlationId: msg.properties.correlationId,
+                contentType: msg.properties.contentType,
+                contentEncoding: msg.properties.contentEncoding,
+                persistent: true,
+                headers: headers,
+            },
+        );
     }
 
     private async retryWithDelay(
@@ -279,8 +349,14 @@ export const createRabbitMQErrorHandlerWithFallback = (
             });
         }
 
+        // Same rule as handle(): nothing here may throw, and a closed channel
+        // already returns the delivery to the broker.
         if (msg) {
-            channel.nack(msg, false, false);
+            try {
+                channel.nack(msg, false, false);
+            } catch {
+                // channel closed
+            }
         }
     };
 };

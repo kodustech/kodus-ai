@@ -624,6 +624,37 @@ Pattern fields accept glob expressions such as `**/*.lock`, `dist/**`, `release/
 
 Use `kodus config remote open` when you need advanced repository settings that are still web-only. The CLI opens the Kodus app and prints the repository/section path to navigate.
 
+### Risk assessment, routing and approval policies
+
+Sign in with `kodus auth login` to inspect and edit the same settings used by the app. `.` selects the current repository. Use `global` for team-wide settings or `--directory <path>` for a directory with its own settings.
+
+```bash
+kodus config remote show . --json
+kodus config remote set . riskAssessmentActive true
+kodus config remote set . reviewMode balanced
+kodus config remote set . riskReviewRouting.riskFound heavy
+kodus config remote unset . riskReviewRouting.riskFound
+kodus config remote risk-preview . --pr 123 --json
+```
+
+Use `set . riskCriteria '<JSON array>'` and `set . approvalPolicies '<JSON array>'` to replace the list at that scope. `riskCriteria '[]'` uses standard risk assessment, and `approvalPolicies '[]'` disables all approval policies at the scope. Use `unset` at repository and directory scope to restore inheritance. The automatic approval switch is `pullRequestApprovalActive`.
+
+Risk preview uses the effective criteria for the scope. Pass `--criteria '<JSON array>'` to try different criteria for that run. The preview doesn't save settings, post a comment or approve the PR.
+
+```bash
+kodus agents update ciclo-de-vida-do-pr --repo kodus-ai --run-when risk-found
+kodus pr reviews 123 --explain
+kodus config remote approvals list .
+kodus config remote approvals show . changelog
+kodus config remote approvals test . --pr 123 --assume-clean --assume-enabled
+kodus config remote approvals enable . changelog
+kodus config remote approvals disable . changelog
+```
+
+`--run-when always` runs the agent on each matching PR. `risk-found` requires a confirmed risk result. `pr reviews --explain` compares recorded review commits with the current PR head and shows approval decisions, routing reasons and failed specialists where recorded.
+
+Policy enable and disable target one ID at a time. At a child scope, toggling an inherited policy creates a local policy list. `approvals test` uses a recorded clean review for the current snapshot by default. Pass `--assume-clean`, `--assume-enabled` or `--policies '<JSON array>'` to test hypothetical settings. The output identifies the assumptions. The preview never publishes an approval or updates settings.
+
 Use `--json` with `show`, `set`, `open`, `add-pattern`, `remove-pattern`, and the pattern aliases when you need stable machine-readable output for scripts or AI agents.
 
 When targeting a repository that is different from your current working directory, pass `owner/repo` explicitly instead of `.`:

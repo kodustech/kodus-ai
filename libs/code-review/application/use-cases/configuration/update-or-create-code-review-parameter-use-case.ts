@@ -13,7 +13,7 @@ import { produce } from 'immer';
 import { v4 as uuidv4 } from 'uuid';
 import { DeepPartial } from 'typeorm';
 
-import { createLogger } from '@libs/core/log/logger';
+import { createLogger, extractErrorProps } from '@libs/core/log/logger';
 import {
     CentralizedConfigPrService,
     CentralizedPrMetadata,
@@ -339,6 +339,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
             const codeReviewConfigs = await this.getCodeReviewConfigs(
                 organizationAndTeamData,
+                body.expectedConfigId,
             );
 
             const codeRepositories = await this.getFormattedRepositories(
@@ -708,6 +709,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 previousFolders,
                 previousRulesFileNames,
                 body.inheritFields,
+                body.expectedConfigId,
             );
 
             if (!directoryId) {
@@ -772,12 +774,21 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
     private async getCodeReviewConfigs(
         organizationAndTeamData: OrganizationAndTeamData,
+        expectedConfigId?: string,
     ): Promise<CodeReviewParameter> {
         const codeReviewConfig = await this.parametersService.findByKey(
             ParametersKey.CODE_REVIEW_CONFIG,
             organizationAndTeamData,
         );
 
+        if (
+            expectedConfigId !== undefined &&
+            codeReviewConfig?.uuid !== expectedConfigId
+        ) {
+            throw new ConflictException(
+                'Code review settings changed. Reload them and try again.',
+            );
+        }
         return codeReviewConfig?.configValue;
     }
 
@@ -1166,6 +1177,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             memories?: Array<{ fileName: string; content: string }>;
         },
         inheritFields: string[] = [],
+        expectedConfigId?: string,
     ) {
         const resolver = new ConfigResolver(codeReviewConfigs);
 
@@ -1364,19 +1376,24 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             level !== ConfigLevel.GLOBAL &&
             !pathsChanged;
 
-        const centralizedPr = isSelectionOnlyPayload
-            ? null
-            : await this.createCentralizedMutationIfEnabled({
-                  organizationAndTeamData,
-                  actor,
-                  level,
-                  repository,
-                  directory,
-                  oldDelta: oldConfig,
-                  newDelta,
-                  previousFolders,
-                  previousRulesFileNames,
-              });
+        const createCentralizedMutation = () =>
+            isSelectionOnlyPayload
+                ? null
+                : this.createCentralizedMutationIfEnabled({
+                      organizationAndTeamData,
+                      actor,
+                      level,
+                      repository,
+                      directory,
+                      oldDelta: oldConfig,
+                      newDelta,
+                      previousFolders,
+                      previousRulesFileNames,
+                  });
+        let centralizedPr =
+            expectedConfigId === undefined
+                ? await createCentralizedMutation()
+                : null;
 
         // Every UI-triggered change (structural or config) lands in the DB
         // immediately and the centralized PR is best-effort. If the user
@@ -1406,11 +1423,44 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             updater,
         );
 
+        const precondition: [expectedConfigId?: string] =
+            expectedConfigId === undefined ? [] : [expectedConfigId];
         await this.createOrUpdateParametersUseCase.execute(
             ParametersKey.CODE_REVIEW_CONFIG,
             updatedCodeReviewConfigValue,
             organizationAndTeamData,
+            ...precondition,
         );
+        if (expectedConfigId !== undefined) {
+            try {
+                centralizedPr = await createCentralizedMutation();
+            } catch (error) {
+                const { code, status, statusCode } =
+                    error instanceof Error ? extractErrorProps(error) : {};
+                this.logger.warn({
+                    message:
+                        'Saved code review settings, but could not create the centralized config pull request',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    error:
+                        error instanceof Error
+                            ? new Error(error.message)
+                            : undefined,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId,
+                        directoryId,
+                        providerErrorCode:
+                            typeof code === 'string' ? code : undefined,
+                        providerStatus:
+                            typeof status === 'number'
+                                ? status
+                                : typeof statusCode === 'number'
+                                  ? statusCode
+                                  : undefined,
+                    },
+                });
+            }
+        }
 
         await this.logConfigUpdate({
             actor,

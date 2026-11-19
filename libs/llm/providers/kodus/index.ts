@@ -81,7 +81,9 @@ export const KODUS_FIREWORKS_BASE_URL_ENV = 'API_FIREWORKS_BASE_URL';
 const FIREWORKS_DEFAULT_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 
 /** Endpoint an upstream is reached at, when the upstream module needs one. */
-export function kodusUpstreamBaseURL(upstream: KodusUpstream): string | undefined {
+export function kodusUpstreamBaseURL(
+    upstream: KodusUpstream,
+): string | undefined {
     if (upstream !== 'fireworks') return undefined;
     return (
         (process.env[KODUS_FIREWORKS_BASE_URL_ENV] ?? '').trim() ||
@@ -108,7 +110,10 @@ export function configuredKodusUpstreams(): KodusUpstream[] {
  * the upstream builds against its canonical endpoint — or, for an upstream
  * without one (Fireworks over openai_compatible), the endpoint Kodus pins.
  */
-function asUpstream(cfg: ProviderBuildConfig, ref: KodusModelRef): ProviderBuildConfig {
+function asUpstream(
+    cfg: ProviderBuildConfig,
+    ref: KodusModelRef,
+): ProviderBuildConfig {
     const {
         baseURL: _baseURL,
         vertexLocation: _vertexLocation,
@@ -169,7 +174,10 @@ export const kodusModule: ProviderModule = {
         return up.module.capabilities(up.ref.model);
     },
 
-    build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         const up = upstreamFor(cfg.model);
         if (!up) {
             throw new Error(
@@ -217,6 +225,16 @@ export const kodusModule: ProviderModule = {
         return up.module.systemCacheControl(asUpstream(cfg, up.ref));
     },
 
+    prefixCacheHint(cfg: ProviderBuildConfig) {
+        const up = upstreamFor(cfg.model);
+        if (!up) return undefined;
+        const upstream = asUpstream(cfg, up.ref);
+        if (up.module.prefixCacheHint)
+            return up.module.prefixCacheHint(upstream);
+        const part = up.module.systemCacheControl?.(upstream);
+        return part ? { part } : undefined;
+    },
+
     // The WIRE answer comes from the UPSTREAM the catalog entry points at —
     // Kodus is a billing wrapper, not a transport, so it must not invent one.
     // An unroutable id answers 'none': `capabilities()` already says the same
@@ -246,13 +264,19 @@ export const kodusModule: ProviderModule = {
     providerOptionsNamespace: (_id, model) => {
         const up = upstreamFor(model);
         if (!up || !up.module.providerOptionsNamespace) return undefined;
-        return up.module.providerOptionsNamespace(up.ref.providerId, up.ref.model);
+        return up.module.providerOptionsNamespace(
+            up.ref.providerId,
+            up.ref.model,
+        );
     },
     providerOptionsNamespaceAliases: (_id) => [],
     reasoningOverrideExample: (_id, model) => {
         const up = upstreamFor(model);
         if (!up || !up.module.reasoningOverrideExample) return undefined;
-        return up.module.reasoningOverrideExample(up.ref.providerId, up.ref.model);
+        return up.module.reasoningOverrideExample(
+            up.ref.providerId,
+            up.ref.model,
+        );
     },
     modelListing: kodusModelListing,
 };

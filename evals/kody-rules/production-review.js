@@ -47,6 +47,16 @@ class InMemoryKodyRulesRepository {
         return organizationId === this.doc.organizationId ? this.entity() : null;
     }
 
+    async existsForOrganization(organizationId) {
+        return organizationId === this.doc.organizationId;
+    }
+
+    async updateRuleFieldsByOrganization(organizationId, ruleId, fields) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const updated = await this.updateRule(this.doc.uuid, ruleId, fields);
+        return updated?.rules.find((rule) => rule.uuid === ruleId) ?? null;
+    }
+
     // The repository's per-field $set: an undefined field is left alone.
     async updateRule(uuid, ruleId, updateData) {
         if (uuid !== this.doc.uuid) return null;
@@ -56,6 +66,24 @@ class InMemoryKodyRulesRepository {
             if (value !== undefined) rule[key] = value;
         }
         return this.entity();
+    }
+
+    // The one-rule $set the save-time compile writes the detector with
+    // (KodyRulesRepository.updateRuleFieldsByOrganization): an undefined
+    // field is left alone, null is written, and only the touched rule comes
+    // back, normalized as the entity reads it.
+    async updateRuleFieldsByOrganization(organizationId, ruleId, updateData) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const rule = this.doc.rules.find((r) => r.uuid === ruleId);
+        if (!rule) return null;
+        for (const [key, value] of Object.entries(updateData || {})) {
+            if (value !== undefined) rule[key] = value;
+        }
+        return this.entity().rules.find((r) => r.uuid === ruleId);
+    }
+
+    async existsForOrganization(organizationId) {
+        return organizationId === this.doc.organizationId;
     }
 }
 
@@ -313,9 +341,19 @@ async function reviewCase(c, { rules, compiled, storedConfig = null }) {
         context = await fetchChangedFiles(context, pr, sandbox.repoDir);
         const log = executionLog();
         const stage = agentReviewStage(permission, log, referenceLoader(c, sandbox.repoDir))(rulesRepo);
+        const startedAt = Date.now();
         const out = await stage.execute(context);
+        const stageMs = Date.now() - startedAt;
         return {
             suggestions: [...(out.validSuggestions || []), ...(out.validSuggestionsByPR || [])],
+            // How long the review stage ran, and each changed file as the stage
+            // read it (the quality judge shows the lines around a finding).
+            stageMs,
+            fileContents: Object.fromEntries(
+                (context.changedFiles || [])
+                    .filter((f) => typeof f.fileContent === 'string')
+                    .map((f) => [f.filename, f.fileContent]),
+            ),
             discarded: out.discardedSuggestions || [],
             files: (context.changedFiles || []).map((f) => f.filename),
             reviewWarnings: out.reviewWarnings || [],
