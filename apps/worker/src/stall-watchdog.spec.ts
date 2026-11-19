@@ -479,13 +479,23 @@ describe('startStallWatchdog (real worker thread)', () => {
                 logger,
             );
             await arm();
-            burnCpuInATightLoopForTest(2_000);
+            // Long enough that the stack is read inside the stall.
+            burnCpuInATightLoopForTest(4_000);
             const stall = await waitFor(() =>
                 reports.find((r) => r.kind === 'stall'),
             );
-            // With 0 forwarded, every answer would count as late and the
-            // stack would be discarded.
-            expect(stall.stackUnavailable).not.toBe('answered-late');
+            // Read inside the stall, so the verdict follows the answer time
+            // against the 1s default. With 0 forwarded, every answer would
+            // count as late and the stack would be discarded.
+            expect(stall.inspectorAnswerMs!).toBeGreaterThan(0);
+            if (stall.inspectorAnswerMs! <= 1_000) {
+                expect(stall.stackUnavailable).toBeUndefined();
+                expect(stall.stack?.[0]?.fn).toBe('burnCpuInATightLoopForTest');
+            } else {
+                // A slow inspector (huge in-band CI process) is late either way.
+                expect(stall.stackUnavailable).toBe('answered-late');
+                expect(stall.stack).toBeNull();
+            }
             stop();
             stop = undefined;
         }
