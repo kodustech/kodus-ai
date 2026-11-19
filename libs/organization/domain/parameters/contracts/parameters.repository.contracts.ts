@@ -51,6 +51,7 @@ export interface IParametersRepository {
         teamId: string,
         configValue: IParameters<K>['configValue'],
         nextVersion: number,
+        expectedConfigId?: string,
     ): Promise<ParametersEntity<K> | undefined>;
 
     /**

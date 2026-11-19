@@ -196,6 +196,20 @@ describe('buildUserPrompt', () => {
         },
     );
 
+    it.each([
+        ['full', {}, {}, true],
+        ['compact', { adaptiveProfile: { compactPrompt: true } }, {}, true],
+        ['no sandbox', { remoteCommands: undefined }, {}, false],
+        ['custom focus', {}, { conventionGuides: [] }, false],
+        ['no history', { previousDecisions: [] }, {}, false],
+    ] as const)('investigates consequences only in the tool-enabled generalist (%s)', (_name, input, agent, expected) => {
+        const prompt = buildUserPrompt(baseInput({
+            previousDecisions: [{ suggestionId: 'prior', label: 'bug', outcome: 'implemented' }],
+            ...input,
+        }), { ...meta, categoryLabel: 'generalist', ...agent } as PromptAgentMeta);
+        expect(prompt.includes('<ReviewAppliedChanges>')).toBe(expected);
+    });
+
     it('leaves the prompt free of a PreviousReviewDecisions block when none exist', () => {
         expect(buildUserPrompt(baseInput(), meta)).not.toContain(
             '<PreviousReviewDecisions>',

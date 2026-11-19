@@ -1,6 +1,9 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
-import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
+import {
+    SECURITY_SCAN_JOB_QUEUE,
+    WORKFLOW_JOB_QUEUE_ARGUMENTS,
+} from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
 import {
     Injectable,
     OnApplicationBootstrap,
@@ -43,7 +46,7 @@ const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
         routingKey: 'workflow.jobs.*.AST_GRAPH_INCREMENTAL',
     },
     {
-        queue: 'workflow.jobs.security_scan.queue',
+        queue: SECURITY_SCAN_JOB_QUEUE,
         routingKey: 'workflow.jobs.*.SECURITY_SCAN',
     },
 ];
