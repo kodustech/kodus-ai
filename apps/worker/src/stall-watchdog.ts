@@ -32,6 +32,8 @@ export interface StallFrame {
 export interface StallReport {
     kind: 'stall' | 'recovered';
     stalledMs: number;
+    /** When the stall began (epoch ms), to tie a report to its stall. */
+    startedAt?: number;
     capture?: number;
     /** The stack was read after the main thread ran again: not the stall. */
     stackReadAfterRecovery?: boolean;
@@ -538,11 +540,11 @@ export function stallWatchdogThread(): void {
         return `an unknown place (capture failed${error ? `: ${error}` : ''})`;
     }
 
-    function emitRecovered(stalledMs: number) {
+    function emitRecovered(stalledMs: number, startedAt: number) {
         emit(
             'warn',
             `Main thread recovered after a ${Math.round(stalledMs / 1000)}s stall`,
-            { kind: 'recovered', stalledMs },
+            { kind: 'recovered', stalledMs, startedAt },
         );
     }
 
@@ -586,6 +588,7 @@ export function stallWatchdogThread(): void {
             {
                 kind: 'stall',
                 stalledMs,
+                startedAt: s.start,
                 capture: n,
                 stack,
                 hottest,
@@ -617,6 +620,7 @@ export function stallWatchdogThread(): void {
                     monitor: 'worker_stall',
                     ...cfg.identity,
                     stalledMs,
+                    startedAt: s.start,
                     recovered: s.endedMs !== undefined,
                     location: where,
                     stackUnavailable,
@@ -673,7 +677,10 @@ export function stallWatchdogThread(): void {
                         // report, never before it.
                         if (s.recoveryPending) {
                             s.recoveryPending = false;
-                            emitRecovered(s.endedMs ?? Date.now() - s.start);
+                            emitRecovered(
+                                s.endedMs ?? Date.now() - s.start,
+                                s.start,
+                            );
                         }
                     });
             }
@@ -692,7 +699,7 @@ export function stallWatchdogThread(): void {
                         stack: null,
                         stackUnavailable: 'not-captured',
                     });
-                emitRecovered(s.endedMs);
+                emitRecovered(s.endedMs, s.start);
             }
         }
 

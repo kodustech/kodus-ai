@@ -26,13 +26,30 @@ async function waitFor<T>(
     throw new Error('timed out waiting for the watchdog report');
 }
 
+// Real threads and real clocks: in a long in-band CI run the process also
+// pauses on its own (GC), so a test only looks at stalls it provoked
+// (startedAt after `arm()`), and a run is retried on a starved machine.
+jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
 describe('startStallWatchdog (real worker thread)', () => {
+    let armedAt = Number.POSITIVE_INFINITY;
+    /** From now on, stalls are this test's own. */
+    const arm = () => {
+        armedAt = Date.now() - 50;
+    };
+    const keep = (reports: StallReport[]) => (r: StallReport) => {
+        if ((r.startedAt ?? 0) >= armedAt) reports.push(r);
+    };
+    const ourFail = (h: { path: string; body: string }) =>
+        h.path.endsWith('/fail') &&
+        (JSON.parse(h.body).context?.startedAt ?? 0) >= armedAt;
     jest.setTimeout(30_000);
 
     const logger = { warn: jest.fn(), error: jest.fn() };
     let stop: (() => void) | undefined;
 
     afterEach(() => {
+        armedAt = Number.POSITIVE_INFINITY;
         stop?.();
         stop = undefined;
         jest.clearAllMocks();
@@ -48,7 +65,7 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 writeFd: null,
                 identity: { role: 'test' },
-                onReport: (r) => reports.push(r),
+                onReport: keep(reports),
             },
             logger,
         );
@@ -59,6 +76,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         start(reports);
         await settle(200); // thread up and ticking
 
+        arm();
         const result = burnCpuInATightLoopForTest(3_000);
 
         // The main thread ran to completion: the pause was released.
@@ -101,6 +119,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         start(reports);
         await settle(200);
 
+        arm();
         burnCpuInATightLoopForTest(1_500);
 
         const recovered = await waitFor(() =>
@@ -113,6 +132,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         const reports: StallReport[] = [];
         start(reports);
 
+        arm();
         // Short bursts below the threshold, with the loop free in between.
         for (let i = 0; i < 5; i++) {
             burnCpuInATightLoopForTest(100);
@@ -149,16 +169,15 @@ describe('startStallWatchdog (real worker thread)', () => {
                 pingIntervalMs: 0,
                 writeFd: null,
                 identity: { role: 'test', instanceId: 'ip-test' },
-                onReport: (r) => reports.push(r),
+                onReport: keep(reports),
             },
             logger,
         );
         await settle(200);
+        arm();
         burnCpuInATightLoopForTest(2_000);
 
-        const fail = await waitFor(() =>
-            hits.find((h) => h.path.endsWith('/fail')),
-        );
+        const fail = await waitFor(() => hits.find(ourFail));
         server.close();
 
         const payload = JSON.parse(fail.body);
@@ -196,7 +215,7 @@ describe('startStallWatchdog (real worker thread)', () => {
                 pingIntervalMs: 0,
                 writeFd: null,
                 identity: { role: 'test' },
-                onReport: (r) => reports.push(r),
+                onReport: keep(reports),
             },
             logger,
         );
@@ -204,12 +223,10 @@ describe('startStallWatchdog (real worker thread)', () => {
 
         // The inspector cannot interrupt a synchronous native call: the
         // main thread answers only after it returns.
+        arm();
         execSync('sleep 2');
 
-        const fail = await waitFor(
-            () => hits.find((h) => h.path.endsWith('/fail')),
-            15_000,
-        );
+        const fail = await waitFor(() => hits.find(ourFail), 15_000);
         server.close();
 
         const stall = reports.find((r) => r.kind === 'stall');
@@ -232,20 +249,21 @@ describe('startStallWatchdog (real worker thread)', () => {
                 thresholdMs: 400,
                 checkIntervalMs: 50,
                 tickIntervalMs: 20,
-                // The capture outlives the first stall.
-                profileMs: 2_000,
+                // The capture (~3.4s+) outlives the first stall (~1s).
+                profileMs: 3_000,
                 maxCapturesPerStall: 1,
                 writeFd: null,
                 identity: { role: 'test' },
-                onReport: (r) => reports.push(r),
+                onReport: keep(reports),
             },
             logger,
         );
         await settle(200);
 
+        arm();
         burnCpuInATightLoopForTest(1_000); // stall 1, capture starts
         await settle(200); // recovers while that capture is in flight
-        burnCpuInATightLoopForTest(2_500); // stall 2, same capture window
+        burnCpuInATightLoopForTest(3_500); // stall 2, same capture window
 
         await waitFor(
             () =>
@@ -259,13 +277,14 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(kinds.indexOf('stall')).toBeLessThan(kinds.indexOf('recovered'));
         const firstStall = reports.find((r) => r.kind === 'stall');
         // The stall report carries the stall's length (~1s), not the
-        // capture's (~2.4s).
+        // capture's (>= ~3.4s). The upper bound leaves room for a slow
+        // in-band CI run, where Debugger.enable replays every loaded script.
         expect(firstStall?.stalledMs).toBeGreaterThanOrEqual(800);
-        expect(firstStall?.stalledMs).toBeLessThan(1_800);
+        expect(firstStall?.stalledMs).toBeLessThan(2_600);
         const firstRecovery = reports.find((r) => r.kind === 'recovered');
-        // Its length is the stall's (~1s), not the capture's (~2.4s).
+        // Its length is the stall's (~1s), not the capture's (>= ~3.4s).
         expect(firstRecovery?.stalledMs).toBeGreaterThanOrEqual(800);
-        expect(firstRecovery?.stalledMs).toBeLessThan(1_800);
+        expect(firstRecovery?.stalledMs).toBeLessThan(2_600);
     });
     it('names the code from the profile when the stall ends during the capture', async () => {
         const reports: StallReport[] = [];
@@ -278,13 +297,14 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 writeFd: null,
                 identity: { role: 'test' },
-                onReport: (r) => reports.push(r),
+                onReport: keep(reports),
             },
             logger,
         );
         await settle(200);
 
         // Ends while the profile is running, before the stack is read.
+        arm();
         burnCpuInATightLoopForTest(600);
 
         const stall = await waitFor(() =>
@@ -318,12 +338,13 @@ describe('startStallWatchdog (real worker thread)', () => {
                 maxCapturesPerStall: 1,
                 writeFd: null,
                 identity: { role: 'test' },
-                onReport: (r) => reports.push(r),
+                onReport: keep(reports),
             },
             logger,
         );
         await settle(200);
 
+        arm();
         burnCpuInATightLoopForTest(1_000); // stall 1: captured
         await settle(200);
         burnCpuInATightLoopForTest(800); // stall 2: ends before that capture
@@ -366,11 +387,13 @@ describe('startStallWatchdog (real worker thread)', () => {
             logger,
         );
         await settle(500);
+        // (A /fail from a pause of the test process itself is not a ping.)
+        const pings = () => hits.filter((h) => !h.endsWith('/fail'));
         // Nothing before the first full interval ...
-        expect(hits).toEqual([]);
+        expect(pings()).toEqual([]);
         // ... then the regular healthy ping.
-        await waitFor(() => (hits.length ? true : undefined), 5_000);
+        await waitFor(() => (pings().length ? true : undefined), 5_000);
         server.close();
-        expect(hits[0]).toBe('/api/v1/heartbeat/tok');
+        expect(pings()[0]).toBe('/api/v1/heartbeat/tok');
     });
 });

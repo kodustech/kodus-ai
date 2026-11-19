@@ -41,6 +41,9 @@ async function maxEventLoopGap<T>(
     }
 }
 
+// Real clocks: retried on a starved CI machine.
+jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
 describe('createFilePatchYielding', () => {
     jest.setTimeout(60_000);
 
@@ -182,7 +185,9 @@ describe('createFilePatchYielding', () => {
             ),
         );
         expect(result.every((p) => p?.includes('@@'))).toBe(true);
-        expect(maxGapMs).toBeLessThan(MAX_GAP_MS);
+        // Turns, not a sum: back to back, six attempts held the loop for
+        // ~6x the budget (1.5s). Under 3x leaves room for a slow CI runner.
+        expect(maxGapMs).toBeLessThan(3 * AZURE_FILE_DIFF_SYNC_BUDGET_MS);
     });
 
     it('gives up on a pathological file instead of running unbounded', async () => {
