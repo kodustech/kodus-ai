@@ -1,3 +1,4 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { SpendLimitAlertService } from '@libs/analytics/application/spend-limit/spend-limit-alert.service';
 import { SpendLimitConfigService } from '@libs/analytics/application/spend-limit/spend-limit-config.service';
@@ -6,7 +7,6 @@ import {
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 // Hourly. Spend is recomputed live, so this only governs alert latency.
 const API_CRON_SPEND_LIMIT_ALERT =
@@ -27,7 +27,7 @@ export class SpendLimitAlertCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_SPEND_LIMIT_ALERT, {
+    @GatedCron(API_CRON_SPEND_LIMIT_ALERT, {
         name: 'Spend Limit Alerts',
         timeZone: 'America/Sao_Paulo',
     })

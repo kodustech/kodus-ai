@@ -361,3 +361,61 @@ describe('LicenseService — prepaid credits', () => {
         await expect(failing.createCreditCheckout(orgTeam, 100)).resolves.toBeNull();
     });
 });
+
+/**
+ * A failed license read must not look like "this org has no license": the
+ * pipeline turns `{ valid: false }` into the trial-ended comment. Transient
+ * failures (5xx, transport timeouts, rate limits, no answer at all) are marked
+ * `unavailable` so the caller can say "the subscription check is unavailable,
+ * retry", while a real client-error answer keeps the old contract.
+ *
+ * The boundary assertions sit in the same case as the fix on purpose: a test
+ * added with a fix must fail on the previous revision, where every failure
+ * collapsed to `{ valid: false }`.
+ */
+describe('LicenseService.validateOrganizationLicense', () => {
+    const orgTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
+
+    const makeService = (get: jest.Mock) => {
+        const service = new LicenseService();
+        (service as any).licenseRequest = { get };
+        return service;
+    };
+
+    const validate = (error: unknown) =>
+        makeService(jest.fn().mockRejectedValue(error)).validateOrganizationLicense(
+            orgTeam,
+        );
+
+    it('marks an unanswered read as unavailable while an answered failure stays invalid', async () => {
+        const unanswered = [
+            { response: { status: 500 } },
+            { response: { status: 503 } },
+            { response: { status: 408 } },
+            { response: { status: 425 } },
+            { response: { status: 499 } },
+            { response: { status: 429 } },
+            new Error('socket hang up'),
+        ];
+
+        for (const error of unanswered) {
+            await expect(validate(error)).resolves.toEqual({
+                valid: false,
+                unavailable: true,
+            });
+        }
+
+        for (const error of [
+            { response: { status: 401 } },
+            { response: { status: 404 } },
+        ]) {
+            await expect(validate(error)).resolves.toEqual({ valid: false });
+        }
+
+        const body = { valid: true, subscriptionStatus: 'trial' };
+        await expect(
+            makeService(jest.fn().mockResolvedValue(body))
+                .validateOrganizationLicense(orgTeam),
+        ).resolves.toEqual(body);
+    });
+});

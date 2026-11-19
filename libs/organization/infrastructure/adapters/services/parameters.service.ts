@@ -1,4 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    Inject,
+    Injectable,
+} from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -104,6 +109,7 @@ export class ParametersService implements IParametersService {
         parametersKey: K,
         configValue: ParametersEntity<K>['configValue'],
         organizationAndTeamData: OrganizationAndTeamData,
+        expectedConfigId?: string,
     ): Promise<ParametersEntity<K> | boolean> {
         try {
             const teamId = organizationAndTeamData.teamId;
@@ -141,13 +147,17 @@ export class ParametersService implements IParametersService {
             // unique index (raised when two writers race past the app-level
             // guard) propagates into the surrounding catch instead of
             // escaping as an unhandled rejection.
+            const precondition: [expectedConfigId?: string] =
+                expectedConfigId === undefined ? [] : [expectedConfigId];
             return await this.parametersRepository.createNewActiveVersion(
                 parametersKey,
                 teamId,
                 configValue,
                 version,
+                ...precondition,
             );
         } catch (err) {
+            if (err instanceof ConflictException) throw err;
             throw new BadRequestException('Failed to save parameters', {
                 cause: err,
             });

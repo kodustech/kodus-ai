@@ -83,6 +83,8 @@ export async function runChunkedReview(
         let cutShort: ReviewAgentOutput['finishReason'] | undefined;
         const allWarnings: ReviewWarning[] = [...(parentWarnings ?? [])];
         let totalTurns = 0;
+        // Findings the lenses produced, kept out of this agent's own count.
+        let specialistFindings = 0;
         const batchErrors: Error[] = [];
 
         const batchTotal = chunks.length;
@@ -130,6 +132,7 @@ export async function runChunkedReview(
                 const batchResult = await deps.runBatch(batchInput);
 
                 allSuggestions.push(...batchResult.suggestions);
+                specialistFindings += batchResult.specialistFindings ?? 0;
                 if (batchResult.discardedBySeverity) {
                     allDiscardedBySeverity.push(
                         ...batchResult.discardedBySeverity,
@@ -165,7 +168,9 @@ export async function runChunkedReview(
                     batchIndex,
                     batchTotal,
                     batchFiles: batchFiles.length,
-                    findings: batchResult.suggestions.length,
+                    findings:
+                        batchResult.suggestions.length -
+                        (batchResult.specialistFindings ?? 0),
                     durationMs: Date.now() - batchStartedAt,
                 });
             } catch (error) {
@@ -220,6 +225,13 @@ export async function runChunkedReview(
             throw batchErrors[0];
         }
 
+        // A batch that threw never reviewed its files, so the aggregate is as
+        // incomplete as one whose batch hit a limit. Its findings-less result
+        // must not read as a clean review (#2204).
+        if (batchErrors.length > 0 && !cutShort) {
+            cutShort = 'no-result';
+        }
+
         const durationMs = Date.now() - startTime;
 
         logger.log({
@@ -233,7 +245,7 @@ export async function runChunkedReview(
             agentReplicaIndex: input.agentReplicaIndex,
             agentReplicaTotal: input.agentReplicaTotal,
             status: 'completed',
-            findings: allSuggestions.length,
+            findings: allSuggestions.length - specialistFindings,
             durationMs,
         });
 
@@ -250,6 +262,7 @@ export async function runChunkedReview(
             agentReplicaTotal: input.agentReplicaTotal,
             turnsUsed: totalTurns,
             durationMs,
+            ...(specialistFindings > 0 && { specialistFindings }),
             warnings: allWarnings,
         };
 }

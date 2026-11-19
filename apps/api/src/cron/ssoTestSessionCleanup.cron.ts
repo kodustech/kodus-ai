@@ -1,3 +1,4 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import {
     DistributedLock,
@@ -5,7 +6,6 @@ import {
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { SSOTestSessionService } from '@libs/ee/sso/services/sso-test-session.service';
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 const API_CRON_SSO_TEST_SESSION_CLEANUP =
     process.env.API_CRON_SSO_TEST_SESSION_CLEANUP || '0 1 * * *';
@@ -21,7 +21,7 @@ export class SSOTestSessionCleanupCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_SSO_TEST_SESSION_CLEANUP, {
+    @GatedCron(API_CRON_SSO_TEST_SESSION_CLEANUP, {
         name: 'SSO Test Session Cleanup',
         timeZone: 'America/Sao_Paulo',
     })

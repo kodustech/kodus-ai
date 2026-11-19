@@ -363,6 +363,22 @@ describe('AutomationCodeReviewService', () => {
             );
         });
 
+        it('records the mode it reviewed in, balanced unless heavy (#2578)', () => {
+            const sha = { lastAnalyzedCommit: { sha: 'reviewed-sha' } };
+            expect(build({ ...sha, heavy: true })).toEqual(
+                expect.objectContaining({ heavy: true, reviewMode: 'heavy' }),
+            );
+            expect(build(sha)).toEqual(
+                expect.objectContaining({
+                    heavy: false,
+                    reviewMode: 'balanced',
+                }),
+            );
+            expect(build({ lastAnalyzedCommit: undefined })).not.toHaveProperty(
+                'reviewMode',
+            );
+        });
+
         it('records no base branch when no commit was reviewed', () => {
             expect(build({ lastAnalyzedCommit: undefined })).not.toHaveProperty(
                 'reviewedBaseBranch',

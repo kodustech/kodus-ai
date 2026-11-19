@@ -126,6 +126,26 @@ export interface IKodyRule {
      */
     atoms?: IKodyRuleAtoms;
     /**
+     * Identity of the review-time JUDGMENT UNIT this object is, when it is one
+     * atom of a longer rule: the atom's persisted id (`<uuid>-atom-<n>`), set by
+     * `KodyRuleSummaryService.expandForReview` at review time and never stored.
+     *
+     * `uuid` deliberately stays the PARENT's on an expanded unit (citations,
+     * severity and path/scope routing must resolve to the customer's rule), so
+     * anything keyed per unit (detector hits, candidate lines) has to use this
+     * instead. Keyed by `uuid`, the atoms of one rule merge: a line one atom's
+     * detector flagged becomes a candidate for its siblings, and an atom whose
+     * own detector fired nowhere is judged anyway.
+     */
+    reviewUnitId?: string;
+    /**
+     * The parent rule's own title, kept on an atom unit whose `title` is the
+     * atom's. The atoms of one rule share a `uuid`, so a title lookup keyed by
+     * `uuid` ends up naming an earlier finding after whichever atom happened to
+     * be last; this is the name to fall back to.
+     */
+    parentTitle?: string;
+    /**
      * What this rule must SEE to be judged honestly (issue #1826). Absent means
      * `diff-only`, i.e. today's behavior — every rule judged against one file's
      * hunks and about three lines of context. Inferred once at save by the same

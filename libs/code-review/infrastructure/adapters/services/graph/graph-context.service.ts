@@ -42,6 +42,7 @@ export class GraphContextService {
         sandbox: SandboxInstance,
         changedFiles: FileChange[],
         repoId: string,
+        baseBranch?: string,
     ): Promise<string> {
         if (!sandbox?.run) {
             this.logger.warn({
@@ -88,7 +89,11 @@ export class GraphContextService {
                     message: `[KODUS-GRAPH] Step 3/4: repo not found by UUID ${repoId}, falling back to legacy`,
                     context: GraphContextService.name,
                 });
-                return this.generateContextLegacy(sandbox, changedFiles);
+                return this.generateContextLegacy(
+                    sandbox,
+                    changedFiles,
+                    baseBranch,
+                );
             }
             await this.writeBaseGraphToSandbox(
                 sandbox,
@@ -129,7 +134,11 @@ export class GraphContextService {
                 error,
                 metadata: { repoId, fileCount: filePaths.length },
             });
-            return this.generateContextLegacy(sandbox, changedFiles);
+            return this.generateContextLegacy(
+                sandbox,
+                changedFiles,
+                baseBranch,
+            );
         }
     }
 
@@ -253,11 +262,13 @@ export class GraphContextService {
             return prompt;
         } catch (error) {
             this.logger.warn({
-                message: `[KODUS-GRAPH] Failed to generate context, proceeding without it`,
+                message: `[KODUS-GRAPH] Failed to generate context`,
                 context: GraphContextService.name,
                 error,
             });
-            return '';
+            // Rethrow so the review stage records CALLGRAPH_FAILED; the stage
+            // proceeds without the graph either way.
+            throw error;
         }
     }
 

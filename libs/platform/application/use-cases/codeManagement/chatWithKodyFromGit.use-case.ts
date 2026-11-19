@@ -2759,6 +2759,8 @@ export class ChatWithKodyFromGitUseCase {
                 prNumber: pr.pullRequestNumber,
                 platform,
                 sandboxMetadata: { stage: 'conversation' },
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
             };
         } catch (err) {
             // Auth lookup or repo metadata fetch failed — log and let the lease

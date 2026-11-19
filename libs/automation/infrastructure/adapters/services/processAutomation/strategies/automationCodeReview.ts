@@ -919,6 +919,9 @@ export class AutomationCodeReviewService implements Omit<
                 // The mode it ran in: `--heavy` / `--balanced` asking for the
                 // other one re-reviews the whole PR.
                 heavy: !!result.heavy,
+                // Read by the Pull Requests screen (reviewModeOfExecution).
+                reviewMode: result.heavy ? 'heavy' : 'balanced',
+                reviewRoutingReason: result.reviewRoutingReason,
             });
         }
 

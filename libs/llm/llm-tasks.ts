@@ -42,6 +42,10 @@ export const LLM_TASK = {
     /** A team-defined custom review agent finding issues (#2172). A per-agent
      *  `models.run` override wins over this task's routing. */
     customAgent: 'customAgent',
+    /** The deep scan of a whole repository (#2451): its map, lenses,
+     *  reproduction tests. A long agentic run, so a team may route it to a
+     *  model of its own. Inherits the org default when unset. */
+    securityScan: 'securityScan',
 } as const;
 
 export type LlmTask = (typeof LLM_TASK)[keyof typeof LLM_TASK];

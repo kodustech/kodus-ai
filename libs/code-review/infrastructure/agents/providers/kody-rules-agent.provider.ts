@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { Injectable, Optional } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
@@ -34,7 +35,12 @@ import {
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-references';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
+import {
+    kodyRuleEvidenceVerifier,
+    ruleForCandidate,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence';
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import {
     needOf,
@@ -190,9 +196,13 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             mechanicalRules,
             input.changedFiles,
         );
-        const rulesWithHits = mechanicalRules.filter(
-            (r) => r.uuid && detectorHits.get(r.uuid)?.size,
-        ).length;
+        // Read through `reviewUnitKey`: the atoms of one decomposed rule share
+        // the parent uuid, so a uuid-keyed read counts (and judges) a sibling's
+        // hits as this unit's own (#2509).
+        const rulesWithHits = mechanicalRules.filter((r) => {
+            const key = reviewUnitKey(r);
+            return !!key && !!detectorHits.get(key)?.size;
+        }).length;
         const candidateCount = [...detectorHits.values()].reduce(
             (n, perFile) =>
                 n +
@@ -208,9 +218,10 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         // created for it — which is what keeps T0's cost argument intact.
         const judgeRules = [
             ...semanticRules,
-            ...mechanicalRules.filter(
-                (r) => r.uuid && detectorHits.get(r.uuid)?.size,
-            ),
+            ...mechanicalRules.filter((r) => {
+                const key = reviewUnitKey(r);
+                return !!key && !!detectorHits.get(key)?.size;
+            }),
         ];
 
         // ONE lookup for the whole review (issue #1826, KRC-22). The empty-read
@@ -286,7 +297,17 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // See runStructuredReviewCall for the model policy. runAiSdkLLMInSpan
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.
-            const runJudge: RunJudge = async ({ system, user, filename }) => {
+            const verifyEvidence = kodyRuleEvidenceVerifier(
+                input,
+                byokConfig ?? undefined,
+                lookup.available && !!input.remoteCommands,
+            );
+            const scheduleEvidence = pLimit(4); // shared across all shards of this review
+            let evidenceChecks = 0;
+            let evidenceFailures = 0;
+            let evidenceSkipped = 0;
+            const runJudge: RunJudge = async (shard) => {
+                const { system, user, filename } = shard;
                 // The validate step recovers or rejects an off-shape reply but
                 // has no org or PR; this call logs what it did, with them.
                 const reshapes: ShardReplyReshape[] = [];
@@ -297,8 +318,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         // re-derive `required` from the zod input side and
                         // reintroduce the OpenAI-strict 400. See the
                         // shardViolationsWireSchema doc.
-                        schema: buildShardViolationsWireSchema((e) =>
-                            reshapes.push(e),
+                        schema: buildShardViolationsWireSchema(
+                            (e) => reshapes.push(e),
+                            shard.verifyRepositoryFacts,
                         ),
                         // The shard model (managed kimi-k2.7) answers a bare `[]` for
                         // "no violations" or `[{…}]` when it found some, instead of the
@@ -320,8 +342,74 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             ...(filename ? { file: filename } : {}),
                         },
                     });
-                    return ((parsed as any)?.violations ??
-                        []) as RawShardViolation[];
+                    const candidates = parsed?.violations ?? [];
+                    const evidenceDeadline = Date.now() + 180_000;
+                    const evaluated = await Promise.all(
+                        candidates.map(async (candidate: RawShardViolation) => {
+                            const rule = ruleForCandidate(candidate, shard);
+                            if (
+                                filename !== null &&
+                                !candidate.needsRepositoryEvidence &&
+                                (!rule ||
+                                    rule.detector ||
+                                    !lookup.available ||
+                                    !input.remoteCommands)
+                            ) {
+                                return candidate;
+                            }
+                            return scheduleEvidence(async () => {
+                                const metadata = {
+                                    ...input.organizationAndTeamData,
+                                    prNumber: input.prNumber,
+                                    filename,
+                                    line: candidate.relevantLinesStart,
+                                    ruleId: rule?.uuid,
+                                    shardRuleId: candidate.ruleId,
+                                };
+                                let reason: string;
+                                if (Date.now() >= evidenceDeadline) {
+                                    evidenceSkipped++;
+                                    reason = 'evidence_deadline';
+                                } else {
+                                    evidenceChecks++;
+                                    try {
+                                        reason = await verifyEvidence(
+                                            candidate,
+                                            shard,
+                                            evidenceDeadline,
+                                        );
+                                        if (reason === 'verified')
+                                            return {
+                                                ...candidate,
+                                                evidenceVerified: true,
+                                            };
+                                        if (reason === 'sandbox_unavailable')
+                                            evidenceFailures++;
+                                    } catch (error) {
+                                        evidenceFailures++;
+                                        reason = 'evidence_error';
+                                        this.shardLogger.warn({
+                                            message:
+                                                'Kody Rule evidence check failed',
+                                            context: this.getIdentity().name,
+                                            error,
+                                            metadata,
+                                        });
+                                    }
+                                }
+                                this.shardLogger.log({
+                                    message:
+                                        'Kody Rule candidate withheld without verified evidence',
+                                    context: this.getIdentity().name,
+                                    metadata: { ...metadata, reason },
+                                });
+                                return null;
+                            });
+                        }),
+                    );
+                    return evaluated.filter(
+                        (entry): entry is RawShardViolation => entry !== null,
+                    );
                 } finally {
                     if (reshapes.length > 0) {
                         this.shardLogger.warn({
@@ -637,6 +725,8 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 () =>
                     judgeKodyRulesSharded({
                         changedFiles: input.changedFiles,
+                        incrementalDiff: input.incrementalDiff,
+                        prFilePaths: input.prFilePaths,
                         rules: rulesForJudge,
                         runJudge,
                         prTitle: input.prTitle,
@@ -659,6 +749,26 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
+            if (evidenceSkipped) {
+                contextWarnings.push({
+                    kind: 'KODY_RULES_PARTIAL',
+                    reason: 'evidence_deadline',
+                    contextWindowTokens: 0,
+                    modelName: main.modelName,
+                    agentName: this.getIdentity().name,
+                    detail: `${evidenceSkipped} Kody Rules candidate(s) were not checked because the evidence time budget expired`,
+                });
+            }
+            if (evidenceFailures) {
+                contextWarnings.push(
+                    buildKodyRulesPartialWarning({
+                        failed: evidenceFailures,
+                        total: evidenceChecks,
+                        modelName: main.modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+            }
 
             const { referenceStats } = result;
             if (referenceStats?.shards > 0) {

@@ -56,6 +56,14 @@
     }
   },
   {
+    "route": "/deep-scan",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/dev/plan-status",
     "expected": {
       "billing_manager": "deny",

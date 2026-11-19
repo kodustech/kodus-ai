@@ -45,7 +45,7 @@ main({
     inputOf: flat,
     // A control is judged by whichever agent loop the review runs first, as if
     // its finder had read the file the findings are on.
-    controlInput: (candidates) => ({ loops: [{ loop: '*', investigated: ['src/cart.ts'], candidates }] }),
+    controlInput: (candidates) => ({ loops: [{ loop: '*', investigated: candidates.map(({ finding }) => finding.relevantFile), candidates }] }),
     apply: async (env, frozen) => {
         const { reviewPullRequest, loopKey } = require('../../shared/review-stage');
         const { finderRunEnvironment } = lib('code-review/infrastructure/agents/core/core-agent-loop.adapter.ts');

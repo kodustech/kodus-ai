@@ -1,3 +1,4 @@
+import { CronShutdownService } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -87,6 +88,10 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
         ]),
     ],
     providers: [
+        // Stops @GatedCron runs before the database closes. Provided here
+        // only: api, worker and webhooks all import this module, and a second
+        // instance would hold shutdown for its own budget again.
+        CronShutdownService,
         // ── Repositories ──────────────────────────────────────
         {
             provide: NOTIFICATION_DELIVERY_REPOSITORY_TOKEN,
