@@ -153,7 +153,7 @@ export function stallWatchdogThread(): void {
         session: InstanceType<typeof inspector.Session>,
         method: string,
         params: object = {},
-        timeoutMs = 5_000,
+        timeoutMs = INSPECTOR_BOUND_MS,
     ): Promise<any> {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(
@@ -286,6 +286,10 @@ export function stallWatchdogThread(): void {
     // this may have come only after the blocking code returned, so the
     // stack it carries is not trusted.
     const LATE_ANSWER_MS = cfg.lateAnswerMs;
+    // Longest any inspector call may wait: 5s, or twice the late threshold
+    // when that is raised, so an answer the threshold still trusts is never
+    // cut off by the bound first.
+    const INSPECTOR_BOUND_MS = Math.max(5_000, 2 * LATE_ANSWER_MS);
 
     const round2 = (ms: number) => Math.round(ms * 100) / 100;
 
@@ -348,7 +352,7 @@ export function stallWatchdogThread(): void {
                           : null,
                 );
             };
-            const timer = setTimeout(() => finish(null), 5_000);
+            const timer = setTimeout(() => finish(null), INSPECTOR_BOUND_MS);
             function onPaused(msg: any) {
                 // Read while the main thread is paused: if it ticked since
                 // the capture began, the stall had already ended.

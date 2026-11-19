@@ -37,22 +37,19 @@ describe('startStallWatchdog (real worker thread)', () => {
      * From now on, stalls are this test's own. Arms after a free window
      * longer than the watchdog's check interval, so a stall of the test
      * process itself (GC) has already been closed; then a stall is ours if
-     * it was still open at that moment or began after it.
+     * it began after that moment (minus a tick or two of slack: its start is
+     * the last tick before the gap).
      */
     const arm = async () => {
         await settle(200);
         armedAt = Date.now();
     };
-    const endedAt = (startedAt?: number, stalledMs?: number) =>
-        (startedAt ?? 0) + (stalledMs ?? 0);
+    const ours = (startedAt?: number) => (startedAt ?? 0) >= armedAt - 50;
     const keep = (reports: StallReport[]) => (r: StallReport) => {
-        if (endedAt(r.startedAt, r.stalledMs) >= armedAt) reports.push(r);
+        if (ours(r.startedAt)) reports.push(r);
     };
-    const ourFail = (h: { path: string; body: string }) => {
-        if (!h.path.endsWith('/fail')) return false;
-        const c = JSON.parse(h.body).context ?? {};
-        return endedAt(c.startedAt, c.stalledMs) >= armedAt;
-    };
+    const ourFail = (h: { path: string; body: string }) =>
+        h.path.endsWith('/fail') && ours(JSON.parse(h.body).context?.startedAt);
     jest.setTimeout(30_000);
 
     const logger = { warn: jest.fn(), error: jest.fn() };
