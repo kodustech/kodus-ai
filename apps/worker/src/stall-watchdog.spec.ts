@@ -509,7 +509,7 @@ describe('startStallWatchdog (real worker thread)', () => {
             'burnCpuInATightLoopForTest',
         );
     }, 60_000);
-    it('alerts only a stall that outlasts alertMs, once, and only logs a shorter one', async () => {
+    it('warns every stall at its first report and alerts critical only past alertMs, once each', async () => {
         const http = await import('http');
         const hits: { path: string; body: string }[] = [];
         const server = http.createServer((req, res) => {
@@ -531,7 +531,8 @@ describe('startStallWatchdog (real worker thread)', () => {
                 profileMs: 0,
                 maxCapturesPerStall: 1,
                 alertMs: 2_500,
-                heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
+                heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/critical`,
+                warnHeartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/warn`,
                 pingIntervalMs: 0,
                 writeFd: null,
                 identity: { role: 'test' },
@@ -540,24 +541,31 @@ describe('startStallWatchdog (real worker thread)', () => {
             logger,
         );
         await settle(200);
+        const failsFor = (which: string, startedAt?: number) =>
+            hits.filter(
+                (h) =>
+                    h.path === `/api/v1/heartbeat/${which}/fail` &&
+                    JSON.parse(h.body).context?.startedAt === startedAt,
+            );
 
-        // Short: reported, not alerted.
+        // Short: warned, not alerted critical.
         await arm();
         burnCpuInATightLoopForTest(1_200);
         const short = await waitFor(() =>
             reports.find((r) => r.kind === 'recovered'),
         );
+        await waitFor(() => {
+            const f = failsFor('warn', short.startedAt);
+            return f.length ? f : undefined;
+        });
         await settle(300);
-        const failsFor = (startedAt?: number) =>
-            hits.filter(
-                (h) =>
-                    h.path.endsWith('/fail') &&
-                    JSON.parse(h.body).context?.startedAt === startedAt,
-            );
-        expect(reports.some((r) => r.kind === 'stall')).toBe(true);
-        expect(failsFor(short.startedAt)).toHaveLength(0);
+        expect(failsFor('warn', short.startedAt)).toHaveLength(1);
+        expect(failsFor('critical', short.startedAt)).toHaveLength(0);
+        expect(
+            JSON.parse(failsFor('warn', short.startedAt)[0].body).context.level,
+        ).toBe('warning');
 
-        // Long: alerted once, with the place the report found.
+        // Long: warned once and alerted critical once.
         await arm();
         burnCpuInATightLoopForTest(4_500);
         const long = await waitFor(
@@ -569,13 +577,16 @@ describe('startStallWatchdog (real worker thread)', () => {
                 ),
             15_000,
         );
-        const fails = await waitFor(() => {
-            const f = failsFor(long.startedAt);
+        const critical = await waitFor(() => {
+            const f = failsFor('critical', long.startedAt);
             return f.length ? f : undefined;
         });
+        await settle(300);
         server.close();
-        expect(fails).toHaveLength(1);
-        const context = JSON.parse(fails[0].body).context;
+        expect(critical).toHaveLength(1);
+        expect(failsFor('warn', long.startedAt)).toHaveLength(1);
+        const context = JSON.parse(critical[0].body).context;
+        expect(context.level).toBe('critical');
         expect(context.stalledMs).toBeGreaterThanOrEqual(2_500);
     });
     it('names the job, PR, stage and tool call that were running when the stall began', async () => {
