@@ -59,6 +59,8 @@ export interface StallReport {
     inspectorAnswerMs?: number;
     /** How long the main thread took to start the profile. */
     profilerAnswerMs?: number;
+    /** How long a later profiler call (stop) waited before it failed. */
+    profilerFailedCallMs?: number;
     /** Human-readable location, as used in the log line and the alert. */
     location?: string;
     stack?: StallFrame[] | null;
@@ -281,6 +283,19 @@ export function stallWatchdogThread(): void {
 
     const round2 = (ms: number) => Math.round(ms * 100) / 100;
 
+    // Total: any rejected value gives a non-empty string, and formatting it
+    // can never throw (a null-prototype object or a throwing toString would
+    // make String() throw and lose the stall report).
+    function errorText(e: unknown): string {
+        try {
+            const text =
+                e instanceof Error ? e.message || e.name : String(e ?? '');
+            return text || 'capture failed without a message';
+        } catch {
+            return 'capture failed with an unprintable error';
+        }
+    }
+
     function pausedStack(
         session: InstanceType<typeof inspector.Session>,
         ranSinceStart: () => boolean,
@@ -386,6 +401,7 @@ export function stallWatchdogThread(): void {
             let profileLate = false;
             let profileSlow = false;
             let profilerAnswerMs: number | undefined;
+            let profilerFailedCallMs: number | undefined;
             if (cfg.profileMs > 0) {
                 // How long the inspector call that failed had been waiting:
                 // a call that fails (5s bound) after more than
@@ -424,16 +440,19 @@ export function stallWatchdogThread(): void {
                     await post(session, 'Profiler.disable').catch(() => {});
                 } catch {
                     summary = null;
-                    // The report carries the timing behind the verdict: the
-                    // start phase if it never finished, else the call that
-                    // failed if it was the slower one.
-                    if (profilerAnswerMs === undefined)
+                    // The report carries the timing behind the verdict:
+                    // the start phase if it never finished, else the later
+                    // call that failed, in its own field.
+                    if (profilerAnswerMs === undefined) {
                         profilerAnswerMs = round2(
                             performance.now() - startAskedAt,
                         );
-                    else if (failedCallMs > profilerAnswerMs)
-                        profilerAnswerMs = failedCallMs;
-                    if (profilerAnswerMs > LATE_ANSWER_MS) profileSlow = true;
+                        if (profilerAnswerMs > LATE_ANSWER_MS)
+                            profileSlow = true;
+                    } else {
+                        profilerFailedCallMs = failedCallMs;
+                        if (failedCallMs > LATE_ANSWER_MS) profileSlow = true;
+                    }
                 }
             }
             const paused = await pausedStack(session, ranSinceStart);
@@ -463,6 +482,7 @@ export function stallWatchdogThread(): void {
                 stackUnavailable,
                 inspectorAnswerMs: read?.answerMs,
                 profilerAnswerMs,
+                profilerFailedCallMs,
                 error: pauseError,
             };
         } finally {
@@ -564,6 +584,7 @@ export function stallWatchdogThread(): void {
             stackUnavailable?: StallReport['stackUnavailable'];
             inspectorAnswerMs?: number;
             profilerAnswerMs?: number;
+            profilerFailedCallMs?: number;
             error?: string;
         },
     ) {
@@ -576,6 +597,7 @@ export function stallWatchdogThread(): void {
             stackUnavailable,
             inspectorAnswerMs,
             profilerAnswerMs,
+            profilerFailedCallMs,
             error,
         } = r;
         // A stall that ended during the capture keeps its real length, not
@@ -605,6 +627,9 @@ export function stallWatchdogThread(): void {
                     ? { inspectorAnswerMs }
                     : {}),
                 ...(profilerAnswerMs !== undefined ? { profilerAnswerMs } : {}),
+                ...(profilerFailedCallMs !== undefined
+                    ? { profilerFailedCallMs }
+                    : {}),
                 ...(error !== undefined ? { error } : {}),
             },
         );
@@ -664,11 +689,7 @@ export function stallWatchdogThread(): void {
                         // Never empty and never throwing, whatever was
                         // rejected: an empty error would read as a capture
                         // that worked and found nothing.
-                        error:
-                            (e instanceof Error
-                                ? e.message || e.name
-                                : String(e ?? '')) ||
-                            'capture failed without a message',
+                        error: errorText(e),
                     }))
                     .then((r) => reportStall(s, n, r))
                     .finally(() => {

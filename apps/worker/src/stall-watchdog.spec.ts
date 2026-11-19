@@ -99,7 +99,11 @@ describe('startStallWatchdog (real worker thread)', () => {
             // The inspector answered late (seen in CI: Debugger.enable
             // replays every script of a long in-band Jest run), so the
             // stack it carried is not trusted, and the reason is given.
-            expect(stall.stackUnavailable).toBe('answered-late');
+            // Whether the ticker ran before the late pause landed is a race
+            // the scenario cannot fix: either reason is honest here.
+            expect(['answered-late', 'ended-before-read']).toContain(
+                stall.stackUnavailable,
+            );
         }
         if (stall.stackUnavailable === undefined && stall.error === undefined) {
             // The inspector answered in time, so the profile belongs to the
@@ -322,7 +326,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(stall.inspectorAnswerMs!).toBeGreaterThan(0);
         expect(stall.profilerAnswerMs!).toBeGreaterThan(0);
         // The scenario fixes the reason: the main thread ran again before
-        // the read. (The late branch is pinned by the execSync test.)
+        // the read. (The late-pause branch has its own test below.)
         expect(stall.stackUnavailable).toBe('ended-before-read');
     });
 
@@ -395,5 +399,42 @@ describe('startStallWatchdog (real worker thread)', () => {
         await waitFor(() => (pings().length ? true : undefined), 5_000);
         server.close();
         expect(pings()[0]).toBe('/api/v1/heartbeat/tok');
+    });
+    it('does not trust a pause that answered late while the thread had not ticked again', async () => {
+        const { execSync } = await import('child_process');
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                // No profile: the verdict can only come from the pause.
+                profileMs: 0,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+
+        arm();
+        // The inspector cannot get in during the native call; it answers
+        // only once it returns, while JavaScript keeps the thread busy
+        // without ticking. The pause then lands in that later JavaScript.
+        execSync('sleep 2');
+        burnCpuInATightLoopForTest(1_500);
+
+        const stall = await waitFor(
+            () => reports.find((r) => r.kind === 'stall'),
+            15_000,
+        );
+        // Late answer, no tick in between: the frames are of the code that
+        // ran after the stall, so they are not offered as the location.
+        expect(stall.stackUnavailable).toBe('answered-late');
+        expect(stall.stack).toBeNull();
+        expect(stall.inspectorAnswerMs!).toBeGreaterThan(1_000);
+        expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
     });
 });
