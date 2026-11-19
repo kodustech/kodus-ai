@@ -47,7 +47,13 @@ export interface StallReport {
         'ended-before-read' | 'answered-late' | 'no-answer' | 'not-captured';
     /** The profile also covers time after the stall ended. */
     profileIncludesRecovery?: boolean;
-    /** How long the main thread took to pause for the stack read. */
+    /**
+     * How long the stack read took, from Debugger.enable to the pause. On
+     * purpose it includes Debugger.enable, which the main thread serves (and
+     * which replays every loaded script): if that alone outlasts the stall,
+     * the pause lands on whatever runs next, so it must count as late. In
+     * the worker (one webpack bundle) the replay costs milliseconds.
+     */
     inspectorAnswerMs?: number;
     /** How long the main thread took to start the profile. */
     profilerAnswerMs?: number;
