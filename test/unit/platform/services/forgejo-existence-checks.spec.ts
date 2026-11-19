@@ -32,6 +32,20 @@ describe('ForgejoService existence checks', () => {
     const client = {} as any;
     const repoInfo = { owner: 'acme', repo: 'config' };
 
+    const mockSdkHttpError = (
+        sdkCall: jest.Mock,
+        status: number,
+        error: object = { status },
+    ): object => {
+        sdkCall.mockImplementation((options?: { throwOnError?: boolean }) =>
+            options?.throwOnError
+                ? Promise.reject(error)
+                : Promise.resolve({ error, response: { status } }),
+        );
+
+        return error;
+    };
+
     beforeEach(async () => {
         forgejo = jest.requireMock('@llamaduck/forgejo-ts');
 
@@ -62,7 +76,7 @@ describe('ForgejoService existence checks', () => {
     });
 
     afterEach(() => {
-        jest.resetAllMocks();
+        jest.clearAllMocks();
     });
 
     describe('checkForgejoBranchExists', () => {
@@ -82,16 +96,18 @@ describe('ForgejoService existence checks', () => {
         });
 
         it('returns false on a 404', async () => {
-            forgejo.repoGetBranch.mockRejectedValue({ status: 404 });
+            mockSdkHttpError(forgejo.repoGetBranch, 404);
 
             await expect(
                 service.checkForgejoBranchExists(client, repoInfo, 'missing'),
             ).resolves.toBe(false);
+            expect(forgejo.repoGetBranch).toHaveBeenCalledWith(
+                expect.objectContaining({ throwOnError: true }),
+            );
         });
 
         it.each([401, 500])('rethrows a %i', async (status) => {
-            const error = { status };
-            forgejo.repoGetBranch.mockRejectedValue(error);
+            const error = mockSdkHttpError(forgejo.repoGetBranch, status);
 
             await expect(
                 service.checkForgejoBranchExists(client, repoInfo, 'feature'),
@@ -137,16 +153,18 @@ describe('ForgejoService existence checks', () => {
         });
 
         it('returns exists false on a 404', async () => {
-            forgejo.repoGetContents.mockRejectedValue({ status: 404 });
+            mockSdkHttpError(forgejo.repoGetContents, 404);
 
             await expect(
                 service.checkForgejoFileExists(client, repoInfo, 'main', 'a.yml'),
             ).resolves.toEqual({ exists: false });
+            expect(forgejo.repoGetContents).toHaveBeenCalledWith(
+                expect.objectContaining({ throwOnError: true }),
+            );
         });
 
         it.each([401, 500])('rethrows a %i', async (status) => {
-            const error = { status };
-            forgejo.repoGetContents.mockRejectedValue(error);
+            const error = mockSdkHttpError(forgejo.repoGetContents, status);
 
             await expect(
                 service.checkForgejoFileExists(client, repoInfo, 'main', 'a.yml'),
@@ -171,7 +189,7 @@ describe('ForgejoService existence checks', () => {
         });
 
         it('seeds the base branch when it is missing', async () => {
-            forgejo.repoGetBranch.mockRejectedValue({ status: 404 });
+            mockSdkHttpError(forgejo.repoGetBranch, 404);
             forgejo.repoChangeFiles.mockResolvedValue({ status: 201 });
 
             await run({ name: 'Kody' });
@@ -189,24 +207,27 @@ describe('ForgejoService existence checks', () => {
 
         it('swallows a seed failure when a concurrent run created the branch', async () => {
             forgejo.repoGetBranch
-                .mockRejectedValueOnce({ status: 404 })
+                .mockImplementationOnce(() => Promise.reject({ status: 404 }))
                 .mockResolvedValueOnce({ data: {} });
-            forgejo.repoChangeFiles.mockRejectedValue(new Error('conflict'));
+            mockSdkHttpError(
+                forgejo.repoChangeFiles,
+                409,
+                new Error('conflict'),
+            );
 
             await expect(run()).resolves.toBeUndefined();
         });
 
         it('rethrows the seed error when the branch still does not exist', async () => {
             const error = new Error('boom');
-            forgejo.repoGetBranch.mockRejectedValue({ status: 404 });
-            forgejo.repoChangeFiles.mockRejectedValue(error);
+            mockSdkHttpError(forgejo.repoGetBranch, 404);
+            mockSdkHttpError(forgejo.repoChangeFiles, 500, error);
 
             await expect(run()).rejects.toBe(error);
         });
 
         it('propagates a non-404 error from the branch check', async () => {
-            const error = { status: 401 };
-            forgejo.repoGetBranch.mockRejectedValue(error);
+            const error = mockSdkHttpError(forgejo.repoGetBranch, 401);
 
             await expect(run()).rejects.toBe(error);
             expect(forgejo.repoChangeFiles).not.toHaveBeenCalled();
@@ -257,7 +278,7 @@ describe('ForgejoService existence checks', () => {
         });
 
         it('creates without a sha when the file is missing', async () => {
-            forgejo.repoGetContents.mockRejectedValue({ status: 404 });
+            mockSdkHttpError(forgejo.repoGetContents, 404);
 
             await upload([{ path: 'a.yml', content: 'hi' }]);
 
@@ -280,7 +301,7 @@ describe('ForgejoService existence checks', () => {
         });
 
         it('skips deleting a missing file', async () => {
-            forgejo.repoGetContents.mockRejectedValue({ status: 404 });
+            mockSdkHttpError(forgejo.repoGetContents, 404);
 
             await expect(
                 upload([{ path: 'a.yml', operation: 'delete' }]),
@@ -291,7 +312,7 @@ describe('ForgejoService existence checks', () => {
         it.each([401, 500])(
             'returns false and does not write when the file check fails with %i',
             async (status) => {
-                forgejo.repoGetContents.mockRejectedValue({ status });
+                mockSdkHttpError(forgejo.repoGetContents, status);
 
                 await expect(
                     upload([{ path: 'a.yml', content: 'hi' }]),
