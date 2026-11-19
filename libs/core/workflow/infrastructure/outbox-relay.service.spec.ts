@@ -38,7 +38,6 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
     let jobRepository: {
         failStaleProcessing: jest.Mock;
-        failStalePending: jest.Mock;
         countReapedSince: jest.Mock;
     };
     let lock: { release: jest.Mock };
@@ -56,7 +55,6 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     const build = () => {
         jobRepository = {
             failStaleProcessing: jest.fn().mockResolvedValue([]),
-            failStalePending: jest.fn().mockResolvedValue([]),
             // undefined: no window count available, alert on the pass alone
             countReapedSince: jest.fn().mockResolvedValue(undefined),
         };
@@ -165,22 +163,6 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         await service.reapStaleProcessingJobs();
 
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
-    });
-
-    it('reaps jobs that never started (PENDING) with a 6h cutoff', async () => {
-        const service = build();
-        const before = Date.now();
-        jobRepository.failStalePending.mockResolvedValue(jobs(2, 'WEBHOOK_PROCESSING'));
-
-        await service.reapStaleProcessingJobs();
-
-        expect(jobRepository.failStalePending).toHaveBeenCalledTimes(1);
-        const arg = jobRepository.failStalePending.mock.calls[0][0];
-        expect(arg.errorClassification).toBe(ErrorClassification.PERMANENT);
-        expect(arg.lastError).toMatch(/^Orphaned: never started/);
-        const expected = before - 360 * 60 * 1000;
-        expect(arg.olderThan.getTime()).toBeGreaterThanOrEqual(expected - 5000);
-        expect(arg.olderThan.getTime()).toBeLessThanOrEqual(expected + 5000);
     });
 
     it('alerts once when small passes add up past the threshold in the window', async () => {

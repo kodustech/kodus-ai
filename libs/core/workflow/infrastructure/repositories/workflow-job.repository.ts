@@ -470,40 +470,6 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
     }
 
     /**
-     * Reaps jobs that never started: PENDING with `updatedAt` before the
-     * cutoff. Their message was lost before any worker began them (the
-     * holder died between claim and start, or the retry was dropped), and
-     * no other path moves them; the PROCESSING reaper never sees them. A job
-     * scheduled for later (`scheduledAt` after the cutoff) is left alone.
-     */
-    async failStalePending(params: {
-        olderThan: Date;
-        lastError: string;
-        errorClassification: ErrorClassification;
-    }): Promise<StaleWorkflowJobReapResult[]> {
-        const result = await this.repository
-            .createQueryBuilder()
-            .update(WorkflowJobModel)
-            .set({
-                status: JobStatus.FAILED,
-                errorClassification: params.errorClassification,
-                lastError: params.lastError,
-                completedAt: () => 'NOW()',
-            })
-            .where('status = :status', { status: JobStatus.PENDING })
-            .andWhere('"updatedAt" < :olderThan', {
-                olderThan: params.olderThan,
-            })
-            .andWhere('("scheduledAt" IS NULL OR "scheduledAt" < :olderThan)', {
-                olderThan: params.olderThan,
-            })
-            .returning(['uuid', 'workflowType', 'organizationId', 'startedAt'])
-            .execute();
-
-        return (result.raw ?? []) as StaleWorkflowJobReapResult[];
-    }
-
-    /**
      * How many jobs the reapers failed since `since` (their lastError starts
      * with `lastErrorPrefix`). Feeds the windowed loss alert.
      */

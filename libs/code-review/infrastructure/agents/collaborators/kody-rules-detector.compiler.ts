@@ -33,9 +33,6 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { extensionScopeAppliesToFile } from '@libs/common/utils/kody-rules/file-patterns';
 import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
-import { createLogger } from '@libs/core/log/logger';
-
-const detectorLogger = createLogger('KodyRulesDetector');
 
 // ── the LLM side of the compiler (runs once at authoring) ────────────────────
 
@@ -447,28 +444,6 @@ export interface DetectorHit {
  * changed files. Pure code, no LLM. The hits are candidates — a cheap
  * confirm-on-hits LLM pass filters false positives and writes the comment.
  */
-/**
- * CPU a single detector may spend on one review. A compiled detector is an
- * LLM-written regex that runs synchronously on the worker's event loop, on
- * every added line; the compile-time guard only rejects nested quantifiers, so
- * a polynomial shape (`.*X[^/]*Y`, unanchored) still ships and costs ~1s per
- * 2000-char line. Past this budget the detector stops for the review: the
- * rule falls back to the semantic judge for the files it did not reach.
- */
-export const DETECTOR_REVIEW_BUDGET_MS = 250;
-
-export interface RunDetectorOptions {
-    budgetMs?: number;
-    /** Clock, injectable in tests. */
-    now?: () => number;
-    /** Called once when the budget runs out (which lines were left out). */
-    onBudgetExceeded?: (info: {
-        elapsedMs: number;
-        linesChecked: number;
-        filesLeft: number;
-    }) => void;
-}
-
 export function runDetector(
     plan: DetectorPlan,
     changedFiles: Array<{
@@ -476,7 +451,6 @@ export function runDetector(
         patchWithLinesStr?: string;
         patch?: string;
     }>,
-    opts: RunDetectorOptions = {},
 ): DetectorHit[] {
     let rx: RegExp;
     try {
@@ -484,13 +458,8 @@ export function runDetector(
     } catch {
         return [];
     }
-    const budgetMs = opts.budgetMs ?? DETECTOR_REVIEW_BUDGET_MS;
-    const now = opts.now ?? Date.now;
-    const started = now();
-    let linesChecked = 0;
     const hits: DetectorHit[] = [];
-    for (let fi = 0; fi < changedFiles.length; fi++) {
-        const f = changedFiles[fi];
+    for (const f of changedFiles) {
         const diff = f.patchWithLinesStr ?? f.patch ?? '';
         for (const raw of diff.split('\n')) {
             const m = raw.match(/^\s*(\d+)\s*\+(.*)$/);
@@ -504,16 +473,6 @@ export function runDetector(
             rx.lastIndex = 0;
             if (Number.isFinite(line) && rx.test(code)) {
                 hits.push({ filename: f.filename, line, code });
-            }
-            linesChecked++;
-            const elapsedMs = now() - started;
-            if (elapsedMs > budgetMs) {
-                opts.onBudgetExceeded?.({
-                    elapsedMs,
-                    linesChecked,
-                    filesLeft: changedFiles.length - fi - 1,
-                });
-                return hits;
             }
         }
     }
@@ -591,21 +550,7 @@ export function buildDetectorCandidates(
                 ruleAppliesToFile(f.filename, rule.path) &&
                 detectorAppliesToFile(f.filename, rule.detector!),
         );
-        const hits = runDetector(rule.detector, files, {
-            onBudgetExceeded: (info) =>
-                detectorLogger.warn({
-                    message: `Kody rule detector ${key} exceeded its ${DETECTOR_REVIEW_BUDGET_MS}ms review budget; stopped early (the regex backtracks: recompile it)`,
-                    context: 'KodyRulesDetector',
-                    metadata: {
-                        ruleUuid: rule.uuid,
-                        reviewUnitKey: key,
-                        pattern: rule.detector!.pattern,
-                        flags: rule.detector!.flags,
-                        ...info,
-                    },
-                }),
-        });
-        for (const h of hits) {
+        for (const h of runDetector(rule.detector, files)) {
             let perFile = index.get(key);
             if (!perFile) index.set(key, (perFile = new Map()));
             const lines = perFile.get(h.filename);

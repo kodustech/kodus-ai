@@ -73,10 +73,6 @@ const DEFAULT_OUTBOX_PUBLISH_TIMEOUT_MS = 15000;
 // so an actively running or reclaimable job is never reaped.
 const DEFAULT_STALE_JOB_TIMEOUT_MINUTES = 180;
 
-// A job still PENDING this long never started: its message was lost before
-// any worker began it. Well above any queue backlog we have seen.
-const STALE_PENDING_TIMEOUT_MINUTES = 360;
-
 // Every reaped job's lastError starts with this; the loss alert counts them.
 const REAPED_LAST_ERROR_PREFIX = 'Orphaned:';
 
@@ -493,10 +489,9 @@ export class OutboxRelayService
      * the 150-min claim can be reclaimed, and its delayed retry never comes
      * back (the topic-typed delayed exchange routes it to no queue on
      * RabbitMQ 4.2 + Khepri) — so the job is never reprocessed and no other
-     * path resets its status. Jobs whose message was lost before they
-     * started stay PENDING the same way. This flips both to FAILED so they
-     * stop reporting as running, are observable, and can be re-driven by a
-     * new review.
+     * path resets its status. This flips such rows to FAILED so they stop
+     * reporting as running, are observable, and can be re-driven by a new
+     * review.
      *
      * The UI "in progress" badge is reaped separately by the automation
      * execution watchdog (staleReviewWatchdog.cron); this closes the job
@@ -518,24 +513,13 @@ export class OutboxRelayService
                 Date.now() - this.staleJobTimeoutMinutes * 60 * 1000,
             );
 
-            const processing =
+            const reaped =
                 (await this.jobRepository.failStaleProcessing?.({
                     olderThan,
                     lastError: `${REAPED_LAST_ERROR_PREFIX} the worker running this job stopped (froze or was killed) without a terminal update within ${this.staleJobTimeoutMinutes}min. Reaped by stale-job watchdog; not retried.`,
                     errorClassification: ErrorClassification.PERMANENT,
                 })) ?? [];
 
-            const pendingOlderThan = new Date(
-                Date.now() - STALE_PENDING_TIMEOUT_MINUTES * 60 * 1000,
-            );
-            const pending =
-                (await this.jobRepository.failStalePending?.({
-                    olderThan: pendingOlderThan,
-                    lastError: `${REAPED_LAST_ERROR_PREFIX} never started within ${STALE_PENDING_TIMEOUT_MINUTES}min (its message was lost before any worker began it). Reaped by stale-job watchdog; not retried.`,
-                    errorClassification: ErrorClassification.PERMANENT,
-                })) ?? [];
-
-            const reaped = [...processing, ...pending];
             const reapedCount = reaped.length;
             if (reapedCount === 0) {
                 return;
@@ -543,12 +527,10 @@ export class OutboxRelayService
 
             const byType = countBy(reaped.map((job) => job.workflowType));
             this.logger.warn({
-                message: `Reaped ${reapedCount} stale workflow jobs (${processing.length} PROCESSING, ${pending.length} never started)`,
+                message: `Reaped ${reapedCount} stale PROCESSING workflow jobs`,
                 context: OutboxRelayService.name,
                 metadata: {
                     reapedCount,
-                    processingCount: processing.length,
-                    pendingCount: pending.length,
                     byType,
                     staleTimeoutMinutes: this.staleJobTimeoutMinutes,
                     olderThan: olderThan.toISOString(),

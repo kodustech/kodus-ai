@@ -55,15 +55,6 @@ export interface IWorkflowJobRepository {
             errorClassification: ErrorClassification;
         },
     ): Promise<boolean>;
-    /**
-     * Reaps jobs that never started (PENDING older than `olderThan`, not
-     * scheduled for later): their message was lost before any worker began.
-     */
-    failStalePending?(params: {
-        olderThan: Date;
-        lastError: string;
-        errorClassification: unknown;
-    }): Promise<StaleWorkflowJobReapResult[]>;
     /** Jobs failed by a reaper since `since` (lastError starts with the prefix). */
     countReapedSince?(since: Date, lastErrorPrefix: string): Promise<number>;
 }

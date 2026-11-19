@@ -244,57 +244,6 @@ describe('runDetector — review-time regex over added lines', () => {
         ]);
         expect(hits).toHaveLength(0);
     });
-
-    it('stops a detector that runs past its review budget and says so', () => {
-        let t = 0;
-        const onBudgetExceeded = jest.fn();
-        const hits = runDetector(
-            plan,
-            [
-                {
-                    filename: 'a.ts',
-                    patchWithLinesStr: '1 +console.log(1)\n2 +console.log(2)',
-                },
-                { filename: 'b.ts', patchWithLinesStr: '1 +console.log(3)' },
-            ],
-            { budgetMs: 100, now: () => (t += 60), onBudgetExceeded },
-        );
-        // Clock reads: start 60, line 1 -> 120 (60ms), line 2 -> 180 (120ms):
-        // over budget after line 2, so b.ts is never reached.
-        expect(hits.map((h) => h.code)).toEqual([
-            'console.log(1)',
-            'console.log(2)',
-        ]);
-        expect(onBudgetExceeded).toHaveBeenCalledWith({
-            elapsedMs: 120,
-            linesChecked: 2,
-            filesLeft: 1,
-        });
-    });
-
-    it('bounds the review time of the polynomial detector shipped in prod', () => {
-        // A compiled detector that passed isDetectorRegexSafe (no nested
-        // quantifier) yet is cubic on long punctuation-heavy lines.
-        const slow: DetectorPlan = {
-            type: 'regex',
-            pattern:
-                '\\.[^a-z0-9].*[^a-z0-9][^/]*g[^u]|\\.[^a-z0-9].*[^a-z0-9][^/]*g\\s*[,)]',
-        };
-        const line = `1 +${'. '.repeat(900)}`;
-        const started = Date.now();
-        const onBudgetExceeded = jest.fn();
-        runDetector(
-            slow,
-            Array.from({ length: 20 }, (_, i) => ({
-                filename: `f${i}.md`,
-                patchWithLinesStr: Array(20).fill(line).join('\n'),
-            })),
-            { onBudgetExceeded },
-        );
-        expect(onBudgetExceeded).toHaveBeenCalledTimes(1);
-        // 400 such lines take minutes unbounded; the budget cuts it short.
-        expect(Date.now() - started).toBeLessThan(5_000);
-    });
 });
 
 // A valid D payload the strict models emit; the json_object-fallback models
