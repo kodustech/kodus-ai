@@ -73,6 +73,18 @@ describe('syncedRuleIsUnchanged', () => {
         ['the scope path', { path: 'src/**' }],
         ['the directory', { directoryId: 'dir-1' }],
         ['the status (file disabled)', { status: KodyRulesStatus.PAUSED }],
+        [
+            'an extra example',
+            {
+                examples: [
+                    { snippet: 'catch {}', isCorrect: false },
+                    { snippet: 'catch (e) {}', isCorrect: false },
+                ],
+            },
+        ],
+        ['the examples, given as one object', { examples: { snippet: 'x' } }],
+        ['a number', { priority: 2 }],
+        ['a date', { reviewedAt: new Date('2026-11-02T00:00:00Z') }],
     ])('is changed when %s differs', (_label, change) => {
         expect(
             syncedRuleIsUnchanged(
@@ -176,5 +188,87 @@ describe('syncedRuleIsUnchanged', () => {
                 incoming() as any,
             ),
         ).toBe(false);
+    });
+
+    // Fields the file carries are compared by value, whatever their shape.
+    describe('value comparison', () => {
+        const withStored = (fields: Record<string, unknown>) => ({
+            ...stored(),
+            priority: 1,
+            reviewedAt: new Date('2026-11-01T00:00:00Z'),
+            ...fields,
+        });
+        const withIncoming = (fields: Record<string, unknown>) => ({
+            ...incoming(),
+            priority: 1,
+            reviewedAt: new Date('2026-11-01T00:00:00Z'),
+            ...fields,
+        });
+
+        it('treats a missing, undefined and null field as the same', () => {
+            expect(
+                syncedRuleIsUnchanged(
+                    withStored({ directoryId: null }) as any,
+                    withIncoming({ directoryId: undefined }) as any,
+                ),
+            ).toBe(true);
+        });
+
+        it('compares dates by instant, not by object', () => {
+            expect(
+                syncedRuleIsUnchanged(
+                    withStored({}) as any,
+                    withIncoming({
+                        reviewedAt: '2026-11-01T00:00:00.000Z',
+                    }) as any,
+                ),
+            ).toBe(true);
+        });
+
+        it.each([
+            [
+                'two different dates',
+                { reviewedAt: new Date('2026-11-02T00:00:00Z') },
+            ],
+            ['two different numbers', { priority: 2 }],
+            [
+                'a list and an object with the same entries',
+                {
+                    examples: {
+                        0: { snippet: 'catch {}', isCorrect: false },
+                    },
+                },
+            ],
+        ])('tells apart %s', (_label, change) => {
+            expect(
+                syncedRuleIsUnchanged(
+                    withStored({}) as any,
+                    withIncoming(change) as any,
+                ),
+            ).toBe(false);
+        });
+
+        it('leaves the uuid out: it is the key the rule was matched by', () => {
+            expect(
+                syncedRuleIsUnchanged(
+                    withStored({}) as any,
+                    withIncoming({ uuid: 'other-uuid' }) as any,
+                ),
+            ).toBe(true);
+        });
+
+        it('reads an absent severity as no severity', () => {
+            const { severity: _ignored, ...withoutSeverity } = stored();
+            expect(
+                syncedRuleIsUnchanged(
+                    { ...withoutSeverity, priority: 1 } as any,
+                    {
+                        ...incoming(),
+                        severity: undefined,
+                        priority: 1,
+                    } as any,
+                ),
+            ).toBe(true);
+        });
     });
 });
