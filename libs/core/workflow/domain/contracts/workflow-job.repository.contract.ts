@@ -3,6 +3,8 @@ export interface StaleWorkflowJobReapResult {
     workflowType: string;
     organizationId: string | null;
     startedAt: Date | null;
+    /** To name the PR the reaped job was about. */
+    payload?: Record<string, unknown> | null;
 }
 
 export interface IWorkflowJobRepository {

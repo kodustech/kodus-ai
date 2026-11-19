@@ -190,7 +190,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 { operation: 'update', jobId: id },
             );
 
-            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
+            if (data.metadata !== undefined)
+                updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
                 updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
@@ -303,6 +304,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     'workflowType',
                     'organizationId',
                     'startedAt',
+                    'payload',
                 ])
                 .execute();
 

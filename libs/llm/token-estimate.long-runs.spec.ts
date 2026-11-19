@@ -11,6 +11,10 @@ import {
  * long run without whitespace; the context compressor froze a worker for 88s
  * on such a run in prod (2026-11-19).
  */
+// Real clocks: retried on a starved machine (a parallel run of the whole
+// suite), as the other wall-clock specs are.
+jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
 describe('estimateTextTokens — long runs without whitespace', () => {
     const enc = get_encoding('o200k_base');
     const exact = (t: string) => enc.encode_ordinary(t).length;

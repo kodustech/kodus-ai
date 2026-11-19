@@ -21,6 +21,7 @@ export interface ActivityTool {
 export interface ActivityInfo {
     jobId: string;
     queue?: string;
+    workflowType?: string;
     startedAt: number;
     pipeline?: string;
     stage?: string;
@@ -120,6 +121,16 @@ export function beginToolActivity(tool: string, args?: string): () => void {
         entry.toolCalls.delete(call);
         notify();
     };
+}
+
+/** The current job's entry (no-op outside a job), bounded like a snapshot. */
+export function currentActivity(): ActivityInfo | undefined {
+    const run = als.getStore()?.run;
+    const entry = run ? active.get(run) : undefined;
+    if (!entry) return undefined;
+    const { toolCalls, ...info } = entry;
+    const tools = [...toolCalls.values()].slice(0, MAX_TOOLS);
+    return tools.length ? { ...info, tools } : info;
 }
 
 /** Bounded copy of what runs now, safe to post to another thread. */

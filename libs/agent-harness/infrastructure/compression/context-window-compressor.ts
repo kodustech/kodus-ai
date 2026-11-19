@@ -18,6 +18,7 @@
  * (weaker recap, still functional); a later step can wire the live tool-call
  * history.
  */
+import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
 import type { ModelMessage } from 'ai';
 
 import type {
@@ -69,9 +70,7 @@ export class ContextWindowCompressor implements Compressor {
         );
     }
 
-    maybeCompress(
-        messages: readonly AgentMessage[],
-    ): CompressionResult | null {
+    maybeCompress(messages: readonly AgentMessage[]): CompressionResult | null {
         if (!this.contextWindowTokens || this.contextWindowTokens <= 0) {
             return null;
         }
@@ -88,7 +87,13 @@ export class ContextWindowCompressor implements Compressor {
                 this.safetyMarginTokens,
         );
 
-        const current = estimateMessagesTokens(modelMsgs);
+        // Tokenizes the whole history every step: the 2026-11-19 stall in
+        // tiktoken was here. A slow count is logged with its job.
+        const current = timeSync(
+            'context compressor token count',
+            () => estimateMessagesTokens(modelMsgs),
+            () => ({ messages: modelMsgs.length }),
+        );
         const usage = current + this.overheadTokens;
 
         // Soft trigger: total usage crosses the compression threshold. Hard

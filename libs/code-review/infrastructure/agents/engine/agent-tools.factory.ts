@@ -16,6 +16,7 @@ import {
     cutLongLines,
     MAX_TOOL_LINE_CHARS,
 } from '@libs/code-review/infrastructure/agents/engine/long-lines';
+import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
 import { beginToolActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import {
     findProjectLevelTypeScriptErrors,
@@ -1940,7 +1941,11 @@ function guardSecretFiles(
             if (typeof out !== 'string') return out;
             // Secret lines leave first, on the whole line; then no line the
             // agent gets is longer than MAX_TOOL_LINE_CHARS.
-            const capped = cutLongLines(withoutSecretFileLines(out));
+            const capped = timeSync(
+                'code-review tool output (secret filter, line cut)',
+                () => cutLongLines(withoutSecretFileLines(out)),
+                () => ({ tool: name, outputChars: out.length }),
+            );
             if (capped.cut > 0) {
                 // The trace of a search that returned a huge line: which
                 // search, so the file behind it can be found.

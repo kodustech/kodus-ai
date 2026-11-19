@@ -1,5 +1,8 @@
 import * as os from 'os';
-import { runActivity } from '@libs/core/infrastructure/activity/activity-registry';
+import {
+    activitySnapshot,
+    runActivity,
+} from '@libs/core/infrastructure/activity/activity-registry';
 import {
     INBOX_RELEASE_TIMEOUT_MS,
     parseDrainTimeoutMs,
@@ -579,6 +582,8 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
             context: WorkflowJobConsumer.name,
             metadata: {
                 activeJobs: this.activeJobs,
+                // Which jobs (org, repository, PR, stage) this shutdown may cut.
+                jobs: activitySnapshot(),
                 maxWaitMs,
                 configured: process.env.API_WORKER_DRAIN_TIMEOUT_MS ?? null,
             },
@@ -604,6 +609,7 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
                 context: WorkflowJobConsumer.name,
                 metadata: {
                     activeJobs: this.activeJobs,
+                    jobs: activitySnapshot(),
                     instanceId: this.instanceId,
                     drainDurationMs,
                     drainBudgetMs: maxWaitMs,
