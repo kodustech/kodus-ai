@@ -763,6 +763,38 @@ describe('citesRepoInstruction', () => {
     ])('finds nothing in %p', (text) => {
         expect(citesRepoInstruction(finding(text), context)).toBe(false);
     });
+
+    // Hyphens between the file and the verb still read as a citation.
+    it.each([
+        'CLAUDE.md - the billing section - requires integer cents.',
+        'AGENTS.md -- in its logging rule -- says use the logger.',
+        'CLAUDE.md (non-negotiable) requires the structured logger.',
+    ])('finds a citation across hyphens in %p', (text) => {
+        expect(citesRepoInstruction(finding(text), context)).toBe(true);
+    });
+
+    // Regression: these inputs froze a worker for minutes (exponential
+    // backtracking on hyphen runs after a cited file). Each must answer in
+    // milliseconds, with the same verdict.
+    it.each([
+        ['a long run of hyphens', `CLAUDE.md ${'-'.repeat(200)} x`, false],
+        [
+            'a markdown table separator row',
+            `| CLAUDE.md ${'|------------'.repeat(12)}|`,
+            false,
+        ],
+        [
+            'a horizontal rule before the verb',
+            `CLAUDE.md ${'-'.repeat(80)} requires cents.`,
+            true,
+        ],
+    ])('answers fast on %s', (_label, text, expected) => {
+        const started = Date.now();
+        expect(citesRepoInstruction(finding(text as string), context)).toBe(
+            expected,
+        );
+        expect(Date.now() - started).toBeLessThan(200);
+    });
 });
 
 describe('isRepoInstructionFile', () => {
