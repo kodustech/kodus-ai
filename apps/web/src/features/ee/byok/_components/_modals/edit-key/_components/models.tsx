@@ -230,9 +230,12 @@ const ModelInput = ({
  */
 const ModelPickerPopover = ({
     models,
+    allModels,
     onUseManual,
 }: {
     models: LLMProviderModel[];
+    /** Everything the provider lists, the already-enabled models included. */
+    allModels: LLMProviderModel[];
     onUseManual?: (typed?: string) => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -242,16 +245,17 @@ const ModelPickerPopover = ({
 
     // The label drops a snapshot pin (`-1017`, `-2026-03-05`), so a pinned id
     // and its alias read the same ("GPT 5.4" twice). Those rows show their id
-    // too, or nobody can tell which one they are picking.
+    // too, or nobody can tell which one they are picking. Counted over the
+    // full listing: an enabled alias is hidden, yet its pin still reads as it.
     const sharedNames = useMemo(() => {
         const seen = new Set<string>();
         const shared = new Set<string>();
-        for (const m of models) {
+        for (const m of allModels) {
             if (seen.has(m.name)) shared.add(m.name);
             seen.add(m.name);
         }
         return shared;
-    }, [models]);
+    }, [allModels]);
     const selected = models.find((p) => p.id === form.watch("model"));
 
     return (
@@ -438,7 +442,13 @@ const ModelSelect = ({
     const excludeSet = new Set(excludeIds.filter((id) => id !== selected));
     const models = allModels.filter((m) => !excludeSet.has(m.id));
 
-    return <ModelPickerPopover models={models} onUseManual={onUseManual} />;
+    return (
+        <ModelPickerPopover
+            models={models}
+            allModels={allModels}
+            onUseManual={onUseManual}
+        />
+    );
 };
 
 /** Debounce a value by `ms` — so the live model fetch fires after the user stops
@@ -620,5 +630,11 @@ const ModelSelectLive = ({
         );
     }
 
-    return <ModelPickerPopover models={models} onUseManual={onUseManual} />;
+    return (
+        <ModelPickerPopover
+            models={models}
+            allModels={data ?? []}
+            onUseManual={onUseManual}
+        />
+    );
 };

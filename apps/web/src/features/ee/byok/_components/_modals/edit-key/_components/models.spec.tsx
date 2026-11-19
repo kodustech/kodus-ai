@@ -57,14 +57,19 @@ function Harness({ lockedInUse }: { lockedInUse: boolean }) {
 function LivePickerHarness({
     defaultValues,
     credentialStored = false,
+    excludeIds,
 }: {
     defaultValues: Record<string, unknown>;
     credentialStored?: boolean;
+    excludeIds?: string[];
 }) {
     const form = useForm({ defaultValues: defaultValues as any });
     return (
         <FormProvider {...form}>
-            <ByokModelSelect credentialStored={credentialStored} />
+            <ByokModelSelect
+                credentialStored={credentialStored}
+                excludeIds={excludeIds}
+            />
         </FormProvider>
     );
 }
@@ -502,6 +507,35 @@ describe("ByokModelSelect — models that share a label", () => {
         ).toBeInTheDocument();
         // A label nobody else has keeps its single line.
         expect(screen.queryByText("listed/model-a")).not.toBeInTheDocument();
+    });
+
+    it("still shows the id when the same-label sibling is already enabled", async () => {
+        mockPreview.mockReturnValue({
+            data: listing,
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                excludeIds={["deepseek-ai/DeepSeek-V4.1-Flash"]}
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://api.together.ai/v1",
+                }}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole("combobox"));
+
+        // The enabled alias is hidden; its pin must not pass for it.
+        expect(
+            await screen.findByText("deepseek-ai/DeepSeek-V4.1-Flash-1017"),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText("deepseek-ai/DeepSeek-V4.1-Flash"),
+        ).not.toBeInTheDocument();
     });
 
     it("names the picked one by its id on the trigger", () => {
