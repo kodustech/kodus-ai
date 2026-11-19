@@ -670,13 +670,16 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
                 // Ignore general index creation errors
             }
 
-            // Telemetry gets no index from here. The single-field indexes this
-            // used to create on every boot (timestamp, correlationId, tenantId,
-            // name, agentName, toolName, phase) serve no read: Token Usage reads
-            // through the tu_cover_* compounds the migrations build
-            // (database/mongo/token-usage/ensure-indexes.ts). Creating them on
-            // boot also meant a dropped index came back, rebuilt over the whole
-            // collection, on the next deploy of every service.
+            // Telemetry keeps only `correlationId`: the per-execution lookups
+            // (traceability.ts, scripts/analyze-pr-performance.cli.ts) read
+            // spans by it, and no compound has it as a prefix. The other
+            // single-field indexes this created on every boot (timestamp,
+            // tenantId, name, agentName, toolName, phase) serve no read: Token
+            // Usage reads through the tu_cover_* compounds the migrations build
+            // (database/mongo/token-usage/ensure-indexes.ts), and a dropped
+            // index came back, rebuilt over the whole collection, on the next
+            // deploy of every service.
+            await this.collections.telemetry.createIndex({ correlationId: 1 });
 
             this.logger.log({
                 message: 'Performance indexes created successfully',
@@ -901,9 +904,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         // "Executing Query", "Execution context set"). info/warn/error still
         // persist for audit.
         const minLevel = process.env.API_LOG_LEVEL || 'info';
-        if (
-            (LOG_LEVEL_RANK[level] ?? 1) < (LOG_LEVEL_RANK[minLevel] ?? 1)
-        ) {
+        if ((LOG_LEVEL_RANK[level] ?? 1) < (LOG_LEVEL_RANK[minLevel] ?? 1)) {
             return;
         }
 
@@ -971,8 +972,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         // unrelated" and "we do not know whether these lines are related",
         // which are opposite conclusions to draw from the same query.
         const providedCorrelationId = normalizedContext?.correlationId as
-            | string
-            | undefined;
+            string | undefined;
         const correlationId = providedCorrelationId || randomUUID();
 
         // Ensure tenantId exists in metadata (common requirement).
@@ -1089,9 +1089,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         const agentName = item.attributes[AGENT.NAME] as string;
         const toolName = item.attributes[TOOL.NAME] as string;
         const phase = item.attributes['agent.phase'] as
-            | 'think'
-            | 'act'
-            | 'observe';
+            'think' | 'act' | 'observe';
 
         const telemetryItem: MongoDBTelemetryItem = {
             timestamp: new Date(item.startTime),
@@ -1489,10 +1487,8 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             });
         }
 
-        const {
-            accepted: flushableLogs,
-            droppedCount: oversizedCount,
-        } = this.dropOversizedLogItems(sanitizedLogs);
+        const { accepted: flushableLogs, droppedCount: oversizedCount } =
+            this.dropOversizedLogItems(sanitizedLogs);
         if (oversizedCount > 0) {
             this.logger.warn({
                 message: `Dropping ${oversizedCount} oversized log entr${oversizedCount === 1 ? 'y' : 'ies'} from flush batch (exceeded BSON safety threshold)`,
@@ -1552,7 +1548,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
                         error: error as Error,
                     });
 
-                    await this.handleConnectionError(error as Error, 'flushLogs');
+                    await this.handleConnectionError(
+                        error as Error,
+                        'flushLogs',
+                    );
 
                     const uncommitted = this.extractRebufferable(error, batch);
                     if (this.isNonRetryableLogWriteError(error)) {

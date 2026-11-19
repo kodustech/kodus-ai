@@ -104,7 +104,12 @@ async function main() {
                     .toArray()
             ).map((doc) => doc._id);
             if (!ids.length) break;
-            const result = await sessions.deleteMany({ _id: { $in: ids } });
+            // `stale` again in the write: a session that got a message after
+            // the read above is no longer stale and must survive.
+            const result = await sessions.deleteMany({
+                ...stale,
+                _id: { $in: ids },
+            });
             deleted += result.deletedCount;
             console.log(`deleted ${deleted} / ${toDelete}`);
             await new Promise((r) => setTimeout(r, PAUSE_MS));
