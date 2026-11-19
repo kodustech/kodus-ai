@@ -1,6 +1,6 @@
 ---
 title: "Synthetic — Assinatura de Taxa Fixa para Modelos de Codificação Open-Source"
-description: "Aprenda como conectar a API por assinatura do Synthetic.new — que inclui Kimi, DeepSeek, Qwen, GLM e mais — ao Kodus."
+description: "Aprenda como conectar a API por assinatura do Synthetic.new — que inclui Kimi, DeepSeek, Qwen, GLM e mais — à Kodus."
 icon: "infinity"
 ---
 
@@ -8,7 +8,7 @@ icon: "infinity"
 
 O Synthetic é um serviço por assinatura que serve LLMs open-source por uma API **compatível com OpenAI** (e compatível com Anthropic). Em vez de pagar por token, você paga um **preço mensal fixo** e usa um limite semanal de créditos que cobre todos os modelos da plataforma.
 
-O Kodus acessa o Synthetic pelo endpoint compatível com OpenAI, então não há alterações de adaptador — apenas credenciais BYOK.
+A Kodus acessa o Synthetic pelo endpoint compatível com OpenAI, então não há alterações de adaptador — apenas credenciais BYOK.
 
 ## Visão geral dos planos
 
@@ -47,7 +47,9 @@ O catálogo muda com frequência. A lista ao vivo em [api.synthetic.new/openai/v
 2. Assine um plano em [synthetic.new/pricing](https://synthetic.new/pricing).
 3. Copie sua chave de API. O Synthetic a mostra na [documentação da API](https://dev.synthetic.new/docs/api/getting-started) enquanto você está logado.
 
-## Configurar o Synthetic no Kodus
+<span id="configurar-o-synthetic-no-kodus" aria-hidden="true" />
+
+## Configurar o Synthetic na Kodus
 
 ### Opção 1 — Página AI providers (recomendado)
 
@@ -66,7 +68,7 @@ Clique em **Test & save** e escolha os modelos padrão e de fallback em [Modos e
 </Tip>
 
 <Note>
-  Em **Code review → Routing** (o botão **Configure routing** em **AI providers**), defina o Synthetic como **Default model** e um modelo da OpenAI ou Anthropic como **Fallback model**. Quando o Synthetic falha, por exemplo quando seus créditos acabam, o Kodus executa a chamada novamente no fallback.
+  Em **Code review → Routing** (o botão **Configure routing** em **AI providers**), defina o Synthetic como **Default model** e um modelo da OpenAI ou Anthropic como **Fallback model**. Quando o Synthetic falha, por exemplo quando seus créditos acabam, a Kodus executa a chamada novamente no fallback.
 </Note>
 
 ### Opção 2 — Self-hosted (variáveis de ambiente)

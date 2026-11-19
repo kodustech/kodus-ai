@@ -4,7 +4,7 @@ description: "O que o heartbeat do self-hosted envia, por que coletamos e como d
 icon: "satellite-dish"
 ---
 
-Cada instância self-hosted do Kodus envia **um heartbeat anônimo por dia** para
+Cada instância self-hosted da Kodus envia **um heartbeat anônimo por dia** para
 `https://telemetry.kodus.io`. O payload contém apenas contadores agregados e
 metadados de runtime — nunca código, identidades ou qualquer coisa que possa
 levar até você ou seus usuários. O `worker` de code review o envia, às 03:17 UTC.
@@ -78,7 +78,7 @@ por acidente.
 Heartbeats anônimos nos permitem responder perguntas que, de outra forma, não conseguiríamos
 responder sobre os usuários self-hosted:
 
-- Quais versões do Kodus ainda estão em uso e com que rapidez as novas releases
+- Quais versões da Kodus ainda estão em uso e com que rapidez as novas releases
   são adotadas
 - Como os operadores fazem o deploy (Docker / Kubernetes / bare metal), para que possamos priorizar
   as plataformas que as pessoas realmente usam
@@ -100,7 +100,7 @@ com um `.env` que aponte para o seu PostgreSQL e o seu MongoDB:
 pnpm run telemetry:preview
 ```
 
-Isso inicia um contexto mínimo do Kodus, roda o mesmo coletor que o cron usa
+Isso inicia um contexto mínimo da Kodus, roda o mesmo coletor que o cron usa
 e imprime o JSON em stdout. Passe por um pipe no `jq` para explorar:
 
 ```bash

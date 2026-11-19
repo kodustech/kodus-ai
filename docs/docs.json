@@ -816,7 +816,7 @@
                                         ]
                                     },
                                     {
-                                        "group": "Regras do Kody",
+                                        "group": "Regras da Kody",
                                         "pages": [
                                             "pt-BR/how_to_use/code_review/configs/kody_rules",
                                             "pt-BR/how_to_use/code_review/configs/rules_library",

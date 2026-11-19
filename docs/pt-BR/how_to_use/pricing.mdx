@@ -3,10 +3,10 @@ title: "Planos e Licenças"
 description: "Os planos Free, Teams e Enterprise, o que o teste gratuito inclui, o que cada plano libera e como funcionam as licenças de desenvolvedor."
 ---
 
-Os planos diferem por funcionalidades, não pela quantidade de pull requests que o Kody pode revisar. Para preços e condições comerciais, veja [kodus.io/pricing](https://kodus.io/pricing).
+Os planos diferem por funcionalidades, não pela quantidade de pull requests que a Kody pode revisar. Para preços e condições comerciais, veja [kodus.io/pricing](https://kodus.io/pricing).
 
 <Note>
-  **Reviews de PR e membros do workspace são ilimitados em todos os planos.** Em um plano pago, as licenças de desenvolvedor decidem de quem são os pull requests revisados. No Free e no Teams, os reviews rodam na sua própria chave de IA (BYOK). O Kody pula o review quando há mais de **2.000 arquivos revisáveis**, contando os arquivos que só um custom agent revisa.
+  **Reviews de PR e membros do workspace são ilimitados em todos os planos.** Em um plano pago, as licenças de desenvolvedor decidem de quem são os pull requests revisados. No Free e no Teams, os reviews rodam na sua própria chave de IA (BYOK). A Kody pula o review quando há mais de **2.000 arquivos revisáveis**, contando os arquivos que só um custom agent revisa.
 </Note>
 
 ## Planos
@@ -23,28 +23,28 @@ Os planos diferem por funcionalidades, não pela quantidade de pull requests que
   </Card>
 </CardGroup>
 
-Uma instância self-hosted sem license key roda a **Community Edition**, que tem os mesmos limites do Free. O Teams é um plano cloud. Para liberar o Enterprise em uma instância self-hosted, cole a chave que você recebeu do Kodus em **Subscription → Activate a license key**. Quando a chave expira, as funcionalidades Enterprise são desativadas até você colar uma renovada.
+Uma instância self-hosted sem license key roda a **Community Edition**, que tem os mesmos limites do Free. O Teams é um plano cloud. Para liberar o Enterprise em uma instância self-hosted, cole a chave que você recebeu da Kodus em **Subscription → Activate a license key**. Quando a chave expira, as funcionalidades Enterprise são desativadas até você colar uma renovada.
 
 Em **Subscription**, **Choose a plan** (**Upgrade** no plano Free) abre o seletor de planos. Em um plano pago, **Manage billing** abre o Stripe, onde você altera as licenças de desenvolvedor e os dados de pagamento.
 
 ## O teste gratuito
 
-Um novo workspace no Kodus Cloud começa com **14 dias de trial**. O acesso aos recursos e a quantidade de reviews pagos pelo Kodus são independentes.
+Um novo workspace na Kodus Cloud começa com **14 dias de trial**. O acesso aos recursos e a quantidade de reviews pagos pela Kodus são independentes.
 
 <CardGroup cols={2}>
   <Card title="14 dias de acesso" icon="calendar">
     O trial inclui os recursos do Teams e acesso ao SSO e aos logs de atividade do Enterprise. Nesse período, as fontes de regras globais podem importar até cinco regras no total.
   </Card>
   <Card title="Seus primeiros 5 reviews de PR por nossa conta" icon="gift">
-    O Kodus cobre os tokens de IA, para você experimentar o Kody sem uma chave de API. Os reviews do trial rodam em modelos eficientes fornecidos pelo Kodus. Conecte a sua própria chave para usar modelos maiores.
+    A Kodus cobre os tokens de IA, para você experimentar a Kody sem uma chave de API. Os reviews do trial rodam em modelos eficientes fornecidos pela Kodus. Conecte a sua própria chave para usar modelos maiores.
   </Card>
 </CardGroup>
 
-**Subscription** mostra como ganhar mais reviews de trial: cadastre-se com um e-mail corporativo, convide colegas ou conecte uma organização Git com 10 ou mais desenvolvedores. **Request review** pede ao Kodus para olhar o seu trial e estendê-lo.
+**Subscription** mostra como ganhar mais reviews de trial: cadastre-se com um e-mail corporativo, convide colegas ou conecte uma organização Git com 10 ou mais desenvolvedores. **Request review** pede à Kodus para olhar o seu trial e estendê-lo.
 
-Para continuar revisando depois dos reviews de trial, conecte a sua chave de IA em [**AI providers**](/pt-BR/how_to_use/byok). Os reviews passam a rodar na sua chave, sem limite de reviews, em qualquer plano, mesmo depois que os 14 dias terminam. Quando os reviews de trial acabam antes de você conectar uma chave, o Kody pausa os reviews e, com **Show status feedback** ativado, posta um comentário no pull request com um link para adicionar uma. Quando o trial termina, escolha um plano em **Subscription** para manter as funcionalidades do Team.
+Para continuar revisando depois dos reviews de trial, conecte a sua chave de IA em [**AI providers**](/pt-BR/how_to_use/byok). Os reviews passam a rodar na sua chave, sem limite de reviews, em qualquer plano, mesmo depois que os 14 dias terminam. Quando os reviews de trial acabam antes de você conectar uma chave, a Kody pausa os reviews e, com **Show status feedback** ativado, posta um comentário no pull request com um link para adicionar uma. Quando o trial termina, escolha um plano em **Subscription** para manter as funcionalidades do Team.
 
-Em uma instância self-hosted sem chave, **Request a trial** em **Subscription** pede ao Kodus uma license key para testar.
+Em uma instância self-hosted sem chave, **Request a trial** em **Subscription** pede à Kodus uma license key para testar.
 
 ## O que cada plano libera
 
@@ -70,7 +70,7 @@ As regras acima do limite aparecem como **Locked** e ficam fora dos reviews. Ela
 
 ## Licenças de desenvolvedor
 
-Em um plano pago com seats, os pull requests de um desenvolvedor são revisados quando ele tem uma licença. As licenças contam desenvolvedores da sua organização Git. Os membros do workspace, as pessoas que configuram o Kodus, são separados e ilimitados.
+Em um plano pago com seats, os pull requests de um desenvolvedor são revisados quando ele tem uma licença. As licenças contam desenvolvedores da sua organização Git. Os membros do workspace, as pessoas que configuram a Kodus, são separados e ilimitados.
 
 - Os Owners atribuem ou liberam licenças na aba **PR licenses** de **Subscription**.
 - Com **Auto-assign licenses** ativado, o primeiro PR de um desenvolvedor é revisado sem um seat, e um seat é atribuído quando ele abre outro, se houver um livre. Veja [Atribuição Automática de Licença](/pt-BR/how_to_use/auto_license_assignment).
@@ -78,7 +78,7 @@ Em um plano pago com seats, os pull requests de um desenvolvedor são revisados 
 
 ## BYOK em todos os planos
 
-Você conecta o seu próprio provider, e o provider cobra você pelos tokens. No Enterprise, o Kodus pode, em vez disso, rodar os modelos sob o seu contrato. Veja [BYOK](/pt-BR/how_to_use/byok) para os providers e a configuração, e [Limite de Gasto Mensal](/pt-BR/how_to_use/spend-limit) para os alertas de gasto.
+Você conecta o seu próprio provider, e o provider cobra você pelos tokens. No Enterprise, a Kodus pode, em vez disso, rodar os modelos sob o seu contrato. Veja [BYOK](/pt-BR/how_to_use/byok) para os providers e a configuração, e [Limite de Gasto Mensal](/pt-BR/how_to_use/spend-limit) para os alertas de gasto.
 
 ## Pagamentos
 

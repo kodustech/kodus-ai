@@ -1,6 +1,6 @@
 ---
 title: "Guia de Solução de Problemas"
-description: "Resolva problemas comuns com o Kodus."
+description: "Resolva problemas comuns com a Kodus."
 icon: "headset"
 ---
 
@@ -155,7 +155,7 @@ docker compose restart rabbitmq
 
 - `QueueBind 404` nos logs da api ou dos webhooks significa que o worker nunca criou as filas `workflow.jobs.*`. Verifique se o worker está em execução e se `WORKER_ROLE` está definido.
 - Erros de conexão geralmente significam que `API_RABBITMQ_URI` não corresponde a `RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS` ou ao virtual host `kodus-ai`.
-- `PRECONDITION_FAILED` em um review longo significa que o `consumer_timeout` do broker está abaixo de 2 horas. A imagem RabbitMQ do Kodus já define esse valor; defina `consumer_timeout = 7200000` no seu próprio broker.
+- `PRECONDITION_FAILED` em um review longo significa que o `consumer_timeout` do broker está abaixo de 2 horas. A imagem RabbitMQ da Kodus já define esse valor; defina `consumer_timeout = 7200000` no seu próprio broker.
 
 ### Problemas de Recursos
 
@@ -182,7 +182,7 @@ docker inspect $(docker compose ps -q api) | grep -A 5 "Resources"
 - A mensagem de erro exata
 - A saída de `./scripts/doctor.sh` (no Kubernetes, `./scripts/collect-diagnostics.sh -n <namespace>`)
 - Logs relevantes dos serviços afetados
-- Seu método de implantação (Docker Compose, Kubernetes, OpenShift) e a versão do Kodus
+- Seu método de implantação (Docker Compose, Kubernetes, OpenShift) e a versão da Kodus
 - Passos para reproduzir o problema
 
 ### Onde Obter Ajuda

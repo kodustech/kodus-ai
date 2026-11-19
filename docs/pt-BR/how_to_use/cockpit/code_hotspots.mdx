@@ -10,13 +10,13 @@ import { FeatureBadge } from "/snippets/feature-badge.jsx";
   <FeatureBadge id="providers" detail="Code hotspots analisa repositórios conectados pelo GitHub ou GitLab.">
     <Badge icon="code-branch" stroke>GitHub e GitLab</Badge>
   </FeatureBadge>
-  <FeatureBadge id="cloud" detail="Disponível no Kodus Cloud, incluindo o trial.">
+  <FeatureBadge id="cloud" detail="Disponível na Kodus Cloud, incluindo o trial.">
     <Badge icon="cloud" stroke>Teams e Enterprise</Badge>
   </FeatureBadge>
   <FeatureBadge id="self-hosted" detail="Requer uma licença Enterprise e BETA_FEATURES=true.">
     <Badge icon="server" stroke>Self-hosted</Badge>
   </FeatureBadge>
-  <FeatureBadge id="beta" detail="O workspace no Kodus Cloud precisa ter acesso a este beta.">
+  <FeatureBadge id="beta" detail="O workspace na Kodus Cloud precisa ter acesso a este beta.">
     <Badge icon="flask" color="orange" stroke>Beta</Badge>
   </FeatureBadge>
 </div>
@@ -46,7 +46,7 @@ Selecione um card para abrir **Area detail**: **Changed PRs**, **JS/TS files che
 
 - **Histórico:** pull requests mergeados. A primeira varredura cobre os 30 dias anteriores, e novos pull requests mergeados a estendem, até um ano. Quando uma semana tem 100 ou mais pull requests, ou alguns não puderam ser lidos por completo, a aba mostra **Sampled history (up to 100 PRs per week)**.
 - **Atualização:** um job em segundo plano roda a cada duas horas. Até a primeira varredura de um repositório terminar, a aba mostra **History scan in progress**.
-- **Funções:** o Kodus lê até 60 arquivos JavaScript e TypeScript da branch padrão, no máximo três por diretório, os mais alterados primeiro. Ele ignora arquivos com mais de 150.000 caracteres e arquivos com erros de sintaxe. Uma função é sinalizada com 80 ou mais linhas, 12 ou mais ramificações, ou aninhamento de 4 ou mais níveis.
+- **Funções:** a Kodus lê até 60 arquivos JavaScript e TypeScript da branch padrão, no máximo três por diretório, os mais alterados primeiro. Ele ignora arquivos com mais de 150.000 caracteres e arquivos com erros de sintaxe. Uma função é sinalizada com 80 ou mais linhas, 12 ou mais ramificações, ou aninhamento de 4 ou mais níveis.
 - **Correções vinculadas:** pull requests que alteraram o diretório e cuja descrição fecha uma issue do mesmo repositório (por exemplo `fixes #123`) com label bug, defect ou regression. Elas acrescentam histórico. Não mostram onde um defeito começou nem preveem bugs futuros.
 
 **How this view is calculated**, na parte inferior da aba, mostra as contagens do repositório selecionado.

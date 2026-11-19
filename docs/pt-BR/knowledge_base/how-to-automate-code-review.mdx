@@ -5,9 +5,11 @@ description: "Configure uma revisão de código com IA que roda automaticamente 
 
 Revisões de código manuais criam gargalos. Revisores trocam de contexto, PRs se acumulam e a qualidade do feedback varia. A revisão de código com IA roda instantaneamente em cada PR, identificando problemas antes mesmo de um revisor humano olhar o código.
 
-## Como o Kodus automatiza a revisão de código
+<span id="como-o-kodus-automatiza-a-revisão-de-código" aria-hidden="true" />
 
-Depois de conectado, o Kodus revisa automaticamente cada pull request. Ele analisa o código em busca de vulnerabilidades de segurança, problemas de performance, tratamento de erros, manutenibilidade e das suas regras personalizadas — e então posta comentários diretamente no PR.
+## Como a Kodus automatiza a revisão de código
+
+Depois de conectada, a Kodus revisa automaticamente cada pull request. Ela analisa o código em busca de vulnerabilidades de segurança, problemas de performance, tratamento de erros, manutenibilidade e das suas regras personalizadas — e então posta comentários diretamente no PR.
 
 ### Plataformas suportadas
 
@@ -19,7 +21,7 @@ Depois de conectado, o Kodus revisa automaticamente cada pull request. Ele anali
 
 ### O que é analisado
 
-Por padrão, o Kodus verifica as categorias que você pode ativar ou desativar em **Code review → What to review**, além das suas próprias regras:
+Por padrão, a Kodus verifica as categorias que você pode ativar ou desativar em **Code review → What to review**, além das suas próprias regras:
 - Problemas de segurança (SQL injection, XSS, segredos hardcoded)
 - Problemas de performance (queries N+1, índices ausentes)
 - Bugs em potencial (ponteiros nulos, vazamentos de recursos, lacunas no tratamento de erros)
@@ -40,14 +42,14 @@ Você também pode rodar uma revisão sob demanda em qualquer PR com `@kody star
 
 ### O que acontece depois da revisão
 
-O Kody também pode aprovar PRs sem problemas (veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve)) e solicitar mudanças em problemas críticos (veja [Política de revisão](/pt-BR/how_to_use/code_review/policy)). Ambos vêm desativados por padrão. O Kodus nunca faz merge de um PR.
+A Kody também pode aprovar PRs sem problemas (veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve)) e solicitar mudanças em problemas críticos (veja [Política de revisão](/pt-BR/how_to_use/code_review/policy)). Ambos vêm desativados por padrão. A Kodus nunca faz merge de um PR.
 
 ## Como começar
 
-1. Crie um workspace em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
+1. Crie um workspace em [kodus.io](https://kodus.io) ou [hospede a Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
 2. Conecte seu provedor Git (GitHub, GitLab, Bitbucket, Azure DevOps ou Forgejo)
 3. Selecione quais repositórios monitorar
-4. Abra um PR — o Kodus o revisa automaticamente
+4. Abra um PR — a Kodus o revisa automaticamente
 
 Para a configuração específica de cada plataforma, consulte:
 - [Configuração do GitHub](/pt-BR/knowledge_base/how-to-set-up-ai-code-review-on-github)

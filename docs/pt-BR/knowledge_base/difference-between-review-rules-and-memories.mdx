@@ -1,18 +1,18 @@
 ---
 title: "Qual é a diferença entre Regras de Revisão e Memórias"
-description: "Entenda quando usar Regras de Revisão ou Memórias no Kody para obter os melhores resultados de revisão de código."
+description: "Entenda quando usar Regras de Revisão ou Memórias na Kody para obter os melhores resultados de revisão de código."
 ---
 
 Na interface de Kody Rules, você configura duas coisas diferentes, e saber quando usar cada uma torna suas revisões de código mais eficazes.
 
 Uma regra prática:
 
-- **Memórias** ensinam ao Kody como seu codebase funciona para que futuras revisões e sugestões sejam mais relevantes.
-- **Regras de Revisão** dizem ao Kody o que sinalizar quando um PR não bate com seus padrões.
+- **Memórias** ensinam à Kody como seu codebase funciona para que futuras revisões e sugestões sejam mais relevantes.
+- **Regras de Revisão** dizem à Kody o que sinalizar quando um PR não bate com seus padrões.
 
 ## Regras de Revisão
 
-Regras de Revisão são **verificações** que rodam durante o code review. Cada regra é aplicada ao diff de um arquivo ou ao PR inteiro, e o Kody reporta uma sugestão quando a mudança a quebra.
+Regras de Revisão são **verificações** que rodam durante o code review. Cada regra é aplicada ao diff de um arquivo ou ao PR inteiro, e a Kody reporta uma sugestão quando a mudança a quebra.
 
 **Melhores para:**
 - Limites de arquitetura ("a camada de domínio não deve importar infraestrutura")
@@ -29,7 +29,7 @@ Regras de Revisão são **verificações** que rodam durante o code review. Cada
 
 ## Memórias
 
-Memórias são **instruções contextuais persistentes** que o Kody usa em code reviews e em conversas com o Kody. Elas representam o conhecimento de contexto que o Kody deve carregar sobre seu codebase, suas convenções e suas preferências.
+Memórias são **instruções contextuais persistentes** que a Kody usa em code reviews e em conversas com a Kody. Elas representam o conhecimento de contexto que a Kody deve carregar sobre seu codebase, suas convenções e suas preferências.
 
 **Melhores para:**
 - Contexto do codebase ("este repositório espelha uma API de terceiros, então alguns campos externos permanecem intencionalmente em snake_case")
@@ -39,10 +39,10 @@ Memórias são **instruções contextuais persistentes** que o Kody usa em code 
 
 **Como funcionam:**
 - Adicionadas como contexto de alta prioridade em code reviews e conversas
-- Melhoram sugestões futuras ao dar ao Kody contexto específico do repositório
+- Melhoram sugestões futuras ao dar à Kody contexto específico do repositório
 - Criadas via conversa (`@kody remember: ...`) ou manualmente com **New memory** na aba **Memories** de **Code review → Kody Rules**
 - Com escopo de diretório, repositório ou organização
-- O Kody confere as memórias existentes antes de salvar uma nova, e ignora duplicatas ou atualiza a memória existente
+- A Kody confere as memórias existentes antes de salvar uma nova, e ignora duplicatas ou atualiza a memória existente
 
 ## Quando usar cada uma
 

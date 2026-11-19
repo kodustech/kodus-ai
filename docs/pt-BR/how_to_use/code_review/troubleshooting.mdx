@@ -3,20 +3,20 @@ title: "Solução de Problemas"
 description: "Descubra por que uma revisão não rodou, falhou ou saiu diferente do esperado."
 ---
 
-## Sem Resposta ou Sem Comentários do Kody
+## Sem Resposta ou Sem Comentários da Kody
 
-Comece pela reação no PR. 👀 significa que o Kody pulou o review, 😕 significa que ele falhou e 🎉 significa que ele terminou (um review limpo não posta comentários inline). No GitHub (GitHub App) e no Forgejo, o check **Kody Code Review** mostra o motivo de um skip. [Quando o Kody pula](/pt-BR/how_to_use/code_review/flow#quando-o-kody-pula) lista todos os motivos e a correção de cada um.
+Comece pela reação no PR. 👀 significa que a Kody pulou o review, 😕 significa que a revisão falhou e 🎉 significa que ela terminou (um review limpo não posta comentários inline). No GitHub (GitHub App) e no Forgejo, o check **Kody Code Review** mostra o motivo de um skip. [Quando a Kody pula](/pt-BR/how_to_use/code_review/flow#quando-a-kody-pula) lista todos os motivos e a correção de cada um.
 
 ### Quando uma revisão automática não começa
 
 1. Confirme se o repositório está selecionado em **Repositories** ou incluído em **Review every repository**.
 2. Confira se o provedor Git entregou o evento do PR. [Diagnostique a entrega do webhook](/pt-BR/knowledge_base/how-to-fix-webhook-issues).
 3. Abra **Code review → General** no escopo do repositório e confira **Automated code review**. Se o repositório usa [kodus-config.yml](/pt-BR/how_to_use/code_review/configs/general#kodus-config-yml), confira `automatedReviewActive` no arquivo.
-4. Para pedir uma revisão agora, comente `@kody start-review` no PR. Se o Kody ainda pular a revisão, [veja o motivo que ele registrou](/pt-BR/how_to_use/code_review/flow#quando-o-kody-pula).
+4. Para pedir uma revisão agora, comente `@kody start-review` no PR. Se a Kody ainda pular a revisão, [veja o motivo que ela registrou](/pt-BR/how_to_use/code_review/flow#quando-a-kody-pula).
 
 ### A revisão terminou sem sugestões
 
-Certifique-se de que pelo menos uma categoria (Bug, Performance, Security, Business Logic) está ativada para o Kody fornecer sugestões, e confira o **Minimum severity to post**. Ambos ficam em **Code review → What to review** ([abrir](https://app.kodus.io/settings/code-review/global/review-scope)).
+Certifique-se de que pelo menos uma categoria (Bug, Performance, Security, Business Logic) está ativada para a Kody fornecer sugestões, e confira o **Minimum severity to post**. Ambos ficam em **Code review → What to review** ([abrir](https://app.kodus.io/settings/code-review/global/review-scope)).
 
 ## Revisões pararam depois de um push
 
@@ -34,14 +34,14 @@ Confira as configurações do repositório ou diretório no seletor de escopo em
 
 `kodus-config.yml` só vale quando **Prefer kodus-config.yml settings** está ativado em **Code review → General** para aquele repositório. Um badge sob o seletor de escopo mostra se o arquivo foi aplicado, não foi encontrado ou está indisponível.
 
-## O Kody diz que já está revisando este PR
+## A Kody diz que já está revisando este PR
 
-Um comando de review (`@kody review`, `@kody -v …`) enviado enquanto outro review roda no mesmo PR espera e começa quando o review atual termina. Se esse review ainda estiver rodando quando o Kody parar de esperar (cerca de 25 minutos no máximo), o Kody comenta "Kody is already reviewing this PR" e não inicia o comando. Espere o review terminar e peça de novo.
+Um comando de review (`@kody review`, `@kody -v …`) enviado enquanto outro review roda no mesmo PR espera e começa quando o review atual termina. Se esse review ainda estiver rodando quando a Kody parar de esperar (cerca de 25 minutos no máximo), a Kody comenta "Kody is already reviewing this PR" e não inicia o comando. Espere o review terminar e peça de novo.
 
-## A merge queue remove PRs enquanto espera o Kody Code Review
+## A merge queue remove PRs enquanto espera o check Kody Code Review
 
-No GitHub, quando `Kody Code Review` é um check obrigatório e um PR entra na merge queue, o Kody reporta o resultado do último review concluído do PR no commit que a fila testa. Nenhum novo review roda. Isso exige o Kody conectado pelo GitHub App; com um personal access token o Kody não posta checks.
+No GitHub, quando `Kody Code Review` é um check obrigatório e um PR entra na merge queue, a Kody reporta o resultado do último review concluído do PR no commit que a fila testa. Nenhum novo review roda. Isso exige a Kody conectada pelo GitHub App; com um personal access token a Kody não posta checks.
 
-O check significa que o Kody revisou o PR, não que o PR está livre de problemas. Ele passa mesmo com sugestões críticas ainda em aberto, e no PR só falha quando o review em si não pôde rodar. Exigi-lo garante que um review aconteceu; ele não bloqueia um merge pelos apontamentos do Kody.
+O check significa que a Kody revisou o PR, não que o PR está livre de problemas. Ele passa mesmo com sugestões críticas ainda em aberto, e no PR só falha quando o review em si não pôde rodar. Exigi-lo garante que um review aconteceu; ele não bloqueia um merge pelos apontamentos da Kody.
 
-Se o último commit do PR não tem um review concluído do Kody quando ele entra na fila (por exemplo, porque um admin ignorou o check obrigatório), o check falha na hora com **No finished Kody review** e a fila remove o PR. Comente `@kody start-review` no PR, deixe o review terminar e adicione-o à fila de novo. **Could not carry Kody's review** significa que o GitHub não devolveu o resultado do review; adicione o PR à fila de novo.
+Se o último commit do PR não tem um review concluído da Kody quando ele entra na fila (por exemplo, porque um admin ignorou o check obrigatório), o check falha na hora com **No finished Kody review** e a fila remove o PR. Comente `@kody start-review` no PR, deixe o review terminar e adicione-o à fila de novo. **Could not carry Kody's review** significa que o GitHub não devolveu o resultado do review; adicione o PR à fila de novo.

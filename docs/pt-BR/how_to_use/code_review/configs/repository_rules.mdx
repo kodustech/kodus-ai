@@ -9,13 +9,13 @@ As Regras do Repositório estão sempre sincronizadas: não há configuração p
 
 ## Como funciona
 
-Coloque no seu repositório um arquivo markdown com o template abaixo. O Kody o importa como uma regra, e a regra acompanha o arquivo: edite o arquivo e a regra muda, apague-o e a regra é removida.
+Coloque no seu repositório um arquivo markdown com o template abaixo. A Kody o importa como uma regra, e a regra acompanha o arquivo: edite o arquivo e a regra muda, apague-o e a regra é removida.
 
 Os arquivos são importados **verbatim**, sem conversão por LLM. O frontmatter é lido como está escrito, o corpo markdown vira as instruções da regra exatamente como você escreveu, e os exemplos Bad e Good são importados do corpo. Cada arquivo produz uma regra.
 
 - **Automático:** os arquivos de regras são sincronizados em todo repositório conectado.
 - **No merge:** quando um pull request que adiciona, altera, renomeia ou remove um arquivo de regra é mesclado, a regra é criada, atualizada ou removida. Pull requests em um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config) não são sincronizados.
-- **Importar agora:** para arquivos que já estão no repositório, abra **Code review → Kody Rules → Configuration** do repositório e clique em **Import rule files now**. Ele lê todos os arquivos de regras da branch padrão.
+- **Importar agora:** para arquivos que já estão no repositório, abra **Code review → Kody Rules → Configuration** do repositório e clique em **Import rule files now**. A Kody lê todos os arquivos de regras da branch padrão.
 - **No app:** as regras sincronizadas aparecem na página **Kody Rules** do repositório com a origem **Auto-sync** e o caminho do arquivo como fonte.
 
 Novas regras entram ativas, ou ficam em **Pending review** quando **Kody knowledge approval** está ativado.

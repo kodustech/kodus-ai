@@ -1,13 +1,13 @@
 ---
 title: "Política de revisão"
-description: "Como interpretar o feedback do Kody e como ele interage com as suas políticas de merge: o que bloqueia um PR, o que não bloqueia e quem decide."
+description: "Como interpretar o feedback da Kody e como ela interage com as suas políticas de merge: o que bloqueia um PR, o que não bloqueia e quem decide."
 ---
 
 ## Sugestões vs. bloqueio
 
-- **Sugestões:** por padrão, o Kody posta comentários que não bloqueiam o PR. Você decide quais aplicar.
-- **Request changes em problemas críticos (opcional):** quando o Kody encontra um problema crítico, ele define o seu review no PR como Request Changes. Só apontamentos críticos fazem isso. O Kody retira o pedido quando esses apontamentos são resolvidos, mesmo em um PR que ele não aprova. Essa configuração fica em **Code review → General → Review feedback**. Ela não está disponível quando o GitLab é o seu único provider conectado.
-- **Aprovação automática de PR (opcional):** quando um review está limpo, o Kody aprova o PR. Ele nunca faz o merge. Com políticas de aprovação, só os PRs que casam com uma política são aprovados. Veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve).
+- **Sugestões:** por padrão, a Kody posta comentários que não bloqueiam o PR. Você decide quais aplicar.
+- **Request changes em problemas críticos (opcional):** quando a Kody encontra um problema crítico, ela define o seu review no PR como Request Changes. Só apontamentos críticos fazem isso. A Kody retira o pedido quando esses apontamentos são resolvidos, mesmo em um PR que ela não aprova. Essa configuração fica em **Code review → General → Review feedback**. Ela não está disponível quando o GitLab é o seu único provider conectado.
+- **Aprovação automática de PR (opcional):** quando um review está limpo, a Kody aprova o PR. Ela nunca faz o merge. Com políticas de aprovação, só os PRs que casam com uma política são aprovados. Veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve).
 
 <Note>
   Ative o comportamento de bloqueio apenas quando o seu time concordar com os limites e tiver um CI sólido.
@@ -15,9 +15,9 @@ description: "Como interpretar o feedback do Kody e como ele interage com as sua
 
 ## O que não bloqueia
 
-- **O check Kody Code Review** (GitHub App e Forgejo) informa que um review rodou. Ele passa com sugestões em aberto e só falha quando o review em si não pôde rodar. Um check obrigatório garante que um review aconteceu; ele não bloqueia um merge pelos apontamentos do Kody.
+- **O check Kody Code Review** (GitHub App e Forgejo) informa que um review rodou. Ele passa com sugestões em aberto e só falha quando o review em si não pôde rodar. Um check obrigatório garante que um review aconteceu; ele não bloqueia um merge pelos apontamentos da Kody.
 - **Business Logic** posta um comentário e nenhum check ou status. Veja [Business Logic Validation](/pt-BR/how_to_use/code_review/business_logic_validation).
-- **Risk assessment** e **routing** mudam como o Kody revisa, e se ele pode aprovar. Eles não bloqueiam um merge. Veja [Avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) e [Modos e modelos de revisão](/pt-BR/how_to_use/code_review/configs/routing).
+- **Risk assessment** e **routing** mudam como a Kody revisa, e se ela pode aprovar. Eles não bloqueiam um merge. Veja [Avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) e [Modos e modelos de revisão](/pt-BR/how_to_use/code_review/configs/routing).
 
 ## Quando ativar o Request changes
 
@@ -32,4 +32,4 @@ description: "Como interpretar o feedback do Kody e como ele interage com as sua
 
 ## A decisão humana sempre importa
 
-O Kody acelera o feedback, mas não substitui o julgamento humano. O seu time decide quais sugestões adotar e quando fazer o merge.
+A Kody acelera o feedback, mas não substitui o julgamento humano. O seu time decide quais sugestões adotar e quando fazer o merge.

@@ -3,7 +3,7 @@ title: "Kody Issues"
 description: "Rastreie e gerencie sugestões não implementadas com o recurso Kody Issues."
 ---
 
-O **Kody Issues** mantém uma lista em tempo real das sugestões que o Kody fez e que **não foram implementadas** quando o pull request delas foi fechado, e as fecha conforme o código muda. Ele funciona sozinho; desative-o com o switch **Auto-create issues**.
+O recurso **Kody Issues** mantém uma lista em tempo real das sugestões que a Kody fez e que **não foram implementadas** quando o pull request delas foi fechado, e as fecha conforme o código muda. Ele funciona sozinho; desative-o com o switch **Auto-create issues**.
 
 Em qualquer plano, incluindo self-hosted sem licença, Owners, Repo Admins e Contributors podem abrir **Issues** pela paleta de comandos ⌘K. A entrada abre a lista mesmo quando aparece com um cadeado e a tag **Teams**.
 
@@ -11,7 +11,7 @@ Quem tem [acesso ao Cockpit](/pt-BR/how_to_use/cockpit/overview) pode abrir a li
 
 A lista mostra **Status**, **Severity**, **Category**, **Title**, **Repository**, **File**, **Age** e **#PR(s)**. Por padrão, ela exibe as issues abertas.
 
-<Frame caption="Painel do Kody Issues mostrando sugestões rastreadas com filtros e gerenciamento de status">
+<Frame caption="Painel da seção Kody Issues mostrando sugestões rastreadas com filtros e gerenciamento de status">
   <img src="/images/issues.png" alt="Kody Issues Dashboard" />
 </Frame>
 
@@ -26,9 +26,9 @@ Para consultar issues pelo terminal, veja a disponibilidade e os filtros de [`ko
   nem durante a revisão. No GitLab e no Azure Repos, só conta um PR com merge.
 </Note>
 
-- Quando um PR é fechado, o Kody pega as sugestões que fez naquele PR e que não foram implementadas e cria uma **Issue** para cada uma, vinculada ao repositório. Cada issue guarda a explicação original, o arquivo, a severidade e a categoria.
-- Se uma issue aberta no mesmo arquivo já cobre o mesmo problema, o Kody adiciona a nova sugestão a ela em vez de criar uma duplicata. **#PR(s)** lista todos os PRs que contribuíram.
-- Isso inclui sugestões que o Kody não postou por estarem abaixo da severidade mínima ou acima de um limite de comentários. Sugestões que o Kody descartou por estarem erradas, por serem repetidas ou porque a categoria delas está desativada não viram issues.
+- Quando um PR é fechado, a Kody pega as sugestões que fez naquele PR e que não foram implementadas e cria uma **Issue** para cada uma, vinculada ao repositório. Cada issue guarda a explicação original, o arquivo, a severidade e a categoria.
+- Se uma issue aberta no mesmo arquivo já cobre o mesmo problema, a Kody adiciona a nova sugestão a ela em vez de criar uma duplicata. **#PR(s)** lista todos os PRs que contribuíram.
+- Isso inclui sugestões que a Kody não postou por estarem abaixo da severidade mínima ou acima de um limite de comentários. Sugestões que a Kody descartou por estarem erradas, por serem repetidas ou porque a categoria delas está desativada não viram issues.
 
 <Warning>
   Kody Rules **Per PR** não geram issues. Apenas sugestões no nível de arquivo criam issues rastreáveis.
@@ -36,7 +36,7 @@ Para consultar issues pelo terminal, veja a disponibilidade e os filtros de [`ko
 
 ## Como as issues são resolvidas
 
-Cada vez que um PR é fechado, o Kody confere as issues abertas nos arquivos que aquele PR alterou com o código atual:
+Cada vez que um PR é fechado, a Kody confere as issues abertas nos arquivos que aquele PR alterou com o código atual:
 
 - Se o código não tem mais o problema, a issue passa para **Resolved**.
 - Se o arquivo foi excluído, a issue passa para **Dismissed**.
@@ -50,8 +50,8 @@ Clique em uma linha para abrir o painel de detalhes da issue, com os links do re
 ### Status
 
 - **Open**: precisa de atenção.
-- **Resolved**: definido pelo Kody quando o problema sumiu do código.
-- **Dismissed**: não relevante. Defina manualmente quando uma sugestão não se aplica ao seu time; o Kody também define quando o arquivo é excluído.
+- **Resolved**: definido pela Kody quando o problema sumiu do código.
+- **Dismissed**: não relevante. Defina manualmente quando uma sugestão não se aplica ao seu time; a Kody também define quando o arquivo é excluído.
 
 Altere o status no seletor no topo do painel de detalhes.
 

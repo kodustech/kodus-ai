@@ -5,7 +5,7 @@ description: "Quais modelos de IA processam o seu código, quem detém a relaç�
 
 ## Qual modelo revisa o seu código
 
-Não existe um modelo fixo. **O Kodus roda em Bring Your Own Key (BYOK) por padrão em todos os
+Não existe um modelo fixo. **A Kodus roda em Bring Your Own Key (BYOK) por padrão em todos os
 planos**, o que significa que o modelo — e a relação com o provedor por trás dele — normalmente
 é seu, não nosso.
 
@@ -20,12 +20,12 @@ Existem quatro caminhos, e qual deles se aplica muda com quem está o seu acordo
 | --- | --- | --- |
 | **BYOK** (padrão, todos os planos) | **Você.** Sua chave, seu faturamento, seu contrato com o provedor. | O que você configurar: um modelo frontier, um modelo especializado em código, ou um endpoint self-hosted ou compatível. |
 | **Self-hosted com variáveis de ambiente de LLM** | **Você.** O dono da instância define o provedor e a chave no ambiente do servidor. | O modelo nomeado no ambiente. A página **AI providers** o mostra, sem a chave. |
-| **Trial, sem chave conectada** | Kodus, pelos reviews incluídos no trial. | Modelos que o Kodus fornece para o trial. |
-| **Enterprise com uma chave gerenciada pelo Kodus** | Kodus, sob o seu contrato Enterprise. | Modelos selecionados pelo Kodus. |
+| **Trial, sem chave conectada** | Kodus, pelos reviews incluídos no trial. | Modelos que a Kodus fornece para o trial. |
+| **Enterprise com uma chave gerenciada pela Kodus** | Kodus, sob o seu contrato Enterprise. | Modelos selecionados pela Kodus. |
 
 ### Classes de provedor suportadas
 
-No BYOK você pode apontar o Kodus para:
+No BYOK você pode apontar a Kodus para:
 
 - **Provedores first-party**: OpenAI, Anthropic e Google (Gemini), pelas APIs próprias deles.
 - **Gateways hospedados em nuvem**: Google Vertex AI, Amazon Bedrock e Azure OpenAI, faturados pela sua
@@ -37,50 +37,52 @@ No BYOK você pode apontar o Kodus para:
 A lista completa e atual, com as instruções de configuração, está em [BYOK](/pt-BR/how_to_use/byok).
 
 <Note>
-  **Um review BYOK nunca cai silenciosamente em um modelo gerenciado pelo Kodus.** Se o modelo
+  **Um review BYOK nunca cai silenciosamente em um modelo gerenciado pela Kodus.** Se o modelo
   que você configurou falhar e você não tiver definido o seu próprio fallback, o review falha —
   não redirecionamos o seu código (nem a sua conta) para a nossa infraestrutura.
 </Note>
 
-## O que o Kodus faz com o seu código
+## O que a Kodus faz com o seu código
 
 - O código é enviado ao provedor do modelo apenas para produzir aquele review, e apenas nas
   partes necessárias: o diff mais o contexto que o review exige.
-- Nada é retido pelo Kodus para treinamento.
+- Nada é retido pela Kodus para treinamento.
 - Os resultados do review (sugestões, metadados) são armazenados para o produto conseguir
   mostrar histórico, evitar repetir sugestões e calcular métricas.
 
 ## O que o provedor faz com o seu código
 
 Esta é a parte que vale ler com atenção, porque **no BYOK isso não é regido pelo seu contrato com
-o Kodus — é regido pelo seu contrato com o provedor.**
+a Kodus — é regido pelo seu contrato com o provedor.**
 
 - A maioria dos tiers comerciais de API declara não treinar com tráfego de API por padrão.
   Confirme isso no plano em que você está de fato: tiers gratuitos/consumer costumam diferir dos
   tiers pagos de API.
 - As janelas de retenção (para monitoramento de abuso, por exemplo) são definidas pelo provedor,
-  não pelo Kodus.
+  não pela Kodus.
 - Se você precisa de uma garantia contratual (retenção zero, uma região específica, um DPA assinado),
   obtenha direto do provedor — ou use um gateway hospedado em nuvem ou um endpoint self-hosted, onde
   esses termos já fazem parte do seu acordo existente.
 
 <Warning>
-  Como quem escolhe o provedor é você, **o Kodus não pode fazer promessas de tratamento de dados
+  Como quem escolhe o provedor é você, **a Kodus não pode fazer promessas de tratamento de dados
   em nome dele.** Se a sua postura de compliance depende de garantias específicas, confirme com o
-  provedor antes de apontar o Kodus para ele.
+  provedor antes de apontar a Kodus para ele.
 </Warning>
 
-## Medidas de segurança do lado do Kodus
+<span id="medidas-de-segurança-do-lado-do-kodus" aria-hidden="true" />
+
+## Medidas de segurança do lado da Kodus
 
 - **Tratamento de chaves**: as suas chaves de provedor e os seus tokens Git são armazenados criptografados, e a sua chave de provedor nunca é exibida de volta em texto claro.
 - **Acesso controlado**: acesso ao workspace baseado em funções — veja
   [Funções do Workspace](/pt-BR/how_to_use/workspace_roles).
 - **Self-hosting**: rode toda a stack na sua própria infraestrutura se você não quiser que o código
-  saia da sua rede. Veja [Deploy do Kodus](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
+  saia da sua rede. Veja [Deploy da Kodus](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
 
 ## Telemetria self-hosted
 
-Se você roda o Kodus self-hosted, cada instância envia um heartbeat anônimo diário
+Se você roda a Kodus self-hosted, cada instância envia um heartbeat anônimo diário
 para `telemetry.kodus.io` com contadores agregados e metadados de runtime — nunca
 código, identidades ou qualquer coisa que possa ser rastreada até os seus usuários.
 Você pode inspecionar o payload exato com `pnpm run telemetry:preview` ou desativá-la

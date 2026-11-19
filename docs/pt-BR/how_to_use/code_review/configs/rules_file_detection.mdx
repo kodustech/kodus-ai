@@ -1,20 +1,22 @@
 ---
 title: "Instruções para agentes de código"
-description: "Deixe o Kody ler as instruções que o seu time escreve para agentes de código (CLAUDE.md, AGENTS.md, .cursor/rules, instruções do Copilot) e apontar mudanças que as quebram, sem transformá-las em Kody Rules."
+description: "Deixe a Kody ler as instruções que o seu time escreve para agentes de código (CLAUDE.md, AGENTS.md, .cursor/rules, instruções do Copilot) e apontar mudanças que as quebram, sem transformá-las em Kody Rules."
 ---
 
-Arquivos como `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` e `.github/copilot-instructions.md` dizem aos agentes de código como o seu time trabalha. Eles não são política de review, então o Kodus nunca os transforma em Kody Rules. Quando você ativa esta configuração, o Kody lê os que cobrem os arquivos alterados por um pull request e aponta mudanças que quebram o que eles dizem.
+Arquivos como `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` e `.github/copilot-instructions.md` dizem aos agentes de código como o seu time trabalha. Eles não são política de review, então a Kodus nunca os transforma em Kody Rules. Quando você ativa esta configuração, a Kody lê os que cobrem os arquivos alterados por um pull request e aponta mudanças que quebram o que eles dizem.
 
 Para transformar uma convenção em uma regra de review aplicada, escreva-a como uma [Regra do Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules) em `.kody/rules`.
 
 ## Como ativar
 
-- **Durante o onboarding**, a etapa **Teach Kody how your team builds software** lista os arquivos de agentes de código encontrados em cada repositório selecionado e pergunta se o Kody deve usá-los. Fica desativado a menos que você ative.
+- **Durante o onboarding**, a etapa **Teach Kody how your team builds software** lista os arquivos de agentes de código encontrados em cada repositório selecionado e pergunta se a Kody deve usá-los. Fica desativado a menos que você ative.
 - **Depois**, escolha **Global** ou um repositório no seletor de escopo no topo do grupo **Code review**, abra **What to review** e ative **Coding-agent instructions**. O valor global é o padrão para todo repositório que não define o próprio.
 
 A configuração é armazenada como `repoInstructionsEnabled` na configuração de code review (e no `kodus-config.yml`).
 
-## Arquivos que o Kody lê
+<span id="arquivos-que-o-kody-lê" aria-hidden="true" />
+
+## Arquivos que a Kody lê
 
 ### Cursor
 - `.cursorrules`
@@ -47,10 +49,10 @@ As skills do Claude (`.claude/skills/**`) também não são lidas: o Claude carr
 - **Lidos a partir da branch de destino do pull request.** Um pull request é verificado contra as instruções já mescladas nela; as mudanças que ele faz nas instruções só valem depois do merge.
 - **Referências são seguidas.** Um arquivo que aponta para outro arquivo do repositório, com uma linha que é só um caminho (`AI-AGENTS.md`) ou um import do Claude Code (`@docs/guide.md`), é seguido na branch de destino: o arquivo apontado é lido no lugar dele, dentro dos mesmos limites. Caminhos fora do repositório são ignorados.
 - **Com limite.** No máximo 8 arquivos e 64 KB por review, com os arquivos mais próximos do código alterado primeiro; um arquivo mais longo é cortado. O review registra em log o que ficou de fora.
-- **Os apontamentos recebem o rótulo Repo Instruction.** O Kody só reporta um quando a instrução se aplica ao arquivo alterado e a linha que a quebra foi adicionada ou modificada pelo pull request. O comentário cita a instrução e nomeia o arquivo.
-- **Os filtros do review valem.** Os apontamentos Repo Instruction passam pelo filtro de severidade e pelos limites de sugestões do time como qualquer outro apontamento; um abaixo do limite não é publicado. A configuração deixa o Kody ler os arquivos, não publicar além desses limites.
+- **Os apontamentos recebem o rótulo Repo Instruction.** A Kody só reporta um quando a instrução se aplica ao arquivo alterado e a linha que a quebra foi adicionada ou modificada pelo pull request. O comentário cita a instrução e nomeia o arquivo.
+- **Os filtros do review valem.** Os apontamentos Repo Instruction passam pelo filtro de severidade e pelos limites de sugestões do time como qualquer outro apontamento; um abaixo do limite não é publicado. A configuração deixa a Kody ler os arquivos, não publicar além desses limites.
 - **Precisa de um agente de review.** Os arquivos são lidos pelos agentes que revisam bugs, segurança e performance, então não têm efeito quando **Bug**, **Security** e **Performance** estão todos desativados e nenhum custom agent está ativado. **What to review** mostra um aviso nesse caso.
-- **Nunca são instruções para o Kody.** Os arquivos são tratados como texto do repositório contra o qual o diff é verificado. Qualquer coisa que peçam ao revisor é ignorada, e eles nunca mudam como bugs, problemas de segurança ou de performance são avaliados.
+- **Nunca são instruções para a Kody.** Os arquivos são tratados como texto do repositório contra o qual o diff é verificado. Qualquer coisa que peçam ao revisor é ignorada, e eles nunca mudam como bugs, problemas de segurança ou de performance são avaliados.
 
 ## Regras importadas de arquivos de agentes de código
 

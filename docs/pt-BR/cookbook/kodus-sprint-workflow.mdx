@@ -8,7 +8,7 @@ icon: "arrows-spin"
 
 Os times rastreiam requisitos no Jira, Linear ou Notion. Os desenvolvedores os implementam em PRs. Mas ninguém verifica sistematicamente se o PR realmente cobre todos os critérios de aceitação — até o QA encontrar lacunas em staging.
 
-Este cookbook fecha esse ciclo com a [Validação de Lógica de Negócio](/pt-BR/how_to_use/code_review/business_logic_validation): o Kody confere cada PR contra a tarefa que ele referencia.
+Este cookbook fecha esse ciclo com a [Validação de Lógica de Negócio](/pt-BR/how_to_use/code_review/business_logic_validation): a Kody confere cada PR contra a tarefa que ele referencia.
 
 ## O fluxo de trabalho
 
@@ -36,7 +36,7 @@ Na barra lateral, abra **Plugins** e conecte sua ferramenta:
 - **Notion**
 - **Git Issues** — para issues no rastreador do próprio repositório
 
-Qualquer outro rastreador funciona por meio de um [plugin personalizado](/pt-BR/cookbook/custom-plugin-install). O Kody só lê tarefas pelo id e nunca escreve no seu rastreador.
+Qualquer outro rastreador funciona por meio de um [plugin personalizado](/pt-BR/cookbook/custom-plugin-install). A Kody só lê tarefas pelo id e nunca escreve no seu rastreador.
 
 ## Passo 2 — Confira se a Business Logic está ativada
 
@@ -49,9 +49,9 @@ reviewOptions:
 
 ## Passo 3 — Escreva bons critérios de aceitação
 
-O quanto o Kody consegue conferir depende da tarefa:
+O quanto a Kody consegue conferir depende da tarefa:
 
-| Tarefa | O que o Kody faz |
+| Tarefa | O que a Kody faz |
 |--------|------------------|
 | Critérios de aceitação: um campo de critérios, um checklist ou uma lista na descrição | Confere cada requisito e cita o arquivo e a linha |
 | Uma descrição, sem lista | Confere o comportamento que a descrição declara |
@@ -75,32 +75,32 @@ Se os seus critérios ficam sob um título ou em um campo personalizado, defina 
 
 ## Passo 4 — Faça o PR citar a tarefa
 
-O Kody procura a tarefa no título do PR, no nome da branch e na descrição, nessa ordem: uma chave como `KC-1292`, `#123`, `AB#123`, ou um link para a tarefa. "Closes KC-1292" confere o PR contra a tarefa inteira. "Part of KC-1292" confere uma fatia e lista o que falta sem tratar como bloqueio.
+A Kody procura a tarefa no título do PR, no nome da branch e na descrição, nessa ordem: uma chave como `KC-1292`, `#123`, `AB#123`, ou um link para a tarefa. "Closes KC-1292" confere o PR contra a tarefa inteira. "Part of KC-1292" confere uma fatia e lista o que falta sem tratar como bloqueio.
 
-Para exigir isso, abra **Code review → What to review → Business Logic** e ative **Ask for a task when the PR references none**. O Kody então comenta perguntando para qual tarefa é o PR. PRs de bots, como o Dependabot, são ignorados.
+Para exigir isso, abra **Code review → What to review → Business Logic** e ative **Ask for a task when the PR references none**. A Kody então comenta perguntando para qual tarefa é o PR. PRs de bots, como o Dependabot, são ignorados.
 
 ## Passo 5 — Reconfira conforme o PR muda
 
-O Kody confere no primeiro review do PR. Depois disso, comente:
+A Kody confere no primeiro review do PR. Depois disso, comente:
 
 ```
 @kody -v business-logic
 ```
 
-O Kody edita o seu único comentário em vez de postar um novo. Para conferir contra uma tarefa específica, adicione o link ou o id dela: `@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292`.
+A Kody edita o seu único comentário em vez de postar um novo. Para conferir contra uma tarefa específica, adicione o link ou o id dela: `@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292`.
 
 Para reconferir sem pedir, defina **Re-check after a push** como **While something is missing**: cada push reconfere até que todos os requisitos sejam atendidos.
 
 ## Passo 6 — Ensine as convenções do time
 
-Nas configurações de Business Logic, **Team guidance** guarda notas que o Kody segue ao julgar:
+Nas configurações de Business Logic, **Team guidance** guarda notas que a Kody segue ao julgar:
 
 ```
 Requirements the ticket marks as out of scope are not missing.
 Feature flags count as implemented when the flag exists and defaults to off.
 ```
 
-Um revisor, e não o autor do PR, também pode aceitar uma lacuna respondendo ao comentário do Kody e mencionando o Kody, por exemplo "@kody Out of scope, moved to SAA-102". O Kody confirma que a tarefa existe e marca o requisito como aceito. Veja [Respondendo ao comentário](/pt-BR/how_to_use/code_review/business_logic_validation#respondendo-ao-comentário) para saber quem pode aceitar.
+Um revisor, e não o autor do PR, também pode aceitar uma lacuna respondendo ao comentário da Kody e mencionando a Kody, por exemplo "@kody Out of scope, moved to SAA-102". A Kody confirma que a tarefa existe e marca o requisito como aceito. Veja [Respondendo ao comentário](/pt-BR/how_to_use/code_review/business_logic_validation#respondendo-ao-comentário) para saber quem pode aceitar.
 
 ## O resultado
 
@@ -115,6 +115,6 @@ O QA encontra menos lacunas, as demos de sprint ficam mais tranquilas, e o "ache
 
 - Incentive o time a escrever critérios de aceitação numerados — eles recebem a melhor validação
 - Rode `@kody -v business-logic` durante o desenvolvimento, não só na hora do review
-- Para entregas faseadas, escreva "Part of KC-1292" na descrição do PR para que o Kody não trate o resto como bloqueio
+- Para entregas faseadas, escreva "Part of KC-1292" na descrição do PR para que a Kody não trate o resto como bloqueio
 
 Para mais detalhes, veja [Validação de Lógica de Negócio](/pt-BR/how_to_use/code_review/business_logic_validation).

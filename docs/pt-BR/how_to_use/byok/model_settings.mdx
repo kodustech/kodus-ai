@@ -16,7 +16,7 @@ O formulário de adicionar modelo expõe um toggle **Thinking / Reasoning** (Off
 
 ### Níveis predefinidos
 
-Quando você escolhe Low / Medium / High, o Kodus traduz o nível automaticamente para o formato nativo de cada provedor:
+Quando você escolhe Low / Medium / High, a Kodus traduz o nível automaticamente para o formato nativo de cada provedor:
 
 | Provedor | O que o nível envia |
 | --- | --- |
@@ -38,14 +38,14 @@ Quando você escolhe Low / Medium / High, o Kodus traduz o nível automaticament
 
 ### Custom JSON override
 
-Escolher **Custom** no toggle **Thinking / Reasoning** revela uma textarea de JSON. Cole as opções do provedor diretamente — **o Kodus as envolve automaticamente no namespace do provedor ativo**. Você não precisa conhecer as regras de roteamento do Vercel AI SDK.
+Escolher **Custom** no toggle **Thinking / Reasoning** revela uma textarea de JSON. Cole as opções do provedor diretamente — **a Kodus as envolve automaticamente no namespace do provedor ativo**. Você não precisa conhecer as regras de roteamento do Vercel AI SDK.
 
 Use quando:
 
 - Você precisa de um valor específico de `budgetTokens` para o Claude (em vez do mapeamento de esforço predefinido)
 - Você quer habilitar/desabilitar thinking por modelo em provedores compatíveis com OpenAI
 - Você quer campos além de reasoning — **caching, service tier, safety settings, tagging de `user` etc.** O override é mesclado em `providerOptions`, então qualquer campo do adaptador passa
-- O provedor lançou um campo novo que o Kodus ainda não envolveu
+- O provedor lançou um campo novo que a Kodus ainda não envolveu
 
 #### Exemplos (cole direto — não precisa de namespace)
 
@@ -137,7 +137,7 @@ Use quando:
 
 #### Indo no modo manual com namespaces (usuários avançados)
 
-Se o seu JSON já começa com uma chave de namespace conhecida no nível superior — qualquer chave da tabela de mapeamento abaixo — o Kodus o deixa intocado. Útil se você quer misturar vários namespaces de provedores ou ser explícito:
+Se o seu JSON já começa com uma chave de namespace conhecida no nível superior — qualquer chave da tabela de mapeamento abaixo — a Kodus o deixa intocado. Útil se você quer misturar vários namespaces de provedores ou ser explícito:
 
 ```json
 {
@@ -148,7 +148,7 @@ Se o seu JSON já começa com uma chave de namespace conhecida no nível superio
 }
 ```
 
-Por baixo dos panos, estes são os mapeamentos de namespace que o Kodus usa:
+Por baixo dos panos, estes são os mapeamentos de namespace que a Kodus usa:
 
 | Provedor BYOK | Chave de namespace |
 | --- | --- |
@@ -166,7 +166,7 @@ Por baixo dos panos, estes são os mapeamentos de namespace que o Kodus usa:
 
 - **Apenas um objeto JSON válido.** Vírgulas faltando, vírgulas sobrando ou um valor que não seja objeto são rejeitados ao salvar.
 - **Precedência:** o override em JSON **substitui por completo** o bloco de namespace do preset de esforço — se você sobrescrever `anthropic.thinking` mas esquecer `anthropic.effort`, esse campo não será enviado. O roteamento do OpenRouter (Pin providers / Allow fallbacks) é a única exceção: ele faz deep-merge com o seu override em `openrouter`.
-- **Provedor desconhecido = sem wrap.** Se o seu provedor BYOK não está na tabela de namespaces acima, o Kodus repassa o JSON como está.
+- **Provedor desconhecido = sem wrap.** Se o seu provedor BYOK não está na tabela de namespaces acima, a Kodus repassa o JSON como está.
 
 ## Temperature
 
@@ -175,7 +175,7 @@ A temperature fica em **Advanced settings**, e o campo se adapta às regras do m
 | Modelo | Campo de temperature |
 | --- | --- |
 | A maioria dos modelos | **Editável** (0 = determinístico, 2 = criativo). |
-| Kimi `k3` e GLM-5.3 (sempre com reasoning) | **Travado em `1`.** O protocolo fixa a temperature em 1 durante o thinking, então o Kodus envia `1` independentemente do que foi armazenado. O campo mostra um cadeado. |
+| Kimi `k3` e GLM-5.3 (sempre com reasoning) | **Travado em `1`.** O protocolo fixa a temperature em 1 durante o thinking, então a Kodus envia `1` independentemente do que foi armazenado. O campo mostra um cadeado. |
 | Kimi `k2.6` e `k2.7-code`, e DeepSeek com reasoning ligado | **Oculto.** O Kimi informa que a temperature não é modificável nesses modelos, e o DeepSeek a ignora durante o thinking. O DeepSeek com reasoning em **Off** mantém um campo editável. |
 | Claude 4.7+ e OpenAI GPT-5 / série o | **Oculto.** Esses modelos removeram a temperature e rejeitam qualquer requisição que a defina. Guie-os pelo nível de thinking. |
 
@@ -185,7 +185,7 @@ A temperature fica em **Advanced settings**, e o campo se adapta às regras do m
 
 ## Simultaneidade e rate limits
 
-O campo `maxConcurrentRequests` (**Max concurrent requests**, em **Advanced settings**) limita quantas requisições em andamento o Kodus envia ao seu provedor em paralelo. Na maioria das vezes, o padrão serve — mas planos de assinatura com limites de simultaneidade rígidos precisam que ele seja definido explicitamente.
+O campo `maxConcurrentRequests` (**Max concurrent requests**, em **Advanced settings**) limita quantas requisições em andamento a Kodus envia ao seu provedor em paralelo. Na maioria das vezes, o padrão serve — mas planos de assinatura com limites de simultaneidade rígidos precisam que ele seja definido explicitamente.
 
 ### Valores a definir
 
@@ -195,7 +195,7 @@ O campo `maxConcurrentRequests` (**Max concurrent requests**, em **Advanced sett
 | **Kimi Code Plan** | Comece com um valor baixo | [Ajustar a simultaneidade](/pt-BR/cookbook/moonshot#ajustar-a-simultaneidade) |
 | **GLM Developer API** | _(vazio)_ | Os limites escalam por chave; não há um padrão global sensato. |
 | **Kimi Developer API** | _(vazio)_ | Escala com o seu tier de recarga (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
-| **Anthropic / OpenAI / Google / OpenRouter** | _(vazio)_ | Os provedores aplicam seus próprios TPM/RPM; o Kodus não limita. |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(vazio)_ | Os provedores aplicam seus próprios TPM/RPM; a Kodus não limita. |
 
 ### Quando ajustar
 

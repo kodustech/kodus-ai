@@ -1,11 +1,11 @@
 ---
 title: "Token de API do Bitbucket"
-description: "Gere o API Token do Bitbucket Cloud que o Kody precisa para o code review, com as permissões exatas a conceder."
+description: "Gere o API Token do Bitbucket Cloud que a Kody precisa para o code review, com as permissões exatas a conceder."
 ---
 
 ## Introdução
 
-Para habilitar o Kody a realizar code reviews automáticos no Bitbucket Cloud, você precisa gerar um **API Token**. Esse token permite que o Kody acesse seus repositórios, pull requests, webhooks e issues, com as permissões específicas listadas abaixo.
+Para habilitar a Kody a realizar code reviews automáticos no Bitbucket Cloud, você precisa gerar um **API Token**. Esse token permite que a Kody acesse seus repositórios, pull requests, webhooks e issues, com as permissões específicas listadas abaixo.
 
 ---
 
@@ -21,9 +21,9 @@ Para habilitar o Kody a realizar code reviews automáticos no Bitbucket Cloud, v
 
 ---
 
-## Escopos necessários para o Kody
+## Escopos necessários para a Kody
 
-O token deve incluir **todos** os escopos a seguir para o funcionamento completo com o Kody:
+O token deve incluir **todos** os escopos a seguir para o funcionamento completo com a Kody:
 
 | Escopo                        | Finalidade / O que habilita                                                                 |
 | ----------------------------- | ------------------------------------------------------------------------------------------- |
@@ -37,18 +37,20 @@ O token deve incluir **todos** os escopos a seguir para o funcionamento completo
 | `read:issue:bitbucket`        | Ler informações do issue tracker.                                                           |
 | `read:webhook:bitbucket`      | Ver os webhooks existentes e suas configurações.                                            |
 | `write:webhook:bitbucket`     | Criar ou atualizar webhooks.                                                                |
-| `delete:webhook:bitbucket`    | Remover os webhooks do Kodus quando você exclui a integração.                               |
+| `delete:webhook:bitbucket`    | Remover os webhooks da Kodus quando você exclui a integração.                               |
 
-O Kody não usa `admin:repository:bitbucket` nem `read:pipeline:bitbucket`. Os status de CI são lidos com `read:repository:bitbucket`.
+A Kody não usa `admin:repository:bitbucket` nem `read:pipeline:bitbucket`. Os status de CI são lidos com `read:repository:bitbucket`.
 
 > ⚠️ Conceda apenas essas permissões necessárias; evite conceder mais do que o preciso para reduzir o risco de segurança.
 
 ---
 
-## Adicionando o Token ao Kody
+<span id="adicionando-o-token-ao-kody" aria-hidden="true" />
 
-- Com o token gerado e todos os escopos necessários selecionados, cole-o no Kodus: durante o onboarding (**Connect your Git tool** → aba **Bitbucket** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Bitbucket**. Preencha **Username**, **Email** e **API token** e clique em **Validate and save**.
-- Para criar o webhook que entrega os eventos de pull request, o Kody precisa de `read:webhook:bitbucket` e `write:webhook:bitbucket`, e o usuário do token precisa ser admin do repositório.
+## Adicionando o Token à Kody
+
+- Com o token gerado e todos os escopos necessários selecionados, cole-o na Kodus: durante o onboarding (**Connect your Git tool** → aba **Bitbucket** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Bitbucket**. Preencha **Username**, **Email** e **API token** e clique em **Validate and save**.
+- Para criar o webhook que entrega os eventos de pull request, a Kody precisa de `read:webhook:bitbucket` e `write:webhook:bitbucket`, e o usuário do token precisa ser admin do repositório.
 - Para trocar um token, clique em **Reset** no card **Bitbucket** em **Repositories**, escolha **Just reset the integration** e conecte novamente com o novo token.
 
 ---

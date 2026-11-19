@@ -1,10 +1,10 @@
 ---
 title: Criando um Webhook
-description: "Crie manualmente o webhook do Bitbucket quando o registro automático não aconteceu, e escolha os triggers de pull request que o Kodus realmente consome."
+description: "Crie manualmente o webhook do Bitbucket quando o registro automático não aconteceu, e escolha os triggers de pull request que a Kodus realmente consome."
 icon: webhook
 ---
 
-O Kodus geralmente cria o webhook automaticamente quando você salva a seleção de repositórios. Isso exige acesso de admin ao repositório: no Bitbucket Cloud, também os escopos `read:webhook:bitbucket` e `write:webhook:bitbucket` no API token; no Bitbucket Data Center, a permissão **Repository admin**. Se isso não aconteceu, **Repositories** lista o repositório com o motivo, e você pode configurar o webhook manualmente:
+A Kodus geralmente cria o webhook automaticamente quando você salva a seleção de repositórios. Isso exige acesso de admin ao repositório: no Bitbucket Cloud, também os escopos `read:webhook:bitbucket` e `write:webhook:bitbucket` no API token; no Bitbucket Data Center, a permissão **Repository admin**. Se isso não aconteceu, **Repositories** lista o repositório com o motivo, e você pode configurar o webhook manualmente:
 
 <Note>
   As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Usar o domínio da API só funciona se seu proxy reverso rotear os caminhos `/.../webhook` para o serviço de webhooks.
@@ -40,11 +40,11 @@ O suporte ao Bitbucket Data Center está em alpha. Abra o repositório, vá em *
 - **Events**: os eventos de pull request `pr:opened`, `pr:modified`, `pr:comment:added`, `pr:merged` e `pr:declined`
 
 <Note>
-  O Kodus só consome eventos de pull request: no Cloud `created`, `updated`, `merged`, `declined` e `comment created`, no Data Center os cinco listados acima. Triggers de Repository, Issue e build status são descartados na chegada, então deixá-los desmarcados reduz o tráfego do webhook. O registro automático no Data Center também assina `pr:reviewer:updated`, que o Kodus recebe e ignora.
+  A Kodus só consome eventos de pull request: no Cloud `created`, `updated`, `merged`, `declined` e `comment created`, no Data Center os cinco listados acima. Triggers de Repository, Issue e build status são descartados na chegada, então deixá-los desmarcados reduz o tráfego do webhook. O registro automático no Data Center também assina `pr:reviewer:updated`, que a Kodus recebe e ignora.
 </Note>
 
 ### Pushes em um pull request aberto
 
-No Data Center, um push de novos commits em um pull request aberto chega como `pr:from_ref_updated`. O Kodus não assina esse evento e o descarta, então um push não inicia um review. `pr:modified` dispara quando o título, a descrição, a branch de destino ou o estado de draft mudam. O Kodus o ignora, a menos que o último commit seja novo para o Kodus ou o pull request saia de draft. Para fazer o review de novos commits, comente `@kody start-review` no pull request.
+No Data Center, um push de novos commits em um pull request aberto chega como `pr:from_ref_updated`. A Kodus não assina esse evento e o descarta, então um push não inicia um review. `pr:modified` dispara quando o título, a descrição, a branch de destino ou o estado de draft mudam. A Kodus o ignora, a menos que o último commit seja novo para a Kodus ou o pull request saia de draft. Para fazer o review de novos commits, comente `@kody start-review` no pull request.
 
-No Cloud, o Kodus trata `pullrequest:updated` da mesma forma: ele só inicia um review quando o último commit é novo para o Kodus ou o pull request sai de draft.
+No Cloud, a Kodus trata `pullrequest:updated` da mesma forma: ela só inicia um review quando o último commit é novo para a Kodus ou o pull request sai de draft.

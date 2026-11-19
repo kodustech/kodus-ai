@@ -1,15 +1,15 @@
 ---
 title: "Como hospedar uma ferramenta de revisão de código com IA por conta própria"
-description: "Implante o Kodus na sua própria infraestrutura com controle total sobre dados, modelos e configuração."
+description: "Implante a Kodus na sua própria infraestrutura com controle total sobre dados, modelos e configuração."
 ---
 
-O Kodus é open source e pode ser hospedado na sua própria infraestrutura. Isso dá a você controle sobre onde ficam os dados de revisão, qual provedor de LLM as revisões usam e como o seu provedor Git alcança o Kodus.
+A Kodus é open source e pode ser hospedado na sua própria infraestrutura. Isso dá a você controle sobre onde ficam os dados de revisão, qual provedor de LLM as revisões usam e como o seu provedor Git alcança a Kodus.
 
 ## Opções de implantação
 
 ### Docker (recomendado)
 
-Implante o Kodus usando Docker Compose em qualquer VM:
+Implante a Kodus usando Docker Compose em qualquer VM:
 
 1. Clone o repositório `kodus-installer`
 2. Copie `.env.example` para `.env`, gere as chaves e preencha seus valores
@@ -37,7 +37,7 @@ Para testes ou para contribuir, use o [quickstart local](/pt-BR/how_to_deploy/lo
 
 - **Dados** — os dados de pull requests, sugestões e configurações ficam no seu próprio PostgreSQL e MongoDB
 - **Provedor de LLM** — use qualquer provedor, ou um modelo self-hosted por meio de um endpoint compatível com OpenAI
-- **Rede** — seu provedor Git precisa alcançar o serviço de webhooks (porta 3332), e o Kodus precisa alcançar seu provedor Git e seu provedor de LLM
+- **Rede** — seu provedor Git precisa alcançar o serviço de webhooks (porta 3332), e a Kodus precisa alcançar seu provedor Git e seu provedor de LLM
 - **Configuração** — as configurações ficam no seu `.env` e no app web
 
 Cada instância envia um heartbeat anônimo por dia; veja [Telemetria Anônima](/pt-BR/how_to_deploy/deploy_kodus/telemetry) para inspecioná-lo ou desativá-lo.

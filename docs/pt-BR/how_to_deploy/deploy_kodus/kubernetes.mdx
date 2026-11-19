@@ -1,10 +1,10 @@
 ---
 title: "Kubernetes e OpenShift"
-description: "Faça deploy do Kodus em Kubernetes ou OpenShift com os Helm charts oficiais."
+description: "Faça deploy da Kodus em Kubernetes ou OpenShift com os Helm charts oficiais."
 icon: "dharmachakra"
 ---
 
-Prefere um cluster em vez de uma única VM? O Kodus disponibiliza **Helm charts** para Kubernetes e
+Prefere um cluster em vez de uma única VM? A Kodus disponibiliza **Helm charts** para Kubernetes e
 OpenShift no repositório [kodus-installer](https://github.com/kodustech/kodus-installer).
 Esta página é a visão geral. O
 [README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
@@ -37,7 +37,7 @@ helm install kodus . \
   --set ingress.hosts.webhooks.host=webhooks.kodus.example.net
 ```
 
-A versão do chart é independente da versão das imagens do Kodus. Por padrão, o chart usa seu `appVersion` em todas as imagens do Kodus, inclusive no job de migração. Veja o [README do chart](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md) para instalar uma versão publicada via OCI.
+A versão do chart é independente da versão das imagens da Kodus. Por padrão, o chart usa seu `appVersion` em todas as imagens da Kodus, inclusive no job de migração. Veja o [README do chart](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md) para instalar uma versão publicada via OCI.
 
 Defina `NEXTAUTH_URL`, `API_FRONTEND_URL` e `API_USER_INVITE_BASE_URL` com a URL pública do app web. Esses valores são usados no login, no retorno do GitHub App, no login pelo CLI e nos convites. Para SSO via SAML, defina também `global.config.API_URL` com a URL pública da API.
 

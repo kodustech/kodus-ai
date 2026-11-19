@@ -1,12 +1,12 @@
 ---
 title: "BYOK - Traga Sua Própria Chave"
 sidebarTitle: "Visão geral"
-description: "Conecte suas próprias chaves de provedor e escolha qual modelo roda cada tarefa. Disponível em todos os planos do Kodus."
+description: "Conecte suas próprias chaves de provedor e escolha qual modelo roda cada tarefa. Disponível em todos os planos da Kodus."
 ---
 
-BYOK (Bring Your Own Key) é a **forma padrão como o Kodus usa LLMs em todos os planos**: Free, Teams e Enterprise. Você conecta suas próprias contas de provedor, adiciona os modelos que quiser e escolhe qual modelo roda cada tarefa. Seu provedor cobra você diretamente pelos tokens, e sua chave é armazenada criptografada e nunca é exibida de volta em texto simples.
+BYOK (Bring Your Own Key) é a **forma padrão como a Kodus usa LLMs em todos os planos**: Free, Teams e Enterprise. Você conecta suas próprias contas de provedor, adiciona os modelos que quiser e escolhe qual modelo roda cada tarefa. Seu provedor cobra você diretamente pelos tokens, e sua chave é armazenada criptografada e nunca é exibida de volta em texto simples.
 
-O BYOK também funciona no Community self-hosted. Somente [Owners](/pt-BR/how_to_use/workspace_roles) gerenciam credenciais em **AI providers**. No Enterprise, o Kodus também pode rodar os modelos previstos no contrato.
+O BYOK também funciona no Community self-hosted. Somente [Owners](/pt-BR/how_to_use/workspace_roles) gerenciam credenciais em **AI providers**. No Enterprise, a Kodus também pode rodar os modelos previstos no contrato.
 
 ## Como o BYOK funciona
 
@@ -43,14 +43,14 @@ O BYOK é **provider-first**: você conecta um provedor uma vez, adiciona a ele 
   <Step title="Adicionar um modelo">
     Escolher um provedor abre o formulário de adicionar modelo dele (**Add a … model**). Cole a chave de API uma vez (reutilizada em cada modelo que você adicionar àquele provedor depois) e então escolha o modelo:
 
-    - Se o Kodus listar os modelos do provedor, escolha um na lista. Se o seu não aparecer, escolha **Type model manually** e digite o ID exato do modelo.
+    - Se a Kodus listar os modelos do provedor, escolha um na lista. Se o seu não aparecer, escolha **Type model manually** e digite o ID exato do modelo.
     - Caso contrário (endpoints personalizados, self-hosted ou quando chaves de plataforma não estão configuradas), digite o Model ID exato.
 
     Endpoints personalizados (OpenAI-compatible / Anthropic-compatible) também pedem uma **Base URL** primeiro, e o Azure OpenAI pede um **Resource endpoint**. **OpenAI** mostra uma **Base URL** opcional para o seu próprio proxy ou gateway; deixe vazia para chamar a OpenAI diretamente. Cole a base URL sem o caminho do endpoint (sem `/chat/completions`). Ela deve usar `https://` e resolver para um endereço público.
   </Step>
 
   <Step title="Ajustar configurações avançadas (opcional)">
-    No card **Advanced (optional)**, expanda **Advanced settings**: **Thinking / Reasoning**, **Temperature**, **Max output tokens**, **Max input tokens** e **Max concurrent requests**. Os padrões são sensatos para a maioria dos provedores — veja [Reasoning](/pt-BR/how_to_use/byok/model_settings#reasoning-/-extended-thinking) e [Temperature](/pt-BR/how_to_use/byok/model_settings#temperature) para os campos que o Kodus trava ou oculta por modelo.
+    No card **Advanced (optional)**, expanda **Advanced settings**: **Thinking / Reasoning**, **Temperature**, **Max output tokens**, **Max input tokens** e **Max concurrent requests**. Os padrões são sensatos para a maioria dos provedores — veja [Reasoning](/pt-BR/how_to_use/byok/model_settings#reasoning-/-extended-thinking) e [Temperature](/pt-BR/how_to_use/byok/model_settings#temperature) para os campos que a Kodus trava ou oculta por modelo.
   </Step>
 
   <Step title="Testar e salvar">
@@ -79,7 +79,7 @@ Quando o teste passa, mas um override ou nível de reasoning não chegou a nenhu
 
 ## Editar ou remover
 
-Na aba **Providers**, **Edit model** altera as configurações de um modelo, **Edit provider** altera a chave do provedor e **Remove model** (o ícone de lixeira) remove um modelo. Um modelo que ainda é o padrão ou o fallback, está definido para uma tarefa, é usado por um repositório ou diretório, ou está fixado em um agente customizado não pode ser removido. A linha lista onde ele é usado, então altere esses pontos primeiro. Remover seu último modelo desconecta o BYOK: o Kodus usa o LLM definido por variáveis de ambiente, se houver um, e caso contrário para de rodar revisões até você conectar um modelo.
+Na aba **Providers**, **Edit model** altera as configurações de um modelo, **Edit provider** altera a chave do provedor e **Remove model** (o ícone de lixeira) remove um modelo. Um modelo que ainda é o padrão ou o fallback, está definido para uma tarefa, é usado por um repositório ou diretório, ou está fixado em um agente customizado não pode ser removido. A linha lista onde ele é usado, então altere esses pontos primeiro. Remover seu último modelo desconecta o BYOK: a Kodus usa o LLM definido por variáveis de ambiente, se houver um, e caso contrário para de rodar revisões até você conectar um modelo.
 
 ## Routing: qual modelo roda cada tarefa
 
@@ -111,7 +111,7 @@ Qualquer modelo que seu provedor sirva funciona. Se você não sabe por onde com
     **Rápido e consistente.** A linha flagship da OpenAI — baixa latência confiável, conhecimento amplo. Chaves: [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
   </Card>
   <Card title="Kimi / GLM" icon="moon">
-    **Cobrança do provedor.** A Moonshot oferece o Kimi Code Plan. Para reviews com GLM no Kodus, conecte uma chave da Developer API da Z.AI. Veja [Assinaturas e coding plans](#assinaturas-e-coding-plans) e [Conectando Kimi e GLM](/pt-BR/how_to_use/byok/providers#conectando-kimi-moonshot-e-glm-z-ai).
+    **Cobrança do provedor.** A Moonshot oferece o Kimi Code Plan. Para reviews com GLM na Kodus, conecte uma chave da Developer API da Z.AI. Veja [Assinaturas e coding plans](#assinaturas-e-coding-plans) e [Conectando Kimi e GLM](/pt-BR/how_to_use/byok/providers#conectando-kimi-moonshot-e-glm-z-ai).
   </Card>
 </CardGroup>
 
@@ -121,11 +121,11 @@ Qualquer modelo que seu provedor sirva funciona. Se você não sabe por onde com
 
 ## Assinaturas e coding plans
 
-Alguns provedores vendem uma assinatura de taxa fixa, muitas vezes chamada de coding plan, no lugar de, ou junto com, o acesso à API pay-per-token. O Kodus se conecta a uma delas do mesmo jeito que se conecta a qualquer API: com a chave e o endpoint que o plano oferece. Ele nunca faz login com a sua conta no site ou no app de um provedor.
+Alguns provedores vendem uma assinatura de taxa fixa, muitas vezes chamada de coding plan, no lugar de, ou junto com, o acesso à API pay-per-token. A Kodus se conecta a uma delas do mesmo jeito que se conecta a qualquer API: com a chave e o endpoint que o plano oferece. Ela nunca faz login com a sua conta no site ou no app de um provedor.
 
 Se um plano pode ser usado assim depende do provedor, e cada um define suas próprias regras. Antes de depender de um:
 
-- **Confira os termos.** Alguns planos permitem o uso apenas nos apps do próprio provedor, ou limitam o uso automatizado. Provedores podem mudar isso a qualquer momento, e o Kodus não consegue verificar isso por você.
+- **Confira os termos.** Alguns planos permitem o uso apenas nos apps do próprio provedor, ou limitam o uso automatizado. Provedores podem mudar isso a qualquer momento, e a Kodus não consegue verificar isso por você.
 - **Confira os limites.** Planos costumam limitar requisições simultâneas, janelas de requisições ou o uso mensal. Defina **Max concurrent requests** de acordo e adicione um **Fallback model** em um provedor diferente para que as revisões não falhem quando um limite for atingido. Veja [Simultaneidade e rate limits](/pt-BR/how_to_use/byok/model_settings#simultaneidade-e-rate-limits).
 - **Use o endpoint do próprio plano.** A chave de um plano muitas vezes só funciona no endpoint desse plano, não na API pay-per-token do provedor. [Kimi e GLM](/pt-BR/how_to_use/byok/providers#conectando-kimi-moonshot-e-glm-z-ai) mostram a diferença.
 
@@ -133,9 +133,9 @@ Usar um plano de assinatura é por sua conta e risco. Se o provedor limitar ou e
 
 ## Kodus credits
 
-Se seu workspace no Kodus Cloud tem acesso ao alpha do provedor **Kodus**, acesse **AI providers** e escolha **Kodus** para adicionar um modelo sem chave de API. Adicione saldo pré-pago em **Kodus credits**. O uso é descontado pelo preço por token exibido no modelo. A tela de recarga mostra a taxa da plataforma antes do pagamento.
+Se seu workspace na Kodus Cloud tem acesso ao alpha do provedor **Kodus**, acesse **AI providers** e escolha **Kodus** para adicionar um modelo sem chave de API. Adicione saldo pré-pago em **Kodus credits**. O uso é descontado pelo preço por token exibido no modelo. A tela de recarga mostra a taxa da plataforma antes do pagamento.
 
-Use **Configure routing** para escolher as tarefas que o modelo executa. Se o saldo acabar, as revisões que usam modelos do Kodus ficam pausadas até você adicionar créditos. Os modelos que usam suas próprias chaves de provedor continuam funcionando.
+Use **Configure routing** para escolher as tarefas que o modelo executa. Se o saldo acabar, as revisões que usam modelos da Kodus ficam pausadas até você adicionar créditos. Os modelos que usam suas próprias chaves de provedor continuam funcionando.
 
 ## Configurações avançadas
 
@@ -143,7 +143,7 @@ O formulário de cada modelo tem um card opcional **Advanced settings**: reasoni
 
 ### Custom JSON override
 
-Para uma opção de provedor para a qual o Kodus não tem campo, escolha **Custom** em **Thinking / Reasoning** e cole o JSON. Veja [Custom JSON override](/pt-BR/how_to_use/byok/model_settings#custom-json-override).
+Para uma opção de provedor para a qual a Kodus não tem campo, escolha **Custom** em **Thinking / Reasoning** e cole o JSON. Veja [Custom JSON override](/pt-BR/how_to_use/byok/model_settings#custom-json-override).
 
 ### Fixando provedores do OpenRouter
 
@@ -155,7 +155,7 @@ Em um modelo do OpenRouter, **OpenRouter routing** fixa quais provedores upstrea
 
 <CardGroup cols={2}>
   <Card title="Chaves Dedicadas" icon="shield-check">
-    Crie chaves de API separadas para o Kodus. Facilita a auditoria de uso e a rotação de chaves.
+    Crie chaves de API separadas para a Kodus. Facilita a auditoria de uso e a rotação de chaves.
   </Card>
   <Card title="Rotação Regular" icon="arrows-rotate">
     Rotacione as chaves periodicamente e atualize-as com **Edit provider** na página **AI providers**.
@@ -164,7 +164,7 @@ Em um modelo do OpenRouter, **OpenRouter routing** fixa quais provedores upstrea
     Confira os painéis dos seus provedores em busca de padrões incomuns.
   </Card>
   <Card title="Armazenamento Seguro" icon="lock">
-    Nunca faça commit de chaves em repositórios. O Kodus as armazena criptografadas em repouso e em trânsito.
+    Nunca faça commit de chaves em repositórios. A Kodus as armazena criptografadas em repouso e em trânsito.
   </Card>
 </CardGroup>
 

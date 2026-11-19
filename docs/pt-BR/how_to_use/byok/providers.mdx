@@ -14,14 +14,14 @@ Escolha seu provedor para ver como obter uma chave e o que informar. Adicione o 
 
     **Obtenha uma chave de API:**
     1. Acesse [OpenAI API Keys](https://platform.openai.com/api-keys)
-    2. Crie uma nova chave para o Kodus
+    2. Crie uma nova chave para a Kodus
     3. Adicione as informações de cobrança
 
     **Pelo seu próprio gateway:** se o seu tráfego da OpenAI passa por um gateway de protocolo OpenAI que serve a Responses API, defina o endereço dele na **Base URL** opcional e use a chave que o gateway espera. Com os IDs de modelo da própria OpenAI, as revisões rodam então como em uma chave direta da OpenAI: a Responses API, saída estruturada estrita e o seu nível de reasoning.
 
-    - Inclua a versão da API, como em `https://your-gateway.example.com/v1`. O Kodus chama `<Base URL>/responses` e lista os modelos em `<Base URL>/models`.
+    - Inclua a versão da API, como em `https://your-gateway.example.com/v1`. A Kodus chama `<Base URL>/responses` e lista os modelos em `<Base URL>/models`.
     - Se o gateway só serve chat completions, conecte-o como **OpenAI-compatible**.
-    - A URL deve usar `https://` e resolver para um endereço público, porque o Kodus envia sua chave para lá. Gateways na rede privada de uma instalação self-hosted não são suportados.
+    - A URL deve usar `https://` e resolver para um endereço público, porque a Kodus envia sua chave para lá. Gateways na rede privada de uma instalação self-hosted não são suportados.
     - As requisições saem com `store: false`, então nem o gateway nem a OpenAI são solicitados a guardá-las.
     - Use os IDs de modelo da própria OpenAI (por exemplo `gpt-5.4`). Um modelo que o gateway renomeia não é reconhecido como um modelo de reasoning, então o nível de reasoning dele não é enviado.
     - Não suportado aqui: gateways que precisam de headers próprios além da chave (Portkey, Cloudflare AI Gateway) e o Azure OpenAI, que tem seu próprio provedor **Azure OpenAI**.
@@ -79,7 +79,7 @@ Escolha seu provedor para ver como obter uma chave e o que informar. Adicione o 
     **Como configurar:**
     1. No fluxo de conexão, escolha **Google Vertex AI** (em Custom).
     2. Cole o **conteúdo do seu arquivo JSON de service account** no campo Service Account JSON
-       (codificado em base64 também funciona). O Kodus extrai o `project_id` do JSON
+       (codificado em base64 também funciona). A Kodus extrai o `project_id` do JSON
        automaticamente.
     3. **Region** — deixe vazio para usar o endpoint global (recomendado). Fixe uma região
        (ex.: `us-east5`) apenas quando você tiver requisitos de residência de dados.
@@ -113,7 +113,7 @@ Escolha seu provedor para ver como obter uma chave e o que informar. Adicione o 
     **Como configurar:**
     1. No fluxo de conexão, escolha **Azure OpenAI** (em Custom).
     2. Informe sua **API key** e o **Resource endpoint**, por exemplo `https://your-resource.openai.azure.com/openai`.
-    3. Digite o **nome do deployment** como Model ID. O Kodus não consegue listar os deployments do Azure com a chave de inferência.
+    3. Digite o **nome do deployment** como Model ID. A Kodus não consegue listar os deployments do Azure com a chave de inferência.
   </Tab>
 
   <Tab title="OpenAI-compatible">
@@ -154,7 +154,7 @@ Escolha seu provedor para ver como obter uma chave e o que informar. Adicione o 
 
     <Note>
       Cole a base URL no formato que o seu provedor documenta — com ou sem um `/v1` no final
-      (ex.: `https://api.kimi.com/coding` ou `https://api.kimi.com/coding/v1`). O Kodus
+      (ex.: `https://api.kimi.com/coding` ou `https://api.kimi.com/coding/v1`). A Kodus
       a normaliza internamente, porque os dois caminhos do SDK da Anthropic discordam sobre onde o
       `/v1` fica. Para uma marca conhecida, uma conexão só com a chave resolve o endpoint automaticamente.
     </Note>
@@ -165,7 +165,7 @@ Escolha seu provedor para ver como obter uma chave e o que informar. Adicione o 
 
 A Moonshot e a Z.ai oferecem, cada uma, um plano de assinatura em um **endpoint diferente** do da sua Developer API pay-per-token. Cada plano é uma conta separada, com a própria chave — escolha a base URL que corresponde à chave que você tem.
 
-Os cards **Moonshot** e **Z.ai** em **Providers** conectam à Developer API apenas com uma chave: o Kodus preenche o endpoint de protocolo Anthropic (`https://api.moonshot.ai/anthropic`, `https://api.z.ai/api/anthropic`) e o formulário não tem campo de base URL. Para uma chave de coding plan ou outro endpoint, escolha **OpenAI-compatible** ou **Anthropic-compatible** em **Custom** e informe a base URL da tabela.
+Os cards **Moonshot** e **Z.ai** em **Providers** conectam à Developer API apenas com uma chave: a Kodus preenche o endpoint de protocolo Anthropic (`https://api.moonshot.ai/anthropic`, `https://api.z.ai/api/anthropic`) e o formulário não tem campo de base URL. Para uma chave de coding plan ou outro endpoint, escolha **OpenAI-compatible** ou **Anthropic-compatible** em **Custom** e informe a base URL da tabela.
 
 <Tabs>
   <Tab title="Kimi (Moonshot AI)">
@@ -186,7 +186,7 @@ Os cards **Moonshot** e **Z.ai** em **Providers** conectam à Developer API apen
     | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | Volume previsível do time, taxa mensal fixa |
 
     <Warning>
-      Use uma chave da **Developer API** para rodar reviews no Kodus. A Z.AI restringe o GLM Coding Plan às [ferramentas que ela autoriza](https://docs.z.ai/devpack/tool/others#supported-tools). Confirme a elegibilidade com a Z.AI antes de usar uma assinatura do Coding Plan no Kodus.
+      Use uma chave da **Developer API** para rodar reviews na Kodus. A Z.AI restringe o GLM Coding Plan às [ferramentas que ela autoriza](https://docs.z.ai/devpack/tool/others#supported-tools). Confirme a elegibilidade com a Z.AI antes de usar uma assinatura do Coding Plan na Kodus.
     </Warning>
   </Tab>
 </Tabs>
@@ -216,7 +216,7 @@ Quando o seu provedor BYOK é o **OpenRouter**, o painel Advanced settings mostr
   Os nomes de upstream devem corresponder ao catálogo do OpenRouter. Confira as tags de provedor em [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) — valores comuns incluem `moonshot`, `together`, `groq`, `fireworks`, `novita`.
 </Warning>
 
-Por baixo dos panos, o Kodus emite isto na chamada do Vercel AI SDK:
+Por baixo dos panos, a Kodus emite isto na chamada do Vercel AI SDK:
 
 ```json
 {

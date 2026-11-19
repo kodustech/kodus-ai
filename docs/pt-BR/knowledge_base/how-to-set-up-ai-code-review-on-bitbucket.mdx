@@ -1,17 +1,17 @@
 ---
 title: "Como configurar revisão de código com IA no Bitbucket"
-description: "Conecte o Bitbucket ao Kodus e selecione os repositórios para revisão automática."
+description: "Conecte o Bitbucket à Kodus e selecione os repositórios para revisão automática."
 ---
 
-O Kodus se conecta ao Bitbucket com um API token e recebe os eventos de pull request por meio de webhooks do repositório. O Bitbucket Cloud é suportado; o Bitbucket Data Center está em alpha. No Data Center, um push em um pull request aberto não inicia uma revisão: comente `@kody start-review`.
+A Kodus se conecta ao Bitbucket com um API token e recebe os eventos de pull request por meio de webhooks do repositório. O Bitbucket Cloud é suportado; o Bitbucket Data Center está em alpha. No Data Center, um push em um pull request aberto não inicia uma revisão: comente `@kody start-review`.
 
 ## Passos
 
-1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
+1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede a Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
 2. **Conecte o Bitbucket** — na etapa **Connect your Git tool** do onboarding, abra a aba **Bitbucket**, clique em **Connect via token** e informe seu username, e-mail e API token do Bitbucket (você também pode conectar depois em **Repositories** na barra lateral: clique em **Bitbucket** em **Connect a provider**). Para o Bitbucket Data Center, ative **Bitbucket Data Center** e informe a URL base, seu username e o **Basic auth password**
-3. **Selecione os repositórios** — escolha quais repositórios do Bitbucket o Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
-4. **Webhooks** — o Kodus cria o webhook de pull request automaticamente quando você salva a seleção. Isso exige acesso de admin ao repositório: no Bitbucket Cloud, o token também precisa de `read:webhook:bitbucket` e `write:webhook:bitbucket`; no Data Center, da permissão **Repository admin**. Se isso não aconteceu, **Repositories** lista o repositório com o motivo; adicione o webhook manualmente com o guia [Bitbucket Webhooks](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
-5. Abra um pull request em um repositório selecionado. Veja [o que o Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
+3. **Selecione os repositórios** — escolha quais repositórios do Bitbucket a Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
+4. **Webhooks** — a Kodus cria o webhook de pull request automaticamente quando você salva a seleção. Isso exige acesso de admin ao repositório: no Bitbucket Cloud, o token também precisa de `read:webhook:bitbucket` e `write:webhook:bitbucket`; no Data Center, da permissão **Repository admin**. Se isso não aconteceu, **Repositories** lista o repositório com o motivo; adicione o webhook manualmente com o guia [Bitbucket Webhooks](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+5. Abra um pull request em um repositório selecionado. Veja [o que a Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
 
 ## Configuração personalizada
 
@@ -19,6 +19,6 @@ Use o [kodus-config.yml](/pt-BR/how_to_use/code_review/configs/general#kodus-con
 
 ## Rate limits
 
-O Bitbucket Cloud limita quantas requisições de API são permitidas por hora. Cada processo do Kodus (API, worker, webhooks) espera pelo menos 400 ms entre as chamadas ao Bitbucket Cloud feitas com as mesmas credenciais (`BITBUCKET_RATE_GATE_MIN_INTERVAL_MS`) e tenta de novo uma resposta `429` até 4 vezes, respeitando o `Retry-After` (`BITBUCKET_RATE_GATE_429_MAX_RETRIES`). O intervalo é por processo, então, com vários workers, a taxa efetiva se multiplica. Aumente-o se o seu Bitbucket limitar de forma agressiva.
+O Bitbucket Cloud limita quantas requisições de API são permitidas por hora. Cada processo da Kodus (API, worker, webhooks) espera pelo menos 400 ms entre as chamadas ao Bitbucket Cloud feitas com as mesmas credenciais (`BITBUCKET_RATE_GATE_MIN_INTERVAL_MS`) e tenta de novo uma resposta `429` até 4 vezes, respeitando o `Retry-After` (`BITBUCKET_RATE_GATE_429_MAX_RETRIES`). O intervalo é por processo, então, com vários workers, a taxa efetiva se multiplica. Aumente-o se o seu Bitbucket limitar de forma agressiva.
 
 Para o guia completo de configuração, consulte [API Token do Bitbucket](/pt-BR/how_to_use/code_review/general_config/bitbucket_pat) e [Bitbucket Webhooks](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook).

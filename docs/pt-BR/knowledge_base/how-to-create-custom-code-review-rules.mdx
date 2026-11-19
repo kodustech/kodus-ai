@@ -3,9 +3,11 @@ title: "Como criar regras personalizadas de revisão de código"
 description: "Defina regras adaptadas à arquitetura, aos padrões e às preferências de codificação do seu time, verificadas em cada PR."
 ---
 
-Todo time tem convenções que linters genéricos não cobrem: limites de arquitetura, padrões de nomenclatura, requisitos de testes ou restrições específicas do negócio. Regras personalizadas de revisão de código permitem codificá-las como verificações que o Kody roda em cada pull request.
+Todo time tem convenções que linters genéricos não cobrem: limites de arquitetura, padrões de nomenclatura, requisitos de testes ou restrições específicas do negócio. Regras personalizadas de revisão de código permitem codificá-las como verificações que a Kody roda em cada pull request.
 
-## Criando uma regra no Kodus
+<span id="criando-uma-regra-no-kodus" aria-hidden="true" />
+
+## Criando uma regra na Kodus
 
 1. Selecione **Global** (ou um repositório / diretório) no seletor de escopo no topo do grupo **Code review** na barra lateral e abra **Kody Rules**
 2. Na aba **Review Rules**, clique em **New rule**
@@ -16,12 +18,12 @@ Todo time tem convenções que linters genéricos não cobrem: limites de arquit
    - **Instructions**: o que verificar e como decidir
    - **Severity**: Critical, High (o padrão), Medium ou Low
 
-Em **Advanced settings**, você pode adicionar um **Bad example** e um **Good example**, que ajudam o Kody a distinguir uma violação de um código em conformidade.
+Em **Advanced settings**, você pode adicionar um **Bad example** e um **Good example**, que ajudam a Kody a distinguir uma violação de um código em conformidade.
 
 ## O que ajuda uma regra a funcionar
 
 - **Seja específico.** Cite o padrão, o caminho e o que conta como violação.
-- **Aponte para os seus padrões.** Mencione um arquivo pelo caminho, como `@file:docs/architecture.md`, e o Kody o lê quando avalia a regra. O arquivo é lido da branch de destino do pull request.
+- **Aponte para os seus padrões.** Mencione um arquivo pelo caminho, como `@file:docs/architecture.md`, e a Kody o lê quando avalia a regra. O arquivo é lido da branch de destino do pull request.
 - **Escolha o modo certo.** Use Per file para o que dá para ver em um único arquivo, e Per PR para requisitos sobre o pull request como um todo: a descrição, o tamanho ou se arquivos relacionados mudam juntos.
 
 ### Exemplo: Aplicando uma convenção de nomenclatura
@@ -56,9 +58,9 @@ PR also changes a matching test file under test/services/.
 
 - **Rules Library**: clique em **Discovery** na página de Kody Rules para adicionar regras e packs prontos
 - **Regras de repositório**: mantenha uma regra por arquivo markdown no seu repositório, em `.kody/rules`
-- **Geração automática**: o Kody redige regras a partir dos comentários passados dos seus revisores
-- **Em uma thread de revisão**: peça ao Kody para criar ou alterar uma regra, por exemplo `@kody update this rule to ignore test files`
+- **Geração automática**: a Kody redige regras a partir dos comentários passados dos seus revisores
+- **Em uma thread de revisão**: peça à Kody para criar ou alterar uma regra, por exemplo `@kody update this rule to ignore test files`
 
-Para que o Kody confira pull requests com o `CLAUDE.md`, o `AGENTS.md` ou as instruções do Cursor e do Copilot, veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
+Para que a Kody confira pull requests com o `CLAUDE.md`, o `AGENTS.md` ou as instruções do Cursor e do Copilot, veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
 
 Para a referência completa, consulte [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).

@@ -1,19 +1,19 @@
 ---
 title: "Atribuição Automática de Licenças"
-description: "Deixe o Kodus atribuir licenças de desenvolvedor automaticamente a quem contribui de fato, em vez de gerenciar cada assento na mão."
+description: "Deixe a Kodus atribuir licenças de desenvolvedor automaticamente a quem contribui de fato, em vez de gerenciar cada assento na mão."
 ---
 
-O recurso de Atribuição Automática de Licenças simplifica o gerenciamento de licenças de desenvolvedores dentro da sua organização. Em vez de atribuir licenças manualmente a cada desenvolvedor, o Kodus pode atribuir automaticamente uma licença a contribuidores ativos.
+O recurso de Atribuição Automática de Licenças simplifica o gerenciamento de licenças de desenvolvedores dentro da sua organização. Em vez de atribuir licenças manualmente a cada desenvolvedor, a Kodus pode atribuir automaticamente uma licença a contribuidores ativos.
 
 Organizações com plano pago que usa assentos, incluindo instalações self-hosted licenciadas. Owners gerenciam a opção em **Subscription → PR licenses**.
 
 ## Como Funciona
 
-Em um plano pago, o Kodus verifica o autor de cada pull request que está prestes a revisar. Com **Auto-assign licenses** ativado:
+Em um plano pago, a Kodus verifica o autor de cada pull request que está prestes a revisar. Com **Auto-assign licenses** ativado:
 
--   **O primeiro PR da pessoa é revisado sem um assento.** O Kodus conta os PRs que ele registrou para o autor.
--   **A partir do segundo PR, o Kodus atribui uma licença** se houver uma disponível, e a revisão prossegue.
--   **Se o autor não tem licença e nenhuma pode ser atribuída**, porque não há assento livre ou **Auto-assign licenses** está desativado, a revisão é ignorada e o Kodus reage ao pull request com um emoji de polegar para baixo (👎) no GitHub e no Forgejo, um emoji de cadeado (🔒) no GitLab, ou um comentário 👎 no Azure DevOps e no Bitbucket. A reação só aparece quando **Show status feedback** está ativado em **Code review → General**.
+-   **O primeiro PR da pessoa é revisado sem um assento.** A Kodus conta os PRs que ela registrou para o autor.
+-   **A partir do segundo PR, a Kodus atribui uma licença** se houver uma disponível, e a revisão prossegue.
+-   **Se o autor não tem licença e nenhuma pode ser atribuída**, porque não há assento livre ou **Auto-assign licenses** está desativado, a revisão é ignorada e a Kodus reage ao pull request com um emoji de polegar para baixo (👎) no GitHub e no Forgejo, um emoji de cadeado (🔒) no GitLab, ou um comentário 👎 no Azure DevOps e no Bitbucket. A reação só aparece quando **Show status feedback** está ativado em **Code review → General**.
 
 As licenças só valem em um plano pago com assentos. O plano Free e o trial não têm; veja [Planos e Licenças](/pt-BR/how_to_use/pricing).
 
@@ -45,4 +45,4 @@ Para habilitar e configurar a Atribuição Automática de Licenças:
 
 Os dois toggles aparecem apenas com um plano pago ativo ou uma instância self-hosted licenciada, e apenas para membros que podem gerenciar assentos (Owners).
 
-No GitLab, se alguém com assento estiver ausente da lista de membros, o Kodus verifica se essa pessoa abriu um merge request recente em algum projeto conectado. Autores encontrados nessa consulta mantêm o assento. Se o provedor não concluir a verificação, os assentos são mantidos. Essa verificação do GitLab entrou depois da versão self-hosted 2.2.11.
+No GitLab, se alguém com assento estiver ausente da lista de membros, a Kodus verifica se essa pessoa abriu um merge request recente em algum projeto conectado. Autores encontrados nessa consulta mantêm o assento. Se o provedor não concluir a verificação, os assentos são mantidos. Essa verificação do GitLab entrou depois da versão self-hosted 2.2.11.

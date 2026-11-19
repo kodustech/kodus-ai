@@ -1,6 +1,6 @@
 ---
 title: "Conceitos"
-description: "Modelos mentais para aproveitar ao máximo o Kodus CLI."
+description: "Modelos mentais para aproveitar ao máximo o CLI da Kodus."
 ---
 
 Um breve tour pelas ideias que aparecem em todo o CLI. Leia isso uma vez e o restante da documentação fará mais sentido.
@@ -36,7 +36,7 @@ Você também pode usar `--format json` ou `--format markdown` para consumidores
 
 ## Profundidade da Revisão
 
-- **Padrão** — o modo de revisão definido para o repositório no Kodus (Balanced, a menos que você tenha alterado).
+- **Padrão** — o modo de revisão definido para o repositório na Kodus (Balanced, a menos que você tenha alterado).
 - **`--fast`** — verificações mais leves e um orçamento menor de passos. O hook instalado por `kodus hook install` usa esse modo.
 - **`--heavy`** — adiciona revisores especialistas para maior recall, com mais custo. Roda para uma equipe logada nos planos Teams ou Enterprise; qualquer outra revisão roda em Balanced e avisa isso. `--balanced` força apenas a revisão principal em um repositório configurado como Heavy. Veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode).
 - **`--focus <text>`** — direciona a revisão para uma área. Veja [Direcionar a revisão](/pt-BR/how_to_use/code_review/review_directive).
@@ -72,7 +72,7 @@ Veja [Primeiros Passos](/pt-BR/how_to_use/cli/getting_started) para saber como f
 
 ## Kody Rules
 
-Uma **Kody Rule** é uma regra estruturada que o revisor do Kodus aplica durante cada revisão, com escopo para um repositório ou global para sua equipe.
+Uma **Kody Rule** é uma regra estruturada que o revisor da Kodus aplica durante cada revisão, com escopo para um repositório ou global para sua equipe.
 
 ```
 Rule
@@ -84,13 +84,13 @@ Rule
 └── repo-id        <uuid> | global
 ```
 
-As regras se sobrepõem à revisão geral do Kodus — a IA as usa como critérios adicionais, não como substitutos.
+As regras se sobrepõem à revisão geral da Kodus — a IA as usa como critérios adicionais, não como substitutos.
 
 Gerencie regras pelo web app (**Code review → Kody Rules**) ou pelo CLI com `kodus rules create|update|view|pause|resume|delete`. O CLI é útil quando você quer as regras em controle de versão (gere-as a partir de um script, faça check-in em um repositório, reaplique ao provisionar). Com a [Configuração Centralizada](#configuração-centralizada), uma mudança de regra vira um pull request em vez de uma gravação direta.
 
 ## Configurações de Revisão
 
-As configurações de code review governam como o Kody revisa: quais categorias verificar, limites de severidade, arquivos ignorados, branches base, resumos de PR, aprovação e mais. Elas se aplicam em três níveis: **global**, **repositório** e **diretório**. O nível mais específico vence, e um nível sem valor próprio herda o do nível acima.
+As configurações de code review governam como a Kody revisa: quais categorias verificar, limites de severidade, arquivos ignorados, branches base, resumos de PR, aprovação e mais. Elas se aplicam em três níveis: **global**, **repositório** e **diretório**. O nível mais específico vence, e um nível sem valor próprio herda o do nível acima.
 
 Pelo CLI:
 
@@ -111,7 +111,7 @@ Uma revisão pelo CLI usa as configurações globais e as Kody Rules da sua equi
 
 ## Configuração Centralizada
 
-Normalmente, as configurações de cada repositório ficam no Kodus. A **Configuração Centralizada** permite que uma equipe armazene essas configurações em um único repositório git como fonte de verdade — cada mudança vira um pull request nesse repositório, dando revisão e histórico de versões à própria configuração de revisão.
+Normalmente, as configurações de cada repositório ficam na Kodus. A **Configuração Centralizada** permite que uma equipe armazene essas configurações em um único repositório git como fonte de verdade — cada mudança vira um pull request nesse repositório, dando revisão e histórico de versões à própria configuração de revisão.
 
 Ative, sincronize ou inspecione o estado (chave de equipe necessária):
 
@@ -122,7 +122,7 @@ kodus config centralized sync
 kodus config centralized disable
 ```
 
-Use a Configuração Centralizada quando sua equipe quiser controle auditável e versionado sobre as configurações de revisão. Mantenha o padrão (configurações por repositório no Kodus) quando esse cerimonial for exagero. Veja o [guia de Configuração Centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config#cli).
+Use a Configuração Centralizada quando sua equipe quiser controle auditável e versionado sobre as configurações de revisão. Mantenha o padrão (configurações por repositório na Kodus) quando esse cerimonial for exagero. Veja o [guia de Configuração Centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config#cli).
 
 ## Validação de Negócio
 
@@ -141,7 +141,7 @@ Agentes customizados são revisores extras que sua equipe define, cada um com su
 
 ## Kodus Trace
 
-O Kodus Trace registra as decisões por trás das mudanças que um agente de código com IA faz, e `kodus trace <path>` lê de volta as registradas para um caminho. Veja [Kodus Trace](/pt-BR/how_to_use/cli/trace).
+O recurso Kodus Trace registra as decisões por trás das mudanças que um agente de código com IA faz, e `kodus trace <path>` lê de volta as registradas para um caminho. Veja [Kodus Trace](/pt-BR/how_to_use/cli/trace).
 
 ## Saída para Agentes de IA (`--prompt-only` e `--agent`)
 

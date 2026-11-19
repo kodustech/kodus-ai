@@ -38,7 +38,7 @@ Soluciones para los errores que encuentras al conectar un proveedor y ejecutar r
   </Accordion>
 
   <Accordion title="Las variables de entorno del alojamiento autónomo no aparecen">
-    - Si Kodus está configurado mediante variables de entorno, la página **AI providers** muestra **Kodus is currently using an LLM configured via environment variables** con el modelo y el proveedor (y si el proveedor se definió en `API_LLM_PROVIDER` o se dedujo), mientras no haya un modelo conectado allí. La clave nunca se muestra.
+    - Si Kodus está configurada mediante variables de entorno, la página **AI providers** muestra **Kodus is currently using an LLM configured via environment variables** con el modelo y el proveedor (y si el proveedor se definió en `API_LLM_PROVIDER` o se dedujo), mientras no haya un modelo conectado allí. La clave nunca se muestra.
     - Conectar un modelo y guardar reemplaza la configuración del entorno.
   </Accordion>
 
@@ -72,6 +72,6 @@ Soluciones para los errores que encuentras al conectar un proveedor y ejecutar r
   </Accordion>
 
   <Accordion title="¿Puedo usar un LLM de alojamiento autónomo (p. ej., Ollama, vLLM)?">
-    Sí, mediante el proveedor **OpenAI-compatible** (en Custom). Ingresa la URL base de tu endpoint, el ID del modelo que expone y una clave de API de marcador de posición (la mayoría de los entornos de ejecución de alojamiento autónomo ignoran el encabezado de la clave pero igual requieren una). La página **AI providers** solo acepta una URL `https://` que se resuelva a una dirección pública, por lo que `localhost` y las direcciones de red privada se rechazan. En un Kodus con alojamiento autónomo, define un endpoint en una red privada con variables de entorno en su lugar; consulta [Instalación](/es/how_to_deploy/deploy_kodus/generic_vm).
+    Sí, mediante el proveedor **OpenAI-compatible** (en Custom). Ingresa la URL base de tu endpoint, el ID del modelo que expone y una clave de API de marcador de posición (la mayoría de los entornos de ejecución de alojamiento autónomo ignoran el encabezado de la clave pero igual requieren una). La página **AI providers** solo acepta una URL `https://` que se resuelva a una dirección pública, por lo que `localhost` y las direcciones de red privada se rechazan. En una instancia autoalojada de Kodus, define un endpoint en una red privada con variables de entorno en su lugar; consulta [Instalación](/es/how_to_deploy/deploy_kodus/generic_vm).
   </Accordion>
 </AccordionGroup>

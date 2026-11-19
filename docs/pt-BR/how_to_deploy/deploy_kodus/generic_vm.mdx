@@ -1,6 +1,6 @@
 ---
 title: "Instalação"
-description: "Implante o Kodus em uma máquina virtual genérica."
+description: "Implante a Kodus em uma máquina virtual genérica."
 icon: "plug"
 ---
 
@@ -12,7 +12,7 @@ Use esta seção para preencher seu `.env`. Comece pelas URLs públicas, depois 
 
 ### URLs Públicas
 
-Estas configurações dizem ao Kodus onde ele pode ser acessado. Troque os domínios de exemplo pelos seus.
+Estas configurações dizem à Kodus onde ela pode ser acessada. Troque os domínios de exemplo pelos seus.
 
 ```env
 NEXTAUTH_URL="https://kodus-web.yourdomain.com"          # Full public URL of the web app
@@ -31,12 +31,12 @@ WEB_PORT_API=3001
 <Info>
   Com o padrão `WEB_HOSTNAME_API=localhost`, o app web localiza a API usando `GLOBAL_API_CONTAINER_NAME` (`kodus_api` no instalador).
 
-  O navegador fala com o app web, e o servidor do app web chama a API. Quando `WEB_PORT_API` está definido, o app web chama `http://<WEB_HOSTNAME_API>:<WEB_PORT_API>`, então precisa ser um endereço HTTP simples que o container web consiga alcançar. Não o defina como um endereço HTTPS público com porta 443. O `install.sh` avisa quando `WEB_HOSTNAME_API` é `localhost`. Você pode ignorar esse aviso: os provedores Git chegam ao Kodus pelas URLs de webhook abaixo, não por esta variável.
+  O navegador fala com o app web, e o servidor do app web chama a API. Quando `WEB_PORT_API` está definido, o app web chama `http://<WEB_HOSTNAME_API>:<WEB_PORT_API>`, então precisa ser um endereço HTTP simples que o container web consiga alcançar. Não o defina como um endereço HTTPS público com porta 443. O `install.sh` avisa quando `WEB_HOSTNAME_API` é `localhost`. Você pode ignorar esse aviso: os provedores Git chegam à Kodus pelas URLs de webhook abaixo, não por esta variável.
 </Info>
 
 ### Configuração do Provedor de LLM
 
-O Kodus roda os reviews com o seu próprio modelo. Escolha uma forma de conectá-lo:
+A Kodus roda os reviews com o seu próprio modelo. Escolha uma forma de conectá-lo:
 
 - **No app (recomendado).** Abra **AI providers** na barra lateral, conecte um provedor com a sua chave e direcione modelos para tarefas. Veja [BYOK](/pt-BR/how_to_use/byok). Um modelo conectado ali sobrepõe o definido no `.env`.
 - **No `.env`.** Um modelo para a instância inteira. Declare o provedor, o modelo e a chave:
@@ -57,7 +57,7 @@ API_LLM_API_KEY="your-api-key"
 | `google_gemini` | Uma chave. `API_LLM_API_KEY` ou `API_GOOGLE_AI_API_KEY`. |
 | `google_vertex` | `API_LLM_API_KEY` como o JSON da service account em base64, ou deixe vazio para usar o Application Default Credentials com `GOOGLE_CLOUD_PROJECT`. `API_VERTEX_AI_LOCATION` define a localização. |
 
-Se `API_LLM_PROVIDER` estiver vazio, o Kodus deduz o provedor pelo nome do modelo e pelas chaves definidas. A página **AI providers** mostra qual modelo o ambiente configura e qualquer problema com ele.
+Se `API_LLM_PROVIDER` estiver vazio, a Kodus deduz o provedor pelo nome do modelo e pelas chaves definidas. A página **AI providers** mostra qual modelo o ambiente configura e qualquer problema com ele.
 
 Guias de provedores com valores prontos: [Chutes](/pt-BR/cookbook/chutes), [Fireworks](/pt-BR/cookbook/fireworks), [Groq](/pt-BR/cookbook/groq), [Moonshot](/pt-BR/cookbook/moonshot), [Novita](/pt-BR/cookbook/novita), [Synthetic](/pt-BR/cookbook/synthetic), [Together](/pt-BR/cookbook/together) e [Z.AI](/pt-BR/cookbook/z-ai).
 
@@ -104,7 +104,7 @@ API_DATABASE_DISABLE_SSL=true                 # disable SSL for local DBs
   Para bancos de dados embutidos, deixe `API_PG_DB_PASSWORD` e `API_MG_DB_PASSWORD` em branco e rode `./scripts/generate-secrets.sh` uma única vez para gerá-las, ou defina as suas. Para bancos de dados externos, use a senha do banco de dados existente.
 </Tip>
 
-Para usar seu próprio PostgreSQL ou MongoDB, defina `USE_LOCAL_DB=false` e aponte as variáveis `API_PG_DB_*` e `API_MG_DB_*` para eles. Os containers locais continuam subindo, porque os serviços do Kodus dependem deles no `docker-compose.yml` do instalador, mas o Kodus não os usa. Seu PostgreSQL precisa da extensão `vector` (pgvector), e o usuário do Kodus precisa poder criar schemas. Para um PostgreSQL gerenciado que exige TLS, defina `API_DATABASE_DISABLE_SSL=false`. O Kodus se autentica no MongoDB contra o banco `admin`, então crie o usuário lá. Uma única connection string também funciona: `DATABASE_URL` para o PostgreSQL e `MONGODB_URI` para o MongoDB substituem as variáveis individuais de host, porta e credenciais.
+Para usar seu próprio PostgreSQL ou MongoDB, defina `USE_LOCAL_DB=false` e aponte as variáveis `API_PG_DB_*` e `API_MG_DB_*` para eles. Os containers locais continuam subindo, porque os serviços da Kodus dependem deles no `docker-compose.yml` do instalador, mas a Kodus não os usa. Seu PostgreSQL precisa da extensão `vector` (pgvector), e o usuário da Kodus precisa poder criar schemas. Para um PostgreSQL gerenciado que exige TLS, defina `API_DATABASE_DISABLE_SSL=false`. A Kodus se autentica no MongoDB contra o banco `admin`, então crie o usuário lá. Uma única connection string também funciona: `DATABASE_URL` para o PostgreSQL e `MONGODB_URI` para o MongoDB substituem as variáveis individuais de host, porta e credenciais.
 
 A API aceita `DATABASE_URL` e `MONGODB_URI`. Ao usar o instalador, mantenha `API_PG_DB_PASSWORD` e `API_MG_DB_PASSWORD` preenchidos. O instalador exige os dois e o Compose ainda sobe os contêineres embutidos.
 
@@ -185,7 +185,7 @@ Escolha e configure seu provedor Git preferido. Você pode configurar um ou mais
   </Tab>
 </Tabs>
 
-Use o host dedicado de webhooks se tiver um. O Kodus usa essas URLs ao cadastrar webhooks por repositório. Se usar um [GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app), configure a URL do webhook nas configurações do App.
+Use o host dedicado de webhooks se tiver um. A Kodus usa essas URLs ao cadastrar webhooks por repositório. Se usar um [GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app), configure a URL do webhook nas configurações do App.
 
 ### Configuração do MCP Manager
 
@@ -193,7 +193,7 @@ Use o host dedicado de webhooks se tiver um. O Kodus usa essas URLs ao cadastrar
   Necessário apenas se você quiser usar o MCP Manager.
 </Info>
 
-O MCP Manager é o serviço que conecta o Kody a ferramentas externas e as expõe na tela de Plugins. Consulte a [documentação do MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager) para mais informações.
+O MCP Manager é o serviço que conecta a Kody a ferramentas externas e as expõe na tela de Plugins. Consulte a [documentação do MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager) para mais informações.
 
 ```env
 API_MCP_SERVER_ENABLED=true   # The installer starts kodus-mcp-manager when this is true
@@ -206,11 +206,11 @@ API_MCP_MANAGER_REDIRECT_URI=https://kodus-web.yourdomain.com/setup/mcp/oauth
 
 ### Configuração de Serviços Externos (Opcional)
 
-Estes serviços são opcionais, mas melhoram a qualidade do code review do Kodus. Cada um exige que você crie uma conta e gere uma chave de API.
+Estes serviços são opcionais, mas melhoram a qualidade do code review da Kodus. Cada um exige que você crie uma conta e gere uma chave de API.
 
 <AccordionGroup>
   <Accordion title="E2B — Sandbox de Execução de Código">
-    Por padrão, o Kodus processa os repositórios dentro do container do worker (`SANDBOX_PROVIDER=local`). O E2B roda esse trabalho em um sandbox remoto, o que o isola do seu host e serve para repositórios muito grandes.
+    Por padrão, a Kodus processa os repositórios dentro do container do worker (`SANDBOX_PROVIDER=local`). O E2B roda esse trabalho em um sandbox remoto, o que o isola do seu host e serve para repositórios muito grandes.
 
     1. Crie uma conta em [e2b.dev](https://e2b.dev)
     2. Gere uma chave de API no seu painel
@@ -225,7 +225,7 @@ Estes serviços são opcionais, mas melhoram a qualidade do code review do Kodus
   </Accordion>
 
   <Accordion title="MorphLLM — Modelo de Edição de Código">
-    O MorphLLM é um modelo especializado em edição de código rápida e precisa. O Kodus o usa para aplicar as sugestões de review com mais precisão.
+    O MorphLLM é um modelo especializado em edição de código rápida e precisa. A Kodus o usa para aplicar as sugestões de review com mais precisão.
 
     1. Crie uma conta em [morphllm.com](https://morphllm.com)
     2. Gere uma chave de API no seu painel
@@ -237,7 +237,7 @@ Estes serviços são opcionais, mas melhoram a qualidade do code review do Kodus
   </Accordion>
 
   <Accordion title="Exa — Busca em Documentação">
-    Com uma chave do Exa, o Kody consulta a documentação de bibliotecas enquanto revisa. Sem ela, a busca em documentação fica desligada.
+    Com uma chave do Exa, a Kody consulta a documentação de bibliotecas enquanto revisa. Sem ela, a busca em documentação fica desligada.
 
     1. Crie uma conta em [exa.ai](https://exa.ai)
     2. Gere uma chave de API no seu painel

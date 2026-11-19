@@ -1,6 +1,6 @@
 ---
 title: "Primeiros Passos"
-description: "Instale o Kodus CLI, autentique-se e execute sua primeira revisão."
+description: "Instale o CLI da Kodus, autentique-se e execute sua primeira revisão."
 ---
 
 Este guia leva você do zero a um diff revisado em menos de cinco minutos.
@@ -9,7 +9,7 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
   <Step title="Instalar">
     <Tabs>
       <Tab title="Instalador de Skills (Recomendado)">
-        Instala ou atualiza o CLI e depois instala as skills do Kodus nos agentes de IA que encontrar na sua máquina (Claude Code, Cursor, Codex e outros — veja [Agentes de IA](/pt-BR/how_to_use/cli/ai_agents)).
+        Instala ou atualiza o CLI e depois instala as skills da Kodus nos agentes de IA que encontrar na sua máquina (Claude Code, Cursor, Codex e outros — veja [Agentes de IA](/pt-BR/how_to_use/cli/ai_agents)).
 
         macOS e Linux:
 
@@ -60,9 +60,9 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
 
         O CLI abre a página **Authorize Kodus CLI** no seu navegador e imprime a URL caso o navegador não abra. Confira os detalhes de **Device**, **Mode** e **Expires**, clique em **Authorize CLI** e volte ao terminal.
 
-        Se você não estiver logado no Kodus nesse navegador, primeiro cai na página de login e, depois de entrar, no dashboard. Abra novamente a URL do terminal para chegar em **Authorize CLI**. O CLI espera por até 10 minutos.
+        Se você não estiver logado na Kodus nesse navegador, primeiro cai na página de login e, depois de entrar, no dashboard. Abra novamente a URL do terminal para chegar em **Authorize CLI**. O CLI espera por até 10 minutos.
 
-        Em uma máquina sem navegador, execute `kodus auth login --device-code` em um terminal privado. O CLI mostra a página de autorização (`https://app.kodus.io/cli/authorize` no Kodus Cloud) e um código de uso único. Na barra de endereços do navegador, adicione o código à URL como parâmetro `code` e clique em **Authorize CLI**. O código expira após 10 minutos. Mantenha o código e o link completo fora de logs e mensagens compartilhadas. No CI, armazene uma chave de equipe no secret `KODUS_TEAM_KEY`.
+        Em uma máquina sem navegador, execute `kodus auth login --device-code` em um terminal privado. O CLI mostra a página de autorização (`https://app.kodus.io/cli/authorize` na Kodus Cloud) e um código de uso único. Na barra de endereços do navegador, adicione o código à URL como parâmetro `code` e clique em **Authorize CLI**. O código expira após 10 minutos. Mantenha o código e o link completo fora de logs e mensagens compartilhadas. No CI, armazene uma chave de equipe no secret `KODUS_TEAM_KEY`.
 
         Seu login é armazenado em `~/.kodus/credentials.json` e atualizado automaticamente.
       </Tab>
@@ -94,7 +94,7 @@ Este guia leva você do zero a um diff revisado em menos de cinco minutos.
     </Tabs>
 
     <Info>
-      **Hospedando o Kodus por conta própria?** Aponte o CLI para a sua API antes de autenticar:
+      **Hospedando a Kodus por conta própria?** Aponte o CLI para a sua API antes de autenticar:
 
       ```bash
       export KODUS_API_URL=https://kodus-api.yourcompany.com

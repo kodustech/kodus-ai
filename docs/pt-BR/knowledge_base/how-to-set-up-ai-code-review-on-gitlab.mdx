@@ -1,19 +1,19 @@
 ---
 title: "Como configurar revisão de código com IA no GitLab"
-description: "Conecte o GitLab ao Kodus e selecione os repositórios para revisão automática."
+description: "Conecte o GitLab à Kodus e selecione os repositórios para revisão automática."
 ---
 
-O Kodus se conecta ao GitLab com OAuth ou um access token e recebe os eventos de merge request por meio de webhooks.
+A Kodus se conecta ao GitLab com OAuth ou um access token e recebe os eventos de merge request por meio de webhooks.
 
 O GitLab não tem um app para instalar: **Install Gitlab app** é um login OAuth. As revisões são publicadas como o usuário que conectou com OAuth, ou como o dono do token.
 
 ## Passos
 
-1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
+1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede a Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
 2. **Conecte o GitLab** — na etapa **Connect your Git tool** do onboarding, clique em **Install Gitlab app** para autorizar via OAuth, ou em **Connect via token** (você também pode conectar depois em **Repositories** na barra lateral: clique em **Gitlab** em **Connect a provider** e use a aba **OAuth** ou **Token**). Para um GitLab self-managed com token, ative **Self-hosted** e informe a **Gitlab URL**
-3. **Selecione os projetos** — escolha quais projetos do GitLab o Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
-4. **Webhooks** — o Kodus registra o webhook de merge request automaticamente quando você salva a seleção. Isso exige a função **Maintainer** ou **Owner** em cada projeto. Se isso não aconteceu, **Repositories** lista o projeto com o motivo; adicione o webhook manualmente com o guia [GitLab Webhooks](/pt-BR/how_to_deploy/platforms/gitlab/gitlab_webhook)
-5. Abra um merge request em um projeto selecionado. Veja [o que o Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
+3. **Selecione os projetos** — escolha quais projetos do GitLab a Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
+4. **Webhooks** — a Kodus registra o webhook de merge request automaticamente quando você salva a seleção. Isso exige a função **Maintainer** ou **Owner** em cada projeto. Se isso não aconteceu, **Repositories** lista o projeto com o motivo; adicione o webhook manualmente com o guia [GitLab Webhooks](/pt-BR/how_to_deploy/platforms/gitlab/gitlab_webhook)
+5. Abra um merge request em um projeto selecionado. Veja [o que a Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
 
 ## Configuração personalizada
 

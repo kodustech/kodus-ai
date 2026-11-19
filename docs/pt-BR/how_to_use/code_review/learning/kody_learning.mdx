@@ -3,14 +3,14 @@ title: "Feedback sobre sugestões"
 description: "O que o feedback registra hoje e quais mecanismos moldam as revisões futuras."
 ---
 
-As reações nos comentários do Kody não treinam um modelo nem filtram a próxima revisão. O Kody registra as reações 👍 e 👎, e se cada sugestão foi aplicada, e as exibe no Cockpit. O único ponto em que elas têm efeito é **Pause ignored and noisy rules** (abaixo): uma Kody Rule cujas sugestões acumulam 👎 ou raramente são aplicadas pode ser pausada.
+As reações nos comentários da Kody não treinam um modelo nem filtram a próxima revisão. A Kody registra as reações 👍 e 👎, e se cada sugestão foi aplicada, e as exibe no Cockpit. O único ponto em que elas têm efeito é **Pause ignored and noisy rules** (abaixo): uma Kody Rule cujas sugestões acumulam 👎 ou raramente são aplicadas pode ser pausada.
 
 Você ainda pode reagir a uma sugestão como feedback para o seu time. Para impedir que um tipo de sugestão volte, use um dos mecanismos abaixo.
 
 ## O que afeta as revisões futuras
 
-- **Sugestões anteriores no mesmo PR:** em um PR que o Kody já revisou, ele vê as sugestões que postou antes e se foram aplicadas, e evita postá-las de novo.
+- **Sugestões anteriores no mesmo PR:** em um PR que a Kody já revisou, ela vê as sugestões que postou antes e se foram aplicadas, e evita postá-las de novo.
 - [Memórias](/pt-BR/knowledge_base/how-to-teach-ai-your-team-conventions): preservam convenções explícitas do time por meio de `@kody remember` e de conversas.
 - [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules): definem padrões que são aplicados durante o code review.
 - [Geração automática de regras](/pt-BR/how_to_use/code_review/learning/kody_rules_generation): gera regras a partir do histórico de revisões. As regras ficam ativas por padrão, ou retidas em **Pending review** para aprovação quando **Kody knowledge approval** está ativado.
-- [Pause ignored and noisy rules](/pt-BR/how_to_use/code_review/configs/kody_rules#pausar-regras-ignoradas-e-ruidosas): nos planos Teams e Enterprise, desativado por padrão. Quando ativado, o Kody pausa uma vez por dia as regras ativas marcadas como **Ignored** (poucas sugestões aplicadas) ou **Noisy** (maioria 👎) nos últimos 30 dias.
+- [Pause ignored and noisy rules](/pt-BR/how_to_use/code_review/configs/kody_rules#pausar-regras-ignoradas-e-ruidosas): nos planos Teams e Enterprise, desativado por padrão. Quando ativado, a Kody pausa uma vez por dia as regras ativas marcadas como **Ignored** (poucas sugestões aplicadas) ou **Noisy** (maioria 👎) nos últimos 30 dias.

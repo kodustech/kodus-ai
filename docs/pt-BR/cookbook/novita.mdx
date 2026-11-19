@@ -1,12 +1,12 @@
 ---
 title: "Novita AI - Plataforma GPU Serverless"
-description: "Aprenda a usar os modelos da Novita com o Kodus"
+description: "Aprenda a usar os modelos da Novita com a Kodus"
 icon: "server"
 ---
 
 ## Como a Novita funciona
 
-A Novita é uma plataforma de inferência serverless que hospeda modelos open-source, como DeepSeek, Kimi, GLM, MiniMax e Qwen, por trás de uma API **compatível com OpenAI**. O Kodus tem um provedor **Novita** dedicado, então você só precisa de uma chave de API.
+A Novita é uma plataforma de inferência serverless que hospeda modelos open-source, como DeepSeek, Kimi, GLM, MiniMax e Qwen, por trás de uma API **compatível com OpenAI**. A Kodus tem um provedor **Novita** dedicado, então você só precisa de uma chave de API.
 
 ## Modelos Recomendados
 
@@ -33,11 +33,11 @@ Os IDs de modelo da Novita são strings `org/model`, na maioria em minúsculas. 
 3. Escolha uma expiração: **Permanent**, 90 dias, 30 dias ou 24 horas. Você não pode alterá-la depois, e a Novita rejeita uma chave expirada.
 4. Copie a chave. A Novita a mostra por completo apenas uma vez.
 
-## Configurar a Novita no Kodus
+## Configurar a Novita na Kodus
 
 ### Opção 1 — Página AI providers (recomendado)
 
-Este fluxo é o mesmo no Kodus Cloud e em uma instância self-hosted.
+Este fluxo é o mesmo na Kodus Cloud e em uma instância self-hosted.
 
 <Steps>
   <Step title="Abrir AI providers e escolher Novita">
@@ -45,11 +45,11 @@ Este fluxo é o mesmo no Kodus Cloud e em uma instância self-hosted.
   </Step>
 
   <Step title="Colar sua chave de API e escolher o modelo">
-    Cole sua chave da Novita no campo **Key** do card **API key**. Deixe **Base URL (optional)** vazio: o Kodus então chama `https://api.novita.ai/v3/openai`. No card **Model**, escolha um modelo da lista ou selecione **Type model manually**.
+    Cole sua chave da Novita no campo **Key** do card **API key**. Deixe **Base URL (optional)** vazio: a Kodus então chama `https://api.novita.ai/v3/openai`. No card **Model**, escolha um modelo da lista ou selecione **Type model manually**.
   </Step>
 
   <Step title="Test & save">
-    Clique em **Test & save**. O Kodus envia ao modelo uma requisição de um token e salva a configuração em caso de sucesso.
+    Clique em **Test & save**. A Kodus envia ao modelo uma requisição de um token e salva a configuração em caso de sucesso.
   </Step>
 </Steps>
 

@@ -1,15 +1,15 @@
 ---
 title: "Como corrigir problemas de webhook"
-description: "Diagnostique e resolva problemas de entrega de webhook entre seu provedor Git e o Kodus."
+description: "Diagnostique e resolva problemas de entrega de webhook entre seu provedor Git e a Kodus."
 ---
 
-Webhooks são a forma como o Kodus sabe quando um PR é aberto, atualizado ou comentado. Se não estiverem funcionando, as revisões não serão acionadas.
+Webhooks são a forma como a Kodus sabe quando um PR é aberto, atualizado ou comentado. Se não estiverem funcionando, as revisões não serão acionadas.
 
-Com o GitHub App, os eventos vêm do webhook do próprio App. Em todas as outras conexões, o Kodus cria um webhook em cada repositório quando você salva a seleção em **Repositories**.
+Com o GitHub App, os eventos vêm do webhook do próprio App. Em todas as outras conexões, a Kodus cria um webhook em cada repositório quando você salva a seleção em **Repositories**.
 
 ## Verifique Repositories primeiro
 
-Quando um provedor se recusa a criar um webhook, **Repositories** mostra um aviso, **A repository has no webhook** ou **N repositories have no webhook**, com cada repositório e o motivo. O Kodus nunca fica sabendo dos pull requests nesses repositórios, então nenhuma revisão roda. A causa usual é uma credencial que não consegue gerenciar webhooks:
+Quando um provedor se recusa a criar um webhook, **Repositories** mostra um aviso, **A repository has no webhook** ou **N repositories have no webhook**, com cada repositório e o motivo. A Kodus nunca fica sabendo dos pull requests nesses repositórios, então nenhuma revisão roda. A causa usual é uma credencial que não consegue gerenciar webhooks:
 
 ### Permissões de webhook por provedor
 
@@ -22,7 +22,7 @@ Quando um provedor se recusa a criar um webhook, **Repositories** mostra um avis
 | Azure DevOps | **Edit subscriptions** no projeto (os Project Administrators têm) |
 | Forgejo | Acesso de admin ao repositório e o escopo `write:repository` |
 
-Corrija a permissão e salve a seleção de novo (**Save selected repositories**). Com **Review every repository** ativado, o Kodus tenta esses repositórios de novo a cada sincronização.
+Corrija a permissão e salve a seleção de novo (**Save selected repositories**). Com **Review every repository** ativado, a Kodus tenta esses repositórios de novo a cada sincronização.
 
 As recusas do Azure DevOps só aparecem aqui com **Review every repository** ativado. Com uma seleção, confira as assinaturas em **Project settings** → **Service hooks**.
 
@@ -31,7 +31,7 @@ As recusas do Azure DevOps só aparecem aqui com **Review every repository** ati
 ### GitHub
 
 1. Vá em **Settings** → **Webhooks** do seu repositório
-2. Encontre o webhook do Kodus
+2. Encontre o webhook da Kodus
 3. Clique nele e verifique **Recent Deliveries**
 4. Procure entregas com falha (códigos de status diferentes de 2xx)
 
@@ -40,14 +40,14 @@ Com um GitHub App que você criou para uma instância self-hosted, verifique **A
 ### GitLab
 
 1. Vá em **Settings** → **Webhooks** do seu projeto
-2. Encontre o webhook do Kodus
+2. Encontre o webhook da Kodus
 3. Verifique o histórico de entregas em busca de erros
 
 ### Azure DevOps
 
 Abra **Project settings** → **Service hooks** e verifique o histórico da assinatura.
 
-## Verifique se a URL chega ao Kodus
+## Verifique se a URL chega à Kodus
 
 Os webhooks são tratados por um serviço separado (porta 3332), não pela API nem pelo app web. Envie uma requisição que o serviço aceite sem um evento real:
 
@@ -60,7 +60,7 @@ curl -i -X POST https://kodus-webhooks.yourdomain.com/github/webhook \
 
 Um `200` com `Webhook ignored (event not supported)` significa que a requisição chegou ao serviço de webhooks. Um `404`, um redirecionamento ou uma página HTML significa que a URL aponta para a API ou para o app web: corrija a URL ou o seu reverse proxy. Para os outros provedores, use `/gitlab/webhook`, `/bitbucket/webhook` ou `/forgejo/webhook`. O Azure Repos responde `403 Unauthorized` sem o parâmetro `token`, o que também prova que a rota está certa.
 
-Um `200` só significa que o serviço aceitou a requisição. O Kodus descarta eventos de um repositório que não está selecionado em **Repositories**.
+Um `200` só significa que o serviço aceitou a requisição. A Kodus descarta eventos de um repositório que não está selecionado em **Repositories**.
 
 ## Correções comuns
 
@@ -76,15 +76,15 @@ A URL de cada provedor vem da sua variável de ambiente:
 | Azure DevOps | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | `/azure-repos/webhook` |
 | Forgejo | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | `/forgejo/webhook` |
 
-O Kodus identifica os webhooks existentes pela URL. Depois de alterar a URL, reinicie a API e salve a seleção de novo: o Kodus cria um novo webhook e deixa o antigo no lugar. Exclua o antigo no seu provedor Git.
+A Kodus identifica os webhooks existentes pela URL. Depois de alterar a URL, reinicie a API e salve a seleção de novo: a Kodus cria um novo webhook e deixa o antigo no lugar. Exclua o antigo no seu provedor Git.
 
 ### Problemas com o certificado SSL
 
-Os webhooks que o Kodus cria no GitHub e no GitLab têm a verificação SSL ativada; os outros provedores usam o próprio padrão. Se você hospeda por conta própria, garanta que seu certificado SSL seja válido, ou o provedor rejeita a entrega.
+Os webhooks que a Kodus cria no GitHub e no GitLab têm a verificação SSL ativada; os outros provedores usam o próprio padrão. Se você hospeda por conta própria, garanta que seu certificado SSL seja válido, ou o provedor rejeita a entrega.
 
 ### Bloqueio por firewall
 
-Se o Kodus está atrás de um firewall, garanta que as faixas de IP do seu provedor Git consigam alcançar o endpoint do webhook.
+Se a Kodus está atrás de um firewall, garanta que as faixas de IP do seu provedor Git consigam alcançar o endpoint do webhook.
 
 ### O webhook foi excluído
 
@@ -94,4 +94,4 @@ Salvar a seleção em **Repositories** (**Add repository** → **Save selected r
 
 A maioria dos provedores Git permite **reenviar** (redeliver) um payload de webhook recente. Use isso para testar sem criar um novo PR.
 
-Self-hosted: rode `./scripts/doctor.sh` a partir da pasta do instalador. As verificações de Git dele reportam repositórios que o token não consegue ler nem comentar, repositórios sem webhook do Kodus e se a URL do webhook está definida e recebeu eventos nos últimos 7 dias.
+Self-hosted: rode `./scripts/doctor.sh` a partir da pasta do instalador. As verificações de Git dele reportam repositórios que o token não consegue ler nem comentar, repositórios sem webhook da Kodus e se a URL do webhook está definida e recebeu eventos nos últimos 7 dias.

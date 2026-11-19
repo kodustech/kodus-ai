@@ -1,6 +1,6 @@
 ---
 title: "Conecte o Jira e valide pull requests"
-description: "Configure o Atlassian Rovo no Kodus e confira um PR com o ticket do Jira."
+description: "Configure o Atlassian Rovo na Kodus e confira um PR com o ticket do Jira."
 ---
 
 Você precisa ter permissão de leitura nos projetos do Jira referenciados pelos seus pull requests.
@@ -12,13 +12,13 @@ Você precisa ter permissão de leitura nos projetos do Jira referenciados pelos
 3. Clique em **Authenticate with** do plugin e autorize o acesso ao seu workspace do Jira (OAuth), ou informe seu e-mail da Atlassian e um API token e clique em **Connect**
 4. O plugin é instalado assim que conecta, com as ferramentas somente leitura selecionadas. Para alterá-las depois, abra o plugin, edite **Selected tools** e clique em **Update Tools**
 
-Mantenha estas ferramentas selecionadas, porque o Kody lê os tickets com elas: `getJiraIssue`, `getAccessibleAtlassianResources` e `getVisibleJiraProjects`. Uma ferramenta que você desativa não pode ser usada.
+Mantenha estas ferramentas selecionadas, porque a Kody lê os tickets com elas: `getJiraIssue`, `getAccessibleAtlassianResources` e `getVisibleJiraProjects`. Uma ferramenta que você desativa não pode ser usada.
 
 ## O que isso habilita
 
 ### Validação automática de lógica de negócio
 
-Informe o ticket do Jira no título, na branch ou na descrição do PR. Com **Business Logic** ativado em **Code review → What to review** (o padrão), o Kody verifica o PR na primeira revisão. O Kody lê o ticket, a tarefa pai e as subtarefas.
+Informe o ticket do Jira no título, na branch ou na descrição do PR. Com **Business Logic** ativado em **Code review → What to review** (o padrão), a Kody verifica o PR na primeira revisão. A Kody lê o ticket, a tarefa pai e as subtarefas.
 
 ### Validação sob demanda
 
@@ -30,7 +30,7 @@ Cole qualquer URL do Jira, ou a chave de um ticket, em um comentário de PR:
 
 ## O que você recebe
 
-O Kody publica um comentário **Kody · Business Logic** com os requisitos que conferiu e o trecho de código que embasa cada resultado. Uma nova verificação atualiza esse comentário. Consulte a [Validação de regras de negócio](/pt-BR/how_to_use/code_review/business_logic_validation) para ver os estados e as opções de rechecagem.
+A Kody publica um comentário **Kody · Business Logic** com os requisitos que conferiu e o trecho de código que embasa cada resultado. Uma nova verificação atualiza esse comentário. Consulte a [Validação de regras de negócio](/pt-BR/how_to_use/code_review/business_logic_validation) para ver os estados e as opções de rechecagem.
 
 ## Dicas para melhores resultados
 
@@ -40,4 +40,4 @@ O Kody publica um comentário **Kody · Business Logic** com os requisitos que c
 
 ## Ferramentas do plugin em conversas
 
-O Kody pode usar o plugin quando você o menciona em um comentário de PR. Ele também pode ser ativado para um [agente personalizado](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp).
+A Kody pode usar o plugin quando você o menciona em um comentário de PR. Ele também pode ser ativado para um [agente personalizado](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp).

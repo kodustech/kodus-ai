@@ -1,25 +1,25 @@
 ---
 title: "Instruções e personalidade"
-description: "Diga ao Kody o que buscar em cada categoria de revisão e como escrever as sugestões."
+description: "Diga à Kody o que buscar em cada categoria de revisão e como escrever as sugestões."
 ---
 
-Duas configurações moldam o que o Kody reporta e como ele soa. As duas podem ser definidas nos escopos Global, Repository e Directory.
+Duas configurações moldam o que a Kody reporta e como ela soa. As duas podem ser definidas nos escopos Global, Repository e Directory.
 
 | Configuração | Onde | O que controla |
 | --- | --- | --- |
-| **Instructions** | **Code review → What to review**, nas linhas Bug, Performance e Security | O que o Kody busca nessa categoria. |
+| **Instructions** | **Code review → What to review**, nas linhas Bug, Performance e Security | O que a Kody busca nessa categoria. |
 | **Personality instructions** | **Code review → What Kody writes**, em **Kody's personality** | O tom e o tamanho de cada sugestão. |
 
 ## Instruções de categoria
 
 Cada linha **Bug**, **Performance** e **Security** ativada em [O que revisar](/pt-BR/how_to_use/code_review/configs/what_to_review) tem um botão **Instructions** que abre um editor (*What counts as a bug issue*, e assim por diante).
 
-- O editor mostra o texto padrão do Kody. O chip mostra **Kody's default** até você alterá-lo, e depois **Custom**.
+- O editor mostra o texto padrão da Kody. O chip mostra **Kody's default** até você alterá-lo, e depois **Custom**.
 - **Reset to default** restaura o padrão. Apagar o texto faz o mesmo.
 - O limite é de 2000 caracteres.
 - O botão fica oculto enquanto a categoria está desligada. Business Logic não tem instruções aqui.
 
-O Kody adiciona o seu texto às diretrizes dele para essa categoria. Cite a sua stack e os padrões que importam para você:
+A Kody adiciona o seu texto às diretrizes dela para essa categoria. Cite a sua stack e os padrões que importam para você:
 
 ```text
 Focus on SQL injection and missing authorization checks in our API
@@ -28,10 +28,10 @@ handlers. Treat unvalidated user input reaching a query as a finding.
 
 ## Personality instructions
 
-O editor **Personality instructions** em **Kody's personality** (limite de 2000 caracteres, **Reset to default** disponível) define como o Kody soa em cada sugestão. Ele se aplica por cima das instruções de cada categoria.
+O editor **Personality instructions** em **Kody's personality** (limite de 2000 caracteres, **Reset to default** disponível) define como a Kody soa em cada sugestão. Ele se aplica por cima das instruções de cada categoria.
 
-- O padrão do Kody mantém cada sugestão em duas frases curtas: o impacto e o que mudar. Quando você escreve a sua, esse limite deixa de valer, então diga qual tamanho você quer nas sugestões.
-- Algumas regras valem independentemente do que você escrever: o Kody não repete o título da sugestão, não coloca blocos de código no texto porque a correção é mostrada separadamente e não adiciona números de linha.
+- O padrão da Kody mantém cada sugestão em duas frases curtas: o impacto e o que mudar. Quando você escreve a sua, esse limite deixa de valer, então diga qual tamanho você quer nas sugestões.
+- Algumas regras valem independentemente do que você escrever: a Kody não repete o título da sugestão, não coloca blocos de código no texto porque a correção é mostrada separadamente e não adiciona números de linha.
 - Vale para toda sugestão, exceto achados determinísticos de scanners. As instruções de escrita próprias de um agente customizado substituem esta para os achados desse agente.
 
 ```text
@@ -41,12 +41,12 @@ Write in the second person and skip pleasantries.
 
 ## Referências Externas
 
-Instruções de categoria, instruções de personalidade e [instruções de resumo](/pt-BR/how_to_use/code_review/configs/pr_summary) podem apontar para arquivos. Depois que você salva, o Kody detecta as referências e lê esses arquivos nas revisões seguintes. Um indicador de status abaixo do editor mostra quando o processamento termina.
+Instruções de categoria, instruções de personalidade e [instruções de resumo](/pt-BR/how_to_use/code_review/configs/pr_summary) podem apontar para arquivos. Depois que você salva, a Kody detecta as referências e lê esses arquivos nas revisões seguintes. Um indicador de status abaixo do editor mostra quando o processamento termina.
 
 - `@file:path/to/file.ts` — um arquivo do repositório que está sendo revisado. Adicione `#L10-L50` para um intervalo de linhas.
 - `@file:repo-name:path/to/file.ts` — um arquivo de outro repositório.
 
-Menções como "siga as diretrizes do CONTRIBUTING.md" também são detectadas. Use caminhos precisos para que o Kody encontre o arquivo certo.
+Menções como "siga as diretrizes do CONTRIBUTING.md" também são detectadas. Use caminhos precisos para que a Kody encontre o arquivo certo.
 
 ## Definindo no `kodus-config.yml`
 
@@ -67,7 +67,7 @@ v2PromptOverrides:
                 What Kody should look for in the Security category.
 ```
 
-O arquivo aceita mais um grupo que nenhuma página do app edita: a régua de severidade que o Kody usa para classificar um achado.
+O arquivo aceita mais um grupo que nenhuma página do app edita: a régua de severidade que a Kody usa para classificar um achado.
 
 ```yaml
 v2PromptOverrides:
@@ -84,7 +84,7 @@ v2PromptOverrides:
 ```
 
 <Warning>
-  Isso muda como o Kody *classifica* os achados, não só como ele os escreve. Uma régua ruim pode silenciar ou inflar severidades em todas as revisões sem que ninguém perceba. Parta dos padrões em
+  Isso muda como a Kody *classifica* os achados, não só como ela os escreve. Uma régua ruim pode silenciar ou inflar severidades em todas as revisões sem que ninguém perceba. Parta dos padrões em
   [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
   em vez de escrever uma régua do zero.
 </Warning>
@@ -99,7 +99,7 @@ O arquivo só é lido quando **Prefer kodus-config.yml settings** está ligado. 
 
 - **Seja específico ao seu contexto.** "Foque em null dereferences nos nossos serviços Java e em conexões não fechadas na camada DAO" funciona melhor do que "procure bugs".
 - **Mantenha as categorias separadas.** Não repita a mesma instrução em Bug, Security e Performance.
-- **Descreva o padrão, não um exemplo.** Um exemplo, como uma concatenação de strings específica, pode restringir o que o Kody sinaliza a esse formato.
+- **Descreva o padrão, não um exemplo.** Um exemplo, como uma concatenação de strings específica, pode restringir o que a Kody sinaliza a esse formato.
 - **Comece com uma configuração.** Rode os padrões por uma semana, anote os falsos positivos ou as omissões e altere apenas a instrução relacionada a eles.
 
 ## Perguntas Frequentes
@@ -117,11 +117,11 @@ O arquivo só é lido quando **Prefer kodus-config.yml settings** está ligado. 
     Aumente **Minimum severity to post** em What to review (veja [Severidade mínima](/pt-BR/how_to_use/code_review/configs/suggestion_control)) e depois torne as instruções de categoria mais específicas.
   </Accordion>
 
-  <Accordion title="O Kody deixa passar um problema que deveria pegar.">
+  <Accordion title="A Kody deixa passar um problema que deveria pegar.">
     Verifique se a categoria está ligada e se a severidade do achado não está abaixo do seu limite. Use **Reset to default** para ver se a sua instrução restringiu demais a revisão.
   </Accordion>
 
   <Accordion title="Qual a diferença entre instruções de categoria e de personalidade?">
-    As instruções de categoria controlam o que o Kody analisa em cada categoria. As instruções de personalidade controlam como cada achado é escrito. Você pode alterá-las de forma independente.
+    As instruções de categoria controlam o que a Kody analisa em cada categoria. As instruções de personalidade controlam como cada achado é escrito. Você pode alterá-las de forma independente.
   </Accordion>
 </AccordionGroup>

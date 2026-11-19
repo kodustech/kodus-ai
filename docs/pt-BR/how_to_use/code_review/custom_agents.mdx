@@ -1,13 +1,13 @@
 ---
 title: "Visão geral"
-description: "Revisores que o seu time define, cada um com suas instruções, arquivos, conhecimento e ferramentas. Eles rodam ao lado do Kody nos pull requests que tocam os arquivos deles."
+description: "Revisores que o seu time define, cada um com suas instruções, arquivos, conhecimento e ferramentas. Eles rodam ao lado da Kody nos pull requests que tocam os arquivos deles."
 tag: "beta"
 ---
 
 import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
 <div className="kodus-feature-badges">
-  <FeatureBadge id="cloud" detail="Disponível no Kodus Cloud, incluindo o trial.">
+  <FeatureBadge id="cloud" detail="Disponível na Kodus Cloud, incluindo o trial.">
     <Badge icon="cloud" stroke>Teams e Enterprise</Badge>
   </FeatureBadge>
   <FeatureBadge id="self-hosted" detail="Requer uma licença Enterprise e BETA_FEATURES=true.">
@@ -28,7 +28,7 @@ Um agente personalizado é um revisor que o seu time escreve para um assunto só
 - **Tools**: plugins somente leitura, CLIs do seu time e regras do ast-grep
 - **Comments & model**: tag, formato, severidade mínima, limite de comentários, estilo de escrita e modelo
 
-Os agentes rodam ao lado da revisão do próprio Kody. Cada um reporta só o seu foco, e os comentários dele levam uma tag com o nome do agente, para o time saber quem está falando.
+Os agentes rodam ao lado da revisão da própria Kody. Cada um reporta só o seu foco, e os comentários dele levam uma tag com o nome do agente, para o time saber quem está falando.
 
 Em **Run automatically**, escolha **Every matching PR** ou **When risk is found**. A segunda só roda depois que a [avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) confirma um risco no pull request: com a avaliação desativada ou indisponível, o agente não roda sozinho, então ative a avaliação primeiro. Todo agente também recebe o resultado de risco como contexto. Um `@kody -v <agent>` explícito ignora essa condição, mantendo os arquivos, as permissões e as verificações de plano do agente. Uma execução só de agente nunca aprova o PR.
 
@@ -114,7 +114,7 @@ Quando as últimas execuções do agente falharam ou pararam antes de terminar, 
 
 | Campo | Observações |
 | --- | --- |
-| **Name** | Até 60 caracteres. Aparece na tag do agente. Evite um nome que repita uma categoria do Kody (Bug, Performance, Security, Business Logic); a página sugere um nome diferente. |
+| **Name** | Até 60 caracteres. Aparece na tag do agente. Evite um nome que repita uma categoria da Kody (Bug, Performance, Security, Business Logic); a página sugere um nome diferente. |
 | **Instructions** | Até 8.000 caracteres. Um briefing para um revisor que conhece o código: o que procurar, o que ignorar, que prova um apontamento precisa. |
 | **Run automatically** | **Every matching PR** (o padrão) ou **When risk is found**. As execuções manuais com `@kody -v` a ignoram. |
 
@@ -137,7 +137,7 @@ Os globs são comparados com o caminho a partir da raiz do repositório, em todo
 
 Arquivos de segredo (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*` e outras chaves SSH) nunca são mostrados a um agente, e um glob que os nomeia não muda isso. Templates como `.env.example` não são arquivos de segredo.
 
-Um pull request em que todos os arquivos alterados são ignorados ainda é revisado por um agente que nomeia algum deles, e só por ele: a revisão do próprio Kody não tem nada para olhar.
+Um pull request em que todos os arquivos alterados são ignorados ainda é revisado por um agente que nomeia algum deles, e só por ele: a revisão da própria Kody não tem nada para olhar.
 
 ### Tools
 
@@ -153,7 +153,7 @@ O que o agente pode executar além de ler o código, tudo somente leitura em rel
 | **Max comments per pull request** | Posta os mais graves. Vazio para sem limite. |
 | **Suggested fix** | **When confident**: o comentário propõe código quando o agente tem certeza da mudança. **Never**: ele só descreve o problema. |
 | **How it writes** | Até 2.000 caracteres sobre tom, tamanho e o que todo comentário precisa dizer. Vazio usa as configurações de escrita do time. Os comentários saem sempre no idioma definido em **General**. |
-| **Model** | **Routing default** segue a tarefa **Custom Agents** em **Code review → Routing**. Você pode escolher um dos seus modelos BYOK. Sem modelos BYOK, o agente usa os modelos do Kodus. |
+| **Model** | **Routing default** segue a tarefa **Custom Agents** em **Code review → Routing**. Você pode escolher um dos seus modelos BYOK. Sem modelos BYOK, o agente usa os modelos da Kodus. |
 
 **Delete agent**, no fim da página, remove o agente. Os apontamentos dele continuam nos pull requests anteriores.
 
@@ -188,7 +188,7 @@ Comente no pull request com o nome de comando do agente na primeira linha:
 @kody -v data-contracts
 ```
 
-O Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desligado, e posta os comentários dele. Os revisores do próprio Kody não rodam, e esse comando nunca aprova o pull request. Se nenhum agente responde por esse nome, o Kody responde com os nomes que existem.
+A Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desligado, e posta os comentários dele. Os revisores da própria Kody não rodam, e esse comando nunca aprova o pull request. Se nenhum agente responde por esse nome, a Kody responde com os nomes que existem.
 
 ## Como os agentes rodam em uma revisão
 
@@ -197,7 +197,7 @@ O Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desli
     Roda todo agente ligado cujos globs batem com pelo menos um arquivo alterado. Um agente sem arquivo correspondente não roda, e um configurado como **When risk is found** também não roda em um pull request sem risco confirmado.
   </Step>
   <Step title="Revisão">
-    Cada agente revisa só os seus arquivos, ao lado da revisão do Kody, e reporta só o que as instruções pedem. Ele lê skills e docs da branch de destino (um guia de outro repositório, da branch definida para ele) e usa as suas ferramentas.
+    Cada agente revisa só os seus arquivos, ao lado da revisão da Kody, e reporta só o que as instruções pedem. Ele lê skills e docs da branch de destino (um guia de outro repositório, da branch definida para ele) e usa as suas ferramentas.
   </Step>
   <Step title="Checagem de cada apontamento">
     Um apontamento de convenção precisa citar a regra que aplica. Veja [Como os apontamentos usam esses guias](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#como-os-apontamentos-usam-esses-guias) para saber o que pode ser citado. Uma citação que não está na fonte, na branch de onde ela é lida, é descartada. Uma citação encurtada com "..." passa quando cada parte está lá, na ordem. Depois, um verificador descarta apontamentos fora do foco do agente ou sem respaldo no código. Um match do ast-grep vale como prova sozinho.
@@ -206,7 +206,7 @@ O Kody roda só esse agente, no pull request inteiro, mesmo que ele esteja desli
     A severidade mínima do agente e, depois, o limite de comentários (ficam os mais graves).
   </Step>
   <Step title="Junção com a revisão principal">
-    Quando um agente e o Kody reportam o mesmo problema, fica um comentário só. Para uma regra do time dentro do foco do agente, vence o comentário do agente. Para o resto, fica o comentário do Kody.
+    Quando um agente e a Kody reportam o mesmo problema, fica um comentário só. Para uma regra do time dentro do foco do agente, vence o comentário do agente. Para o resto, fica o comentário da Kody.
   </Step>
   <Step title="Publicação">
     Os comentários levam a tag do agente. Um comentário de convenção cita a regra aplicada (o guia e o texto dele, ou "agent's instructions"). Um apontamento apoiado em uma CLI mostra, em **Evidence**, as linhas da saída da CLI que citam o arquivo.
@@ -248,12 +248,12 @@ Os comentários de cada agente levam a tag dele, então o pull request mostra qu
     - O apontamento está fora do que as instruções do agente pedem.
     - O verificador não achou respaldo no código.
     - Ficou abaixo da severidade mínima do agente, ou acima do limite de comentários.
-    - A revisão do Kody reportou o mesmo problema e manteve o comentário dela.
+    - A revisão da Kody reportou o mesmo problema e manteve o comentário dela.
   </Accordion>
   <Accordion title="Por que um guia de outro repositório não é aplicado?">
     O **Try it** mostra, em **Warnings**, qual arquivo não foi lido e por quê. Os motivos mais comuns:
 
-    - O repositório não está mais conectado ao Kodus (foi desmarcado em Git settings, renomeado ou o acesso foi revogado). Conecte de novo e escolha em **Other repository…**.
+    - O repositório não está mais conectado à Kodus (foi desmarcado em Git settings, renomeado ou o acesso foi revogado). Conecte de novo e escolha em **Other repository…**.
     - Não foi possível listar os repositórios da integração naquele momento. A próxima revisão tenta de novo.
     - O arquivo não está na branch padrão desse repositório, nem na branch ou tag que você definiu.
   </Accordion>

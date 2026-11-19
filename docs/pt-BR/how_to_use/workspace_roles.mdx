@@ -1,18 +1,18 @@
 ---
 title: "Funções do Workspace"
-description: "Saiba mais sobre o controle de acesso baseado em funções (RBAC) nos workspaces do Kodus, incluindo as diferentes funções de usuário e suas permissões."
+description: "Saiba mais sobre o controle de acesso baseado em funções (RBAC) nos workspaces da Kodus, incluindo as diferentes funções de usuário e suas permissões."
 ---
 
 <Note>
 **Membros do Workspace vs. Licenças de PR**: São completamente separados e não se afetam.
 
-- **Membros do Workspace**: Pessoas com conta no workspace do Kodus. Cada uma tem um papel que define o acesso, e todos os planos permitem membros ilimitados.
-- **Licenças de PR**: Desenvolvedores da sua organização Git que recebem reviews do Kody (baseado no seu plano)
+- **Membros do Workspace**: Pessoas com conta no workspace da Kodus. Cada uma tem um papel que define o acesso, e todos os planos permitem membros ilimitados.
+- **Licenças de PR**: Desenvolvedores da sua organização Git que recebem reviews da Kody (baseado no seu plano)
 </Note>
 
 ## Entendendo as Licenças de PR
 
-A aba **PR licenses** lista as pessoas que podem abrir pull requests nos repositórios que o Kody revisa: os membros da sua organização Git, mais os autores recentes de PR, com os bots marcados. As licenças são atribuídas a elas ali, e o seu plano decide quantos seats existem. Veja [Atribuição Automática de Licença](/pt-BR/how_to_use/auto_license_assignment).
+A aba **PR licenses** lista as pessoas que podem abrir pull requests nos repositórios que a Kody revisa: os membros da sua organização Git, mais os autores recentes de PR, com os bots marcados. As licenças são atribuídas a elas ali, e o seu plano decide quantos seats existem. Veja [Atribuição Automática de Licença](/pt-BR/how_to_use/auto_license_assignment).
 
 **Por que um desenvolvedor não está aparecendo?** A lista vem da sua plataforma de código. Clique em **Refresh members** para recarregá-la. Se a pessoa continuar sem aparecer, use **Assign by git ID** para atribuir um seat diretamente. Se a sua plataforma de código não responder, a aba avisa e a limpeza automática de seats é pausada.
 
@@ -20,7 +20,7 @@ A aba **PR licenses** lista as pessoas que podem abrir pull requests nos reposit
 
 ## Visão Geral
 
-Os workspaces do Kodus suportam **Controle de Acesso Baseado em Funções (RBAC)**, permitindo gerenciar permissões de usuário e níveis de acesso dentro da sua organização. Cada membro do workspace tem uma de quatro funções, cada uma com permissões específicas.
+Os workspaces da Kodus suportam **Controle de Acesso Baseado em Funções (RBAC)**, permitindo gerenciar permissões de usuário e níveis de acesso dentro da sua organização. Cada membro do workspace tem uma de quatro funções, cada uma com permissões específicas.
 
 ## Funções Disponíveis
 
@@ -74,7 +74,7 @@ Ative o auto-join para permitir que usuários com domínios de e-mail correspond
 
 **Como funciona:**
 - Usuários que se cadastram com o seu domínio de e-mail podem escolher entrar na sua organização
-- No Kodus Cloud, eles precisam confirmar o e-mail depois de escolher entrar
+- Na Kodus Cloud, eles precisam confirmar o e-mail depois de escolher entrar
 - Todos os usuários de auto-join entram com a função **Contributor** (acesso somente leitura a toda a organização)
 - Como Owner, ajuste a função deles se precisarem de permissões de edição
 
@@ -127,7 +127,7 @@ O mesmo menu tem **Approve** para membros marcados como **Needs approval** e **C
   </Accordion>
 
   <Accordion title="Um desenvolvedor não está aparecendo em PR licenses">
-    - Clique em **Refresh members** na aba **PR licenses** e confira se o desenvolvedor pertence à sua organização Git ou abriu PRs recentemente em um repositório que o Kody revisa.
+    - Clique em **Refresh members** na aba **PR licenses** e confira se o desenvolvedor pertence à sua organização Git ou abriu PRs recentemente em um repositório que a Kody revisa.
     - Use **Assign by git ID** para atribuir um seat a alguém que não está listado.
     - Lembre-se: as licenças de PR vêm do seu provider Git, não dos membros do workspace.
   </Accordion>

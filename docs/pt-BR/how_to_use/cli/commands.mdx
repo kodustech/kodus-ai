@@ -1,6 +1,6 @@
 ---
 title: "Referência de Comandos"
-description: "Referência completa de todos os comandos, flags e opções do Kodus CLI."
+description: "Referência completa de todos os comandos, flags e opções do CLI da Kodus."
 ---
 
 ## Flags Globais
@@ -204,7 +204,7 @@ Passe no máximo um escopo: arquivos, `--staged`, `--branch` ou `--commit`. Sem 
 
 ## `kodus auth`
 
-Gerencia a autenticação com a API do Kodus.
+Gerencia a autenticação com a API da Kodus.
 
 ### `auth login`
 
@@ -214,7 +214,7 @@ kodus auth login --device-code                # Code login, for SSH and headless
 kodus auth login --legacy -e user@mail.com
 ```
 
-O login abre a página **Authorize Kodus CLI** no seu navegador e imprime a URL dela; clique em **Authorize CLI** lá para concluir. Se você não estiver logado no Kodus nesse navegador, você cai no dashboard depois de entrar: abra a URL novamente.
+O login abre a página **Authorize Kodus CLI** no seu navegador e imprime a URL dela; clique em **Authorize CLI** lá para concluir. Se você não estiver logado na Kodus nesse navegador, você cai no dashboard depois de entrar: abra a URL novamente.
 
 Em uma sessão SSH privada ou máquina sem navegador, use `--device-code` e siga as [etapas de login](/pt-BR/how_to_use/cli/getting_started). Os dois fluxos aguardam até 10 minutos. No CI, use `KODUS_TEAM_KEY` como secret.
 
@@ -305,7 +305,7 @@ Isso revisa os commits que o remoto ainda não tem. O `--fast` fica de fora com 
 kodus hook uninstall
 ```
 
-Remove o hook pre-push instalado pelo Kodus. Adicione `--dry-run` para visualizar. Um hook que o Kodus não instalou é deixado em paz.
+Remove o hook pre-push instalado pela Kodus. Adicione `--dry-run` para visualizar. Um hook que a Kodus não instalou é deixado em paz.
 
 ### `hook status`
 
@@ -325,7 +325,7 @@ KODUS_SKIP_HOOK=1 git push
 
 ## `kodus config remote`
 
-Lê e altera as configurações de code review armazenadas no Kodus: globais, por repositório e por diretório.
+Lê e altera as configurações de code review armazenadas na Kodus: globais, por repositório e por diretório.
 
 <Note>`kodus config repo` ainda funciona como um alias de `kodus config remote`.</Note>
 
@@ -356,8 +356,8 @@ kodus config remote setup .                             # Guided setup (team key
 
 | Subcomando                                                  | Descrição                                                                                |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `add [repository]`                                          | Adicionar um repositório ao Kodus. `--no-prompt` pula o prompt de configuração           |
-| `list`                                                      | Listar os repositórios adicionados ao Kodus. `--team`, `--json`                          |
+| `add [repository]`                                          | Adicionar um repositório à Kodus. `--no-prompt` pula o prompt de configuração           |
+| `list`                                                      | Listar os repositórios adicionados à Kodus. `--team`, `--json`                          |
 | `show [repository]`                                         | Mostrar as configurações e o nível de onde cada valor vem. `--no-file-overlay` pula a leitura do `kodus-config.yml` |
 | `set [repository] <key> <value>`                            | Definir uma configuração. `--create-directory` dá a `--directory` suas próprias configurações se ele não tiver nenhuma |
 | `unset [repository] <key>`                                  | Descartar o valor próprio de um nível para que ele volte a herdar                        |
@@ -420,7 +420,7 @@ Para um passo a passo completo, veja o [guia de Configuração Centralizada](/pt
 
 ## `kodus rules`
 
-Cria, atualiza, visualiza, pausa, retoma e exclui Kody Rules — regras estruturadas que o Kodus aplica durante a revisão.
+Cria, atualiza, visualiza, pausa, retoma e exclui Kody Rules — regras estruturadas que a Kodus aplica durante a revisão.
 
 Com uma chave de equipe, a chave precisa de **Allow Kody Rules management via CLI** ativado (**Organization → CLI keys**, **Configure** na chave; desativado por padrão). Com um login, valem as permissões do seu role no app web. `pause`, `resume` e `delete` exigem um login.
 
@@ -655,7 +655,7 @@ kodus issues list --repo my-repo --status all --json
 | `--repo <repo>` | Filtra por nome ou ID do repositório. |
 | `--json` | Retorna a lista em JSON. |
 
-Os achados do Deep Scan e os prompts de correção exigem um workspace do Kodus Cloud com acesso ao alpha privado.
+Os achados do Deep Scan e os prompts de correção exigem um workspace da Kodus Cloud com acesso ao alpha privado.
 
 ---
 
@@ -679,7 +679,7 @@ Veja [Kodus Trace](/pt-BR/how_to_use/cli/trace) para saber como funciona.
 
 ## `kodus skills`
 
-Inspeciona e instala as skills do Kodus incluídas no CLI nos agentes de IA da sua máquina.
+Inspeciona e instala as skills da Kodus incluídas no CLI nos agentes de IA da sua máquina.
 
 ### Uso
 
@@ -715,7 +715,7 @@ O CLI detecta um agente pela pasta de configuração dele. [Agentes de IA](/pt-B
 
 ## `kodus status`
 
-Mostra um status consolidado do Kodus: versão do CLI, modo de autenticação, se uma chave de equipe está configurada, repositório e branch, hook pre-push, hooks de decisão e o número de skills incluídas.
+Mostra um status consolidado da Kodus: versão do CLI, modo de autenticação, se uma chave de equipe está configurada, repositório e branch, hook pre-push, hooks de decisão e o número de skills incluídas.
 
 ```bash
 kodus status
@@ -727,7 +727,7 @@ kodus status
 
 ## `kodus update`
 
-Atualiza o Kodus CLI para a versão mais recente do npm.
+Atualiza o CLI da Kodus para a versão mais recente do npm.
 
 ```bash
 kodus update
@@ -739,7 +739,7 @@ Executa o comando de instalação global do gerenciador de pacotes que o iniciou
 
 ## `kodus subscribe`
 
-Abre a página de preços do Kodus no seu navegador.
+Abre a página de preços da Kodus no seu navegador.
 
 ```bash
 kodus subscribe

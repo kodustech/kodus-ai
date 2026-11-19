@@ -1,17 +1,17 @@
 ---
 title: "Geral"
-description: "Quando o Kody revisa, quais pull requests e arquivos ele pula, como ele reporta no pull request e a referência do kodus-config.yml."
+description: "Quando a Kody revisa, quais pull requests e arquivos ela pula, como ela reporta no pull request e a referência do kodus-config.yml."
 ---
 
-Abra **Code review → General** (título da página **General settings**). As categorias de revisão e o limite de severidade estão em [O que revisar](/pt-BR/how_to_use/code_review/configs/what_to_review). Resumos, mensagens e a voz do Kody estão em **What Kody writes**.
+Abra **Code review → General** (título da página **General settings**). As categorias de revisão e o limite de severidade estão em [O que revisar](/pt-BR/how_to_use/code_review/configs/what_to_review). Resumos, mensagens e a voz da Kody estão em **What Kody writes**.
 
 <Note>
-  O Kodus tem três níveis de configuração: Global, Repositório e Diretório. Saiba como funcionam em <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança de configurações</a>.
+  A Kodus tem três níveis de configuração: Global, Repositório e Diretório. Saiba como funcionam em <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança de configurações</a>.
 </Note>
 
 ## Revisão de código automatizada
 
-A chave **Automated code review** faz o Kody revisar os pull requests quando eles são abertos. Ela vem ligada por padrão. Com ela desligada, inicie uma revisão comentando `@kody start-review` no pull request.
+A chave **Automated code review** faz a Kody revisar os pull requests quando eles são abertos. Ela vem ligada por padrão. Com ela desligada, inicie uma revisão comentando `@kody start-review` no pull request.
 
 <Info>
   Essa chave cobre a **revisão inicial**. Para os pushes seguintes, veja Cadência de Revisão abaixo.
@@ -19,7 +19,7 @@ A chave **Automated code review** faz o Kody revisar os pull requests quando ele
 
 ### Cadência de Revisão
 
-Exibida quando **Automated code review** está ligado. Define como o Kody trata as revisões depois da primeira:
+Exibida quando **Automated code review** está ligado. Define como a Kody trata as revisões depois da primeira:
 
 <Tabs>
   <Tab title="Automático">
@@ -27,13 +27,13 @@ Exibida quando **Automated code review** está ligado. Define como o Kody trata 
   </Tab>
 
   <Tab title="Auto-pause">
-    Pausa as revisões quando os pushes chegam em rajada. Depois que o Kody revisou um pull request **Pushes to trigger pause** vezes dentro de **Time window (minutes)**, o próximo push não é revisado e o pull request fica pausado até você comentar `@kody start-review`.
+    Pausa as revisões quando os pushes chegam em rajada. Depois que a Kody revisou um pull request **Pushes to trigger pause** vezes dentro de **Time window (minutes)**, o próximo push não é revisado e o pull request fica pausado até você comentar `@kody start-review`.
 
     Padrões: 3 pushes em 15 minutos.
   </Tab>
 
   <Tab title="Manual">
-    O Kody revisa o primeiro push quando o pull request é aberto. Os pushes seguintes só são revisados quando você comenta `@kody start-review`.
+    A Kody revisa o primeiro push quando o pull request é aberto. Os pushes seguintes só são revisados quando você comenta `@kody start-review`.
   </Tab>
 </Tabs>
 
@@ -49,38 +49,38 @@ A avaliação de risco tem a própria página e chave. Veja [Avaliação de risc
 
 ## Fluxo de PR
 
-**Automatic PR approval** — o Kody aprova um PR depois de uma revisão limpa, ou quando todos os comentários que ele deixou estão resolvidos. Ele nunca faz o merge. As políticas de aprovação definem quais PRs limpos o Kody pode aprovar, e a avaliação de risco ativa vale para todas as políticas. Veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve).
+**Automatic PR approval** — a Kody aprova um PR depois de uma revisão limpa, ou quando todos os comentários que ela deixou estão resolvidos. Ela nunca faz o merge. As políticas de aprovação definem quais PRs limpos a Kody pode aprovar, e a avaliação de risco ativa vale para todas as políticas. Veja [Aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve).
 
 **Plataformas:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 
 ## Feedback da revisão
 
-- **Request changes on critical issues** (`isRequestChangesActive`, desligado por padrão) — quando o Kody encontra um problema crítico, ele define o review do pull request como Request Changes. O Kody retira o pedido quando esses achados são resolvidos, mesmo em um pull request que ele não aprova. Plataformas: GitHub, Bitbucket, Azure Repos, Forgejo. A chave fica oculta quando o GitLab é a única plataforma conectada.
-- **Show status feedback** (ligado por padrão) — o Kody reage ou comenta quando uma revisão é pulada ou bloqueada.
-- **Committable suggestions** (Alpha, ligado por padrão) — o Kody pode sugerir código que você aplica diretamente como um commit. Apenas GitHub; a chave fica desabilitada sem uma conexão com o GitHub.
+- **Request changes on critical issues** (`isRequestChangesActive`, desligado por padrão) — quando a Kody encontra um problema crítico, ela define o review do pull request como Request Changes. A Kody retira o pedido quando esses achados são resolvidos, mesmo em um pull request que ela não aprova. Plataformas: GitHub, Bitbucket, Azure Repos, Forgejo. A chave fica oculta quando o GitLab é a única plataforma conectada.
+- **Show status feedback** (ligado por padrão) — a Kody reage ou comenta quando uma revisão é pulada ou bloqueada.
+- **Committable suggestions** (Alpha, ligado por padrão) — a Kody pode sugerir código que você aplica diretamente como um commit. Apenas GitHub; a chave fica desabilitada sem uma conexão com o GitHub.
 
 ## Escopo da revisão
 
-O Kody pula arquivos e pull requests que correspondam a estas configurações. Revisões iniciadas com `@kody start-review` ignoram **Ignore title keywords**, **Base Branches** e **Review draft pull requests**.
+A Kody pula arquivos e pull requests que correspondam a estas configurações. Revisões iniciadas com `@kody start-review` ignoram **Ignore title keywords**, **Base Branches** e **Review draft pull requests**.
 
 ### Arquivos ignorados
 
-Padrões glob de arquivos que o Kody pula. Os padrões diferenciam maiúsculas de minúsculas e correspondem a dotfiles. O campo mostra alguns padrões; **Edit** abre o diálogo **Ignored files**. Cada novo padrão é verificado quanto à sintaxe glob válida, e **Test a file** diz se um caminho seria ignorado, e por qual padrão, ou revisado. **Apply** apenas atualiza o campo. Nada é salvo até você clicar em **Save settings**.
+Padrões glob de arquivos que a Kody pula. Os padrões diferenciam maiúsculas de minúsculas e correspondem a dotfiles. O campo mostra alguns padrões; **Edit** abre o diálogo **Ignored files**. Cada novo padrão é verificado quanto à sintaxe glob válida, e **Test a file** diz se um caminho seria ignorado, e por qual padrão, ou revisado. **Apply** apenas atualiza o campo. Nada é salvo até você clicar em **Save settings**.
 
-A lista padrão é longa: `yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`, `**/*.xml`, `**/*.lock`, `**/*.min.*`, imagens, fontes e arquivos compactados, arquivos de IDE e de SO, e pastas como `**/build/**`, `**/bin/**`, `**/out/**`, `**/vendor/*`, `**/deploy/**` e `**/prod/**`. Se o Kody pula arquivos que você espera que ele revise, procure na lista um padrão amplo e remova-o.
+A lista padrão é longa: `yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`, `**/*.xml`, `**/*.lock`, `**/*.min.*`, imagens, fontes e arquivos compactados, arquivos de IDE e de SO, e pastas como `**/build/**`, `**/bin/**`, `**/out/**`, `**/vendor/*`, `**/deploy/**` e `**/prod/**`. Se a Kody pula arquivos que você espera que ela revise, procure na lista um padrão amplo e remova-o.
 
-Quando todos os arquivos alterados estão ignorados, o review ainda pode rodar se um custom agent incluir explicitamente um deles. Arquivos removidos ficam de fora. O Kody pula o review quando o review principal e os custom agents somam mais de 2.000 arquivos revisáveis. Use **Ignored files** para excluir pastas geradas ou de vendor.
+Quando todos os arquivos alterados estão ignorados, o review ainda pode rodar se um custom agent incluir explicitamente um deles. Arquivos removidos ficam de fora. A Kody pula o review quando o review principal e os custom agents somam mais de 2.000 arquivos revisáveis. Use **Ignored files** para excluir pastas geradas ou de vendor.
 
 ### Ignore title keywords
 
-O Kody pula pull requests cujo título contém qualquer uma destas palavras-chave. A correspondência não diferencia maiúsculas de minúsculas, e cada palavra-chave pode ter até 100 caracteres.
+A Kody pula pull requests cujo título contém qualquer uma destas palavras-chave. A correspondência não diferencia maiúsculas de minúsculas, e cada palavra-chave pode ter até 100 caracteres.
 
 ### Base Branches
 
 Quais branches de destino recebem revisões automáticas.
 
 <Info>
-  **Vazio, o padrão, significa apenas a branch padrão do repositório.** Adicione entradas para revisar outras branches. Quando a lista tem entradas, o Kody revisa os pull requests que correspondem a uma delas, mais a branch padrão, a menos que você a exclua com `!`.
+  **Vazio, o padrão, significa apenas a branch padrão do repositório.** Adicione entradas para revisar outras branches. Quando a lista tem entradas, a Kody revisa os pull requests que correspondem a uma delas, mais a branch padrão, a menos que você a exclua com `!`.
 
   As entradas são comparadas com a branch de **destino** do pull request, exceto `contains:`:
 
@@ -97,7 +97,7 @@ Quais branches de destino recebem revisões automáticas.
 
 ## Outras configurações
 
-- **Kody Language** (apenas Global) — o idioma que o Kody usa nas respostas das revisões.
+- **Kody Language** (apenas Global) — o idioma que a Kody usa nas respostas das revisões.
 - **Configure centralized config** (apenas Global, no cabeçalho da página) — mantenha as configurações de revisão em um repositório. Veja [Configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config).
 
 ## kodus-config.yml
@@ -107,12 +107,12 @@ Quais branches de destino recebem revisões automáticas.
 Você pode manter as configurações de revisão em um arquivo `kodus-config.yml` na raiz de um repositório, em vez de usar o web app.
 
 <Warning>
-  **O arquivo é ignorado até você habilitar essa opção.** O Kody nunca lê o `kodus-config.yml` a menos que **Prefer kodus-config.yml settings** esteja ligado para o repositório. Só fazer commit do arquivo não faz nada.
+  **O arquivo é ignorado até você habilitar essa opção.** A Kody nunca lê o `kodus-config.yml` a menos que **Prefer kodus-config.yml settings** esteja ligado para o repositório. Só fazer commit do arquivo não faz nada.
 
   Escolha o repositório no seletor de escopo no topo do grupo **Code review**, abra **Code review → General** e ative **Prefer kodus-config.yml settings**. A chave também aparece no escopo de diretório, mas só a configuração do repositório decide se o arquivo é lido. É uma configuração da web: não pode ser ativada pelo arquivo. A barra lateral então mostra **kodus-config.yml applied**, **kodus-config.yml not found** ou **kodus-config.yml unavailable** abaixo do seletor de escopo.
 </Warning>
 
-- O Kody lê o arquivo da raiz da branch padrão do repositório.
+- A Kody lê o arquivo da raiz da branch padrão do repositório.
 - O arquivo é aplicado por cima do Global e das configurações web do repositório. Declare apenas as chaves que você quer alterar; as chaves omitidas mantêm o valor da web.
 - Configurações aninhadas são mescladas chave a chave. Uma lista no arquivo, como `ignorePaths`, substitui a lista vinda da web.
 - Uma configuração sobrescrita em um escopo de diretório tem precedência sobre a mesma configuração no arquivo do repositório. Veja [Herança de configurações](/pt-BR/how_to_use/code_review/configs/inheritance_overrides).

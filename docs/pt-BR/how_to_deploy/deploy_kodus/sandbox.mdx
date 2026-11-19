@@ -1,10 +1,10 @@
 ---
 title: "Sandbox & AST Graph"
-description: "Como o Kodus parseia seu repo (kodus-graph), onde isso roda (modos de sandbox) e quando escolher cada modo."
+description: "Como a Kodus parseia seu repo (kodus-graph), onde isso roda (modos de sandbox) e quando escolher cada modo."
 icon: "box"
 ---
 
-Para revisar um PR com o contexto certo, o Kodus parseia o repositório
+Para revisar um PR com o contexto certo, a Kodus parseia o repositório
 inteiro em um **AST graph** (nós + arestas) e usa esse graph para buscar contexto
 cross-file, validar sugestões e alimentar o agente. O parser roda dentro
 de um **sandbox**, para poder fazer `git clone`, instalar dependências e
@@ -19,15 +19,15 @@ graph e como o cache mantém rápidos os reviews em nível de PR.
 
 ## Como o AST graph funciona
 
-O Kodus usa o [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-graph),
+A Kodus usa o [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-graph),
 uma CLI que percorre um repositório e emite um graph em JSON (funções, classes,
-arquivos, imports, calls). A CLI já vem **pré-instalada nas imagens do Kodus**
+arquivos, imports, calls). A CLI já vem **pré-instalada nas imagens da Kodus**
 (incluindo a `kodus-ai-worker`), então não há etapa extra de setup no modo `local`.
 
 O ciclo de vida:
 
 1. **Quando você seleciona um repositório** (durante o setup, ou ao adicionar um repo
-   depois na UI) — o Kodus enfileira um job `AstGraphBuild` que roda
+   depois na UI) — a Kodus enfileira um job `AstGraphBuild` que roda
    `kodus-graph parse --all` na branch padrão, persiste o
    resultado no Postgres (tabelas `ast_graph_*`) e marca o repo como
    indexado. Isso acontece em background — você não precisa esperar
@@ -36,7 +36,7 @@ O ciclo de vida:
    enfileiram um rebuild incremental que re-parseia só os arquivos alterados
    e mescla os deltas no graph em cache. Um merge que altera
    mais de 500 arquivos dispara um rebuild completo no lugar.
-3. **Em todo review de PR** — o Kodus carrega o graph em cache, parseia só
+3. **Em todo review de PR** — a Kodus carrega o graph em cache, parseia só
    os arquivos tocados pelo PR e alimenta o agente com um subgraph focado.
    Esse é o caminho quente; ele nunca re-parseia o repo inteiro.
 
@@ -82,7 +82,7 @@ script de backfill que vem no instalador:
 
 Ele percorre todos os teams da instância e enfileira um job `AstGraphBuild`
 para cada repo selecionado cujo status de graph não esteja definido, `pending` ou
-`failed`. Os builds rodam em background — você pode continuar usando o Kodus
+`failed`. Os builds rodam em background — você pode continuar usando a Kodus
 enquanto eles terminam.
 
 O script é **idempotente**: rodar de novo pula repos que já estão

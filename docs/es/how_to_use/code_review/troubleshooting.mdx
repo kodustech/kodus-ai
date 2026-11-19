@@ -40,7 +40,7 @@ Un comando de revisión (`@kody review`, `@kody -v …`) enviado mientras otra r
 
 ## La merge queue elimina PRs mientras espera Kody Code Review
 
-En GitHub, cuando `Kody Code Review` es un check requerido y un PR entra en la merge queue, Kody informa el último resultado de revisión terminada del PR en el commit que prueba la cola. No se ejecuta ninguna revisión nueva. Esto requiere que Kody esté conectado mediante la GitHub App; con un personal access token, Kody no publica checks.
+En GitHub, cuando `Kody Code Review` es un check requerido y un PR entra en la merge queue, Kody informa el último resultado de revisión terminada del PR en el commit que prueba la cola. No se ejecuta ninguna revisión nueva. Esto requiere que Kody esté conectada mediante la GitHub App; con un personal access token, Kody no publica checks.
 
 El check significa que Kody revisó el PR, no que el PR esté libre de problemas. Pasa incluso con sugerencias críticas aún abiertas, y en el PR solo falla cuando la revisión misma no pudo ejecutarse. Exigirlo garantiza que hubo una revisión; no bloquea un merge por los hallazgos de Kody.
 

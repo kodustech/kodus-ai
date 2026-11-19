@@ -1,11 +1,11 @@
 ---
-title: "Servidor MCP do Kodus"
-description: "Conecte um cliente MCP ao Kodus self-hosted com uma chave de CLI para ler repositórios e pull requests e gerenciar Kody Issues, Kody Rules e memórias."
+title: "Servidor MCP da Kodus"
+description: "Conecte um cliente MCP à Kodus self-hosted com uma chave de CLI para ler repositórios e pull requests e gerenciar Kody Issues, Kody Rules e memórias."
 ---
 
-O servidor MCP é exclusivo do Kodus self-hosted. Ele expõe os repositórios, os pull requests, as [Kody Issues](/pt-BR/how_to_use/issues/overview), as [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules) e as memórias de um workspace como ferramentas para um cliente MCP.
+O servidor MCP é exclusivo da Kodus self-hosted. Ele expõe os repositórios, os pull requests, as [Kody Issues](/pt-BR/how_to_use/issues/overview), as [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules) e as memórias de um workspace como ferramentas para um cliente MCP.
 
-Para conectar ferramentas externas ao Kody pela página **Plugins**, configure o [MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager).
+Para conectar ferramentas externas à Kody pela página **Plugins**, configure o [MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager).
 
 ## Ative
 
@@ -66,7 +66,7 @@ curl -X POST https://kodus-api.example.com/mcp \
 
 | Ferramenta | O que faz |
 | --- | --- |
-| `KODUS_CREATE_KODY_ISSUE` | Cria uma issue para um pull request, vinculada ao comentário do Kody de onde ela veio. |
+| `KODUS_CREATE_KODY_ISSUE` | Cria uma issue para um pull request, vinculada ao comentário da Kody de onde ela veio. |
 | `KODUS_LIST_KODY_ISSUES` | Lista issues, filtradas por nome do repositório, severidade ou label. |
 | `KODUS_GET_KODY_ISSUE_DETAILS` | Retorna uma issue. |
 | `KODUS_UPDATE_KODY_ISSUE_STATUS` | Define o status como `open`, `resolved` ou `dismissed`. |
@@ -82,7 +82,7 @@ curl -X POST https://kodus-api.example.com/mcp \
 | `KODUS_CREATE_KODY_RULE` | Cria uma regra com escopo (**Per file** ou **Per PR**), severidade e exemplos opcionais. |
 | `KODUS_UPDATE_KODY_RULE` | Altera os campos que você enviar em uma regra existente. |
 | `KODUS_DELETE_KODY_RULE` | Exclui uma regra permanentemente. |
-| `KODUS_CREATE_MEMORY` | Salva uma memória. Se já existir uma parecida, o Kody a ignora ou atualiza aquela. |
+| `KODUS_CREATE_MEMORY` | Salva uma memória. Se já existir uma parecida, a Kody a ignora ou atualiza aquela. |
 | `KODUS_FIND_MEMORIES` | Busca memórias por repositório, diretório, glob de caminho ou palavras-chave. Retorna até 20, das mais novas para as mais antigas. |
 
 ## Gerenciando regras e memórias

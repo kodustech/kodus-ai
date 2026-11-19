@@ -26,7 +26,7 @@ Depois da correção, o mesmo comentário diz "All requirements met" e "✅ 3 of
 ## Pré-requisitos
 
 - Um gerenciador de tarefas conectado em [Plugins](/pt-BR/how_to_use/code_review/plugins): Linear, Jira (Atlassian Rovo), Notion, Git Issues ou um plugin customizado.
-- Kody só **lê** do seu gerenciador: a tarefa que um PR cita pelo id e o que ela referencia (uma tarefa pai, sub-tarefas, documentos anexados). Ele nunca escreve nele, e só usa uma tarefa quando o gerenciador devolve uma com aquele id.
+- Kody só **lê** do seu gerenciador: a tarefa que um PR cita pelo id e o que ela referencia (uma tarefa pai, sub-tarefas, documentos anexados). Ela nunca escreve nele, e só usa uma tarefa quando o gerenciador devolve uma com aquele id.
 - Sem gerenciador, você ainda pode colar o texto da tarefa no comando (veja abaixo).
 
 ## Como ligar
@@ -86,10 +86,10 @@ Um gap manda o autor refazer trabalho, então Kody confronta cada um com o códi
 
 ## No pull request
 
-- Kody confere o PR na **primeira revisão**. Uma revisão que o pula sem postar nada (nenhuma tarefa referenciada, um gerenciador fora do ar) não conta: a próxima revisão tenta de novo. Depois que o PR foi conferido, ele confere de novo quando alguém comenta `@kody -v business-logic` ou roda `@kody review --force`. **Re-check after a push** também pode ser configurado como **While something is missing**, para uma correção atualizar o comentário sem ninguém pedir, ou como **On every push**; cada um é mais uma validação por push.
+- Kody confere o PR na **primeira revisão**. Uma revisão que o pula sem postar nada (nenhuma tarefa referenciada, um gerenciador fora do ar) não conta: a próxima revisão tenta de novo. Depois que o PR foi conferido, a Kody confere de novo quando alguém comenta `@kody -v business-logic` ou roda `@kody review --force`. **Re-check after a push** também pode ser configurado como **While something is missing**, para uma correção atualizar o comentário sem ninguém pedir, ou como **On every push**; cada um é mais uma validação por push.
 - Confira de novo quando quiser com `@kody -v business-logic`. O **mesmo comentário é editado**; Kody nunca posta um segundo.
 - Um PR que cumpre a tarefa recebe um comentário curto ("✅ 4 of 4 met"), mais o que houver para conferir manualmente, para o autor saber que foi conferido. Desligue **Comment when every requirement is met** para não comentar nesses casos.
-- O comentário é o sinal em todas as plataformas: Kody não escreve check nem status, então nunca bloqueia um merge sozinho. O cabeçalho diz o que falta corrigir.
+- O comentário é o sinal em todas as plataformas: a Kody não escreve check nem status, então nunca bloqueia um merge sozinha. O cabeçalho diz o que falta corrigir.
 
 ### Respondendo ao comentário
 
@@ -98,14 +98,14 @@ Responda ao comentário de Business Logic mencionando `@kody`. Kody lê um comen
 - **Discordar**: "Está coberto em `useDrag.ts`". Kody confere de novo o que você apontou e marca como MET ou diz o que olhou e mantém.
 - **Aceitar um apontamento** (alguém que não é o autor do PR: no GitHub, com permissão de escrita no repositório; no GitLab, Developer ou acima no repositório; no Bitbucket, Azure Repos e Forgejo, um membro da organização que a plataforma lista): "Reordenar pelo teclado está fora do escopo, foi para SAA-102". Kody confirma que SAA-102 existe, marca a linha como **ACCEPTED** com quem aceitou, e ela deixa de ficar pendente. A decisão se mantém nas próximas conferências, mesmo quando Kody escreve o requisito de um jeito um pouco diferente, enquanto o texto da tarefa não mudar; depois que a tarefa é editada, só um requisito escrito exatamente como antes mantém a decisão.
 
-O que o Kody responde:
+O que a Kody responde:
 
 | Resposta | Kody |
 |---|---|
 | Um revisor aceita, movendo para SAA-102 | "Got it. SAA-102 exists, I marked “Keyboard reordering” as accepted by @rafa and updated the table above. Nothing is left to merge." (or "Other requirements are still listed to merge.") |
 | O autor do PR tenta aceitar | "The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check." |
 | Alguém sem o acesso acima | "Only someone with write access to the repository can accept a requirement…" |
-| O Kody não consegue consultar o acesso de quem comentou | "I couldn't check your access to the repository, so nothing was accepted. Reply again in a moment." |
+| A Kody não consegue consultar o acesso de quem comentou | "I couldn't check your access to the repository, so nothing was accepted. Reply again in a moment." |
 | A tarefa para onde foi movido não existe | "I couldn't find SAA-102 in the task tracker, so nothing was accepted. Check the id and reply again." |
 
 ## Quando Kody fica em silêncio
@@ -120,7 +120,7 @@ Kody só comenta quando o autor pode fazer algo:
 | Uma issue do GitHub, mas só o Linear está conectado | Nada; admins veem uma contagem na página de configurações. Com **Ask for a task** ligado, um comentário dizendo qual gerenciador não consegue ler |
 | O gerenciador está fora do ar ou o token expirou | Nada; os donos são notificados, e Kody confere de novo quando o gerenciador responder, por até um dia depois da primeira falha |
 
-O motivo de cada pulo é registrado. O topo da página de configurações de Business Logic diz se Kody está funcionando (PRs conferidos nos últimos 30 dias, última tarefa lida) ou pausado porque um gerenciador não responde, e conta os PRs que ele não conseguiu ler por motivo: a tarefa não existe, erro de digitação na referência, o gerenciador não respondeu, nenhum gerenciador conectado lê a referência ou a tarefa é rasa demais.
+O motivo de cada pulo é registrado. O topo da página de configurações de Business Logic diz se Kody está funcionando (PRs conferidos nos últimos 30 dias, última tarefa lida) ou pausada porque um gerenciador não responde, e conta os PRs que ela não conseguiu ler por motivo: a tarefa não existe, erro de digitação na referência, o gerenciador não respondeu, nenhum gerenciador conectado lê a referência ou a tarefa é rasa demais.
 
 ## Rodando sob demanda
 
@@ -135,7 +135,7 @@ Comente no PR (não numa linha de código):
 Abra **Code review → What to review** e clique em **Business Logic** (ou **⋯ → Edit**). Toda configuração pode ser global e sobrescrita por repositório ou diretório.
 
 - **Task source**: todos os gerenciadores conectados, ou um plugin. Em **Every connected tracker**, Kody lê Linear, Jira, Notion e Git Issues, e os plugins customizados cujo nome diz que são um gerenciador de tarefas (Jira, Linear, Notion, ClickUp); qualquer outro plugin customizado, como o Azure DevOps, só é lido quando você o escolhe. Para um plugin customizado, escolha a ferramenta que lê uma tarefa pelo id; só ferramentas de leitura são oferecidas. Use **Try it**, fixo à direita da página (precisa de permissão para editar essas configurações): uma tarefa sozinha mostra o que Kody lê dela, e um pull request roda a conferência inteira sem postar, com as configurações da tela, salvas ou não. **Post to the pull request** posta o resultado mostrado, sem rodar de novo, uma vez por teste; é recusado se o pull request recebeu um commit depois do teste ou se passaram 30 minutos, então rode o teste de novo antes.
-- **Custom task id format** (opcional): uma expressão regular para ids que Kody não encontra sozinho: `T(\d{4})` lê `T1234` como a tarefa 1234. Chaves como `SAA-96`, `#12`, `AB#8`, `CU-…` e links de gerenciadores são encontrados sem ela, assim como uma chave em minúsculas como `sc-123` no nome da branch. No título ou na descrição, uma chave em minúsculas só conta quando o Linear ou o Jira tem aquele time ou projeto; para outro gerenciador, defina o formato. Um número que o formato captura só é lido como issue do Git quando Git Issues é a fonte de tarefas; com todos os gerenciadores conectados, `T1234` nunca vira a issue #1234 do repositório. O formato tem no máximo 200 caracteres, e Kody descarta um que possa demorar demais para rodar, como `(a+)+`.
+- **Custom task id format** (opcional): uma expressão regular para ids que a Kody não encontra sozinha: `T(\d{4})` lê `T1234` como a tarefa 1234. Chaves como `SAA-96`, `#12`, `AB#8`, `CU-…` e links de gerenciadores são encontrados sem ela, assim como uma chave em minúsculas como `sc-123` no nome da branch. No título ou na descrição, uma chave em minúsculas só conta quando o Linear ou o Jira tem aquele time ou projeto; para outro gerenciador, defina o formato. Um número que o formato captura só é lido como issue do Git quando Git Issues é a fonte de tarefas; com todos os gerenciadores conectados, `T1234` nunca vira a issue #1234 do repositório. O formato tem no máximo 200 caracteres, e Kody descarta um que possa demorar demais para rodar, como `(a+)+`.
 - **Requirements → Where acceptance criteria live**: detectado automaticamente (um campo de critérios, um checklist ou uma lista na descrição), sob um título na descrição, ou num campo customizado; uma tarefa sem o campo é lida pela descrição. Com **Under a heading in the description** em `Acceptance criteria`, esta tarefa é conferida contra os três itens, e o parágrafo acima é contexto:
 
   ```markdown

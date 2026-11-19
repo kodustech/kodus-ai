@@ -6,7 +6,7 @@ icon: "shield-check"
 
 ## Por que este guia é importante
 
-Todo time de engenharia tem um doc de "boas práticas" em algum lugar. O problema é que as sugestões da IDE não o leem, os revisores esquecem os detalhes, e o documento vai perdendo autoridade aos poucos. Este guia transforma seu handbook em guardrails ativos, para que o Kody aplique essas regras em todo pull request e aponte a seção em que o código se desviou.
+Todo time de engenharia tem um doc de "boas práticas" em algum lugar. O problema é que as sugestões da IDE não o leem, os revisores esquecem os detalhes, e o documento vai perdendo autoridade aos poucos. Este guia transforma seu handbook em guardrails ativos, para que a Kody aplique essas regras em todo pull request e aponte a seção em que o código se desviou.
 
 Vamos usar dois blocos de construção:
 
@@ -103,7 +103,7 @@ Instructions:
 
 ## Fase 4 – Ou dê o handbook a um agente personalizado
 
-Um agente personalizado lê o handbook como um doc vinculado e precisa citar a regra por trás de cada apontamento. Uma citação que não está no doc na branch de destino é descartada. Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial; o Kodus self-hosted também precisa de `BETA_FEATURES=true`.
+Um agente personalizado lê o handbook como um doc vinculado e precisa citar a regra por trás de cada apontamento. Uma citação que não está no doc na branch de destino é descartada. Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial; a Kodus self-hosted também precisa de `BETA_FEATURES=true`.
 
 <Steps>
   <Step title="Crie o agente">
@@ -129,7 +129,7 @@ Veja [Skills, documentação e ferramentas](/pt-BR/how_to_use/code_review/custom
 
 <AccordionGroup>
   <Accordion title="Crie um PR de verificação">
-    Crie um PR descartável que viole cada seção e deixe o Kody revisá-lo (comente `@kody start-review` se o review não tiver começado). Confira se os comentários inline e de nível de PR citam os itens certos. Rode o agente sob demanda com `@kody -v engineering-standards`.
+    Crie um PR descartável que viole cada seção e deixe a Kody revisá-lo (comente `@kody start-review` se o review não tiver começado). Confira se os comentários inline e de nível de PR citam os itens certos. Rode o agente sob demanda com `@kody -v engineering-standards`.
   </Accordion>
   <Accordion title="Ajuste ruído e severidade">
     Durante o rollout, observe com que frequência cada regra dispara. Restrinja os globs de arquivo, adicione exclusões ou ajuste a severidade até que o sinal atenda às expectativas.

@@ -1,6 +1,6 @@
 ---
 title: "Visão geral"
-description: "Kody Rules são os padrões de review do seu time: verificações que o Kody executa em todo pull request, mais contexto que o Kody leva para cada review e conversa."
+description: "Kody Rules são os padrões de review do seu time: verificações que a Kody executa em todo pull request, mais contexto que a Kody leva para cada review e conversa."
 ---
 
 import { FeatureBadge } from "/snippets/feature-badge.jsx";
@@ -37,9 +37,9 @@ O cabeçalho tem três ações:
   </Tab>
 
   <Tab title="Memórias">
-    Conhecimento de fundo que o Kody usa como contexto de alta prioridade nos code reviews e nas conversas com o Kody. Uma memória descreve como o seu codebase funciona; não é uma verificação e não tem severidade.
+    Conhecimento de fundo que a Kody usa como contexto de alta prioridade nos code reviews e nas conversas com a Kody. Uma memória descreve como o seu codebase funciona; não é uma verificação e não tem severidade.
 
-    - Criadas conversando com o Kody em um comentário de PR, ou com **New memory**.
+    - Criadas conversando com a Kody em um comentário de PR, ou com **New memory**.
     - Com escopo para um diretório, um repositório ou a organização inteira.
   </Tab>
 </Tabs>
@@ -53,24 +53,24 @@ Na aba **Review Rules**, clique em **New rule** (**Write a rule** quando a lista
 | **Rule name** | Até 300 caracteres. |
 | **Execution mode** | **Per file** ou **Per PR**. |
 | **Path** | Globs que limitam uma regra **Per file** aos arquivos correspondentes. Separe vários globs com vírgulas; um arquivo que corresponda a qualquer um deles é verificado. Vazio significa todos os arquivos. Não é usado por regras **Per PR** e não é editável no escopo de diretório, onde a regra pertence ao escopo de diretório (veja [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance) para saber quando ela vale). |
-| **Instructions** | O que o Kody deve verificar e como decidir. Obrigatório. Em uma regra nova você pode **Start with a popular template**. O menu **Variables** insere nomes como `fileDiff` ou `pr_title`, que você pode usar para se referir ao diff e aos detalhes do PR que o Kody vê. |
+| **Instructions** | O que a Kody deve verificar e como decidir. Obrigatório. Em uma regra nova você pode **Start with a popular template**. O menu **Variables** insere nomes como `fileDiff` ou `pr_title`, que você pode usar para se referir ao diff e aos detalhes do PR que a Kody vê. |
 | **Severity** | **Critical**, **High** (padrão), **Medium** ou **Low**. |
 | **Advanced settings** | **Inheritable** (ligado por padrão) e **Code examples**: um **Bad example** e um **Good example**. |
 
 A severidade decide como o finding é rotulado. Se findings abaixo de uma severidade chegam a ser postados é definido em [Severidade mínima](/pt-BR/how_to_use/code_review/configs/suggestion_control#aplicar-o-limite-às-kody-rules).
 
-### O que o Kody vê
+### O que a Kody vê
 
 - **Per file:** o diff do arquivo, o restante do arquivo quando ele é pequeno o bastante, e o título e a descrição do PR (primeiros 1.000 caracteres).
 - **Per PR:** o título e a descrição do PR (primeiros 1.000 caracteres), a lista de arquivos alterados e o diff de cada arquivo. Em PRs muito grandes, os arquivos além do orçamento de diff são listados apenas pelo nome.
 
-O Kody só reporta violações em linhas que o pull request adiciona ou altera. Uma regra cujas instruções citam uma linguagem ("em arquivos Ruby, ...") fica limitada aos arquivos dessa linguagem, que o Kody descobre quando você salva a regra.
+A Kody só reporta violações em linhas que o pull request adiciona ou altera. Uma regra cujas instruções citam uma linguagem ("em arquivos Ruby, ...") fica limitada aos arquivos dessa linguagem, que a Kody descobre quando você salva a regra.
 
 ### Arquivos de referência em uma regra
 
-Mencione um arquivo pelo caminho nas instruções, por exemplo `@file:docs/architecture.md`, para dar ao Kody o conteúdo dele quando ele julga a regra.
+Mencione um arquivo pelo caminho nas instruções, por exemplo `@file:docs/architecture.md`, para dar à Kody o conteúdo dele quando ela julga a regra.
 
-- O Kody encontra as referências a arquivos quando você salva a regra. O status ao lado do editor mostra quando elas foram resolvidas e qualquer arquivo que ele não conseguiu ler.
+- A Kody encontra as referências a arquivos quando você salva a regra. O status ao lado do editor mostra quando elas foram resolvidas e qualquer arquivo que ela não conseguiu ler.
 - Os arquivos são lidos da branch de destino do pull request.
 - Use o caminho real no repositório, não um placeholder.
 
@@ -119,8 +119,8 @@ Mencione um arquivo pelo caminho nas instruções, por exemplo `@file:docs/archi
 - **[Biblioteca de regras](/pt-BR/how_to_use/code_review/configs/rules_library):** adicione regras e packs prontos com **Discovery**.
 - **[Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules):** mantenha uma regra por arquivo markdown no seu repositório, em `.kody/rules`.
 - **[Fontes globais de regras](/pt-BR/how_to_use/code_review/configs/global_rule_sources):** importe arquivos de regra de um repositório de standards como regras globais.
-- **[Geração automática de regras](/pt-BR/how_to_use/code_review/learning/kody_rules_generation):** o Kody rascunha regras a partir dos comentários anteriores dos seus revisores.
-- **Em uma thread de review:** peça ao Kody para criar, alterar ou remover uma regra, por exemplo `@kody update this rule to ignore test files`. Regras criadas assim mostram a origem **MCP/Agent** e esperam em **Pending review**.
+- **[Geração automática de regras](/pt-BR/how_to_use/code_review/learning/kody_rules_generation):** a Kody rascunha regras a partir dos comentários anteriores dos seus revisores.
+- **Em uma thread de review:** peça à Kody para criar, alterar ou remover uma regra, por exemplo `@kody update this rule to ignore test files`. Regras criadas assim mostram a origem **MCP/Agent** e esperam em **Pending review**.
 
 ## A lista de regras
 
@@ -139,8 +139,8 @@ Use a chave de visualização em tabela ou em cards ao lado dos filtros; a escol
 | **Auto-sync** | Um arquivo de regra em um repositório, mantido em sincronia. |
 | **Kody-generated** | Rascunhada a partir de reviews anteriores. |
 | **Onboarding** | Sugerida durante o onboarding. |
-| **MCP/Agent** | Criada pelas ferramentas MCP do Kodus: pelo Kody em uma thread de review, ou por um cliente MCP. |
-| **CLI** | Criada com o Kodus CLI. |
+| **MCP/Agent** | Criada pelas ferramentas MCP da Kodus: pela Kody em uma thread de review, ou por um cliente MCP. |
+| **CLI** | Criada com o CLI da Kodus. |
 | **Agent file** | Importada de um arquivo de agente de código antes de eles deixarem de virar regras. Congelada. Veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection#regras-importadas-de-arquivos-de-agentes-de-código). |
 
 ### Status
@@ -176,29 +176,29 @@ Organizações no plano **Free** da cloud (ou cuja assinatura foi cancelada ou e
 
 ## Memórias
 
-Uma memória é uma declaração curta que o Kody mantém em mente: como o seu sistema funciona, o que o time já decidiu. As memórias ajudam o Kody a evitar repetir suposições erradas sobre o seu repositório.
+Uma memória é uma declaração curta que a Kody mantém em mente: como o seu sistema funciona, o que o time já decidiu. As memórias ajudam a Kody a evitar repetir suposições erradas sobre o seu repositório.
 
-- As memórias são adicionadas ao contexto dos code reviews e das conversas com o Kody.
-- Quando o Kody está prestes a salvar uma memória, ele confere as existentes e a cria, a pula por ser duplicada, ou atualiza uma memória existente.
+- As memórias são adicionadas ao contexto dos code reviews e das conversas com a Kody.
+- Quando a Kody está prestes a salvar uma memória, ela confere as existentes e a cria, a pula por ser duplicada, ou atualiza uma memória existente.
 
 ### Criar uma memória
 
-**Em um comentário de PR.** Peça ao Kody para lembrar de algo e ele salva:
+**Em um comentário de PR.** Peça à Kody para lembrar de algo e ela salva:
 
 ```
 @kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
-Quando você apenas expõe um contexto ou uma preferência do time, o Kody oferece salvar e espera. Responda `@kody yes` para salvar:
+Quando você apenas expõe um contexto ou uma preferência do time, a Kody oferece salvar e espera. Responda `@kody yes` para salvar:
 
 ```
 @kody in this service, tests usually live next to implementation files rather than in a central test folder.
 ```
 
-Quando o Kody salva ou atualiza uma memória, ele responde com um link para ela no app.
+Quando a Kody salva ou atualiza uma memória, ela responde com um link para ela no app.
 
 <Info>
-  O Kody não salva instruções transitórias ("corrija isso agora"), conversa de depuração, perguntas, declarações vagas, nem pedidos que valem apenas para uma tarefa ou PR.
+  A Kody não salva instruções transitórias ("corrija isso agora"), conversa de depuração, perguntas, declarações vagas, nem pedidos que valem apenas para uma tarefa ou PR.
 </Info>
 
 **No app.** Escolha o escopo, abra a aba **Memories**, clique em **New memory** (**Add a memory** quando a lista está vazia), preencha **Memory name** e **Instructions** e clique em **Create memory**.
@@ -213,15 +213,15 @@ Quando o Kody salva ou atualiza uma memória, ele responde com um link para ela 
 
 ## Aprovação
 
-Por padrão, regras geradas a partir de reviews anteriores, regras sugeridas durante o onboarding e memórias que o Kody salva ficam ativas assim que são criadas. Para revisá-las antes, abra **Configuration** e ligue **Kody knowledge approval**.
+Por padrão, regras geradas a partir de reviews anteriores, regras sugeridas durante o onboarding e memórias que a Kody salva ficam ativas assim que são criadas. Para revisá-las antes, abra **Configuration** e ligue **Kody knowledge approval**.
 
 Com a aprovação ligada, estes itens esperam em **Pending review** até serem aprovados:
 
 - regras geradas a partir de reviews anteriores ou sugeridas durante o onboarding;
-- memórias que o Kody salva em uma thread de review;
+- memórias que a Kody salva em uma thread de review;
 - regras sincronizadas de arquivos de regra de um repositório. Regras importadas por [Fontes globais de regras](/pt-BR/how_to_use/code_review/configs/global_rule_sources) ficam ativas na hora.
 
-Uma regra criada pelas ferramentas MCP do Kodus, o que inclui uma regra que o Kody cria em uma thread de review, sempre espera em **Pending review**, seja qual for a configuração. Regras que você escreve à mão, adiciona da biblioteca ou cria com a CLI ficam ativas na hora.
+Uma regra criada pelas ferramentas MCP da Kodus, o que inclui uma regra que a Kody cria em uma thread de review, sempre espera em **Pending review**, seja qual for a configuração. Regras que você escreve à mão, adiciona da biblioteca ou cria com a CLI ficam ativas na hora.
 
 ### Pending review
 
@@ -242,6 +242,6 @@ Selecione vários e use **Bulk actions** (**Approve N**, **Create as new (N)**, 
     Mantenha as regras no seu repositório como arquivos markdown.
   </Card>
   <Card title="Instruções para Agentes de Código" icon="window" href="/pt-BR/how_to_use/code_review/configs/rules_file_detection">
-    Deixe o Kody verificar as alterações contra as instruções do CLAUDE.md, AGENTS.md, Cursor e Copilot.
+    Deixe a Kody verificar as alterações contra as instruções do CLAUDE.md, AGENTS.md, Cursor e Copilot.
   </Card>
 </CardGroup>

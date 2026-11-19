@@ -1,14 +1,14 @@
 ---
 title: "Como configurar revisão de código com IA no GitHub"
-description: "Conecte o GitHub ao Kodus e selecione os repositórios para revisão automática."
+description: "Conecte o GitHub à Kodus e selecione os repositórios para revisão automática."
 ---
 
 ## Passos
 
-1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
+1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede a Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
 2. **Conecte o GitHub** — na etapa **Connect your Git tool** do onboarding, clique em **Install Github app** (você também pode conectar depois em **Repositories** na barra lateral: clique em **Github** em **Connect a provider** e depois em **Go to OAuth** na aba **OAuth**)
-3. **Selecione os repositórios** — escolha quais repositórios o Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
-4. Abra um pull request em um repositório selecionado. Veja [o que o Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
+3. **Selecione os repositórios** — escolha quais repositórios a Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
+4. Abra um pull request em um repositório selecionado. Veja [o que a Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
 
 ## Configuração personalizada
 
@@ -16,10 +16,10 @@ Use o [kodus-config.yml](/pt-BR/how_to_use/code_review/configs/general#kodus-con
 
 ## Usando um Personal Access Token
 
-Se você não consegue instalar o GitHub App, conecte com um Personal Access Token (PAT) do GitHub. Escolha **Connect via token** no onboarding (ou a aba **Token** ao conectar o GitHub em **Repositories**). As revisões passam a ser publicadas pela conta do dono do token, e GitHub Checks/status do PR não ficam disponíveis. O Kodus cria um webhook em cada repositório selecionado; veja [Criando um Webhook](/pt-BR/how_to_deploy/platforms/github/github_webhook) se isso falhar.
+Se você não consegue instalar o GitHub App, conecte com um Personal Access Token (PAT) do GitHub. Escolha **Connect via token** no onboarding (ou a aba **Token** ao conectar o GitHub em **Repositories**). As revisões passam a ser publicadas pela conta do dono do token, e GitHub Checks/status do PR não ficam disponíveis. A Kodus cria um webhook em cada repositório selecionado; veja [Criando um Webhook](/pt-BR/how_to_deploy/platforms/github/github_webhook) se isso falhar.
 
 ## Self-hosted
 
-O Kodus self-hosted se conecta com um GitHub App que você mesmo cria, ou com um token. **Install Github app** exige as credenciais do App no seu `.env`: veja [Configuração do GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app). Para permitir também que os usuários façam login com o GitHub, veja [GitHub OAuth App](/pt-BR/how_to_deploy/platforms/github/github_oauth).
+A Kodus self-hosted se conecta com um GitHub App que você mesmo cria, ou com um token. **Install Github app** exige as credenciais do App no seu `.env`: veja [Configuração do GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app). Para permitir também que os usuários façam login com o GitHub, veja [GitHub OAuth App](/pt-BR/how_to_deploy/platforms/github/github_oauth).
 
 Para o guia completo de configuração, consulte [Início Rápido](/pt-BR/how_to_use/quickstart).

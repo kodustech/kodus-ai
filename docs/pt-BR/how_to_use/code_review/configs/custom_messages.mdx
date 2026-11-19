@@ -1,6 +1,6 @@
 ---
 title: "Mensagens personalizadas"
-description: "Edite os comentários que o Kody posta quando uma revisão começa, termina ou falha, e como os comentários dele aparecem no pull request."
+description: "Edite os comentários que a Kody posta quando uma revisão começa, termina ou falha, e como os comentários dela aparecem no pull request."
 ---
 
 Abra **Code review → What Kody writes**. As mensagens ficam na seção **Comments during the review**, com uma aba por mensagem: **Review starts**, **Review ends** e **Review fails**. Cada aba tem uma caixa **Message** e um menu **Reset to…**. O menu oferece **Inherited message** nos escopos de repositório e de diretório, e **Default message** no Global.
@@ -9,14 +9,14 @@ As mensagens podem ser definidas nos escopos Global, Repository e Directory.
 
 ## Como as mensagens aparecem
 
-O Kody posta a mensagem de início quando uma revisão começa. Quando a revisão termina, ele edita esse mesmo comentário para virar a mensagem de fim. As sugestões são postadas como comentários de review entre as duas.
+A Kody posta a mensagem de início quando uma revisão começa. Quando a revisão termina, ela edita esse mesmo comentário para virar a mensagem de fim. As sugestões são postadas como comentários de review entre as duas.
 
 - **Início e fim postados:** um comentário, que mostra primeiro a mensagem de início e, quando a revisão termina, a mensagem de fim.
 - **Início não postado nesta execução:** a mensagem de fim é postada como um novo comentário depois da revisão.
 - **Fim definido como Never:** o comentário de início fica como está, também após uma revisão que falhou. A reação 😕 passa a ser o único sinal da falha.
-- **A revisão falha:** o Kody posta o comentário de erro padrão dele no lugar da sua mensagem de fim, com o texto de **Review fails** abaixo.
+- **A revisão falha:** a Kody posta o comentário de erro padrão dela no lugar da sua mensagem de fim, com o texto de **Review fails** abaixo.
 
-No GitHub, quando uma nova revisão começa, o Kody recolhe o comentário da revisão anterior.
+No GitHub, quando uma nova revisão começa, a Kody recolhe o comentário da revisão anterior.
 
 ## Post this message
 
@@ -24,13 +24,13 @@ Em **Review starts** e **Review ends**, o seletor **Post this message** define q
 
 - **On every push** (`every_push`, padrão) — postada a cada execução de revisão: quando o pull request é aberto e após cada push que dispara uma revisão.
 - **Only when the PR opens** (`only_when_opened`) — postada uma vez, na primeira execução de revisão.
-- **Never** (`off`) — não é postada. O texto é mantido, e a caixa **Message** e o **Add context** ficam desabilitados. O Kody continua rodando a revisão e postando sugestões.
+- **Never** (`off`) — não é postada. O texto é mantido, e a caixa **Message** e o **Add context** ficam desabilitados. A Kody continua rodando a revisão e postando sugestões.
 
 As mensagens só são postadas quando uma revisão roda. Com uma cadência de revisão **Manual** e **Automated code review** ligado, a primeira revisão roda quando o pull request é aberto; os pushes seguintes não postam nada até alguém comentar `@kody start-review`.
 
 ## Add context
 
-O menu **Add context** ao lado de **Message** insere um token que o Kody substitui por dados reais do pull request.
+O menu **Add context** ao lado de **Message** insere um token que a Kody substitui por dados reais do pull request.
 
 | Item do menu | Token | O que adiciona |
 | --- | --- | --- |
@@ -45,9 +45,9 @@ O menu **Add context** ao lado de **Message** insere um token que o Kody substit
 
 ## Mensagem de falha da revisão
 
-Escreva um texto na aba **Review fails** para acrescentá-lo abaixo do comentário que o Kody posta quando uma revisão falha, por exemplo quando nenhum provedor de IA está configurado ou o provedor rejeitou a requisição. Use para apontar as pessoas para um responsável interno ou um runbook.
+Escreva um texto na aba **Review fails** para acrescentá-lo abaixo do comentário que a Kody posta quando uma revisão falha, por exemplo quando nenhum provedor de IA está configurado ou o provedor rejeitou a requisição. Use para apontar as pessoas para um responsável interno ou um runbook.
 
-Não há chave liga/desliga para essa mensagem: o texto é a chave. Vazio (o padrão) mantém o comentário de erro padrão do Kody como está.
+Não há chave liga/desliga para essa mensagem: o texto é a chave. Vazio (o padrão) mantém o comentário de erro padrão da Kody como está.
 
 ## Visibilidade dos comentários
 

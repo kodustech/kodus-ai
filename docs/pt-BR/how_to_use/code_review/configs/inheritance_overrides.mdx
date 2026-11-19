@@ -5,7 +5,7 @@ description: "Como as configurações Global → Repositório → Diretório her
 
 ## Visão Geral
 
-As configurações do Kodus funcionam em três níveis: **Global**, **Repositório** e **Diretório**.
+As configurações da Kodus funcionam em três níveis: **Global**, **Repositório** e **Diretório**.
 
 <Note>
 O nível mais específico prevalece: Diretório > Repositório > Global
@@ -31,14 +31,14 @@ Uma vez sobrescrito, um campo para de seguir o pai e usa o valor local no lugar.
 
 ## No app
 
-- **Trocando de nível:** o seletor de escopo no topo do grupo **Code review** da barra lateral lista **Global** ("applies to every repository"), depois cada repositório que o Kody revisa, com seus escopos de diretório recuados abaixo. Um repositório sem configurações próprias é marcado como **Inherits Global**. Trocar de escopo mantém você na mesma página quando ela existe no novo escopo.
+- **Trocando de nível:** o seletor de escopo no topo do grupo **Code review** da barra lateral lista **Global** ("applies to every repository"), depois cada repositório que a Kody revisa, com seus escopos de diretório recuados abaixo. Um repositório sem configurações próprias é marcado como **Inherits Global**. Trocar de escopo mantém você na mesma página quando ela existe no novo escopo.
 - **Adicionando um nível:** um repositório ganha configurações próprias na primeira vez que você salva uma alteração no escopo dele. Para adicionar um escopo de diretório, escolha o repositório e selecione **Add directory scope** no final do seletor. Veja [Configurações por diretório](/pt-BR/how_to_use/code_review/configs/directory_level).
 - **Vendo as sobrescritas:** um indicador numérico ao lado de um escopo ou página na barra lateral conta as configurações sobrescritas naquele nível ("N settings overridden at this level"). Na página, cada campo sobrescrito mostra um badge **Overridden**; o botão de desfazer dele devolve o campo à herança.
 - **Removendo um nível:** o menu **⋯** ao lado do seletor de escopo tem **Delete configuration**, e **Edit directories** para um escopo de diretório. Depois de excluir, um repositório usa a configuração Global e as pastas de um diretório usam a do repositório delas. A configuração de um repositório só pode ser excluída depois que os escopos de diretório dele forem removidos.
 
 ## kodus-config.yml
 
-Quando **Prefer kodus-config.yml settings** está ligado para um repositório, o Kody lê o `kodus-config.yml` da raiz da branch padrão do repositório. Ele é aplicado por cima do Global e das configurações do próprio repositório, e abaixo de qualquer configuração que um escopo de diretório sobrescreva. Veja [Geral](/pt-BR/how_to_use/code_review/configs/general#prioridade-de-configuração).
+Quando **Prefer kodus-config.yml settings** está ligado para um repositório, a Kody lê o `kodus-config.yml` da raiz da branch padrão do repositório. Ele é aplicado por cima do Global e das configurações do próprio repositório, e abaixo de qualquer configuração que um escopo de diretório sobrescreva. Veja [Geral](/pt-BR/how_to_use/code_review/configs/general#prioridade-de-configuração).
 
 ```
 Global
@@ -47,7 +47,7 @@ Global
          └─ Directory
 ```
 
-- O arquivo da raiz é o único que o Kody lê. Ele não lê um `kodus-config.yml` dentro de uma pasta.
+- O arquivo da raiz é o único que a Kody lê. Ela não lê um `kodus-config.yml` dentro de uma pasta.
 - O arquivo da raiz só é lido quando a chave está ligada no escopo de **repositório**. A chave também aparece no escopo de diretório, mas não muda uma revisão.
 - Os escopos de diretório recebem as configurações do app ou de um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config), que grava nas mesmas configurações Global, de repositório e de diretório.
 - O nível de diretório só vale quando o pull request toca exatamente um escopo de diretório. Veja [Configurações por diretório](/pt-BR/how_to_use/code_review/configs/directory_level#regras-de-seleção).

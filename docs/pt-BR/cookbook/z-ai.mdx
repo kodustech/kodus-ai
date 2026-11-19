@@ -1,6 +1,6 @@
 ---
 title: "Z.AI (GLM)"
-description: "Conecte modelos GLM ao Kodus com a Developer API da Z.AI."
+description: "Conecte modelos GLM à Kodus com a Developer API da Z.AI."
 icon: "bolt"
 ---
 
@@ -10,12 +10,12 @@ A Z.AI serve a família de modelos GLM. O **GLM Coding Plan** é uma assinatura 
 
 A Z.AI também oferece acesso pay-per-token na sua Developer API padrão.
 
-Os dois caminhos expõem um endpoint compatível com OpenAI, então o Kodus pode se comunicar com eles pelo provedor **OpenAI-compatible**. O Kodus também tem um provedor **Z.ai** dedicado, que se conecta pelo endpoint compatível com Anthropic da Z.AI (`https://api.z.ai/api/anthropic`).
+Os dois caminhos expõem um endpoint compatível com OpenAI, então a Kodus pode se comunicar com eles pelo provedor **OpenAI-compatible**. A Kodus também tem um provedor **Z.ai** dedicado, que se conecta pelo endpoint compatível com Anthropic da Z.AI (`https://api.z.ai/api/anthropic`).
 
 ## Visão geral dos planos
 
 <Info>
-  Use uma chave da **Developer API** para rodar reviews no Kodus. A Z.AI restringe o GLM Coding Plan às [ferramentas que ela autoriza](https://docs.z.ai/devpack/tool/others#supported-tools). Confirme a elegibilidade com a Z.AI antes de usar uma assinatura do Coding Plan no Kodus.
+  Use uma chave da **Developer API** para rodar reviews na Kodus. A Z.AI restringe o GLM Coding Plan às [ferramentas que ela autoriza](https://docs.z.ai/devpack/tool/others#supported-tools). Confirme a elegibilidade com a Z.AI antes de usar uma assinatura do Coding Plan na Kodus.
 </Info>
 
 ### GLM Coding Plan (assinatura)
@@ -30,7 +30,7 @@ Os dois caminhos expõem um endpoint compatível com OpenAI, então o Kodus pode
 - Os planos começam em $18 por mês. O preço de cada tier está em [z.ai/subscribe](https://z.ai/subscribe).
 - Os limites de simultaneidade dependem do tier (Max o maior, depois Pro, depois Lite). A documentação da Z.AI não lista os números.
 - Todos os planos incluem GLM-5.3 e GLM-5.3-Flash. Requisições para modelos GLM mais antigos são roteadas para estes.
-- Endpoints do Coding Plan: `https://api.z.ai/api/anthropic` (compatível com Anthropic — o que o provedor **Z.ai** do Kodus usa) e `https://api.z.ai/api/coding/paas/v4` (compatível com OpenAI). O endpoint padrão `/api/paas/v4/` não consome do Coding Plan.
+- Endpoints do Coding Plan: `https://api.z.ai/api/anthropic` (compatível com Anthropic — o que o provedor **Z.ai** da Kodus usa) e `https://api.z.ai/api/coding/paas/v4` (compatível com OpenAI). O endpoint padrão `/api/paas/v4/` não consome do Coding Plan.
 
 ### Developer API pay-per-token
 
@@ -43,7 +43,7 @@ Preços e disponibilidade de modelos mudam. Confirme na [página de preços da Z
 <Tabs>
   <Tab title="Assinante do Coding Plan">
     1. Faça login em [z.ai](https://z.ai).
-    2. Confirme com a Z.AI que seu uso do Coding Plan no Kodus é permitido antes de contratar a assinatura.
+    2. Confirme com a Z.AI que seu uso do Coding Plan na Kodus é permitido antes de contratar a assinatura.
     3. Abra [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) e crie uma chave de API em **Personal Coding Plan**.
 
     <Note>
@@ -62,9 +62,9 @@ Preços e disponibilidade de modelos mudam. Confirme na [página de preços da Z
   </Tab>
 </Tabs>
 
-## Configurar a Z.AI no Kodus
+## Configurar a Z.AI na Kodus
 
-O fluxo principal é a página **AI providers**, que é a mesma no Kodus Cloud e em uma instância self-hosted. Usuários self-hosted que preferem fixar o provedor no nível do processo podem usar variáveis de ambiente.
+O fluxo principal é a página **AI providers**, que é a mesma na Kodus Cloud e em uma instância self-hosted. Usuários self-hosted que preferem fixar o provedor no nível do processo podem usar variáveis de ambiente.
 
 ### Opção 1 — Provedor Z.ai com o endpoint Anthropic
 
@@ -76,15 +76,15 @@ Para a **Developer API**, siga a Opção 2 com uma conexão OpenAI-compatible.
   </Step>
 
   <Step title="Colar sua chave de API e informar o modelo">
-    Cole sua chave da Z.AI no card **API key** e digite o ID do modelo (ex.: `glm-5.3`) em **Model**. O Kodus preenche o endpoint `https://api.z.ai/api/anthropic` para você — o endpoint compatível com Anthropic que a Z.AI documenta para o GLM Coding Plan — então este card não tem seletor de plano nem campo de base URL. Para usar um endpoint compatível com OpenAI específico, use a Opção 2 abaixo.
+    Cole sua chave da Z.AI no card **API key** e digite o ID do modelo (ex.: `glm-5.3`) em **Model**. A Kodus preenche o endpoint `https://api.z.ai/api/anthropic` para você — o endpoint compatível com Anthropic que a Z.AI documenta para o GLM Coding Plan — então este card não tem seletor de plano nem campo de base URL. Para usar um endpoint compatível com OpenAI específico, use a Opção 2 abaixo.
   </Step>
 
   <Step title="Definir a simultaneidade (Coding Plan)">
-    O Kodus não preenche a simultaneidade. No Coding Plan, abra **Advanced (optional)** → **Advanced settings** e defina **Max concurrent requests**. A Z.AI atrela o limite ao seu tier e a documentação dela não lista os números, então comece baixo e aumente enquanto você não vir erros 429.
+    A Kodus não preenche a simultaneidade. No Coding Plan, abra **Advanced (optional)** → **Advanced settings** e defina **Max concurrent requests**. A Z.AI atrela o limite ao seu tier e a documentação dela não lista os números, então comece baixo e aumente enquanto você não vir erros 429.
   </Step>
 
   <Step title="Test & save">
-    Clique em **Test & save**. O Kodus testa a conexão e salva a configuração em caso de sucesso. Um erro de autenticação significa que a chave não corresponde ao endpoint.
+    Clique em **Test & save**. A Kodus testa a conexão e salva a configuração em caso de sucesso. Um erro de autenticação significa que a chave não corresponde ao endpoint.
   </Step>
 </Steps>
 
@@ -92,12 +92,12 @@ Para a **Developer API**, siga a Opção 2 com uma conexão OpenAI-compatible.
 
 **Thinking / Reasoning** fica em **Advanced (optional)** → **Advanced settings**.
 
-O GLM-5.3 e o GLM-5.3-Flash sempre fazem reasoning, e a Z.AI não permite desligá-lo: `thinking.type` aceita apenas `enabled`, e uma requisição com `disabled` falha. O Kodus não envia nada para esses modelos quando **Thinking / Reasoning** está em **Off**.
+O GLM-5.3 e o GLM-5.3-Flash sempre fazem reasoning, e a Z.AI não permite desligá-lo: `thinking.type` aceita apenas `enabled`, e uma requisição com `disabled` falha. A Kodus não envia nada para esses modelos quando **Thinking / Reasoning** está em **Off**.
 
-No GLM-5.3, a Z.AI aceita `reasoning_effort` com `low`, `high` ou `max` (padrão `max`). Para definir isso pelo Kodus, conecte por **OpenAI-compatible** (Opção 2) e escolha **Low**, **Medium** ou **High**, que enviam `low`, `high` e `max`. O card **Z.ai** não consegue definir isso: ele envia um budget de thinking.
+No GLM-5.3, a Z.AI aceita `reasoning_effort` com `low`, `high` ou `max` (padrão `max`). Para definir isso pela Kodus, conecte por **OpenAI-compatible** (Opção 2) e escolha **Low**, **Medium** ou **High**, que enviam `low`, `high` e `max`. O card **Z.ai** não consegue definir isso: ele envia um budget de thinking.
 
 <Note>
-  Para enviar outras opções do provedor, mude **Thinking / Reasoning** para **Custom**. O Kodus envolve o JSON no namespace do provedor ativo. Veja [Custom JSON override](/pt-BR/how_to_use/byok/model_settings#custom-json-override).
+  Para enviar outras opções do provedor, mude **Thinking / Reasoning** para **Custom**. A Kodus envolve o JSON no namespace do provedor ativo. Veja [Custom JSON override](/pt-BR/how_to_use/byok/model_settings#custom-json-override).
 </Note>
 
 ### Ajustar a simultaneidade
@@ -106,7 +106,7 @@ No GLM-5.3, a Z.AI aceita `reasoning_effort` com `low`, `high` ou `max` (padrão
 - **Developer API**: comece vazio (sem limite). Se você vir erros de rate limit, defina um limite e vá aumentando. Veja a página de [rate limits](https://docs.z.ai/api-reference/rate-limit) da Z.AI.
 
 <Note>
-  Em **Code review → Routing** (o botão **Configure routing** em **AI providers**), defina seu modelo GLM como **Default model** e um modelo da OpenAI ou Anthropic como **Fallback model**, para que as revisões continuem funcionando quando os créditos do seu Coding Plan acabarem. O Kodus faz o failover automaticamente.
+  Em **Code review → Routing** (o botão **Configure routing** em **AI providers**), defina seu modelo GLM como **Default model** e um modelo da OpenAI ou Anthropic como **Fallback model**, para que as revisões continuem funcionando quando os créditos do seu Coding Plan acabarem. A Kodus faz o failover automaticamente.
 </Note>
 
 ### Opção 2 — Endpoint compatível com OpenAI
@@ -137,7 +137,7 @@ Siga o guia de instalação para [aplicar a mudança de modelo](/pt-BR/how_to_de
 
 ## Escolhendo entre o Coding Plan e pay-per-token
 
-- Use a **Developer API** para reviews no Kodus, com cobrança por token.
+- Use a **Developer API** para reviews na Kodus, com cobrança por token.
 - Para usar uma assinatura do Coding Plan, confirme seu caso de uso com a Z.AI antes de depender das cotas.
 
 ## Solução de problemas

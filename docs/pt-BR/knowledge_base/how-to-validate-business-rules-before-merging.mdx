@@ -7,14 +7,14 @@ Os code reviews normalmente focam na qualidade do código: segurança, performan
 
 ## O que é verificado
 
-O Kody encontra a tarefa que um PR referencia, lê-a no seu task tracker e lista cada requisito com a situação dele no código. O resultado é um único comentário no PR, mantido atualizado. Cada requisito recebe um estado:
+A Kody encontra a tarefa que um PR referencia, lê-a no seu task tracker e lista cada requisito com a situação dele no código. O resultado é um único comentário no PR, mantido atualizado. Cada requisito recebe um estado:
 
 | Estado | Significado |
 |---|---|
 | **MET** | O diff o implementa. |
 | **PARTIAL** | Parte do que o requisito diz está implementada. |
 | **MISSING** | Não há evidência no diff do PR, ou o código em que o PR se apoia não o faz. |
-| **CHECK MANUALLY** | Um requisito visual ou de fluxo, ou um que o Kody não consegue resolver pelo código. |
+| **CHECK MANUALLY** | Um requisito visual ou de fluxo, ou um que a Kody não consegue resolver pelo código. |
 | **NOT IN TASK** | Uma mudança que a tarefa não pede. |
 
 Cada linha cita o arquivo e a linha em que se baseia e diz o que mudar.
@@ -23,7 +23,7 @@ Cada linha cita o arquivo e a linha em que se baseia e diz o que mudar.
 
 ### Automático (padrão)
 
-Com a categoria **Business Logic** ativada em **Code review → What to review** (ativada por padrão) e um task tracker conectado, o Kody verifica o PR na primeira revisão quando o título, o nome da branch ou a descrição do PR cita uma tarefa: `PROJ-123` ou um link da tarefa, ou `#123` no título ou na branch (`Closes #123` na descrição). Depois disso, ele verifica de novo quando alguém pede, ou a cada push se você definir **Re-check after a push**.
+Com a categoria **Business Logic** ativada em **Code review → What to review** (ativada por padrão) e um task tracker conectado, a Kody verifica o PR na primeira revisão quando o título, o nome da branch ou a descrição do PR cita uma tarefa: `PROJ-123` ou um link da tarefa, ou `#123` no título ou na branch (`Closes #123` na descrição). Depois disso, ela verifica de novo quando alguém pede, ou a cada push se você definir **Re-check after a push**.
 
 ### Sob demanda
 
@@ -40,11 +40,11 @@ Discount codes cannot be combined with loyalty rewards.
 Free shipping applies only to domestic orders.
 ```
 
-Sem uma tarefa depois do comando, o Kody verifica de novo as tarefas que o PR referencia. Com um texto de pelo menos 40 caracteres, ele verifica o PR contra o que você escreveu, e nenhum tracker é necessário.
+Sem uma tarefa depois do comando, a Kody verifica de novo as tarefas que o PR referencia. Com um texto de pelo menos 40 caracteres, ela verifica o PR contra o que você escreveu, e nenhum tracker é necessário.
 
 ## Fontes de tarefa suportadas
 
-Conecte um tracker em [Plugins](/pt-BR/how_to_use/code_review/plugins). O Kody só lê as tarefas pelo id delas.
+Conecte um tracker em [Plugins](/pt-BR/how_to_use/code_review/plugins). A Kody só lê as tarefas pelo id delas.
 
 | Fonte | Como referenciar |
 |--------|-----------------|
@@ -60,6 +60,6 @@ Conecte um tracker em [Plugins](/pt-BR/how_to_use/code_review/plugins). O Kody s
 - Tarefas com critérios de aceitação explícitos recebem a validação mais completa.
 - Depois de corrigir uma lacuna, comente `@kody -v business-logic` de novo. O mesmo comentário é atualizado.
 - Use **Closes PROJ-1** quando o PR entrega a tarefa inteira e **Part of PROJ-1** quando entrega uma parte.
-- Se a tarefa tem apenas um título, o Kody pede critérios de aceitação em vez de adivinhar.
+- Se a tarefa tem apenas um título, a Kody pede critérios de aceitação em vez de adivinhar.
 
 Para detalhes, consulte [Business Logic Validation](/pt-BR/how_to_use/code_review/business_logic_validation).

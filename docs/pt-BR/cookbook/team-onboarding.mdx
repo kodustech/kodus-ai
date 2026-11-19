@@ -1,12 +1,12 @@
 ---
 title: "Integração de um novo time"
-description: "Guia passo a passo para configurar o Kodus para um novo time — desde a conexão de repositórios até o ensino das primeiras convenções."
+description: "Guia passo a passo para configurar a Kodus para um novo time — desde a conexão de repositórios até o ensino das primeiras convenções."
 icon: "users-gear"
 ---
 
 ## Visão geral
 
-Colocar um novo time em funcionamento com o Kodus leva cerca de 30 minutos. Este guia percorre a configuração completa para que seu time tenha valor desde o primeiro PR.
+Colocar um novo time em funcionamento com a Kodus leva cerca de 30 minutos. Este guia percorre a configuração completa para que seu time tenha valor desde o primeiro PR.
 
 ## Passo 1 — Crie e configure o workspace
 
@@ -15,11 +15,11 @@ Colocar um novo time em funcionamento com o Kodus leva cerca de 30 minutos. Este
 3. Conecte seu provedor Git (GitHub, GitLab, Bitbucket, Azure Repos ou Forgejo)
 4. Selecione os repositórios a monitorar
 
-O guia de configuração continua com a severidade mínima para postar, o interruptor das instruções de agentes de código (Passo 3) e um pull request para o primeiro review do Kody.
+O guia de configuração continua com a severidade mínima para postar, o interruptor das instruções de agentes de código (Passo 3) e um pull request para o primeiro review da Kody.
 
 ## Passo 2 — Defina a linha de base de revisão
 
-O Kodus começa com padrões sensatos, então personalize só o que for diferente. Você pode definir a linha de base no app web, em **Code review → What to review** (categorias e **Minimum severity to post**), ou mantê-la em um `kodus-config.yml` na raiz de cada repositório, na branch padrão. O Kody só lê esse arquivo depois que você ativa **Prefer kodus-config.yml settings** em **Code review → General** para o repositório.
+A Kodus começa com padrões sensatos, então personalize só o que for diferente. Você pode definir a linha de base no app web, em **Code review → What to review** (categorias e **Minimum severity to post**), ou mantê-la em um `kodus-config.yml` na raiz de cada repositório, na branch padrão. A Kody só lê esse arquivo depois que você ativa **Prefer kodus-config.yml settings** em **Code review → General** para o repositório.
 
 ```yaml
 # kodus-config.yml — these are the defaults
@@ -43,7 +43,7 @@ Isso dá a você revisões automatizadas com um limite de severidade razoável. 
 Se o seu time já mantém instruções do Cursor, Copilot, Claude ou `AGENTS.md`:
 
 1. Na barra lateral, escolha **Global** ou um repositório no seletor de escopo no topo do grupo **Code review**, abra **What to review** e ative **Coding-agent instructions**
-2. O Kody lê os arquivos de instrução que cobrem os arquivos alterados de cada pull request e aponta mudanças que os quebram
+2. A Kody lê os arquivos de instrução que cobrem os arquivos alterados de cada pull request e aponta mudanças que os quebram
 3. Para uma convenção que você quer aplicar em todo review, escreva-a como um arquivo de regra em `.kody/rules`
 
 Os arquivos de instrução nunca são transformados em Kody Rules, então não conseguem mudar sua política de revisão sem que você perceba.
@@ -76,7 +76,7 @@ Use interfaces and dependency injection.
 No direct DB access from services or controllers.
 ```
 
-Elas viram Memories que o Kody usa nos reviews seguintes. Com **Kody knowledge approval** ativado, cada uma espera em **Pending review** até que alguém a aprove.
+Elas viram Memories que a Kody usa nos reviews seguintes. Com **Kody knowledge approval** ativado, cada uma espera em **Pending review** até que alguém a aprove.
 
 ## Passo 5 — Crie 2-3 regras críticas
 
@@ -104,13 +104,13 @@ URLs must come from environment variables or config files.
 
 ## Passo 6 — Conecte a gestão de tarefas (opcional, mas recomendado)
 
-Conecte Atlassian Rovo (Jira), Linear, Notion ou Git Issues em **Plugins** (na barra lateral) para habilitar a [validação de lógica de negócio](/pt-BR/how_to_use/code_review/business_logic_validation). Isso permite que o Kodus confira se os PRs implementam o que as tarefas descrevem.
+Conecte Atlassian Rovo (Jira), Linear, Notion ou Git Issues em **Plugins** (na barra lateral) para habilitar a [validação de lógica de negócio](/pt-BR/how_to_use/code_review/business_logic_validation). Isso permite que a Kodus confira se os PRs implementam o que as tarefas descrevem.
 
 ## Passo 7 — Rode um PR piloto
 
 Abra um PR de teste e verifique:
 
-- [ ] Os comentários do Kodus aparecem no PR
+- [ ] Os comentários da Kodus aparecem no PR
 - [ ] As sugestões são relevantes e estão na severidade certa
 - [ ] Suas regras personalizadas disparam quando deveriam
 - [ ] As Memories aparecem refletidas no contexto do review
@@ -122,13 +122,13 @@ Depois de uma semana de reviews, converse com o time:
 - Há sugestões demais? → Aumente **Minimum severity to post** em **Code review → What to review** (`severityLevelFilter` no `kodus-config.yml`)
 - As regras estão com muito ruído? → Restrinja os caminhos de arquivo ou adicione exclusões
 - Faltam padrões importantes? → Adicione novas regras ou Memories
-- Quer regras geradas automaticamente? → Escolha o repositório no seletor de escopo, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Generate from past reviews** para que o Kody rascunhe regras a partir dos comentários dos seus revisores. Na nuvem, fora do trial, isso exige [BYOK](/pt-BR/how_to_use/byok)
+- Quer regras geradas automaticamente? → Escolha o repositório no seletor de escopo, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Generate from past reviews** para que a Kody rascunhe regras a partir dos comentários dos seus revisores. Na nuvem, fora do trial, isso exige [BYOK](/pt-BR/how_to_use/byok)
 
 ## Dicas
 
 - Não sobrecarregue com regras no primeiro dia — comece pequeno e vá crescendo
-- Deixe o time ensinar o Kody naturalmente por meio de conversas antes de formalizar como regras
-- Use `@kody start-review` nos primeiros PRs para que o time veja o Kodus em ação
-- Ative **Kody knowledge approval** (**Code review → Kody Rules → Configuration**) se quiser revisar o que o Kody aprende
+- Deixe o time ensinar a Kody naturalmente por meio de conversas antes de formalizar como regras
+- Use `@kody start-review` nos primeiros PRs para que o time veja a Kodus em ação
+- Ative **Kody knowledge approval** (**Code review → Kody Rules → Configuration**) se quiser revisar o que a Kody aprende
 
 Para o guia completo de configuração, veja o [Início Rápido](/pt-BR/how_to_use/quickstart).

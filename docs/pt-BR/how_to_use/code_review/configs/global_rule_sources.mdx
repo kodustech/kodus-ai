@@ -14,14 +14,14 @@ import { FeatureBadge } from "/snippets/feature-badge.jsx";
   </FeatureBadge>
 </div>
 
-As Fontes Globais de Regras permitem apontar o Kodus para um ou mais repositórios conectados e importar seus arquivos de regra como Kody Rules **globais**. Diferente das [Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules), que valem apenas no repositório onde estão, as regras importadas de uma fonte global valem em **todos** os repositórios durante o code review.
+As Fontes Globais de Regras permitem apontar a Kodus para um ou mais repositórios conectados e importar seus arquivos de regra como Kody Rules **globais**. Diferente das [Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules), que valem apenas no repositório onde estão, as regras importadas de uma fonte global valem em **todos** os repositórios durante o code review.
 
 Use isso quando o time mantém seus padrões de arquitetura e de código em um repositório dedicado de "standards" e quer esses padrões aplicados em todo lugar, sem copiar arquivos de regra para cada projeto.
 
 ## Como funciona
 
 - Você seleciona repositórios conectados para atuar como **fontes**.
-- O Kodus varre a branch padrão de cada repositório fonte em busca de arquivos de regra, nos mesmos locais e com o mesmo template das [Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules) (`.kody/rules/`, `rules/**/*.md` e assim por diante).
+- A Kodus varre a branch padrão de cada repositório fonte em busca de arquivos de regra, nos mesmos locais e com o mesmo template das [Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules) (`.kody/rules/`, `rules/**/*.md` e assim por diante).
 - Cada arquivo de regra vira uma regra global, exibida na página global de **Kody Rules** com o arquivo de onde veio.
 - No code review de qualquer repositório, essas regras globais valem junto com as regras do próprio repositório, respeitando a [herança](/pt-BR/how_to_use/code_review/configs/rules_inheritance).
 - Instruções escritas para agentes de código (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`) não são importadas. Regras globais importadas delas no passado são mantidas, mas congeladas; veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
@@ -50,7 +50,7 @@ Remover um repositório da lista **apaga as regras globais importadas dele**, en
 
 ## Repositórios fonte não são revisados
 
-Um repositório usado como fonte de regras globais é tratado como um repositório de configuração, não como uma base de código. O Kodus **pula o code review** nos pull requests abertos nele, do mesmo jeito que faz com um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config).
+Um repositório usado como fonte de regras globais é tratado como um repositório de configuração, não como uma base de código. A Kodus **pula o code review** nos pull requests abertos nele, do mesmo jeito que faz com um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config).
 
 ## Disponibilidade por plano
 
@@ -64,5 +64,5 @@ No plano Trial, um contador mostra quantas das 5 regras estão em uso, e um diá
 
 ## Relacionados
 
-- [Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules): os locais dos arquivos de regra e o template que o Kodus importa.
+- [Regras de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules): os locais dos arquivos de regra e o template que a Kodus importa.
 - [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance): como as regras globais, de repositório e de diretório se combinam durante a revisão.

@@ -1,6 +1,6 @@
 ---
 title: "MCP Manager"
-description: "Implante o MCP Manager para o Kodus."
+description: "Implante o MCP Manager para a Kodus."
 icon: "puzzle-piece"
 tag: 'beta'
 ---
@@ -9,21 +9,21 @@ tag: 'beta'
 
 Model Context Protocol (MCP) é um padrão aberto que permite que aplicativos de LLM se conectem a
 ferramentas externas e fontes de dados por meio de uma interface de servidor consistente. Os
-servidores MCP publicam schemas de ferramentas e endpoints para que clientes como o Kodus/Kody possam buscar
+servidores MCP publicam schemas de ferramentas e endpoints para que clientes como a Kodus/Kody possam buscar
 contexto ou executar ações durante um fluxo de trabalho.
 
 ## Arquitetura do MCP Manager
 
 O MCP Manager é o serviço de backend que intermedeia essas conexões MCP para
-o Kodus. Ele registra provedores, integrações e ferramentas permitidas por
-workspace, e então expõe esse catálogo para a API do Kodus. Ele escuta na porta 3101,
+a Kodus. Ele registra provedores, integrações e ferramentas permitidas por
+workspace, e então expõe esse catálogo para a API da Kodus. Ele escuta na porta 3101,
 responde `GET /health` e guarda seus dados no schema `mcp-manager` do seu banco
 PostgreSQL. Ele mesmo cria e migra esse schema quando inicia.
 
 - Registro central de provedores MCP (Kodus e custom)
 - Armazena metadados de integração (status de conexão, URL MCP, ferramentas permitidas)
 - Gerencia fluxos de autenticação específicos de cada provedor e a descoberta de ferramentas
-- Expõe APIs usadas pelo Kodus para listar e invocar ferramentas MCP
+- Expõe APIs usadas pela Kodus para listar e invocar ferramentas MCP
 
 ```mermaid
 graph TD
@@ -49,7 +49,7 @@ O MCP Manager é opcional.
     ```
 
     - `API_KODUS_SERVICE_MCP_MANAGER` é como a API e o worker alcançam o serviço. Use o nome do container, não `localhost`.
-    - `API_KODUS_MCP_SERVER_URL` é a URL pública do servidor MCP do Kodus na sua API.
+    - `API_KODUS_MCP_SERVER_URL` é a URL pública do servidor MCP da Kodus na sua API.
     - `API_MCP_MANAGER_REDIRECT_URI` é para onde o navegador volta depois de um login OAuth. Use a URL pública do seu web.
     - `API_MCP_MANAGER_JWT_SECRET` e `API_MCP_MANAGER_ENCRYPTION_SECRET` são gerados pelo `./scripts/generate-secrets.sh`.
   </Tab>
@@ -58,18 +58,20 @@ O MCP Manager é opcional.
   </Tab>
 </Tabs>
 
-`API_MCP_SERVER_ENABLED=true` também liga o servidor MCP do Kodus na API, em `POST /mcp`. Ele aceita uma chave de API de time (`x-team-key: kodus_...` ou `Authorization: Bearer kodus_...`) vinda de clientes MCP.
+`API_MCP_SERVER_ENABLED=true` também liga o servidor MCP da Kodus na API, em `POST /mcp`. Ele aceita uma chave de API de time (`x-team-key: kodus_...` ou `Authorization: Bearer kodus_...`) vinda de clientes MCP.
 
-Para conectar um cliente como Cursor ou Claude Desktop à sua instância, veja [Servidor MCP do Kodus](/pt-BR/how_to_deploy/deploy_kodus/mcp_server).
+Para conectar um cliente como Cursor ou Claude Desktop à sua instância, veja [Servidor MCP da Kodus](/pt-BR/how_to_deploy/deploy_kodus/mcp_server).
 
-## Plugins no Kodus
+<span id="plugins-no-kodus" aria-hidden="true" />
 
-Tudo que está registrado no MCP Manager aparece na página **Plugins** do Kodus
+## Plugins na Kodus
+
+Tudo que está registrado no MCP Manager aparece na página **Plugins** da Kodus
 (barra lateral → **Plugins**), para que seu time possa instalar, gerenciar e habilitar
 os MCPs disponíveis para cada workspace. Se o web app não conseguir alcançar o MCP Manager
 (por exemplo, porque ele não está implantado), o item **Plugins** fica oculto na barra lateral.
 
-<img src="/images/kodus_plugins.png" alt="Tela de plugins do Kodus mostrando MCPs do MCP Manager" />
+<img src="/images/kodus_plugins.png" alt="Tela de plugins da Kodus mostrando MCPs do MCP Manager" />
 
 ## Provedores
 

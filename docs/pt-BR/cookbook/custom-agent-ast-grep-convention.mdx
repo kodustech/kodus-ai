@@ -10,11 +10,11 @@ Algumas convenções são estruturais: "nunca chame esta função aqui", "sempre
 
 O exemplo é um serviço de checkout com uma convenção: **valores são centavos inteiros tratados pelo helper `Money`, nunca floats.**
 
-Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial. O Kodus self-hosted também precisa de `BETA_FEATURES=true`.
+Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial. A Kodus self-hosted também precisa de `BETA_FEATURES=true`.
 
 ## Passo 1 — Escreva as regras no repositório
 
-Faça commit de um arquivo de regras na branch padrão. O Kodus lê esse arquivo da branch de destino de cada pull request, então um pull request não consegue afrouxar as regras pelas quais ele é conferido.
+Faça commit de um arquivo de regras na branch padrão. A Kodus lê esse arquivo da branch de destino de cada pull request, então um pull request não consegue afrouxar as regras pelas quais ele é conferido.
 
 ```yaml rules/money.yml
 id: no-parsefloat-amount

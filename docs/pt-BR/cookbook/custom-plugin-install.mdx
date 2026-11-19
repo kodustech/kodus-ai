@@ -1,15 +1,15 @@
 ---
 title: "Instalar plugins MCP personalizados"
-description: "Instruções passo a passo para conectar o seu próprio servidor do Model Context Protocol ao Kodus."
+description: "Instruções passo a passo para conectar o seu próprio servidor do Model Context Protocol à Kodus."
 icon: "plug"
 ---
 
 ## Por que plugins personalizados
 
-Um plugin personalizado permite que o Kody leia seus sistemas internos, como uma base de conhecimento, um dashboard de incidentes ou um mecanismo de políticas, enquanto responde num pull request. Os revisores param de colar capturas de tela e trechos desatualizados nos comentários.
+Um plugin personalizado permite que a Kody leia seus sistemas internos, como uma base de conhecimento, um dashboard de incidentes ou um mecanismo de políticas, enquanto responde num pull request. Os revisores param de colar capturas de tela e trechos desatualizados nos comentários.
 
 <Callout icon="globe">
-  O Kodus suporta **apenas servidores MCP remotos**. O servidor precisa ser acessível a partir da infraestrutura do Kodus: nada de `localhost`, nada de endpoints MCP de desktop.
+  A Kodus suporta **apenas servidores MCP remotos**. O servidor precisa ser acessível a partir da infraestrutura da Kodus: nada de `localhost`, nada de endpoints MCP de desktop.
 </Callout>
 
 ## Prepare as informações do seu plugin
@@ -28,7 +28,9 @@ Procurando servidores MCP remotos para experimentar?
 - [Smithery.ai](https://smithery.ai/) seleciona serviços MCP implantáveis.
 - [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) lista endpoints mantidos pela comunidade.
 
-## Instalar o plugin no Kodus
+<span id="instalar-o-plugin-no-kodus" aria-hidden="true" />
+
+## Instalar o plugin na Kodus
 
 <Frame caption="Plugins → card Add Custom Plugin → Add Plugin abre este formulário">
   <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
@@ -52,26 +54,26 @@ Procurando servidores MCP remotos para experimentar?
     Clique em **Create Plugin**.
   </Step>
   <Step title="Escolha as ferramentas e instale">
-    O plugin abre. Com OAuth 2.0, clique primeiro em **Authenticate with** o plugin. Em **Selected tools**, mantenha só as ferramentas de que o Kody precisa e clique em **Install plugin**. Um plugin instalado mostra **Installed** no card.
+    O plugin abre. Com OAuth 2.0, clique primeiro em **Authenticate with** o plugin. Em **Selected tools**, mantenha só as ferramentas de que a Kody precisa e clique em **Install plugin**. Um plugin instalado mostra **Installed** no card.
   </Step>
 </Steps>
 
-Se **Selected tools** mostrar 0 of 0, o Kodus não conseguiu listar as ferramentas do servidor. Abra o plugin, clique em **Edit Plugin** e confira a URL, o protocolo e a autorização.
+Se **Selected tools** mostrar 0 of 0, a Kodus não conseguiu listar as ferramentas do servidor. Abra o plugin, clique em **Edit Plugin** e confira a URL, o protocolo e a autorização.
 
 <Warning>
-  O Kody pode chamar qualquer ferramenta que você selecionar. Instale só endpoints em que a sua organização confia e selecione só as ferramentas de que o Kody precisa.
+  A Kody pode chamar qualquer ferramenta que você selecionar. Instale só endpoints em que a sua organização confia e selecione só as ferramentas de que a Kody precisa.
 </Warning>
 
 ## Verificar a conexão
 
-1. Abra um pull request num repositório em que o Kody está habilitado.
+1. Abra um pull request num repositório em que a Kody está habilitada.
 2. Comente com `@kody` e uma pergunta que só o plugin consegue responder:
 
    ```
    @kody can you fetch the deployment checklist from our MCP and confirm whether feature flags are required?
    ```
 
-3. Confira a resposta do Kody. Ela deve incluir dados retornados pelo seu plugin. Se não incluir, abra o plugin na página **Plugins** e confira a URL, o protocolo e a autorização.
+3. Confira a resposta da Kody. Ela deve incluir dados retornados pelo seu plugin. Se não incluir, abra o plugin na página **Plugins** e confira a URL, o protocolo e a autorização.
 
 <Info>
   Para ensaiar o fluxo sem construir um servidor, adicione `https://docs.kodus.io/mcp` como plugin personalizado: protocolo **HTTP**, autorização **None**.
@@ -83,9 +85,9 @@ Um agente personalizado lê de um plugin instalado quando você o liga em **Tool
 
 ## Checklist rápido
 
-- [ ] O servidor é acessível pelo Kodus via HTTP ou SSE.
+- [ ] O servidor é acessível pela Kodus via HTTP ou SSE.
 - [ ] A autorização dele funciona com o método que você escolheu.
-- [ ] **Selected tools** lista ferramentas, e só as de que o Kody precisa estão selecionadas.
+- [ ] **Selected tools** lista ferramentas, e só as de que a Kody precisa estão selecionadas.
 - [ ] O plugin mostra **Installed**.
 - [ ] Um comentário de teste num pull request retornou dados do plugin.
 - [ ] Alguém é responsável por monitorar e atualizar a integração.

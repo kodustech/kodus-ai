@@ -1,11 +1,11 @@
 ---
 title: "Token FGPAT do Github"
-description: "Gere o Fine-Grained PAT do GitHub que o Kody precisa para o code review, incluindo como liberar o acesso aos repositórios da sua organização."
+description: "Gere o Fine-Grained PAT do GitHub que a Kody precisa para o code review, incluindo como liberar o acesso aos repositórios da sua organização."
 ---
 
 ## Introdução ao FGPAT
 
-Para habilitar o Kody a realizar Code Reviews automáticos, você precisa gerar um Fine-Grained Personal Access Token (FGPAT) no GitHub. Esse token permite que o Kody acesse seus repositórios de forma segura e realize a análise de código de maneira controlada.
+Para habilitar a Kody a realizar Code Reviews automáticos, você precisa gerar um Fine-Grained Personal Access Token (FGPAT) no GitHub. Esse token permite que a Kody acesse seus repositórios de forma segura e realize a análise de código de maneira controlada.
 
 ## Verificar as permissões de acesso Fine-Grained
 
@@ -56,28 +56,30 @@ Siga estas etapas para configurar o token corretamente:
    - **Organization**:
      - **Members**: Permissão de leitura.
 
-   O Kody não usa **Actions** nem **Deployments**; deixe os dois em **No access**.
+   A Kody não usa **Actions** nem **Deployments**; deixe os dois em **No access**.
 
 6. **Finalize e salve o token**:
    - Depois de configurar as permissões, clique em `Generate token`.
-   - Copie o token gerado e guarde-o com segurança, pois você precisará dele para configurar o Kody.
+   - Copie o token gerado e guarde-o com segurança, pois você precisará dele para configurar a Kody.
 
-## Adicionando o Token ao Kody
+<span id="adicionando-o-token-ao-kody" aria-hidden="true" />
 
-Depois de gerar o token, cole-o no Kodus:
+## Adicionando o Token à Kody
+
+Depois de gerar o token, cole-o na Kodus:
 
 - **Durante o onboarding**: em **Connect your Git tool**, escolha a aba **Github** e clique em **Connect via token**.
 - **Depois**: na barra lateral, abra **Repositories**, clique em **Github** em **Connect a provider**, mude para a aba **Token**, cole o token e clique em **Validate and save**.
 - **Trocando um token**: em **Repositories**, clique em **Reset** no card **Github**, escolha **Just reset the integration** e conecte novamente com o novo token, como descrito acima.
 
-Com um token, as revisões são publicadas com o seu perfil do GitHub em vez do perfil do Kody, e GitHub Checks / status de PR não ficam disponíveis.
+Com um token, as revisões são publicadas com o seu perfil do GitHub em vez do perfil da Kody, e GitHub Checks / status de PR não ficam disponíveis.
 
 ## GitHub Enterprise Server (Beta)
 
-Para conectar o GitHub Enterprise Server com um token, o workspace no Cloud precisa ter acesso a esse beta. No Kodus self-hosted, defina `BETA_FEATURES=true`.
+Para conectar o GitHub Enterprise Server com um token, o workspace no Cloud precisa ter acesso a esse beta. Na Kodus self-hosted, defina `BETA_FEATURES=true`.
 
 1. Crie o token na sua instância do GitHub Enterprise Server.
 2. No diálogo de token do **Github**, ative **Self-hosted** e informe a **GitHub Enterprise URL**, por exemplo `https://github.your-company.com`. Ela precisa começar com `http://` ou `https://`.
 3. Cole o token e clique em **Validate and save**.
 
-O Kodus chama a API da instância em `<GitHub Enterprise URL>/api/v3`. Se o token ou a URL estiverem errados, o diálogo mostra **Invalid Token or GitHub Enterprise URL**.
+A Kodus chama a API da instância em `<GitHub Enterprise URL>/api/v3`. Se o token ou a URL estiverem errados, o diálogo mostra **Invalid Token or GitHub Enterprise URL**.

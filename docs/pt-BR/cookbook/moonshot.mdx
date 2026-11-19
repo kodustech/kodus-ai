@@ -1,12 +1,12 @@
 ---
 title: "Moonshot (Kimi)"
-description: "Conecte os modelos Kimi da Moonshot AI ao Kodus com a Moonshot Developer API ou o Kimi Code Plan."
+description: "Conecte os modelos Kimi da Moonshot AI à Kodus com a Moonshot Developer API ou o Kimi Code Plan."
 icon: "moon"
 ---
 
 ## Como o Moonshot funciona
 
-A Moonshot AI publica os modelos **Kimi** (K3.1 Pro, K3 e a série K2 anterior). A API é compatível com OpenAI e também compatível com Anthropic. O Kodus tem um provedor **Moonshot** dedicado, que se conecta pelo endpoint compatível com Anthropic (`https://api.moonshot.ai/anthropic`). Você também pode acessar o Kimi pelo provedor **OpenAI-compatible**.
+A Moonshot AI publica os modelos **Kimi** (K3.1 Pro, K3 e a série K2 anterior). A API é compatível com OpenAI e também compatível com Anthropic. A Kodus tem um provedor **Moonshot** dedicado, que se conecta pelo endpoint compatível com Anthropic (`https://api.moonshot.ai/anthropic`). Você também pode acessar o Kimi pelo provedor **OpenAI-compatible**.
 
 A Moonshot oferece **dois caminhos** para os modelos Kimi, cada um com seu próprio endpoint e suas próprias chaves:
 
@@ -71,9 +71,11 @@ Endpoints da Developer API: `https://api.moonshot.ai/v1` (compatível com OpenAI
   </Tab>
 </Tabs>
 
-## Configurar o Moonshot no Kodus
+<span id="configurar-o-moonshot-no-kodus" aria-hidden="true" />
 
-O fluxo principal é a página **AI providers**, que é a mesma no Kodus Cloud e em uma instância self-hosted. Usuários self-hosted que preferem fixar o provedor no nível do processo podem usar variáveis de ambiente.
+## Configurar o Moonshot na Kodus
+
+O fluxo principal é a página **AI providers**, que é a mesma na Kodus Cloud e em uma instância self-hosted. Usuários self-hosted que preferem fixar o provedor no nível do processo podem usar variáveis de ambiente.
 
 ### Opção 1 — Provedor Moonshot (recomendado para a Developer API)
 
@@ -83,11 +85,11 @@ O fluxo principal é a página **AI providers**, que é a mesma no Kodus Cloud e
   </Step>
 
   <Step title="Colar sua chave de API e escolher o modelo">
-    Cole sua chave da Developer API de [platform.kimi.ai](https://platform.kimi.ai/console/api-keys) no card **API key**. O seletor **Model** então carrega os modelos da Moonshot. Escolha um (por exemplo `kimi-k3.1-pro`) ou selecione **Type model manually**. O Kodus preenche o endpoint `https://api.moonshot.ai/anthropic` para você. Este card não tem seletor de plano nem campo de base URL, então para uma chave do Kimi Code Plan ou da plataforma chinesa use a Opção 2 abaixo.
+    Cole sua chave da Developer API de [platform.kimi.ai](https://platform.kimi.ai/console/api-keys) no card **API key**. O seletor **Model** então carrega os modelos da Moonshot. Escolha um (por exemplo `kimi-k3.1-pro`) ou selecione **Type model manually**. A Kodus preenche o endpoint `https://api.moonshot.ai/anthropic` para você. Este card não tem seletor de plano nem campo de base URL, então para uma chave do Kimi Code Plan ou da plataforma chinesa use a Opção 2 abaixo.
   </Step>
 
   <Step title="Test & save">
-    Clique em **Test & save**. O Kodus testa a conexão e salva a configuração em caso de sucesso. 401 significa que a chave está errada ou pertence a outra plataforma.
+    Clique em **Test & save**. A Kodus testa a conexão e salva a configuração em caso de sucesso. 401 significa que a chave está errada ou pertence a outra plataforma.
   </Step>
 </Steps>
 
@@ -101,7 +103,7 @@ O Kimi K3.1 Pro e o K3 sempre fazem reasoning. A API da Moonshot não tem config
 - **Developer API**: deixe vazio (sem limite). Seu limite depende da sua recarga acumulada. Defina um valor se você vir erros 429 durante as revisões.
 
 <Note>
-  Em **Code review → Routing**, defina **Default model** como Kimi e escolha um modelo de outro provedor como **Fallback model**. O Kodus executa novamente uma chamada que falhou no fallback uma vez. Veja [Routing](/pt-BR/how_to_use/byok#routing:-qual-modelo-roda-cada-tarefa).
+  Em **Code review → Routing**, defina **Default model** como Kimi e escolha um modelo de outro provedor como **Fallback model**. A Kodus executa novamente uma chamada que falhou no fallback uma vez. Veja [Routing](/pt-BR/how_to_use/byok#routing:-qual-modelo-roda-cada-tarefa).
 </Note>
 
 ### Opção 2 — Endpoint compatível com OpenAI
@@ -165,7 +167,7 @@ Siga o guia de instalação para [aplicar a mudança de modelo](/pt-BR/how_to_de
   <Accordion title="Região / conectividade">
     - As chaves da Developer API são atreladas à plataforma: `platform.kimi.ai` para `api.moonshot.ai`, `platform.kimi.com` para `api.moonshot.cn`.
     - O Kimi Code tem endpoints separados: `api.kimi.ai/coding/v1` (internacional) e `api.kimi.com/coding/v1` (China).
-    - Confirme que o HTTPS de saída para o endpoint escolhido é permitido a partir do seu deployment do Kodus.
+    - Confirme que o HTTPS de saída para o endpoint escolhido é permitido a partir do seu deployment da Kodus.
   </Accordion>
 </AccordionGroup>
 

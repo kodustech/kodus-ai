@@ -4,7 +4,7 @@ description: "Crie a aplicação do GitLab por trás do \"Sign in with GitLab\" 
 icon: gitlab
 ---
 
-Uma única aplicação do GitLab cobre duas coisas no Kodus:
+Uma única aplicação do GitLab cobre duas coisas na Kodus:
 
 - **Sign in with GitLab** na página de login.
 - **Install Gitlab app** no passo **Connect your Git tool**, ou **Go to OAuth** na aba **OAuth** quando você conecta o GitLab em **Repositories**. Ambos conectam o GitLab para o code review com OAuth.
@@ -45,7 +45,7 @@ Cada fluxo solicita seus próprios escopos:
 - **Sign in with GitLab** solicita apenas `read_user`.
 - **Install Gitlab app** e **Go to OAuth** solicitam os escopos de `WEB_GITLAB_SCOPES` (Passo 4).
 
-O Kody precisa de `api` para publicar comentários de review e para criar, editar e remover webhooks. `read_api` consegue ler, mas não consegue publicar.
+A Kody precisa de `api` para publicar comentários de review e para criar, editar e remover webhooks. `read_api` consegue ler, mas não consegue publicar.
 
 <Warning>
   O `.env.schema` define `WEB_GITLAB_SCOPES` com o padrão `read_api read_user read_repository`. Uma conexão feita com esse valor consegue ler seus repositórios, mas não consegue publicar comentários nem gerenciar webhooks. Defina o valor mostrado no Passo 4.

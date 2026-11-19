@@ -40,7 +40,7 @@
     - `db_kodus_postgres`, `db_kodus_mongodb`, `rabbitmq` —
       infraestrutura local. Defina `USE_LOCAL_DB=false` /
       `USE_LOCAL_RABBITMQ=false` para apontar para instâncias gerenciadas. Os
-      containers continuam subindo como dependências, mas o Kodus não os usa.
+      containers continuam subindo como dependências, mas a Kodus não os usa.
 
     **Opcionais:**
     - `kodus-mcp-manager` — broker do Model Context Protocol. Habilite
@@ -65,7 +65,7 @@
 
 ## Configuração de Domínio (Opcional)
 
-O provedor Git precisa alcançar a URL do webhook via HTTPS. O instalador exige pelo menos uma URL HTTPS de webhook, inclusive quando Kodus e Git estão em rede privada. O app web precisa estar acessível aos usuários, inclusive quando o navegador voltar do login ou do provedor Git.
+O provedor Git precisa alcançar a URL do webhook via HTTPS. O instalador exige pelo menos uma URL HTTPS de webhook, inclusive quando a Kodus e o Git estão em rede privada. O app web precisa estar acessível aos usuários, inclusive quando o navegador voltar do login ou do provedor Git.
 
 Recomendamos configurar dois subdomínios:
 - Um para a aplicação web, ex.: `kodus-web.seudominio.com`.
@@ -132,9 +132,9 @@ Os dois subdomínios devem ter registros DNS A apontando para o endereço IP do 
     Quando você acessar a interface web pela primeira vez, vai precisar:
 
 1. **Criar sua conta de administrador** - Será o primeiro usuário, com acesso total ao sistema
-2. **Conectar um provedor de LLM** - O Kodus é bring-your-own-key, e nenhum review roda sem um modelo. Abra **AI providers** na barra lateral, ou defina o modelo no `.env` (veja [Configuração do Provedor de LLM](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#configuração-do-provedor-de-llm))
+2. **Conectar um provedor de LLM** - A Kodus é bring-your-own-key, e nenhum review roda sem um modelo. Abra **AI providers** na barra lateral, ou defina o modelo no `.env` (veja [Configuração do Provedor de LLM](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#configuração-do-provedor-de-llm))
 3. **Configurar seu provedor Git** - Conecte GitHub, GitLab, Bitbucket, Azure DevOps ou Forgejo seguindo as instruções na tela
-4. **Selecionar repositórios** para análise - Escolha quais repositórios de código o Kody vai revisar
+4. **Selecionar repositórios** para análise - Escolha quais repositórios de código a Kody vai revisar
 
 <Info>
   Para etapas detalhadas do processo de configuração inicial, consulte nosso [Guia de Início Rápido](/pt-BR/how_to_use/quickstart).

@@ -7,7 +7,7 @@ description: "Dê a pastas específicas de um repositório as próprias configur
 
 Um escopo de diretório aplica as próprias configurações de code review a uma ou mais pastas de um repositório. Use em monorepos, onde áreas diferentes têm padrões ou responsáveis distintos.
 
-O Kody usa uma única configuração por pull request: **Diretório** → **Repositório** → **Global**.
+A Kody usa uma única configuração por pull request: **Diretório** → **Repositório** → **Global**.
 
 <Note>
   Saiba como as configurações fluem entre os níveis em <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança de configurações</a>.
@@ -22,14 +22,14 @@ O Kody usa uma única configuração por pull request: **Diretório** → **Repo
 
 ### Regras de Seleção
 
-O Kody verifica quais escopos de diretório o pull request toca:
+A Kody verifica quais escopos de diretório o pull request toca:
 
 - **Um escopo tocado:** usa as configurações desse escopo. Arquivos fora de qualquer escopo não mudam isso.
 - **Nenhum escopo tocado:** usa as configurações do repositório, ou do Global se o repositório não tiver.
 - **Dois ou mais escopos tocados:** usa as configurações do repositório, ou do Global se o repositório não tiver.
 
 <Note>
-  O Kody usa uma configuração por pull request para manter as revisões previsíveis. Misturar configurações causa conflitos.
+  A Kody usa uma configuração por pull request para manter as revisões previsíveis. Misturar configurações causa conflitos.
 </Note>
 
 ## Exemplos
@@ -63,8 +63,8 @@ Para alterar as pastas depois, abra o menu **⋯** ao lado do seletor de escopo 
 
 ## kodus-config.yml e escopos de diretório
 
-- O Kody lê o `kodus-config.yml` apenas da raiz da branch padrão do repositório. Ele nunca lê um `kodus-config.yml` colocado dentro de uma pasta.
-- Ele só lê o arquivo da raiz quando **Prefer kodus-config.yml settings** está ligado no escopo de **repositório**. A chave também aparece no escopo de diretório, mas não muda uma revisão: ligá-la ali não faz o Kody ler um arquivo para esse diretório, e desligá-la não impede que o arquivo do repositório seja aplicado.
+- A Kody lê o `kodus-config.yml` apenas da raiz da branch padrão do repositório. Ela nunca lê um `kodus-config.yml` colocado dentro de uma pasta.
+- Ela só lê o arquivo da raiz quando **Prefer kodus-config.yml settings** está ligado no escopo de **repositório**. A chave também aparece no escopo de diretório, mas não muda uma revisão: ligá-la ali não faz a Kody ler um arquivo para esse diretório, e desligá-la não impede que o arquivo do repositório seja aplicado.
 - Uma configuração sobrescrita no escopo de diretório tem precedência sobre a mesma configuração no arquivo do repositório.
 - Para manter as configurações de um escopo de diretório em arquivos, use um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config), onde um `kodus-config.yml` na pasta do escopo é sincronizado com as configurações do escopo de diretório.
 

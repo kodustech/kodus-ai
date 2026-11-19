@@ -1,6 +1,6 @@
 ---
 title: "O que revisar"
-description: "Escolha as categorias de review, escreva instruções para cada uma e decida o que mais o Kody verifica."
+description: "Escolha as categorias de review, escreva instruções para cada uma e decida o que mais a Kody verifica."
 ---
 
 Abra **Code review → What to review**. As configurações desta página podem ser definidas nos escopos Global, Repository e Directory. Veja [Herança de configurações](/pt-BR/how_to_use/code_review/configs/inheritance_overrides).
@@ -30,17 +30,17 @@ reviewOptions:
 
 ## Instruções por categoria
 
-Nas linhas Bug, Performance e Security, **Instructions** abre um editor que mostra o que o Kody procura nessa categoria. Edite para combinar com o seu código. Veja [Instructions & Personality](/pt-BR/how_to_use/code_review/configs/custom_prompts).
+Nas linhas Bug, Performance e Security, **Instructions** abre um editor que mostra o que a Kody procura nessa categoria. Edite para combinar com o seu código. Veja [Instructions & Personality](/pt-BR/how_to_use/code_review/configs/custom_prompts).
 
 ## Coding-agent instructions
 
-**Coding-agent instructions** (desativado por padrão) permite que o Kody leia arquivos como `CLAUDE.md`, `AGENTS.md` e `.cursor/rules` e aponte mudanças que os quebram. Veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
+**Coding-agent instructions** (desativado por padrão) permite que a Kody leia arquivos como `CLAUDE.md`, `AGENTS.md` e `.cursor/rules` e aponte mudanças que os quebram. Veja [Instruções para agentes de código](/pt-BR/how_to_use/code_review/configs/rules_file_detection).
 
-O Kody lê esses arquivos por meio dos reviews de Bug, Security e Performance, então a configuração precisa de pelo menos um deles ativado.
+A Kody lê esses arquivos por meio dos reviews de Bug, Security e Performance, então a configuração precisa de pelo menos um deles ativado.
 
 ## Minimum severity to post
 
-O Kody publica apenas apontamentos neste nível ou acima. **Apply the threshold to Kody Rules** estende isso às suas regras. Veja [Severidade mínima](/pt-BR/how_to_use/code_review/configs/suggestion_control).
+A Kody publica apenas apontamentos neste nível ou acima. **Apply the threshold to Kody Rules** estende isso às suas regras. Veja [Severidade mínima](/pt-BR/how_to_use/code_review/configs/suggestion_control).
 
 ## Custom agents
 
@@ -56,7 +56,7 @@ A seção aparece no Cloud quando o workspace tem acesso a verificações determ
 
 - **Vulnerable dependencies** — verifica os pacotes que um pull request adiciona ou atualiza em bancos públicos de advisories, e reporta apenas as vulnerabilidades que essa mudança introduz. Lê lockfiles mesmo quando eles estão na lista de arquivos ignorados.
 - **Committed credentials** — varre os arquivos alterados em busca de tokens, chaves e chaves privadas.
-- **Use your CI's results as evidence** — lê os checks que já estão no commit. Nada é executado de novo. No GitHub, isso exige o app do Kodus: um personal access token não consegue ler check runs.
+- **Use your CI's results as evidence** — lê os checks que já estão no commit. Nada é executado de novo. No GitHub, isso exige o app da Kodus: um personal access token não consegue ler check runs.
 
 Com a configuração de CI ativada, um scanner se retira quando o seu CI já cobre o que ele verifica. Os apontamentos recebem o rótulo **Deterministic**, cobrem apenas linhas que o pull request adicionou e são publicados independentemente do limite de severidade.
 

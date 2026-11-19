@@ -1,6 +1,6 @@
 ---
 title: "Início Rápido Local"
-description: "Coloque o Kodus em execução na sua máquina local — API, Worker, Webhooks, Web UI e todas as dependências em um único comando."
+description: "Coloque a Kodus em execução na sua máquina local — API, Worker, Webhooks, Web UI e todas as dependências em um único comando."
 icon: "laptop"
 ---
 
@@ -10,7 +10,7 @@ icon: "laptop"
 </Note>
 
 <Note>
-  O `.env.example` é o template compartilhado com o Kodus Cloud, então um `.env` novo vem com
+  O `.env.example` é o template compartilhado com a Kodus Cloud, então um `.env` novo vem com
   `API_CLOUD_MODE=true` e `SANDBOX_PROVIDER=e2b`. Para rodar do jeito de uma instância
   self-hosted, defina `API_CLOUD_MODE=false` e
   `SANDBOX_PROVIDER=local` no `.env` antes de iniciar os serviços. Com
@@ -153,7 +153,7 @@ icon: "laptop"
       - Kodus API
       - Worker (tarefas assíncronas)
       - Serviço de Webhooks
-      - Aplicação Web do Kodus
+      - Aplicação Web da Kodus
       - Banco de dados PostgreSQL
       - Banco de dados MongoDB
       - RabbitMQ
@@ -202,7 +202,7 @@ icon: "laptop"
 
 ## Conectar um modelo
 
-O Kodus precisa de um modelo para executar reviews. Escolha uma opção antes de iniciar os serviços:
+A Kodus precisa de um modelo para executar reviews. Escolha uma opção antes de iniciar os serviços:
 
 - **No app.** Depois de entrar, abra **AI providers** na barra lateral e conecte um provedor com a sua chave. Veja [BYOK](/pt-BR/how_to_use/byok).
 - **No `.env`.** Um modelo para a instância inteira:
@@ -308,7 +308,7 @@ docker network rm kodus-backend-services shared-network
 
 **Conflitos de porta:**
 - Certifique-se de que as portas 3000 (Web), 3001 (API), 3332 (Webhooks), 5432 (PostgreSQL), 27017 (MongoDB) e 5672/15672 (RabbitMQ) estão disponíveis
-- Pare outros serviços que usam essas portas antes de iniciar o Kodus
+- Pare outros serviços que usam essas portas antes de iniciar a Kodus
 
 **Variáveis de ambiente não carregando:**
 - Verifique se o arquivo `.env` existe na raiz do projeto

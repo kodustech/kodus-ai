@@ -1,15 +1,15 @@
 ---
 title: "Configuração Self-Hosted"
-description: "Conecte o Kodus CLI à sua instância self-hosted do Kodus."
+description: "Conecte o CLI da Kodus à sua instância self-hosted da Kodus."
 ---
 
-Se você estiver executando o Kodus na sua própria infraestrutura, o CLI funciona da mesma forma — você só precisa apontá-lo para a sua API.
+Se você estiver executando a Kodus na sua própria infraestrutura, o CLI funciona da mesma forma — você só precisa apontá-lo para a sua API.
 
 ## Conectar à Sua Instância
 
 <Steps>
   <Step title="Definir a URL da API">
-    Informe ao CLI onde sua API do Kodus está. Escolha um método:
+    Informe ao CLI onde sua API da Kodus está. Escolha um método:
 
     <Tabs>
       <Tab title="Variável de Ambiente (Recomendado)">
@@ -59,7 +59,7 @@ Se você estiver executando o Kodus na sua própria infraestrutura, o CLI funcio
   <Step title="Autenticar">
     <Tabs>
       <Tab title="Chave de Equipe (Recomendado)">
-        Gere uma chave de equipe no app self-hosted do Kodus em **Organization → CLI keys**. Defina-a na variável de ambiente `KODUS_TEAM_KEY` no shell em que você executa o CLI.
+        Gere uma chave de equipe no app self-hosted da Kodus em **Organization → CLI keys**. Defina-a na variável de ambiente `KODUS_TEAM_KEY` no shell em que você executa o CLI.
 
         <Tip>Chaves de equipe são ideais para ambientes compartilhados e configurações com agentes de IA — sem necessidade de login individual.</Tip>
       </Tab>
@@ -73,7 +73,7 @@ Se você estiver executando o Kodus na sua própria infraestrutura, o CLI funcio
         Seu login é armazenado em `~/.kodus/credentials.json` com permissões restritas (600).
 
         <Info>
-          O endereço dessa página vem da configuração `API_FRONTEND_URL` da sua API do Kodus. Ela precisa ser a URL do seu web app, ou a página de login abre no host errado.
+          O endereço dessa página vem da configuração `API_FRONTEND_URL` da sua API da Kodus. Ela precisa ser a URL do seu web app, ou a página de login abre no host errado.
         </Info>
 
         No CI, armazene uma chave de equipe no secret `KODUS_TEAM_KEY`.

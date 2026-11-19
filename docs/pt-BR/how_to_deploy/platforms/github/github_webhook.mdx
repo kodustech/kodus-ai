@@ -1,10 +1,10 @@
 ---
 title: Criando um Webhook
-description: "Crie manualmente o webhook do GitHub para uma integração por token quando o registro automático não aconteceu, e selecione os três eventos que o Kodus consome."
+description: "Crie manualmente o webhook do GitHub para uma integração por token quando o registro automático não aconteceu, e selecione os três eventos que a Kodus consome."
 icon: webhook
 ---
 
-Com um personal access token, o Kodus cria o webhook em cada repositório quando você salva a seleção de repositórios. Isso exige acesso de leitura e escrita aos webhooks do repositório: `admin:repo_hook` em um token classic, ou **Webhooks: Read and write** em um token fine-grained. Se o token não tiver essa permissão, **Repositories** lista o repositório com o motivo, e você pode criar o webhook manualmente como descrito a seguir.
+Com um personal access token, a Kodus cria o webhook em cada repositório quando você salva a seleção de repositórios. Isso exige acesso de leitura e escrita aos webhooks do repositório: `admin:repo_hook` em um token classic, ou **Webhooks: Read and write** em um token fine-grained. Se o token não tiver essa permissão, **Repositories** lista o repositório com o motivo, e você pode criar o webhook manualmente como descrito a seguir.
 
 Com o GitHub App não existe webhook por repositório: os eventos vêm do próprio webhook do App. Veja [Criando um GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app).
 
@@ -33,5 +33,5 @@ Com o GitHub App não existe webhook por repositório: os eventos vêm do própr
 Você configurou com sucesso um webhook para code reviews no seu repositório GitHub.
 
 <Note>
-  Estes são os únicos eventos que uma integração por token usa. O Kodus ignora os outros, como pushes, pull request reviews e review threads, então selecioná-los só gera mais tráfego.
+  Estes são os únicos eventos que uma integração por token usa. A Kodus ignora os outros, como pushes, pull request reviews e review threads, então selecioná-los só gera mais tráfego.
 </Note>

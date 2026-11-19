@@ -22,7 +22,7 @@ Correções para os erros que você encontra ao conectar um provedor e rodar rev
 
   <Accordion title="'Endpoint not found' ao clicar em Test">
     - Verifique se a base URL corresponde exatamente ao provedor (a barra final importa em alguns).
-    - Para provedores compatíveis com OpenAI, o endpoint geralmente é `{baseURL}/chat/completions` (o Kodus adiciona o caminho), então cole a base URL sem ele. Uma URL que termina em `/chat/completions`, `/messages` ou `/responses` é rejeitada, e a mensagem informa o endereço a usar no lugar.
+    - Para provedores compatíveis com OpenAI, o endpoint geralmente é `{baseURL}/chat/completions` (a Kodus adiciona o caminho), então cole a base URL sem ele. Uma URL que termina em `/chat/completions`, `/messages` ou `/responses` é rejeitada, e a mensagem informa o endereço a usar no lugar.
     - Um `404` em uma URL OpenAI ou OpenAI-compatible sem versão geralmente significa que ela precisa de `/v1`. A mensagem sugere a URL corrigida.
     - A URL deve usar `https://` e resolver para um endereço público. Uma URL que resolve para um endereço privado ou reservado é rejeitada.
   </Accordion>
@@ -38,7 +38,7 @@ Correções para os erros que você encontra ao conectar um provedor e rodar rev
   </Accordion>
 
   <Accordion title="Variáveis de ambiente self-hosted não aparecem">
-    - Se o Kodus está configurado por variáveis de ambiente, a página **AI providers** mostra **Kodus is currently using an LLM configured via environment variables** com o modelo e o provedor (e se o provedor foi definido em `API_LLM_PROVIDER` ou deduzido), enquanto nenhum modelo estiver conectado ali. A chave nunca é exibida.
+    - Se a Kodus está configurada por variáveis de ambiente, a página **AI providers** mostra **Kodus is currently using an LLM configured via environment variables** com o modelo e o provedor (e se o provedor foi definido em `API_LLM_PROVIDER` ou deduzido), enquanto nenhum modelo estiver conectado ali. A chave nunca é exibida.
     - Conectar um modelo e salvar substitui a configuração do ambiente.
   </Accordion>
 
@@ -72,6 +72,6 @@ Correções para os erros que você encontra ao conectar um provedor e rodar rev
   </Accordion>
 
   <Accordion title="Posso usar um LLM self-hosted (ex.: Ollama, vLLM)?">
-    Sim — pelo provedor **OpenAI-compatible** (em Custom). Informe a base URL do seu endpoint, o Model ID que ele expõe e uma chave de API qualquer (a maioria dos runtimes self-hosted ignora o header da chave, mas ainda exige um). A página **AI providers** só aceita uma URL `https://` que resolva para um endereço público, então `localhost` e endereços de rede privada são rejeitados. Em um Kodus self-hosted, defina um endpoint em uma rede privada com variáveis de ambiente; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
+    Sim — pelo provedor **OpenAI-compatible** (em Custom). Informe a base URL do seu endpoint, o Model ID que ele expõe e uma chave de API qualquer (a maioria dos runtimes self-hosted ignora o header da chave, mas ainda exige um). A página **AI providers** só aceita uma URL `https://` que resolva para um endereço público, então `localhost` e endereços de rede privada são rejeitados. Em uma instância self-hosted da Kodus, defina um endpoint em uma rede privada com variáveis de ambiente; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
   </Accordion>
 </AccordionGroup>

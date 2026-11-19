@@ -1,21 +1,21 @@
 ---
 title: "Posso usar meu próprio provedor de LLM para revisão de código"
-description: "Traga sua própria chave de API e escolha seu provedor de LLM preferido para revisão de código com IA no Kodus."
+description: "Traga sua própria chave de API e escolha seu provedor de LLM preferido para revisão de código com IA na Kodus."
 ---
 
-Sim. O Kodus suporta Bring Your Own Key (BYOK) em todos os planos, permitindo que você use seu provedor de LLM preferido. Seu provedor cobra você diretamente pelos tokens, e sua chave é armazenada criptografada e nunca é exibida de volta em texto simples.
+Sim. A Kodus suporta Bring Your Own Key (BYOK) em todos os planos, permitindo que você use seu provedor de LLM preferido. Seu provedor cobra você diretamente pelos tokens, e sua chave é armazenada criptografada e nunca é exibida de volta em texto simples.
 
 ## Como funciona
 
 1. Na barra lateral, abra **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok))
 2. Na aba **Providers**, escolha seu provedor — ou **OpenAI-compatible** / **Anthropic-compatible** em **Custom** para qualquer outro endpoint
-3. Cole sua chave de API, escolha o modelo e clique em **Test & save**. O Kodus envia uma requisição real mínima ao modelo antes de salvar
+3. Cole sua chave de API, escolha o modelo e clique em **Test & save**. A Kodus envia uma requisição real mínima ao modelo antes de salvar
 
 ## Provedores suportados
 
-A seção **Providers** da grade lista provedores de primeira linha como Anthropic, OpenAI, Google, OpenRouter, Novita, Moonshot e Z.ai. A seção **Custom** cobre endpoints para os quais você mesmo aponta o Kodus: OpenAI-compatible, Anthropic-compatible, Google Vertex AI, Amazon Bedrock e Azure OpenAI.
+A seção **Providers** da grade lista provedores de primeira linha como Anthropic, OpenAI, Google, OpenRouter, Novita, Moonshot e Z.ai. A seção **Custom** cobre endpoints para os quais você mesmo aponta a Kodus: OpenAI-compatible, Anthropic-compatible, Google Vertex AI, Amazon Bedrock e Azure OpenAI.
 
-Quando o Kodus consegue listar os modelos de um provedor, o seletor **Model** os exibe (os recomendados primeiro, além de **Type model manually**); caso contrário, você digita o ID exato do modelo. Thinking/reasoning, temperature, limites de tokens e max concurrent requests ficam em **Advanced (optional)**.
+Quando a Kodus consegue listar os modelos de um provedor, o seletor **Model** os exibe (os recomendados primeiro, além de **Type model manually**); caso contrário, você digita o ID exato do modelo. Thinking/reasoning, temperature, limites de tokens e max concurrent requests ficam em **Advanced (optional)**.
 
 ## Por que usar seu próprio provedor
 
@@ -33,7 +33,7 @@ Pelos provedores **OpenAI-compatible** e **Anthropic-compatible**, você pode ap
 - Chutes, Synthetic
 - Sua própria instância Ollama / vLLM / TGI (via o provedor **OpenAI-compatible**)
 
-A URL base precisa usar `https://` e resolver para um endereço público. Em um Kodus self-hosted, um endpoint em uma rede privada é configurado com variáveis de ambiente; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
+A URL base precisa usar `https://` e resolver para um endereço público. Em uma instância self-hosted da Kodus, um endpoint em uma rede privada é configurado com variáveis de ambiente; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
 
 Para guias de configuração, consulte as páginas dos provedores no [Cookbook](/pt-BR/cookbook/fireworks).
 

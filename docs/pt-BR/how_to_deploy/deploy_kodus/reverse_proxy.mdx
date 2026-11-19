@@ -1,15 +1,15 @@
 ---
 title: "Proxy Reverso"
-description: "Configure um proxy reverso para o Kodus."
+description: "Configure um proxy reverso para a Kodus."
 icon: "server" 
 tags: ["reverse-proxy", "nginx"]
 ---
 
 <Info>
-Pule esta página se um balanceador de carga ou outro proxy já roteia o tráfego para o Kodus.
+Pule esta página se um balanceador de carga ou outro proxy já roteia o tráfego para a Kodus.
 </Info>
 
-Para tornar sua instância do Kodus acessível a partir de sistemas externos (necessário para webhooks de Code Review e acesso público), você precisará configurar um proxy reverso com Nginx. Ele roteia três serviços: o app web (porta 3000), a API (porta 3001) e o serviço de webhooks (porta 3332). O instalador publica os três no host.
+Para tornar sua instância da Kodus acessível a partir de sistemas externos (necessário para webhooks de Code Review e acesso público), você precisará configurar um proxy reverso com Nginx. Ele roteia três serviços: o app web (porta 3000), a API (porta 3001) e o serviço de webhooks (porta 3332). O instalador publica os três no host.
 
 Aqui está um exemplo de configuração do Nginx para dois subdomínios:
 

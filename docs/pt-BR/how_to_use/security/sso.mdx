@@ -1,12 +1,12 @@
 ---
 title: "Single Sign-On"
-description: "Habilite o Single Sign-On (SSO) para um acesso seguro e eficiente ao Kodus."
+description: "Habilite o Single Sign-On (SSO) para um acesso seguro e eficiente à Kodus."
 ---
 
 import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
 <div className="kodus-feature-badges">
-  <FeatureBadge id="enterprise" detail="Disponível no Kodus Cloud com Enterprise ou um trial ativo.">
+  <FeatureBadge id="enterprise" detail="Disponível na Kodus Cloud com Enterprise ou um trial ativo.">
     <Badge icon="shield-check" stroke>Enterprise</Badge>
   </FeatureBadge>
   <FeatureBadge id="self-hosted" detail="Requer uma licença Enterprise.">
@@ -16,7 +16,7 @@ import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
 ## Visão Geral
 
-O Single Sign-On (SSO) permite que o seu time entre no Kodus pelo seu provedor de identidade via SAML 2.0.
+O Single Sign-On (SSO) permite que o seu time entre na Kodus pelo seu provedor de identidade via SAML 2.0.
 
 Owners configuram o SSO via SAML em **Organization → SSO**.
 
@@ -37,8 +37,8 @@ Owners configuram o SSO via SAML em **Organization → SSO**.
         </Info>
     </Step>
 
-    <Step title="Configurar o Kodus como SP no seu IdP">
-        Configure o Kodus como um SP no seu IdP informando o nosso entity ID (**Service Provider Entity ID**, `kodus-orchestrator` por padrão) e a **Callback URL** da sua organização, ambos exibidos na página de configurações de SSO.
+    <Step title="Configurar a Kodus como SP no seu IdP">
+        Configure a Kodus como um SP no seu IdP informando o nosso entity ID (**Service Provider Entity ID**, `kodus-orchestrator` por padrão) e a **Callback URL** da sua organização, ambos exibidos na página de configurações de SSO.
 
         Certifique-se de que o formato do name ID está definido como e-mail.
 
@@ -61,13 +61,13 @@ Owners configuram o SSO via SAML em **Organization → SSO**.
 
 ### Mapeamento de Atributos
 
-Você pode mapear os seguintes atributos do seu IdP para os usuários do Kodus, melhorando a experiência do usuário.
+Você pode mapear os seguintes atributos do seu IdP para os usuários da Kodus, melhorando a experiência do usuário.
 
 -   Primeiro nome, mapeado para `firstName`
 -   Sobrenome, mapeado para `lastName`
 
 ## Fazendo login
 
-Na página de login, digite o seu e-mail. Se o domínio dele tem o SSO ativado, o Kodus mostra **Continue with SSO** em vez de pedir uma senha, e envia você ao seu IdP.
+Na página de login, digite o seu e-mail. Se o domínio dele tem o SSO ativado, a Kodus mostra **Continue with SSO** em vez de pedir uma senha, e envia você ao seu IdP.
 
-Na primeira vez que alguém entra por SSO, o Kodus cria a conta dessa pessoa na sua organização com a função **Contributor**, sem uma etapa de confirmação de e-mail. Um Owner pode alterar a função depois em **Organization → Subscription → Workspace members**; veja [Funções do Workspace](/pt-BR/how_to_use/workspace_roles).
+Na primeira vez que alguém entra por SSO, a Kodus cria a conta dessa pessoa na sua organização com a função **Contributor**, sem uma etapa de confirmação de e-mail. Um Owner pode alterar a função depois em **Organization → Subscription → Workspace members**; veja [Funções do Workspace](/pt-BR/how_to_use/workspace_roles).

@@ -1,17 +1,17 @@
 ---
 title: "Como ensinar à IA as convenções de código do seu time"
-description: "Use Memórias para fazer o Kody aprender suas preferências de codificação, decisões arquiteturais e convenções do time por meio de conversas naturais."
+description: "Use Memórias para fazer a Kody aprender suas preferências de codificação, decisões arquiteturais e convenções do time por meio de conversas naturais."
 ---
 
-Todo time tem contexto não escrito — preferências tecnológicas, convenções de nomenclatura, decisões arquiteturais, detalhes de migração. Em vez de documentar tudo isso antecipadamente, você pode ensinar o Kody por meio de conversas naturais para que as revisões futuras sejam mais relevantes e sugestões ruins e repetitivas desapareçam.
+Todo time tem contexto não escrito — preferências tecnológicas, convenções de nomenclatura, decisões arquiteturais, detalhes de migração. Em vez de documentar tudo isso antecipadamente, você pode ensinar a Kody por meio de conversas naturais para que as revisões futuras sejam mais relevantes e sugestões ruins e repetitivas desapareçam.
 
 ## Como funciona
 
-Quando você pede ao Kody em um comentário de PR para lembrar de algo, ele salva isso como uma **Memória**. Quando você apenas declara contexto do codebase ou uma preferência do time, o Kody se oferece para salvar e salva assim que você disser que sim. As Memórias passam então a ser usadas como contexto de alta prioridade em code reviews e conversas futuras.
+Quando você pede à Kody em um comentário de PR para lembrar de algo, ela salva isso como uma **Memória**. Quando você apenas declara contexto do codebase ou uma preferência do time, a Kody se oferece para salvar e salva assim que você disser que sim. As Memórias passam então a ser usadas como contexto de alta prioridade em code reviews e conversas futuras.
 
 ### Ensino explícito
 
-Diga diretamente ao Kody para lembrar de algo:
+Diga diretamente à Kody para lembrar de algo:
 
 ```
 @kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
@@ -23,7 +23,7 @@ Diga diretamente ao Kody para lembrar de algo:
 
 ### Declarando uma convenção
 
-Declare uma convenção, ou explique por que uma sugestão não se aplica, e o Kody se oferece para salvá-la como uma memória. Responda `@kody yes` para salvar. Por exemplo:
+Declare uma convenção, ou explique por que uma sugestão não se aplica, e a Kody se oferece para salvá-la como uma memória. Responda `@kody yes` para salvar. Por exemplo:
 
 ```
 @kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
@@ -37,9 +37,11 @@ Declare uma convenção, ou explique por que uma sugestão não se aplica, e o K
 @kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
 ```
 
-## O que o Kody não salva
+<span id="o-que-o-kody-não-salva" aria-hidden="true" />
 
-O Kody é seletivo sobre o que vira uma memória:
+## O que a Kody não salva
+
+A Kody é seletiva sobre o que vira uma memória:
 
 - Instruções temporárias ("corrija isso agora", "ignore isso por hoje")
 - Perguntas ("qual é o prazo?")
@@ -59,7 +61,7 @@ Cada memória se aplica em um nível específico:
 
 ## Fluxo de aprovação
 
-Se você quiser revisar as memórias que o Kody cria antes que entrem em vigor, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Kody knowledge approval**. As novas memórias (e as regras geradas pelo Kody) passam a aguardar na seção **Pending review** até você usar **Approve** ou **Discard**. As memórias que você escreve com **New memory** ficam ativas na hora.
+Se você quiser revisar as memórias que a Kody cria antes que entrem em vigor, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Kody knowledge approval**. As novas memórias (e as regras geradas pela Kody) passam a aguardar na seção **Pending review** até você usar **Approve** ou **Discard**. As memórias que você escreve com **New memory** ficam ativas na hora.
 
 ## Gerenciando memórias
 

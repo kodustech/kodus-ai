@@ -1,6 +1,6 @@
 ---
 title: "Solução de Problemas"
-description: "Erros comuns do Kodus CLI, códigos de saída e como depurá-los."
+description: "Erros comuns do CLI da Kodus, códigos de saída e como depurá-los."
 ---
 
 Comece qualquer investigação com:
@@ -83,13 +83,13 @@ kodus review --verbose    # or any command with --verbose
   <Accordion title="Limite de taxa atingido / Trial esgotado">
     O modo trial permite 2 revisões por hora para cada usuário, dispositivo e pasta de repositório, contadas em uma hora móvel. Faça login com `kodus auth login` ou configure uma chave de equipe com `KODUS_TEAM_KEY` para aumentar o limite. No modo trial, `kodus auth status` imprime seu uso e quando ele é reiniciado. Ele rotula o limite como "daily" e mostra "Files limit: 10 per review"; o servidor não aplica nenhum dos dois: o limite é por hora, e nenhum limite de arquivos se aplica a uma revisão trial. Quando o limite do trial é atingido, `kodus review` imprime um aviso "Daily limit reached" e termina com código 0, independentemente do que `--fail-on` diga.
 
-    Uma equipe logada é limitada a 1.000 requisições por hora. Revisões, verificações de validação de negócio e eventos de sessão do Kodus Trace contam para esse limite. O CLI então diz "Rate limit exceeded. Please try again later."
+    Uma equipe logada é limitada a 1.000 requisições por hora. Revisões, verificações de validação de negócio e eventos de sessão do recurso Kodus Trace contam para esse limite. O CLI então diz "Rate limit exceeded. Please try again later."
   </Accordion>
 
   <Accordion title="A página de login não abre ou o login expira">
     - O CLI imprime a URL quando o navegador não abre. Cole-a em um navegador.
     - Em uma sessão SSH privada ou máquina sem navegador, siga as [etapas de login por código](/pt-BR/how_to_use/cli/getting_started). No CI, configure `KODUS_TEAM_KEY` como secret.
-    - Quando você não está logado no Kodus nesse navegador, a página leva você à página de login e, depois de entrar, você cai no dashboard, não em **Authorize CLI**. Abra a URL novamente; o CLI continua esperando.
+    - Quando você não está logado na Kodus nesse navegador, a página leva você à página de login e, depois de entrar, você cai no dashboard, não em **Authorize CLI**. Abra a URL novamente; o CLI continua esperando.
     - O login espera por até 10 minutos. "Authorization timed out", "expired" ou "denied" significa que você precisa executar `kodus auth login` novamente.
     - Para forçar o fluxo por código, execute `kodus auth login --device-code`.
   </Accordion>
@@ -169,5 +169,5 @@ Com `--agent`, uma falha imprime um envelope com `ok: false` e um `error.code`:
 ## Obtendo Ajuda
 
 - Reporte bugs: [github.com/kodustech/kodus-ai/issues](https://github.com/kodustech/kodus-ai/issues)
-- Pedidos de funcionalidades e dúvidas de configuração: seu gerente de conta do Kodus, ou `support@kodus.io`.
+- Pedidos de funcionalidades e dúvidas de configuração: seu gerente de conta da Kodus, ou `support@kodus.io`.
 - Para implantações self-hosted, inclua a saída de `kodus status` e a versão do seu CLI (`kodus --version`) ao abrir uma issue.

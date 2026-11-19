@@ -1,11 +1,11 @@
 ---
 title: "Geração automática de regras"
-description: "O Kody redige Kody Rules a partir dos comentários que seus revisores deixam nos pull requests e continua aprendendo toda semana."
+description: "A Kody redige Kody Rules a partir dos comentários que seus revisores deixam nos pull requests e continua aprendendo toda semana."
 ---
 
-O Kody lê os comentários de revisão que o seu time escreveu nos pull requests do repositório, abertos ou fechados, encontra os padrões que os revisores repetem e os redige como [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules). Ele leva em conta as regras que você já tem para não repeti-las.
+A Kody lê os comentários de revisão que o seu time escreveu nos pull requests do repositório, abertos ou fechados, encontra os padrões que os revisores repetem e os redige como [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules). Ela leva em conta as regras que você já tem para não repeti-las.
 
-- Ele aprende com os comentários dos seus revisores com mais de 100 caracteres. Comentários de bots e do próprio Kody ficam de fora.
+- Ela aprende com os comentários dos seus revisores com mais de 100 caracteres. Comentários de bots e da própria Kody ficam de fora.
 - Funciona por repositório.
 - As regras geradas mostram a origem **Kody-generated** e valem para todos os arquivos até você definir um caminho.
 - As regras geradas ficam ativas na hora, ou aguardam em **Pending review** quando **Kody knowledge approval** está ativado.
@@ -15,7 +15,7 @@ O Kody lê os comentários de revisão que o seu time escreveu nos pull requests
 1. Na barra lateral, escolha **Global** ou um repositório no seletor de escopo no topo do grupo **Code review** e abra **Kody Rules**.
 2. Clique em **Configuration** para abrir o painel lateral.
 3. Ative **Generate from past reviews**.
-4. Opcionalmente, use o seletor de revisores abaixo do toggle (**Learning from all reviewers** por padrão) para excluir desenvolvedores cujos comentários de revisão o Kody não deve usar para aprender. Ele lista os membros atuais e os autores recentes de pull requests, e mostra **Excluding N reviewers** depois que você aplica uma seleção.
+4. Opcionalmente, use o seletor de revisores abaixo do toggle (**Learning from all reviewers** por padrão) para excluir desenvolvedores cujos comentários de revisão a Kody não deve usar para aprender. Ele lista os membros atuais e os autores recentes de pull requests, e mostra **Excluding N reviewers** depois que você aplica uma seleção.
 
 A configuração segue a hierarquia habitual: **Global** é o padrão de todos os repositórios, e um repositório pode definir o próprio valor. Ela não se aplica por diretório.
 
@@ -23,18 +23,18 @@ Novos workspaces são perguntados durante o onboarding, na etapa **Kody learns f
 
 ## Quando ele roda
 
-- **Primeira vez em um repositório:** o Kody lê os comentários de revisão dos últimos **3 meses**. Ativar o toggle no nível do repositório inicia isso na hora e pode levar alguns minutos. Ativar no nível Global não inicia nada naquele momento: os repositórios que o seguem entram na próxima execução semanal. Essa primeira passada só acontece enquanto o repositório ainda não tem regras geradas.
-- **Depois disso:** uma vez por semana, o Kody lê os comentários da última semana. O agendamento padrão é sábado às 00:00, horário de São Paulo (`America/Sao_Paulo`); instâncias self-hosted podem alterá-lo com `API_CRON_KODY_LEARNING`.
+- **Primeira vez em um repositório:** a Kody lê os comentários de revisão dos últimos **3 meses**. Ativar o toggle no nível do repositório inicia isso na hora e pode levar alguns minutos. Ativar no nível Global não inicia nada naquele momento: os repositórios que o seguem entram na próxima execução semanal. Essa primeira passada só acontece enquanto o repositório ainda não tem regras geradas.
+- **Depois disso:** uma vez por semana, a Kody lê os comentários da última semana. O agendamento padrão é sábado às 00:00, horário de São Paulo (`America/Sao_Paulo`); instâncias self-hosted podem alterá-lo com `API_CRON_KODY_LEARNING`.
 
 Não há quantidade mínima de histórico. Um repositório sem comentários de revisores na janela não gera regras.
 
-Quando novas regras são criadas, o Kody notifica o seu time com os títulos delas.
+Quando novas regras são criadas, a Kody notifica o seu time com os títulos delas.
 
 ## Requisitos de modelo
 
-Na nuvem, fora do trial, a geração usa a sua própria chave de modelo, então o **BYOK** precisa estar configurado; sem ele, nada é gerado. Durante o trial, o Kodus fornece o modelo. Instâncias self-hosted usam o modelo configurado para o deployment. Veja [BYOK](/pt-BR/how_to_use/byok).
+Na nuvem, fora do trial, a geração usa a sua própria chave de modelo, então o **BYOK** precisa estar configurado; sem ele, nada é gerado. Durante o trial, a Kodus fornece o modelo. Instâncias self-hosted usam o modelo configurado para o deployment. Veja [BYOK](/pt-BR/how_to_use/byok).
 
-## Revise o que o Kody gerou
+## Revise o que a Kody gerou
 
 As regras geradas são listadas com a origem **Kody-generated**. Use **Filters → Origin → Kody-generated** para ver só elas. Abra qualquer uma para editar, pausar ou excluir, como qualquer outra regra.
 

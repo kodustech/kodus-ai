@@ -7,7 +7,7 @@ Veja os [requisitos dos agentes personalizados](/pt-BR/how_to_use/code_review/cu
 
 ## Skills & docs
 
-Skills e docs são guias que já existem no seu repositório. O Kodus não os copia: ele os lê da **branch de destino do pull request** em toda revisão. Assim, as edições nessa branch valem sem voltar às configurações, e um pull request não consegue mudar a regra que o avalia. Um guia também pode vir de outro repositório, como um repositório de regras compartilhado (veja **De outro repositório** mais abaixo).
+Skills e docs são guias que já existem no seu repositório. A Kodus não os copia: ela os lê da **branch de destino do pull request** em toda revisão. Assim, as edições nessa branch valem sem voltar às configurações, e um pull request não consegue mudar a regra que o avalia. Um guia também pode vir de outro repositório, como um repositório de regras compartilhado (veja **De outro repositório** mais abaixo).
 
 | | Skill | Doc |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ Skills e docs são guias que já existem no seu repositório. O Kodus não os co
 
 Scripts dentro de uma skill chegam ao agente como texto e nunca são executados.
 
-### Onde o Kodus encontra
+### Onde a Kodus encontra
 
 As **Skills** são detectadas em:
 
@@ -49,7 +49,7 @@ Os **Docs** são sugeridos a partir de `CONTRIBUTING.md`, `ARCHITECTURE.md`, `CO
 Há dois lugares para vincular uma skill ou doc:
 
 - **Na página do agente**, em **Files & knowledge → Skills & docs**: **Add skill or doc** lista o que o agente pode seguir, ou use **Add by path**.
-- **Na página Skills & docs** (o link **Skills & docs** ao lado de **Custom agents** em What to review): em **Added, and who follows each**, toda skill e doc cadastrada, com uma caixa de seleção para **Main review** e para cada agente. Vincular a **Main review** entrega o guia à revisão do próprio Kody. **Found in the repository** lista o que o Kodus detectou, cada item com **Add**, e um campo adiciona qualquer caminho à mão. As alterações são mantidas com **Save**.
+- **Na página Skills & docs** (o link **Skills & docs** ao lado de **Custom agents** em What to review): em **Added, and who follows each**, toda skill e doc cadastrada, com uma caixa de seleção para **Main review** e para cada agente. Vincular a **Main review** entrega o guia à revisão da própria Kody. **Found in the repository** lista o que a Kodus detectou, cada item com **Add**, e um campo adiciona qualquer caminho à mão. As alterações são mantidas com **Save**.
 
 No nível global, a página Skills & docs só aceita caminhos digitados à mão. Cada repositório é lido separadamente; abra as configurações de um repositório para ver se cada caminho existe nele.
 
@@ -59,7 +59,7 @@ Quando as revisões descartam apontamentos porque citam um arquivo que o agente 
 
 ### De outro repositório
 
-É comum o time manter as regras em um repositório e aplicá-las em vários. Escolha esse repositório em **From** ao adicionar uma skill ou doc na página de um agente: os repositórios vinculados do repositório aparecem primeiro, e **Other repository…** lista todos os repositórios conectados ao Kodus (selecionados em Git settings). Se o repositório de regras não aparecer, conecte-o lá primeiro.
+É comum o time manter as regras em um repositório e aplicá-las em vários. Escolha esse repositório em **From** ao adicionar uma skill ou doc na página de um agente: os repositórios vinculados do repositório aparecem primeiro, e **Other repository…** lista todos os repositórios conectados à Kodus (selecionados em Git settings). Se o repositório de regras não aparecer, conecte-o lá primeiro.
 
 - Um guia de outro repositório é lido na **branch padrão** desse repositório, ou na branch ou tag que você definir em **Use a branch or tag instead**. Uma branch ou tag por repositório. Um pull request nunca a altera.
 - É só para custom agents. A revisão principal lê os guias do repositório revisado e as instruções para agentes de código dele, não as de outro repositório, por isso a página Skills & docs não oferece **Main review** para ele.
@@ -93,7 +93,7 @@ Um apontamento de convenção precisa **citar** a regra que aplica. A citação 
 - as próprias instruções do agente
 - o `CLAUDE.md`, o `AGENTS.md` e outros arquivos de agentes de código do repositório, quando **Coding-agent instructions** está ativado em What to review
 
-O Kodus confere a citação nessa fonte como ela está na branch de destino e descarta o apontamento quando a citação não está lá. Um apontamento que indica um código existente como o padrão a seguir só é mantido quando o arquivo citado contém o código citado na branch de destino. O comentário publicado cita a regra:
+A Kodus confere a citação nessa fonte como ela está na branch de destino e descarta o apontamento quando a citação não está lá. Um apontamento que indica um código existente como o padrão a seguir só é mantido quando o arquivo citado contém o código citado na branch de destino. O comentário publicado cita a regra:
 
 ```markdown
 **Rule** (`docs/ledger.md`):
@@ -151,7 +151,7 @@ go install github.com/acme/ledgerctl@v1.4.2
 - Cada etapa de uma CLI roda como root pelo provider do sandbox, nunca pelo usuário com que a revisão roda. Esse usuário perde qualquer forma de virar root (inclusive sudo) antes de o repositório ser baixado, então o código do pull request não alcança o processo nem os arquivos de uma CLI.
 - Um sandbox em que isso não pôde ser confirmado não roda nenhuma CLI.
 
-**Comandos bloqueados.** Em uma CLI com secrets, o Kodus recusa, ao salvar e na execução, prefixos e argumentos que listam o ambiente (`printenv`, `env`, `set`, `export`, `declare`, qualquer coisa em `/proc`), comandos comuns que imprimem tokens (`auth token`, `auth status --show-token`, `auth:token`, `config get`, `configure get`, `print-access-token`, `get-access-token`), um shell ou interpretador como binário (`bash`, `node`, `python`, `npx`, …) e argumentos que nomeiam um dos seus secrets como `$NAME` ou `${NAME}`. Os argumentos nunca passam por um shell, então o próprio Kodus nunca os expande.
+**Comandos bloqueados.** Em uma CLI com secrets, a Kodus recusa, ao salvar e na execução, prefixos e argumentos que listam o ambiente (`printenv`, `env`, `set`, `export`, `declare`, qualquer coisa em `/proc`), comandos comuns que imprimem tokens (`auth token`, `auth status --show-token`, `auth:token`, `config get`, `configure get`, `print-access-token`, `get-access-token`), um shell ou interpretador como binário (`bash`, `node`, `python`, `npx`, …) e argumentos que nomeiam um dos seus secrets como `$NAME` ou `${NAME}`. Os argumentos nunca passam por um shell, então a própria Kodus nunca os expande.
 
 **Rede.** A allowlist vale pelo nome do host. As conexões HTTPS da CLI passam por um proxy que só encaminha uma conexão quando o nome de servidor pedido está na lista (nome exato, sem subdomínios) e que resolve esse nome por conta própria, recusando endereços privados e internos. A CLI não tem outro acesso à rede: nem DNS, nem HTTP sem TLS, nem outras portas. Um host permitido ainda recebe o que a CLI enviar, credenciais incluídas, e a rede não distingue leitura de escrita. Use tokens somente leitura, com o menor privilégio possível, e permita só hosts em que você confia.
 

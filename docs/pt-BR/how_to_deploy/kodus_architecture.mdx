@@ -1,12 +1,12 @@
 ---
-title: "Arquitetura do Kodus"
-description: "Os serviços, armazenamentos de dados e redes que uma implantação self-hosted do Kodus executa."
+title: "Arquitetura da Kodus"
+description: "Os serviços, armazenamentos de dados e redes que uma implantação self-hosted da Kodus executa."
 icon: "puzzle-piece"
 ---
 
 ## Visão Geral
 
-O Kodus roda como um conjunto de contêineres: um app web, uma API, um worker que executa os reviews, um receptor de webhooks e três armazenamentos de dados (PostgreSQL, MongoDB e RabbitMQ). As mesmas imagens rodam no Docker Compose e no Kubernetes.
+A Kodus roda como um conjunto de contêineres: um app web, uma API, um worker que executa os reviews, um receptor de webhooks e três armazenamentos de dados (PostgreSQL, MongoDB e RabbitMQ). As mesmas imagens rodam no Docker Compose e no Kubernetes.
 
 ```mermaid
 graph LR
@@ -60,19 +60,19 @@ O worker cria as filas `workflow.jobs.*` na sua primeira conexão. Se ele nunca 
 
 - **PostgreSQL** (com a extensão pgvector): dados da aplicação, jobs de workflow e o outbox, o AST graph de cada repositório, e os schemas do MCP Manager e do data warehouse de analytics.
 - **MongoDB**: dados de pull requests e reviews, Kody Rules e leases de sandbox.
-- **RabbitMQ**: as filas de jobs nas quais o worker publica e das quais consome. A imagem RabbitMQ do Kodus inclui o plugin delayed message exchange e cria os virtual hosts `kodus-ai` e `kodus-ast`. Se você usa seu próprio broker, habilite o plugin `rabbitmq_delayed_message_exchange`, crie os dois virtual hosts e defina `consumer_timeout = 7200000`.
+- **RabbitMQ**: as filas de jobs nas quais o worker publica e das quais consome. A imagem RabbitMQ da Kodus inclui o plugin delayed message exchange e cria os virtual hosts `kodus-ai` e `kodus-ast`. Se você usa seu próprio broker, habilite o plugin `rabbitmq_delayed_message_exchange`, crie os dois virtual hosts e defina `consumer_timeout = 7200000`.
 
-Com o Docker Compose, você pode apontar o Kodus para o seu próprio PostgreSQL, MongoDB ou RabbitMQ; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#configuração-do-banco-de-dados).
+Com o Docker Compose, você pode apontar a Kodus para o seu próprio PostgreSQL, MongoDB ou RabbitMQ; veja [Instalação](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#configuração-do-banco-de-dados).
 
 ## Redes
 
 O instalador cria três redes Docker externas:
 
 - `shared-network`: web, api, worker, webhooks, MCP Manager e RabbitMQ.
-- `kodus-backend-services`: todos os serviços do Kodus, além de PostgreSQL e MongoDB.
+- `kodus-backend-services`: todos os serviços da Kodus, além de PostgreSQL e MongoDB.
 - `monitoring-network`: somente o RabbitMQ.
 
-PostgreSQL e MongoDB ficam conectados apenas à `kodus-backend-services`. O RabbitMQ expõe métricas do Prometheus na porta 15692; o Kodus não inclui Prometheus nem Grafana.
+PostgreSQL e MongoDB ficam conectados apenas à `kodus-backend-services`. O RabbitMQ expõe métricas do Prometheus na porta 15692; a Kodus não inclui Prometheus nem Grafana.
 
 ## Recursos Enterprise
 
@@ -80,10 +80,10 @@ Uma chave de licença desbloqueia os recursos Enterprise em uma instância self-
 
 ## Próximos Passos
 <CardGroup cols={2}>
-  <Card title="Executar o Kodus Localmente" icon="laptop" href="/pt-BR/how_to_deploy/local_quickstart/orchestrator">
-    Ideal para desenvolvimento local e para se familiarizar com o stack completo do Kodus.
+  <Card title="Executar a Kodus Localmente" icon="laptop" href="/pt-BR/how_to_deploy/local_quickstart/orchestrator">
+    Ideal para desenvolvimento local e para se familiarizar com o stack completo da Kodus.
   </Card>
-  <Card title="Implantar o Kodus em Produção" icon="rocket" href="/pt-BR/how_to_deploy/deploy_kodus/generic_vm">
-    Perfeito para implantação em produção e para aproveitar todas as capacidades do Kodus.
+  <Card title="Implantar a Kodus em Produção" icon="rocket" href="/pt-BR/how_to_deploy/deploy_kodus/generic_vm">
+    Perfeito para implantação em produção e para aproveitar todas as capacidades da Kodus.
   </Card>
 </CardGroup>

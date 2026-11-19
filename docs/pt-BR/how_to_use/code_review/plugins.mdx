@@ -1,6 +1,6 @@
 ---
 title: "Plugins"
-description: "Conecte as ferramentas do seu time ao Kody via MCP para que as respostas, a validação de regras de negócio e os custom agents possam lê-las."
+description: "Conecte as ferramentas do seu time à Kody via MCP para que as respostas, a validação de regras de negócio e os custom agents possam lê-las."
 tag: 'beta'
 ---
 
@@ -15,19 +15,19 @@ import { FeatureBadge } from "/snippets/feature-badge.jsx";
   </FeatureBadge>
 </div>
 
-Um plugin é um servidor remoto de Model Context Protocol (MCP) conectado ao seu workspace: um tracker de tickets, uma wiki, um monitor de erros. O Kody lê dele, e só age nele quando você pede.
+Um plugin é um servidor remoto de Model Context Protocol (MCP) conectado ao seu workspace: um tracker de tickets, uma wiki, um monitor de erros. A Kody lê dele, e só age nele quando você pede.
 
 | Onde | O que acontece |
 | --- | --- |
-| Um comentário que menciona `@kody` | O Kody chama um plugin instalado e responde na mesma thread. Ele só altera algo, como mover um ticket ou editar uma regra, quando o seu comentário pede. |
-| [Validação de regras de negócio](/pt-BR/how_to_use/code_review/business_logic_validation) | O Kody lê, no seu tracker, a tarefa que um pull request referencia. |
+| Um comentário que menciona `@kody` | A Kody chama um plugin instalado e responde na mesma thread. Ela só altera algo, como mover um ticket ou editar uma regra, quando o seu comentário pede. |
+| [Validação de regras de negócio](/pt-BR/how_to_use/code_review/business_logic_validation) | A Kody lê, no seu tracker, a tarefa que um pull request referencia. |
 | [Custom agents](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp) | Um agente lê dos plugins que você ativa para ele. Apenas ferramentas de leitura. |
 
 ## Página Plugins
 
 Abra **Plugins** na barra lateral. Apenas os Owners podem instalar ou alterar plugins; Billing Managers, Repo Admins e Contributors podem visualizá-los. Cada card mostra um plugin e, depois de conectado, **Installed**, **Default** ou **Locked**. Em uma instalação self-hosted, a página precisa do [MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager).
 
-| Plugin | O que o Kody pode ler | Login |
+| Plugin | O que a Kody pode ler | Login |
 | --- | --- | --- |
 | **Git Issues** | Issues do tracker do seu repositório (GitHub, GitLab, Bitbucket ou Forgejo), pela sua conexão Git | Nenhum |
 | **Linear** | Issues, projetos e ciclos | OAuth ou API key |
@@ -35,11 +35,11 @@ Abra **Plugins** na barra lateral. Apenas os Owners podem instalar ou alterar pl
 | **Notion** | Páginas, bancos de dados e docs | OAuth |
 | **Sentry** | Projetos, issues e eventos | OAuth |
 | **Fireflies** | Transcrições de reuniões, resumos e action items | API key |
-| **Kodus Docs** | A documentação do Kodus | Nenhum |
+| **Kodus Docs** | A documentação da Kodus | Nenhum |
 | **Exa Search** | Busca na web e em código | Nenhum |
 | **Kodus OSV** | Vulnerabilidades conhecidas de pacotes | Nenhum |
 
-O **Kodus MCP** está conectado em todo workspace (**Default**). Ele lê repositórios, pull requests, commits, arquivos e diffs do seu provider Git, e gerencia Kody Rules, memórias e issues do Kody. Ele fica sempre ativo e não conta para o limite do plano Free abaixo.
+O plugin **Kodus MCP** está conectado em todo workspace (**Default**). Ele lê repositórios, pull requests, commits, arquivos e diffs do seu provider Git, e gerencia Kody Rules, memórias e issues da Kody. Ele fica sempre ativo e não conta para o limite do plano Free abaixo.
 
 ## Instale um plugin
 
@@ -48,24 +48,24 @@ O **Kodus MCP** está conectado em todo workspace (**Default**). Ele lê reposit
     Clique no card dele.
   </Step>
   <Step title="Conecte">
-    Um plugin com login pede isso primeiro: clique em **Authenticate with** o plugin (OAuth), ou preencha os campos e clique em **Connect** (API key ou token). Ele é instalado assim que conecta. O Kody começa com as ferramentas que o plugin marca como somente leitura, ou com todas as ferramentas quando ele não marca nenhuma.
+    Um plugin com login pede isso primeiro: clique em **Authenticate with** o plugin (OAuth), ou preencha os campos e clique em **Connect** (API key ou token). Ele é instalado assim que conecta. A Kody começa com as ferramentas que o plugin marca como somente leitura, ou com todas as ferramentas quando ele não marca nenhuma.
 
-    Um plugin sem login vai direto para **Selected tools**. Escolha as ferramentas que o Kody pode usar e clique em **Install plugin**.
+    Um plugin sem login vai direto para **Selected tools**. Escolha as ferramentas que a Kody pode usar e clique em **Install plugin**.
   </Step>
   <Step title="Altere as ferramentas depois">
     Abra um plugin instalado, altere **Selected tools** e clique em **Update Tools**. **Reset Authentication** o desconecta.
   </Step>
 </Steps>
 
-As ferramentas cujos nomes sugerem uma ação destrutiva (delete, remove, archive) são marcadas com um aviso e começam desmarcadas. Para instalar com uma delas selecionada, confirme na caixa de seleção no fim. O Kody pode usar qualquer ferramenta que você selecionar, então selecione só o que ele precisa.
+As ferramentas cujos nomes sugerem uma ação destrutiva (delete, remove, archive) são marcadas com um aviso e começam desmarcadas. Para instalar com uma delas selecionada, confirme na caixa de seleção no fim. A Kody pode usar qualquer ferramenta que você selecionar, então selecione só o que ela precisa.
 
 <Note>
-  No plano Free (e no self-hosted sem licença), o Kody roda até 3 plugins instalados por vez, os mais antigos primeiro. Um banner na página Plugins nomeia os que ele pula, e os cards deles mostram **Locked**. O **Git Issues** não pode ser instalado quando o seu provider de código é Azure Repos ou Bitbucket Data Center, que não têm um issue tracker nativo.
+  No plano Free (e no self-hosted sem licença), a Kody roda até 3 plugins instalados por vez, os mais antigos primeiro. Um banner na página Plugins nomeia os que ela pula, e os cards deles mostram **Locked**. O **Git Issues** não pode ser instalado quando o seu provider de código é Azure Repos ou Bitbucket Data Center, que não têm um issue tracker nativo.
 </Note>
 
 ## Plugins personalizados
 
-Adicione o seu próprio servidor MCP quando o catálogo não cobre uma ferramenta. O servidor precisa ser acessível pelo Kodus: um endpoint HTTP ou SSE remoto, não `localhost`.
+Adicione o seu próprio servidor MCP quando o catálogo não cobre uma ferramenta. O servidor precisa ser acessível pela Kodus: um endpoint HTTP ou SSE remoto, não `localhost`.
 
 <Steps>
   <Step title="Adicione">
@@ -94,7 +94,7 @@ Abra um plugin personalizado para usar **Edit Plugin** ou **Delete Plugin**. Vej
 
 <img src="https://kodus.io/wp-content/uploads/2025/10/comment-mcp.gif" alt="Example of using a plugin in a suggestion" />
 
-Mencione o Kody em um comentário em uma sugestão ou no pull request. O Kody chama o plugin de que precisa e responde na mesma thread.
+Mencione a Kody em um comentário em uma sugestão ou no pull request. A Kody chama o plugin de que precisa e responde na mesma thread.
 
 - `@kody, update this kody rule to ignore test files`
 - `@kody, move this task https://jira.com/task-123 to DONE`
