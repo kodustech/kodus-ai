@@ -89,6 +89,25 @@ async function startKodusMcp({ storedConfig = null } = {}) {
             saved.rules.push(copy(rule));
             return entity(saved, KodyRulesEntity);
         },
+        // The rules the review reads: every rule but the deleted ones.
+        findLiveRulesByOrganizationId: async (organizationId) => {
+            const saved = db.kodyRules.find((d) => d.organizationId === organizationId);
+            return saved ? entity({ ...saved, rules: saved.rules.filter((r) => r.status !== 'deleted') }, KodyRulesEntity) : null;
+        },
+        // The plan sync's per-rule writes in one call; returns the ids it missed.
+        updateRulesFields: async (uuid, changes) => {
+            const saved = db.kodyRules.find((d) => d._id === uuid);
+            const failed = [];
+            for (const { ruleId, patch } of changes) {
+                const rule = saved?.rules.find((r) => r.uuid === ruleId);
+                if (!rule) {
+                    failed.push(ruleId);
+                    continue;
+                }
+                for (const [key, value] of Object.entries(patch)) if (value !== undefined) rule[key] = copy(value);
+            }
+            return failed;
+        },
         // Field by field, as kodyRules.repository.ts sets `rules.$.<field>`.
         updateRule: async (uuid, ruleId, patch) => {
             const saved = db.kodyRules.find((d) => d._id === uuid);
