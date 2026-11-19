@@ -752,18 +752,24 @@ export function startStallWatchdog(
     opts: StallWatchdogOptions = {},
     logger: WatchdogLogger = createLogger('StallWatchdog'),
 ): () => void {
+    // Zero, negative or non-numeric values count as absent and take the
+    // default, except where 0 means "off" (profileMs, pingIntervalMs).
+    const positive = (v: number | undefined, fallback: number) =>
+        typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback;
+    const nonNegative = (v: number | undefined, fallback: number) =>
+        typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
     const cfg = {
-        thresholdMs: opts.thresholdMs ?? 20_000,
-        checkIntervalMs: opts.checkIntervalMs ?? 1_000,
-        profileMs: opts.profileMs ?? 3_000,
-        lateAnswerMs: opts.lateAnswerMs ?? 1_000,
-        maxCapturesPerStall: opts.maxCapturesPerStall ?? 3,
-        recaptureMs: opts.recaptureMs ?? 60_000,
+        thresholdMs: positive(opts.thresholdMs, 20_000),
+        checkIntervalMs: positive(opts.checkIntervalMs, 1_000),
+        profileMs: nonNegative(opts.profileMs, 3_000),
+        lateAnswerMs: positive(opts.lateAnswerMs, 1_000),
+        maxCapturesPerStall: positive(opts.maxCapturesPerStall, 3),
+        recaptureMs: positive(opts.recaptureMs, 60_000),
         heartbeatUrl: opts.heartbeatUrl ?? '',
-        pingIntervalMs: opts.pingIntervalMs ?? 30 * 60_000,
+        pingIntervalMs: nonNegative(opts.pingIntervalMs, 30 * 60_000),
         identity: opts.identity ?? {},
         writeFd: opts.writeFd === undefined ? 1 : opts.writeFd,
-        tickIntervalMs: opts.tickIntervalMs ?? 500,
+        tickIntervalMs: positive(opts.tickIntervalMs, 500),
     };
 
     const sab = new SharedArrayBuffer(8);

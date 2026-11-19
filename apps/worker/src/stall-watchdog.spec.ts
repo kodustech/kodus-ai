@@ -464,4 +464,33 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(stall.inspectorAnswerMs!).toBeGreaterThan(1_000);
         expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
     });
+    it('treats a zero or invalid lateAnswerMs as the 1s default, so stacks are still trusted', async () => {
+        for (const lateAnswerMs of [0, -1, Number.NaN]) {
+            const reports: StallReport[] = [];
+            stop = startStallWatchdog(
+                {
+                    thresholdMs: 400,
+                    checkIntervalMs: 50,
+                    tickIntervalMs: 20,
+                    profileMs: 0,
+                    lateAnswerMs,
+                    maxCapturesPerStall: 1,
+                    writeFd: null,
+                    identity: { role: 'test' },
+                    onReport: keep(reports),
+                },
+                logger,
+            );
+            await arm();
+            burnCpuInATightLoopForTest(2_000);
+            const stall = await waitFor(() =>
+                reports.find((r) => r.kind === 'stall'),
+            );
+            // With 0 forwarded, every answer would count as late and the
+            // stack would be discarded.
+            expect(stall.stackUnavailable).not.toBe('answered-late');
+            stop();
+            stop = undefined;
+        }
+    });
 });
