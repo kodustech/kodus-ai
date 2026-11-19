@@ -44,7 +44,9 @@ import { resolveMongoTestGate } from '../../../../../../test/integration/mongo-t
 
 // Runs in CI (TEST_MONGODB_URI); skips locally without it, fails in CI
 // when the URI is missing instead of passing with nothing asserted.
-const gate = resolveMongoTestGate();
+// No API_MG_DB_HOST fallback: that is a docker-network hostname that never
+// resolves from the host, so a local .env carrying it must skip, not fail.
+const gate = resolveMongoTestGate('kodus_test', false);
 const TEST_DB = 'kodus_kody_rules_sync_it';
 const ORG = 'org-sync-it';
 const organizationAndTeamData = { organizationId: ORG, teamId: 'team-it' };
