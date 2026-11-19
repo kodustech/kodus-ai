@@ -478,6 +478,13 @@ describe('evals/experiment.js the Kody Rules agent', () => {
         expect(rows('kody-specificity')).toEqual([['a', 9, 10], ['b', 4, 4]]);
     });
 
+    it('leaves a case without its off-site or false-alarm count unmeasured rather than perfect', () => {
+        const partial = { metric: run.metric, cases: [run.cases[0], { id: 'd', hits: 1, total: 1, flagged: 3, cleanFiles: 5 }] };
+        const partialRows = (id: string) => deriveRuns([partial], derived(id))[0].cases.map((c: Case) => [c.id, c.hits, c.total]);
+        expect(partialRows('kody-line-precision')).toEqual([['a', 4, 5]]);
+        expect(partialRows('kody-specificity')).toEqual([['a', 9, 10]]);
+    });
+
     it('reads title and fix quality only where the judge graded', () => {
         expect(rows('kody-title-quality')).toEqual([['a', 2, 4]]);
         expect(rows('kody-fix-quality')).toEqual([['a', 1, 3]]);

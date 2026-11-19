@@ -4,6 +4,8 @@ const {
     emptyQuality,
     addQuality,
     judgeRoute,
+    snapshotTokens,
+    restoreTokens,
 } = require('./suggestion-quality');
 
 const rule = {
@@ -96,6 +98,10 @@ describe('scoreVerdict', () => {
         });
     });
 
+    it('fails a well-formed title the judge says does not name the problem', () => {
+        expect(scoreVerdict(suggestion, verdict('PASS', false)).titleOk).toBe(false);
+    });
+
     it('needs the title format too, not only the judge', () => {
         const long = {
             ...suggestion,
@@ -165,5 +171,28 @@ describe('judgeRoute — the judge runs as itself, whatever the reviewed model i
         });
         expect(process.env.RECALL_MODEL).toBe('claude-sonnet-5-5');
         expect(process.env.RECALL_REASONING_EFFORT).toBe('high');
+    });
+});
+
+describe('snapshotTokens / restoreTokens — the judge is not the review', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { tokensUsed } = require('../shared/eval-kit');
+
+    it('takes back every call, time and reasoning effort the judge added', () => {
+        const t = tokensUsed();
+        Object.assign(t, { in: 10, out: 2, cacheRead: 0, cacheWrite: 0, calls: 1, ms: 50 });
+        t.callMs.splice(0, t.callMs.length, 50);
+        t.efforts = { codeReview: ['high'] };
+        const before = snapshotTokens();
+
+        t.in += 7;
+        t.calls += 1;
+        t.callMs.push(30);
+        t.efforts.codeReview.push('low');
+        t.efforts.judge = ['none'];
+        restoreTokens(before);
+
+        expect(t).toMatchObject({ in: 10, calls: 1, ms: 50, callMs: [50] });
+        expect(t.efforts).toEqual({ codeReview: ['high'] });
     });
 });

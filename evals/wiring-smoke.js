@@ -645,7 +645,6 @@ async function main() {
                     server.stats.verdictPrompts.slice(verdictsBefore),
                 finderToolResults:
                     server.stats.finderToolResults.slice(toolResultsBefore),
-                result: step.result ? readJson(resultFile) : undefined,
             });
         }
         if (!problem && step.result) problem = resultProblem(step, resultFile);
