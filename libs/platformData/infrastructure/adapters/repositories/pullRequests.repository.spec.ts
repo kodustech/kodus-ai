@@ -423,6 +423,41 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(exec).toHaveBeenCalledTimes(7);
         });
 
+        it('starts no further read once one has failed', async () => {
+            const { find } = mockFind([]);
+            const pending: Array<(error?: Error) => void> = [];
+            const exec = jest.fn(
+                () =>
+                    new Promise<any[]>((resolve, reject) =>
+                        pending.push((error) =>
+                            error ? reject(error) : resolve([]),
+                        ),
+                    ),
+            );
+            find.mockReturnValue({
+                lean: () => ({ maxTimeMS: () => ({ exec }) }),
+            });
+            const flush = () => new Promise((r) => setImmediate(r));
+
+            const call = repo.findManyByNumbersAndRepositoryIds(
+                Array.from({ length: 12 }, (_, i) => ({
+                    number: 1,
+                    repositoryId: `r${i}`,
+                })),
+                'org-A',
+            );
+            await flush();
+            pending.shift()!(new Error('primary stepped down'));
+            await expect(call).rejects.toThrow('primary stepped down');
+            while (pending.length) {
+                pending.shift()!();
+                await flush();
+            }
+
+            // Five were in flight; none of the seven queued ones ran.
+            expect(exec).toHaveBeenCalledTimes(5);
+        });
+
         it('skips the query for an empty criteria list', async () => {
             const { find } = mockFind([]);
             expect(
@@ -568,6 +603,39 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(sort).toHaveBeenCalledWith({ _id: 1 });
             // The unique index bounds each read by the numbers it asks for.
             expect(limit.mock.calls).toEqual([[100], [1], [1]]);
+        });
+
+        it('reads one repository at a time, since the cron already runs teams side by side', async () => {
+            const pending: Array<() => void> = [];
+            const exec = jest.fn(
+                () => new Promise<any[]>((r) => pending.push(() => r([]))),
+            );
+            const chain = {
+                sort: () => chain,
+                limit: () => chain,
+                lean: () => chain,
+                maxTimeMS: () => ({ exec }),
+            };
+            model.find = jest.fn().mockReturnValue(chain);
+            const flush = () => new Promise((r) => setImmediate(r));
+
+            const call =
+                repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                    'org-A',
+                    ['repo-a', 'repo-b', 'repo-c'].map((repositoryId) => ({
+                        repositoryId,
+                        pullRequestNumber: 1,
+                    })),
+                    'open',
+                );
+            await flush();
+            expect(exec).toHaveBeenCalledTimes(1);
+            while (pending.length) {
+                pending.shift()!();
+                await flush();
+            }
+            await call;
+            expect(exec).toHaveBeenCalledTimes(3);
         });
     });
 

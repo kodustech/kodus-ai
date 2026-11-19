@@ -93,7 +93,11 @@ function numbersByRepository(
     return reads;
 }
 
-/** Reads per repository in flight at once, for one call. */
+/**
+ * Reads per repository in flight at once, for one dashboard call. The approval
+ * cron reads one at a time: it already runs teams side by side, and its reads
+ * go to the primary.
+ */
 const PAIR_READ_CONCURRENCY = 5;
 
 /**
@@ -103,14 +107,31 @@ const PAIR_READ_CONCURRENCY = 5;
 async function readEachRepository<T>(
     reads: Array<[string, number[]]>,
     read: (repositoryId: string, numbers: number[]) => Promise<T[]>,
+    concurrency = PAIR_READ_CONCURRENCY,
 ): Promise<T[]> {
-    const limit = pLimit(PAIR_READ_CONCURRENCY);
-    const results = await Promise.all(
-        reads.map(([repositoryId, numbers]) =>
-            limit(() => read(repositoryId, numbers)),
-        ),
-    );
-    return results.flat();
+    const limit = pLimit(concurrency);
+    // A failed read fails the call: the queued reads would only add load to a
+    // cluster that is already failing, so none starts after one fails.
+    let failed = false;
+    try {
+        const results = await Promise.all(
+            reads.map(([repositoryId, numbers]) =>
+                limit(async () => {
+                    if (failed) return [];
+                    try {
+                        return await read(repositoryId, numbers);
+                    } catch (error) {
+                        failed = true;
+                        throw error;
+                    }
+                }),
+            ),
+        );
+        return results.flat();
+    } catch (error) {
+        limit.clearQueue();
+        throw error;
+    }
 }
 
 const OPEN_PULL_REQUEST_MATCH = {
@@ -1989,6 +2010,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     suggestions: [],
                 }));
             },
+            1,
         );
     }
 
