@@ -31,6 +31,9 @@ export class RealPullRequestsApi {
         if (query.cursor) {
             params.set('cursor', query.cursor);
         }
+        if (query.explain) {
+            params.set('explain', 'true');
+        }
 
         return this.requester<PullRequestExecutionsPage>(
             `/pull-requests/executions?${params.toString()}`,

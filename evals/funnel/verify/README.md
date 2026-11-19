@@ -18,3 +18,9 @@ A known bug is lost when every candidate that matches it is dropped. The
 control pair: a finding the code confirms stays, one it refutes is dropped.
 `evals/verifier-verdict` checks, without a model, that a verdict reaches the
 gate.
+
+`--controls --control-set=hallucinations-2528` sends the same frozen finding
+through production verify on two checkouts. The preceding branch makes failed
+attempts resumable in one and is absent in the other. The verifier must drop
+the former and keep the latter. This isolates verify from how often the finder
+proposes the claim in `review-rounds`.

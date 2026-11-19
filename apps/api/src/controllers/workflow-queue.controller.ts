@@ -20,6 +20,13 @@ import { IJobStatusService } from '@libs/core/workflow/domain/contracts/job-stat
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 
+/**
+ * Job history is not kept forever: finished jobs (COMPLETED, FAILED,
+ * CANCELLED) are deleted 30 days after their last update
+ * (WorkflowJobRetentionService); CLI review jobs are kept for share links.
+ * A removed job answers like an unknown one: `{ status: 404, message: 'Job
+ * not found' }`.
+ */
 @ApiTags('Workflow Queue')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()

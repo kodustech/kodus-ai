@@ -234,6 +234,22 @@ describe('occurrenceKeys', () => {
 });
 
 describe('buildRepeatCheckPrompt', () => {
+    it('gives the comparison the concrete downstream failure when a short title omits it', () => {
+        const prompt = buildRepeatCheckPrompt([
+            {
+                finding: {
+                    oneSentenceSummary: 'Handle offline inventory',
+                    suggestionContent:
+                        'Returning empty names during an outage removes the entire catalog.',
+                },
+                candidates: [ruleComment],
+            },
+        ]);
+        expect(prompt).toContain(
+            'Finding: Returning empty names during an outage removes the entire catalog.',
+        );
+    });
+
     it('names rules by title and shows each finding with its own earlier comments', () => {
         const prompt = buildRepeatCheckPrompt(
             [
@@ -352,6 +368,7 @@ describe('checkRepeats', () => {
                     verdict: 'same_occurrence',
                     earlierId: 'bug-old',
                 },
+                { finding: 1, verdict: 'new_place', earlierId: 'bug-old' },
             ],
         });
 
@@ -558,7 +575,7 @@ describe('checkRepeats', () => {
         expect(result.repeats).toHaveLength(1);
     });
 
-    it('fails open: a model error posts the findings it had to judge, code matches still hold', async () => {
+    it('a model failure preserves code matches and posts findings without a plausible repeat', async () => {
         const byCode = {
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-no-console'],
@@ -579,9 +596,129 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
+    it('after two timeouts withholds the repeated CSV claim and delivers the PDF claim under the same PR rule', async () => {
+        const old = earlier({
+            suggestionId: 'pr-comment-old',
+            relevantFile: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['export-tests'],
+            suggestionContent: 'The CSV export has no regression test.',
+        });
+        const repeat = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['export-tests'],
+            suggestionContent: old.suggestionContent,
+        };
+        const different = {
+            ...repeat,
+            suggestionContent: 'The PDF export has no regression test.',
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([repeat, different], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy.mock.calls.map(([call]) => call.timeoutMs)).toEqual([
+            120_000, 25_000,
+        ]);
+        expect(result.withheld).toEqual([repeat]);
+        expect(result.kept).toEqual([different]);
+        expect(result.repeats).toEqual([]);
+    });
+
+    it.each([
+        {
+            name: 'outer whitespace on the same claim',
+            previous: 'Missing test for PDF.',
+            current: '  Missing test for PDF.  ',
+            hold: true,
+        },
+        {
+            name: 'case-sensitive identifiers',
+            previous: 'Missing test for `encodeID`.',
+            current: 'Missing test for `encodeId`.',
+            hold: false,
+        },
+        {
+            name: 'different thresholds',
+            previous: 'The retry limit must be 10.',
+            current: 'The retry limit must be 100.',
+            hold: false,
+        },
+        {
+            name: 'a paraphrase without a verdict',
+            previous: 'Missing test for PDF.',
+            current: 'PDF export is untested.',
+            hold: false,
+        },
+        {
+            name: 'empty claim with only a summary',
+            previous: '',
+            current: '',
+            hold: false,
+        },
+    ])('on timeout: $name', async ({ previous, current, hold }) => {
+        const old = earlier({
+            suggestionId: 'pr-comment-timeout',
+            relevantFile: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-a'],
+            suggestionContent: previous,
+        });
+        const candidate = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-a'],
+            oneSentenceSummary: 'Review the implementation',
+            suggestionContent: current,
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([candidate], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy).toHaveBeenCalledTimes(2);
+        expect(result.kept).toEqual(hold ? [] : [candidate]);
+        expect(result.withheld).toEqual(hold ? [candidate] : []);
+    });
+
+    it('retries only missing verdicts and lets an explicit new-place verdict through', async () => {
+        const first = {
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+            suggestionContent: 'first',
+        };
+        const second = { ...bugComment };
+        runSpy
+            .mockResolvedValueOnce({
+                verdicts: [
+                    {
+                        finding: 0,
+                        verdict: 'same_occurrence',
+                        earlierId: 'bug-old',
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                verdicts: [
+                    { finding: 0, verdict: 'new_place', earlierId: null },
+                ],
+            });
+        const result = await checkRepeats([first, second], [bugComment], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy.mock.calls[1][0].user).toContain(
+            `Finding: ${second.suggestionContent}`,
+        );
+        expect(runSpy.mock.calls[1][0].user).not.toContain('Finding: first');
+        expect(result.kept).toEqual([second]);
+        expect(result.repeats.map(({ finding }) => finding)).toEqual([first]);
+        expect(result.model).toBe('ok');
+    });
+
     it('without a model, posts what it could not match by code', async () => {
         hasManagedModelKeyMock.mockReturnValue(false);
-        const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
+        const finding = { ...bugComment };
 
         const result = await checkRepeats([finding], [bugComment], {
             organizationId: 'org-1',
@@ -609,13 +746,64 @@ describe('checkRepeats', () => {
         expect(result.repeats).toEqual([]);
     });
 
+    it('does not retry an invalid API key', async () => {
+        runSpy.mockRejectedValue(
+            Object.assign(new Error('invalid API key'), { status: 401 }),
+        );
+        await checkRepeats(
+            [{ label: 'bug', relevantFile: 'src/retry.ts' }],
+            [bugComment],
+            { organizationId: 'org-1', byokConfig: slot },
+        );
+        expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('limits both the initial batches and retries on a large review', async () => {
+        const peak = new Map<number, number>();
+        let active = 0;
+        runSpy.mockImplementation(async ({ timeoutMs, user }) => {
+            peak.set(timeoutMs, Math.max(peak.get(timeoutMs) ?? 0, ++active));
+            await new Promise((resolve) => setImmediate(resolve));
+            active--;
+            if (timeoutMs === 120_000)
+                throw new DOMException('timed out', 'TimeoutError');
+            return {
+                verdicts: [...user.matchAll(/<Finding n="(\d+)">/g)].map(
+                    ([, n]) => ({
+                        finding: Number(n),
+                        verdict: 'different_problem',
+                        earlierId: null,
+                    }),
+                ),
+            };
+        });
+        const findings = Array.from({ length: 60 }, () => ({
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+        }));
+        const result = await checkRepeats(findings, [bugComment], {
+            organizationId: 'org',
+            byokConfig: slot,
+        });
+        expect([...peak.values()]).toEqual([4, 4]);
+        expect(result.kept).toHaveLength(60);
+    });
+
     it('judges ten findings per call', async () => {
         const findings = Array.from({ length: 23 }, (_, i) => ({
             label: 'bug',
             relevantFile: 'src/retry.ts',
             suggestionContent: `finding ${i}`,
         }));
-        runSpy.mockResolvedValue({ verdicts: [] });
+        runSpy.mockImplementation(async ({ user }) => ({
+            verdicts: [...user.matchAll(/<Finding n="(\d+)">/g)].map(
+                ([, n]) => ({
+                    finding: Number(n),
+                    verdict: 'different_problem',
+                    earlierId: null,
+                }),
+            ),
+        }));
 
         const result = await checkRepeats(findings, [bugComment], {
             organizationId: 'org-1',

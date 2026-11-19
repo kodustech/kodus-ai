@@ -101,6 +101,7 @@ export const SCAN_STATUS_LABEL = {
     completed: "Completed",
     stopped_by_budget: "Stopped at limit",
     failed: "Failed",
+    cancelled: "Cancelled",
 } as const satisfies Record<SecurityScan["status"], string>;
 
 export const VULNERABILITY_CLASS_LABEL = {

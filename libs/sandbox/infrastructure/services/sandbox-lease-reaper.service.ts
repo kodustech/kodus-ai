@@ -1,5 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { createLogger } from '@libs/core/log/logger';
 import { Sandbox } from 'e2b';
@@ -97,7 +98,7 @@ export class SandboxLeaseReaperService {
         private readonly configService: ConfigService,
     ) {}
 
-    @Cron(CronExpression.EVERY_5_MINUTES)
+    @GatedCron(CronExpression.EVERY_5_MINUTES)
     async reapExpiredLeases(): Promise<void> {
         const lock = await this.acquireCronLock(
             'CRON:SANDBOX:LEASE_REAPER',
@@ -259,7 +260,7 @@ export class SandboxLeaseReaperService {
      * sweep, and Sandbox.kill / Mongo delete are individually idempotent
      * so even an unhandled worker crash mid-loop just gets retried next tick.
      */
-    @Cron('*/30 * * * * *')
+    @GatedCron('*/30 * * * * *')
     async killIdleSandboxes(): Promise<void> {
         const lock = await this.acquireCronLock(
             'CRON:SANDBOX:IDLE_KILL',
@@ -394,7 +395,7 @@ export class SandboxLeaseReaperService {
      * left. Another deployment's sandboxes are never listed: its leases live
      * in a Mongo this one cannot see.
      */
-    @Cron(CronExpression.EVERY_HOUR)
+    @GatedCron(CronExpression.EVERY_HOUR)
     async sweepOrphanedSandboxes(): Promise<void> {
         const apiKey = this.configService.get<string>('API_E2B_KEY');
         if (!apiKey) return;

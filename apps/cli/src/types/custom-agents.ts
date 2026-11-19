@@ -45,6 +45,7 @@ export type CustomAgent = {
     name: string;
     enabled: boolean;
     instructions: string;
+    runWhen?: 'always' | 'risk-found';
     scope: { include?: string[]; exclude?: string[] };
     tools: {
         astGrepConfig?: string;

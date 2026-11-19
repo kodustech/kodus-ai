@@ -35,8 +35,10 @@ import { CommandError } from '../../utils/command-errors.js';
 import { customAgentsApi } from '../api/custom-agents.api.js';
 import {
     agentStatusLine,
+    applyAgentInput,
     customAgentsService,
     resolveLevel,
+    prepareAgentForSave,
     PLAN_NOT_ALLOWED_MESSAGE,
     STALE_AGENTS_MESSAGE,
 } from '../custom-agents.service.js';
@@ -58,6 +60,22 @@ const agent = (overrides: Partial<CustomAgent> = {}): CustomAgent => ({
         suggestedFix: 'when-confident',
     },
     ...overrides,
+});
+
+it('preserves a saved risk trigger when editing an unrelated field', () => {
+    const saved = agent({ runWhen: 'risk-found' });
+    expect(
+        prepareAgentForSave(
+            applyAgentInput(saved, { instructions: 'Updated' }),
+        ),
+    ).toMatchObject({ instructions: 'Updated', runWhen: 'risk-found' });
+    expect(
+        prepareAgentForSave(applyAgentInput(saved, { runWhen: 'always' }))
+            .runWhen,
+    ).toBe('always');
+    expect(() => applyAgentInput(saved, { runWhen: 'other' })).toThrow(
+        /--run-when/,
+    );
 });
 
 function config(): FormattedCodeReviewParameter {

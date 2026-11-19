@@ -166,7 +166,7 @@ export class PullRequestController implements OnApplicationShutdown {
     public async getPullRequestExecutions(
         @Query() query: EnrichedPullRequestsQueryDto,
     ): Promise<PaginatedEnrichedPullRequestsResponse> {
-        return await this.getEnrichedPullRequestsUseCase.execute(query);
+        return this.getEnrichedPullRequestsUseCase.execute(query);
     }
 
     @Get('/executions/totals')

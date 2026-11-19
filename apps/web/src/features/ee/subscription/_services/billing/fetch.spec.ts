@@ -15,7 +15,11 @@ jest.mock("src/core/utils/helpers", () => ({
 
 // fetch.ts pulls these in at module scope for sibling functions; stub them
 // so importing the module under test stays isolated.
-jest.mock("./utils", () => ({ billingFetch: jest.fn() }));
+const billingRequestMock = jest.fn();
+jest.mock("./utils", () => ({
+    billingFetch: jest.fn(),
+    billingRequest: (...args: unknown[]) => billingRequestMock(...args),
+}));
 jest.mock("@services/organizations/fetch", () => ({
     getOrganizationId: jest.fn().mockResolvedValue("org-1"),
 }));
@@ -32,7 +36,10 @@ describe("requestTrialExtension", () => {
 
         const result = await requestTrialExtension({
             teamId: "team-1",
-            request: { teamSize: 12, message: "Evaluating for the platform team" },
+            request: {
+                teamSize: 12,
+                message: "Evaluating for the platform team",
+            },
         });
 
         expect(result).toEqual({ success: true });
@@ -76,4 +83,32 @@ describe("requestTrialExtension", () => {
 
         expect(result.success).toBe(false);
     });
+});
+
+describe("updateCreditAutoTopUp monthly cap contract", () => {
+    it.each([100, 0, null, undefined])(
+        "forwards the cap %p without changing its meaning",
+        async (monthlyLimitUsd) => {
+            billingRequestMock.mockResolvedValue({ monthlyLimitUsd });
+            const { updateCreditAutoTopUp } = await import("./fetch");
+            const result = await updateCreditAutoTopUp({
+                teamId: "team-1",
+                enabled: true,
+                monthlyLimitUsd,
+            });
+            expect(billingRequestMock).toHaveBeenLastCalledWith(
+                "credits/auto-topup",
+                {
+                    method: "POST",
+                    body: {
+                        organizationId: "org-1",
+                        teamId: "team-1",
+                        enabled: true,
+                        monthlyLimitUsd,
+                    },
+                },
+            );
+            expect(result).toEqual({ monthlyLimitUsd });
+        },
+    );
 });

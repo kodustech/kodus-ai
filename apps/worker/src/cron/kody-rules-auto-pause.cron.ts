@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { AutoPauseKodyRulesUseCase } from '@libs/cockpit/application/use-cases/auto-pause-kody-rules.use-case';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
@@ -24,7 +24,7 @@ export class KodyRulesAutoPauseCron {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(process.env.API_CRON_KODY_RULES_AUTO_PAUSE || '0 6 * * *', {
+    @GatedCron(process.env.API_CRON_KODY_RULES_AUTO_PAUSE || '0 6 * * *', {
         name: 'kody-rules-auto-pause',
         timeZone: 'UTC',
     })

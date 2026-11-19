@@ -1071,9 +1071,20 @@ export class CodeManagementTools {
                         (f) => f.filename === params.filePath,
                     );
 
+                    // `data` is a string in the output schema: undefined made
+                    // the MCP server reject the answer as a protocol error.
+                    if (!file) {
+                        return {
+                            success: false,
+                            data: `${params.filePath} is not among the files changed by PR #${params.prNumber}`,
+                        };
+                    }
+
                     return {
                         success: true,
-                        data: file?.patch,
+                        data:
+                            file.patch ??
+                            `${params.filePath} changed without a textual diff (binary, renamed only, or too large to show)`,
                     };
                 },
             ),
