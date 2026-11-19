@@ -391,6 +391,38 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             ).toEqual(['r1:1', 'r1:2', 'r2:1']);
         });
 
+        it('runs the per-repository reads at most five at a time, not one after another', async () => {
+            const { find } = mockFind([]);
+            const pending: Array<() => void> = [];
+            const exec = jest.fn(
+                () =>
+                    new Promise<any[]>((resolve) =>
+                        pending.push(() => resolve([])),
+                    ),
+            );
+            find.mockReturnValue({
+                lean: () => ({ maxTimeMS: () => ({ exec }) }),
+            });
+            const flush = () => new Promise((r) => setImmediate(r));
+
+            const call = repo.findManyByNumbersAndRepositoryIds(
+                Array.from({ length: 7 }, (_, i) => ({
+                    number: 1,
+                    repositoryId: `r${i}`,
+                })),
+                'org-A',
+            );
+            await flush();
+            expect(exec).toHaveBeenCalledTimes(5);
+
+            while (pending.length) {
+                pending.shift()!();
+                await flush();
+            }
+            await call;
+            expect(exec).toHaveBeenCalledTimes(7);
+        });
+
         it('skips the query for an empty criteria list', async () => {
             const { find } = mockFind([]);
             expect(
