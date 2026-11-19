@@ -676,6 +676,16 @@ describe('PullRequestsService — when a stored file counts as unchanged', () =>
         expect(unchanged(stored, fields, budgeted)).toBe(true);
     });
 
+    it('leaves updatedAt out: a save always carries a fresh one', () => {
+        expect(
+            unchanged(
+                { ...stored, updatedAt: '2026-11-01T00:00:00.000Z' },
+                { ...fields, updatedAt: new Date().toISOString() },
+                budgeted,
+            ),
+        ).toBe(true);
+    });
+
     it('reads absent, null and empty the same', () => {
         expect(
             unchanged(
