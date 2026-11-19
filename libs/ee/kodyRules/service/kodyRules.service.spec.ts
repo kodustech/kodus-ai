@@ -299,11 +299,34 @@ describe('KodyRulesService.find — rules the plan limit paused', () => {
         } as any;
         // The rules are written, then the sync's own re-read fails.
         repo.findByOrganizationId.mockRejectedValue(new Error('timeout'));
+        // What the write left in storage: the rule reactivated.
+        repo.find
+            .mockResolvedValueOnce([lockedDoc('org-1')])
+            .mockResolvedValueOnce([
+                {
+                    toObject: () => ({
+                        organizationId: 'org-1',
+                        rules: [
+                            {
+                                uuid: 'r1',
+                                status: KodyRulesStatus.ACTIVE,
+                                lockedByPlan: false,
+                                severity: 'High',
+                            },
+                        ],
+                    }),
+                },
+            ]);
 
-        await svc.find({ organizationId: 'org-1' } as any);
+        const result = await svc.find({ organizationId: 'org-1' } as any);
 
         expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
-        expect(repo.find).toHaveBeenCalledTimes(2);
+        // find() serves the stored rules, not the paused ones it read first.
+        expect(result[0].rules[0]).toMatchObject({
+            uuid: 'r1',
+            status: KodyRulesStatus.ACTIVE,
+            lockedByPlan: false,
+        });
     });
 });
 

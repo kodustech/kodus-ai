@@ -57,9 +57,12 @@ describe('MongooseFactory connection options', () => {
         }
     });
 
-    it('accepts a pool minimum of zero, which keeps no idle connection', () => {
+    it('accepts a pool minimum of zero, and falls back for an unparseable one', () => {
         process.env.COMPONENT_TYPE = 'api';
         process.env.MG_POOL_MIN_API = '0';
         expect(options().minPoolSize).toBe(0);
+        // Previously forwarded to the driver as NaN.
+        process.env.MG_POOL_MIN_API = 'abc';
+        expect(options().minPoolSize).toBe(1);
     });
 });
