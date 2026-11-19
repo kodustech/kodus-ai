@@ -212,13 +212,26 @@ function tryParseValidationObject(
     };
 }
 
-function stripCodeFence(value: string): string {
+/**
+ * Unwraps a ```/```json fenced block. Same contract as the former
+ * /^```(?:json)?\s*([\s\S]*?)\s*```$/i, without its backtracking: on a
+ * fenced reply that never closes (a model output cut at max tokens) with
+ * indented JSON inside, that regex was cubic in the whitespace (8k chars:
+ * 93s) and blocked the worker's event loop.
+ */
+export function stripCodeFence(value: string): string {
     const trimmed = value.trim();
-    const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-    if (!fencedMatch || !fencedMatch[1]) {
+    if (
+        trimmed.length < 6 ||
+        !trimmed.startsWith('```') ||
+        !trimmed.endsWith('```')
+    ) {
         return trimmed;
     }
-    return fencedMatch[1].trim();
+    let inner = trimmed.slice(3, -3);
+    if (inner.slice(0, 4).toLowerCase() === 'json') inner = inner.slice(4);
+    inner = inner.trim();
+    return inner || trimmed;
 }
 
 function looksLikeValidationSummary(value: string): boolean {

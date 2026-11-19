@@ -13,6 +13,7 @@ configureLongFetchTimeouts();
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-worker' });
 
+import { hostname } from 'os';
 import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
@@ -108,8 +109,23 @@ async function bootstrap() {
         const sliceJobId = securityScanSliceJobId();
 
         // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked.
-        startEventLoopMonitor();
+        // need to see whether the thread is blocked. The stall watchdog
+        // captures where a stall is stuck and alerts while it happens; not in
+        // a slice child, whose whole point is to run heavy work off the
+        // consumer's event loop.
+        startEventLoopMonitor(
+            sliceJobId
+                ? {}
+                : {
+                      stallWatchdog: {
+                          heartbeatUrl:
+                              process.env
+                                  .API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL ??
+                              '',
+                          identity: { role, instanceId: hostname() },
+                      },
+                  },
+        );
 
         if (sliceJobId) {
             logger?.log(
