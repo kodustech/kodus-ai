@@ -1,4 +1,8 @@
 import { Worker } from 'worker_threads';
+import {
+    type ActivityInfo,
+    onActivityChange,
+} from '@libs/core/infrastructure/activity/activity-registry';
 import { createLogger } from '@libs/core/log/logger';
 
 /**
@@ -70,6 +74,11 @@ export interface StallReport {
      * later code. A lead, not the location. Top frames only.
      */
     unverifiedStack?: StallFrame[];
+    /**
+     * The jobs in flight when the stall began: job, queue, pipeline stage,
+     * org/repo/PR and the agent tool calls running (activity-registry.ts).
+     */
+    activeJobs?: ActivityInfo[];
     /** Human-readable location, as used in the log line and the alert. */
     location?: string;
     stack?: StallFrame[] | null;
@@ -147,6 +156,13 @@ export function stallWatchdogThread(): void {
     };
     const lastTick = new BigInt64Array(sab);
     const parent = wt.parentPort;
+    // What the main thread last said it was running; frozen into a stall
+    // record when the stall begins (the main thread cannot update it then).
+    let activity: ActivityInfo[] = [];
+    parent?.on('message', (m: any) => {
+        if (m && m.type === 'activity' && Array.isArray(m.snapshot))
+            activity = m.snapshot;
+    });
 
     // One record per stall. A capture keeps a reference to the stall it
     // started for, so a recovery (or a new stall) while it is in flight
@@ -160,6 +176,8 @@ export function stallWatchdogThread(): void {
         alerted?: boolean;
         /** What the latest report named, for an alert sent between reports. */
         last?: AlertPlace;
+        /** The jobs in flight when the stall began. */
+        activity?: ActivityInfo[];
     } | null = null;
     type AlertPlace = {
         where: string;
@@ -627,7 +645,7 @@ export function stallWatchdogThread(): void {
         s.alerted = true;
         lastPing = Date.now();
         void heartbeat('/fail', {
-            message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${place.where}. ${s.endedMs !== undefined ? 'It has recovered; jobs in flight may have lost their broker connection.' : 'In-flight jobs on this worker will be lost if it does not recover.'} ${Object.entries(
+            message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${place.where}. ${s.endedMs !== undefined ? 'It has recovered; jobs in flight may have lost their broker connection.' : 'In-flight jobs on this worker will be lost if it does not recover.'}${describeJobs(s.activity)} ${Object.entries(
                 cfg.identity,
             )
                 .map(([k, v]) => `${k}=${v}`)
@@ -642,8 +660,26 @@ export function stallWatchdogThread(): void {
                 stackUnavailable: place.stackUnavailable,
                 stack: (place.stack ?? []).slice(0, 12),
                 hottest: (place.hottest ?? []).slice(0, 5),
+                activeJobs: (s.activity ?? []).slice(0, 10),
             },
         });
+    }
+
+    // The jobs that were running, tool calls first: a few words each.
+    function describeJobs(jobs: ActivityInfo[] | undefined): string {
+        if (!jobs?.length) return '';
+        const withTools = jobs.filter((j) => j.tools?.length);
+        const shown = (withTools.length ? withTools : jobs).slice(0, 3);
+        const parts = shown.map((j) => {
+            const pr = [j.repository, j.prNumber ? `#${j.prNumber}` : '']
+                .filter(Boolean)
+                .join('');
+            const tool = j.tools?.length
+                ? ` ${j.tools.map((t) => `${t.tool}(${t.args ?? ''})`).join(', ')}`
+                : '';
+            return `${pr || j.jobId}${j.stage ? ` [${j.stage}]` : ''}${tool}`;
+        });
+        return ` Jobs: ${parts.join('; ')}${jobs.length > shown.length ? ` (+${jobs.length - shown.length} more)` : ''}.`;
     }
 
     // One stall report (log line, parent message) and, for the first one of
@@ -699,6 +735,7 @@ export function stallWatchdogThread(): void {
                     : {}),
                 ...(stackUnavailable ? { stackUnavailable } : {}),
                 ...(unverifiedStack ? { unverifiedStack } : {}),
+                ...(s.activity?.length ? { activeJobs: s.activity } : {}),
                 ...(profileIncludesRecovery
                     ? { profileIncludesRecovery: true }
                     : {}),
@@ -723,7 +760,7 @@ export function stallWatchdogThread(): void {
 
         if (lag >= cfg.thresholdMs) {
             if (stall === null) {
-                stall = { start: now - lag, captures: 0 };
+                stall = { start: now - lag, captures: 0, activity };
             }
             const s = stall;
             const due = cfg.thresholdMs + s.captures * cfg.recaptureMs;
@@ -866,6 +903,14 @@ export function startStallWatchdog(
             }),
         );
         if (opts.onReport) worker.on('message', opts.onReport);
+        const thread = worker;
+        onActivityChange((snapshot) => {
+            try {
+                thread.postMessage({ type: 'activity', snapshot });
+            } catch {
+                // the thread is gone; reports still log without jobs
+            }
+        });
     } catch (error) {
         clearInterval(ticker);
         logger.warn({
@@ -879,6 +924,7 @@ export function startStallWatchdog(
 
     return () => {
         clearInterval(ticker);
+        onActivityChange(null);
         void worker?.terminate();
     };
 }

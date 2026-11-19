@@ -578,6 +578,60 @@ describe('startStallWatchdog (real worker thread)', () => {
         const context = JSON.parse(fails[0].body).context;
         expect(context.stalledMs).toBeGreaterThanOrEqual(2_500);
     });
+    it('names the job, PR, stage and tool call that were running when the stall began', async () => {
+        const { runActivity, updateActivity, beginToolActivity } =
+            await import('@libs/core/infrastructure/activity/activity-registry');
+        const reports: StallReport[] = [];
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                profileMs: 0,
+                maxCapturesPerStall: 1,
+                writeFd: null,
+                identity: { role: 'test' },
+                onReport: keep(reports),
+            },
+            logger,
+        );
+        await settle(200);
+
+        await runActivity('job-77', { queue: 'code_review' }, async () => {
+            updateActivity({
+                stage: 'AgentReviewStage',
+                organizationId: 'org-1',
+                repository: 'acme/app',
+                prNumber: 8132,
+            });
+            const end = beginToolActivity('grep', 'pattern=foo path=.');
+            // The tool's own await: the snapshot leaves before the freeze.
+            await settle(100);
+            await arm();
+            burnCpuInATightLoopForTest(1_500);
+            end();
+        });
+
+        const stall = await waitFor(() =>
+            reports.find((r) => r.kind === 'stall'),
+        );
+        expect(stall.activeJobs).toEqual([
+            expect.objectContaining({
+                jobId: 'job-77',
+                queue: 'code_review',
+                stage: 'AgentReviewStage',
+                organizationId: 'org-1',
+                repository: 'acme/app',
+                prNumber: 8132,
+                tools: [
+                    expect.objectContaining({
+                        tool: 'grep',
+                        args: 'pattern=foo path=.',
+                    }),
+                ],
+            }),
+        ]);
+    });
     it('treats a zero or invalid lateAnswerMs as the 1s default, so stacks are still trusted', async () => {
         for (const lateAnswerMs of [0, -1, Number.NaN]) {
             const reports: StallReport[] = [];

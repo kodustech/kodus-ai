@@ -16,6 +16,7 @@ import {
     cutLongLines,
     MAX_TOOL_LINE_CHARS,
 } from '@libs/code-review/infrastructure/agents/engine/long-lines';
+import { beginToolActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
@@ -1844,6 +1845,7 @@ fi
     }
 
     guardSecretFiles(tools);
+    trackToolActivity(tools);
 
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
@@ -1851,6 +1853,48 @@ fi
     });
 
     return tools;
+}
+
+/** Argument fields that say which call it was, in a few words. */
+const ACTIVITY_ARG_KEYS = [
+    'pattern',
+    'regex',
+    'functionName',
+    'query',
+    'path',
+    'filePath',
+    'file',
+    'directory',
+    'dir',
+    'glob',
+    'repo',
+    'start',
+    'end',
+];
+
+/**
+ * Every tool call is marked in flight for the job running it, so a stall
+ * report names the call that froze the worker (activity-registry.ts).
+ * Outermost wrapper: it covers the secret filter and the line cut too.
+ */
+function trackToolActivity(tools: Record<string, any>): void {
+    for (const [name, tool] of Object.entries(tools)) {
+        if (!tool || typeof tool.execute !== 'function') continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any, ...rest: unknown[]) => {
+            const summary = ACTIVITY_ARG_KEYS.filter(
+                (k) => args?.[k] !== undefined && args?.[k] !== '',
+            )
+                .map((k) => `${k}=${String(args[k]).slice(0, 120)}`)
+                .join(' ');
+            const end = beginToolActivity(name, summary);
+            try {
+                return await execute(args, ...rest);
+            } finally {
+                end();
+            }
+        };
+    }
 }
 
 /**

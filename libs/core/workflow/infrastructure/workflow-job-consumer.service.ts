@@ -1,4 +1,5 @@
 import * as os from 'os';
+import { runActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import {
     INBOX_RELEASE_TIMEOUT_MS,
     parseDrainTimeoutMs,
@@ -139,7 +140,9 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         queueOptions: {
             channel: 'channel-cli-code-review',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.cli_code_review.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.cli_code_review.queue'
+                ],
         },
     })
     async handleCliCodeReviewJob(
@@ -169,7 +172,9 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         queueOptions: {
             channel: 'channel-check-implementation',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.check_implementation.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.check_implementation.queue'
+                ],
         },
     })
     async handleImplementationCheckJob(
@@ -217,7 +222,9 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         queueOptions: {
             channel: 'channel-ast-graph-build',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_build.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_build.queue'
+                ],
         },
     })
     async handleAstGraphBuildJob(
@@ -253,7 +260,9 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         queueOptions: {
             channel: 'channel-ast-graph-incremental',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_incremental.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_incremental.queue'
+                ],
         },
     })
     async handleAstGraphIncrementalJob(
@@ -449,7 +458,13 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
                 });
 
                 try {
-                    await this.jobProcessor.process(unwrappedMessage.jobId);
+                    // The stall watchdog names this job (and, as it runs,
+                    // its PR, stage and tool call) when the worker freezes.
+                    await runActivity(
+                        unwrappedMessage.jobId,
+                        { queue: queueName },
+                        () => this.jobProcessor.process(unwrappedMessage.jobId),
+                    );
 
                     await this.inboxRepository.markAsProcessed(
                         messageId,
