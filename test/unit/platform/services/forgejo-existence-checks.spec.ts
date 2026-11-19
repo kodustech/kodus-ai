@@ -77,6 +77,9 @@ describe('ForgejoService existence checks', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+        forgejo.repoGetBranch.mockReset();
+        forgejo.repoGetContents.mockReset();
+        forgejo.repoChangeFiles.mockReset();
     });
 
     describe('checkForgejoBranchExists', () => {
@@ -256,6 +259,32 @@ describe('ForgejoService existence checks', () => {
                 repository: { id: '1', name: 'acme/config' },
                 files,
             });
+
+        it('passes throwOnError on the write call', async () => {
+            forgejo.repoGetContents.mockResolvedValue({
+                data: { sha: 'sha-1' },
+            });
+
+            await upload([{ path: 'a.yml', content: 'hi' }]);
+
+            expect(forgejo.repoChangeFiles).toHaveBeenCalledWith(
+                expect.objectContaining({ throwOnError: true }),
+            );
+        });
+
+        it.each([422, 500])(
+            'returns false when the write fails with %i',
+            async (status) => {
+                forgejo.repoGetContents.mockResolvedValue({
+                    data: { sha: 'sha-1' },
+                });
+                mockSdkHttpError(forgejo.repoChangeFiles, status);
+
+                await expect(
+                    upload([{ path: 'a.yml', content: 'hi' }]),
+                ).resolves.toBe(false);
+            },
+        );
 
         it('sends the existing sha on update', async () => {
             forgejo.repoGetContents.mockResolvedValue({

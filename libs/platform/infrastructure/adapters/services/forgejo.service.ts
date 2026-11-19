@@ -779,7 +779,7 @@ export class ForgejoService implements Omit<
                 return true;
             }
 
-            const res = await repoChangeFiles({
+            await repoChangeFiles({
                 client,
                 path: repoInfo,
                 body: {
@@ -801,11 +801,8 @@ export class ForgejoService implements Omit<
                           }
                         : {}),
                 },
+                throwOnError: true,
             });
-
-            if (!res || res.status >= 300) {
-                throw new Error(`Failed to upload files: ${res.status}`);
-            }
 
             return true;
         } catch (error) {
