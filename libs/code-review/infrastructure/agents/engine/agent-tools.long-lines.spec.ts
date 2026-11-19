@@ -74,6 +74,18 @@ describe('agent tools — long lines in search output', () => {
             );
         });
 
+        it('names the files of the cut lines, each once', () => {
+            const r = cutLongLines(
+                [
+                    `dist/a.min.js:1:${huge}`,
+                    `dist/a.min.js-2-${huge}`,
+                    `[acme/lib] out/b.json:9:${huge}`,
+                    `no-line-number-${huge}`,
+                ].join('\n'),
+            );
+            expect(r.files).toEqual(['dist/a.min.js', '[acme/lib] out/b.json']);
+        });
+
         it('keeps empty lines and a trailing newline', () => {
             const r = cutLongLines(`a\n\n${'b'.repeat(5_000)}\n`);
             const lines = r.text.split('\n');
@@ -121,13 +133,15 @@ describe('agent tools — long lines in search output', () => {
             expect.objectContaining({
                 metadata: expect.objectContaining({
                     tool: 'grep',
-                    pattern: 'needle',
+                    files: ['dist/app.min.js'],
                     path: 'dist',
                     repository: 'acme/app',
                     linesCut: 1,
                 }),
             }),
         );
+        // The agent's pattern can quote a secret: never logged.
+        expect(JSON.stringify(warn.mock.calls)).not.toContain('needle');
     });
 
     it('still drops a secret file line before cutting, even a huge one', async () => {

@@ -1948,12 +1948,10 @@ function guardSecretFiles(
                     context: 'agent-tools.factory',
                     metadata: {
                         tool: name,
-                        pattern: String(
-                            args?.pattern ??
-                                args?.regex ??
-                                args?.functionName ??
-                                '',
-                        ).slice(0, 200),
+                        // The files behind the long lines, not the
+                        // agent's pattern: a pattern can quote a secret or
+                        // code from the diff.
+                        files: capped.files,
                         path: searchPath.slice(0, 300),
                         glob: args?.glob
                             ? String(args.glob).slice(0, 200)

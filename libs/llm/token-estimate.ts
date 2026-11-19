@@ -121,8 +121,11 @@ function isWhitespace(code: number): boolean {
 
 /**
  * tiktoken count, except that any run of more than MAX_ENCODED_RUN_CHARS
- * characters without whitespace is counted by the fallback ratio. One linear
- * pass over the text; no regex (a `\S{n,}` scan would itself be O(n·k)).
+ * characters without whitespace is estimated instead: its ASCII characters by
+ * the fallback ratio, every other character as one token (CJK and other
+ * scripts written without spaces run about 1-1.5 characters per token, so 3
+ * would under-count them). One linear pass over the text; no regex (a
+ * `\S{n,}` scan would itself be O(n·k)).
  */
 function countTokens(enc: Tiktoken, text: string): number {
     if (text.length <= MAX_ENCODED_RUN_CHARS) {
@@ -132,6 +135,8 @@ function countTokens(enc: Tiktoken, text: string): number {
     let segmentStart = 0;
     let runStart = 0;
     let longRuns = false;
+    // Non-ASCII code units in the current run.
+    let runNonAscii = 0;
     const flushLongRun = (runEnd: number) => {
         if (runEnd - runStart <= MAX_ENCODED_RUN_CHARS) return;
         longRuns = true;
@@ -140,13 +145,18 @@ function countTokens(enc: Tiktoken, text: string): number {
                 text.slice(segmentStart, runStart),
             ).length;
         }
-        tokens += Math.ceil((runEnd - runStart) / FALLBACK_CHARS_PER_TOKEN);
+        const ascii = runEnd - runStart - runNonAscii;
+        tokens += Math.ceil(ascii / FALLBACK_CHARS_PER_TOKEN) + runNonAscii;
         segmentStart = runEnd;
     };
     for (let i = 0; i < text.length; i++) {
-        if (isWhitespace(text.charCodeAt(i))) {
+        const code = text.charCodeAt(i);
+        if (isWhitespace(code)) {
             flushLongRun(i);
             runStart = i + 1;
+            runNonAscii = 0;
+        } else if (code > 0x7f) {
+            runNonAscii++;
         }
     }
     flushLongRun(text.length);

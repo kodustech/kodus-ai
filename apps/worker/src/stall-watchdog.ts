@@ -111,7 +111,7 @@ export interface StallWatchdogOptions {
      * `thresholdMs`). Default 75s: before the ECS health check can mark the
      * task unhealthy (3 checks 30s apart), so the alert means "this worker is
      * about to be killed"; no stall under 90s killed a worker on 2026-11-19.
-     * 0 alerts at the first report.
+     * Zero, negative or non-numeric values take the default.
      */
     alertMs?: number;
     /** BetterStack heartbeat; empty disables alerting (reports still log). */
@@ -804,12 +804,7 @@ export function stallWatchdogThread(): void {
             }
             // Long enough to alert while no report is due: name what the
             // latest report found (a capture in flight alerts on its own).
-            if (
-                !s.alerted &&
-                lag >= cfg.alertMs &&
-                capturingFor !== s &&
-                cfg.alertMs > 0
-            ) {
+            if (!s.alerted && lag >= cfg.alertMs && capturingFor !== s) {
                 alert(
                     s,
                     lag,
@@ -870,7 +865,7 @@ export function startStallWatchdog(
         lateAnswerMs: positive(opts.lateAnswerMs, 1_000),
         maxCapturesPerStall: positive(opts.maxCapturesPerStall, 3),
         recaptureMs: positive(opts.recaptureMs, 60_000),
-        alertMs: nonNegative(opts.alertMs, 75_000),
+        alertMs: positive(opts.alertMs, 75_000),
         heartbeatUrl: opts.heartbeatUrl ?? '',
         pingIntervalMs: nonNegative(opts.pingIntervalMs, 30 * 60_000),
         identity: opts.identity ?? {},

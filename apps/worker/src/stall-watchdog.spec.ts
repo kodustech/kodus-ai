@@ -179,7 +179,7 @@ describe('startStallWatchdog (real worker thread)', () => {
                 heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
                 pingIntervalMs: 0,
                 // Alert on the first report: these stalls are short.
-                alertMs: 0,
+                alertMs: 1,
                 writeFd: null,
                 identity: { role: 'test', instanceId: 'ip-test' },
                 onReport: keep(reports),
@@ -227,7 +227,7 @@ describe('startStallWatchdog (real worker thread)', () => {
                 heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
                 pingIntervalMs: 0,
                 // Alert on the first report: these stalls are short.
-                alertMs: 0,
+                alertMs: 1,
                 writeFd: null,
                 identity: { role: 'test' },
                 onReport: keep(reports),
@@ -475,6 +475,10 @@ describe('startStallWatchdog (real worker thread)', () => {
                 tickIntervalMs: 20,
                 profileMs: 200,
                 maxCapturesPerStall: 1,
+                // High enough that even a slow in-band CI inspector reads
+                // the pause in time, while the native call below holds the
+                // profiler start well past it: the verdict is deterministic.
+                lateAnswerMs: 8_000,
                 writeFd: null,
                 identity: { role: 'test' },
                 onReport: keep(reports),
@@ -484,31 +488,27 @@ describe('startStallWatchdog (real worker thread)', () => {
         await settle(200);
 
         await arm();
-        // The native call holds the profiler start past the limit; the
+        // The native call holds the profiler start past lateAnswerMs; the
         // pause then lands, in time and without a tick, in the JavaScript
         // that follows.
-        execSync('sleep 2');
-        burnCpuInATightLoopForTest(6_000);
+        execSync('sleep 10');
+        burnCpuInATightLoopForTest(8_000);
 
         const stall = await waitFor(
             () => reports.find((r) => r.kind === 'stall'),
-            15_000,
+            25_000,
         );
-        expect(stall.profilerAnswerMs!).toBeGreaterThan(1_000);
+        expect(stall.profilerAnswerMs!).toBeGreaterThan(8_000);
+        expect(stall.inspectorAnswerMs!).toBeLessThanOrEqual(8_000);
         expect(stall.stack).toBeNull();
         expect(stall.stackUnavailable).toBe('answered-late');
         expect(stall.location).not.toContain('burnCpuInATightLoopForTest');
-        if (stall.inspectorAnswerMs! <= 1_000) {
-            // Read in time: offered as a lead, which here names the code
-            // after the native call. That is why it is not the location.
-            expect(stall.unverifiedStack?.[0]?.fn).toBe(
-                'burnCpuInATightLoopForTest',
-            );
-        } else {
-            // A slow inspector (huge in-band CI process): nothing offered.
-            expect(stall.unverifiedStack).toBeUndefined();
-        }
-    });
+        // Offered as a lead, which here names the code after the native
+        // call: that is why it is not the location.
+        expect(stall.unverifiedStack?.[0]?.fn).toBe(
+            'burnCpuInATightLoopForTest',
+        );
+    }, 60_000);
     it('alerts only a stall that outlasts alertMs, once, and only logs a shorter one', async () => {
         const http = await import('http');
         const hits: { path: string; body: string }[] = [];

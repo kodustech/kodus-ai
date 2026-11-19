@@ -43,9 +43,26 @@ describe('estimateTextTokens — long runs without whitespace', () => {
         );
     });
 
-    it('encodes a run of exactly the limit as before', () => {
-        const text = `a ${'z'.repeat(MAX_ENCODED_RUN_CHARS)} b`;
-        expect(fresh(text)).toBe(exact(text));
+    it('encodes a run of exactly the limit, and estimates one character past it', () => {
+        const atLimit = `a ${'z'.repeat(MAX_ENCODED_RUN_CHARS)} b`;
+        expect(fresh(atLimit)).toBe(exact(atLimit));
+        const run = 'z'.repeat(MAX_ENCODED_RUN_CHARS + 1);
+        expect(fresh(`a ${run} b`)).toBe(
+            exact('a ') +
+                Math.ceil(run.length / FALLBACK_CHARS_PER_TOKEN) +
+                exact(' b'),
+        );
+    });
+
+    it('never counts a long run without spaces in a non-Latin script below one token per character', () => {
+        // Chinese is written without spaces: about 1-1.5 chars per token.
+        const run = '漢字仮名交じり文'.repeat(300); // 2,400 chars, no space
+        const tokens = fresh(run);
+        expect(tokens).toBeGreaterThanOrEqual(run.length);
+        // And still fast on a long one.
+        const started = Date.now();
+        fresh('中'.repeat(100_000));
+        expect(Date.now() - started).toBeLessThan(500);
     });
 
     it.each([

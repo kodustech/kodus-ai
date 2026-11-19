@@ -16,6 +16,19 @@ export interface CutLongLines {
     cut: number;
     /** Length of the longest line before the cut. */
     longest: number;
+    /**
+     * The files the cut lines came from (rg prints `path:line:` or
+     * `path-line-` first), at most MAX_CUT_FILES: what to look at.
+     */
+    files: string[];
+}
+
+const MAX_CUT_FILES = 5;
+
+/** The path rg printed before the line number, if the line has one. */
+function pathOf(line: string): string | undefined {
+    const m = /^(.{1,500}?)[:-]\d+[:-]/.exec(line);
+    return m ? m[1] : undefined;
 }
 
 /**
@@ -28,6 +41,7 @@ export function cutLongLines(
 ): CutLongLines {
     let cut = 0;
     let longest = 0;
+    const files: string[] = [];
     let start = 0;
     const parts: string[] = [];
     while (start <= output.length) {
@@ -42,6 +56,9 @@ export function cutLongLines(
             let keep = max;
             const last = output.charCodeAt(start + keep - 1);
             if (last >= 0xd800 && last <= 0xdbff) keep--;
+            const file = pathOf(output.slice(start, start + keep));
+            if (file && files.length < MAX_CUT_FILES && !files.includes(file))
+                files.push(file);
             parts.push(
                 `${output.slice(start, start + keep)} … [${length - keep} more characters on this line not shown]`,
             );
@@ -51,5 +68,5 @@ export function cutLongLines(
         if (nl === -1) break;
         start = nl + 1;
     }
-    return { text: cut ? parts.join('\n') : output, cut, longest };
+    return { text: cut ? parts.join('\n') : output, cut, longest, files };
 }
