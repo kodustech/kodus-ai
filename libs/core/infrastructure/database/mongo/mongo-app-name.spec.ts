@@ -29,6 +29,12 @@ describe('mongoAppName', () => {
         expect(mongoAppName()).toBe('kodus-worker-analytics');
     });
 
+    it('names a worker that has no role', () => {
+        process.env.COMPONENT_TYPE = 'worker';
+        delete process.env.WORKER_ROLE;
+        expect(mongoAppName()).toBe('kodus-worker');
+    });
+
     it('ignores WORKER_ROLE outside the worker', () => {
         process.env.COMPONENT_TYPE = 'api';
         process.env.WORKER_ROLE = 'code-review';

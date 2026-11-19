@@ -30,7 +30,11 @@ const pricingFromMillions = (opts: {
     const withTier = (def: number, tieredPerM?: number) => ({
         default: def,
         ...(tieredPerM !== undefined
-            ? { tiers: [{ threshold: 200_000, rate: perToken(tieredPerM) ?? 0 }] }
+            ? {
+                  tiers: [
+                      { threshold: 200_000, rate: perToken(tieredPerM) ?? 0 },
+                  ],
+              }
             : {}),
     });
     return {
@@ -347,7 +351,7 @@ describe('CostEstimateUseCase', () => {
                     prNumber: 1,
                     // Tier-aware model with all calls in gt.
                     byTier: [
-                    {
+                        {
                             input: 0,
                             output: 0,
                             total: 0,
@@ -355,7 +359,7 @@ describe('CostEstimateUseCase', () => {
                             cacheRead: 0,
                             cacheWrite: 0,
                         },
-                    {
+                        {
                             input: 500_000,
                             output: 100_000,
                             total: 600_000,
@@ -363,7 +367,7 @@ describe('CostEstimateUseCase', () => {
                             cacheRead: 0,
                             cacheWrite: 0,
                         },
-                ],
+                    ],
                 },
                 {
                     input: 500_000,
@@ -440,9 +444,9 @@ describe('CostEstimateUseCase', () => {
             const result = await useCase.execute('org-1');
 
             expect(result.developerCount).toBe(3);
-            expect(
-                pullRequestsService.findManyByNumbers,
-            ).toHaveBeenCalledTimes(1);
+            expect(pullRequestsService.findManyByNumbers).toHaveBeenCalledTimes(
+                1,
+            );
             expect(
                 pullRequestsService.findManyByNumbers.mock.calls[0][0].sort(),
             ).toEqual([1, 2, 3]);
@@ -455,6 +459,9 @@ describe('CostEstimateUseCase', () => {
             pullRequestsService.findManyByNumbers.mockResolvedValue([
                 { number: 1, user: { username: 'alice' } },
                 { number: 1, user: { username: 'bob' } },
+                // Alice again: the first author of PR 1 is hers, so bob is
+                // never counted.
+                { number: 2, user: { username: 'alice' } },
             ]);
             tokenPricingUseCase.execute.mockResolvedValue(
                 pricingFromMillions({ inputPerM: 0, outputPerM: 0 }),
@@ -463,6 +470,25 @@ describe('CostEstimateUseCase', () => {
             const result = await useCase.execute('org-1');
 
             expect(result.developerCount).toBe(1);
+        });
+
+        it('does not count a PR whose author is unknown as a developer', async () => {
+            tokenUsageService.getUsageByPr.mockResolvedValue(
+                buildUsage([{ input: 100, output: 50, outputReasoning: 0 }]),
+            );
+            pullRequestsService.findManyByNumbers.mockResolvedValue([
+                { number: 1, user: {} },
+                { number: 1, user: { username: 'alice' } },
+                { number: 2 },
+                { number: 3, user: { username: 'carol' } },
+            ]);
+            tokenPricingUseCase.execute.mockResolvedValue(
+                pricingFromMillions({ inputPerM: 0, outputPerM: 0 }),
+            );
+
+            const result = await useCase.execute('org-1');
+
+            expect(result.developerCount).toBe(2);
         });
 
         it('falls back to developerCount=1 when no developers are resolved', async () => {
