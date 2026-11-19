@@ -286,6 +286,52 @@ describe('ForgejoService existence checks', () => {
             },
         );
 
+        it.each([409, 422])(
+            'retries once with fresh shas when the write conflicts with %i',
+            async (status) => {
+                forgejo.repoGetContents
+                    .mockResolvedValueOnce({ data: { sha: 'stale-sha' } })
+                    .mockResolvedValueOnce({ data: { sha: 'fresh-sha' } });
+                forgejo.repoChangeFiles
+                    .mockRejectedValueOnce({ status })
+                    .mockResolvedValueOnce({ status: 200 });
+
+                await expect(
+                    upload([{ path: 'a.yml', content: 'hi' }]),
+                ).resolves.toBe(true);
+
+                expect(forgejo.repoGetContents).toHaveBeenCalledTimes(2);
+                expect(forgejo.repoChangeFiles).toHaveBeenCalledTimes(2);
+                const [first, second] = forgejo.repoChangeFiles.mock.calls;
+                expect(first[0].body.files[0].sha).toBe('stale-sha');
+                expect(second[0].body.files[0].sha).toBe('fresh-sha');
+            },
+        );
+
+        it('returns false when the retry conflicts again', async () => {
+            forgejo.repoGetContents.mockResolvedValue({
+                data: { sha: 'sha-1' },
+            });
+            forgejo.repoChangeFiles.mockRejectedValue({ status: 409 });
+
+            await expect(
+                upload([{ path: 'a.yml', content: 'hi' }]),
+            ).resolves.toBe(false);
+            expect(forgejo.repoChangeFiles).toHaveBeenCalledTimes(2);
+        });
+
+        it('does not retry a non-conflict write failure', async () => {
+            forgejo.repoGetContents.mockResolvedValue({
+                data: { sha: 'sha-1' },
+            });
+            forgejo.repoChangeFiles.mockRejectedValue({ status: 500 });
+
+            await expect(
+                upload([{ path: 'a.yml', content: 'hi' }]),
+            ).resolves.toBe(false);
+            expect(forgejo.repoChangeFiles).toHaveBeenCalledTimes(1);
+        });
+
         it('sends the existing sha on update', async () => {
             forgejo.repoGetContents.mockResolvedValue({
                 data: { sha: 'sha-1' },

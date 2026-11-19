@@ -708,6 +708,7 @@ export class ForgejoService implements Omit<
                       }
                     : undefined;
 
+            const attemptUpload = async (): Promise<boolean> => {
             const branchAlreadyExists =
                 resolvedBranchName === resolvedBaseBranch
                     ? true
@@ -805,6 +806,26 @@ export class ForgejoService implements Omit<
             });
 
             return true;
+            };
+
+            try {
+                return await attemptUpload();
+            } catch (error) {
+                if (!this.isForgejoConflictError(error)) {
+                    throw error;
+                }
+
+                // The branch moved between the existence checks and the write.
+                this.logger.warn({
+                    message:
+                        'Forgejo write conflict while uploading files, retrying once',
+                    context: ForgejoService.name,
+                    error,
+                    metadata: { params },
+                });
+
+                return await attemptUpload();
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error uploading files to Forgejo',
@@ -944,6 +965,21 @@ export class ForgejoService implements Omit<
 
             throw error;
         }
+    }
+
+    private isForgejoConflictError(error: unknown): boolean {
+        const candidate = error as
+            | {
+                  status?: number;
+                  code?: number;
+                  response?: { status?: number };
+              }
+            | undefined;
+
+        const status =
+            candidate?.status || candidate?.code || candidate?.response?.status;
+
+        return status === 409 || status === 422;
     }
 
     private isForgejoNotFoundError(error: unknown): boolean {
