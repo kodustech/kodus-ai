@@ -999,6 +999,30 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('scopes the delivered-suggestions read to each repository once, skipping refs without one', async () => {
+        const { cron, deps } = makeCron();
+
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [
+                { repositoryId: 'repo-b', pullRequestNumber: 2 },
+                { repositoryId: 'repo-b', pullRequestNumber: 3 },
+                { repositoryId: '', pullRequestNumber: 4 },
+                { repositoryId: 'repo-c', pullRequestNumber: 5 },
+            ],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [],
+        );
+        jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        const [, , , repositoryIds] =
+            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions
+                .mock.calls[0];
+        expect(repositoryIds).toEqual(['repo-b', 'repo-c']);
+    });
+
     it('processes a successful PR when a different PR is in progress for the same team', async () => {
         const { cron, deps } = makeCron();
 
