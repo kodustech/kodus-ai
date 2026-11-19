@@ -33,16 +33,26 @@ jest.retryTimes(2, { logErrorsBeforeRetry: true });
 
 describe('startStallWatchdog (real worker thread)', () => {
     let armedAt = Number.POSITIVE_INFINITY;
-    /** From now on, stalls are this test's own. */
-    const arm = () => {
-        armedAt = Date.now() - 50;
+    /**
+     * From now on, stalls are this test's own. Arms after a free window
+     * longer than the watchdog's check interval, so a stall of the test
+     * process itself (GC) has already been closed; then a stall is ours if
+     * it was still open at that moment or began after it.
+     */
+    const arm = async () => {
+        await settle(200);
+        armedAt = Date.now();
     };
+    const endedAt = (startedAt?: number, stalledMs?: number) =>
+        (startedAt ?? 0) + (stalledMs ?? 0);
     const keep = (reports: StallReport[]) => (r: StallReport) => {
-        if ((r.startedAt ?? 0) >= armedAt) reports.push(r);
+        if (endedAt(r.startedAt, r.stalledMs) >= armedAt) reports.push(r);
     };
-    const ourFail = (h: { path: string; body: string }) =>
-        h.path.endsWith('/fail') &&
-        (JSON.parse(h.body).context?.startedAt ?? 0) >= armedAt;
+    const ourFail = (h: { path: string; body: string }) => {
+        if (!h.path.endsWith('/fail')) return false;
+        const c = JSON.parse(h.body).context ?? {};
+        return endedAt(c.startedAt, c.stalledMs) >= armedAt;
+    };
     jest.setTimeout(30_000);
 
     const logger = { warn: jest.fn(), error: jest.fn() };
@@ -76,7 +86,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         start(reports);
         await settle(200); // thread up and ticking
 
-        arm();
+        await arm();
         const result = burnCpuInATightLoopForTest(3_000);
 
         // The main thread ran to completion: the pause was released.
@@ -123,7 +133,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         start(reports);
         await settle(200);
 
-        arm();
+        await arm();
         burnCpuInATightLoopForTest(1_500);
 
         const recovered = await waitFor(() =>
@@ -136,7 +146,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         const reports: StallReport[] = [];
         start(reports);
 
-        arm();
+        await arm();
         // Short bursts below the threshold, with the loop free in between.
         for (let i = 0; i < 5; i++) {
             burnCpuInATightLoopForTest(100);
@@ -178,7 +188,7 @@ describe('startStallWatchdog (real worker thread)', () => {
             logger,
         );
         await settle(200);
-        arm();
+        await arm();
         burnCpuInATightLoopForTest(2_000);
 
         const fail = await waitFor(() => hits.find(ourFail));
@@ -227,7 +237,7 @@ describe('startStallWatchdog (real worker thread)', () => {
 
         // The inspector cannot interrupt a synchronous native call: the
         // main thread answers only after it returns.
-        arm();
+        await arm();
         execSync('sleep 2');
 
         const fail = await waitFor(() => hits.find(ourFail), 15_000);
@@ -264,7 +274,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         );
         await settle(200);
 
-        arm();
+        await arm();
         burnCpuInATightLoopForTest(1_000); // stall 1, capture starts
         await settle(200); // recovers while that capture is in flight
         burnCpuInATightLoopForTest(3_500); // stall 2, same capture window
@@ -276,16 +286,27 @@ describe('startStallWatchdog (real worker thread)', () => {
                     : undefined,
             15_000,
         );
-        const kinds = reports.map((r) => r.kind);
-        // Stall 1 is reported before its recovery, and stall 2 is a new one.
-        expect(kinds.indexOf('stall')).toBeLessThan(kinds.indexOf('recovered'));
-        const firstStall = reports.find((r) => r.kind === 'stall');
+        // Select by identity, not emission order: stall 1 is the captured
+        // one (stall 2 may be reported as not-captured, and first).
+        const firstStall = reports.find(
+            (r) => r.kind === 'stall' && r.stackUnavailable !== 'not-captured',
+        );
         // The stall report carries the stall's length (~1s), not the
         // capture's (>= ~3.4s). The upper bound leaves room for a slow
         // in-band CI run, where Debugger.enable replays every loaded script.
         expect(firstStall?.stalledMs).toBeGreaterThanOrEqual(800);
         expect(firstStall?.stalledMs).toBeLessThan(2_600);
-        const firstRecovery = reports.find((r) => r.kind === 'recovered');
+        // Its recovery is the one with the same start.
+        const firstRecovery = reports.find(
+            (r) =>
+                r.kind === 'recovered' && r.startedAt === firstStall?.startedAt,
+        );
+        // Stall 1 is reported before its own recovery.
+        expect(firstStall).toBeDefined();
+        expect(firstRecovery).toBeDefined();
+        expect(reports.indexOf(firstStall!)).toBeLessThan(
+            reports.indexOf(firstRecovery!),
+        );
         // Its length is the stall's (~1s), not the capture's (>= ~3.4s).
         expect(firstRecovery?.stalledMs).toBeGreaterThanOrEqual(800);
         expect(firstRecovery?.stalledMs).toBeLessThan(2_600);
@@ -308,7 +329,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         await settle(200);
 
         // Ends while the profile is running, before the stack is read.
-        arm();
+        await arm();
         burnCpuInATightLoopForTest(600);
 
         const stall = await waitFor(() =>
@@ -348,7 +369,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         );
         await settle(200);
 
-        arm();
+        await arm();
         burnCpuInATightLoopForTest(1_000); // stall 1: captured
         await settle(200);
         burnCpuInATightLoopForTest(800); // stall 2: ends before that capture
@@ -419,7 +440,7 @@ describe('startStallWatchdog (real worker thread)', () => {
         );
         await settle(200);
 
-        arm();
+        await arm();
         // The inspector cannot get in during the native call; it answers
         // only once it returns, while JavaScript keeps the thread busy
         // without ticking. The pause then lands in that later JavaScript.
