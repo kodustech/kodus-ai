@@ -121,11 +121,15 @@ function isWhitespace(code: number): boolean {
 
 /**
  * tiktoken count, except that any run of more than MAX_ENCODED_RUN_CHARS
- * characters without whitespace is estimated instead: its ASCII characters by
- * the fallback ratio, every other character as one token (CJK and other
- * scripts written without spaces run about 1-1.5 characters per token, so 3
- * would under-count them). One linear pass over the text; no regex (a
- * `\S{n,}` scan would itself be O(n·k)).
+ * characters of one kind (whitespace, or anything but whitespace) is
+ * estimated instead: tiktoken is quadratic on both, since a whitespace run is
+ * one pre-token piece too (80k spaces took 3.8s). A whitespace run counts by
+ * the fallback ratio (conservative: tiktoken packs many spaces per token).
+ * In any other run, ASCII characters count by the fallback ratio and every
+ * other character as one token (CJK and other scripts written without spaces
+ * run about 1-1.5 characters per token, so 3 would under-count them). One
+ * linear pass over the text; no regex (a `\S{n,}` scan would itself be
+ * O(n·k)).
  */
 function countTokens(enc: Tiktoken, text: string): number {
     if (text.length <= MAX_ENCODED_RUN_CHARS) {
@@ -134,32 +138,37 @@ function countTokens(enc: Tiktoken, text: string): number {
     let tokens = 0;
     let segmentStart = 0;
     let runStart = 0;
+    let runIsWhitespace = isWhitespace(text.charCodeAt(0));
     let longRuns = false;
-    // Non-ASCII code units in the current run.
+    // Non-ASCII code units in the current (non-whitespace) run.
     let runNonAscii = 0;
-    const flushLongRun = (runEnd: number) => {
-        if (runEnd - runStart <= MAX_ENCODED_RUN_CHARS) return;
+    const flushRun = (runEnd: number) => {
+        const length = runEnd - runStart;
+        if (length <= MAX_ENCODED_RUN_CHARS) return;
         longRuns = true;
         if (runStart > segmentStart) {
             tokens += enc.encode_ordinary(
                 text.slice(segmentStart, runStart),
             ).length;
         }
-        const ascii = runEnd - runStart - runNonAscii;
-        tokens += Math.ceil(ascii / FALLBACK_CHARS_PER_TOKEN) + runNonAscii;
+        tokens += runIsWhitespace
+            ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
+            : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
+              runNonAscii;
         segmentStart = runEnd;
     };
     for (let i = 0; i < text.length; i++) {
         const code = text.charCodeAt(i);
-        if (isWhitespace(code)) {
-            flushLongRun(i);
-            runStart = i + 1;
+        const whitespace = isWhitespace(code);
+        if (whitespace !== runIsWhitespace) {
+            flushRun(i);
+            runStart = i;
+            runIsWhitespace = whitespace;
             runNonAscii = 0;
-        } else if (code > 0x7f) {
-            runNonAscii++;
         }
+        if (!whitespace && code > 0x7f) runNonAscii++;
     }
-    flushLongRun(text.length);
+    flushRun(text.length);
     if (!longRuns) return enc.encode_ordinary(text).length;
     if (segmentStart < text.length) {
         tokens += enc.encode_ordinary(text.slice(segmentStart)).length;

@@ -66,6 +66,32 @@ describe('estimateTextTokens — long runs without whitespace', () => {
     });
 
     it.each([
+        ['spaces', ' '],
+        ['newlines', '\n'],
+        ['tabs', '\t'],
+        ['mixed whitespace', ' \n'],
+    ])('answers fast on a long run of %s', (_l, unit) => {
+        // A degenerate model reply padded with whitespace, or a tool
+        // result with it: one pre-token piece, quadratic in tiktoken.
+        const text = `start${unit.repeat(80_000 / unit.length)}end`;
+        const started = Date.now();
+        const tokens = fresh(text);
+        expect(Date.now() - started).toBeLessThan(500);
+        expect(tokens).toBeGreaterThanOrEqual(exact('start') + exact('end'));
+    });
+
+    it('encodes a whitespace run of exactly the limit, and estimates one past it', () => {
+        const atLimit = `a${' '.repeat(MAX_ENCODED_RUN_CHARS)}b`;
+        expect(fresh(atLimit)).toBe(exact(atLimit));
+        const run = ' '.repeat(MAX_ENCODED_RUN_CHARS + 1);
+        expect(fresh(`a${run}b`)).toBe(
+            exact('a') +
+                Math.ceil(run.length / FALLBACK_CHARS_PER_TOKEN) +
+                exact('b'),
+        );
+    });
+
+    it.each([
         [
             'short code',
             'export function add(a: number, b: number) { return a + b; }\n',
