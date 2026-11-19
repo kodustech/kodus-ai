@@ -1,6 +1,9 @@
 import pLimit from 'p-limit';
 
-import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
+import {
+    GatedCron,
+    cronRunGate,
+} from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import {
     KODUS_CREDITS_METERING_SERVICE_TOKEN,
@@ -15,16 +18,20 @@ import { Injectable, Inject } from '@nestjs/common';
 const API_CRON_KODUS_CREDITS_SWEEP =
     process.env.API_CRON_KODUS_CREDITS_SWEEP || '*/5 * * * *';
 
-// Each sweep reads a month of telemetry spans; this many organizations at a
-// time keeps those scans from stacking on the primary.
+// Each organization's sweep scans its new telemetry spans and writes its
+// charges; this many at a time keeps those scans from stacking on the primary.
 const SWEEP_CONCURRENCY = 4;
 
-// The lock must outlive a sweep: with SWEEP_CONCURRENCY at a time a run can
-// pass the 5-minute schedule, and an expired lock let the next tick stack a
-// second sweep on the same scans. A crashed process frees it at once (it is a
-// Postgres advisory lock on the run's own session); the TTL only bounds a run
-// that hangs.
-const SWEEP_LOCK_TTL_MS = 30 * 60 * 1000;
+// A run starts no organization after this, inside the 5-minute schedule; the
+// ones left are swept by the next tick (the sweep is idempotent: unique span
+// ids on both sides).
+const SWEEP_RUN_BUDGET_MS = 4 * 60 * 1000;
+
+// The lock outlives a run: the budget plus room for the sweeps already
+// started to finish, so the next tick never stacks a second sweep on the same
+// scans. A crashed process frees it at once (a Postgres advisory lock on the
+// run's own session); a run that hangs holds it for two ticks at most.
+const SWEEP_LOCK_TTL_MS = 10 * 60 * 1000;
 
 /**
  * Every 5 minutes: journal Kodus-routed usage spans as charges and debit them
@@ -59,21 +66,28 @@ export class KodusCreditsSweepCronProvider {
                 return;
             }
 
-            // Each sweep reads a month of telemetry spans; all organizations
-            // at once stacked those scans on the primary.
             const limit = pLimit(SWEEP_CONCURRENCY);
+            const deadline = Date.now() + SWEEP_RUN_BUDGET_MS;
+            let started = 0;
             const results = await Promise.allSettled(
                 orgs.map((organizationId) =>
-                    limit(() =>
-                        this.metering.sweepOrganization(organizationId),
-                    ),
+                    limit(async () => {
+                        // Past the budget, or shutting down: the next tick
+                        // (or the next process) sweeps it.
+                        if (cronRunGate.stopping || Date.now() >= deadline) {
+                            return null;
+                        }
+                        started += 1;
+                        return this.metering.sweepOrganization(organizationId);
+                    }),
                 ),
             );
 
             const failed = results.filter((r) => r.status === 'rejected');
             const summaries = results
                 .filter((r) => r.status === 'fulfilled')
-                .map((r) => (r as PromiseFulfilledResult<any>).value);
+                .map((r) => (r as PromiseFulfilledResult<any>).value)
+                .filter(Boolean);
             const debited = summaries.reduce((s, x) => s + (x.debited ?? 0), 0);
             const debitedUsd = summaries.reduce(
                 (s, x) => s + (x.debitedUsd ?? 0),
@@ -85,6 +99,7 @@ export class KodusCreditsSweepCronProvider {
                 context: KodusCreditsSweepCronProvider.name,
                 metadata: {
                     orgs: orgs.length,
+                    deferred: orgs.length - started,
                     failed: failed.length,
                     debited,
                     debitedUsd: Math.round(debitedUsd * 1e6) / 1e6,

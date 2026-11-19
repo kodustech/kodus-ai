@@ -21,8 +21,45 @@ describe('KodusCreditsSweepCronProvider', () => {
 
         const [key, options] = lockService.acquire.mock.calls[0];
         expect(key).toBe('CRON:KODUS_CREDITS:SWEEP');
-        // Every 5 minutes; the lock outlasts several of them.
-        expect(options.ttl).toBeGreaterThanOrEqual(30 * 60 * 1000);
+        // Longer than a run's 4-minute budget plus the sweeps it started,
+        // short enough that a hung run holds it for two ticks at most.
+        expect(options.ttl).toBeGreaterThan(5 * 60 * 1000);
+        expect(options.ttl).toBeLessThanOrEqual(10 * 60 * 1000);
+    });
+
+    it('starts no organization past its 4-minute budget, leaving the rest to the next tick', async () => {
+        let now = Date.parse('2026-11-19T00:00:00Z');
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        const metering = {
+            listOrganizationsWithKodusCredential: jest
+                .fn()
+                .mockResolvedValue(['o1', 'o2', 'o3', 'o4', 'o5', 'o6']),
+            sweepOrganization: jest.fn(async (_organizationId: string) => {
+                // Each sweep takes a minute.
+                now += 60 * 1000;
+                return { debited: 1, debitedUsd: 0.01 };
+            }),
+        };
+        const cron = new KodusCreditsSweepCronProvider(
+            metering as any,
+            {
+                acquire: jest.fn().mockResolvedValue({
+                    release: jest.fn().mockResolvedValue(undefined),
+                }),
+            } as any,
+        );
+
+        await cron.handleCron();
+        clock.mockRestore();
+
+        // The first four start at once and end at minute 4; the budget is
+        // spent, so o5 and o6 wait for the next tick.
+        expect(metering.sweepOrganization.mock.calls.map(([o]) => o)).toEqual([
+            'o1',
+            'o2',
+            'o3',
+            'o4',
+        ]);
     });
 
     it('sweeps at most four organizations at a time', async () => {
