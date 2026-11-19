@@ -87,16 +87,34 @@ describe('ultraDegradedNotice', () => {
 
 describe('ultraSaveRefusalMessage', () => {
     it.each([
-        'plan' as const,
-        { reason: 'too_few_models' as const, ownModels: 2 },
-        { reason: 'not_configured' as const, ownModels: 3 },
-        { reason: 'same_model' as const, ownModels: 3, model: 'm' },
-        { reason: 'unavailable_models' as const, ownModels: 3 },
-        { reason: 'some_unavailable' as const, ownModels: 3, unavailable: 1 },
+        ['plan' as const, 'Teams and Enterprise plans'],
+        [{ reason: 'too_few_models' as const, ownModels: 2 }, 'has 2,'],
+        [
+            { reason: 'not_configured' as const, ownModels: 3 },
+            'three different models set under Ultra models',
+        ],
+        [
+            { reason: 'same_model' as const, ownModels: 3, model: 'model-x' },
+            'model-x',
+        ],
+        [
+            { reason: 'unavailable_models' as const, ownModels: 3 },
+            'any of the three models set for it any more',
+        ],
+        [
+            {
+                reason: 'some_unavailable' as const,
+                ownModels: 3,
+                unavailable: 2,
+            },
+            'cannot run on 2 of the three models',
+        ],
     ])(
-        'starts with "Ultra review", the prefix the web shows it on: %j',
-        (refusal) => {
-            expect(ultraSaveRefusalMessage(refusal)).toMatch(/^Ultra review/);
+        'starts with "Ultra review", the prefix the web shows it on, and names its own reason: %j',
+        (refusal, fragment) => {
+            const message = ultraSaveRefusalMessage(refusal);
+            expect(message).toMatch(/^Ultra review/);
+            expect(message).toContain(fragment);
         },
     );
 });
