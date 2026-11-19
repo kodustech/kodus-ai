@@ -6,6 +6,7 @@ import { AutomationStatus } from '@libs/automation/domain/automation/enum/automa
 import { AutomationMessage } from '@libs/automation/domain/automation/enum/automation-status';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 describe('FetchChangedFilesStage', () => {
     let stage: FetchChangedFilesStage;
@@ -156,10 +157,39 @@ describe('FetchChangedFilesStage', () => {
         );
     });
 
-    it('reuses preliminaryFiles from the context instead of fetching', async () => {
-        const files = [
-            { filename: 'src/a.ts', status: 'modified', patch: '' },
+    it('supplies previous-round filenames for PR rules without loading their patches into the review', async () => {
+        context.lastExecution = { lastAnalyzedCommit: 'sha-prev' };
+        context.codeReviewConfig.kodyRules = [
+            { scope: KodyRulesScope.PULL_REQUEST },
         ];
+        const recent = {
+            filename: 'web/page.ts',
+            status: 'modified',
+            patch: '',
+        };
+        mockPullRequestManagerService.getChangedFilesMetadata
+            .mockResolvedValueOnce([recent])
+            .mockResolvedValueOnce([{ filename: 'api/controller.ts' }, recent]);
+        mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue([
+            recent,
+        ]);
+
+        const result = await stage.execute(context);
+
+        expect(result.prFilePaths).toEqual([
+            'api/controller.ts',
+            'web/page.ts',
+        ]);
+        expect(result.changedFiles.map(({ filename }) => filename)).toEqual([
+            'web/page.ts',
+        ]);
+        expect(
+            mockPullRequestManagerService.enrichFilesWithContent,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it('reuses preliminaryFiles from the context instead of fetching', async () => {
+        const files = [{ filename: 'src/a.ts', status: 'modified', patch: '' }];
         context.preliminaryFiles = files as any;
         mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
             files,
@@ -186,9 +216,21 @@ describe('FetchChangedFilesStage', () => {
 
     it('computes the PR stats from the files it will review', async () => {
         const files = [
-            { filename: 'a.ts', status: 'modified', additions: 10, deletions: 3, patch: '' },
+            {
+                filename: 'a.ts',
+                status: 'modified',
+                additions: 10,
+                deletions: 3,
+                patch: '',
+            },
             { filename: 'b.ts', status: 'added', additions: 50, patch: '' },
-            { filename: 'c.ts', status: 'modified', additions: 5, deletions: 20, patch: '' },
+            {
+                filename: 'c.ts',
+                status: 'modified',
+                additions: 5,
+                deletions: 20,
+                patch: '',
+            },
         ];
         mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
             files,

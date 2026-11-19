@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { createLogger } from '@libs/core/log/logger';
 import { BusinessLogicRecheckService } from '@libs/platform/application/services/business-logic-recheck.service';
@@ -16,7 +16,7 @@ export class BusinessLogicRecheckCron {
 
     constructor(private readonly recheck: BusinessLogicRecheckService) {}
 
-    @Cron('*/15 * * * *', {
+    @GatedCron('*/15 * * * *', {
         name: 'business-logic-recheck',
         timeZone: 'UTC',
     })

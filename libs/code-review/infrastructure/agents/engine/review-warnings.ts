@@ -89,6 +89,7 @@ export type ReviewWarningReason =
     | 'path_mismatch'
     /** A Kody Rules judge shard errored. */
     | 'judge_shard_failed'
+    | 'evidence_deadline'
     /** The prompt did not fit the single-batch budget on a large PR. */
     | 'large_pr'
     /** The verifier's model call failed (provider error, 429, abort). */
@@ -363,7 +364,8 @@ export function buildKodyRulesPartialWarning(params: {
  * end-review comment would render the same `PROMPT_COMPACTED` notice 4
  * times (bug + security + performance + kody-rules).
  *
- * Dedup key: (kind, modelName, contextWindowTokens). Within a group,
+ * Kody Rules partial reviews also group by reason so a missed deadline
+ * and a failed shard remain distinguishable. Within a group,
  * `detail` strings are deduped and comma-joined, and `agentName` is
  * cleared because the warning is no longer agent-specific.
  *
@@ -379,7 +381,9 @@ export function dedupReviewWarnings(
     const detailsByKey = new Map<string, string[]>();
 
     for (const w of warnings) {
-        const key = `${w.kind}::${w.modelName}::${w.contextWindowTokens}`;
+        const group =
+            w.kind === 'KODY_RULES_PARTIAL' ? `${w.kind}::${w.reason}` : w.kind;
+        const key = `${group}::${w.modelName}::${w.contextWindowTokens}`;
         const existing = byKey.get(key);
         if (!existing) {
             byKey.set(key, {

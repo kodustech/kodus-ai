@@ -1,6 +1,28 @@
 import { z } from 'zod';
 
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    cutLongLines,
+    MAX_TOOL_LINE_CHARS,
+} from '@libs/common/utils/tool-output/long-lines';
+import {
+    isSecretFilePath,
+    secretFileRefusal,
+    withoutSecretFileLines,
+} from '@libs/common/utils/tool-output/secret-files';
+import { beginToolActivity } from '@libs/core/infrastructure/activity/activity-registry';
+import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('ConversationTools');
+
+/**
+ * Most characters one tool answer hands the conversation agent. Code review
+ * tools cap reads at 8k; this agent reads larger ranges, so the cap only
+ * stops a runaway answer (a minified bundle, a whole lockfile) from reaching
+ * the prompt and the compressor.
+ */
+export const MAX_CONVERSATION_TOOL_OUTPUT_CHARS = 64_000;
 
 /**
  * Shape of a legacy flow-engine tool config — locally typed to avoid importing from
@@ -144,5 +166,101 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
         });
     }
 
-    return tools;
+    return tools.map(guardConversationTool);
+}
+
+/** Argument fields that name a call without the agent's search text. */
+const ACTIVITY_ARG_KEYS = ['path', 'glob', 'start', 'end', 'maxDepth'];
+
+/**
+ * Every conversation tool answer gets what the code review tools get: no
+ * secret file's content, no line longer than MAX_TOOL_LINE_CHARS, no answer
+ * longer than MAX_CONVERSATION_TOOL_OUTPUT_CHARS, the call marked in flight
+ * for the stall watchdog, and a log when its post-processing is slow.
+ */
+function guardConversationTool(tool: ToolConfig): ToolConfig {
+    const execute = tool.execute;
+    return {
+        ...tool,
+        execute: async (input: unknown) => {
+            const args = (input ?? {}) as Record<string, unknown>;
+            const refused = refuseSecret(tool.name, args);
+            if (refused) return refused;
+            const summary =
+                tool.name === 'exec'
+                    ? `command=${
+                          String(args.command ?? '')
+                              .trim()
+                              .split(/\s+/)[0] ?? ''
+                      }`
+                    : ACTIVITY_ARG_KEYS.filter(
+                          (k) => args[k] !== undefined && args[k] !== '',
+                      )
+                          .map((k) => `${k}=${String(args[k]).slice(0, 120)}`)
+                          .join(' ');
+            const end = beginToolActivity(tool.name, summary);
+            try {
+                const out = await execute(input);
+                return timeSync(
+                    'conversation tool output (secret filter, line cut)',
+                    () => guardOutput(tool.name, out),
+                    () => ({ tool: tool.name }),
+                );
+            } finally {
+                end();
+            }
+        },
+    };
+}
+
+/** A path or command naming a secret file is refused, as code review does. */
+function refuseSecret(
+    name: string,
+    args: Record<string, unknown>,
+): { error: string } | undefined {
+    if (name === 'exec') {
+        // Best effort: a command whose words name a secret file (`cat .env`).
+        const words = String(args.command ?? '').split(/[\s'"`;|&<>()]+/);
+        const secret = words.find((w) => w && isSecretFilePath(w));
+        return secret ? { error: secretFileRefusal(secret) } : undefined;
+    }
+    const path = String(args.path ?? '');
+    return path && isSecretFilePath(path)
+        ? { error: secretFileRefusal(path) }
+        : undefined;
+}
+
+function guardOutput(name: string, out: unknown): unknown {
+    if (!out || typeof out !== 'object') return out;
+    const result = { ...(out as Record<string, unknown>) };
+    for (const field of ['matches', 'content', 'listing', 'stdout', 'stderr']) {
+        const value = result[field];
+        if (typeof value !== 'string') continue;
+        let text =
+            name === 'grep' || name === 'exec' || field === 'listing'
+                ? withoutSecretFileLines(value)
+                : value;
+        const capped = cutLongLines(text);
+        text = capped.text;
+        if (text.length > MAX_CONVERSATION_TOOL_OUTPUT_CHARS) {
+            text = `${text.slice(0, MAX_CONVERSATION_TOOL_OUTPUT_CHARS)}\n... (${text.length - MAX_CONVERSATION_TOOL_OUTPUT_CHARS} more characters not shown — narrow the call)`;
+        }
+        if (capped.cut > 0 || text.length < value.length) {
+            logger.warn({
+                message: `[CONVERSATION-TOOLS] ${name} output cut before the agent`,
+                context: 'ConversationTools',
+                metadata: {
+                    tool: name,
+                    field,
+                    outputChars: value.length,
+                    longestLine: capped.longest,
+                    linesCut: capped.cut,
+                    files: capped.files,
+                    maxLine: MAX_TOOL_LINE_CHARS,
+                },
+            });
+        }
+        result[field] = text;
+    }
+    return result;
 }

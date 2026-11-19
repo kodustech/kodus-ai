@@ -22,6 +22,11 @@ export const configSchema = Joi.object({
         .optional()
         .allow('')
         .default(''),
+    // Worker main-thread stall alerts (apps/worker/src/stall-watchdog.ts).
+    API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL: Joi.string()
+        .optional()
+        .allow('')
+        .default(''),
     METRICS_ERROR_RATE_THRESHOLD_PERCENT: Joi.number().optional().default(10),
     METRICS_ERROR_RATE_CRITICAL_PERCENT: Joi.number().optional().default(25),
     METRICS_ERROR_RATE_WINDOW_MINUTES: Joi.number().optional().default(5),

@@ -1,6 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { ClassifySessionUseCase } from '@libs/cli-review/application/use-cases/classify-session.use-case';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
@@ -29,7 +29,7 @@ export class ClassifyOrphanedSessionsCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(API_CRON_CLASSIFY_ORPHANED_SESSIONS, {
+    @GatedCron(API_CRON_CLASSIFY_ORPHANED_SESSIONS, {
         name: 'Classify Orphaned Sessions',
         timeZone: 'America/Sao_Paulo',
     })

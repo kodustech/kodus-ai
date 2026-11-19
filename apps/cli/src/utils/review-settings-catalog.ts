@@ -2,10 +2,13 @@ import { CommandError } from './command-errors.js';
 import { parseRepositoryPatternList } from './repo-settings-schema.js';
 
 export type ReviewSettingType =
-    'boolean' | 'number' | 'string' | 'enum' | 'string[]' | 'json';
+    'boolean' | 'number' | 'string' | 'enum' | 'string[]' | 'json' | 'object[]';
 
 export type ReviewSettingSection =
     | 'general'
+    | 'risk-assessment'
+    | 'routing'
+    | 'approval-policies'
     | 'review-scope'
     | 'custom-prompts'
     | 'suggestion-control'
@@ -21,9 +24,11 @@ export interface ReviewSettingDefinition {
     description: string;
     values?: readonly string[];
     maxLength?: number;
+    inheritField?: boolean;
 }
 
 const SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+const REVIEW_MODES = ['balanced', 'heavy'] as const;
 
 /**
  * Every setting the Settings > Code Review pages edit, keyed by its path in
@@ -99,6 +104,54 @@ export const REVIEW_SETTINGS: readonly ReviewSettingDefinition[] = [
         type: 'boolean',
         section: 'general',
         description: 'Approve the pull request when the review finds nothing.',
+    },
+    {
+        key: 'approvalPolicies',
+        type: 'object[]',
+        section: 'approval-policies',
+        inheritField: true,
+        description:
+            'Replace the ordered list of named approval policies. [] disables all policies.',
+    },
+    {
+        key: 'riskAssessmentActive',
+        type: 'boolean',
+        section: 'risk-assessment',
+        inheritField: true,
+        description: 'Assess PR risk independently of automatic approval.',
+    },
+    {
+        key: 'riskCriteria',
+        type: 'object[]',
+        section: 'risk-assessment',
+        inheritField: true,
+        description:
+            'Replace the list of team risk criteria. [] uses standard assessment.',
+    },
+    {
+        key: 'reviewMode',
+        type: 'enum',
+        section: 'routing',
+        values: REVIEW_MODES,
+        inheritField: true,
+        description:
+            'Default review mode when risk assessment is off or unavailable.',
+    },
+    {
+        key: 'riskReviewRouting.noRisk',
+        type: 'enum',
+        section: 'routing',
+        values: REVIEW_MODES,
+        inheritField: true,
+        description: 'Review mode when risk assessment finds no risk.',
+    },
+    {
+        key: 'riskReviewRouting.riskFound',
+        type: 'enum',
+        section: 'routing',
+        values: REVIEW_MODES,
+        inheritField: true,
+        description: 'Review mode when risk assessment finds risk.',
     },
     {
         key: 'approvalLabels',
@@ -494,12 +547,27 @@ export function parseReviewSettingValue(
             }
             return parseRepositoryPatternList(raw);
         }
-        case 'json': {
+        case 'json':
+        case 'object[]': {
             let parsed: unknown;
             try {
                 parsed = JSON.parse(raw);
             } catch {
                 return invalid(setting, 'valid JSON');
+            }
+            if (setting.type === 'object[]') {
+                if (
+                    !Array.isArray(parsed) ||
+                    parsed.some(
+                        (item) =>
+                            !item ||
+                            typeof item !== 'object' ||
+                            Array.isArray(item),
+                    )
+                ) {
+                    return invalid(setting, 'a JSON array of objects');
+                }
+                return parsed;
             }
             if (
                 !Array.isArray(parsed) ||

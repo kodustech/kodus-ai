@@ -325,6 +325,7 @@ export interface IPullRequestWithDeliveredSuggestions {
     organizationId: string;
     status: string;
     provider: string;
+    url?: string;
     repository: {
         id: string;
         name: string;

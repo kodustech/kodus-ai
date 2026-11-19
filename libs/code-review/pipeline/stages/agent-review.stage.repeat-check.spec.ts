@@ -147,14 +147,17 @@ const published = (result: any) =>
 
 let runSpy: jest.SpyInstance;
 let repeatAnswer: unknown;
+let repeatTimeout: boolean;
 beforeEach(() => {
+    repeatTimeout = false;
     repeatAnswer = { verdicts: [] };
-    runSpy = jest
-        .spyOn(LLM, 'run')
-        .mockImplementation((async (req: any) =>
-            req.spanName === 'code-review::repeat-check'
-                ? repeatAnswer
-                : { groups: [], unique: [0, 1, 2, 3] }) as any);
+    runSpy = jest.spyOn(LLM, 'run').mockImplementation((async (req: any) => {
+        if (req.spanName !== 'code-review::repeat-check') {
+            return { groups: [], unique: [0, 1, 2, 3] };
+        }
+        if (repeatTimeout) throw new DOMException('timed out', 'TimeoutError');
+        return repeatAnswer;
+    }) as any);
 });
 afterEach(() => {
     runSpy.mockRestore();
@@ -162,6 +165,48 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — repeat check (#2097)', () => {
+    it('keeps a timed-out PR-level comparison off the PR while delivering a new problem of the same rule', async () => {
+        repeatTimeout = true;
+        const old = earlier({
+            label: 'kody_rules',
+            relevantFile: undefined,
+            brokenKodyRulesIds: ['rule-logger'],
+            suggestionContent:
+                'The CSV export has no regression test.',
+        });
+        const repeat = {
+            label: 'kody_rules',
+            severity: 'high',
+            brokenKodyRulesIds: ['rule-logger'],
+            oneSentenceSummary: 'Missing export coverage',
+            suggestionContent:
+                'The CSV export has no regression test.',
+        };
+        const newFinding = {
+            ...repeat,
+            oneSentenceSummary: 'Missing export coverage',
+            suggestionContent:
+                'The PDF export has no regression test.',
+        };
+        const { stage, reviewOrchestrator } = makeStage([old]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([repeat, newFinding]),
+        );
+
+        const result = await run(stage, makeContext([old]));
+        expect(result.discardedSuggestions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    suggestionContent: repeat.suggestionContent,
+                    priorityStatus: PriorityStatus.WITHHELD_BY_REPEAT_CHECK,
+                }),
+            ]),
+        );
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            newFinding.suggestionContent,
+        );
+    });
     it("reads the whole history and keeps a rule repeat older than the prompts' history out of the review", async () => {
         const recent = Array.from({ length: 3 }, (_, i) =>
             earlier({
@@ -263,7 +308,7 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         ]);
     });
 
-    it("matches a finder finding to an earlier comment on the same code in another file, by its cited lines", async () => {
+    it('matches a finder finding to an earlier comment on the same code in another file, by its cited lines', async () => {
         const moved = earlier({
             suggestionId: 'old-moved',
             relevantFile: 'src/user.ts',
@@ -314,7 +359,9 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
 
         expect(logSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                message: expect.stringContaining('the file is not changed by this PR'),
+                message: expect.stringContaining(
+                    'the file is not changed by this PR',
+                ),
                 metadata: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
@@ -408,7 +455,7 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         );
     });
 
-    it("links a lean finder finding, whose cited code the check read on a copy", async () => {
+    it('links a lean finder finding, whose cited code the check read on a copy', async () => {
         const applied = earlier({
             suggestionId: 'old-bug',
             outcome: 'implemented',
