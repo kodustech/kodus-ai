@@ -84,6 +84,7 @@ const rule = (uuid: string) => ({
             ]);
         });
 
+        // A guard, not a pin: $eq must leave the ordinary delete working.
         it('deleteRule with a real id removes that rule only', async () => {
             expect(await repository.deleteRule(docId, 'r1')).toBe(true);
 
@@ -103,6 +104,18 @@ const rule = (uuid: string) => ({
             expect(await storedRules()).toEqual([
                 { uuid: 'r1', title: 'Rule r1' },
                 { uuid: 'r2', title: 'Rule r2' },
+            ]);
+        });
+
+        it('deleteRuleLogically with an object id marks no rule deleted', async () => {
+            expect(await repository.deleteRuleLogically(ORG, injected)).toBe(
+                false,
+            );
+
+            const stored: any = await model.findById(docId).lean().exec();
+            expect(stored.rules.map((r: any) => r.status)).toEqual([
+                KodyRulesStatus.ACTIVE,
+                KodyRulesStatus.ACTIVE,
             ]);
         });
     },
