@@ -185,5 +185,97 @@ let available = false;
                 'B:2',
             ]);
         });
+
+        it('returns nothing for pairs whose numbers and repositories cross into one never asked', async () => {
+            // A:2 and B:1 both have delivered suggestions. Their numbers and
+            // repositories also name B:2, which has none: a read admitting
+            // the cross product would return it.
+            const found =
+                await repository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                    ORG,
+                    [
+                        { repositoryId: 'A', pullRequestNumber: 2 },
+                        { repositoryId: 'B', pullRequestNumber: 1 },
+                    ],
+                    'open',
+                );
+
+            expect(found).toEqual([]);
+        });
+
+        // Every read below names A:2 and B:1, whose numbers and repositories
+        // also cross into A:1 and B:2: only the two pairs asked may be read.
+        const crossing = [
+            { repositoryId: 'A', number: 2 },
+            { repositoryId: 'B', number: 1 },
+        ];
+        const docsExamined = async (
+            run: () => Promise<unknown>,
+            method: 'find' | 'aggregate',
+        ) => {
+            const spy = jest.spyOn(model, method as any);
+            await run();
+            const calls = spy.mock.calls.map((call) => call[0]);
+            spy.mockRestore();
+            let total = 0;
+            for (const arg of calls) {
+                const explained: any =
+                    method === 'find'
+                        ? await model.collection
+                              .find(arg as any)
+                              .explain('executionStats')
+                        : await model.collection
+                              .aggregate(arg as any[])
+                              .explain('executionStats');
+                const stats =
+                    explained.executionStats ??
+                    explained.stages?.[0]?.$cursor?.executionStats;
+                total += stats.totalDocsExamined;
+            }
+            return total;
+        };
+
+        it('reads only the pairs asked for the suggestion counts', async () => {
+            expect(
+                await docsExamined(
+                    () =>
+                        repository.findSuggestionCountsByNumbersAndRepositoryIds(
+                            crossing,
+                            ORG,
+                        ),
+                    'aggregate',
+                ),
+            ).toBe(2);
+        });
+
+        it('reads only the pairs asked for the PR list', async () => {
+            expect(
+                await docsExamined(
+                    () =>
+                        repository.findManyByNumbersAndRepositoryIds(
+                            crossing,
+                            ORG,
+                        ),
+                    'find',
+                ),
+            ).toBe(2);
+        });
+
+        it('reads only the pairs asked for the approval cron', async () => {
+            expect(
+                await docsExamined(
+                    () =>
+                        repository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                            ORG,
+                            crossing.map((c) => ({
+                                repositoryId: c.repositoryId,
+                                pullRequestNumber: c.number,
+                            })),
+                            'open',
+                        ),
+                    'find',
+                ),
+            ).toBe(2);
+        });
     },
 );

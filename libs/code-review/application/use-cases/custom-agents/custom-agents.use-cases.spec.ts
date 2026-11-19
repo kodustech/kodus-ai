@@ -1564,10 +1564,15 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 count: { $sum: 1 },
             }),
         });
-        expect(aggregate.mock.calls[0][1]).toEqual({
-            allowDiskUse: true,
-            readPreference: expect.anything(),
-        });
+        // The status counts are analytics: they read from the analytics
+        // member, never the primary.
+        const options = aggregate.mock.calls[0][1];
+        expect(options.allowDiskUse).toBe(true);
+        expect(options.readPreference.mode).toBe('secondaryPreferred');
+        expect(options.readPreference.tags).toEqual([
+            { workload: 'analytics' },
+            {},
+        ]);
         const [firstMatch] = aggregate.mock.calls[0][0];
         expect(firstMatch.$match).toEqual({
             'organizationId': 'org-1',

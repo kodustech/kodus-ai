@@ -63,6 +63,35 @@ function isUnknownIndexHint(error: unknown): boolean {
 }
 
 /** A pull request that is neither merged nor closed. */
+/**
+ * The (repository, number) pairs grouped by repository. One read per
+ * repository with `number: { $in }` fetches exactly the pairs asked on the
+ * unique (number, repository.id, organizationId) index. `$in` on both keys
+ * admits the whole numbers x repositories cross product, and PR numbers repeat
+ * across repositories; one `$or` branch per pair is the shape that hit
+ * maxIndexedOrSolutionsReached (prod: 98s avg, 155s max).
+ */
+function numbersByRepository(
+    pairs: Array<{ repositoryId: string; number: number }>,
+): Array<[string, number[]]> {
+    const groups = new Map<string, Set<number>>();
+    for (const { repositoryId, number } of pairs) {
+        const key = String(repositoryId);
+        if (!groups.has(key)) groups.set(key, new Set());
+        groups.get(key)!.add(number);
+    }
+    // At most 100 numbers per read, so one read stays bounded however many
+    // PRs of a repository are asked for.
+    const reads: Array<[string, number[]]> = [];
+    for (const [repositoryId, numbers] of groups) {
+        const list = [...numbers];
+        for (let i = 0; i < list.length; i += 100) {
+            reads.push([repositoryId, list.slice(i, i + 100)]);
+        }
+    }
+    return reads;
+}
+
 const OPEN_PULL_REQUEST_MATCH = {
     merged: { $ne: true },
     status: { $nin: ['closed'] },
@@ -434,42 +463,29 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             return [];
         }
 
-        // Bounded `$in` on both keys instead of one `$or` branch per pair: with
-        // ~20 indexes on this collection the planner hits its indexed-OR limit
-        // (`maxIndexedOrSolutionsReached`) and can settle on an org-wide scan
-        // that applies the `$or` in FETCH (prod: 98s avg, 155s max). `$in` x
-        // `$in` gives tight bounds on the unique (number, repository.id, org)
-        // index; the cross-product superset is trimmed to the exact pairs below.
-        const numbers = [...new Set(criteria.map((c) => c.number))];
-        const repositoryIds = [
-            ...new Set(criteria.map((c) => String(c.repositoryId))),
-        ];
-        const wanted = new Set(
-            criteria.map((c) => `${c.repositoryId}:${c.number}`),
-        );
-
-        const candidates = await this.pullRequestsModel
-            .find(
-                {
-                    organizationId,
-                    'number': { $in: numbers },
-                    'repository.id': { $in: repositoryIds },
-                },
-                {
-                    // PERF: Exclude heavy fields - suggestion counts come from aggregation
-                    // This reduces data transfer from ~3MB to ~50KB per batch
-                    files: 0,
-                    commits: 0,
-                    prLevelSuggestions: 0,
-                },
-            )
-            .lean()
-            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-            .exec();
-
-        const pullRequests = candidates.filter((pr) =>
-            wanted.has(`${pr.repository?.id}:${pr.number}`),
-        );
+        // One read per repository: see numbersByRepository.
+        const pullRequests = [];
+        for (const [repositoryId, numbers] of numbersByRepository(criteria)) {
+            const found = await this.pullRequestsModel
+                .find(
+                    {
+                        organizationId,
+                        'number': { $in: numbers },
+                        'repository.id': repositoryId,
+                    },
+                    {
+                        // PERF: Exclude heavy fields - suggestion counts come from aggregation
+                        // This reduces data transfer from ~3MB to ~50KB per batch
+                        files: 0,
+                        commits: 0,
+                        prLevelSuggestions: 0,
+                    },
+                )
+                .lean()
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+            pullRequests.push(...found);
+        }
 
         return mapSimpleModelsToEntities(pullRequests, PullRequestsEntity);
     }
@@ -602,350 +618,341 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             return result;
         }
 
-        // `$in` x `$in` instead of one `$or` branch per pair, for the reason
-        // in findManyByNumbersAndRepositoryIds; the rows of pairs nobody asked
-        // for are dropped when the map is built.
-        const numbers = [...new Set(criteria.map((c) => c.number))];
-        const repositoryIds = [
-            ...new Set(criteria.map((c) => String(c.repositoryId))),
-        ];
-        const wanted = new Set(
-            criteria.map((c) => `${c.repositoryId}_${c.number}`),
-        );
-
-        const aggregationResult = await this.pullRequestsModel
-            .aggregate([
-                // Match the PRs we need
-                {
-                    $match: {
-                        organizationId,
-                        'number': { $in: numbers },
-                        'repository.id': { $in: repositoryIds },
+        // One aggregation per repository: see numbersByRepository.
+        const aggregationResult: any[] = [];
+        for (const [repositoryId, numbers] of numbersByRepository(criteria)) {
+            const rows = await this.pullRequestsModel
+                .aggregate([
+                    // Match the PRs we need
+                    {
+                        $match: {
+                            organizationId,
+                            'number': { $in: numbers },
+                            'repository.id': repositoryId,
+                        },
                     },
-                },
-                // Only what the counts read. Each `$unwind` below copies the
-                // document once per suggestion, and the whole PR (patches,
-                // every suggestion's text) is most of what it weighs.
-                {
-                    $project: {
-                        'number': 1,
-                        'repository.id': 1,
-                        'files.path': 1,
-                        'files.suggestions.id': 1,
-                        'files.suggestions.deliveryStatus': 1,
-                        'files.suggestions.implementationStatus': 1,
-                        'files.suggestions.label': 1,
-                        'files.suggestions.severity': 1,
+                    // Only what the counts read. Each `$unwind` below copies the
+                    // document once per suggestion, and the whole PR (patches,
+                    // every suggestion's text) is most of what it weighs.
+                    {
+                        $project: {
+                            'number': 1,
+                            'repository.id': 1,
+                            'files.path': 1,
+                            'files.suggestions.id': 1,
+                            'files.suggestions.deliveryStatus': 1,
+                            'files.suggestions.implementationStatus': 1,
+                            'files.suggestions.label': 1,
+                            'files.suggestions.severity': 1,
+                        },
                     },
-                },
-                // Unwind files array
-                {
-                    $unwind: {
-                        path: '$files',
-                        preserveNullAndEmptyArrays: true,
+                    // Unwind files array
+                    {
+                        $unwind: {
+                            path: '$files',
+                            preserveNullAndEmptyArrays: true,
+                        },
                     },
-                },
-                // Unwind suggestions array
-                {
-                    $unwind: {
-                        path: '$files.suggestions',
-                        preserveNullAndEmptyArrays: true,
+                    // Unwind suggestions array
+                    {
+                        $unwind: {
+                            path: '$files.suggestions',
+                            preserveNullAndEmptyArrays: true,
+                        },
                     },
-                },
-                // Group by PR and count by deliveryStatus
-                {
-                    $group: {
-                        _id: {
-                            repositoryId: '$repository.id',
-                            prNumber: '$number',
-                        },
-                        sent: {
-                            $sum: {
-                                $cond: [
-                                    {
-                                        $eq: [
-                                            '$files.suggestions.deliveryStatus',
-                                            DeliveryStatus.SENT,
-                                        ],
-                                    },
-                                    1,
-                                    0,
-                                ],
+                    // Group by PR and count by deliveryStatus
+                    {
+                        $group: {
+                            _id: {
+                                repositoryId: '$repository.id',
+                                prNumber: '$number',
                             },
-                        },
-                        filtered: {
-                            $sum: {
-                                $cond: [
-                                    {
-                                        $eq: [
-                                            '$files.suggestions.deliveryStatus',
-                                            DeliveryStatus.NOT_SENT,
-                                        ],
-                                    },
-                                    1,
-                                    0,
-                                ],
-                            },
-                        },
-                        // Delivery failures (Kody tried to post but couldn't) —
-                        // kept distinct from `filtered` (a config decision) so
-                        // they aren't silently dropped from the totals.
-                        failed: {
-                            $sum: {
-                                $cond: [
-                                    {
-                                        $in: [
-                                            '$files.suggestions.deliveryStatus',
-                                            [
-                                                DeliveryStatus.FAILED,
-                                                DeliveryStatus.FAILED_LINES_MISMATCH,
-                                            ],
-                                        ],
-                                    },
-                                    1,
-                                    0,
-                                ],
-                            },
-                        },
-                        // Superseded by a newer suggestion — counted for
-                        // reconciliation, not surfaced as a live signal.
-                        replaced: {
-                            $sum: {
-                                $cond: [
-                                    {
-                                        $eq: [
-                                            '$files.suggestions.deliveryStatus',
-                                            DeliveryStatus.REPLACED,
-                                        ],
-                                    },
-                                    1,
-                                    0,
-                                ],
-                            },
-                        },
-                        // Breakdown of DELIVERED (sent) suggestions by severity —
-                        // this powers the "needs attention" signal + severity
-                        // filter on the PR list. Severity is $toLower-normalized
-                        // because older docs stored it capitalized.
-                        critical: this.sumSentBySeverity('critical'),
-                        high: this.sumSentBySeverity('high'),
-                        medium: this.sumSentBySeverity('medium'),
-                        low: this.sumSentBySeverity('low'),
-                        // Unresolved (sent + implementationStatus ≠ implemented)
-                        // total and by severity — the "Needs attention" signal.
-                        unresolved: this.unresolvedSentCond(),
-                        ucritical: this.unresolvedSentCond('critical'),
-                        uhigh: this.unresolvedSentCond('high'),
-                        umedium: this.unresolvedSentCond('medium'),
-                        ulow: this.unresolvedSentCond('low'),
-                        // Distinct categories (labels) among DELIVERED suggestions
-                        // — powers the category filter. null entries (non-sent
-                        // rows) are stripped when the map is built.
-                        categories: {
-                            $addToSet: {
-                                $cond: [
-                                    {
-                                        $eq: [
-                                            '$files.suggestions.deliveryStatus',
-                                            DeliveryStatus.SENT,
-                                        ],
-                                    },
-                                    {
-                                        $toLower: {
-                                            $ifNull: [
-                                                '$files.suggestions.label',
-                                                '',
+                            sent: {
+                                $sum: {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$files.suggestions.deliveryStatus',
+                                                DeliveryStatus.SENT,
                                             ],
                                         },
-                                    },
-                                    null,
-                                ],
+                                        1,
+                                        0,
+                                    ],
+                                },
                             },
-                        },
-                        // Deep-link target for the PR-list count
-                        // (?file=...&suggestion=...). Every DELIVERED row with a
-                        // usable id is pushed with its rank; the winner is picked
-                        // in the projection below. Non-sent rows are pushed as
-                        // null and stripped there — never slice this array before
-                        // that filter runs, or a PR whose first suggestion was
-                        // filtered out collapses to [null] and loses its target.
-                        //
-                        // rank mirrors deepLinkTargetRank() on the in-memory side
-                        // (pull-request-metrics.ts): unresolved dominates
-                        // severity, and $unwind's arrival order breaks ties.
-                        firstSent: {
-                            $push: {
-                                $let: {
-                                    vars: {
-                                        // Older docs stored severity capitalized.
-                                        sev: {
+                            filtered: {
+                                $sum: {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$files.suggestions.deliveryStatus',
+                                                DeliveryStatus.NOT_SENT,
+                                            ],
+                                        },
+                                        1,
+                                        0,
+                                    ],
+                                },
+                            },
+                            // Delivery failures (Kody tried to post but couldn't) —
+                            // kept distinct from `filtered` (a config decision) so
+                            // they aren't silently dropped from the totals.
+                            failed: {
+                                $sum: {
+                                    $cond: [
+                                        {
+                                            $in: [
+                                                '$files.suggestions.deliveryStatus',
+                                                [
+                                                    DeliveryStatus.FAILED,
+                                                    DeliveryStatus.FAILED_LINES_MISMATCH,
+                                                ],
+                                            ],
+                                        },
+                                        1,
+                                        0,
+                                    ],
+                                },
+                            },
+                            // Superseded by a newer suggestion — counted for
+                            // reconciliation, not surfaced as a live signal.
+                            replaced: {
+                                $sum: {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$files.suggestions.deliveryStatus',
+                                                DeliveryStatus.REPLACED,
+                                            ],
+                                        },
+                                        1,
+                                        0,
+                                    ],
+                                },
+                            },
+                            // Breakdown of DELIVERED (sent) suggestions by severity —
+                            // this powers the "needs attention" signal + severity
+                            // filter on the PR list. Severity is $toLower-normalized
+                            // because older docs stored it capitalized.
+                            critical: this.sumSentBySeverity('critical'),
+                            high: this.sumSentBySeverity('high'),
+                            medium: this.sumSentBySeverity('medium'),
+                            low: this.sumSentBySeverity('low'),
+                            // Unresolved (sent + implementationStatus ≠ implemented)
+                            // total and by severity — the "Needs attention" signal.
+                            unresolved: this.unresolvedSentCond(),
+                            ucritical: this.unresolvedSentCond('critical'),
+                            uhigh: this.unresolvedSentCond('high'),
+                            umedium: this.unresolvedSentCond('medium'),
+                            ulow: this.unresolvedSentCond('low'),
+                            // Distinct categories (labels) among DELIVERED suggestions
+                            // — powers the category filter. null entries (non-sent
+                            // rows) are stripped when the map is built.
+                            categories: {
+                                $addToSet: {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$files.suggestions.deliveryStatus',
+                                                DeliveryStatus.SENT,
+                                            ],
+                                        },
+                                        {
                                             $toLower: {
                                                 $ifNull: [
-                                                    '$files.suggestions.severity',
+                                                    '$files.suggestions.label',
                                                     '',
                                                 ],
                                             },
                                         },
+                                        null,
+                                    ],
+                                },
+                            },
+                            // Deep-link target for the PR-list count
+                            // (?file=...&suggestion=...). Every DELIVERED row with a
+                            // usable id is pushed with its rank; the winner is picked
+                            // in the projection below. Non-sent rows are pushed as
+                            // null and stripped there — never slice this array before
+                            // that filter runs, or a PR whose first suggestion was
+                            // filtered out collapses to [null] and loses its target.
+                            //
+                            // rank mirrors deepLinkTargetRank() on the in-memory side
+                            // (pull-request-metrics.ts): unresolved dominates
+                            // severity, and $unwind's arrival order breaks ties.
+                            firstSent: {
+                                $push: {
+                                    $let: {
+                                        vars: {
+                                            // Older docs stored severity capitalized.
+                                            sev: {
+                                                $toLower: {
+                                                    $ifNull: [
+                                                        '$files.suggestions.severity',
+                                                        '',
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                        in: {
+                                            $cond: [
+                                                {
+                                                    $and: [
+                                                        {
+                                                            $eq: [
+                                                                '$files.suggestions.deliveryStatus',
+                                                                DeliveryStatus.SENT,
+                                                            ],
+                                                        },
+                                                        // Legacy docs may lack the
+                                                        // explicit id — a deep link
+                                                        // without one is useless.
+                                                        {
+                                                            $ne: [
+                                                                {
+                                                                    $ifNull: [
+                                                                        '$files.suggestions.id',
+                                                                        '',
+                                                                    ],
+                                                                },
+                                                                '',
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                                {
+                                                    id: '$files.suggestions.id',
+                                                    filePath: '$files.path',
+                                                    rank: {
+                                                        $add: [
+                                                            {
+                                                                $cond: [
+                                                                    {
+                                                                        $ne: [
+                                                                            '$files.suggestions.implementationStatus',
+                                                                            ImplementationStatus.IMPLEMENTED,
+                                                                        ],
+                                                                    },
+                                                                    UNRESOLVED_RANK_BONUS,
+                                                                    0,
+                                                                ],
+                                                            },
+                                                            {
+                                                                $switch: {
+                                                                    branches: [
+                                                                        {
+                                                                            case: {
+                                                                                $eq: [
+                                                                                    '$$sev',
+                                                                                    'critical',
+                                                                                ],
+                                                                            },
+                                                                            then: 4,
+                                                                        },
+                                                                        {
+                                                                            case: {
+                                                                                $eq: [
+                                                                                    '$$sev',
+                                                                                    'high',
+                                                                                ],
+                                                                            },
+                                                                            then: 3,
+                                                                        },
+                                                                        {
+                                                                            case: {
+                                                                                $eq: [
+                                                                                    '$$sev',
+                                                                                    'medium',
+                                                                                ],
+                                                                            },
+                                                                            then: 2,
+                                                                        },
+                                                                        {
+                                                                            case: {
+                                                                                $eq: [
+                                                                                    '$$sev',
+                                                                                    'low',
+                                                                                ],
+                                                                            },
+                                                                            then: 1,
+                                                                        },
+                                                                    ],
+                                                                    default: 0,
+                                                                },
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                null,
+                                            ],
+                                        },
                                     },
+                                },
+                            },
+                        },
+                    },
+                    // Project to clean output
+                    {
+                        $project: {
+                            _id: 0,
+                            repositoryId: '$_id.repositoryId',
+                            prNumber: '$_id.prNumber',
+                            sent: 1,
+                            filtered: 1,
+                            failed: 1,
+                            replaced: 1,
+                            critical: 1,
+                            high: 1,
+                            medium: 1,
+                            low: 1,
+                            unresolved: 1,
+                            ucritical: 1,
+                            uhigh: 1,
+                            umedium: 1,
+                            ulow: 1,
+                            categories: 1,
+                            // Highest-ranked candidate wins. $reduce (not $sortArray)
+                            // so this doesn't depend on the server being 5.2+, and
+                            // `$gt` is strict, so a tie keeps the earlier row —
+                            // document order. The non-sent nulls need no pre-filter:
+                            // a null's `rank` is missing, which never compares $gt a
+                            // real rank, and the `$$value == null` arm only fires
+                            // until the first real candidate lands.
+                            firstSent: {
+                                $reduce: {
+                                    input: '$firstSent',
+                                    initialValue: null,
                                     in: {
                                         $cond: [
                                             {
-                                                $and: [
+                                                $or: [
+                                                    { $eq: ['$$value', null] },
                                                     {
-                                                        $eq: [
-                                                            '$files.suggestions.deliveryStatus',
-                                                            DeliveryStatus.SENT,
-                                                        ],
-                                                    },
-                                                    // Legacy docs may lack the
-                                                    // explicit id — a deep link
-                                                    // without one is useless.
-                                                    {
-                                                        $ne: [
-                                                            {
-                                                                $ifNull: [
-                                                                    '$files.suggestions.id',
-                                                                    '',
-                                                                ],
-                                                            },
-                                                            '',
+                                                        $gt: [
+                                                            '$$this.rank',
+                                                            '$$value.rank',
                                                         ],
                                                     },
                                                 ],
                                             },
-                                            {
-                                                id: '$files.suggestions.id',
-                                                filePath: '$files.path',
-                                                rank: {
-                                                    $add: [
-                                                        {
-                                                            $cond: [
-                                                                {
-                                                                    $ne: [
-                                                                        '$files.suggestions.implementationStatus',
-                                                                        ImplementationStatus.IMPLEMENTED,
-                                                                    ],
-                                                                },
-                                                                UNRESOLVED_RANK_BONUS,
-                                                                0,
-                                                            ],
-                                                        },
-                                                        {
-                                                            $switch: {
-                                                                branches: [
-                                                                    {
-                                                                        case: {
-                                                                            $eq: [
-                                                                                '$$sev',
-                                                                                'critical',
-                                                                            ],
-                                                                        },
-                                                                        then: 4,
-                                                                    },
-                                                                    {
-                                                                        case: {
-                                                                            $eq: [
-                                                                                '$$sev',
-                                                                                'high',
-                                                                            ],
-                                                                        },
-                                                                        then: 3,
-                                                                    },
-                                                                    {
-                                                                        case: {
-                                                                            $eq: [
-                                                                                '$$sev',
-                                                                                'medium',
-                                                                            ],
-                                                                        },
-                                                                        then: 2,
-                                                                    },
-                                                                    {
-                                                                        case: {
-                                                                            $eq: [
-                                                                                '$$sev',
-                                                                                'low',
-                                                                            ],
-                                                                        },
-                                                                        then: 1,
-                                                                    },
-                                                                ],
-                                                                default: 0,
-                                                            },
-                                                        },
-                                                    ],
-                                                },
-                                            },
-                                            null,
+                                            '$$this',
+                                            '$$value',
                                         ],
                                     },
                                 },
                             },
                         },
                     },
-                },
-                // Project to clean output
-                {
-                    $project: {
-                        _id: 0,
-                        repositoryId: '$_id.repositoryId',
-                        prNumber: '$_id.prNumber',
-                        sent: 1,
-                        filtered: 1,
-                        failed: 1,
-                        replaced: 1,
-                        critical: 1,
-                        high: 1,
-                        medium: 1,
-                        low: 1,
-                        unresolved: 1,
-                        ucritical: 1,
-                        uhigh: 1,
-                        umedium: 1,
-                        ulow: 1,
-                        categories: 1,
-                        // Highest-ranked candidate wins. $reduce (not $sortArray)
-                        // so this doesn't depend on the server being 5.2+, and
-                        // `$gt` is strict, so a tie keeps the earlier row —
-                        // document order. The non-sent nulls need no pre-filter:
-                        // a null's `rank` is missing, which never compares $gt a
-                        // real rank, and the `$$value == null` arm only fires
-                        // until the first real candidate lands.
-                        firstSent: {
-                            $reduce: {
-                                input: '$firstSent',
-                                initialValue: null,
-                                in: {
-                                    $cond: [
-                                        {
-                                            $or: [
-                                                { $eq: ['$$value', null] },
-                                                {
-                                                    $gt: [
-                                                        '$$this.rank',
-                                                        '$$value.rank',
-                                                    ],
-                                                },
-                                            ],
-                                        },
-                                        '$$this',
-                                        '$$value',
-                                    ],
-                                },
-                            },
-                        },
-                    },
-                },
-            ])
-            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
-            .exec();
+                ])
+                .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+                .exec();
+            aggregationResult.push(...rows);
+        }
 
         // Build the result map
         for (const row of aggregationResult) {
             const key = `${row.repositoryId}_${row.prNumber}`;
-            if (!wanted.has(key)) {
-                continue;
-            }
             result.set(key, {
                 sent: row.sent || 0,
                 filtered: row.filtered || 0,
@@ -1881,36 +1888,23 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             ).values(),
         ];
         const matches: IPullRequestWithDeliveredSuggestions[] = [];
-        // The unique (organizationId, repository.id, number) index means a
-        // page of 100 references can match at most 100 whole PR documents.
-        for (let offset = 0; offset < uniqueRefs.length; offset += 100) {
-            const page = uniqueRefs.slice(offset, offset + 100);
-            // `$in` on both keys walks the unique index in one pass; one `$or`
-            // branch per reference is the shape that hit
-            // maxIndexedOrSolutionsReached (see findManyByNumbersAndRepositoryIds).
-            // The pairs it also admits across repositories are dropped below.
-            const pageKeys = new Set(
-                page.map(
-                    (ref) => `${ref.repositoryId}:${ref.pullRequestNumber}`,
-                ),
-            );
+        // One read per repository (see numbersByRepository): the unique
+        // (organizationId, repository.id, number) index means each read
+        // matches at most the numbers it asks for.
+        const groups = numbersByRepository(
+            uniqueRefs.map((ref) => ({
+                repositoryId: ref.repositoryId,
+                number: ref.pullRequestNumber,
+            })),
+        );
+        for (const [repositoryId, numbers] of groups) {
             const docs = await this.pullRequestsModel
                 .find(
                     {
                         organizationId,
                         status,
-                        'number': {
-                            $in: [
-                                ...new Set(
-                                    page.map((ref) => ref.pullRequestNumber),
-                                ),
-                            ],
-                        },
-                        'repository.id': {
-                            $in: [
-                                ...new Set(page.map((ref) => ref.repositoryId)),
-                            ],
-                        },
+                        'number': { $in: numbers },
+                        'repository.id': repositoryId,
                         '$nor': [
                             {
                                 files: {
@@ -1946,28 +1940,25 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 )
                 .sort({ _id: 1 })
+                .limit(numbers.length)
                 .lean()
                 .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
                 .exec();
             matches.push(
-                ...docs
-                    .filter((doc) =>
-                        pageKeys.has(`${doc.repository?.id}:${doc.number}`),
-                    )
-                    .map((doc) => ({
-                        _id: String(doc._id),
-                        number: doc.number,
-                        organizationId: doc.organizationId,
-                        status: doc.status,
-                        provider: doc.provider,
-                        approvalReasonDeliveryFailure:
-                            doc.approvalReasonDeliveryFailure,
-                        repository: {
-                            id: doc.repository.id,
-                            name: doc.repository.name,
-                        },
-                        suggestions: [],
-                    })),
+                ...docs.map((doc) => ({
+                    _id: String(doc._id),
+                    number: doc.number,
+                    organizationId: doc.organizationId,
+                    status: doc.status,
+                    provider: doc.provider,
+                    approvalReasonDeliveryFailure:
+                        doc.approvalReasonDeliveryFailure,
+                    repository: {
+                        id: doc.repository.id,
+                        name: doc.repository.name,
+                    },
+                    suggestions: [],
+                })),
             );
         }
         return matches;
