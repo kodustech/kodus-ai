@@ -49,6 +49,8 @@ export interface StallReport {
     profileIncludesRecovery?: boolean;
     /** How long the main thread took to pause for the stack read. */
     inspectorAnswerMs?: number;
+    /** How long the main thread took to start the profile. */
+    profilerAnswerMs?: number;
     /** Human-readable location, as used in the log line and the alert. */
     location?: string;
     stack?: StallFrame[] | null;
@@ -367,25 +369,38 @@ export function stallWatchdogThread(): void {
             let profileIncludesRecovery = false;
             let profileLate = false;
             let profileSlow = false;
+            let profilerAnswerMs: number | undefined;
             if (cfg.profileMs > 0) {
-                // When the current inspector call was sent: a call that
-                // fails (5s bound) after more than LATE_ANSWER_MS means the
-                // main thread was blocked, so the stack is not trusted.
-                let askedAt = Date.now();
+                // How long the inspector call that failed had been waiting:
+                // a call that fails (5s bound) after more than
+                // LATE_ANSWER_MS means the main thread was blocked, so the
+                // stack is not trusted. Only inspector calls are timed; our
+                // own work (summarize) never counts.
+                let failedCallMs = 0;
+                const call = async (method: string, params?: object) => {
+                    const sentAt = Date.now();
+                    try {
+                        return await post(session, method, params);
+                    } catch (e) {
+                        failedCallMs = Date.now() - sentAt;
+                        throw e;
+                    }
+                };
                 try {
-                    await post(session, 'Profiler.enable');
-                    await post(session, 'Profiler.setSamplingInterval', {
+                    const startAskedAt = Date.now();
+                    await call('Profiler.enable');
+                    await call('Profiler.setSamplingInterval', {
                         interval: 1_000,
                     });
-                    await post(session, 'Profiler.start');
+                    await call('Profiler.start');
                     // Started only after the stall ended (or after code the
                     // inspector cannot interrupt returned): every sample is
                     // of what ran next, so the profile says nothing.
-                    profileSlow = Date.now() - askedAt > LATE_ANSWER_MS;
+                    profilerAnswerMs = Date.now() - startAskedAt;
+                    profileSlow = profilerAnswerMs > LATE_ANSWER_MS;
                     profileLate = profileSlow || ranSinceStart();
                     await sleep(cfg.profileMs);
-                    askedAt = Date.now();
-                    const { profile } = await post(session, 'Profiler.stop');
+                    const { profile } = await call('Profiler.stop');
                     // Started inside the stall: its samples up to the
                     // recovery still name the code (idle time is ignored).
                     profileIncludesRecovery = ranSinceStart();
@@ -393,8 +408,7 @@ export function stallWatchdogThread(): void {
                     await post(session, 'Profiler.disable').catch(() => {});
                 } catch {
                     summary = null;
-                    if (Date.now() - askedAt > LATE_ANSWER_MS)
-                        profileSlow = true;
+                    if (failedCallMs > LATE_ANSWER_MS) profileSlow = true;
                 }
             }
             const paused = await pausedStack(session, ranSinceStart);
@@ -419,6 +433,7 @@ export function stallWatchdogThread(): void {
                 recoveredBeforeRead: !!read?.recovered,
                 stackUnavailable,
                 inspectorAnswerMs: read?.answerMs,
+                profilerAnswerMs,
                 error: pauseError,
             };
         } finally {
@@ -519,6 +534,7 @@ export function stallWatchdogThread(): void {
             recoveredBeforeRead?: boolean;
             stackUnavailable?: StallReport['stackUnavailable'];
             inspectorAnswerMs?: number;
+            profilerAnswerMs?: number;
             error?: string;
         },
     ) {
@@ -530,6 +546,7 @@ export function stallWatchdogThread(): void {
             recoveredBeforeRead,
             stackUnavailable,
             inspectorAnswerMs,
+            profilerAnswerMs,
             error,
         } = r;
         // A stall that ended during the capture keeps its real length, not
@@ -557,6 +574,7 @@ export function stallWatchdogThread(): void {
                 ...(inspectorAnswerMs !== undefined
                     ? { inspectorAnswerMs }
                     : {}),
+                ...(profilerAnswerMs !== undefined ? { profilerAnswerMs } : {}),
                 ...(error !== undefined ? { error } : {}),
             },
         );
