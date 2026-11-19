@@ -264,6 +264,16 @@ describe('agent tools — secret files of the repository', () => {
         expect(Date.now() - started).toBeLessThan(1_000);
     });
 
+    it.each([
+        ['config\\.env:3:SECRET=x'],
+        ['keys\\id_rsa:1:x'],
+        ['certs\\server.pem-2-x'],
+    ])('drops %s: a backslash separates path segments too', (line) => {
+        expect(withoutSecretFileLines(`${line}\nsrc/a.ts:1:ok`)).toBe(
+            'src/a.ts:1:ok',
+        );
+    });
+
     it('keeps a match whose text names a secret file', () => {
         const lines = [
             'docs/setup.md:3:Put the certificate in server.pem',

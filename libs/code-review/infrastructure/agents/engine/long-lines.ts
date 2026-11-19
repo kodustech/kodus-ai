@@ -37,8 +37,13 @@ export function cutLongLines(
         if (length > longest) longest = length;
         if (length > max) {
             cut++;
+            // Never end on the first half of a surrogate pair: a lone
+            // surrogate makes the request body ill-formed for the provider.
+            let keep = max;
+            const last = output.charCodeAt(start + keep - 1);
+            if (last >= 0xd800 && last <= 0xdbff) keep--;
             parts.push(
-                `${output.slice(start, start + max)} … [${length - max} more characters on this line not shown]`,
+                `${output.slice(start, start + keep)} … [${length - keep} more characters on this line not shown]`,
             );
         } else {
             parts.push(output.slice(start, end));

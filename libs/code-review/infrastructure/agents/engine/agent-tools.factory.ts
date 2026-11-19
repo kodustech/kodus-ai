@@ -1844,7 +1844,7 @@ fi
         );
     }
 
-    guardSecretFiles(tools);
+    guardSecretFiles(tools, repositoryFullName);
     trackToolActivity(tools);
 
     logger.log({
@@ -1904,7 +1904,11 @@ function trackToolActivity(tools: Record<string, any>): void {
  * every route a tool takes (linked repositories, sandbox rg, the provider's
  * grep).
  */
-function guardSecretFiles(tools: Record<string, any>): void {
+function guardSecretFiles(
+    tools: Record<string, any>,
+    /** The reviewed repository, named in the long-line warning. */
+    repositoryFullName?: string,
+): void {
     for (const name of ['readFile', 'readReference']) {
         const tool = tools[name];
         if (!tool) continue;
@@ -1954,9 +1958,11 @@ function guardSecretFiles(tools: Record<string, any>): void {
                         glob: args?.glob
                             ? String(args.glob).slice(0, 200)
                             : undefined,
-                        repo: args?.repo
-                            ? String(args.repo).slice(0, 200)
-                            : undefined,
+                        // A linked repository when the call named one, else
+                        // the reviewed repository.
+                        repository: String(
+                            args?.repo || repositoryFullName || '',
+                        ).slice(0, 200),
                         outputChars: out.length,
                         longestLine: capped.longest,
                         linesCut: capped.cut,

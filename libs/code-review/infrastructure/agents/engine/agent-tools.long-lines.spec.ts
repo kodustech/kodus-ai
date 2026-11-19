@@ -1,3 +1,13 @@
+const warn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...a: unknown[]) => warn(...a),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
 import { buildAgentTools } from './agent-tools.factory';
 import { cutLongLines, MAX_TOOL_LINE_CHARS } from './long-lines';
 
@@ -50,6 +60,20 @@ describe('agent tools — long lines in search output', () => {
             expect(r.longest).toBe(line.length);
         });
 
+        it('never ends a cut line on half of a surrogate pair', () => {
+            // An emoji whose first half is the last kept character.
+            const line =
+                'a'.repeat(MAX_TOOL_LINE_CHARS - 1) +
+                '\u{1F600}' +
+                'b'.repeat(50);
+            const r = cutLongLines(line);
+            expect(r.cut).toBe(1);
+            expect(r.text.isWellFormed()).toBe(true);
+            expect(r.text.startsWith('a'.repeat(MAX_TOOL_LINE_CHARS - 1))).toBe(
+                true,
+            );
+        });
+
         it('keeps empty lines and a trailing newline', () => {
             const r = cutLongLines(`a\n\n${'b'.repeat(5_000)}\n`);
             const lines = r.text.split('\n');
@@ -83,6 +107,27 @@ describe('agent tools — long lines in search output', () => {
             expect(line.length).toBeLessThanOrEqual(MAX_TOOL_LINE_CHARS + 80);
         }
         expect(out).toContain('more characters on this line not shown');
+    });
+
+    it('names the reviewed repository and the search in the warning of a cut', async () => {
+        warn.mockClear();
+        const stdout = `dist/app.min.js:1:${huge}`;
+        await buildAgentTools(
+            rcReturning(stdout) as any,
+            undefined,
+            'acme/app',
+        ).grep.execute({ pattern: 'needle', path: 'dist' });
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    tool: 'grep',
+                    pattern: 'needle',
+                    path: 'dist',
+                    repository: 'acme/app',
+                    linesCut: 1,
+                }),
+            }),
+        );
     });
 
     it('still drops a secret file line before cutting, even a huge one', async () => {

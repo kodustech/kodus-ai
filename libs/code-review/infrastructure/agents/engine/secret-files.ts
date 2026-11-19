@@ -77,7 +77,12 @@ const SECRET_BASENAME =
     /^(?:\.env|id_(?:rsa|dsa|ecdsa|ed25519))|\.(?:pem|key|p12|pfx|jks|keystore)$/i;
 
 function mightBeSecretPrefix(line: string, end: number): boolean {
-    const base = line.slice(line.lastIndexOf('/', end - 1) + 1, end);
+    // isSecretFilePath reads a backslash as a separator too (normalizeFilename).
+    const sep = Math.max(
+        line.lastIndexOf('/', end - 1),
+        line.lastIndexOf('\\', end - 1),
+    );
+    const base = line.slice(sep + 1, end);
     // `.`, `..` or a trailing slash: let normalization decide.
     if (base === '' || base === '.' || base === '..') return true;
     return SECRET_BASENAME.test(base);
