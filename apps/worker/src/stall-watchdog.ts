@@ -277,6 +277,8 @@ export function stallWatchdogThread(): void {
     // stack it carries is not trusted.
     const LATE_ANSWER_MS = 1_000;
 
+    const round2 = (ms: number) => Math.round(ms * 100) / 100;
+
     function pausedStack(
         session: InstanceType<typeof inspector.Session>,
         ranSinceStart: () => boolean,
@@ -297,7 +299,8 @@ export function stallWatchdogThread(): void {
             let recovered = false;
             let late = false;
             let answerMs = 0;
-            const askedAt = Date.now();
+            // Sub-millisecond clock: a real round trip is never 0.
+            const askedAt = performance.now();
             // CallFrame.url is deprecated and often empty; the script's url
             // comes from the scriptParsed events Debugger.enable replays.
             const scripts = new Map<string, string>();
@@ -327,7 +330,7 @@ export function stallWatchdogThread(): void {
                 // Read while the main thread is paused: if it ticked since
                 // the capture began, the stall had already ended.
                 recovered = ranSinceStart();
-                answerMs = Date.now() - askedAt;
+                answerMs = round2(performance.now() - askedAt);
                 late = answerMs > LATE_ANSWER_MS;
                 const frames = (msg.params?.callFrames ?? [])
                     .slice(0, 40)
@@ -389,16 +392,16 @@ export function stallWatchdogThread(): void {
                 // own work (summarize) never counts.
                 let failedCallMs = 0;
                 const call = async (method: string, params?: object) => {
-                    const sentAt = Date.now();
+                    const sentAt = performance.now();
                     try {
                         return await post(session, method, params);
                     } catch (e) {
-                        failedCallMs = Date.now() - sentAt;
+                        failedCallMs = round2(performance.now() - sentAt);
                         throw e;
                     }
                 };
+                const startAskedAt = performance.now();
                 try {
-                    const startAskedAt = Date.now();
                     await call('Profiler.enable');
                     await call('Profiler.setSamplingInterval', {
                         interval: 1_000,
@@ -407,7 +410,7 @@ export function stallWatchdogThread(): void {
                     // Started only after the stall ended (or after code the
                     // inspector cannot interrupt returned): every sample is
                     // of what ran next, so the profile says nothing.
-                    profilerAnswerMs = Date.now() - startAskedAt;
+                    profilerAnswerMs = round2(performance.now() - startAskedAt);
                     profileSlow = profilerAnswerMs > LATE_ANSWER_MS;
                     profileLate = profileSlow || ranSinceStart();
                     await sleep(cfg.profileMs);
@@ -419,7 +422,16 @@ export function stallWatchdogThread(): void {
                     await post(session, 'Profiler.disable').catch(() => {});
                 } catch {
                     summary = null;
-                    if (failedCallMs > LATE_ANSWER_MS) profileSlow = true;
+                    // The report carries the timing behind the verdict: the
+                    // start phase if it never finished, else the call that
+                    // failed if it was the slower one.
+                    if (profilerAnswerMs === undefined)
+                        profilerAnswerMs = round2(
+                            performance.now() - startAskedAt,
+                        );
+                    else if (failedCallMs > profilerAnswerMs)
+                        profilerAnswerMs = failedCallMs;
+                    if (profilerAnswerMs > LATE_ANSWER_MS) profileSlow = true;
                 }
             }
             const paused = await pausedStack(session, ranSinceStart);
@@ -431,11 +443,15 @@ export function stallWatchdogThread(): void {
                     ? undefined // reported as the capture error instead
                     : !read
                       ? 'no-answer'
-                      : read.late || profileSlow
-                        ? 'answered-late'
+                      : profileSlow
+                        ? // the profiler could not get in during the stall
+                          'answered-late'
                         : read.recovered
-                          ? 'ended-before-read'
-                          : undefined;
+                          ? // the main thread ran again before the read
+                            'ended-before-read'
+                          : read.late
+                            ? 'answered-late'
+                            : undefined;
             return {
                 stack:
                     read && stackUnavailable === undefined ? read.frames : null,
@@ -633,7 +649,7 @@ export function stallWatchdogThread(): void {
                 // Every stall is reported and alerted, with or without a
                 // stack: a capture that fails still means a stuck worker.
                 capture(tick)
-                    .catch((e: Error) => ({
+                    .catch((e: unknown) => ({
                         stack: null,
                         hottest: undefined,
                         hottestPath: undefined,
@@ -641,9 +657,14 @@ export function stallWatchdogThread(): void {
                         recoveredBeforeRead: false,
                         stackUnavailable:
                             undefined as StallReport['stackUnavailable'],
-                        // Never empty: an empty error would read as a
-                        // capture that worked and found nothing.
-                        error: e.message || String(e),
+                        // Never empty and never throwing, whatever was
+                        // rejected: an empty error would read as a capture
+                        // that worked and found nothing.
+                        error:
+                            (e instanceof Error
+                                ? e.message || e.name
+                                : String(e ?? '')) ||
+                            'capture failed without a message',
                     }))
                     .then((r) => reportStall(s, n, r))
                     .finally(() => {
