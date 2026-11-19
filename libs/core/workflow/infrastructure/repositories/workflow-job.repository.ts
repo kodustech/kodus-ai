@@ -237,6 +237,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         workflowType?: WorkflowType;
         organizationId?: string;
         teamId?: string;
+        correlationId?: string;
         limit?: number;
         offset?: number;
     }): Promise<{ data: IWorkflowJob[]; total?: number }> {
@@ -248,6 +249,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             if (query.organizationId)
                 where.organizationId = query.organizationId;
             if (query.teamId) where.teamId = query.teamId;
+            if (query.correlationId) where.correlationId = query.correlationId;
 
             const [models, total] = await this.repository.findAndCount({
                 where,
@@ -314,6 +316,43 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 context: WorkflowJobRepository.name,
                 error,
                 metadata: { olderThan: params.olderThan },
+            });
+            throw error;
+        }
+    }
+
+    async cancelActiveByCorrelation(params: {
+        correlationId: string;
+        workflowType: string;
+    }): Promise<number> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.CANCELLED,
+                    completedAt: () => 'NOW()',
+                })
+                .where('"correlationId" = :correlationId', {
+                    correlationId: params.correlationId,
+                })
+                .andWhere('"workflowType" = :workflowType', {
+                    workflowType: params.workflowType,
+                })
+                .andWhere('status IN (:...statuses)', {
+                    statuses: [JobStatus.PENDING, JobStatus.PROCESSING],
+                })
+                .execute();
+            return result.affected ?? 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to cancel active workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: {
+                    correlationId: params.correlationId,
+                    workflowType: params.workflowType,
+                },
             });
             throw error;
         }

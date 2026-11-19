@@ -27,6 +27,15 @@ export interface IWorkflowJobRepository {
         errorClassification: unknown;
     }): Promise<StaleWorkflowJobReapResult[]>;
     /**
+     * Cancels PENDING and PROCESSING jobs of one workflow run. The status
+     * filter is in the UPDATE itself, so a job that finished between the
+     * scan cancel and this write is left alone.
+     */
+    cancelActiveByCorrelation(params: {
+        correlationId: string;
+        workflowType: string;
+    }): Promise<number>;
+    /**
      * Deletes one batch of finished jobs last updated before `olderThan`
      * that no inbox/outbox message references, except `keepWorkflowTypes`.
      * Returns how many went and where the next batch should resume.

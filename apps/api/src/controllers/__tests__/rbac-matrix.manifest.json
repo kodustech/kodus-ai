@@ -1804,6 +1804,17 @@
     }
   },
   {
+    "key": "securityScans.controller.ts#cancel",
+    "httpMethod": "POST",
+    "urlPath": "/security-scans/:id/cancel",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "securityScans.controller.ts#get",
     "httpMethod": "GET",
     "urlPath": "/security-scans/:id",
