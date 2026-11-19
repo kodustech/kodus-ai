@@ -86,14 +86,9 @@ describe('startStallWatchdog (real worker thread)', () => {
         if (stall.stackUnavailable === undefined && stall.error === undefined) {
             // The inspector answered in time, so the profile belongs to the
             // stall: one place holds the CPU.
-            // (Its exact split varies with inlining: the burner can be
-            // folded into its caller, in this same file.)
             expect(stall.hottest?.length).toBeGreaterThan(0);
-            expect(
-                stall
-                    .hottest!.slice(0, 3)
-                    .some((h) => h.file.includes('stall-watchdog.spec')),
-            ).toBe(true);
+            expect(stall.hottest![0].pct).toBeGreaterThan(50);
+            expect(stall.hottest![0].file).toContain('stall-watchdog.spec');
         }
         if (stall.stack || stall.hottest?.length) {
             expect(stall.location).toContain('stall-watchdog.spec');
@@ -303,21 +298,14 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(stall.location).not.toContain('could not interrupt');
         // The profile started inside the stall and ran past its end.
         expect(stall.profileIncludesRecovery).toBe(true);
-        // The reason follows from the measured answer time, not from the
-        // value under test: in time -> the stall had simply ended; late
-        // (a slow Debugger.enable, as in a long in-band CI run) -> late.
         // Real measurements from both inspector phases.
         expect(stall.inspectorAnswerMs!).toBeGreaterThan(0);
-        expect(stall.profilerAnswerMs!).toBeGreaterThanOrEqual(0);
-        const answeredLate =
-            stall.inspectorAnswerMs! > 1_000 || stall.profilerAnswerMs! > 1_000;
-        // In time, the only reason left is that the stall had ended (the
-        // late branch itself is pinned deterministically by the execSync
-        // test).
-        expect(stall.stackUnavailable).toBe(
-            answeredLate ? 'answered-late' : 'ended-before-read',
-        );
+        expect(stall.profilerAnswerMs!).toBeGreaterThan(0);
+        // The scenario fixes the reason: the main thread ran again before
+        // the read. (The late branch is pinned by the execSync test.)
+        expect(stall.stackUnavailable).toBe('ended-before-read');
     });
+
     it('reports and alerts a stall that starts and ends while an earlier capture is still running', async () => {
         const reports: StallReport[] = [];
         stop = startStallWatchdog(
