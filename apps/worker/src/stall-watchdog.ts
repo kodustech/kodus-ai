@@ -76,6 +76,12 @@ export interface StallWatchdogOptions {
     checkIntervalMs?: number;
     /** How often the main thread ticks. */
     tickIntervalMs?: number;
+    /**
+     * An inspector answer slower than this is not trusted (default 1s). Only
+     * tests raise it: a huge in-band Jest process makes the inspector itself
+     * slow, which a worker (one bundle) never is.
+     */
+    lateAnswerMs?: number;
     /** CPU profile length per capture; 0 skips the profile. */
     profileMs?: number;
     /** Captures per stall: one at the threshold, then every `recaptureMs`. */
@@ -279,7 +285,7 @@ export function stallWatchdogThread(): void {
     // which JavaScript reaches within milliseconds. An answer slower than
     // this may have come only after the blocking code returned, so the
     // stack it carries is not trusted.
-    const LATE_ANSWER_MS = 1_000;
+    const LATE_ANSWER_MS = cfg.lateAnswerMs;
 
     const round2 = (ms: number) => Math.round(ms * 100) / 100;
 
@@ -748,6 +754,7 @@ export function startStallWatchdog(
         thresholdMs: opts.thresholdMs ?? 20_000,
         checkIntervalMs: opts.checkIntervalMs ?? 1_000,
         profileMs: opts.profileMs ?? 3_000,
+        lateAnswerMs: opts.lateAnswerMs ?? 1_000,
         maxCapturesPerStall: opts.maxCapturesPerStall ?? 3,
         recaptureMs: opts.recaptureMs ?? 60_000,
         heartbeatUrl: opts.heartbeatUrl ?? '',

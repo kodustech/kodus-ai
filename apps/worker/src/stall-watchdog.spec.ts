@@ -318,7 +318,11 @@ describe('startStallWatchdog (real worker thread)', () => {
                 thresholdMs: 400,
                 checkIntervalMs: 50,
                 tickIntervalMs: 20,
-                profileMs: 600,
+                // The profile must start inside the stall and outlive it,
+                // even where starting it takes seconds (a huge in-band CI
+                // process); answers up to 10s are trusted here.
+                profileMs: 5_000,
+                lateAnswerMs: 10_000,
                 maxCapturesPerStall: 1,
                 writeFd: null,
                 identity: { role: 'test' },
@@ -330,7 +334,7 @@ describe('startStallWatchdog (real worker thread)', () => {
 
         // Ends while the profile is running, before the stack is read.
         await arm();
-        burnCpuInATightLoopForTest(600);
+        burnCpuInATightLoopForTest(5_000);
 
         const stall = await waitFor(() =>
             reports.find((r) => r.kind === 'stall'),
