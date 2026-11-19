@@ -483,6 +483,20 @@ describe('evals/experiment.js the Kody Rules agent', () => {
         expect(rows('kody-fix-quality')).toEqual([['a', 1, 3]]);
     });
 
+    it('leaves a case unmeasured for title and fix quality when its judge erred', () => {
+        const erred = {
+            metric: run.metric,
+            cases: [
+                run.cases[0],
+                { id: 'c', hits: 2, total: 2, flagged: 2, offSite: 0, cleanFiles: 3, falseAlarms: 0, quality: { graded: 1, titleOk: 1, fixGraded: 1, fixPass: 1, judgeErrors: 1 } },
+            ],
+        };
+        const erredRows = (id: string) => deriveRuns([erred], derived(id))[0].cases.map((c: Case) => [c.id, c.hits, c.total]);
+        expect(erredRows('kody-title-quality')).toEqual([['a', 2, 4]]);
+        expect(erredRows('kody-fix-quality')).toEqual([['a', 1, 3]]);
+        expect(erredRows('kody-line-precision')).toEqual([['a', 4, 5], ['c', 2, 2]]);
+    });
+
     it('guards the files outside a rule’s language with the polyglot set, scored as specificity', () => {
         const [guard] = plan.guards;
         expect(guard.run).toEqual(expect.arrayContaining(['--dataset=polyglot-cases']));
