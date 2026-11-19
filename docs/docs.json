@@ -781,38 +781,23 @@
                                     "pt-BR/how_to_use/code_review/flow",
                                     "pt-BR/how_to_use/code_review/review_directive",
                                     "pt-BR/how_to_use/code_review/policy",
-                                    "pt-BR/how_to_use/code_review/configs/general",
-                                    "pt-BR/how_to_use/code_review/configs/what_to_review",
-                                    "pt-BR/how_to_use/code_review/configs/routing",
                                     {
-                                        "group": "Risco e aprovação",
+                                        "group": "Configurações avançadas",
                                         "pages": [
-                                            "pt-BR/how_to_use/code_review/configs/risk",
-                                            "pt-BR/how_to_use/code_review/configs/auto_approve"
-                                        ]
-                                    },
-                                    {
-                                        "group": "Repositórios",
-                                        "pages": [
+                                            "pt-BR/how_to_use/code_review/configs/general",
+                                            "pt-BR/how_to_use/code_review/configs/what_to_review",
                                             "pt-BR/how_to_use/code_review/configs/review_all_repositories",
-                                            "pt-BR/how_to_use/code_review/configs/linked_repositories"
-                                        ]
-                                    },
-                                    {
-                                        "group": "Comentários e resumo",
-                                        "pages": [
+                                            "pt-BR/how_to_use/code_review/configs/auto_approve",
+                                            "pt-BR/how_to_use/code_review/configs/risk",
+                                            "pt-BR/how_to_use/code_review/configs/routing",
+                                            "pt-BR/how_to_use/code_review/configs/centralized_config",
+                                            "pt-BR/how_to_use/code_review/configs/inheritance_overrides",
+                                            "pt-BR/how_to_use/code_review/configs/directory_level",
+                                            "pt-BR/how_to_use/code_review/configs/suggestion_control",
                                             "pt-BR/how_to_use/code_review/configs/pr_summary",
                                             "pt-BR/how_to_use/code_review/configs/custom_messages",
                                             "pt-BR/how_to_use/code_review/configs/custom_prompts",
-                                            "pt-BR/how_to_use/code_review/configs/suggestion_control"
-                                        ]
-                                    },
-                                    {
-                                        "group": "Escopos da revisão",
-                                        "pages": [
-                                            "pt-BR/how_to_use/code_review/configs/directory_level",
-                                            "pt-BR/how_to_use/code_review/configs/inheritance_overrides",
-                                            "pt-BR/how_to_use/code_review/configs/centralized_config"
+                                            "pt-BR/how_to_use/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
