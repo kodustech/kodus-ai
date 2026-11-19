@@ -363,9 +363,10 @@ describe('KodyRulesRepository writes keyed by a rule id', () => {
     it('deleteRule pulls only the rule whose id equals the one given', async () => {
         const { repo, updateOne } = buildRepo();
 
-        await repo.deleteRule('doc-1', injected);
+        await repo.deleteRule(injected, injected);
 
-        const [, update] = updateOne.mock.calls[0];
+        const [filter, update] = updateOne.mock.calls[0];
+        expect(filter).toEqual({ _id: { $eq: injected } });
         expect(update).toEqual({
             $pull: { rules: { uuid: { $eq: injected } } },
         });
