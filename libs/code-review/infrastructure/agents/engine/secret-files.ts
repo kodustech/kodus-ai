@@ -60,6 +60,29 @@ export function withoutSecretFileLines(output: string): string {
 /** Linked-repository grep tags each line with `[owner/repo] `. */
 const REPOSITORY_TAG = /^\[[^\]\s]+\] /;
 
+/**
+ * rg prints the path first, and no path is longer than this: a boundary
+ * further in is inside the matched text. Without this bound every boundary
+ * of a long line (minified code, data files) re-tested the whole prefix,
+ * O(length x boundaries): a 135 KB line held the worker for 21s and a
+ * 291 KB one for 181s, until the ECS health check killed it (Nov 2026).
+ */
+const MAX_PATH_LENGTH = 4096;
+
+/**
+ * The last path segment every pattern in SECRET_FILE_GLOBS requires: a
+ * cheap screen so only a plausible prefix pays for the full glob match.
+ */
+const SECRET_BASENAME =
+    /^(?:\.env|id_(?:rsa|dsa|ecdsa|ed25519))|\.(?:pem|key|p12|pfx|jks|keystore)$/i;
+
+function mightBeSecretPrefix(line: string, end: number): boolean {
+    const base = line.slice(line.lastIndexOf('/', end - 1) + 1, end);
+    // `.`, `..` or a trailing slash: let normalization decide.
+    if (base === '' || base === '.' || base === '..') return true;
+    return SECRET_BASENAME.test(base);
+}
+
 function lineFromSecretFile(tagged: string): boolean {
     const line = tagged.replace(REPOSITORY_TAG, '');
     const boundary = /[:-]\d+[:-]/g;
@@ -67,7 +90,12 @@ function lineFromSecretFile(tagged: string): boolean {
     let prefixed = false;
     while ((match = boundary.exec(line))) {
         prefixed = true;
-        if (isSecretFilePath(line.slice(0, match.index))) return true;
+        if (match.index > MAX_PATH_LENGTH) break;
+        if (
+            mightBeSecretPrefix(line, match.index) &&
+            isSecretFilePath(line.slice(0, match.index))
+        )
+            return true;
     }
     // A bare path (namesOnly). A match line is judged by its path alone:
     // its text can end in `.pem` too.
