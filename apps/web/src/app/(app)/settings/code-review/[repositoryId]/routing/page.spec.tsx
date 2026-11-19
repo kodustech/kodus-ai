@@ -839,9 +839,7 @@ describe("Ultra review mode", () => {
         fireEvent.keyDown(screen.getByRole("combobox", { name: "All PRs" }), {
             key: "Enter",
         });
-        fireEvent.click(
-            screen.getByRole("option", { name: /Ultra · 3 models/ }),
-        );
+        fireEvent.click(screen.getByRole("option", { name: "Ultra" }));
         expect(
             screen.getByText("All PRs").closest("[role=group]"),
         ).toHaveTextContent("Uses Risk Model, Model A, Model B.");

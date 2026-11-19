@@ -91,10 +91,7 @@ export function UltraModelsRow({
                         return (
                             <div
                                 key={label}
-                                className="grid items-center gap-2 sm:grid-cols-[6rem_minmax(0,20rem)]">
-                                <span className="text-text-secondary text-xs font-medium">
-                                    {label}
-                                </span>
+                                className="grid items-center gap-2 sm:grid-cols-[minmax(0,20rem)_auto]">
                                 <ModelCombobox
                                     models={options}
                                     value={id}
@@ -132,6 +129,9 @@ export function UltraModelsRow({
                                         </Button>
                                     }
                                 />
+                                <span className="text-text-secondary text-xs font-medium">
+                                    {label}
+                                </span>
                             </div>
                         );
                     })}

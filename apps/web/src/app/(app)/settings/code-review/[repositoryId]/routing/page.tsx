@@ -148,7 +148,7 @@ function ModeRow({
                                                 ? " · Teams/Enterprise"
                                                 : !routing.ultraSet
                                                   ? " · set up 3 models"
-                                                  : " · 3 models"}
+                                                  : ""}
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
