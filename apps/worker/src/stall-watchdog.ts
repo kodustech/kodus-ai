@@ -130,7 +130,12 @@ export function stallWatchdogThread(): void {
         recoveryPending?: boolean;
     } | null = null;
     let capturingFor: typeof stall = null;
-    let lastPing = 0;
+    // Healthy pings share one BetterStack heartbeat across all workers, and
+    // a success ping resolves an open incident. So a task does not ping when
+    // it starts (the task replacing a stalled worker would close that
+    // worker's incident within a second), and a task that sent /fail waits a
+    // full interval before pinging healthy again.
+    let lastPing = Date.now();
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -585,6 +590,7 @@ export function stallWatchdogThread(): void {
             },
         );
         if (n <= 1) {
+            lastPing = Date.now();
             void heartbeat('/fail', {
                 message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. ${s.endedMs !== undefined ? 'It has recovered; jobs in flight may have lost their broker connection.' : 'In-flight jobs on this worker will be lost if it does not recover.'} ${Object.entries(
                     cfg.identity,
