@@ -1,5 +1,6 @@
 import {
     IsArray,
+    IsBoolean,
     IsInt,
     IsNotEmpty,
     IsOptional,
@@ -11,7 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class PreviewPrRiskDto {
+class PreviewPrDto {
     @IsString()
     @IsNotEmpty()
     teamId: string;
@@ -25,10 +26,28 @@ export class PreviewPrRiskDto {
     @Min(1)
     @Max(Number.MAX_SAFE_INTEGER)
     prNumber: number;
+}
 
+export class PreviewPrRiskDto extends PreviewPrDto {
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(50)
     @Type(() => Object)
     criteria?: unknown[];
+}
+
+export class PreviewPrApprovalDto extends PreviewPrDto {
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(50)
+    @Type(() => Object)
+    policies?: unknown[];
+
+    @IsOptional()
+    @IsBoolean()
+    assumeClean?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    assumeEnabled?: boolean;
 }

@@ -3,6 +3,7 @@ import { LLM } from '@libs/llm/llm';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/code-area-risk-map.service';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { DecidePrApprovalStage } from './decide-pr-approval.stage';
 
@@ -79,9 +80,29 @@ beforeEach(() => {
     ]);
 });
 
-it.each([true, false])(
-    'consumes shared risk=%s without another risk model call',
-    async (riskIdentified) => {
+it.each([
+    {
+        riskIdentified: true,
+        liveBase: 'base',
+        kind: 'hold',
+        reason: 'Risk was identified in this PR.',
+    },
+    { riskIdentified: false, liveBase: 'base', kind: 'approve' },
+    {
+        riskIdentified: false,
+        liveBase: 'base-2',
+        kind: 'hold',
+        reason: 'Risk assessment is unavailable for the current PR base.',
+    },
+])(
+    'decides $kind for risk=$riskIdentified and base=$liveBase without another model call',
+    async ({ riskIdentified, liveBase, kind, reason }) => {
+        codeManagement.getPullRequest.mockResolvedValueOnce({
+            labels: ['ready'],
+            head: { sha: 'head-1' },
+            base: { sha: liveBase },
+            user: { login: 'alice' },
+        });
         const ctx = {
             ...context({ riskAssessmentActive: true }),
             riskAssessment: {
@@ -100,9 +121,10 @@ it.each([true, false])(
             },
         };
         const result = await stage.execute(ctx);
-        expect(result.approvalDecision.kind).toBe(
-            riskIdentified ? 'hold' : 'approve',
-        );
+        expect(result.approvalDecision).toMatchObject({
+            kind,
+            ...(reason && { reason }),
+        });
         expect(LLM.run).not.toHaveBeenCalled();
         expect(areaMaps.read).not.toHaveBeenCalled();
     },
@@ -172,6 +194,66 @@ it('does not count a failed shared assessment as an unclean review for named pol
         expect.objectContaining({ reviewClean: true }),
     );
     expect(result.approvalReviewSummary.complete).toBe(true);
+});
+
+it('records the exact posted comment IDs and missing delivery evidence for named approval', async () => {
+    const decision = { kind: 'hold', reason: 'The review is not clean.' };
+    const evaluate = jest.fn().mockResolvedValue({ decision, eligibility: {} });
+    const policyStage = new DecidePrApprovalStage(
+        codeManagement as unknown as CodeManagementService,
+        areaMaps as unknown as CodeAreaRiskMapService,
+        conditionalApprovalAccess as any,
+        { evaluate } as any,
+    );
+    const result = await policyStage.execute({
+        ...context({ approvalPolicies: [] }),
+        lineComments: [
+            {
+                comment: {
+                    path: 'src/auth/login.ts',
+                    body: 'Replaced finding',
+                },
+                deliveryStatus: DeliveryStatus.REPLACED,
+            },
+            {
+                comment: {
+                    path: 'src/auth/login.ts',
+                    body: 'Fallback finding',
+                },
+                deliveryStatus: DeliveryStatus.SENT,
+                codeReviewFeedbackData: {
+                    commentId: 42,
+                    pullRequestReviewId: 1,
+                    suggestionId: 'posted',
+                },
+            },
+            {
+                comment: { path: 'src/auth/login.ts', body: 'Another finding' },
+                deliveryStatus: DeliveryStatus.FAILED,
+                codeReviewFeedbackData: {
+                    commentId: 71,
+                    pullRequestReviewId: 1,
+                    suggestionId: 'failed',
+                },
+            },
+            {
+                comment: {
+                    path: 'src/auth/login.ts',
+                    body: 'Untracked finding',
+                },
+                deliveryStatus: DeliveryStatus.SENT,
+            },
+        ],
+    });
+    expect(result.approvalReviewSummary).toMatchObject({
+        complete: true,
+        lineFindings: 4,
+        lineCommentIds: [null, '42', null, null],
+    });
+    expect(evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ reviewClean: false }),
+    );
+    expect(result.approvalDecision).toEqual(decision);
 });
 
 it('holds a saved conditional policy when beta or paid access is unavailable', async () => {
