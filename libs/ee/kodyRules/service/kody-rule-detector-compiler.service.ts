@@ -43,9 +43,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 
 @Injectable()
-export class KodyRuleDetectorCompilerService
-    implements IKodyRuleDetectorCompiler
-{
+export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompiler {
     private readonly logger = createLogger(
         KodyRuleDetectorCompilerService.name,
     );
@@ -126,6 +124,9 @@ export class KodyRuleDetectorCompilerService
                     system,
                     user,
                     runName: 'kody-rules.detector-compiler',
+                    // Every compile sends the same system prompt, and rules are
+                    // saved in bursts (sync, library add, backfill).
+                    promptCache: { system: true },
                     organizationId: organizationAndTeamData.organizationId,
                 });
                 rawOutput = (parsed as CompilerOutput) ?? null;

@@ -24,6 +24,7 @@ import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
 import { OPENAI_API_BASE_URL, isAzureOpenAiHost } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
+import { openAiPrefixCacheHint } from './prompt-cache';
 import { openAiModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -42,10 +43,7 @@ import {
     type ModelReasoningTraits,
     type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
-import {
-    normalizeSdkResult,
-    normalizeSdkUsage,
-} from '../kernel/usage';
+import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
 import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 
@@ -134,7 +132,10 @@ export const openaiModule: ProviderModule = {
             : 'json_object';
     },
 
-    build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         // apiKey is already DECRYPTED by the caller (byok-to-vercel).
         const apiKey = cfg.apiKey;
         const baseURL = cfg.baseURL;
@@ -183,10 +184,7 @@ export const openaiModule: ProviderModule = {
                               if (!('max_tokens' in body)) {
                                   return body;
                               }
-                              const {
-                                  max_tokens: maxTokens,
-                                  ...rest
-                              } = body;
+                              const { max_tokens: maxTokens, ...rest } = body;
                               return {
                                   ...rest,
                                   max_completion_tokens: maxTokens,
@@ -324,6 +322,8 @@ export const openaiModule: ProviderModule = {
         }
         return { openai: { reasoningEffort: effort } };
     },
+
+    prefixCacheHint: openAiPrefixCacheHint,
 
     // Per-model reasoning facts. openai_compatible thinking models (Kimi/DeepSeek)
     // come from the shared table; native OpenAI reasons on the o-series/gpt-5 line
