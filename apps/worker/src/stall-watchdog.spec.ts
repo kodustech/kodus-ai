@@ -355,4 +355,34 @@ describe('startStallWatchdog (real worker thread)', () => {
         expect(uncaptured?.stalledMs).toBeLessThan(1_600);
         expect(uncaptured?.location).toContain('not captured');
     });
+    it('does not send a healthy ping when it starts, so a new task never closes an open stall incident', async () => {
+        const http = await import('http');
+        const hits: string[] = [];
+        const server = http.createServer((req, res) => {
+            hits.push(req.url ?? '');
+            res.end('ok');
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        const { port } = server.address() as { port: number };
+
+        stop = startStallWatchdog(
+            {
+                thresholdMs: 400,
+                checkIntervalMs: 50,
+                tickIntervalMs: 20,
+                heartbeatUrl: `http://127.0.0.1:${port}/api/v1/heartbeat/tok`,
+                pingIntervalMs: 800,
+                writeFd: null,
+                identity: { role: 'test' },
+            },
+            logger,
+        );
+        await settle(500);
+        // Nothing before the first full interval ...
+        expect(hits).toEqual([]);
+        // ... then the regular healthy ping.
+        await waitFor(() => (hits.length ? true : undefined), 5_000);
+        server.close();
+        expect(hits[0]).toBe('/api/v1/heartbeat/tok');
+    });
 });
