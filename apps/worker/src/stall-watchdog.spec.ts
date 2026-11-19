@@ -49,8 +49,9 @@ describe('startStallWatchdog (real worker thread)', () => {
      * reported `not-captured` instead of being captured. Idle: every stall
      * seen has its recovery, and nothing was reported for a while.
      */
-    const arm = async () => {
-        const deadline = Date.now() + 10_000;
+    const arm = async ({ quietMs = 1_500, maxWaitMs = 10_000 } = {}) => {
+        const armStart = Date.now();
+        const deadline = armStart + maxWaitMs;
         while (Date.now() < deadline) {
             const open = seen.some(
                 ({ r }) =>
@@ -61,8 +62,13 @@ describe('startStallWatchdog (real worker thread)', () => {
                             o.r.startedAt === r.startedAt,
                     ),
             );
-            const last = seen.length ? seen[seen.length - 1].at : 0;
-            if (!open && Date.now() - last >= 1_500) break;
+            // Silence counts from the start of arm(): a capture still in
+            // flight has not reported anything yet.
+            const last = Math.max(
+                armStart,
+                seen.length ? seen[seen.length - 1].at : 0,
+            );
+            if (!open && Date.now() - last >= quietMs) break;
             await settle(100);
         }
         await settle(200);
@@ -270,8 +276,11 @@ describe('startStallWatchdog (real worker thread)', () => {
         await settle(200);
 
         // The inspector cannot interrupt a synchronous native call: the
-        // main thread answers only after it returns.
-        await arm();
+        // main thread answers only after it returns. This needs the capture
+        // slot free: a capture still in flight for an earlier stall (up to
+        // the 5s inspector bound plus the profile) would leave this stall
+        // `not-captured`, so wait out a full capture of silence first.
+        await arm({ quietMs: 6_000, maxWaitMs: 20_000 });
         execSync('sleep 2');
 
         const fail = await waitFor(() => hits.find(ourFail), 15_000);
@@ -283,13 +292,29 @@ describe('startStallWatchdog (real worker thread)', () => {
         // the stack nor the profile it would carry is the stall, so neither
         // is used, and the alert says why instead of naming this file.
         const message = JSON.parse(fail.body).message as string;
+        if (stall?.stackUnavailable !== 'answered-late') {
+            // What held the capture slot, for the next CI failure.
+            console.log(
+                'stall-watchdog spec: reports of this watchdog',
+                JSON.stringify(
+                    seen.map(({ r, at }) => ({
+                        at,
+                        kind: r.kind,
+                        startedAt: r.startedAt,
+                        stalledMs: r.stalledMs,
+                        stackUnavailable: r.stackUnavailable,
+                    })),
+                ),
+                { armedAt },
+            );
+        }
         expect(stall?.stack).toBeNull();
         expect(stall?.hottest).toBeUndefined();
         expect(stall?.stackUnavailable).toBe('answered-late');
         expect(message).toContain('could not interrupt');
         expect(message).not.toContain('stall-watchdog.spec');
         expect(message).toContain('stalled');
-    });
+    }, 60_000);
     it('closes a stall that recovers during its capture, so the next stall gets its own report', async () => {
         const reports: StallReport[] = [];
         stop = startStallWatchdog(
