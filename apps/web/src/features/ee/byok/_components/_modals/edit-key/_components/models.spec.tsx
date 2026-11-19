@@ -453,3 +453,76 @@ describe("ByokModelSelect — manual entry while searching", () => {
         );
     });
 });
+
+describe("ByokModelSelect — models that share a label", () => {
+    beforeAll(() => {
+        window.HTMLElement.prototype.scrollIntoView = jest.fn();
+        (globalThis as any).ResizeObserver = class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        };
+    });
+
+    // A snapshot pin and its alias get the same label once the pin is dropped
+    // (Together lists both of these as "DeepSeek V4.1 Flash").
+    const listing = [
+        {
+            id: "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+            name: "DeepSeek V4.1 Flash",
+        },
+        { id: "deepseek-ai/DeepSeek-V4.1-Flash", name: "DeepSeek V4.1 Flash" },
+        { id: "listed/model-a", name: "Model A" },
+    ];
+
+    it("shows the id under each row whose label another row also has", async () => {
+        mockPreview.mockReturnValue({
+            data: listing,
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://api.together.ai/v1",
+                }}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole("combobox"));
+
+        expect(
+            await screen.findByText("deepseek-ai/DeepSeek-V4.1-Flash-1017"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText("deepseek-ai/DeepSeek-V4.1-Flash"),
+        ).toBeInTheDocument();
+        // A label nobody else has keeps its single line.
+        expect(screen.queryByText("listed/model-a")).not.toBeInTheDocument();
+    });
+
+    it("names the picked one by its id on the trigger", () => {
+        mockPreview.mockReturnValue({
+            data: listing,
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+                    baseURL: "https://api.together.ai/v1",
+                }}
+            />,
+        );
+
+        expect(screen.getByRole("combobox")).toHaveTextContent(
+            "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)",
+        );
+    });
+});

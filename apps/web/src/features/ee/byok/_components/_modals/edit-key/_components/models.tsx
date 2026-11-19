@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -240,6 +240,20 @@ const ModelPickerPopover = ({
     const [search, setSearch] = useState("");
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
 
+    // The label drops a snapshot pin (`-1017`, `-2026-03-05`), so a pinned id
+    // and its alias read the same ("GPT 5.4" twice). Those rows show their id
+    // too, or nobody can tell which one they are picking.
+    const sharedNames = useMemo(() => {
+        const seen = new Set<string>();
+        const shared = new Set<string>();
+        for (const m of models) {
+            if (seen.has(m.name)) shared.add(m.name);
+            seen.add(m.name);
+        }
+        return shared;
+    }, [models]);
+    const selected = models.find((p) => p.id === form.watch("model"));
+
     return (
         <Popover
             modal
@@ -270,17 +284,19 @@ const ModelPickerPopover = ({
                                     rightIcon={
                                         <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                     }>
-                                    {models.find((p) => p.id === field.value)
-                                        ?.name ??
+                                    {(selected &&
+                                        (sharedNames.has(selected.name)
+                                            ? `${selected.name} (${selected.id})`
+                                            : selected.name)) ??
                                         // A saved model the endpoint does not
                                         // list is still the selected one.
                                         (field.value
                                             ? formatModelLabel(field.value)
                                             : undefined) ?? (
-                                        <span className="font-normal">
-                                            Select a model
-                                        </span>
-                                    )}
+                                            <span className="font-normal">
+                                                Select a model
+                                            </span>
+                                        )}
                                 </Button>
                             </PopoverTrigger>
                         </FormControl.Input>
@@ -359,6 +375,11 @@ const ModelPickerPopover = ({
                                             </span>
                                         )}
                                     </span>
+                                    {sharedNames.has(r.name) && (
+                                        <span className="text-text-tertiary truncate text-xs">
+                                            {r.id}
+                                        </span>
+                                    )}
                                     {(r.description || r.pricing) && (
                                         <span className="text-text-tertiary truncate text-xs">
                                             {r.description}
