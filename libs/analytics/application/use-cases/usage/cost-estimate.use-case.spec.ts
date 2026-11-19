@@ -476,11 +476,14 @@ describe('CostEstimateUseCase', () => {
             tokenUsageService.getUsageByPr.mockResolvedValue(
                 buildUsage([{ input: 100, output: 50, outputReasoning: 0 }]),
             );
+            // PR 1's first document has no author: alice, the one after it,
+            // is PR 1's author. A slot claimed by the authorless document
+            // would count an unknown developer next to alice.
             pullRequestsService.findManyByNumbers.mockResolvedValue([
                 { number: 1, user: {} },
                 { number: 1, user: { username: 'alice' } },
                 { number: 2 },
-                { number: 3, user: { username: 'carol' } },
+                { number: 3, user: { username: 'alice' } },
             ]);
             tokenPricingUseCase.execute.mockResolvedValue(
                 pricingFromMillions({ inputPerM: 0, outputPerM: 0 }),
@@ -488,7 +491,11 @@ describe('CostEstimateUseCase', () => {
 
             const result = await useCase.execute('org-1');
 
-            expect(result.developerCount).toBe(2);
+            expect(result.developerCount).toBe(1);
+            // Resolved in one batch read, not one read per PR number.
+            expect(pullRequestsService.findManyByNumbers).toHaveBeenCalledTimes(
+                1,
+            );
         });
 
         it('falls back to developerCount=1 when no developers are resolved', async () => {
