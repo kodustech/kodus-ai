@@ -169,16 +169,20 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         await service.reapStaleProcessingJobs();
 
         expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+        // The window is 60 min, counted on the DB clock (minutes, not a
+        // JS Date that would shift with the process time zone).
         expect(jobRepository.countReapedSince).toHaveBeenCalledWith(
-            expect.any(Date),
+            60,
             'Orphaned:',
         );
     });
 
     it('does not alert again while the window is already past the threshold', async () => {
         const service = build();
-        jobRepository.failStaleProcessing.mockResolvedValue(jobs(3));
-        jobRepository.countReapedSince.mockResolvedValue(9); // 6 before + 3 now
+        // A pass that alone reaches the threshold: the previous per-pass
+        // alert fired on it every time; the window already crossed it.
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(6));
+        jobRepository.countReapedSince.mockResolvedValue(12); // 6 before + 6 now
 
         await service.reapStaleProcessingJobs();
 
@@ -201,7 +205,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         expect(message).not.toMatch(/OOM|node pressure/);
     });
 
-    it('still alerts on the pass alone when the window count fails', async () => {
+    it('still alerts on the pass alone when the window count fails, and says so', async () => {
         const service = build();
         jobRepository.failStaleProcessing.mockResolvedValue(jobs(6));
         jobRepository.countReapedSince.mockRejectedValue(new Error('db slow'));
@@ -209,6 +213,36 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         await service.reapStaleProcessingJobs();
 
         expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+        const message = incidentManager.failHeartbeat.mock.calls[0][1];
+        expect(message).toContain('6 workflow jobs lost in this reaper pass');
+        expect(message).toContain('window count is unavailable');
+        expect(message).not.toContain('in the last 60 min');
+        expect(message).not.toContain('lostInWindow=');
+    });
+
+    it('counts a workflow type named like an Object member as any other', async () => {
+        const service = build();
+        jobRepository.failStaleProcessing.mockResolvedValue(
+            jobs(6, 'constructor'),
+        );
+
+        await service.reapStaleProcessingJobs();
+
+        expect(incidentManager.failHeartbeat.mock.calls[0][1]).toContain(
+            'constructor: 6',
+        );
+    });
+
+    it('does not hold the reaper pass (and its lock) on the heartbeat', async () => {
+        const service = build();
+        jobRepository.failStaleProcessing.mockResolvedValue(jobs(6));
+        jobRepository.countReapedSince.mockResolvedValue(6);
+        incidentManager.failHeartbeat.mockReturnValue(new Promise(() => {}));
+
+        await service.reapStaleProcessingJobs();
+
+        expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+        expect(lock.release).toHaveBeenCalledTimes(1);
     });
 
     it('always releases the lock, even when the repository throws', async () => {

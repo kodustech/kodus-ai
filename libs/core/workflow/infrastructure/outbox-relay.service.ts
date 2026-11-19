@@ -78,9 +78,9 @@ const DEFAULT_STALE_JOB_TIMEOUT_MINUTES = 180;
 // Every reaped job's lastError starts with this; the loss alert counts them.
 const REAPED_LAST_ERROR_PREFIX = 'Orphaned:';
 
-// Loss alert: jobs reaped within the window, alerted once when the count
-// crosses the threshold (edge-triggered across passes, so one episode is one
-// alert, and losses spread over many small passes still alert).
+// Loss alert: jobs reaped within the window, alerted when the count crosses
+// the threshold (edge-triggered across passes, so a burst alerts once, and
+// losses spread over many small passes still alert).
 const LOSS_ALERT_WINDOW_MINUTES = 60;
 const LOSS_ALERT_THRESHOLD = 5;
 
@@ -109,9 +109,11 @@ export const INBOX_REAPER_CONSUMER_TIMEOUTS = {
 } as const;
 
 function countBy(values: string[]): Record<string, number> {
-    const out: Record<string, number> = {};
-    for (const v of values) out[v] = (out[v] ?? 0) + 1;
-    return out;
+    // A Map, not a plain object: a key like 'constructor' must not read an
+    // inherited member.
+    const counts = new Map<string, number>();
+    for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+    return Object.fromEntries(counts);
 }
 
 function parsePositiveIntEnv(envKey: string, fallback: number): number {
@@ -449,10 +451,14 @@ export class OutboxRelayService
                         });
 
                         // No incident here: a reclaimed lock belongs to a
-                        // worker that stopped mid-job, and the same jobs are
-                        // reaped (and alerted, with the loss count) by
-                        // reapStaleProcessingJobs 30 min later. Alerting both
-                        // reported one event twice.
+                        // worker that stopped mid-job, and its workflow job
+                        // is reaped (and alerted, with the loss count) by
+                        // reapStaleProcessingJobs once it has been PROCESSING
+                        // for the reap timeout (180 min by default). For a
+                        // code review that is ~30 min after this reclaim; for
+                        // consumers with shorter claim timeouts the reclaim
+                        // comes earlier, but the job is still alerted there.
+                        // Alerting both reported one event twice.
                         if (reclaimed > 5) {
                             this.logger.error({
                                 message: `HIGH RECLAIM RATE: ${reclaimed} ${consumerId} locks held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}`,
@@ -895,12 +901,17 @@ export class OutboxRelayService
     }
 
     /**
-     * One incident per loss episode. Counts every job reaped in the last
+     * Alerts on job loss. Counts every job reaped in the last
      * LOSS_ALERT_WINDOW_MINUTES (this pass included) and fires only when the
      * count crosses LOSS_ALERT_THRESHOLD in this pass, so a burst alerts once
      * and losses spread over many small passes (which a per-pass threshold
-     * never saw) alert too. The jobs were lost ~3h ago: the stall that caused
-     * it was reported by the worker's StallWatchdog at the time.
+     * never saw) alert too. The window slides: an episode that keeps the count
+     * hovering at the threshold as old reaps age out can cross it again and
+     * alert again. The jobs were lost ~3h ago: the stall that caused it was
+     * reported by the worker's StallWatchdog at the time.
+     *
+     * The heartbeat is not awaited: the reaper holds its lock for this pass,
+     * and a slow BetterStack endpoint must not hold it.
      */
     private async alertOnJobLoss(
         reaped: Array<{
@@ -911,16 +922,19 @@ export class OutboxRelayService
         }>,
     ): Promise<void> {
         const reapedCount = reaped.length;
-        const since = new Date(
-            Date.now() - LOSS_ALERT_WINDOW_MINUTES * 60 * 1000,
-        );
         let lostInWindow = reapedCount;
+        // Without the window count, the number is this pass alone and is
+        // reported as such, not as the window total.
+        let windowCounted = false;
         try {
-            lostInWindow =
-                (await this.jobRepository.countReapedSince?.(
-                    since,
-                    REAPED_LAST_ERROR_PREFIX,
-                )) ?? reapedCount;
+            const counted = await this.jobRepository.countReapedSince?.(
+                LOSS_ALERT_WINDOW_MINUTES,
+                REAPED_LAST_ERROR_PREFIX,
+            );
+            if (typeof counted === 'number') {
+                lostInWindow = counted;
+                windowCounted = true;
+            }
         } catch (error) {
             this.logger.warn({
                 message:
@@ -946,7 +960,10 @@ export class OutboxRelayService
         const typeSummary = Object.entries(byType)
             .map(([type, n]) => `${type}: ${n}`)
             .join(', ');
-        const message = `${lostInWindow} workflow jobs lost in the last ${LOSS_ALERT_WINDOW_MINUTES} min (this pass: ${typeSummary}; ${orgs} orgs). The worker running them stopped mid-job (froze or was killed) about ${this.staleJobTimeoutMinutes} min ago; they were marked FAILED and are not retried.${describeLostJobs(
+        const lost = windowCounted
+            ? `${lostInWindow} workflow jobs lost in the last ${LOSS_ALERT_WINDOW_MINUTES} min`
+            : `${reapedCount} workflow jobs lost in this reaper pass (the ${LOSS_ALERT_WINDOW_MINUTES}-min window count is unavailable, so earlier passes are not included)`;
+        const message = `${lost} (this pass: ${typeSummary}; ${orgs} orgs). The worker running them stopped mid-job (froze or was killed) about ${this.staleJobTimeoutMinutes} min ago; they were marked FAILED and are not retried.${describeLostJobs(
             reaped.map((job) => ({
                 startedAt: job.startedAt,
                 ...jobFields({ payload: job.payload }),
@@ -956,15 +973,21 @@ export class OutboxRelayService
         this.logger.error({
             message: `JOB LOSS: ${message}`,
             context: OutboxRelayService.name,
-            metadata: { lostInWindow, reapedCount, byType, orgs },
+            metadata: {
+                lostInWindow,
+                windowCounted,
+                reapedCount,
+                byType,
+                orgs,
+            },
         });
 
-        await this.incidentManager
+        void this.incidentManager
             ?.failHeartbeat(
                 'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
                 `${message} ${this.formatContext({
                     monitor: 'workflow_job_loss',
-                    lostInWindow,
+                    ...(windowCounted ? { lostInWindow } : {}),
                     reapedCount,
                 })}`,
             )

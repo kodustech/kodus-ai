@@ -510,17 +510,31 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
     }
 
     /**
-     * How many jobs the reapers failed since `since` (their lastError starts
-     * with `lastErrorPrefix`). Feeds the windowed loss alert.
+     * How many jobs the reapers failed in the last `windowMinutes` (their
+     * lastError starts with `lastErrorPrefix`). Feeds the windowed loss alert.
+     *
+     * The cut-off is computed in SQL, on the clock that stamped the rows
+     * (`completedAt` is set to NOW() by failStaleProcessing): a JS Date
+     * against these `timestamp without time zone` columns shifts with the
+     * process time zone. The reap also bumps `updatedAt`, so the same bound
+     * on it lets idx_workflow_jobs_updated_at pick the few recent rows
+     * instead of walking every FAILED job.
      */
     async countReapedSince(
-        since: Date,
+        windowMinutes: number,
         lastErrorPrefix: string,
     ): Promise<number> {
         return this.repository
             .createQueryBuilder('job')
             .where('job.status = :status', { status: JobStatus.FAILED })
-            .andWhere('job."completedAt" >= :since', { since })
+            .andWhere(
+                'job."updatedAt" >= NOW() - make_interval(mins => :windowMinutes)',
+                { windowMinutes },
+            )
+            .andWhere(
+                'job."completedAt" >= NOW() - make_interval(mins => :windowMinutes)',
+                { windowMinutes },
+            )
             .andWhere('job."lastError" LIKE :prefix', {
                 prefix: `${lastErrorPrefix.replace(/[\\%_]/g, '\\$&')}%`,
             })

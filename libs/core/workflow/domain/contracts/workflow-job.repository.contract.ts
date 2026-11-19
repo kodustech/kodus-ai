@@ -67,7 +67,11 @@ export interface IWorkflowJobRepository {
         },
     ): Promise<boolean>;
     /** Jobs failed by a reaper since `since` (lastError starts with the prefix). */
-    countReapedSince?(since: Date, lastErrorPrefix: string): Promise<number>;
+    /** Jobs the reapers failed in the last `windowMinutes` (DB clock). */
+    countReapedSince?(
+        windowMinutes: number,
+        lastErrorPrefix: string,
+    ): Promise<number>;
 }
 
 export const WORKFLOW_JOB_REPOSITORY_TOKEN = Symbol.for(
