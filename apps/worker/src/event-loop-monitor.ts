@@ -2,6 +2,7 @@ import { monitorEventLoopDelay } from 'perf_hooks';
 import { createLogger } from '@libs/core/log/logger';
 
 import { getLastHealthProbe } from './health-probe';
+import { StallWatchdogOptions, startStallWatchdog } from './stall-watchdog';
 
 type MonitorLogger = Pick<ReturnType<typeof createLogger>, 'log' | 'warn'>;
 
@@ -12,6 +13,12 @@ export interface EventLoopMonitorOptions {
     warnMs?: number;
     /** Injected in tests; defaults to the worker logger. */
     logger?: MonitorLogger;
+    /**
+     * Also watch the thread from outside it: a separate thread that captures
+     * the stack of a stall while it happens (see stall-watchdog.ts). Off when
+     * omitted.
+     */
+    stallWatchdog?: StallWatchdogOptions;
 }
 
 const NS_PER_MS = 1e6;
@@ -25,7 +32,9 @@ const NS_PER_MS = 1e6;
  *
  * The report runs on the thread it measures. A block that lasts until ECS
  * kills the task never produces the spike line; the evidence is the
- * once-per-window line going missing before the recycle.
+ * once-per-window line going missing before the recycle. The optional stall
+ * watchdog closes that gap: it runs on another thread and names the code the
+ * main thread is stuck in while the stall is still happening.
  *
  * Returns a stop function.
  */
@@ -70,8 +79,13 @@ export function startEventLoopMonitor(
     }, intervalMs);
     timer.unref();
 
+    const stopWatchdog = opts.stallWatchdog
+        ? startStallWatchdog(opts.stallWatchdog)
+        : () => undefined;
+
     return () => {
         clearInterval(timer);
         histogram.disable();
+        stopWatchdog();
     };
 }
