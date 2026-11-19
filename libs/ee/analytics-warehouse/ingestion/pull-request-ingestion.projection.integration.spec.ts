@@ -13,7 +13,9 @@ import { resolveMongoTestGate } from '../../../../test/integration/mongo-test-ur
 
 import { PULL_REQUEST_INGESTION_PROJECTION } from './pull-request-ingestion.service';
 
-const gate = resolveMongoTestGate();
+// No API_MG_DB_HOST fallback: that is a docker-network hostname that never
+// resolves from the host, so a local .env carrying it must skip, not fail.
+const gate = resolveMongoTestGate('kodus_test', false);
 
 const TEST_DB = 'kodus_ingestion_projection_it';
 
