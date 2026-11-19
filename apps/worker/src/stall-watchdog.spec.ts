@@ -83,7 +83,7 @@ describe('startStallWatchdog (real worker thread)', () => {
             // stack it carried is not trusted, and the reason is given.
             expect(stall.stackUnavailable).toBe('answered-late');
         }
-        if (stall.stackUnavailable === undefined) {
+        if (stall.stackUnavailable === undefined && stall.error === undefined) {
             // The inspector answered in time, so the profile belongs to the
             // stall: one place holds the CPU.
             // (Its exact split varies with inlining: the burner can be
@@ -306,11 +306,16 @@ describe('startStallWatchdog (real worker thread)', () => {
         // The reason follows from the measured answer time, not from the
         // value under test: in time -> the stall had simply ended; late
         // (a slow Debugger.enable, as in a long in-band CI run) -> late.
-        expect(stall.inspectorAnswerMs).toEqual(expect.any(Number));
+        // Real measurements from both inspector phases.
+        expect(stall.inspectorAnswerMs!).toBeGreaterThan(0);
+        expect(stall.profilerAnswerMs!).toBeGreaterThanOrEqual(0);
+        const answeredLate =
+            stall.inspectorAnswerMs! > 1_000 || stall.profilerAnswerMs! > 1_000;
+        // In time, the only reason left is that the stall had ended (the
+        // late branch itself is pinned deterministically by the execSync
+        // test).
         expect(stall.stackUnavailable).toBe(
-            stall.inspectorAnswerMs! > 1_000
-                ? 'answered-late'
-                : 'ended-before-read',
+            answeredLate ? 'answered-late' : 'ended-before-read',
         );
     });
     it('reports and alerts a stall that starts and ends while an earlier capture is still running', async () => {
