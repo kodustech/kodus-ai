@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { environment } from '@libs/ee/configs/environment';
 import {
@@ -60,7 +60,7 @@ export class SelfHostedBeaconCron implements OnModuleInit {
         }
     }
 
-    @Cron('17 3 * * *', {
+    @GatedCron('17 3 * * *', {
         name: 'self-hosted-beacon',
         timeZone: 'UTC',
     })

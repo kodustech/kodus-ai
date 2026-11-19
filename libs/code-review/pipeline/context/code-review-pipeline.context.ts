@@ -1,4 +1,7 @@
-import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
+import type {
+    RequestedReviewMode,
+    ReviewRoutingReason,
+} from '@libs/code-review/domain/review-mode';
 import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
@@ -92,6 +95,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** The mode the review command asked for (`@kody review --heavy` /
      *  `--balanced`), over the review mode set in settings. */
     requestedReviewMode?: RequestedReviewMode;
+    reviewRoutingReason?: ReviewRoutingReason;
 
     /**
      * Whether this review runs heavy: the requested mode, else the review mode
@@ -115,6 +119,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Arquivos filtrados COM conteúdo - após aplicar ignorePaths no FetchChangedFilesStage */
     changedFiles?: FileChange[];
+    /** Path inventory of the PR for rules that also examine prior rounds. */
+    prFilePaths?: string[];
 
     /** List of files ignored by configuration patterns */
     ignoredFiles?: string[];
@@ -271,6 +277,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     approvalPolicyEligibility?: import('../services/approval-policies.service').ApprovalEligibilityCache;
     approvalReviewSummary?: {
         lineFindings: number;
+        /** One entry per line finding. Null marks publication without a verifiable ID. */
+        lineCommentIds?: Array<string | null>;
         prFindings: number;
         complete: boolean;
     };

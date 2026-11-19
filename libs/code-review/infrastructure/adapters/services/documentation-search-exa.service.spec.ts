@@ -41,9 +41,9 @@ describe('DocumentationSearchExaService — pure query/response transforms', () 
 
     describe('extractLanguageFromQuery', () => {
         it('pulls the language out of a "Language: X." clause (case-insensitive)', () => {
-            expect(call('extractLanguageFromQuery', 'language: TypeScript. do X')).toBe(
-                'TypeScript',
-            );
+            expect(
+                call('extractLanguageFromQuery', 'language: TypeScript. do X'),
+            ).toBe('TypeScript');
         });
 
         it('returns "Unspecified" when there is no language clause', () => {
@@ -115,5 +115,48 @@ describe('DocumentationSearchExaService — pure query/response transforms', () 
             expect(out).toContain('Results:');
             expect(out).toContain('Excerpt: x y'); // whitespace collapsed
         });
+    });
+});
+
+describe('DocumentationSearchExaService — documentation formatter', () => {
+    // Prod 16-17/11: 55 runs in 9 orgs fell back to raw truncation with
+    // "reroute-json produced no valid object" — a whole markdown document
+    // escaped inside a JSON string is what models without native structured
+    // output get wrong. The formatter's answer IS the markdown.
+    const { LLM } = jest.requireActual('@libs/llm/llm');
+    const svc = new DocumentationSearchExaService(
+        { get: () => undefined } as any,
+        {} as any,
+        {} as any,
+    );
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('uses the markdown the model answers with as the formatted documentation', async () => {
+        jest.spyOn(LLM, 'run').mockResolvedValue(
+            '## lodash debounce\n\n- `wait` defaults to 0',
+        );
+
+        const formatted = await (svc as any).formatDocumentationForPrompt({
+            packageName: 'lodash',
+            query: 'debounce default wait',
+            rawSearchContent: 'raw search output',
+        });
+
+        expect(formatted).toBe('## lodash debounce\n\n- `wait` defaults to 0');
+    });
+
+    it('drops a markdown fence the model wraps the document in', async () => {
+        jest.spyOn(LLM, 'run').mockResolvedValue(
+            '```markdown\n## lodash debounce\n```',
+        );
+
+        const formatted = await (svc as any).formatDocumentationForPrompt({
+            packageName: 'lodash',
+            query: 'debounce default wait',
+            rawSearchContent: 'raw search output',
+        });
+
+        expect(formatted).toBe('## lodash debounce');
     });
 });

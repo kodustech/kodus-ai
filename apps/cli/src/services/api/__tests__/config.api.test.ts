@@ -145,4 +145,39 @@ describe('RealConfigApi', () => {
             { headers: { Authorization: 'Bearer eyJ.user' } },
         );
     });
+
+    it('sends risk preview and scoped inheritance through the web API', async () => {
+        const requestWithRetry = vi.fn().mockResolvedValue({});
+        const api = new RealConfigApi(requestWithRetry);
+        const preview = {
+            teamId: 'team-1',
+            repositoryId: 'repo-1',
+            prNumber: 42,
+            criteria: [],
+        };
+
+        await api.previewPrRisk('eyJ.user', preview);
+        await api.saveCodeReviewConfig('eyJ.user', {
+            teamId: 'team-1',
+            repositoryId: 'repo-1',
+            configValue: {},
+            inheritFields: ['riskReviewRouting.riskFound'],
+        });
+
+        expect(requestWithRetry).toHaveBeenNthCalledWith(
+            1,
+            '/code-review/risk/preview',
+            {
+                method: 'POST',
+                headers: { Authorization: 'Bearer eyJ.user' },
+                body: JSON.stringify(preview),
+            },
+        );
+        expect(JSON.parse(requestWithRetry.mock.calls[1][1].body)).toEqual({
+            configValue: {},
+            organizationAndTeamData: { teamId: 'team-1' },
+            repositoryId: 'repo-1',
+            inheritFields: ['riskReviewRouting.riskFound'],
+        });
+    });
 });

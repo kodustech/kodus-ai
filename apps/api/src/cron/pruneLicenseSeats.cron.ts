@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -32,7 +32,7 @@ export class PruneLicenseSeatsCronProvider {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(CRON_PRUNE_LICENSE_SEATS, {
+    @GatedCron(CRON_PRUNE_LICENSE_SEATS, {
         name: 'Prune License Seats',
         timeZone: 'America/Sao_Paulo',
     })

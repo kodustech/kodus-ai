@@ -175,4 +175,70 @@ describe('MongoDBExporter (log flush resilience)', () => {
 
         expect((exporter as any).logBuffer).toHaveLength(0);
     });
+
+    it('waits for a flush already writing, then writes what arrived meanwhile, before dispose goes on', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        let releaseFirst!: () => void;
+        const insertMany = jest
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<void>((resolve) => {
+                        releaseFirst = resolve;
+                    }),
+            )
+            .mockResolvedValue(undefined);
+        (exporter as any).collections = {
+            logs: { insertMany },
+            telemetry: { insertMany: jest.fn() },
+        };
+        (exporter as any).logBuffer = [buildLog('first')];
+
+        const running = (exporter as any).flushLogs();
+        (exporter as any).logBuffer.push(buildLog('arrived during write'));
+        let flushed = false;
+        const flushing = exporter.flush().then(() => (flushed = true));
+
+        await new Promise((r) => setTimeout(r, 20));
+        expect(flushed).toBe(false);
+
+        releaseFirst();
+        await running;
+        await flushing;
+
+        expect(insertMany).toHaveBeenCalledTimes(2);
+        expect((exporter as any).logBuffer).toHaveLength(0);
+    });
+
+    it('keeps the running flush when a flush is asked for from inside its own start', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        let release!: () => void;
+        let nested: Promise<void> | undefined;
+        let calls = 0;
+        (exporter as any).writeLogs = jest.fn(() => {
+            calls += 1;
+            if (calls === 1) {
+                // A log written while the flush starts asks for a flush.
+                nested = (exporter as any).flushLogs();
+                return new Promise<void>((resolve) => (release = resolve));
+            }
+            return Promise.resolve();
+        });
+
+        const running = (exporter as any).flushLogs();
+        await nested;
+        let settled = false;
+        void (exporter as any).flushLogs().then(() => (settled = true));
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(settled).toBe(false);
+        release();
+        await running;
+    });
 });

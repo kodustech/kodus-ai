@@ -6,6 +6,14 @@ import type { RiskAssessmentResult } from './risk/risk-assessment';
  *  mode set in settings. */
 export type RequestedReviewMode = 'balanced' | 'heavy';
 
+export type ReviewRoutingReason =
+    | 'requested'
+    | 'risk-found'
+    | 'no-risk-found'
+    | 'risk-unavailable'
+    | 'default'
+    | 'heavy-unavailable';
+
 /** Resolve before model selection. Commands win; unavailable risk uses settings. */
 export function resolveRiskReviewMode(input: {
     requested?: RequestedReviewMode;

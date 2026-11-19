@@ -17,3 +17,14 @@ export const startSecurityScan = async (
 
     return response.data;
 };
+
+export const cancelSecurityScan = async (
+    scanId: string,
+): Promise<SecurityScan> => {
+    const response = await axiosAuthorized.post<{ data: SecurityScan }>(
+        `${securityScansPath()}/${scanId}/cancel`,
+        {},
+    );
+
+    return response.data;
+};

@@ -23,6 +23,8 @@ import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents
 import { SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { SCAN_NO_AREA_EXAMINED_MESSAGE } from '../domain/scan-failure';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 
 const scanRecord = (overrides = {}) => ({
     uuid: 'scan-1',
@@ -66,7 +68,7 @@ function setup(engineResult: any, scan = scanRecord()) {
         findById: jest.fn(async () => scan),
         update: jest.fn(async (..._args: unknown[]) => scan),
         claim: jest.fn(async (..._args: unknown[]) => scan as any),
-        recordUnit: jest.fn(async (..._args: unknown[]) => undefined),
+        recordUnit: jest.fn(async (..._args: unknown[]) => true),
     };
     const jobRepository = {
         findOne: jest.fn(async () => ({
@@ -138,7 +140,7 @@ function setup(engineResult: any, scan = scanRecord()) {
         kodyIssuesManagement as any,
     );
 
-    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager, pricingResolver };
+    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager, pricingResolver, jobRepository };
 }
 
 const lastUpdate = (scans: { update: jest.Mock }) =>
@@ -186,6 +188,40 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
         expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
         expect(scans.recordUnit).not.toHaveBeenCalled();
+    });
+
+    it('releases the sandbox and leaves the scan running when the slice is preempted', async () => {
+        const { processor, scans, sandbox, jobRepository } = setup({
+            result: finishedResult(),
+        });
+        let started!: () => void;
+        const running = new Promise<void>((r) => (started = r));
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async () => {
+                started();
+                return new Promise(() => undefined);
+            }),
+        }));
+        const abort = new AbortController();
+        const processed = processor.process('job-1', abort.signal);
+        await running;
+        abort.abort(new SlicePreemptedError());
+        await expect(processed).rejects.toBeInstanceOf(SlicePreemptedError);
+        expect(sandbox.cleanup).toHaveBeenCalled();
+        expect(
+            scans.update.mock.calls.some(
+                (call) =>
+                    (call[1] as { status?: string })?.status ===
+                    SecurityScanStatus.FAILED,
+            ),
+        ).toBe(false);
+        expect(
+            jobRepository.update.mock.calls.some(
+                (call) =>
+                    (call[1] as { status?: string })?.status ===
+                    JobStatus.FAILED,
+            ),
+        ).toBe(false);
     });
 
     it('starts a slice from what the one before may have been billed, when it died with requests in flight', async () => {
@@ -587,6 +623,41 @@ describe('SecurityScanJobProcessor', () => {
         expect((scans.update.mock.calls.at(-1) as any[])[3]).toEqual(
             expect.objectContaining({ ownedBy: 'job-1', orUnowned: true }),
         );
+    });
+
+    it('resolves nothing for a scan cancelled after its last unit', async () => {
+        const { processor, scans, issuesService } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, []]],
+            result: finishedResult({ findings: [] }),
+        });
+        // Claimed at the start and at the unit; cancelled before the resolve.
+        scans.claim
+            .mockResolvedValueOnce(scanRecord() as any)
+            .mockResolvedValueOnce(scanRecord() as any)
+            .mockResolvedValue(null);
+
+        await processor.process('job-1');
+
+        expect(scans.recordUnit).toHaveBeenCalledTimes(1);
+        expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
+    });
+
+    it('stops at a unit write that matched nothing, cancelled mid-unit', async () => {
+        const { processor, scans, issuesService } = setup({
+            unitEvents: [
+                [{ unitId: 'u1', state: 'done', findings: 0 }, []],
+                [{ unitId: 'u2', state: 'done', findings: 1 }, [finding]],
+            ],
+            result: finishedResult(),
+        });
+        scans.recordUnit.mockResolvedValueOnce(false);
+
+        await processor.process('job-1');
+
+        expect(scans.recordUnit).toHaveBeenCalledTimes(1);
+        expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
     });
 
     it('claims the scan for its job before running it', async () => {

@@ -86,28 +86,45 @@ export function matchesRiskSnapshot(
     );
 }
 
+interface CurrentRiskSnapshot {
+    headSha: string | undefined;
+    baseSha: string | undefined;
+    description: { title?: string; body?: string } | undefined;
+}
+
+/** Compare the PR fields available to a consumer after the assessment runs. */
+export function riskSnapshotMismatch(
+    risk: RiskAssessmentResult | undefined,
+    current: CurrentRiskSnapshot,
+): string | undefined {
+    if (
+        risk?.status !== 'assessed' ||
+        !current.headSha ||
+        risk.snapshot?.headSha !== current.headSha
+    ) {
+        return 'Risk assessment is unavailable for the current PR head.';
+    }
+    if (!current.baseSha?.trim() || risk.snapshot.baseSha !== current.baseSha)
+        return 'Risk assessment is unavailable for the current PR base.';
+    if (!current.description || !risk.snapshot.descriptionKey)
+        return 'Risk assessment is unavailable for the current PR context.';
+    if (
+        risk.snapshot.descriptionKey !==
+        prRiskDescriptionKey(current.description)
+    )
+        return 'The PR title or description changed after risk assessment.';
+    return undefined;
+}
+
 /** Approval is a consumer: enabling risk makes a verified no-risk result mandatory. */
 export function riskApprovalVeto(
     riskEnabled: boolean,
     risk: RiskAssessmentResult | undefined,
-    currentHeadSha: string,
-    currentDescription?: { title?: string; body?: string },
+    current: CurrentRiskSnapshot,
 ): string | undefined {
     if (!riskEnabled) return undefined;
-    if (
-        risk?.status !== 'assessed' ||
-        !currentHeadSha ||
-        risk.snapshot.headSha !== currentHeadSha
-    ) {
-        return 'Risk assessment is unavailable for the current PR head.';
-    }
-    if (currentDescription && !risk.snapshot.descriptionKey)
-        return 'Risk assessment is unavailable for the current PR context.';
-    if (
-        currentDescription &&
-        risk.snapshot.descriptionKey !==
-            prRiskDescriptionKey(currentDescription)
-    )
-        return 'The PR title or description changed after risk assessment.';
-    return risk.riskIdentified ? 'Risk was identified in this PR.' : undefined;
+    return (
+        riskSnapshotMismatch(risk, current) ??
+        (hasConfirmedRisk(risk) ? 'Risk was identified in this PR.' : undefined)
+    );
 }
