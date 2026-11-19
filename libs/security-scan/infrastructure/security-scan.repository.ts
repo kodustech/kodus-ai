@@ -57,6 +57,8 @@ export interface ISecurityScanRepository {
     /**
      * Records one area's progress in place of its earlier entry (a pending
      * one is removed), without reading or rewriting the rest of the scan.
+     * False when nothing matched: the scan is no longer running, or no
+     * longer run by `ownedBy`.
      */
     recordUnit(
         uuid: string,
@@ -65,7 +67,7 @@ export interface ISecurityScanRepository {
         appendReported?: ScanReportedFinding[],
         /** Lands only while this job holds the scan. */
         ownedBy?: string,
-    ): Promise<void>;
+    ): Promise<boolean>;
     findRecent(
         organizationId: string,
         repositories: ScanRepositoryKey[] | undefined,
@@ -281,7 +283,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
         ownedBy?: string,
-    ): Promise<void> {
+    ): Promise<boolean> {
         const owned = {
             status: SecurityScanStatus.RUNNING,
             ...(ownedBy ? { runningJobId: ownedBy } : {}),
@@ -290,7 +292,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             ? { reported: { $each: appendReported } }
             : undefined;
         if (progress.state === 'pending' && !progress.lensesRun?.length) {
-            await this.model
+            const pulled = await this.model
                 .updateOne(
                     { _id: uuid, ...owned },
                     {
@@ -300,7 +302,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                     },
                 )
                 .exec();
-            return;
+            return pulled.matchedCount > 0;
         }
         // Appended only while the area has no entry, in the same write as the
         // check; an area recorded before is replaced in place.
@@ -315,9 +317,9 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             )
             .exec();
         if (appended.matchedCount) {
-            return;
+            return true;
         }
-        await this.model
+        const replaced = await this.model
             .updateOne(
                 { '_id': uuid, 'progress.unitId': progress.unitId, ...owned },
                 {
@@ -326,6 +328,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                 },
             )
             .exec();
+        return replaced.matchedCount > 0;
     }
 
     async findRecent(

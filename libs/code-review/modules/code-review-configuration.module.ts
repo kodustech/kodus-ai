@@ -32,10 +32,15 @@ import { TryCustomAgentUseCase } from '../application/use-cases/custom-agents/tr
 import { CustomAgentsEngineModule } from './custom-agents-engine.module';
 import { CodeReviewPipelineModule } from '../pipeline/code-review-pipeline.module';
 import { PreviewPrRiskUseCase } from '../application/use-cases/risk/preview-pr-risk.use-case';
+import { PreviewPrApprovalUseCase } from '../application/use-cases/approval/preview-pr-approval.use-case';
+import { AutomationModule } from '@libs/automation/modules/automation.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 
 @Module({
     imports: [
         forwardRef(() => CodeReviewPipelineModule),
+        forwardRef(() => AutomationModule),
+        forwardRef(() => PlatformDataModule),
         CustomAgentRunsModule,
         PermissionsModule,
         forwardRef(() => ParametersModule),
@@ -58,6 +63,7 @@ import { PreviewPrRiskUseCase } from '../application/use-cases/risk/preview-pr-r
     ],
     providers: [
         PreviewPrRiskUseCase,
+        PreviewPrApprovalUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
@@ -75,6 +81,7 @@ import { PreviewPrRiskUseCase } from '../application/use-cases/risk/preview-pr-r
     ],
     exports: [
         PreviewPrRiskUseCase,
+        PreviewPrApprovalUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,

@@ -1,5 +1,6 @@
 import type { NamedApprovalPolicy } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { prRiskDescriptionKey } from '../risk/risk-configuration';
 import {
     approvalPoliciesFromConfig,
     evaluateApprovalPolicies,
@@ -16,12 +17,15 @@ const file = (filename: string) => ({
     deletions: 0,
     patch: '+change',
 });
+const assessedDescription = { title: 'Update docs', body: 'Fix examples' };
 const run = (over: Partial<ApprovalPolicyInput> = {}) =>
     evaluateApprovalPolicies({
         approvalActive: true,
         reviewClean: true,
         riskEnabled: false,
         currentHeadSha: 'head',
+        currentBaseSha: 'base',
+        currentDescription: assessedDescription,
         policies: [policy('Docs', { includedFiles: ['docs/**'] })],
         files: [file('docs/readme.md')],
         ...over,
@@ -37,6 +41,7 @@ const risk = (riskIdentified: boolean) => ({
         baseSha: 'base',
         headSha: 'head',
         assessmentKey: 'key',
+        descriptionKey: prRiskDescriptionKey(assessedDescription),
     },
 });
 
@@ -204,6 +209,22 @@ it.each([
     expect(result.kind).toBe('hold');
     expect(judgeEligibility).not.toHaveBeenCalled();
 });
+
+it.each([{ title: 'Edited title' }, { body: 'Edited body' }])(
+    'holds approval when only the PR %o changed after assessment',
+    async (edit) => {
+        expect(
+            await run({
+                riskEnabled: true,
+                risk: risk(false),
+                currentDescription: { ...assessedDescription, ...edit },
+            }),
+        ).toMatchObject({
+            kind: 'hold',
+            reason: 'The PR title or description changed after risk assessment.',
+        });
+    },
+);
 
 it('requires current no-risk evidence when assessment is enabled and removes only that veto when disabled', async () => {
     expect((await run({ riskEnabled: true, risk: risk(false) })).kind).toBe(

@@ -433,6 +433,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'organizationId': 1,
                 'status': 1,
                 'provider': 1,
+                'url': 1,
                 'repository.id': 1,
                 'repository.name': 1,
                 'files.suggestions.id': 1,
@@ -447,6 +448,10 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(pipeline.at(-1).$project.approvalReasonDeliveryFailure).toBe(
                 1,
             );
+            expect(pipeline.find((step) => step.$group).$group.url).toEqual({
+                $first: '$url',
+            });
+            expect(pipeline.at(-1).$project.url).toBe(1);
             expect(pipeline[2]).toEqual({ $unwind: '$files' });
             expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
         });

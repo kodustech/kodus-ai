@@ -368,6 +368,239 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each([undefined, -1, 1])(
+        'holds a named approval with %s recorded line findings and no delivered comments',
+        async (lineFindings) => {
+            const { deps, execution, run } = namedPolicyCase();
+            Object.assign(execution.dataExecution.approvalReviewSummary, {
+                lineFindings,
+            });
+
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Review findings could not be verified.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
+
+    it.each([
+        { name: 'one ID', commentIds: ['finding-1'] },
+        { name: 'duplicate IDs', commentIds: ['finding-1', 'finding-1'] },
+        {
+            name: 'whitespace-padded duplicates',
+            commentIds: ['finding-1', ' finding-1 '],
+        },
+    ])(
+        'holds a named approval when $name cannot cover two findings',
+        async ({ commentIds }) => {
+            const { input, deps, execution, run } = namedPolicyCase();
+            execution.dataExecution.approvalReviewSummary.lineFindings = 2;
+            Object.assign(input.pr, {
+                suggestions: commentIds.map((id) => ({ comment: { id } })),
+            });
+            deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                [{ id: 'finding-1', isResolved: true }],
+            );
+
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Review findings could not be verified.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
+
+    it('holds when an older comment cannot cover a current finding', async () => {
+        const { input, deps, execution, run } = namedPolicyCase();
+        Object.assign(execution.dataExecution.approvalReviewSummary, {
+            lineFindings: 2,
+            lineCommentIds: ['finding-1', 'finding-2'],
+        });
+        const storedCommentIds = ['finding-1', 'old'];
+        Object.assign(input.pr, {
+            suggestions: storedCommentIds.map((id) => ({ comment: { id } })),
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            storedCommentIds.map((id) => ({ id, isResolved: true })),
+        );
+
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'Review findings could not be verified.',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('approves matching comment IDs and holds when the recorded IDs are duplicates', async () => {
+        const { input, deps, execution, run } = namedPolicyCase();
+        const summary = execution.dataExecution.approvalReviewSummary;
+        Object.assign(summary, {
+            lineFindings: 2,
+            lineCommentIds: ['finding-1', 'finding-2'],
+        });
+        Object.assign(input.pr, {
+            suggestions: [' finding-1 ', 'finding-2'].map((id) => ({
+                comment: { id },
+            })),
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [
+                { id: 'finding-1', isResolved: true },
+                { id: 'finding-2', isResolved: true },
+            ],
+        );
+
+        expect(await run()).toBe(true);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).toHaveBeenCalledTimes(1);
+
+        // Start a fresh cron attempt with the same stored suggestions.
+        deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValueOnce(
+            PullRequestReviewState.PENDING,
+        );
+        Object.assign(summary, {
+            lineCommentIds: ['finding-1', ' finding-1 '],
+        });
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'Review findings could not be verified.',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('holds a named approval when a recorded finding was not published', async () => {
+        const { input, deps, execution, run } = namedPolicyCase();
+        Object.assign(execution.dataExecution.approvalReviewSummary, {
+            lineFindings: 2,
+            lineCommentIds: ['finding-1', null],
+        });
+        Object.assign(input.pr, {
+            suggestions: [
+                { comment: { id: 'finding-1' } },
+                { comment: { id: 'old' } },
+            ],
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [
+                { id: 'finding-1', isResolved: true },
+                { id: 'old', isResolved: true },
+            ],
+        );
+
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'Some review findings have no verifiable publication.',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it.each([
+        { name: 'absent delivered records', suggestions: undefined },
+        {
+            name: 'a delivered record with a missing comment ID',
+            suggestions: [{ comment: {} }],
+        },
+    ])(
+        'holds a named approval with $name even after a clean review',
+        async ({ suggestions }) => {
+            const { input, deps, run } = namedPolicyCase();
+            Object.assign(input.pr, { suggestions });
+
+            expect(await run()).toBe(false);
+            expect(
+                deps.codeManagementService.getPullRequestReviewComments,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Review findings could not be verified.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
+
+    it('holds a named approval when a delivered finding cannot be verified', async () => {
+        const { input, deps, run } = namedPolicyCase();
+        Object.assign(input.pr, {
+            suggestions: [{ comment: { id: 'finding-1' } }],
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            null,
+        );
+
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'Review findings could not be verified.',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
     it.each([
         AutomationStatus.PARTIAL_ERROR,
         AutomationStatus.ERROR,

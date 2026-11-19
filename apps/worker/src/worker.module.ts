@@ -14,8 +14,9 @@ import { ReviewResponseMonitorService } from '@libs/core/infrastructure/metrics/
 import { WebhookFailureMonitorService } from '@libs/core/infrastructure/metrics/webhook-failure-monitor.service';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
-import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { OutboxRelayService } from '@libs/core/workflow/infrastructure/outbox-relay.service';
+import { WorkflowJobRetentionService } from '@libs/core/workflow/infrastructure/workflow-job-retention.service';
+import { isSecurityScanSliceProcess } from '@libs/core/workflow/infrastructure/security-scan-runtime';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
@@ -101,7 +102,7 @@ export class WorkerModule {
                     ...baseImports,
                     SharedPostgresModule.forRoot({ poolSize: 6 }),
                     RabbitMQWrapperModule.register({
-                        enableConsumers: true,
+                        enableConsumers: !isSecurityScanSliceProcess(),
                         securityScanOnly: true,
                     }),
                     WorkflowModule.register({ type: 'security-scan-worker' }),
@@ -137,6 +138,7 @@ export class WorkerModule {
                     ErrorRateMonitorService,
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
+                    WorkflowJobRetentionService,
                     SelfHostedBeaconCron,
                     {
                         provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,

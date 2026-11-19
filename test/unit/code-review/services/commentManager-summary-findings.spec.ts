@@ -176,17 +176,25 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         expect(block).not.toContain('could not be posted');
     });
 
-    // On a successful fallback the same array holds the REPLACED original and
-    // the SENT fallback for one PR comment; counting both double-reports it.
-    it('does not double-count a finding whose comment was replaced by a fallback', () => {
+    it('counts the unpublished original and lists its separately posted fallback', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
-            finding('high', 'src/a.ts', 1, 'Original', DeliveryStatus.REPLACED),
-            finding('high', 'src/a.ts', 1, 'Fallback posted'),
+            finding(
+                'high',
+                'src/a.ts',
+                1,
+                'Original finding',
+                DeliveryStatus.REPLACED,
+            ),
+            finding('high', 'src/b.ts', 2, 'Fallback posted'),
         ]);
 
-        expect(block).toContain('produced 1 finding(s)');
-        expect(block).toContain('high: 1');
-        expect(block).not.toContain('could not be posted');
+        expect(block).toContain('produced 2 finding(s)');
+        expect(block).toContain('high: 2');
+        expect(block).toContain(
+            '1 of them could not be posted to the pull request',
+        );
+        expect(block).toContain('- [high] src/b.ts:2 - Fallback posted');
+        expect(block).not.toContain('Original finding');
     });
 
     // The finding text is review-agent output derived from the code under

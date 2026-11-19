@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { createLogger } from '@libs/core/log/logger';
 import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
@@ -21,7 +21,7 @@ export class SyncAllRepositoriesCronProvider {
         private readonly syncAllRepositoriesUseCase: SyncAllRepositoriesUseCase,
     ) {}
 
-    @Cron(CRON_SYNC_ALL_REPOSITORIES, {
+    @GatedCron(CRON_SYNC_ALL_REPOSITORIES, {
         name: 'Sync All Repositories',
         timeZone: 'America/Sao_Paulo',
     })

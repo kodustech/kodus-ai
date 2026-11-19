@@ -1,5 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { CronExpression } from '@nestjs/schedule';
 
 import { PullRequestClassifierService } from '@libs/ee/analytics-warehouse';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
@@ -35,7 +36,7 @@ export class AnalyticsClassifierCron {
 
     // `||` so that docker-compose's `${VAR:-}` empty-string fallthrough
     // hits the default instead of crashing the cron lib.
-    @Cron(
+    @GatedCron(
         process.env.ANALYTICS_CLASSIFIER_CRON ||
             CronExpression.EVERY_30_MINUTES,
         { name: 'analytics-classifier' },

@@ -158,8 +158,7 @@ export class ApprovalPoliciesService {
             const currentRiskVeto = riskApprovalVeto(
                 input.config.riskAssessmentActive === true,
                 input.risk,
-                headSha,
-                live,
+                { headSha, baseSha, description: live },
             );
             if (currentRiskVeto) return hold(currentRiskVeto);
             const needsFiles =
@@ -259,6 +258,8 @@ export class ApprovalPoliciesService {
                 riskEnabled: input.config.riskAssessmentActive === true,
                 risk: input.risk,
                 currentHeadSha: headSha,
+                currentBaseSha: baseSha,
+                currentDescription: live,
                 platformType: input.platformType,
                 author: live.user?.login,
                 labels: live.labels,

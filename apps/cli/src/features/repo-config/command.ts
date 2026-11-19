@@ -25,8 +25,14 @@ import {
     reviewModelTestAction,
     reviewSettingsKeysAction,
     reviewSettingsUnsetAction,
+    riskPreviewAction,
+    listApprovalsAction,
+    previewApprovalAction,
+    toggleApprovalAction,
+    type ApprovalPreviewOptions,
     type ReviewModelSetOptions,
     type ReviewSettingsTargetOptions,
+    type RiskPreviewOptions,
 } from './review-settings-actions.js';
 import {
     languageListAction,
@@ -171,6 +177,32 @@ export function registerRepositoryConfigCommand(
             ) => {
                 await configRepoSetupAction(repository ?? '.', actionOptions);
             },
+        );
+
+    withScopeOptions(
+        command
+            .command('risk-preview [repository]')
+            .description(
+                'Assess a PR without posting or saving settings. Requires kodus auth login.',
+            ),
+    )
+        .requiredOption(
+            '--pr <number>',
+            'Pull request number in the repository',
+        )
+        .option(
+            '--criteria <json>',
+            'Use this JSON array of criteria for the preview only',
+        )
+        .option(
+            '--json',
+            'Output the risk outcome and changed-file count as JSON',
+        )
+        .action(
+            (
+                repository: string | undefined,
+                actionOptions: RiskPreviewOptions,
+            ) => riskPreviewAction(repository ?? '.', actionOptions),
         );
 
     withScopeOptions(
@@ -492,6 +524,7 @@ export function registerRepositoryConfigCommand(
             await reviewModelTestAction(modelId, actionOptions);
         });
 
+    registerApprovalCommands(command);
     registerReviewExtrasCommands(command);
 }
 
@@ -500,6 +533,91 @@ function collect(value: string, previous: string[] = []): string[] {
 }
 
 /** Custom Messages, the review language and Skills & docs: the Code Review pages outside CODE_REVIEW_CONFIG's plain keys. */
+function registerApprovalCommands(command: Command): void {
+    const approvals = command
+        .command('approvals')
+        .description(
+            'Inspect, toggle and test named approval policies (requires kodus auth login)',
+        );
+
+    withScopeOptions(
+        approvals
+            .command('list [repository]')
+            .description('List effective approval policies'),
+    )
+        .option('--json', 'Output policies as JSON')
+        .action(
+            (
+                repository: string | undefined,
+                options: ReviewSettingsTargetOptions,
+            ) => listApprovalsAction(repository ?? '.', options),
+        );
+
+    withScopeOptions(
+        approvals
+            .command('show <repository> <policy-id>')
+            .description('Show one policy as JSON'),
+    ).action(
+        (
+            repository: string,
+            policyId: string,
+            options: ReviewSettingsTargetOptions,
+        ) => listApprovalsAction(repository, options, policyId),
+    );
+
+    for (const name of ['enable', 'disable'] as const) {
+        withScopeOptions(
+            approvals
+                .command(`${name} <repository> <policy-id>`)
+                .description(
+                    `${name === 'enable' ? 'Enable' : 'Disable'} one policy at this scope`,
+                ),
+        )
+            .option('--json', 'Output the result as JSON')
+            .action(
+                (
+                    repository: string,
+                    policyId: string,
+                    options: ReviewSettingsTargetOptions,
+                ) =>
+                    toggleApprovalAction(
+                        repository,
+                        policyId,
+                        name === 'enable',
+                        options,
+                    ),
+            );
+    }
+
+    approvals
+        .command('test [repository]')
+        .description(
+            'Preview the approval decision on a PR without posting or saving',
+        )
+        .requiredOption(
+            '--pr <number>',
+            'Pull request number in the repository',
+        )
+        .option('--team <team>', 'Team name or id')
+        .option(
+            '--policies <json>',
+            'Use this JSON array of draft policies for this preview only',
+        )
+        .option(
+            '--assume-clean',
+            'Assume a clean review of the current snapshot for this preview',
+        )
+        .option(
+            '--assume-enabled',
+            'Assume automatic approval is on for this preview',
+        )
+        .option('--json', 'Output the decision as JSON')
+        .action(
+            (repository: string | undefined, options: ApprovalPreviewOptions) =>
+                previewApprovalAction(repository ?? '.', options),
+        );
+}
+
 function registerReviewExtrasCommands(command: Command): void {
     const messages = command
         .command('messages')
