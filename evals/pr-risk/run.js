@@ -90,7 +90,13 @@ async function runCase(item, storedConfig) {
                 undefined,
                 risk,
             ).length > 0,
-        approvalVeto: Boolean(riskApprovalVeto(item.active, risk, 'head')),
+        approvalVeto: Boolean(
+            riskApprovalVeto(item.active, risk, {
+                headSha: pr.head?.sha,
+                baseSha: pr.base?.sha,
+                description: pr,
+            }),
+        ),
         policyDecision: decision.approvalDecision.kind,
         replayDecisionMatches:
             decision.approvalDecision.kind === replay.approvalDecision.kind,

@@ -6,6 +6,7 @@ import { GetAwaitingPullRequestsUseCase } from '../application/use-cases/dashboa
 import { GetPullRequestAuthorsUseCase } from '../application/use-cases/dashboard/get-pull-request-authors.use-case';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { CodeReviewExecutionModule } from '@libs/code-review/modules/codeReviewExecution.module';
 import { IntegrationConfigCoreModule } from '@libs/integrations/modules/config-core.module';
@@ -15,6 +16,7 @@ import { OrganizationParametersModule } from '@libs/organization/modules/organiz
     imports: [
         forwardRef(() => AutomationModule),
         forwardRef(() => PlatformDataModule),
+        forwardRef(() => PlatformModule),
         forwardRef(() => IntegrationConfigCoreModule),
         forwardRef(() => PermissionsModule),
         forwardRef(() => CodeReviewExecutionModule),

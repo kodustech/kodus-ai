@@ -34,6 +34,7 @@ type LevelOptions = {
 type AgentFieldOptions = {
     name?: string;
     instructions?: string;
+    runWhen?: string;
     fromFile?: string;
     include?: string[];
     exclude?: string[];
@@ -126,6 +127,7 @@ export async function toAgentInput(
     return {
         fromJson: fromFile.fromJson,
         instructions: options.instructions ?? fromFile.instructions,
+        runWhen: options.runWhen,
         name: options.name,
         include: options.include,
         exclude: options.exclude,
@@ -166,6 +168,10 @@ function withAgentFieldOptions(command: Command): Command {
     return command
         .option('--name <name>', 'Agent name (also its @kody -v command)')
         .option('--instructions <text>', 'What the agent reviews and how')
+        .option(
+            '--run-when <condition>',
+            'Automatic trigger: always or risk-found',
+        )
         .option(
             '--from-file <file>',
             'Read agent fields from a .json file, or the instructions from any other file (e.g. .md)',
@@ -239,6 +245,9 @@ function printAgent(
     cliInfo(
         `  Enabled: ${agent.enabled ? 'yes' : 'no'} · @kody -v ${agentSlug(agent.name)}`,
     );
+    if (agent.runWhen === 'risk-found') {
+        cliInfo('  Automatic trigger: confirmed PR risk');
+    }
     if (agent.skills.length) {
         cliInfo(`  Skills: ${agent.skills.join(', ')}`);
     }

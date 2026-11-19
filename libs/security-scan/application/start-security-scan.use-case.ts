@@ -44,9 +44,13 @@ import {
     ScanRepositoryKey,
     SECURITY_SCAN_REPOSITORY_TOKEN,
 } from '../infrastructure/security-scan.repository';
+import {
+    ISecurityScanQueueProbe,
+    SECURITY_SCAN_QUEUE_PROBE_TOKEN,
+} from '../infrastructure/security-scan-queue.probe';
 
 const ALREADY_RUNNING =
-    'A security scan of this repository is already running.';
+    'A security scan of this repository is already running. Cancel it to start another.';
 
 interface ConfiguredRepository {
     id: string;
@@ -74,6 +78,9 @@ export const NO_DEFAULT_BRANCH_MESSAGE =
 export const NO_CODE_INTEGRATION_MESSAGE =
     'This team has no active code management integration to scan the repository through.';
 
+export const SCAN_QUEUE_UNAVAILABLE_MESSAGE =
+    'The deep scan worker is not taking jobs right now. Try again in a moment.';
+
 @Injectable()
 export class StartSecurityScanUseCase {
     constructor(
@@ -87,6 +94,8 @@ export class StartSecurityScanUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly pricingResolver: PricingResolver,
         private readonly spendLimitConfig: SpendLimitConfigService,
+        @Inject(SECURITY_SCAN_QUEUE_PROBE_TOKEN)
+        private readonly queueProbe: ISecurityScanQueueProbe,
     ) {}
 
     /** Open to every plan, free included, while the scan is in beta (#2451). */
@@ -143,6 +152,8 @@ export class StartSecurityScanUseCase {
                 'The repository has no readable Git host. Reconnect it before starting a security scan.',
             );
         }
+
+        await this.assertQueueAvailable();
 
         await this.scans.failStale(orgTeam.organizationId, STALE_SCAN_AFTER);
         const active = await this.scans.findActive(
@@ -271,6 +282,26 @@ export class StartSecurityScanUseCase {
     }
 
     /**
+     * Publishing without a live consumer drops the job, and the scan stays
+     * queued until it goes stale. Refuse before writing a record.
+     */
+    private async assertQueueAvailable(): Promise<void> {
+        let consumers: number | null;
+        try {
+            consumers = await this.queueProbe.consumerCount();
+        } catch {
+            throw new ServiceUnavailableException(
+                SCAN_QUEUE_UNAVAILABLE_MESSAGE,
+            );
+        }
+        if (consumers == null || consumers < 1) {
+            throw new ServiceUnavailableException(
+                SCAN_QUEUE_UNAVAILABLE_MESSAGE,
+            );
+        }
+    }
+
+    /**
      * The plan of the repository's last scan when it stopped before the end
      * (its spend limit, or a stopped worker): running the scan again carries
      * on with the areas it had not reached instead of mapping the repository
@@ -297,6 +328,7 @@ export class StartSecurityScanUseCase {
         const unfinished =
             last?.status === SecurityScanStatus.STOPPED_BY_BUDGET ||
             last?.status === SecurityScanStatus.FAILED ||
+            last?.status === SecurityScanStatus.CANCELLED ||
             (last?.status === SecurityScanStatus.COMPLETED &&
                 (last.progress ?? []).some((p) => p.state === 'failed'));
         if (!last?.units?.length || !unfinished) {

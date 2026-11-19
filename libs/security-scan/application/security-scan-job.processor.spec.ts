@@ -68,7 +68,7 @@ function setup(engineResult: any, scan = scanRecord()) {
         findById: jest.fn(async () => scan),
         update: jest.fn(async (..._args: unknown[]) => scan),
         claim: jest.fn(async (..._args: unknown[]) => scan as any),
-        recordUnit: jest.fn(async (..._args: unknown[]) => undefined),
+        recordUnit: jest.fn(async (..._args: unknown[]) => true),
     };
     const jobRepository = {
         findOne: jest.fn(async () => ({
@@ -623,6 +623,41 @@ describe('SecurityScanJobProcessor', () => {
         expect((scans.update.mock.calls.at(-1) as any[])[3]).toEqual(
             expect.objectContaining({ ownedBy: 'job-1', orUnowned: true }),
         );
+    });
+
+    it('resolves nothing for a scan cancelled after its last unit', async () => {
+        const { processor, scans, issuesService } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, []]],
+            result: finishedResult({ findings: [] }),
+        });
+        // Claimed at the start and at the unit; cancelled before the resolve.
+        scans.claim
+            .mockResolvedValueOnce(scanRecord() as any)
+            .mockResolvedValueOnce(scanRecord() as any)
+            .mockResolvedValue(null);
+
+        await processor.process('job-1');
+
+        expect(scans.recordUnit).toHaveBeenCalledTimes(1);
+        expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
+    });
+
+    it('stops at a unit write that matched nothing, cancelled mid-unit', async () => {
+        const { processor, scans, issuesService } = setup({
+            unitEvents: [
+                [{ unitId: 'u1', state: 'done', findings: 0 }, []],
+                [{ unitId: 'u2', state: 'done', findings: 1 }, [finding]],
+            ],
+            result: finishedResult(),
+        });
+        scans.recordUnit.mockResolvedValueOnce(false);
+
+        await processor.process('job-1');
+
+        expect(scans.recordUnit).toHaveBeenCalledTimes(1);
+        expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
     });
 
     it('claims the scan for its job before running it', async () => {

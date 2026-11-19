@@ -1754,6 +1754,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'organizationId': 1,
                         'status': 1,
                         'provider': 1,
+                        'url': 1,
                         'repository.id': 1,
                         'repository.name': 1,
                         'files.suggestions.id': 1,
@@ -1788,6 +1789,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         repositoryId: { $first: '$repository.id' },
                         repositoryName: { $first: '$repository.name' },
                         provider: { $first: '$provider' },
+                        url: { $first: '$url' },
                         approvalReasonDeliveryFailure: {
                             $first: '$approvalReasonDeliveryFailure',
                         },
@@ -1812,6 +1814,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                             name: '$repositoryName',
                         },
                         provider: 1,
+                        url: 1,
                         suggestions: 1,
                         approvalReasonDeliveryFailure: 1,
                     },
