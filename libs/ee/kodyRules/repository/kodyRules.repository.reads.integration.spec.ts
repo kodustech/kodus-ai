@@ -64,6 +64,9 @@ let available = false;
                 KodyRulesModel.name,
                 KodyRulesSchema,
             );
+            // The schema's index build runs in the background on compile; a
+            // late createIndexes would land among the commands a test counts.
+            await model.init();
             const created = await model.create({
                 organizationId: ORG,
                 rules: [
