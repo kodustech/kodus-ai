@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IContextResolutionService } from '@libs/core/context-resolution/domain/contracts/context-resolution.service.contract';
+import { RepositoryNotIntegratedError } from '@libs/core/context-resolution/domain/errors/repository-not-integrated.error';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
@@ -37,7 +38,9 @@ export class ContextResolutionService implements IContextResolutionService {
             );
 
         if (!integrationConfigs || integrationConfigs.length === 0) {
-            throw new Error('No active integrations found for organization');
+            throw new RepositoryNotIntegratedError(
+                'No active integrations found for organization',
+            );
         }
 
         for (const config of integrationConfigs) {
@@ -56,7 +59,7 @@ export class ContextResolutionService implements IContextResolutionService {
             }
         }
 
-        throw new Error(
+        throw new RepositoryNotIntegratedError(
             `Repository with id ${repositoryId} not found in any integration config`,
         );
     }

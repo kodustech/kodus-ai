@@ -111,6 +111,9 @@ class UnverifiableClaimError extends Error {}
  * unchanged rather than dropped for being unparseable.
  */
 export function readClaim(violation: ShardViolation): Claim {
+    // The bounded semantic check has already read the code and judged the
+    // actual claim. A shard's symbolic label is a hint for unchecked claims.
+    if (violation.evidenceVerified) return { kind: 'none' };
     const symbol = violation.claimSymbol?.trim() || undefined;
     const path = violation.claimPath?.trim() || undefined;
     const kind = violation.claimKind;

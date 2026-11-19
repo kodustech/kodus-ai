@@ -194,6 +194,7 @@ async function main() {
             code,
             pricing,
             spendConfig,
+            { consumerCount: async () => 1 },
         );
         const processor = new SecurityScanJobProcessor(
             jobRepository,

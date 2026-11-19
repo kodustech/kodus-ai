@@ -12,6 +12,39 @@ next round is shown a stale status for that suggestion), and a production report
 (2026-10-01) of Kody Rule findings reposted every round, reworded, after the
 developer declined or fixed them.
 
+## Does the whole change in #2597 improve review quality?
+
+Use `--set=review-quality-2597` on the base and the PR with the same eval files, model, judge, reasoning effort, concurrency and repetitions. Save both JSON outputs and run `node evals/review-rounds/compare-quality.js base.json pr.json` to see the result by contract, model usage and latency. Each row records production review time in `reviewMs` and judge time in `scoringMs`. Historical rows with only `ms` cannot supply review-only latency. The set scores the comments delivered by any production agent. A correct finding from the general reviewer counts even when the case also exercises a team rule. A false claim from either reviewer also counts against the change. Compare each row of the table separately: suppressing every finding would look good on clean code alone.
+
+| Question | Cases | Expected delivery |
+| --- | --- | --- |
+| Can a rule check code outside an incremental patch? | H1 (permission enforcement), G1 (scheduled task registration) | Stay quiet when the earlier implementation satisfies the rule; flag the missing enforcement or registration. |
+| Does a shared value really represent the same policy? | H2 (production vs development config), G2 (invoice deadline vs support retry) | Suppress the superficial match; flag independent implementations of the same production policy. |
+| Does the whole test block detect the changed behavior? | H3 (interrupted work), G3 (inclusive shipping threshold) | Accept the suite with the decisive input; flag the suite that only covers its neighbors. |
+| Does the normal bug review follow the consumer's behavior? | H4 (resume after failure), G4 (caller-owned array) | Drop the refuted consequence; deliver the real data loss or mutation. |
+| Does history distinguish an old occurrence from a new one? | B1–B3 | Suppress the old occurrence and deliver its neighbor. Empty-history twins measure finder recall. |
+| Do later rounds still deliver revisions, unrelated bugs and moved repeats correctly? | R2, R8, R12, R13 | Ship the two consequences linked to the earlier suggestion, ship the unrelated bug, suppress the moved repeat. |
+
+H1–H4 reproduce the original failure shapes. G1–G4 are paired transfer cases written after the production change, with different repositories and rules. The two repetitions of a case measure model variability; they are not independent repositories. The score covers named claims; unrelated comments in the output require separate adjudication. Report model calls, tokens and review time along with false claims delivered and real findings missed.
+
+Use the existing `kody-rules` GitHub-cases suite for real violating lines and clean files, and `funnel/verify --set=controlled` for known bugs presented to the verifier. Forced timeout and degraded-evidence behavior are checked by the repeat-check and provider contracts. None of these measures establishes production timeout frequency or end-user acceptance.
+
+Run `--set=applied-advice` to check new consequences of implementing past advice. R18 and R19 use the same change and earlier comment. One consumer deletes catalog entries when the source goes offline. The other only renders an empty list. Only the destructive consumer warrants a linked finding. R1, R7 and R13 cover repeats, and R12 covers an unrelated bug.
+
+## Similar comments across rounds
+
+Run the on-demand set with `node evals/review-rounds/run.js --set=repeat-boundaries --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=2 --output=/tmp/repeat-boundaries.json`.
+
+| Case | What distinguishes the new finding from the earlier one |
+| --- | --- |
+| B1 | The same coverage rule applies to two export formats, PDF and CSV. |
+| B2 | Two CLI command names overlap, `pack` and `unpack`; each needs its own changelog entry. |
+| B3 | The worker and scheduler used identical logging code at the same line in different files; the scheduler now edits that call. |
+
+Each case reviews the same change three times with different history. A prior comment about the target should suppress a repost. A comment about the neighboring target should allow delivery. Empty history checks that the pipeline can find the target in the first place. Compare the per-case `new-site` and `no-history` rows before attributing a miss to deduplication. The existing summary counts reposts separately from missed findings. This set has no calibrated floor.
+
+The real-model replay measures ordinary reviews. Two forced timeouts are covered separately by the repeat-check and stage contracts: exact repost, whitespace, changed format, identifier case, numeric threshold, paraphrase and empty claim. A paraphrase can ship after timeout because the model did not establish that it refers to the same occurrence.
+
 ## What it drives
 
 Each round is one pull request through production's review
@@ -46,6 +79,17 @@ seen in production:
 - `flaky:<K>` fails the first K calls, then answers (the sandbox comes back);
 - `none` runs with no sandbox at all, through the self-contained prompts the
   stage uses when no sandbox exists.
+
+`--set=hallucinations-2528` runs four pairs from the failure shapes in #2528.
+Each pair checks that a refuted claim stays off the PR and that the corresponding
+real violation is delivered. H1 uses three commits (base, previously reviewed,
+head); `FetchChangedFilesStage` gets the incremental patches, and the sandbox
+still exposes the head, including files added before the last review.
+The repeat-check stage contract forces a timeout and checks
+that only the plausible repost is withheld, including when both findings cite the
+same rule.
+
+`node evals/review-rounds/run.js --set=hallucinations-2528 --model=deepseek-v4-flash@fireworks --byok-reasoning=none --reps=2 --output=/tmp/hallucinations-2528.json`
 
 Each delivered finding is matched to the case's claims by the recall judge
 (`evals/investigation/recall-judge.js`). `JUDGE_MODEL` defaults here to the

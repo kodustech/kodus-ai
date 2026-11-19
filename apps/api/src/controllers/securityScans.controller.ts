@@ -37,6 +37,7 @@ import {
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { StartSecurityScanUseCase } from '@libs/security-scan/application/start-security-scan.use-case';
 import { GetSecurityScansUseCase } from '@libs/security-scan/application/get-security-scans.use-case';
+import { CancelSecurityScanUseCase } from '@libs/security-scan/application/cancel-security-scan.use-case';
 import {
     DEEP_SCAN_NOT_ENABLED_MESSAGE,
     DeepScanGate,
@@ -89,6 +90,14 @@ const canReadScans = checkPermissions({
     resource: ResourceType.SecurityScan,
 });
 
+// Same grant as start: the people who can run a scan can unstick one.
+// Repo assignment is checked when the scan is loaded (the id is the
+// scan, not the repository).
+const canCancelScan = checkPermissions({
+    action: Action.Create,
+    resource: ResourceType.SecurityScan,
+});
+
 @ApiTags('Security Scans')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
@@ -100,6 +109,7 @@ export class SecurityScansController {
         private readonly request: UserRequest,
         private readonly startSecurityScan: StartSecurityScanUseCase,
         private readonly getSecurityScans: GetSecurityScansUseCase,
+        private readonly cancelSecurityScan: CancelSecurityScanUseCase,
         private readonly authorizationService: AuthorizationService,
         private readonly deepScanGate: DeepScanGate,
     ) {}
@@ -175,6 +185,34 @@ export class SecurityScansController {
             (await this.visibleRepositories()) ?? undefined,
             Number.isInteger(asked) && asked > 0 ? asked : undefined,
         );
+    }
+
+    @Post(':id/cancel')
+    @ApiOperation({
+        summary: 'Cancel a security scan',
+        description:
+            'Stops a queued or running scan so another can start on the same repository.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canCancelScan)
+    async cancel(@Param('id') id: string) {
+        const organizationId = await this.organizationId();
+        // Loaded within the repositories the caller may scan: one outside
+        // them is not found, as on GET /:id.
+        const writeRepos = await this.authorizationService.getRepositoryScope({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+        });
+        await this.getSecurityScans.get(
+            organizationId,
+            id,
+            writeRepos ?? undefined,
+        );
+        return this.cancelSecurityScan.execute({
+            organizationId,
+            scanId: id,
+        });
     }
 
     @Get(':id')

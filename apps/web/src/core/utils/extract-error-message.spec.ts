@@ -32,6 +32,14 @@ describe("extractRejectionMessage", () => {
         ).toBeUndefined();
     });
 
+    it("returns the API's message when a service is temporarily down", () => {
+        const message =
+            "The deep scan worker is not taking jobs right now. Try again in a moment.";
+        expect(extractRejectionMessage(httpError(503, { message }))).toBe(
+            message,
+        );
+    });
+
     it("returns nothing when the request never got an answer", () => {
         expect(
             extractRejectionMessage(new AxiosError("Network Error")),

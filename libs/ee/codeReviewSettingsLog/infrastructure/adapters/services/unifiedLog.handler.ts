@@ -2,6 +2,7 @@ import {
     CONTEXT_RESOLUTION_SERVICE_TOKEN,
     IContextResolutionService,
 } from '@libs/core/context-resolution/domain/contracts/context-resolution.service.contract';
+import { RepositoryNotIntegratedError } from '@libs/core/context-resolution/domain/errors/repository-not-integrated.error';
 import {
     ActionType,
     ConfigLevel,
@@ -42,6 +43,7 @@ export interface UnifiedLogParams extends BaseLogParams {
 @Injectable()
 export class UnifiedLogHandler {
     private readonly logger = createLogger(UnifiedLogHandler.name);
+    private readonly repositoryNames = new Map<string, CachedRepositoryName>();
 
     constructor(
         @Inject(CODE_REVIEW_SETTINGS_LOG_REPOSITORY_TOKEN)
@@ -76,44 +78,12 @@ export class UnifiedLogHandler {
                 userInfo,
             });
 
-        try {
-            if (configLevel === ConfigLevel.REPOSITORY && !repository?.name) {
-                repository.name = await this.getRepositoryAdditionalInfo(
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting repository additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-
-            if (repository) {
-                repository.name = 'Unknown';
-            }
-        }
-
-        try {
-            if (configLevel === ConfigLevel.DIRECTORY && !directory?.path) {
-                directory.path = await this.getDirectoryAdditionalInfo(
-                    directory?.id,
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting directory additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-
-            if (directory) {
-                directory.path = 'Unknown';
-            }
-        }
+        await this.fillLocationNames({
+            organizationId: organizationAndTeamData.organizationId,
+            configLevel,
+            repository,
+            directory,
+        });
 
         await this.codeReviewSettingsLogRepository.create({
             organizationId: organizationAndTeamData.organizationId,
@@ -143,42 +113,12 @@ export class UnifiedLogHandler {
             changedData,
         } = params;
 
-        try {
-            if (configLevel === ConfigLevel.REPOSITORY && !repository?.name) {
-                repository.name = await this.getRepositoryAdditionalInfo(
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting repository additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-            if (repository) {
-                repository.name = 'Unknown';
-            }
-        }
-
-        try {
-            if (configLevel === ConfigLevel.DIRECTORY && !directory?.path) {
-                directory.path = await this.getDirectoryAdditionalInfo(
-                    directory?.id,
-                    repository?.id,
-                    organizationAndTeamData.organizationId,
-                );
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error getting directory additional info',
-                context: UnifiedLogHandler.name,
-                error: error,
-            });
-            if (directory) {
-                directory.path = 'Unknown';
-            }
-        }
+        await this.fillLocationNames({
+            organizationId: organizationAndTeamData.organizationId,
+            configLevel,
+            repository,
+            directory,
+        });
 
         await this.codeReviewSettingsLogRepository.create({
             organizationId: organizationAndTeamData.organizationId,
@@ -192,6 +132,86 @@ export class UnifiedLogHandler {
             repository,
             directory,
             changedData,
+        });
+    }
+
+    /**
+     * Fills the repository name or directory path the caller left out. When
+     * the lookup fails the entry is still written, with "Unknown".
+     */
+    private async fillLocationNames(params: {
+        organizationId: string;
+        configLevel?: ConfigLevel;
+        repository?: { id: string; name?: string };
+        directory?: { id?: string; path?: string };
+    }): Promise<void> {
+        const { organizationId, configLevel, repository, directory } = params;
+
+        try {
+            if (configLevel === ConfigLevel.REPOSITORY && !repository?.name) {
+                repository.name = await this.getRepositoryAdditionalInfo(
+                    repository?.id,
+                    organizationId,
+                );
+            }
+        } catch (error) {
+            this.logLookupFailure(
+                'Error getting repository additional info',
+                error,
+                {
+                    organizationId,
+                    repositoryId: repository?.id,
+                },
+            );
+            if (repository) {
+                repository.name = 'Unknown';
+            }
+        }
+
+        try {
+            if (configLevel === ConfigLevel.DIRECTORY && !directory?.path) {
+                directory.path = await this.getDirectoryAdditionalInfo(
+                    directory?.id,
+                    repository?.id,
+                    organizationId,
+                );
+            }
+        } catch (error) {
+            this.logLookupFailure(
+                'Error getting directory additional info',
+                error,
+                {
+                    organizationId,
+                    repositoryId: repository?.id,
+                    directoryId: directory?.id,
+                },
+            );
+            if (directory) {
+                directory.path = 'Unknown';
+            }
+        }
+    }
+
+    private logLookupFailure(
+        message: string,
+        error: Error,
+        metadata: {
+            organizationId: string;
+            repositoryId?: string;
+            directoryId?: string;
+        },
+    ): void {
+        // A repository removed from the integration still gets entries:
+        // removing its synced Kody Rules writes one per rule (issue #2581).
+        // Nothing is wrong there, and "Unknown" is all that can be said.
+        if (error instanceof RepositoryNotIntegratedError) {
+            return;
+        }
+        this.logger.error({
+            message,
+            context: UnifiedLogHandler.name,
+            error,
+            metadata,
         });
     }
 
@@ -402,15 +422,52 @@ export class UnifiedLogHandler {
         return directoryPath;
     }
 
-    private async getRepositoryName(
+    /**
+     * Removing the synced Kody Rules of a repository writes one entry per
+     * rule, 26 in a row in prod (issue #2581), and each one asked for the
+     * same name. The events are emitted without being awaited, so those
+     * entries run at the same time: the lookup in flight is shared, and its
+     * answer is kept briefly per repository, "not in the integration"
+     * included. Any other failure is dropped, so the next entry asks again.
+     */
+    private getRepositoryName(
         repositoryId: string,
         organizationId: string,
     ): Promise<string> {
-        const repositoryName =
-            await this.contextResolutionService.getRepositoryNameByOrganizationAndRepository(
+        const key = `${organizationId}:${repositoryId}`;
+        const now = Date.now();
+        const cached = this.repositoryNames.get(key);
+        if (cached && cached.expiresAt > now) {
+            return cached.name;
+        }
+
+        const name =
+            this.contextResolutionService.getRepositoryNameByOrganizationAndRepository(
                 organizationId,
                 repositoryId,
             );
-        return repositoryName;
+        this.remember(key, { name, expiresAt: now + REPOSITORY_NAME_TTL_MS });
+        name.catch((error) => {
+            if (
+                !(error instanceof RepositoryNotIntegratedError) &&
+                this.repositoryNames.get(key)?.name === name
+            ) {
+                this.repositoryNames.delete(key);
+            }
+        });
+        return name;
+    }
+
+    private remember(key: string, entry: CachedRepositoryName): void {
+        if (this.repositoryNames.size >= REPOSITORY_NAME_CACHE_MAX) {
+            this.repositoryNames.clear();
+        }
+        this.repositoryNames.set(key, entry);
     }
 }
+
+// Long enough for one burst of entries, short enough that a rename shows up.
+const REPOSITORY_NAME_TTL_MS = 60_000;
+const REPOSITORY_NAME_CACHE_MAX = 1_000;
+
+type CachedRepositoryName = { name: Promise<string>; expiresAt: number };

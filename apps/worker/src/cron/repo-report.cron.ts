@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { SendRepoReportUseCase } from '@libs/cockpit/application/use-cases/send-repo-report.use-case';
 import { environment } from '@libs/ee/configs/environment';
@@ -31,7 +31,7 @@ export class RepoReportCron {
         private readonly organizationService: IOrganizationService,
     ) {}
 
-    @Cron(process.env.API_CRON_REPO_REPORT || '0 9 1,16 * *', {
+    @GatedCron(process.env.API_CRON_REPO_REPORT || '0 9 1,16 * *', {
         name: 'repo-report',
         timeZone: 'UTC',
     })

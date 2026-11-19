@@ -47,6 +47,16 @@ export interface IInboxMessageRepository {
         consumerId: string,
         lockedBy: string,
     ): Promise<void>;
+    /**
+     * Refreshes `lockedAt` while this holder still has the message in
+     * PROCESSING. Returns false when the claim was stolen or completed,
+     * so the caller can stop work.
+     */
+    heartbeat(
+        messageId: string,
+        consumerId: string,
+        lockedBy: string,
+    ): Promise<boolean>;
     reclaimStaleMessages(olderThan: Date): Promise<number>;
     reclaimStaleMessagesByConsumer(
         consumerId: string,

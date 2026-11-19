@@ -289,6 +289,46 @@ function fakeJudge(
 }
 
 describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () => {
+    it('keeps repository evidence instructions on semantic and PR shards', async () => {
+        const runJudge = jest.fn(async (_shard: Parameters<RunJudge>[0]) => []);
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file('src/a.ts', '1 +console.log(1);'),
+                file('test/b.spec.ts', '1 +assert(result);'),
+            ],
+            rules: [
+                {
+                    uuid: 'detector',
+                    path: 'src/**',
+                    detector: { type: 'regex', pattern: 'console' },
+                },
+                {
+                    uuid: 'semantic',
+                    path: 'test/**',
+                    rule: 'Assert the output.',
+                },
+                {
+                    uuid: 'pr',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                    rule: 'Check the intent.',
+                },
+            ],
+            detectorHits: new Map([['detector', new Map([['src/a.ts', [1]]])]]),
+            runJudge,
+        });
+        expect(runJudge.mock.calls).toHaveLength(3);
+        for (const [shard] of runJudge.mock.calls) {
+            const verifyRepositoryFacts = shard.filename !== 'src/a.ts';
+            expect(shard.verifyRepositoryFacts).toBe(verifyRepositoryFacts);
+            expect(shard.system.includes('needsRepositoryEvidence')).toBe(
+                verifyRepositoryFacts,
+            );
+            expect(shard.user.includes('needsRepositoryEvidence')).toBe(
+                verifyRepositoryFacts,
+            );
+        }
+    });
+
     it('issues one shard per changed file that has applicable rules', async () => {
         const { run, calls } = fakeJudge({});
         const res = await judgeKodyRulesSharded({
@@ -447,7 +487,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(res.violations[0].relevantFile).toBeUndefined();
     });
 
-    it('sends the FULL diff of every changed file to the PR-scope shard', async () => {
+    it('sends selected patches to the PR-scope shard and labels an incremental round', async () => {
         // Regression guard: the sharded refactor originally sent only file
         // NAMES to the PR shard, blinding content-dependent PR-scope rules
         // (the migration-safety rule missed 100% across every model — it
@@ -459,6 +499,8 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             return [];
         };
         await judgeKodyRulesSharded({
+            incrementalDiff: true,
+            prFilePaths: ['src/odd\n```.ts'],
             changedFiles: [
                 file(
                     'db/migrate/add_index.rb',
@@ -478,6 +520,9 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         });
         expect(prUser).toContain('add_index :cases');
         expect(prUser).toContain('belongs_to :provider');
+        expect(prUser).toContain('Incremental round');
+        expect(prUser).toContain('````\n"src/odd\\n```.ts"\n````');
+        expect(prUser).not.toMatch(/full diff of every/i);
     });
 
     it('degrades an over-budget file to a name-only marker in the PR shard (never silently)', async () => {

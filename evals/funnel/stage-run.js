@@ -107,7 +107,7 @@ async function runStage(stage) {
     const only = args.cases ? new Set(String(args.cases).split(',')) : null;
     const inSet = SETS[SET];
     const cases = args.controls ? [] : snapshot.cases.filter((c) => inSet(c.caseId) && (!only || only.has(c.caseId))).slice(0, args.limit ? Number(args.limit) : undefined);
-    const controls = CONTROLS[stage.id] || [];
+    const controls = (CONTROLS[stage.id] || []).filter((c) => c.set === args['control-set']);
     const run = async (vars, frozen) => {
         const { result, errors } = await withCallErrors(() =>
             stage.apply({ pr: internals.prOf(vars), team: internals.teamOf(vars), route, permissionService }, frozen),
@@ -137,8 +137,8 @@ async function runStage(stage) {
         }),
         ...controls.map((control) => async () => {
             try {
-                const frozen = stage.controlInput(control.findings.map((finding) => ({ finding, bug: null })));
-                const out = await run(CONTROL_PR, frozen);
+                const frozen = stage.controlInput(control.findings.map((finding) => ({ finding, bug: null })), control);
+                const out = await run(control.pr ?? CONTROL_PR, frozen);
                 return { id: control.id, checks: control.checks, ...scoreControl(control, out), control: true };
             } catch (error) {
                 console.error(`  ${control.id}: ${String(error.message || error).slice(0, 200)}`);

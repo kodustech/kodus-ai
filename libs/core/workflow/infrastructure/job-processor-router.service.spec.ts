@@ -1,4 +1,7 @@
 import { runWithTimeout } from './run-with-timeout';
+import { JobProcessorRouterService } from './job-processor-router.service';
+import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
+import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 describe('runWithTimeout (router core)', () => {
     afterEach(() => {
@@ -13,7 +16,11 @@ describe('runWithTimeout (router core)', () => {
             return new Promise<void>(() => {}); // never resolves
         };
 
-        const racing = runWithTimeout(work, 105 * 60 * 1000, 'timeout after 6300000ms');
+        const racing = runWithTimeout(
+            work,
+            105 * 60 * 1000,
+            'timeout after 6300000ms',
+        );
         // Suppress unhandled rejection — we assert on it below
         racing.catch(() => {});
 
@@ -43,9 +50,9 @@ describe('runWithTimeout (router core)', () => {
             throw new Error('processor exploded');
         };
 
-        await expect(
-            runWithTimeout(work, 1_000, 'unused'),
-        ).rejects.toThrow('processor exploded');
+        await expect(runWithTimeout(work, 1_000, 'unused')).rejects.toThrow(
+            'processor exploded',
+        );
         expect(capturedSignal?.aborted).toBe(false);
     });
 
@@ -57,5 +64,35 @@ describe('runWithTimeout (router core)', () => {
 
         expect(clearSpy).toHaveBeenCalled();
         clearSpy.mockRestore();
+    });
+});
+
+describe('JobProcessorRouterService slice preempt', () => {
+    it('does not mark the job FAILED when the slice was preempted', async () => {
+        const jobRepository = {
+            findOne: jest.fn().mockResolvedValue({
+                workflowType: WorkflowType.SECURITY_SCAN,
+            }),
+            update: jest.fn(),
+        };
+        const securityScanProcessor = {
+            process: jest.fn().mockRejectedValue(new SlicePreemptedError()),
+        };
+        const unused = {} as never;
+        const router = new JobProcessorRouterService(
+            jobRepository as never,
+            unused,
+            unused,
+            unused,
+            unused,
+            unused,
+            unused,
+            securityScanProcessor as never,
+        );
+
+        await expect(router.process('job-1')).rejects.toBeInstanceOf(
+            SlicePreemptedError,
+        );
+        expect(jobRepository.update).not.toHaveBeenCalled();
     });
 });

@@ -18,6 +18,7 @@ import {
     formatScanOutcome,
     formatScanSpend,
 } from "../../issues/_components/security-scan/format";
+import { CancelScanButton } from "./cancel-scan-button";
 
 const ago = (iso?: string) =>
     iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "";
@@ -53,28 +54,36 @@ export const ScanStatusBanner = ({ scans }: { scans: SecurityScan[] }) => {
             (running.coverage?.unitsFailed ?? 0);
         return (
             <Banner tone="info" icon={<ShieldIcon />}>
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <p className="text-text-primary text-sm font-medium">
-                        {/* Queued again between two jobs: already started. */}
-                        {running.status === "queued" && !running.startedAt
-                            ? `Starting a scan of ${running.repository.fullName}`
-                            : `Scanning ${running.repository.fullName}`}
-                    </p>
-                    <span className="text-text-secondary text-xs">
-                        {[
-                            total
-                                ? `${done} of ${total} areas`
-                                : "mapping the repository",
-                            formatScanSpend(running),
-                            formatScanOutcome(running.outcome),
-                        ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                    </span>
+                <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                            <p className="text-text-primary text-sm font-medium">
+                                {/* Queued again between two jobs: already started. */}
+                                {running.status === "queued" &&
+                                !running.startedAt
+                                    ? `Starting a scan of ${running.repository.fullName}`
+                                    : `Scanning ${running.repository.fullName}`}
+                            </p>
+                            <span className="text-text-secondary text-xs">
+                                {[
+                                    total
+                                        ? `${done} of ${total} areas`
+                                        : "mapping the repository",
+                                    formatScanSpend(running),
+                                    formatScanOutcome(running.outcome),
+                                ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                            </span>
+                        </div>
+                        <ScanProgressBar
+                            percent={
+                                total ? Math.round((done / total) * 100) : 0
+                            }
+                        />
+                    </div>
+                    <CancelScanButton scan={running} />
                 </div>
-                <ScanProgressBar
-                    percent={total ? Math.round((done / total) * 100) : 0}
-                />
             </Banner>
         );
     }
@@ -86,13 +95,17 @@ export const ScanStatusBanner = ({ scans }: { scans: SecurityScan[] }) => {
     const tone =
         last.status === "failed"
             ? "danger"
-            : last.status === "stopped_by_budget" || failedAreas > 0
-              ? "warning"
-              : "success";
+            : last.status === "cancelled"
+              ? "neutral"
+              : last.status === "stopped_by_budget" || failedAreas > 0
+                ? "warning"
+                : "success";
     const icon =
-        tone === "danger" ? (
+        last.status === "failed" ? (
             <ShieldXIcon />
-        ) : tone === "warning" ? (
+        ) : last.status === "cancelled" ? (
+            <ShieldIcon />
+        ) : last.status === "stopped_by_budget" || failedAreas > 0 ? (
             <ShieldAlertIcon />
         ) : (
             <ShieldCheckIcon />
@@ -100,25 +113,29 @@ export const ScanStatusBanner = ({ scans }: { scans: SecurityScan[] }) => {
     const headline =
         last.status === "failed"
             ? `The last scan of ${last.repository.fullName} failed`
-            : last.status === "stopped_by_budget"
-              ? `The last scan of ${last.repository.fullName} stopped at its spend limit`
-              : `${last.repository.fullName} was scanned ${ago(last.finishedAt ?? last.updatedAt)}`;
+            : last.status === "cancelled"
+              ? `The last scan of ${last.repository.fullName} was cancelled`
+              : last.status === "stopped_by_budget"
+                ? `The last scan of ${last.repository.fullName} stopped at its spend limit`
+                : `${last.repository.fullName} was scanned ${ago(last.finishedAt ?? last.updatedAt)}`;
     const detail =
         last.status === "failed"
             ? last.error
-            : [
-                  formatScanOutcome(last.outcome),
-                  formatScanSpend(last),
-                  last.status === "stopped_by_budget" &&
-                  last.coverage?.unitsSkippedByBudget
-                      ? `${last.coverage.unitsSkippedByBudget} areas not reached; run it again to continue`
-                      : "",
-                  failedAreas > 0
-                      ? `${failedAreas} ${failedAreas === 1 ? "area" : "areas"} failed; run it again to retry`
-                      : "",
-              ]
-                  .filter(Boolean)
-                  .join(" · ");
+            : last.status === "cancelled"
+              ? undefined
+              : [
+                    formatScanOutcome(last.outcome),
+                    formatScanSpend(last),
+                    last.status === "stopped_by_budget" &&
+                    last.coverage?.unitsSkippedByBudget
+                        ? `${last.coverage.unitsSkippedByBudget} areas not reached; run it again to continue`
+                        : "",
+                    failedAreas > 0
+                        ? `${failedAreas} ${failedAreas === 1 ? "area" : "areas"} failed; run it again to retry`
+                        : "",
+                ]
+                    .filter(Boolean)
+                    .join(" · ");
 
     return (
         <Banner tone={tone} icon={icon}>

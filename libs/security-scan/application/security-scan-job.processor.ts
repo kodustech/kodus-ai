@@ -38,6 +38,7 @@ import {
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { isSlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
 import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 
 import { ScanBudgetMeter, validateBudget } from '../domain/budget-meter';
@@ -182,6 +183,32 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 signal,
             );
         } catch (error) {
+            if (isSlicePreemptedError(error)) {
+                logger.warn({
+                    message: `Security scan ${scan.uuid} slice preempted`,
+                    context: SecurityScanJobProcessor.name,
+                    error,
+                    metadata: {
+                        scanId: scan.uuid,
+                        organizationId: scan.organizationId,
+                        repositoryId: scan.repository.id,
+                    },
+                });
+                if (sliceMeter) {
+                    await this.scans.update(
+                        scan.uuid,
+                        { spend: sliceMeter.committedSpend() },
+                        undefined,
+                        {
+                            statuses: active,
+                            ownedBy: jobId,
+                            orUnowned: true,
+                        },
+                    );
+                }
+                throw error;
+            }
+
             logger.error({
                 message: `Security scan ${scan.uuid} failed`,
                 context: SecurityScanJobProcessor.name,
@@ -594,7 +621,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         ],
                     };
                 }
-                await this.scans.recordUnit(
+                const recorded = await this.scans.recordUnit(
                     scan.uuid,
                     progress,
                     {
@@ -617,6 +644,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     ],
                     jobId,
                 );
+                // Cancelled, or lost to another job, since the unit began.
+                if (!recorded) {
+                    throw new Error(
+                        `Security scan ${scan.uuid} is no longer run by job ${jobId}`,
+                    );
+                }
             },
         });
 
@@ -699,6 +732,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         // A job aborted (timed out) resolves nothing: another may run next.
         signal?.throwIfAborted();
+        // Nor does a scan cancelled, or taken by another job, after its last
+        // unit: resolving would close issues for a scan that did not finish.
+        await stillOwned();
 
         // What this scan carries from an earlier one's plan, in an area it
         // did not read again, it holds as found: seen by it, not resolved

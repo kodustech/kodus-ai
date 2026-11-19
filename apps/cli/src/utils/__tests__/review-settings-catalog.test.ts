@@ -114,4 +114,26 @@ describe('review settings catalog', () => {
             runOnDraft: false,
         });
     });
+
+    it('accepts risk and approval lists without requiring linked repository fields', () => {
+        for (const key of ['riskCriteria', 'approvalPolicies']) {
+            const setting = resolveReviewSetting(key);
+            expect(parseReviewSettingValue(setting, '[]')).toEqual([]);
+            expect(
+                parseReviewSettingValue(setting, '[{"id":"example"}]'),
+            ).toEqual([{ id: 'example' }]);
+            expect(() => parseReviewSettingValue(setting, '{}')).toThrow(
+                /array of objects/,
+            );
+            expect(() => parseReviewSettingValue(setting, '[[]]')).toThrow(
+                /array of objects/,
+            );
+        }
+
+        const route = resolveReviewSetting('riskReviewRouting.riskFound');
+        expect(parseReviewSettingValue(route, 'heavy')).toBe('heavy');
+        expect(() => parseReviewSettingValue(route, 'light')).toThrow(
+            /balanced, heavy/,
+        );
+    });
 });
