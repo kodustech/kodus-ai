@@ -19,6 +19,13 @@ const API_CRON_KODUS_CREDITS_SWEEP =
 // time keeps those scans from stacking on the primary.
 const SWEEP_CONCURRENCY = 4;
 
+// The lock must outlive a sweep: with SWEEP_CONCURRENCY at a time a run can
+// pass the 5-minute schedule, and an expired lock let the next tick stack a
+// second sweep on the same scans. A crashed process frees it at once (it is a
+// Postgres advisory lock on the run's own session); the TTL only bounds a run
+// that hangs.
+const SWEEP_LOCK_TTL_MS = 30 * 60 * 1000;
+
 /**
  * Every 5 minutes: journal Kodus-routed usage spans as charges and debit them
  * from each org's prepaid balance. Single-flight across workers via the
@@ -105,7 +112,7 @@ export class KodusCreditsSweepCronProvider {
         try {
             return await this.distributedLockService.acquire(
                 'CRON:KODUS_CREDITS:SWEEP',
-                { ttl: 4 * 60 * 1000 },
+                { ttl: SWEEP_LOCK_TTL_MS },
             );
         } catch (error) {
             this.logger.error({
