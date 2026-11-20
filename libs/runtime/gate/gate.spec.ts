@@ -436,6 +436,26 @@ describe('decideNewEndpoint', () => {
         const sameStatus = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '404', json: '"other"' }), prAnswers(2, { status: '404', json: '"other"' })];
         expect(gate(sameStatus)).toMatchObject({ verdict: 'new_endpoint' });
     });
+
+    // kr-shop #36 on release v1f: main routes GET /orders/search to /orders/:id, whose Number('search') query fails.
+    const mainFails = (round: number, over: Partial<GateStep> = ready) => step('base', round, { status: '500', 'json.error': '"internal error"' }, { expectedHolds: false, ...over });
+
+    it('main failing (5xx) on a request the route this PR adds answers is new behavior, not a regression (kr-shop #36)', () => {
+        const found = { status: '200', json: '[{"id":1,"item":"keyboard","quantity":2}]' };
+        const steps = [mainFails(1), mainFails(2), prAnswers(1, found), prAnswers(2, found)];
+        expect(decide(steps)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        expect(gate(steps)).toMatchObject({ verdict: 'new_endpoint', reason: expect.stringContaining('main fails on this request (500)') });
+    });
+
+    it('main failing stays a regression when the diff does not add the route, when the PR fails too, or when main failed only once', () => {
+        const found = { status: '200', 'json.total': '20' };
+        expect(gate([mainFails(1), mainFails(2), prAnswers(1, found), prAnswers(2, found)], false)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        const boom = { status: '502', 'json.error': '"bad gateway"' };
+        expect(gate([mainFails(1), mainFails(2), prAnswers(1, boom), prAnswers(2, boom)])).toMatchObject({ verdict: 'finding' });
+        const mainOk = step('base', 2, { status: '200', 'json.total': '20' }, ready);
+        expect(gate([mainFails(1), mainOk, prAnswers(1, found), prAnswers(2, found)])).not.toMatchObject({ verdict: 'new_endpoint' });
+        expect(gate([mainFails(1, {}), mainFails(2, {}), prAnswers(1, found), prAnswers(2, found)])).toMatchObject({ verdict: 'finding' });
+    });
 });
 
 describe('decideNewEndpoint: a route the diff adds that answers 404 on the PR too (kr-shop #20 on release v1e)', () => {

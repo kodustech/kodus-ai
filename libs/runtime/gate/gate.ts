@@ -358,6 +358,12 @@ const baseAnsweredReady = (s: GateStep) => s.readyStatus !== undefined && s.read
  * code fails, which no base comparison is needed to say. A route the PR
  * removes (main answers, the PR 404s) is never `addedByDiff` and stays a
  * regression.
+ *
+ * Main failing on the request is the same case: every base round answered
+ * 5xx after a ready check, as when another route swallows the path the PR
+ * declares (`/orders/:id` takes `/orders/search` and fails, kr-shop #36).
+ * The PR answering it without a 5xx is new behavior; a PR that fails too
+ * stays the finding it was.
  */
 export function decideNewEndpoint<D extends GateDecision>(decision: D, steps: GateStep[], opts: { addedByDiff: boolean }): D {
     if (decision.kind !== 'verdict' || decision.verdict !== 'finding' || decision.findingKind !== 'behavior_change') return decision;
@@ -366,8 +372,15 @@ export function decideNewEndpoint<D extends GateDecision>(decision: D, steps: Ga
     const base = observer.filter((s) => s.side === 'base');
     const pr = observer.filter((s) => s.side === 'pr');
     if (base.length === 0 || pr.length === 0) return decision;
-    const absentOnBase = base.every((s) => ROUTE_ABSENT.has(s.fields.status ?? '') && baseAnsweredReady(s));
     const prStatuses = pr.map(statusOf);
+    const failsOnBase = base.every((s) => (statusOf(s) ?? 0) >= 500 && baseAnsweredReady(s));
+    if (failsOnBase) {
+        if (prStatuses.some((s) => s === undefined || s >= 500)) return decision;
+        const { findingKind: _kind, ...rest } = decision;
+        const prSays = [...new Set(prStatuses)].join('/');
+        return { ...rest, verdict: 'new_endpoint', reason: `main fails on this request (${base[0].fields.status}) and the route this PR adds answers it (${prSays}): new behavior, not a regression` } as D;
+    }
+    const absentOnBase = base.every((s) => ROUTE_ABSENT.has(s.fields.status ?? '') && baseAnsweredReady(s));
     // A PR that answers 404 or 405 too (a missing order on a route it adds, kr-shop #20) answers in its own words, where
     // main answers its framework's: main has no such route to compare with.
     if (!absentOnBase || prStatuses.some((s) => s === undefined)) return decision;
