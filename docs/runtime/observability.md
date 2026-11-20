@@ -265,6 +265,7 @@ one attribute, the Prometheus names as the exporter writes them, every histogram
 | `cell_steps_total` | `cell_steps_total` | counter | {step} | `kind`, `outcome` | cell | Steps run, by kind and outcome. |
 | `cell_sandbox_ops_total` | `cell_sandbox_ops_total` | counter | {op} | `op`, `outcome` | cell | Sandbox operations the guest agent ran (op: the sandbox.op kind; outcome: ok, refused, failed). |
 | `cell_sandbox_op_milliseconds_total` | `cell_sandbox_op_milliseconds_total` | counter | ms | `op` | cell | Time in sandbox operations; divide by cell_sandbox_ops_total for the mean. |
+| `cell_egress_seals_total` | `cell_egress_seals_total` | counter | {seal} | `outcome` | cell | Sandbox egress seals (egress.policy sealed): the policy pushed to the enforcers allows nothing (outcome: ok, failed). |
 | `cell_image_bakes_total` | `cell_image_bakes_total` | counter | {bake} | `outcome` | cell | Image bakes, by outcome. |
 | `cell_exfiltration_alerts_total` | `cell_exfiltration_alerts_total` | counter | {alert} | `kind` | cell | Injector alerts the agent acted on: a claim's credential or bait left for a host it was not for. |
 | `cell_alert_source_available` | `cell_alert_source_available` | gauge | 1 | — | cell | Whether the configured alert sources have verified continuity; zero until negotiated or while unavailable. |
