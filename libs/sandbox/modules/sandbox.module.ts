@@ -25,12 +25,19 @@ import {
     SandboxEgressPolicyService,
 } from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
 import {
-    AdvisoryLockCapacityStore,
     SANDBOX_CAPACITY_GATE_TOKEN,
     SandboxCapacityGate,
     readSandboxCapacityEnv,
 } from '@libs/sandbox/infrastructure/services/sandbox-capacity-gate';
-import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import {
+    SANDBOX_CAPACITY_STATE_MODEL,
+    SANDBOX_CAPACITY_TICKET_MODEL,
+    SandboxCapacityStateSchema,
+    SandboxCapacityTicketSchema,
+} from '@libs/sandbox/infrastructure/repositories/schemas/sandbox-capacity.model';
+import { MongoCapacityStore } from '@libs/sandbox/infrastructure/services/sandbox-capacity-mongo.store';
+import { getModelToken } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
@@ -62,6 +69,14 @@ export function selectSandboxProvider(
     imports: [
         MongooseModule.forFeature([
             { name: SandboxLeaseModel.name, schema: SandboxLeaseSchema },
+            {
+                name: SANDBOX_CAPACITY_TICKET_MODEL,
+                schema: SandboxCapacityTicketSchema,
+            },
+            {
+                name: SANDBOX_CAPACITY_STATE_MODEL,
+                schema: SandboxCapacityStateSchema,
+            },
         ]),
         GlobalParametersModule,
         IntegrationConfigModule,
@@ -80,18 +95,19 @@ export function selectSandboxProvider(
             useClass: SandboxEgressPolicyService,
         },
         SandboxLeaseRepository,
-        // Deployment-wide cap (SANDBOX_MAX_CONCURRENT): a no-op while unset.
-        // The lock service only needs the TypeORM DataSource.
-        DistributedLockService,
+        // Deployment-wide cap (SANDBOX_MAX_CONCURRENT): a no-op while unset
         {
             provide: SANDBOX_CAPACITY_GATE_TOKEN,
-            useFactory: (locks: DistributedLockService) =>
+            useFactory: (tickets: Model<any>, state: Model<any>) =>
                 new SandboxCapacityGate(
                     readSandboxCapacityEnv().maxConcurrent > 0
-                        ? new AdvisoryLockCapacityStore(locks)
+                        ? new MongoCapacityStore(tickets, state)
                         : undefined,
                 ),
-            inject: [DistributedLockService],
+            inject: [
+                getModelToken(SANDBOX_CAPACITY_TICKET_MODEL),
+                getModelToken(SANDBOX_CAPACITY_STATE_MODEL),
+            ],
         },
         {
             provide: SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,

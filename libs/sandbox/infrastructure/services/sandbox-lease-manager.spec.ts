@@ -22,6 +22,7 @@
 
 import { RateLimitError, Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
+import { FakeCapacityStore } from './sandbox-capacity-fake.store';
 import {
     SandboxCapacityGate,
     SandboxCapacityStore,
@@ -895,17 +896,8 @@ describe('SandboxLeaseManager', () => {
                     gate,
                 );
             }
-            const sharedStore = (): SandboxCapacityStore => {
-                const held = new Set<number>();
-                return {
-                    tryAcquire: async (i) => {
-                        if (held.has(i)) return null;
-                        held.add(i);
-                        return { release: async () => void held.delete(i) };
-                    },
-                    isHeld: async (i) => held.has(i),
-                };
-            };
+            const sharedStore = (): SandboxCapacityStore =>
+                new FakeCapacityStore();
 
             it('holds the cap across two workers and frees a queued review when a lease is released', async () => {
                 const store = sharedStore();

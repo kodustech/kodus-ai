@@ -165,17 +165,18 @@ the reviews wait in line instead of failing:
 
 How it behaves:
 
-- With the cap set, a slot is a Postgres advisory lock (`sandbox-capacity:slot:<i>`), so a worker that dies frees its
-  slots. Within one worker the line is first in, first out; across workers the next free slot goes to whichever polls
-  first (a lock has no queue).
+- With the cap set, the line lives in Mongo next to the sandbox leases: each waiting review inserts a ticket
+  (`sandbox_capacity_tickets`), only the oldest live ticket (createdAt, then `_id`) may take a slot, so the order is
+  first in, first out across every worker. Taking a slot is one atomic update of a single document
+  (`sandbox_capacity`), so racing workers never exceed the cap. Workers heartbeat their tickets and slots every 15 s;
+  one silent for 45 s belongs to a crashed worker and stops counting, so nothing leaks and no database connection is
+  held while a sandbox runs.
 - A full Runtime cell is waited out with backoff (5 s doubling to 60 s) until `SANDBOX_QUEUE_MAX_WAIT_MS`; before, the
   review retried once after 10 s and then ran without a sandbox.
-- A PR closed or force-pushed cancels the queued wait of its older review, on the worker that holds it. A plain newer
+- A PR closed or force-pushed deletes the queued ticket of its older review, whichever worker holds it. A plain newer
   push does not: reviews of the same PR on one worker already share one sandbox (one slot).
 - Unset `SANDBOX_MAX_CONCURRENT` is today's behavior; E2B and local providers wait as they did.
-- Each held slot keeps one Postgres connection for the life of its sandbox: keep `SANDBOX_MAX_CONCURRENT` well under
-  the Postgres pool size of the worker.
-- The numbers a screen can show (in use, queued, oldest wait) come from `SandboxLeaseManager.capacityNumbers()`.
+- The numbers a screen can show (in use, queued, oldest wait, deployment-wide, read from Mongo) come from `SandboxLeaseManager.capacityNumbers()`.
 
 ## Docker host disk (docker-gvisor)
 

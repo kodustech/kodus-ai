@@ -1,119 +1,145 @@
+import { FakeCapacityStore } from './sandbox-capacity-fake.store';
 import {
     SandboxCapacityEnv,
     SandboxCapacityGate,
-    SandboxCapacitySlot,
-    SandboxCapacityStore,
     readSandboxCapacityEnv,
 } from './sandbox-capacity-gate';
 
-/** One shared "database": two gates over it are two workers. */
-class FakeStore implements SandboxCapacityStore {
-    readonly held = new Set<number>();
-    async tryAcquire(i: number): Promise<SandboxCapacitySlot | null> {
-        if (this.held.has(i)) return null;
-        this.held.add(i);
-        return { release: async () => void this.held.delete(i) };
-    }
-    async isHeld(i: number) {
-        return this.held.has(i);
-    }
-}
+const timing = { pollMs: 1000, heartbeatMs: 15_000, deadAfterMs: 45_000 };
 
-function worker(store: SandboxCapacityStore, env: SandboxCapacityEnv, clock: { t: number }) {
+/** A worker: a gate over the shared store. Each poll sleep is 1s of fake time. */
+function worker(store: FakeCapacityStore, env: SandboxCapacityEnv, clock: { t: number }) {
     return new SandboxCapacityGate(
         store,
         () => env,
         () => clock.t,
-        // A poll tick costs 1s of fake time and yields to other workers
-        async (ms) => {
+        async () => {
             clock.t += 1000;
             await new Promise((r) => setImmediate(r));
         },
+        timing,
     );
 }
+const tick = () => new Promise((r) => setImmediate(r));
+const rel = (g: any) => g.release();
 
-describe('SandboxCapacityGate', () => {
-    it('holds the cap across two workers', async () => {
-        const store = new FakeStore();
-        const clock = { t: 0 };
-        const env = { maxConcurrent: 2, maxWaitMs: 60_000 };
-        const a = worker(store, env, clock);
-        const b = worker(store, env, clock);
-
-        const g1 = await a.acquire('pr1');
-        const g2 = await b.acquire('pr2');
-        expect([g1.outcome, g2.outcome]).toEqual(['granted', 'granted']);
-
-        const third = b.acquire('pr3');
-        await new Promise((r) => setImmediate(r));
-        expect(store.held.size).toBe(2);
-        expect((await a.numbers()).inUse).toBe(2);
-
-        if (g1.outcome === 'granted') await g1.release();
-        const g3 = await third;
-        expect(g3.outcome).toBe('granted');
-        expect(store.held.size).toBe(2);
-    });
-
-    it('serves one worker FIFO', async () => {
-        const store = new FakeStore();
-        const clock = { t: 0 };
-        const a = worker(store, { maxConcurrent: 1, maxWaitMs: 600_000 }, clock);
-        const first = await a.acquire('first');
-        const order: string[] = [];
-        const waits = ['x', 'y', 'z'].map((id) =>
-            a.acquire(id).then((g) => {
-                order.push(id);
-                if (g.outcome === 'granted') return g.release();
+describe('SandboxCapacityGate (Mongo tickets)', () => {
+    it('never exceeds the cap when two workers race', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 2, maxWaitMs: 600_000 };
+        const workers = [worker(store, env, clock), worker(store, env, clock)];
+        let live = 0;
+        let peak = 0;
+        const runs = Array.from({ length: 12 }, (_, i) =>
+            workers[i % 2].acquire(`h${i}`, `org:repo:${i}`).then(async (g) => {
+                expect(g.outcome).toBe('granted');
+                live++;
+                peak = Math.max(peak, live, store.slots.length);
+                await tick();
+                live--;
+                await rel(g);
             }),
         );
-        await new Promise((r) => setImmediate(r));
-        if (first.outcome === 'granted') await first.release();
+        await Promise.all(runs);
+        expect(peak).toBeLessThanOrEqual(2);
+        expect(peak).toBe(2);
+        expect(store.slots).toHaveLength(0);
+    });
+
+    it('serves strictly FIFO across workers', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 1, maxWaitMs: 600_000 };
+        const a = worker(store, env, clock);
+        const b = worker(store, env, clock);
+        const first: any = await a.acquire('first', 'k:r:0');
+        const order: string[] = [];
+        const waits: Promise<void>[] = [];
+        for (const [i, id] of ['w1', 'w2', 'w3', 'w4'].entries()) {
+            clock.t += 10; // distinct createdAt, alternating workers
+            waits.push(
+                (i % 2 ? a : b).acquire(id, `k:r:${id}`).then(async (g) => {
+                    order.push(id);
+                    await rel(g);
+                }),
+            );
+            await tick();
+        }
+        await rel(first);
         await Promise.all(waits);
-        expect(order).toEqual(['x', 'y', 'z']);
+        expect(order).toEqual(['w1', 'w2', 'w3', 'w4']);
+    });
+
+    it('reaps the slot of a dead worker', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 1, maxWaitMs: 600_000 };
+        const dead = worker(store, env, clock);
+        const grant: any = await dead.acquire('crashed', 'k:r:1');
+        // The crashed worker never heartbeats again: no timer fires in this
+        // spec (fake clock), so its slot just ages past deadAfterMs
+        const alive = worker(store, env, clock);
+        const second = await alive.acquire('next', 'k:r:2');
+        expect(second.outcome).toBe('granted');
+        expect(store.slots.map((s) => s.ticketId)).toEqual(['next']);
+        await rel(second);
+        await rel(grant);
     });
 
     it('times out after the max wait so the caller can degrade', async () => {
-        const store = new FakeStore();
-        const clock = { t: 0 };
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
         const a = worker(store, { maxConcurrent: 1, maxWaitMs: 5_000 }, clock);
-        await a.acquire('holder');
-        const late = await a.acquire('late');
+        const held: any = await a.acquire('holder', 'k:r:1');
+        // keep the holder alive on the fake clock
+        const keep = setInterval(() => store.heartbeatSlot('holder', new Date(clock.t)), 1);
+        const late = await a.acquire('late', 'k:r:2');
+        clearInterval(keep);
         expect(late.outcome).toBe('timeout');
         expect(late.waitedMs).toBeGreaterThanOrEqual(5_000);
-        expect((await a.numbers()).queued).toBe(0);
+        expect(store.tickets).toHaveLength(0);
+        await rel(held);
     });
 
-    it('cancel() drops a queued wait without taking a slot', async () => {
-        const store = new FakeStore();
-        const clock = { t: 0 };
-        const a = worker(store, { maxConcurrent: 1, maxWaitMs: 600_000 }, clock);
-        await a.acquire('holder');
-        const queued = a.acquire('old-push');
-        await new Promise((r) => setImmediate(r));
-        expect(a.cancel('old-push')).toBe(1);
+    it('cancelPrKey deletes the waiting ticket, from any worker', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 1, maxWaitMs: 600_000 };
+        const a = worker(store, env, clock);
+        const b = worker(store, env, clock);
+        const held: any = await a.acquire('holder', 'k:r:1');
+        const queued = b.acquire('old', 'k:r:2');
+        await tick();
+        const keep = setInterval(() => store.heartbeatSlot('holder', new Date(clock.t)), 1);
+        expect(await a.cancelPrKey('k:r:2')).toBe(1);
         expect((await queued).outcome).toBe('cancelled');
-        expect(store.held.size).toBe(1);
+        clearInterval(keep);
+        expect(store.slots).toHaveLength(1);
+        await rel(held);
     });
 
-    it('reports in-use, queued and oldest wait', async () => {
-        const store = new FakeStore();
-        const clock = { t: 0 };
-        const a = worker(store, { maxConcurrent: 1, maxWaitMs: 600_000 }, clock);
-        await a.acquire('holder');
-        void a.acquire('waiting');
-        await new Promise((r) => setImmediate(r));
-        clock.t += 500;
-        const n = await a.numbers();
+    it('reports deployment-wide in-use, queued and oldest wait', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 1, maxWaitMs: 600_000 };
+        const a = worker(store, env, clock);
+        const b = worker(store, env, clock);
+        const held: any = await a.acquire('holder', 'k:r:1');
+        void b.acquire('waiting', 'k:r:2');
+        await tick();
+        const n = await a.numbers(); // read from a worker with nothing queued
         expect(n).toMatchObject({ inUse: 1, cap: 1, queued: 1 });
-        expect(n.oldestWaitMs).toBeGreaterThan(0);
-        a.cancel('waiting');
+        expect(n.oldestWaitMs).toBeGreaterThanOrEqual(0);
+        await b.cancelPrKey('k:r:2');
+        await rel(held);
     });
 
     it('is off without a cap', async () => {
-        const a = worker(new FakeStore(), { maxConcurrent: 0, maxWaitMs: 1 }, { t: 0 });
-        expect((await a.acquire('x')).outcome).toBe('granted');
+        const a = worker(new FakeCapacityStore(), { maxConcurrent: 0, maxWaitMs: 1 }, { t: 0 });
+        expect((await a.acquire('x', 'k:r:1')).outcome).toBe('granted');
         expect(a.enabled).toBe(false);
+        expect((await a.numbers()).inUse).toBeNull();
     });
 
     it('reads the env, ignoring malformed values', () => {

@@ -409,7 +409,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         if (slot.refs > 0) return;
         if (this.prKeySlots.get(prKey) === slot) this.prKeySlots.delete(prKey);
         this.concurrencyLimiter.release(slot.slotId);
-        this.capacityGate?.cancel(slot.slotId);
+        void this.capacityGate?.cancel(slot.slotId);
         this.releaseDeployment(slot);
     }
 
@@ -445,7 +445,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     ): Promise<void> {
         const gate = this.capacityGate;
         if (!gate?.enabled) return;
-        slot.deployment ??= gate.acquire(slot.slotId);
+        slot.deployment ??= gate.acquire(slot.slotId, prKey);
         const startedAt = Date.now();
         let grant: Awaited<NonNullable<WorkerSlot['deployment']>> | null = null;
         const outcome = await waitFor(
@@ -782,8 +782,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      */
     async invalidate(prKey: string): Promise<void> {
         // A review of this PR still queued for capacity on this worker is moot
-        const queued = this.prKeySlots.get(prKey);
-        if (queued) this.capacityGate?.cancel(queued.slotId);
+        // (any worker: the waiting tickets are deleted from Mongo)
+        await this.capacityGate?.cancelPrKey(prKey);
         this.logger.log({
             message: `SandboxLeaseManager: invalidate prKey="${prKey}"`,
             context: SandboxLeaseManager.name,

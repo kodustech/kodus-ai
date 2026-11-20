@@ -1,17 +1,17 @@
+import { randomUUID } from 'crypto';
+
 import { createLogger } from '@libs/core/log/logger';
-import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
 /**
  * Deployment-wide cap on sandboxes held at once, shared by every worker.
  *
- * The cap is `SANDBOX_MAX_CONCURRENT` slots. A slot is a Postgres advisory
- * lock (`sandbox-capacity:slot:<i>`, the pattern the BYOK concurrency gate
- * already uses): whoever holds slot i holds one sandbox, and a crashed
- * worker's connection takes its locks with it, so slots cannot leak.
- *
- * Ordering: within one worker the line is strictly FIFO (only the head of the
- * local line polls). Across workers it is first-to-poll: advisory locks carry
- * no queue, so two workers racing for the same freed slot are not ordered.
+ * `SANDBOX_MAX_CONCURRENT` slots, kept in Mongo next to the sandbox leases
+ * (sandbox-capacity.model.ts). A review inserts a ticket; only the oldest live
+ * ticket (createdAt, then _id) may try to take a slot, so the line is FIFO
+ * across every worker. Taking a slot is one atomic update of the single state
+ * document, so racing workers never exceed the cap. A worker heartbeats its
+ * tickets and slots; entries silent for DEAD_AFTER_MS belong to a crashed
+ * worker and stop counting, with nothing pinned (no connection, no lock).
  *
  * With no cap configured the gate is off and grants at once (today's
  * behavior).
@@ -43,37 +43,37 @@ export function readSandboxCapacityEnv(
     };
 }
 
-/** One held slot; release() frees it for every worker. */
-export interface SandboxCapacitySlot {
-    release(): Promise<void>;
+export interface CapacityNumbers {
+    inUse: number;
+    queued: number;
+    oldestCreatedAt: Date | null;
 }
 
-/** Where slots live. Production: advisory locks; specs: a shared fake. */
+/** Where tickets and slots live. Production: Mongo; specs: a shared fake. */
 export interface SandboxCapacityStore {
-    tryAcquire(slotIndex: number): Promise<SandboxCapacitySlot | null>;
-    isHeld(slotIndex: number): Promise<boolean>;
+    enqueue(
+        t: { id: string; prKey: string; workerId: string },
+        now: Date,
+    ): Promise<void>;
+    /** Refreshes a waiting ticket's heartbeat; false when it is gone (cancelled). */
+    touch(id: string, now: Date): Promise<boolean>;
+    /** No older live ticket is waiting. */
+    isHead(id: string, deadBefore: Date): Promise<boolean>;
+    /** Atomic: takes a slot for `id` only while fewer than `cap` live slots exist. */
+    tryAdmit(
+        id: string,
+        cap: number,
+        now: Date,
+        deadBefore: Date,
+    ): Promise<boolean>;
+    heartbeatSlot(id: string, now: Date): Promise<void>;
+    releaseSlot(id: string): Promise<void>;
+    removeTicket(id: string): Promise<void>;
+    removeTicketsByPrKey(prKey: string): Promise<number>;
+    numbers(deadBefore: Date): Promise<CapacityNumbers>;
 }
-
-export const SANDBOX_CAPACITY_STORE_TOKEN = Symbol(
-    'SANDBOX_CAPACITY_STORE_TOKEN',
-);
 
 export const SANDBOX_CAPACITY_GATE_TOKEN = Symbol('SANDBOX_CAPACITY_GATE_TOKEN');
-
-const SLOT_KEY = (i: number) => `sandbox-capacity:slot:${i}`;
-
-export class AdvisoryLockCapacityStore implements SandboxCapacityStore {
-    constructor(private readonly locks: DistributedLockService) {}
-
-    async tryAcquire(slotIndex: number): Promise<SandboxCapacitySlot | null> {
-        const lock = await this.locks.acquire(SLOT_KEY(slotIndex));
-        return lock ? { release: () => lock.release() } : null;
-    }
-
-    isHeld(slotIndex: number): Promise<boolean> {
-        return this.locks.isLocked(SLOT_KEY(slotIndex));
-    }
-}
 
 export type CapacityGrant =
     | { outcome: 'granted'; waitedMs: number; release: () => Promise<void> }
@@ -85,26 +85,28 @@ export interface SandboxCapacityNumbers {
     inUse: number | null;
     /** The cap; 0 = none. */
     cap: number;
-    /** Reviews waiting in this worker's line. */
+    /** Reviews waiting, across every worker. */
     queued: number;
-    /** Longest wait in this worker's line, ms. */
+    /** Longest wait in the line, ms. */
     oldestWaitMs: number;
 }
 
-interface Ticket {
-    holderId: string;
-    since: number;
-    cancel: () => void;
-    cancelled: boolean;
+export interface SandboxCapacityTiming {
+    pollMs: number;
+    heartbeatMs: number;
+    /** Heartbeat older than this = the worker is dead (3x the heartbeat). */
+    deadAfterMs: number;
 }
 
-const POLL_MIN_MS = 1_000;
-const POLL_MAX_MS = 5_000;
+export const DEFAULT_CAPACITY_TIMING: SandboxCapacityTiming = {
+    pollMs: 2_000,
+    heartbeatMs: 15_000,
+    deadAfterMs: 45_000,
+};
 
 export class SandboxCapacityGate {
     private readonly logger = createLogger(SandboxCapacityGate.name);
-    private readonly line: Ticket[] = [];
-    private cap = 0;
+    private readonly workerId = randomUUID();
 
     constructor(
         private readonly store?: SandboxCapacityStore,
@@ -112,6 +114,7 @@ export class SandboxCapacityGate {
         private readonly now: () => number = Date.now,
         private readonly sleep: (ms: number) => Promise<void> = (ms) =>
             new Promise((r) => setTimeout(r, ms)),
+        private readonly timing: SandboxCapacityTiming = DEFAULT_CAPACITY_TIMING,
     ) {}
 
     get enabled(): boolean {
@@ -126,113 +129,121 @@ export class SandboxCapacityGate {
         return this.env().maxWaitMs;
     }
 
+    private deadBefore(): Date {
+        return new Date(this.now() - this.timing.deadAfterMs);
+    }
+
     /**
-     * Waits for a deployment slot. Granted at once when the cap is off. Ends
-     * with `timeout` after the max wait (the caller runs without a sandbox) or
-     * `cancelled` when cancel(holderId) or `signal` fired first.
+     * Waits for a deployment slot, in line by createdAt across all workers.
+     * Granted at once when the cap is off. Ends with `timeout` after the max
+     * wait (the caller runs without a sandbox) or `cancelled` when the ticket
+     * was deleted (cancel, a newer event) or `signal` fired.
      */
     async acquire(
         holderId: string,
+        prKey: string,
         signal?: AbortSignal,
     ): Promise<CapacityGrant> {
         const { maxConcurrent, maxWaitMs } = this.env();
-        if (!this.store || maxConcurrent <= 0) {
+        const store = this.store;
+        if (!store || maxConcurrent <= 0) {
             return { outcome: 'granted', waitedMs: 0, release: async () => {} };
         }
-        this.cap = maxConcurrent;
         const startedAt = this.now();
-        const ticket: Ticket = {
-            holderId,
-            since: startedAt,
-            cancelled: false,
-            cancel: () => {
-                ticket.cancelled = true;
+        await store.enqueue(
+            { id: holderId, prKey, workerId: this.workerId },
+            new Date(startedAt),
+        );
+        try {
+            for (;;) {
+                const waitedMs = this.now() - startedAt;
+                if (signal?.aborted) {
+                    return { outcome: 'cancelled', waitedMs };
+                }
+                if (waitedMs >= maxWaitMs) return { outcome: 'timeout', waitedMs };
+                // A ticket deleted by another worker (invalidate) is cancelled
+                if (!(await store.touch(holderId, new Date(this.now())))) {
+                    return { outcome: 'cancelled', waitedMs };
+                }
+                if (
+                    (await store.isHead(holderId, this.deadBefore())) &&
+                    (await store.tryAdmit(
+                        holderId,
+                        maxConcurrent,
+                        new Date(this.now()),
+                        this.deadBefore(),
+                    ))
+                ) {
+                    return this.granted(store, holderId, startedAt);
+                }
+                await this.sleep(
+                    Math.min(this.timing.pollMs, Math.max(maxWaitMs - waitedMs, 1)),
+                );
+            }
+        } catch (error) {
+            await store.removeTicket(holderId).catch(() => {});
+            throw error;
+        } finally {
+            // Admitted tickets are already gone; this drops the rest
+            await store.removeTicket(holderId).catch(() => {});
+        }
+    }
+
+    private granted(
+        store: SandboxCapacityStore,
+        holderId: string,
+        startedAt: number,
+    ): CapacityGrant {
+        const beat = setInterval(() => {
+            store
+                .heartbeatSlot(holderId, new Date(this.now()))
+                .catch((error) =>
+                    this.logger.warn({
+                        message: 'SandboxCapacityGate: slot heartbeat failed',
+                        context: SandboxCapacityGate.name,
+                        error,
+                        metadata: { holderId },
+                    }),
+                );
+        }, this.timing.heartbeatMs);
+        beat.unref?.();
+        let released = false;
+        return {
+            outcome: 'granted',
+            waitedMs: this.now() - startedAt,
+            release: async () => {
+                if (released) return;
+                released = true;
+                clearInterval(beat);
+                await store.releaseSlot(holderId);
             },
         };
-        const onAbort = () => ticket.cancel();
-        signal?.addEventListener('abort', onAbort, { once: true });
-        if (signal?.aborted) ticket.cancel();
-        this.line.push(ticket);
-
-        try {
-            for (let tick = 0; ; tick++) {
-                const waitedMs = this.now() - startedAt;
-                if (ticket.cancelled) return { outcome: 'cancelled', waitedMs };
-                if (waitedMs >= maxWaitMs) return { outcome: 'timeout', waitedMs };
-
-                // Only the head of this worker's line polls: FIFO locally
-                if (this.line[0] === ticket) {
-                    const slot = await this.tryAnySlot(maxConcurrent);
-                    if (slot) {
-                        if (ticket.cancelled) {
-                            await slot.release();
-                            return { outcome: 'cancelled', waitedMs };
-                        }
-                        return {
-                            outcome: 'granted',
-                            waitedMs: this.now() - startedAt,
-                            release: () => slot.release(),
-                        };
-                    }
-                }
-                const jitter = POLL_MIN_MS + Math.random() * (POLL_MAX_MS - POLL_MIN_MS);
-                await this.sleep(Math.min(jitter, Math.max(maxWaitMs - waitedMs, 1)));
-            }
-        } finally {
-            signal?.removeEventListener('abort', onAbort);
-            const i = this.line.indexOf(ticket);
-            if (i !== -1) this.line.splice(i, 1);
-        }
     }
 
-    /** Takes a holder out of this worker's line (a newer push, a close). */
-    cancel(holderId: string): number {
-        let n = 0;
-        for (const t of this.line) {
-            if (t.holderId === holderId && !t.cancelled) {
-                t.cancel();
-                n++;
-            }
-        }
-        return n;
+    /** Takes a holder out of the line, on any worker (the ticket is deleted). */
+    async cancel(holderId: string): Promise<void> {
+        await this.store?.removeTicket(holderId).catch(() => {});
     }
 
-    /** The numbers for a later screen: in-use, queued, oldest wait. */
+    /** A newer event on the PR (closed, force-pushed): drops its waiting tickets. */
+    async cancelPrKey(prKey: string): Promise<number> {
+        return (await this.store?.removeTicketsByPrKey(prKey).catch(() => 0)) ?? 0;
+    }
+
+    /** The numbers for a later screen, deployment-wide, read from Mongo. */
     async numbers(): Promise<SandboxCapacityNumbers> {
         const { maxConcurrent } = this.env();
-        const now = this.now();
-        let inUse: number | null = null;
-        if (this.store && maxConcurrent > 0) {
-            inUse = 0;
-            for (let i = 0; i < maxConcurrent; i++) {
-                if (await this.store.isHeld(i)) inUse++;
-            }
+        if (!this.store || maxConcurrent <= 0) {
+            return { inUse: null, cap: 0, queued: 0, oldestWaitMs: 0 };
         }
+        const n = await this.store.numbers(this.deadBefore());
         return {
-            inUse,
+            inUse: n.inUse,
             cap: maxConcurrent,
-            queued: this.line.length,
-            oldestWaitMs: this.line.length
-                ? now - Math.min(...this.line.map((t) => t.since))
+            queued: n.queued,
+            oldestWaitMs: n.oldestCreatedAt
+                ? this.now() - n.oldestCreatedAt.getTime()
                 : 0,
         };
-    }
-
-    private async tryAnySlot(cap: number): Promise<SandboxCapacitySlot | null> {
-        for (let i = 0; i < cap; i++) {
-            try {
-                const slot = await this.store!.tryAcquire(i);
-                if (slot) return slot;
-            } catch (error) {
-                this.logger.warn({
-                    message: 'SandboxCapacityGate: could not try a slot; will retry',
-                    context: SandboxCapacityGate.name,
-                    error,
-                    metadata: { slotIndex: i },
-                });
-                return null;
-            }
-        }
-        return null;
     }
 }
