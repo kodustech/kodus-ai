@@ -32,3 +32,15 @@ func TestExplorationPreservesLocallyRecordedRedactionsAndCanaryData(t *testing.T
 		t.Fatalf("result %+v", b)
 	}
 }
+
+func TestExplorationContentIsRedactedAndClippedWithItsOwnFlag(t *testing.T) {
+	b := &protocol.StepResultBody{BrowserExploration: &protocol.BrowserExploreResult{Status: protocol.BrowserExploreStatusObserved, Snapshot: "- button Save", Candidates: []protocol.BrowserExploreCandidate{}, Content: &protocol.BrowserExploreResultContent{Text: strings.Repeat("ghs_private shown ", 1000)}}}
+	n := New(Known{Value: "ghs_private", Label: "download"}).StepResult(b)
+	out := b.BrowserExploration
+	if n == 0 || strings.Contains(out.Content.Text, "ghs_private") || len(out.Content.Text) > protocol.BrowserExploreContentChars {
+		t.Fatalf("content leaked or unbounded: %d chars", len(out.Content.Text))
+	}
+	if !out.Content.Truncated || out.Truncated {
+		t.Fatalf("a content cut belongs to content.truncated only: %+v", out)
+	}
+}

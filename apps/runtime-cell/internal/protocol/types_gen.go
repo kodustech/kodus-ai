@@ -1135,14 +1135,20 @@ type BrowserExploreCandidate struct {
 	Name     *string `json:"name,omitempty"`
 }
 
+type BrowserExploreResultContent struct {
+	Text      string `json:"text"`
+	Truncated bool   `json:"truncated"`
+}
+
 type BrowserExploreResult struct {
-	Status           BrowserExploreStatus      `json:"status"`
-	Snapshot         string                    `json:"snapshot"`
-	Candidates       []BrowserExploreCandidate `json:"candidates"`
-	ActionsCompleted int64                     `json:"actionsCompleted"`
-	DurationMs       int64                     `json:"durationMs"`
-	CliCalls         int64                     `json:"cliCalls"`
-	Truncated        bool                      `json:"truncated"`
+	Status           BrowserExploreStatus         `json:"status"`
+	Snapshot         string                       `json:"snapshot"`
+	Candidates       []BrowserExploreCandidate    `json:"candidates"`
+	Content          *BrowserExploreResultContent `json:"content,omitempty"`
+	ActionsCompleted int64                        `json:"actionsCompleted"`
+	DurationMs       int64                        `json:"durationMs"`
+	CliCalls         int64                        `json:"cliCalls"`
+	Truncated        bool                         `json:"truncated"`
 }
 
 type StepResultBodySnapshot struct {

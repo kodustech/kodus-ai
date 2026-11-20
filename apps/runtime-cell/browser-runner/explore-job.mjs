@@ -5,6 +5,9 @@ import {join} from 'node:path';
 import {checkJob,JobError,kindOf} from './steps.mjs';
 import {AgentBrowserClient} from './agent-browser-client.mjs';
 import {installNetworkGuard} from './network-guard.mjs';
+// The content part (what the page displays after the steps) has its own
+// bound; the CLI may need a larger stdout bound to return it whole.
+const CONTENT_CHARS=8000,CONTENT_BYTES=1<<20;
 const KINDS=new Set(['goto','click','fill','select','press','waitFor']);
 const selectorProblem=value=>/^\s*@e[0-9]+\s*$/.test(value)||value.includes('>>')||/^(?:internal:|[A-Za-z_][A-Za-z0-9_-]*\s*=|\/\/|\.\/\/|\(\s*\/\/)/i.test(value.trim());
 const stop=status=>{const error=new Error('browser exploration '+status);error.status=status;throw error};
@@ -31,7 +34,7 @@ export async function runExplore(raw,{origin,chromium,clientFactory=options=>new
     const request=checkExploreRequest(raw);
     const app=new URL(origin);
     if(app.protocol!=='http:'||app.hostname!=='app.kody.internal'||app.username||app.password||app.pathname!=='/'||app.search||app.hash)throw new JobError('invalid exploration origin');
-    const started=now(),result={status:'failed',snapshot:'',candidates:[],actionsCompleted:0,durationMs:0,cliCalls:0,truncated:false};
+    const started=now(),result={status:'failed',snapshot:'',candidates:[],content:{text:'',truncated:false},actionsCompleted:0,durationMs:0,cliCalls:0,truncated:false};
     const controller=new AbortController();let browser,context,page,client,work,networkGuard,ended=false,denied=false;
     const remaining=()=>Math.max(1,request.timeoutMs-(now()-started));
     const deny=()=>{denied=true;controller.abort();};
@@ -40,7 +43,7 @@ export async function runExplore(raw,{origin,chromium,clientFactory=options=>new
     const timer=setTimer(expire,request.timeoutMs);timer.unref?.();
     let expected;
     const closedWorld=async()=>{active();const current=await scope(browser);if(current.contexts.length!==1||current.targets.length!==1||current.targets[0].browserContextId!==current.contexts[0]){deny();stop('blocked');}if(expected&&(current.targets[0].targetId!==expected.target||current.contexts[0]!==expected.context)){deny();stop('blocked');}return current;};
-    const cli=async tokens=>{active();if(result.cliCalls>=199)stop('failed');await closedWorld();result.cliCalls++;const response=await client.command(tokens,{timeoutMs:Math.min(5000,remaining())});active();await closedWorld();return response;};
+    const cli=async(tokens,{maxBytes}={})=>{active();if(result.cliCalls>=199)stop('failed');await closedWorld();result.cliCalls++;const response=await client.command(tokens,{timeoutMs:Math.min(5000,remaining()),...(maxBytes?{maxBytes}:{})});active();await closedWorld();return response;};
     const execute=async()=>{
         work=await mkdtemp(join(workRoot,'browser-explore-'));active();
         await mkdir(join(work,'home'),{mode:0o700});await mkdir(join(work,'sockets'),{mode:0o700});active();
@@ -59,9 +62,20 @@ export async function runExplore(raw,{origin,chromium,clientFactory=options=>new
         if(selectors.length){const parser=await context.newCDPSession(page);try{const {root}=await parser.send('DOM.getDocument',{depth:0});for(const selector of selectors){try{await parser.send('DOM.querySelector',{nodeId:root.nodeId,selector});}catch{stop('blocked');}active();}}finally{await parser.detach().catch(()=>{});}}
         client=clientFactory({endpoint:await getEndpoint(),home:join(work,'home'),socketDir:join(work,'sockets'),signal:controller.signal});active();
         for(const step of request.steps){await cli(command(step,app.origin));result.actionsCompleted++;}
-        const observed=await cli(['snapshot','-i','-c','-d','6']);
+        const observed=await cli(['snapshot','-i']);
         if(typeof observed.snapshot!=='string'||!observed.refs||typeof observed.refs!=='object'||Array.isArray(observed.refs))stop('failed');
         result.snapshot=observed.snapshot.slice(0,8000);result.truncated=observed.snapshot.length>8000;
+        // The interactive part lists only controls, so the outcome of the steps
+        // (a status text, a new row) needs the non-interactive tree. It is an
+        // optional observation: without time for it, or when the CLI cannot
+        // return it within its bound, it is flagged as cut, never silently lost.
+        if(remaining()<2000||result.cliCalls>=190)result.content.truncated=true;
+        else{
+            try{const shown=await cli(['snapshot','-c'],{maxBytes:CONTENT_BYTES});
+                result.content=typeof shown.snapshot==='string'?{text:shown.snapshot.slice(0,CONTENT_CHARS),truncated:shown.snapshot.length>CONTENT_CHARS}:{text:'',truncated:true};}
+            catch(error){if(denied||error?.status!=='failed')throw error;result.content={text:'',truncated:true};}
+            active();
+        }
         // Native snapshot JSON omits frame provenance. Do not guess which
         // frame supplied an id that also exists in the main document.
         if(page.frames().length===1){
@@ -83,7 +97,7 @@ export async function runExplore(raw,{origin,chromium,clientFactory=options=>new
         active();result.status='observed';
     };
     try{await Promise.race([execute(),expired]);}
-    catch(error){result.status=denied?'blocked':['timeout','unavailable','blocked'].includes(error?.status)?error.status:'failed';result.snapshot='';result.candidates=[];}
+    catch(error){result.status=denied?'blocked':['timeout','unavailable','blocked'].includes(error?.status)?error.status:'failed';result.snapshot='';result.candidates=[];result.content={text:'',truncated:false};}
     finally{
         ended=true;controller.abort();clearTimer(timer);
         if(client){result.cliCalls++;await boundedCleanup(()=>client.command(['close'],{cleanup:true,timeoutMs:1000}));}
@@ -91,7 +105,7 @@ export async function runExplore(raw,{origin,chromium,clientFactory=options=>new
         if(browser)await boundedCleanup(()=>browser.close());
         if(work)await rm(work,{recursive:true,force:true}).catch(()=>{});
         try{await networkGuard?.finish();}catch{denied=true;}
-        if(denied){result.status='blocked';result.snapshot='';result.candidates=[];}
+        if(denied){result.status='blocked';result.snapshot='';result.candidates=[];result.content={text:'',truncated:false};}
         result.durationMs=Math.min(120000,Math.max(0,Math.round(now()-started)));
     }
     return result;

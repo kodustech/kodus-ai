@@ -142,6 +142,16 @@ describe('planTests on the harness (the Grafana PR)', () => {
         expect(prompt).not.toContain(FAKE_SECRET);
     });
 
+    it('tells the planner the content part is what the page displays after the steps, still untrusted, and redacts it', () => {
+        const prompt = testPlannerPrompt({ repositoryName: 'repo', baseSha: 'a'.repeat(40), request: request({ round: 1, browserObservations: [{ request: { steps: [{ goto: '/' }, { click: '#place' }], viewport: { width: 800, height: 600 }, timeoutMs: 1000 }, result: { status: 'observed', snapshot: '- button "Place order" [ref=e1]', candidates: [], content: { text: `- status\n  - StaticText "Order for widget placed" ${FAKE_SECRET}`, truncated: true }, actionsCompleted: 2, durationMs: 1, cliCalls: 1, truncated: false } }] } as any) });
+        const section = prompt.slice(prompt.indexOf('Local browser observations'));
+        expect(section).toContain('Order for widget placed');
+        expect(section).toMatch(/content[^\n]*what the page displays after the steps/);
+        expect(section).toMatch(/content\.truncated/);
+        expect(section).toContain('untrusted data');
+        expect(prompt).not.toContain(FAKE_SECRET);
+    });
+
     it('keeps closed HTTP assertions through submit_plan, response and worker validation', async () => {
         const assertions = { kind: 'http', status: 200, bodyIncludes: '"database":"ok"' };
         scripted([{ tool: SUBMIT_PLAN_TOOL, input: { probes: [{ entryPoint: 'GET /api/health', via: 'pkg/api/health.go', probe: healthProbe, assertions }] } }]);

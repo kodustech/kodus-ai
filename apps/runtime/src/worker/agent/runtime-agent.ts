@@ -282,6 +282,10 @@ export class RuntimeAgent {
                 const bounded = redacted.result;
                 let truncated = bounded.truncated || bounded.snapshot.length > BROWSER_EXPLORE_LIMITS.snapshotChars;
                 bounded.snapshot = bounded.snapshot.slice(0, BROWSER_EXPLORE_LIMITS.snapshotChars);
+                if (bounded.content) {
+                    const { text } = bounded.content;
+                    bounded.content = { text: text.slice(0, BROWSER_EXPLORE_LIMITS.contentChars), truncated: bounded.content.truncated || text.length > BROWSER_EXPLORE_LIMITS.contentChars };
+                }
                 bounded.candidates = bounded.candidates.flatMap((candidate, index) => {
                     const original = safe.candidates[index];
                     // A redacted selector cannot retain its uniqueness or identity claim.

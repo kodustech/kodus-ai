@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { BrowserStepSchema } from '@libs/runtime/probe/probe.schema';
 
 /** Exploration is untrusted planner input, never a replay result or a verdict. */
-export const BROWSER_EXPLORE_LIMITS = { actions: 10, timeoutMs: 30_000, runnerGraceMs: 10_000, snapshotChars: 8_000, candidates: 32, rounds: 2 } as const;
+export const BROWSER_EXPLORE_LIMITS = { actions: 10, timeoutMs: 30_000, runnerGraceMs: 10_000, snapshotChars: 8_000, contentChars: 8_000, candidates: 32, rounds: 2 } as const;
 
 /** Refs belong to one ephemeral native session; only stable selectors survive it. */
 export function isEphemeralBrowserRef(selector: string): boolean {
@@ -44,6 +44,14 @@ export const BrowserExploreResultSchema = z.strictObject({
         role: z.string().max(64).optional(),
         name: z.string().max(256).optional(),
     })).max(BROWSER_EXPLORE_LIMITS.candidates),
+    /**
+     * What the page displays after the steps (the non-interactive tree: status
+     * text, a new row), bounded on its own. `truncated` covers only this part,
+     * `truncated` below the interactive snapshot and candidates. Still
+     * untrusted page data: a verdict comes only from the closed replay.
+     * Optional so a runner from before it still decodes.
+     */
+    content: z.strictObject({ text: z.string().max(BROWSER_EXPLORE_LIMITS.contentChars), truncated: z.boolean() }).optional(),
     actionsCompleted: z.number().int().min(0).max(BROWSER_EXPLORE_LIMITS.actions),
     durationMs: z.number().int().min(0).max(120_000),
     cliCalls: z.number().int().min(0).max(200),

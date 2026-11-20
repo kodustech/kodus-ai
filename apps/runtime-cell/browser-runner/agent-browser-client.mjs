@@ -12,7 +12,9 @@ export class AgentBrowserClient {
             AGENT_BROWSER_NO_WEBMCP:'1', AGENT_BROWSER_NO_VERSION_CHECK:'1', AGENT_BROWSER_PLUGINS:'[]',
             AGENT_BROWSER_NO_XVFB:'1', AGENT_BROWSER_DEFAULT_TIMEOUT:'4000'};
     }
-    command(tokens, {timeoutMs = 5_000, cleanup = false} = {}) {
+    command(tokens, {timeoutMs = 5_000, cleanup = false, maxBytes = 131_072} = {}) {
+        // One command (the content snapshot) may need a larger stdout bound; never past 1 MiB.
+        const limit = Math.min(Math.max(1, maxBytes), 1 << 20);
         const input = JSON.stringify([tokens]);
         if (Buffer.byteLength(input) > 65_536) return Promise.reject(new BrowserCLIError('failed'));
         const args = ['--config','/runner/agent-browser.json','--session','explore','--no-webmcp','--json','--idle-timeout','10s','--max-output','8000',
@@ -21,10 +23,10 @@ export class AgentBrowserClient {
             let child;
             try {
                 child = this.exec('/usr/local/bin/agent-browser', args, {cwd:'/runner', env:this.env, timeout:Math.max(1,timeoutMs),
-                    maxBuffer:131_072, ...(cleanup ? {} : {signal:this.signal})}, (error,stdout) => {
+                    maxBuffer:limit, ...(cleanup ? {} : {signal:this.signal})}, (error,stdout) => {
                     if (error) { reject(new BrowserCLIError(error.killed || error.name === 'AbortError' ? 'timeout' : 'failed')); return; }
                     try {
-                        if (Buffer.byteLength(stdout) > 131_072) throw new Error();
+                        if (Buffer.byteLength(stdout) > limit) throw new Error();
                         const rows = JSON.parse(stdout);
                         if (!Array.isArray(rows) || rows.length !== 1 || rows[0].success !== true || !rows[0].result || typeof rows[0].result !== 'object') throw new Error();
                         resolve(rows[0].result);

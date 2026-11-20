@@ -145,6 +145,22 @@ describe('RuntimeAgent on the product planner', () => {
         expect(JSON.stringify(observation)).not.toContain(key);
     });
 
+    it('passes the page content to the planner, bounded again after redaction under its own truncation flag', async () => {
+        const key = 'AKIAIOSFODNN7EXAMPLE';
+        const request = { steps: [{ goto: '/' }], viewport: { width: 800, height: 600 }, timeoutMs: 1000 };
+        const result = { status: 'observed', snapshot: '- button "Place order" [ref=e1]', candidates: [], content: { text: `Order for widget placed ${`${key} `.repeat(379)}`, truncated: false }, actionsCompleted: 1, durationMs: 1, cliCalls: 2, truncated: false };
+        const p = planner([{ status: 'explore_browser', request, usage, steps: 1 } as any, { status: 'no_plan', reason: 'done', rejected: [], usage, steps: 1 }]);
+        const e = env(); e.exploreBrowser = async () => result;
+        await new RuntimeAgent(noLlm, e, p.client).plan({ ...input, baseCapabilities: { browserExplore: 'v1' } } as any);
+        expect(RunPlanRequestSchema.safeParse(p.calls[1].body).success).toBe(true);
+        const observation = p.calls[1].body.browserObservations![0];
+        expect(observation.result.content!.text).toContain('Order for widget placed');
+        expect(observation.result.content!.text.length).toBe(8000);
+        expect(observation.result.content!.truncated).toBe(true);
+        expect(observation.result.truncated).toBe(false);
+        expect(JSON.stringify(observation)).not.toContain(key);
+    });
+
     it('withholds a changed request after redaction without storing original input or inventing a replacement prefix', async () => {
         const key = 'AKIAIOSFODNN7EXAMPLE';
         const fill = `${key} `.repeat(390) + 'xx';

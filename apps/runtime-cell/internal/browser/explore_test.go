@@ -105,3 +105,26 @@ func TestExplorerCanonicalizesHTTPDefaultPort(t *testing.T) {
 		t.Fatalf("noncanonical origin %v", job["origin"])
 	}
 }
+
+func TestExplorerCarriesRedactedPageContentWithItsTruncationFlag(t *testing.T) {
+	var result protocol.BrowserExploreResult
+	_ = json.Unmarshal(explorationJSON(t), &result)
+	result.Content = &protocol.BrowserExploreResultContent{Text: "- status\n  - StaticText \"Order ghs_download placed\"", Truncated: true}
+	raw, _ := json.Marshal(result)
+	got, err := (Explorer{Runner: &fakeRunner{stream: tarOf(t, entry{"exploration.json", raw})}, Redactor: redact.New(redact.Known{Value: "ghs_download", Label: "download"})}).Run(context.Background(), RunSpec{Port: 3000}, exploreRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Content == nil || !strings.Contains(got.Content.Text, "StaticText") || strings.Contains(got.Content.Text, "ghs_download") || !got.Content.Truncated {
+		t.Fatalf("content %+v", got.Content)
+	}
+}
+
+func TestExplorerRefusesContentPastItsBoundOrWithoutATruncationFlag(t *testing.T) {
+	for _, content := range []string{`{"text":"` + strings.Repeat("x", protocol.BrowserExploreContentChars+1) + `","truncated":true}`, `{"text":"cut"}`, `{"text":"","truncated":false,"verdict":"finding"}`} {
+		raw := `{"status":"observed","snapshot":"","candidates":[],"content":` + content + `,"actionsCompleted":1,"durationMs":1,"cliCalls":1,"truncated":false}`
+		if _, err := (Explorer{Runner: &fakeRunner{stream: tarOf(t, entry{"exploration.json", []byte(raw)})}}).Run(context.Background(), RunSpec{Port: 3000}, exploreRequest()); err == nil {
+			t.Fatalf("invalid content accepted: %.80s", content)
+		}
+	}
+}

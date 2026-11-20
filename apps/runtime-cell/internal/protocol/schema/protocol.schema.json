@@ -3726,6 +3726,23 @@
                 "additionalProperties": false
               }
             },
+            "content": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "maxLength": 8000
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "text",
+                "truncated"
+              ],
+              "additionalProperties": false
+            },
             "actionsCompleted": {
               "type": "integer",
               "minimum": 0,

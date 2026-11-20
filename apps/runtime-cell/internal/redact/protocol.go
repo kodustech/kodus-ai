@@ -34,8 +34,14 @@ func (r *Redactor) StepResult(b *protocol.StepResultBody) int {
 	if exploration := b.BrowserExploration; exploration != nil {
 		str(&exploration.Snapshot)
 		var cut bool
-		exploration.Snapshot, cut = Clip(exploration.Snapshot, 8000)
+		exploration.Snapshot, cut = Clip(exploration.Snapshot, protocol.BrowserExploreSnapshotChars)
 		exploration.Truncated = exploration.Truncated || cut
+		// Page text shown after the steps: redacted like the snapshot, with its own bound and flag.
+		if content := exploration.Content; content != nil {
+			str(&content.Text)
+			content.Text, cut = Clip(content.Text, protocol.BrowserExploreContentChars)
+			content.Truncated = content.Truncated || cut
+		}
 		kept := make([]protocol.BrowserExploreCandidate, 0, len(exploration.Candidates))
 		for _, candidate := range exploration.Candidates {
 			_, count := r.String(candidate.Selector)

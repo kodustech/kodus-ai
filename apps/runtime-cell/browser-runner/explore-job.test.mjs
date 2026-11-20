@@ -4,7 +4,7 @@ import { test } from 'node:test';
 const impl = await import('./explore-job.mjs').catch(()=>({}));
 const req = () => ({steps:[{goto:'/'},{fill:['#name','--config evil']}],viewport:{width:640,height:480},timeoutMs:3000});
 const origin='http://app.kody.internal:3000';
-function fake({failure,deny,redirect=false,frames=1,targets=1,huge=false}={}){
+function fake({failure,deny,redirect=false,frames=1,targets=1,huge=false,content='- main\n  - status\n    - StaticText "Order for widget placed"',contentError}={}){
  const calls=[];const page={frames:()=>Array.from({length:frames},()=>({})),locator:()=>({count:async()=>0}),close:async()=>calls.push(['page.close'])};
  const context=new EventEmitter();let route;
  context.route=async(_pattern,handler)=>{route=handler;calls.push(['route'])};context.routeWebSocket=async()=>calls.push(['websocket.guard']);
@@ -20,7 +20,8 @@ function fake({failure,deny,redirect=false,frames=1,targets=1,huge=false}={}){
    const response={status:()=>redirect?302:200,headers:()=>({}),dispose:async()=>calls.push(['response.dispose'])};
    await route({request:()=>({url:()=>deny?'http://app.kody.internal:9999/leak':origin+'/',frame:()=>({page:()=>page})}),abort:async()=>calls.push(['abort']),fetch:async()=>{calls.push(['fetch']);return response},fulfill:async()=>calls.push(['fulfill'])});
   }
-  if(tokens[0]==='snapshot')return {snapshot:huge?'x'.repeat(9000):'- textbox Name [ref=e1]',refs:{e1:{role:'textbox',name:'Name'}}};
+  if(tokens[0]==='snapshot'&&tokens.includes('-i'))return {snapshot:huge?'x'.repeat(9000):'- textbox Name [ref=e1]',refs:{e1:{role:'textbox',name:'Name'}}};
+  if(tokens[0]==='snapshot'){if(contentError)throw contentError;return {snapshot:content,refs:{e1:{role:'textbox',name:'Name'}}};}
   if(tokens[0]==='get'&&tokens[1]==='attr')return {value:tokens[3]==='data-testid'?'name-field':null};
   if(tokens[0]==='get'&&tokens[1]==='count')return {count:1};
   return {};
@@ -84,7 +85,7 @@ test('unknown viewport controls are refused rather than passed to Chromium',()=>
 });
 test('optional candidates stop before deadline without discarding a useful snapshot',async()=>{
  const f=fake();let clock=0;const original=f.client.command;
- f.client.command=async tokens=>{const out=await original(tokens);if(tokens[0]==='snapshot')clock=1500;return out;};
+ f.client.command=async tokens=>{const out=await original(tokens);if(tokens[0]==='snapshot'&&tokens.includes('-i'))clock=1500;return out;};
  const result=await run(f,req(),{now:()=>clock});
  assert.equal(result.status,'observed');assert.ok(result.snapshot);assert.equal(result.truncated,true);assert.deepEqual(result.candidates,[]);
  assert.ok(!f.calls.some(x=>x[0]==='cli'&&x[1][0]==='get'));
@@ -98,5 +99,38 @@ test('standard Chromium CSS validation refuses Playwright-only selector extensio
 
 test('a late popup denial during cleanup cannot return an observed snapshot',async()=>{
  const f=fake(),close=f.context.close;f.context.close=async()=>{f.context.emit('page',{close:async()=>{}});await close();};
- const result=await run(f);assert.equal(result.status,'blocked');assert.equal(result.snapshot,'');assert.deepEqual(result.candidates,[]);
+ const result=await run(f);assert.equal(result.status,'blocked');assert.equal(result.snapshot,'');assert.deepEqual(result.candidates,[]);assert.deepEqual(result.content,{text:'',truncated:false});
+});
+
+test('the interactive part is a plain -i snapshot and the content part shows what the page displays after the steps',async()=>{
+ const f=fake();const result=await run(f);
+ assert.equal(result.status,'observed');
+ const snapshots=f.calls.filter(x=>x[0]==='cli'&&x[1][0]==='snapshot').map(x=>x[1]);
+ assert.deepEqual(snapshots,[['snapshot','-i'],['snapshot','-c']]);
+ assert.deepEqual(result.content,{text:'- main\n  - status\n    - StaticText "Order for widget placed"',truncated:false});
+ assert.equal(result.truncated,false);
+});
+test('the content part has its own cap and its truncation is explicit, apart from the interactive flag',async()=>{
+ const result=await run(fake({content:'y'.repeat(9000)}));
+ assert.equal(result.status,'observed');assert.equal(result.content.text.length,8000);assert.equal(result.content.truncated,true);assert.equal(result.truncated,false);
+});
+test('a content snapshot too large for the CLI output bound keeps the interactive observation and says content was cut',async()=>{
+ const result=await run(fake({contentError:Object.assign(new Error('PRIVATE'),{status:'failed'})}));
+ assert.equal(result.status,'observed');assert.ok(result.snapshot);assert.equal(result.candidates.length,1);assert.deepEqual(result.content,{text:'',truncated:true});
+});
+test('the content snapshot asks the CLI for a larger output bound than ordinary commands',async()=>{
+ const f=fake();const seen=[];const original=f.client.command;f.client.command=async(tokens,options)=>{seen.push([tokens,options]);return original(tokens,options);};
+ await run(f);
+ const content=seen.find(([tokens])=>tokens[0]==='snapshot'&&tokens[1]==='-c');assert.ok(content[1].maxBytes>131072);
+ assert.ok(seen.filter(([tokens])=>!(tokens[0]==='snapshot'&&tokens[1]==='-c')).every(([,options])=>options.maxBytes===undefined));
+});
+test('a failed exploration never returns page content',async()=>{
+ const result=await run(fake({failure:2}));assert.equal(result.status,'timeout');assert.deepEqual(result.content,{text:'',truncated:false});
+});
+test('without time for it the content part is skipped and flagged rather than risking the observation',async()=>{
+ const f=fake();let clock=0;const original=f.client.command;
+ f.client.command=async tokens=>{const out=await original(tokens);if(tokens[0]==='snapshot'&&tokens.includes('-i'))clock=1500;return out;};
+ const result=await run(f,req(),{now:()=>clock});
+ assert.equal(result.status,'observed');assert.deepEqual(result.content,{text:'',truncated:true});
+ assert.ok(!f.calls.some(x=>x[0]==='cli'&&x[1][0]==='snapshot'&&x[1][1]==='-c'));
 });

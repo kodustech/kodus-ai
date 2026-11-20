@@ -20,3 +20,11 @@ test('CDP endpoint cannot point at a host or provider URL',()=>{
  assert.equal(typeof impl.AgentBrowserClient,'function');
  for(const endpoint of ['ws://host.orb.internal:9222/x','wss://provider.example/x','ws://127.0.0.1:9223/x']) assert.throws(()=>new impl.AgentBrowserClient({endpoint,home:'/tmp/owned/home',socketDir:'/tmp/owned/sockets'}));
 });
+test('a caller can raise the stdout bound for one command; the default stays 128 KiB',async()=>{
+ const seen=[];const big=JSON.stringify([{success:true,result:{snapshot:'z'.repeat(200_000)}}]);
+ const exec=(_file,_args,opts,callback)=>{const child=new EventEmitter();child.stdin={end:()=>{seen.push(opts.maxBuffer);queueMicrotask(()=>callback(null,big,''))}};child.kill=()=>{};return child};
+ const client=new impl.AgentBrowserClient({endpoint:'ws://127.0.0.1:9222/devtools/browser/known',home:'/tmp/owned/home',socketDir:'/tmp/owned/sockets',exec});
+ await assert.rejects(client.command(['snapshot','-c']),e=>e.status==='failed');
+ const out=await client.command(['snapshot','-c'],{maxBytes:1<<20});assert.equal(out.snapshot.length,200_000);
+ assert.deepEqual(seen,[131072,1<<20]);
+});

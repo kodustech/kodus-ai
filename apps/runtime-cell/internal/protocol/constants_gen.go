@@ -173,6 +173,12 @@ const PreviewMaxRequestBodyBytes = 33554432
 // PreviewRequestTimeoutMs is PREVIEW_LIMITS.requestTimeoutMs (libs/runtime/contracts/preview.ts): how long one preview request may take, in ms.
 const PreviewRequestTimeoutMs = 300000
 
+// BrowserExploreSnapshotChars is BROWSER_EXPLORE_LIMITS.snapshotChars (libs/runtime/contracts/browser-exploration.ts): the longest interactive snapshot a browser exploration carries.
+const BrowserExploreSnapshotChars = 8000
+
+// BrowserExploreContentChars is BROWSER_EXPLORE_LIMITS.contentChars (libs/runtime/contracts/browser-exploration.ts): the longest page content (what the page displays after the steps) a browser exploration carries.
+const BrowserExploreContentChars = 8000
+
 // MaxStepExecOutput is STEP_EXEC_OUTPUT_MAX (libs/runtime/protocol/messages.ts): the longest stdout or stderr a step.result exec carries.
 const MaxStepExecOutput = 16384
 

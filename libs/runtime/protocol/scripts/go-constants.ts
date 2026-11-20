@@ -6,6 +6,7 @@
 // mirrors (needs resolution, strict JSON) stays covered by the shared fixtures
 // in protocol/fixtures.
 import { AUTHORED_FILE_PATH_PATTERN, AUTHORED_FILES_LIMITS } from '@libs/runtime/contracts/authored-files';
+import { BROWSER_EXPLORE_LIMITS } from '@libs/runtime/contracts/browser-exploration';
 import { RECIPE_FILE_PATHS, SECURITY_VIOLATION_SIGNATURE } from '@libs/runtime/contracts/enums';
 import { MACHINE_SIZE_LIMITS } from '@libs/runtime/contracts/machine-size';
 import { PREVIEW_ID_PATTERN, PREVIEW_LIMITS, PREVIEW_STREAM_HEADERS, PREVIEW_TUNNEL_AUTH_SCHEME } from '@libs/runtime/contracts/preview';
@@ -102,6 +103,8 @@ export function goConstants(): GoConstant[] {
         { go: 'PreviewMaxStreams', from: 'PREVIEW_LIMITS.concurrentStreams (libs/runtime/contracts/preview.ts)', doc: 'the most concurrent streams of one preview', value: PREVIEW_LIMITS.concurrentStreams },
         { go: 'PreviewMaxRequestBodyBytes', from: 'PREVIEW_LIMITS.requestBodyBytes (libs/runtime/contracts/preview.ts)', doc: 'the largest request body of one preview stream', value: PREVIEW_LIMITS.requestBodyBytes },
         { go: 'PreviewRequestTimeoutMs', from: 'PREVIEW_LIMITS.requestTimeoutMs (libs/runtime/contracts/preview.ts)', doc: 'how long one preview request may take, in ms', value: PREVIEW_LIMITS.requestTimeoutMs },
+        { go: 'BrowserExploreSnapshotChars', from: 'BROWSER_EXPLORE_LIMITS.snapshotChars (libs/runtime/contracts/browser-exploration.ts)', doc: 'the longest interactive snapshot a browser exploration carries', value: BROWSER_EXPLORE_LIMITS.snapshotChars },
+        { go: 'BrowserExploreContentChars', from: 'BROWSER_EXPLORE_LIMITS.contentChars (libs/runtime/contracts/browser-exploration.ts)', doc: 'the longest page content (what the page displays after the steps) a browser exploration carries', value: BROWSER_EXPLORE_LIMITS.contentChars },
         { go: 'MaxStepExecOutput', from: `STEP_EXEC_OUTPUT_MAX (${MESSAGES})`, doc: 'the longest stdout or stderr a step.result exec carries', value: STEP_EXEC_OUTPUT_MAX },
         { go: 'MaxStepStreamChunk', from: `STEP_STREAM_CHUNK_MAX (${MESSAGES})`, doc: 'the longest chunk one step.stream carries', value: STEP_STREAM_CHUNK_MAX },
         { go: 'MaxClaimFailedReason', from: `CLAIM_FAILED_REASON_MAX (${MESSAGES})`, doc: 'the longest reason a claim.failed carries', value: CLAIM_FAILED_REASON_MAX },
