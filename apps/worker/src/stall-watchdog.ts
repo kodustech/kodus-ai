@@ -1,4 +1,8 @@
 import { Worker } from 'worker_threads';
+import {
+    type ActivityInfo,
+    onActivityChange,
+} from '@libs/core/infrastructure/activity/activity-registry';
 import { createLogger } from '@libs/core/log/logger';
 
 /**
@@ -61,6 +65,20 @@ export interface StallReport {
     profilerAnswerMs?: number;
     /** How long a later profiler call (stop) waited before it failed. */
     profilerFailedCallMs?: number;
+    /**
+     * Frames read while the main thread was paused and had not run again,
+     * held back as `stack` only because the profiler answered late
+     * (`profilerAnswerMs` over the limit). A slow profiler start alone (a
+     * busy, large heap) leaves them right; a native call that held the
+     * profiler and then returned into other JavaScript makes them name that
+     * later code. A lead, not the location. Top frames only.
+     */
+    unverifiedStack?: StallFrame[];
+    /**
+     * The jobs in flight when the stall began: job, queue, pipeline stage,
+     * org/repo/PR and the agent tool calls running (activity-registry.ts).
+     */
+    activeJobs?: ActivityInfo[];
     /** Human-readable location, as used in the log line and the alert. */
     location?: string;
     stack?: StallFrame[] | null;
@@ -87,7 +105,23 @@ export interface StallWatchdogOptions {
     /** Captures per stall: one at the threshold, then every `recaptureMs`. */
     maxCapturesPerStall?: number;
     recaptureMs?: number;
+    /**
+     * Stall length that alerts the BetterStack heartbeat (/fail), once per
+     * stall. Shorter stalls are only logged (with their stack, captured at
+     * `thresholdMs`). Default 75s: before the ECS health check can mark the
+     * task unhealthy (3 checks 30s apart), so the alert means "this worker is
+     * about to be killed"; no stall under 90s killed a worker on 2026-11-19.
+     * Zero, negative or non-numeric values take the default.
+     */
+    alertMs?: number;
     /** BetterStack heartbeat; empty disables alerting (reports still log). */
+    /**
+     * Second BetterStack heartbeat, alerted at the first report of every
+     * stall (at `thresholdMs`), with the place and the jobs: the early
+     * warning. `heartbeatUrl` stays the critical one, alerted at `alertMs`.
+     * Empty disables it.
+     */
+    warnHeartbeatUrl?: string;
     heartbeatUrl?: string;
     /** Healthy ping cadence for the heartbeat, so it does not alert on silence. */
     pingIntervalMs?: number;
@@ -129,6 +163,13 @@ export function stallWatchdogThread(): void {
     };
     const lastTick = new BigInt64Array(sab);
     const parent = wt.parentPort;
+    // What the main thread last said it was running; frozen into a stall
+    // record when the stall begins (the main thread cannot update it then).
+    let activity: ActivityInfo[] = [];
+    parent?.on('message', (m: any) => {
+        if (m && m.type === 'activity' && Array.isArray(m.snapshot))
+            activity = m.snapshot;
+    });
 
     // One record per stall. A capture keeps a reference to the stall it
     // started for, so a recovery (or a new stall) while it is in flight
@@ -138,7 +179,21 @@ export function stallWatchdogThread(): void {
         captures: number;
         endedMs?: number;
         recoveryPending?: boolean;
+        /** The /fail for this stall was sent. */
+        alerted?: boolean;
+        /** The early warning for this stall was sent. */
+        warned?: boolean;
+        /** What the latest report named, for an alert sent between reports. */
+        last?: AlertPlace;
+        /** The jobs in flight when the stall began. */
+        activity?: ActivityInfo[];
     } | null = null;
+    type AlertPlace = {
+        where: string;
+        stackUnavailable?: StallReport['stackUnavailable'];
+        stack?: Array<{ fn: string; file: string; line: number }> | null;
+        hottest?: StallReport['hottest'];
+    };
     let capturingFor: typeof stall = null;
     // Healthy pings share one BetterStack heartbeat across all workers, and
     // a success ping resolves an open incident. So a task does not ping when
@@ -146,6 +201,7 @@ export function stallWatchdogThread(): void {
     // worker's incident within a second), and a task that sent /fail waits a
     // full interval before pinging healthy again.
     let lastPing = Date.now();
+    let lastWarnPing = Date.now();
 
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -485,9 +541,20 @@ export function stallWatchdogThread(): void {
                           : read.late
                             ? 'answered-late'
                             : undefined;
+            // Withheld only because the profiler was slow: the pause itself
+            // answered in time, inside the stall.
+            const unverifiedStack =
+                read &&
+                profileSlow &&
+                !read.recovered &&
+                !read.late &&
+                read.frames.length
+                    ? read.frames.slice(0, 12)
+                    : undefined;
             return {
                 stack:
                     read && stackUnavailable === undefined ? read.frames : null,
+                unverifiedStack,
                 ...(summary ?? {}),
                 profileIncludesRecovery: !!summary && profileIncludesRecovery,
                 recoveredBeforeRead: !!read?.recovered,
@@ -531,10 +598,10 @@ export function stallWatchdogThread(): void {
         }
     }
 
-    async function heartbeat(path: '' | '/fail', body?: object) {
-        if (!cfg.heartbeatUrl) return;
+    async function heartbeat(url: string, path: '' | '/fail', body?: object) {
+        if (!url) return;
         try {
-            await fetch(`${cfg.heartbeatUrl}${path}`, {
+            await fetch(`${url}${path}`, {
                 method: path ? 'POST' : 'GET',
                 headers: body ? { 'content-type': 'application/json' } : {},
                 body: body ? JSON.stringify(body) : undefined,
@@ -582,6 +649,75 @@ export function stallWatchdogThread(): void {
 
     type StallRecord = NonNullable<typeof stall>;
 
+    // The critical BetterStack alert, at most once per stall.
+    function alert(s: StallRecord, stalledMs: number, place: AlertPlace) {
+        if (s.alerted) return;
+        s.alerted = true;
+        lastPing = Date.now();
+        void heartbeat(
+            cfg.heartbeatUrl,
+            '/fail',
+            alertBody(s, stalledMs, place, 'critical'),
+        );
+    }
+
+    // The early warning, at the first report of a stall, at most once.
+    function warn(s: StallRecord, stalledMs: number, place: AlertPlace) {
+        if (s.warned || !cfg.warnHeartbeatUrl) return;
+        s.warned = true;
+        lastWarnPing = Date.now();
+        void heartbeat(
+            cfg.warnHeartbeatUrl,
+            '/fail',
+            alertBody(s, stalledMs, place, 'warning'),
+        );
+    }
+
+    function alertBody(
+        s: StallRecord,
+        stalledMs: number,
+        place: AlertPlace,
+        level: 'warning' | 'critical',
+    ) {
+        return {
+            message: `${level === 'critical' ? `Worker main thread stalled ${Math.round(stalledMs / 1000)}s (past ${Math.round(cfg.alertMs / 1000)}s: the ECS health check is about to kill it)` : `Worker main thread stalled ${Math.round(stalledMs / 1000)}s`} in ${place.where}. ${s.endedMs !== undefined ? 'It has recovered; jobs in flight may have lost their broker connection.' : 'In-flight jobs on this worker will be lost if it does not recover.'}${describeJobs(s.activity)} ${Object.entries(
+                cfg.identity,
+            )
+                .map(([k, v]) => `${k}=${v}`)
+                .join(' ')}`,
+            context: {
+                monitor: 'worker_stall',
+                level,
+                ...cfg.identity,
+                stalledMs,
+                startedAt: s.start,
+                recovered: s.endedMs !== undefined,
+                location: place.where,
+                stackUnavailable: place.stackUnavailable,
+                stack: (place.stack ?? []).slice(0, 12),
+                hottest: (place.hottest ?? []).slice(0, 5),
+                activeJobs: (s.activity ?? []).slice(0, 10),
+            },
+        };
+    }
+
+    // The jobs that were running, tool calls first: a few words each.
+    function describeJobs(jobs: ActivityInfo[] | undefined): string {
+        if (!jobs?.length) return '';
+        const withTools = jobs.filter((j) => j.tools?.length);
+        const shown = (withTools.length ? withTools : jobs).slice(0, 3);
+        const parts = shown.map((j) => {
+            const pr = [j.repository, j.prNumber ? `#${j.prNumber}` : '']
+                .filter(Boolean)
+                .join('');
+            const tool = j.tools?.length
+                ? ` ${j.tools.map((t) => `${t.tool}(${t.args ?? ''})`).join(', ')}`
+                : '';
+            return `${pr || j.jobId}${j.stage ? ` [${j.stage}]` : ''}${tool}`;
+        });
+        return ` Jobs: ${parts.join('; ')}${jobs.length > shown.length ? ` (+${jobs.length - shown.length} more)` : ''}.`;
+    }
+
     // One stall report (log line, parent message) and, for the first one of
     // a stall, the BetterStack alert. Every stall gets this, captured or not.
     function reportStall(
@@ -594,6 +730,7 @@ export function stallWatchdogThread(): void {
             profileIncludesRecovery?: boolean;
             recoveredBeforeRead?: boolean;
             stackUnavailable?: StallReport['stackUnavailable'];
+            unverifiedStack?: StallFrame[];
             inspectorAnswerMs?: number;
             profilerAnswerMs?: number;
             profilerFailedCallMs?: number;
@@ -607,6 +744,7 @@ export function stallWatchdogThread(): void {
             profileIncludesRecovery,
             recoveredBeforeRead,
             stackUnavailable,
+            unverifiedStack,
             inspectorAnswerMs,
             profilerAnswerMs,
             profilerFailedCallMs,
@@ -632,6 +770,8 @@ export function stallWatchdogThread(): void {
                     ? { stackReadAfterRecovery: true }
                     : {}),
                 ...(stackUnavailable ? { stackUnavailable } : {}),
+                ...(unverifiedStack ? { unverifiedStack } : {}),
+                ...(s.activity?.length ? { activeJobs: s.activity } : {}),
                 ...(profileIncludesRecovery
                     ? { profileIncludesRecovery: true }
                     : {}),
@@ -645,27 +785,9 @@ export function stallWatchdogThread(): void {
                 ...(error !== undefined ? { error } : {}),
             },
         );
-        if (n <= 1) {
-            lastPing = Date.now();
-            void heartbeat('/fail', {
-                message: `Worker main thread stalled ${Math.round(stalledMs / 1000)}s in ${where}. ${s.endedMs !== undefined ? 'It has recovered; jobs in flight may have lost their broker connection.' : 'In-flight jobs on this worker will be lost if it does not recover.'} ${Object.entries(
-                    cfg.identity,
-                )
-                    .map(([k, v]) => `${k}=${v}`)
-                    .join(' ')}`,
-                context: {
-                    monitor: 'worker_stall',
-                    ...cfg.identity,
-                    stalledMs,
-                    startedAt: s.start,
-                    recovered: s.endedMs !== undefined,
-                    location: where,
-                    stackUnavailable,
-                    stack: (stack ?? []).slice(0, 12),
-                    hottest: (hottest ?? []).slice(0, 5),
-                },
-            });
-        }
+        s.last = { where, stackUnavailable, stack, hottest };
+        warn(s, stalledMs, s.last);
+        if (stalledMs >= cfg.alertMs) alert(s, stalledMs, s.last);
     }
 
     setInterval(() => {
@@ -675,7 +797,7 @@ export function stallWatchdogThread(): void {
 
         if (lag >= cfg.thresholdMs) {
             if (stall === null) {
-                stall = { start: now - lag, captures: 0 };
+                stall = { start: now - lag, captures: 0, activity };
             }
             const s = stall;
             const due = cfg.thresholdMs + s.captures * cfg.recaptureMs;
@@ -717,6 +839,17 @@ export function stallWatchdogThread(): void {
                         }
                     });
             }
+            // Long enough to alert while no report is due: name what the
+            // latest report found (a capture in flight alerts on its own).
+            if (!s.alerted && lag >= cfg.alertMs && capturingFor !== s) {
+                alert(
+                    s,
+                    lag,
+                    s.last ?? {
+                        where: 'an unknown place (no capture finished yet)',
+                    },
+                );
+            }
         } else if (stall !== null) {
             // Close the stall now, even with a capture in flight: a new
             // stall must start its own record and its own captures.
@@ -743,7 +876,16 @@ export function stallWatchdogThread(): void {
             now - lastPing >= cfg.pingIntervalMs
         ) {
             lastPing = now;
-            void heartbeat('');
+            void heartbeat(cfg.heartbeatUrl, '');
+        }
+        if (
+            cfg.warnHeartbeatUrl &&
+            cfg.pingIntervalMs > 0 &&
+            stall === null &&
+            now - lastWarnPing >= cfg.pingIntervalMs
+        ) {
+            lastWarnPing = now;
+            void heartbeat(cfg.warnHeartbeatUrl, '');
         }
     }, cfg.checkIntervalMs);
 }
@@ -769,7 +911,9 @@ export function startStallWatchdog(
         lateAnswerMs: positive(opts.lateAnswerMs, 1_000),
         maxCapturesPerStall: positive(opts.maxCapturesPerStall, 3),
         recaptureMs: positive(opts.recaptureMs, 60_000),
+        alertMs: positive(opts.alertMs, 75_000),
         heartbeatUrl: opts.heartbeatUrl ?? '',
+        warnHeartbeatUrl: opts.warnHeartbeatUrl ?? '',
         pingIntervalMs: nonNegative(opts.pingIntervalMs, 30 * 60_000),
         identity: opts.identity ?? {},
         writeFd: opts.writeFd === undefined ? 1 : opts.writeFd,
@@ -801,6 +945,14 @@ export function startStallWatchdog(
             }),
         );
         if (opts.onReport) worker.on('message', opts.onReport);
+        const thread = worker;
+        onActivityChange((snapshot) => {
+            try {
+                thread.postMessage({ type: 'activity', snapshot });
+            } catch {
+                // the thread is gone; reports still log without jobs
+            }
+        });
     } catch (error) {
         clearInterval(ticker);
         logger.warn({
@@ -814,6 +966,7 @@ export function startStallWatchdog(
 
     return () => {
         clearInterval(ticker);
+        onActivityChange(null);
         void worker?.terminate();
     };
 }

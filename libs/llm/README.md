@@ -103,6 +103,13 @@ that means "no BYOK configured" returns `undefined`; don't reintroduce `null`.
   timeout for providers that ignore AbortSignal).
 - **`system-cache.ts`** — `systemCacheControl`: registry-driven provider options to
   cache the (large) system prompt on Anthropic models across an agent loop's steps.
+- **`one-shot-cache.ts`** — prompt cache for one-shot calls that share a prefix
+  (the Kody Rules shards of a review). A caller declares `promptCache: { system?,
+  userPrefix? }` on `LLM.run`; `resolvePrefixCacheHint` asks the provider module
+  (`prefixCacheHint`, else `systemCacheControl`) for its marker: Claude native and
+  on Vertex `anthropic.cacheControl`, Claude on Bedrock `bedrock.cachePoint`, OpenAI
+  gpt-5.6+ `promptCacheBreakpoint` plus explicit mode. A call that declares nothing
+  is sent unchanged.
 
 Consumed by `code-review`, `cli-review`, `organization`, … — any lib that needs to
 create or describe an LLM model. Keep this free of review/agent-specific shapes

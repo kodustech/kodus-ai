@@ -1,5 +1,9 @@
 import * as os from 'os';
 import {
+    activitySnapshot,
+    runActivity,
+} from '@libs/core/infrastructure/activity/activity-registry';
+import {
     INBOX_RELEASE_TIMEOUT_MS,
     parseDrainTimeoutMs,
 } from '@libs/core/workflow/infrastructure/drain-timeout';
@@ -268,11 +272,18 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
                 });
 
                 try {
-                    await this.executeJob(
+                    // The stall watchdog names this job (and, as it runs,
+                    // its PR, stage and tool call) when the worker freezes.
+                    await runActivity(
                         unwrappedMessage.jobId,
-                        queueName,
-                        messageId,
-                        consumerId,
+                        { queue: queueName },
+                        () =>
+                            this.executeJob(
+                                unwrappedMessage.jobId,
+                                queueName,
+                                messageId,
+                                consumerId,
+                            ),
                     );
 
                     await this.inboxRepository.completeIfHeldBy(
@@ -415,6 +426,8 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
             context: CONSUMER_CONTEXT,
             metadata: {
                 activeJobs: this.activeJobs,
+                // Which jobs (org, repository, PR, stage) this shutdown may cut.
+                jobs: activitySnapshot(),
                 maxWaitMs,
                 configured: process.env.API_WORKER_DRAIN_TIMEOUT_MS ?? null,
             },
@@ -440,6 +453,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
                 context: CONSUMER_CONTEXT,
                 metadata: {
                     activeJobs: this.activeJobs,
+                    jobs: activitySnapshot(),
                     instanceId: this.instanceId,
                     drainDurationMs,
                     drainBudgetMs: maxWaitMs,

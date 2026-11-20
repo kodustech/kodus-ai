@@ -1,4 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
+import { updateActivity } from '@libs/core/infrastructure/activity/activity-registry';
+import { jobFields } from '@libs/core/infrastructure/activity/job-fields';
 import { createLogger } from '@libs/core/log/logger';
 
 import { runWithTimeout } from './run-with-timeout';
@@ -62,6 +64,10 @@ export class JobProcessorRouterService
         if (!job) {
             throw new Error(`Workflow job ${jobId} not found`);
         }
+
+        // Names the job in stall reports even when no pipeline runs
+        // (webhooks, chat, AST, sync); a pipeline refines it with its stage.
+        updateActivity({ workflowType: job.workflowType, ...jobFields(job) });
 
         const processor = this.getProcessor(job.workflowType);
         const timeoutMs = this.getProcessTimeoutMs(job.workflowType);
