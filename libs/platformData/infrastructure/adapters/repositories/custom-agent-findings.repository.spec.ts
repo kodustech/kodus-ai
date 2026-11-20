@@ -41,7 +41,10 @@ describe('PullRequestsRepository custom agent findings', () => {
             'updatedAt': { $gte: scope.since },
             'files.suggestions.customAgent.id': { $exists: true },
         });
-        expect(prLevelPipeline[0].$match).toMatchObject({
+        expect(prLevelPipeline[0].$match).toEqual({
+            'organizationId': 'org-1',
+            'repository.id': 'repo-1',
+            'updatedAt': { $gte: scope.since },
             'prLevelSuggestions.customAgent.id': { $exists: true },
         });
         // Mongo groups the findings per agent, PR and status, so the rows
@@ -56,6 +59,20 @@ describe('PullRequestsRepository custom agent findings', () => {
                 },
                 count: { $sum: 1 },
             }),
+        });
+    });
+
+    it("reads unfollowed citations only from the scope's organization, repository and window", async () => {
+        const { repository, aggregate } = build([[]]);
+
+        await repository.findUnfollowedCustomAgentCitations(scope);
+
+        const [pipeline] = aggregate.mock.calls[0];
+        expect(pipeline[0].$match).toEqual({
+            'organizationId': 'org-1',
+            'repository.id': 'repo-1',
+            'updatedAt': { $gte: scope.since },
+            'files.suggestions.customAgent.id': { $exists: true },
         });
     });
 
