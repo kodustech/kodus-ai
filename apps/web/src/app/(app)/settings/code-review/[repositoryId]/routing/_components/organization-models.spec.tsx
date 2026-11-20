@@ -522,6 +522,38 @@ describe("Ultra models", () => {
         expect(saved.routing?.ultraModelIds).toEqual(["a", "b", "c"]);
     });
 
+    describe("a trio model that can no longer run", () => {
+        beforeEach(() => {
+            config.routing!.ultraModelIds = ["a", "b", "c"];
+            status = metadata(config);
+            status.models[2].resolvable = false;
+        });
+
+        it("is named in the row, and the other models still save", async () => {
+            mount({ ultraAllowed: true, ultraInUse: true });
+            expect(
+                await screen.findByText(/Model Gamma can no longer run/),
+            ).toBeVisible();
+            await choose("Default model", /Model Beta/);
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+            fireEvent.click(
+                screen.getByRole("button", { name: "Save models" }),
+            );
+            await waitFor(() => expect(put).toHaveBeenCalled());
+        });
+
+        it("blocks a trio edited around it, saying why", async () => {
+            mount({ ultraAllowed: true });
+            await choose("Ultra Model 1", /^None$/);
+            expect(screen.getByRole("alert")).toHaveTextContent(
+                "A model picked for Ultra can no longer run.",
+            );
+            expect(
+                screen.getByRole("button", { name: "Save models" }),
+            ).toBeDisabled();
+        });
+    });
+
     describe("while a review mode here is Ultra", () => {
         const clearTrio = async () => {
             for (const n of [1, 2, 3]) {

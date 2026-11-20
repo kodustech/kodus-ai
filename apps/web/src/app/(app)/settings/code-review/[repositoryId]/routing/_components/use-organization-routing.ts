@@ -125,7 +125,11 @@ export function useOrganizationRouting({
             return { ...current, ultraModelIds: slots };
         });
     const modelOf = ultraModelResolver(query.data?.models);
-    const usable = ultraModelUsable(query.data?.models);
+    // Whether each model still runs is in the status, not the BYOK config.
+    const usable = ultraModelUsable(status?.models);
+    const trioEdited =
+        (saved.ultraModelIds ?? []).join() !==
+        (routing.ultraModelIds ?? []).join();
     const validationError =
         dirty &&
         !pool.some(
@@ -137,7 +141,9 @@ export function useOrganizationRouting({
                     routing.ultraModelIds,
                     ultraInUse,
                     modelOf,
-                    usable,
+                    // A model that stopped running blocks only a trio being
+                    // edited: the API saves the rest of the models with it.
+                    trioEdited ? usable : undefined,
                 )
               : undefined;
 
@@ -246,11 +252,12 @@ export function useOrganizationRouting({
         },
         routing,
         /** The saved trio is being broken by this edit. */
-        // Counted as the API counts a trio: one model through two providers once.
+        // Counted as the API's guard counts a trio: by its ids, one model
+        // through two providers once, whether or not each still runs.
         breaksUltraTrio:
             dirty &&
-            isUltraTrioSet(saved.ultraModelIds, modelOf, usable) &&
-            !isUltraTrioSet(routing.ultraModelIds, modelOf, usable),
+            isUltraTrioSet(saved.ultraModelIds, modelOf) &&
+            !isUltraTrioSet(routing.ultraModelIds, modelOf),
         pool,
         dirty,
         validationError,
