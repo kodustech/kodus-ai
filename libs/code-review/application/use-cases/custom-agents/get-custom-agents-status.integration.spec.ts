@@ -4,9 +4,11 @@
  * following. Those numbers come from aggregations over the PR documents, and
  * must not depend on anything outside the fields the counts read.
  *
- * Runs the real use case against a REAL MongoDB.
+ * Runs the real use case and repository against a REAL MongoDB.
  */
 import mongoose, { Connection } from 'mongoose';
+
+import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapters/repositories/pullRequests.repository';
 
 import { GetCustomAgentsStatusUseCase } from './get-custom-agents-status.use-case';
 import { resolveMongoTestGate } from '../../../../../test/integration/mongo-test-uri';
@@ -100,10 +102,12 @@ const finding = (agentId: string, over: Record<string, unknown> = {}) => ({
         });
 
         it("counts each agent's PRs, posted and dropped findings, and cited guides", async () => {
-            const useCase = new GetCustomAgentsStatusUseCase({
-                getNativeCollection: () =>
-                    client!.db(TEST_DB).collection('pullRequests'),
-            } as any);
+            // The real repository, reading the test database.
+            const useCase = new GetCustomAgentsStatusUseCase(
+                new PullRequestsRepository({
+                    db: client!.db(TEST_DB),
+                } as any),
+            );
 
             const result = await useCase.execute({
                 organizationId: 'org',

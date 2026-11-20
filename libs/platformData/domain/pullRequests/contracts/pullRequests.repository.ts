@@ -21,6 +21,11 @@ import {
     SuggestionCountsBySeverity,
 } from '../interfaces/pullRequests.interface';
 
+import type {
+    CustomAgentFindingsScope,
+    CustomAgentSuggestionRow,
+    UnfollowedCitationRow,
+} from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 export const PULL_REQUESTS_REPOSITORY_TOKEN = Symbol.for(
     'PullRequestsRepository',
 );
@@ -68,6 +73,18 @@ export interface BulkApplyResult {
 
 export interface IPullRequestsRepository {
     getNativeCollection(): any;
+    /**
+     * Each custom agent's stored findings (file and PR level) in one
+     * repository, one row per agent, pull request and statuses. Analytics
+     * read: off the primary, bounded.
+     */
+    findCustomAgentSuggestionRows(
+        scope: CustomAgentFindingsScope,
+    ): Promise<CustomAgentSuggestionRow[]>;
+    /** Dropped custom-agent findings that cited a file the agent does not follow. */
+    findUnfollowedCustomAgentCitations(
+        scope: CustomAgentFindingsScope,
+    ): Promise<UnfollowedCitationRow[]>;
 
     setApprovalReasonDeliveryFailure(
         organizationId: string,

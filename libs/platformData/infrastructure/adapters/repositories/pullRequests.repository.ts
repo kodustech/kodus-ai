@@ -45,6 +45,17 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { clampPatchForPersistWithFlag } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
+import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
+import type {
+    CustomAgentFindingsScope,
+    CustomAgentSuggestionRow,
+    UnfollowedCitationRow,
+} from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
+import {
+    customAgentScopeMatch,
+    suggestionRowsPipeline,
+    unfollowedCitationsPipeline,
+} from './custom-agent-findings.pipelines';
 import {
     MONGO_LONG_QUERY_MAX_TIME_MS,
     MONGO_QUERY_MAX_TIME_MS,
@@ -157,6 +168,40 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     getNativeCollection() {
         return this.pullRequestsModel.db.collection('pullRequests');
+    }
+
+    async findCustomAgentSuggestionRows(
+        scope: CustomAgentFindingsScope,
+    ): Promise<CustomAgentSuggestionRow[]> {
+        const match = customAgentScopeMatch(scope);
+        const [fileRows, prLevelRows] = await Promise.all([
+            this.aggregateAnalytics<CustomAgentSuggestionRow>(
+                suggestionRowsPipeline(match, 'files.suggestions'),
+            ),
+            this.aggregateAnalytics<CustomAgentSuggestionRow>(
+                suggestionRowsPipeline(match, 'prLevelSuggestions'),
+            ),
+        ]);
+        return [...fileRows, ...prLevelRows];
+    }
+
+    findUnfollowedCustomAgentCitations(
+        scope: CustomAgentFindingsScope,
+    ): Promise<UnfollowedCitationRow[]> {
+        return this.aggregateAnalytics<UnfollowedCitationRow>(
+            unfollowedCitationsPipeline(customAgentScopeMatch(scope)),
+        );
+    }
+
+    /** An analytics aggregation: on the analytics member, bounded, spilling to disk. */
+    private aggregateAnalytics<T>(pipeline: object[]): Promise<T[]> {
+        return this.getNativeCollection()
+            .aggregate<T>(pipeline, {
+                allowDiskUse: true,
+                readPreference: ANALYTICS_READ_PREFERENCE,
+                maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
+            })
+            .toArray();
     }
 
     async setApprovalReasonDeliveryFailure(
