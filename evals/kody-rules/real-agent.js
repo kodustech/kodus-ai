@@ -9,7 +9,12 @@
 // AgentReviewStage with the Kody Rules agent (the team's generalist categories
 // off). What the stage keeps is what is scored.
 //
-//   node evals/kody-rules/real-agent.js [--runs=3] [--model=<tier-0 id>] [--cases=<caseId,...>] [--limit=N] [--gate] [--output=<result.json>]
+//   node evals/kody-rules/real-agent.js [--runs=3] [--model=<tier-0 id>] [--cases=<caseId,...>] [--limit=N] [--gate] [--quality [--judge=<tier-0 id>]] [--output=<result.json>]
+//
+// --quality grades every finding that lands on a real violation with the fix/
+// title judge (suggestion-quality.js): does its title name the problem, does
+// its improvedCode fix the cited lines under the rule. One judge call per
+// graded finding; the judge's tokens are not counted in TOKENS.
 //
 // The model is the org's, routed as production routes it (evals/shared/
 // model-route.js). Each run clones the PR's head, so it needs network to GitHub.
@@ -46,9 +51,16 @@ const SPEC_MIN = +(args['spec-min'] ?? MODEL_TARGET.specMin ?? 95);
 // A model with no calibrated floor writes none (ungated), never the 0 above.
 const CALIBRATED = args['occ-min'] !== undefined || MODEL_TARGET.occMin !== undefined;
 
+// The judge defaults to the nightly's (evals/suggestion-enrichment/run.js).
+const QUALITY = !!args.quality;
+const JUDGE = typeof args.judge === 'string' ? args.judge : process.env.JUDGE_MODEL || 'gpt-5.6-luna';
+const LINE_TOL = 2; // a flag "lands" on a real site if within ±2 lines
+
 const allCases = require('./' + DATASET);
 const { evalQuestion } = require('../shared/eval-result');
 const { countTokens, tokensUsed } = require('../shared/eval-kit');
+const quality = require('./suggestion-quality');
+const { TOKEN_FIELDS, snapshotTokens, restoreTokens } = quality;
 // --cases picks cases by id; --limit=N caps how many run (CI scopes to a few).
 const picked = args.cases ? allCases.filter((c) => String(args.cases).split(',').includes(c.caseId)) : allCases;
 const cases = args.limit ? picked.slice(0, +args.limit) : picked;
@@ -87,13 +99,66 @@ function caseTargets(c) {
     });
 }
 
+function tokensSince(snap) {
+    const t = tokensUsed();
+    return Object.fromEntries(TOKEN_FIELDS.map((k) => [k, t[k] - snap[k]]));
+}
+
+// A finding whose own place is a real violation site of its rule.
+const landsOnSite = (s, sites) =>
+    sites.some((g) => normalizePath(s.relevantFile) === g.file && Math.abs(s.relevantLinesStart - g.line) <= LINE_TOL);
+
+// Every graded finding with the judge's verdict and reasons, for reading a low score.
+const qualityDetails = [];
+
+async function gradeFindings(judge, findings, rule, fileContents, caseLabel) {
+    const q = quality.emptyQuality();
+    const contentByPath = new Map(Object.entries(fileContents || {}).map(([f, c]) => [normalizePath(f), c]));
+    for (const s of findings) {
+        const before = snapshotTokens();
+        try {
+            const { score, verdict } = await quality.grade(judge, s, rule, contentByPath.get(normalizePath(s.relevantFile)));
+            quality.addQuality(q, score);
+            qualityDetails.push({
+                case: caseLabel,
+                at: `${s.relevantFile}:${s.relevantLinesStart}`,
+                title: s.oneSentenceSummary,
+                existingCode: s.existingCode,
+                improvedCode: s.improvedCode ?? null,
+                ...score,
+                fix: verdict.fix,
+                fixReason: verdict.fixReason,
+                titleReason: verdict.titleReason,
+            });
+        } catch (e) {
+            q.judgeErrors++;
+            console.error(`  quality judge failed on ${s.relevantFile}:${s.relevantLinesStart}: ${String(e.message).slice(0, 160)}`);
+        } finally {
+            restoreTokens(before);
+        }
+    }
+    return q;
+}
+
+const sumQuality = (list) =>
+    list.reduce((a, q) => {
+        if (q) for (const k of Object.keys(a)) a[k] += q[k] || 0;
+        return a;
+    }, quality.emptyQuality());
+
+function percentile(values, p) {
+    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return null;
+    return sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)];
+}
+
 // A rule as the team saved it: active, reaching every repository.
 const asSaved = (r) => ({ ...r, type: 'standard', status: 'active', scope: r.scope || 'file', repositoryId: 'global' });
 
 // One case in the shape every eval writes (evals/shared/eval-result.js): what
 // it checks, the violation sites it caught over the runs that measured, and
 // each site, ok only when caught in every one of them.
-function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns) {
+function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns, cleanCount) {
     const allSites = targets ? targets.flatMap((t) => t.sites) : sites;
     const where = String(c.caseId || '').split('::')[0];
     const rule = targets ? `${targets.length} rules` : `"${c.rule?.title || caseLabel}"`;
@@ -105,6 +170,8 @@ function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns) {
             hits: measuredRuns.reduce((a, p) => a + p.hit, 0),
             total: violFiles.length * okRuns,
             detail: [],
+            falseAlarms: measuredRuns.reduce((a, p) => a + p.falseOnClean, 0),
+            cleanFiles: cleanCount * okRuns,
         };
     }
     return {
@@ -114,12 +181,26 @@ function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns) {
         total: allSites.length * okRuns,
         detail: allSites.map((g, i) => ({ what: `${g.file}:${g.line}`, ok: measuredRuns.length > 0 && measuredRuns.every((p) => p.siteOk?.[i]) })),
         falseAlarms: measuredRuns.reduce((a, p) => a + p.falseOnClean, 0),
+        // Read by the experiment's derived metrics (evals/experiment.js).
+        flagged: measuredRuns.reduce((a, p) => a + p.flags, 0),
+        offSite: measuredRuns.reduce((a, p) => a + p.lineNoise, 0),
+        cleanFiles: cleanCount * okRuns,
+        ...(QUALITY ? { quality: sumQuality(measuredRuns.map((p) => p.quality)) } : {}),
     };
 }
 
 async function main() {
     // The org's model, routed as production routes it (evals/shared/model-route.js).
     const ROUTE = require('../shared/model-route').orgRouteOrExit(MODELKEY);
+    let judge = null;
+    if (QUALITY) {
+        try {
+            judge = quality.judgeRoute(JUDGE);
+        } catch (e) {
+            console.error(`not measured: judge ${JUDGE}: ${e.message}`);
+            process.exit(2);
+        }
+    }
     const unmaterialized = cases.filter((c) => !c.pr);
     if (unmaterialized.length) {
         console.error(`not measured: ${unmaterialized.length} case(s) carry no recorded PR; run node evals/kody-rules/materialize-cases.js --dataset=${DATASET}`);
@@ -144,7 +225,6 @@ async function main() {
         return compiled.get(rule.uuid);
     };
 
-    const LINE_TOL = 2; // a flag "lands" on a real site if within ±2 lines
     let multiTotalSites = 0, multiCaughtSites = 0, caughtAllRuns = 0, totalMultiRuns = 0;
     let cleanFiles = 0, falseAlarmFiles = 0;
     // occurrence-level (only for cases that carry per-line groundTruth)
@@ -153,6 +233,10 @@ async function main() {
     // runs — NOT real misses. Track them so a broken environment warns (infra)
     // instead of deflating recall into a false quality-gate failure.
     let erroredRuns = 0, totalRuns = 0;
+    // Per run index, over every case: run 0 is cold, a later run repeats the
+    // same prompts at once and reads what run 0 cached (warm).
+    const tokensByRun = [];
+    const stageMs = [];
     const caseResults = [];
     const haveGT = cases.some((c) => c.groundTruth || c.groundTruthAll);
     // flatten groundTruth → [{file, line}]
@@ -170,11 +254,14 @@ async function main() {
         const perRun = [];
         let fileCount = c.pr.files.length;
         for (let r = 0; r < RUNS; r++) {
-            let sugg = [], errored = false;
+            let sugg = [], errored = false, fileContents = {};
             totalRuns++;
+            const before = snapshotTokens();
             try {
                 const res = await review.reviewCase(c, { compiled: { rules: saved }, storedConfig: ROUTE.storedConfig });
                 fileCount = res.files.length;
+                fileContents = res.fileContents || {};
+                if (!res.lastReviewError && Number.isFinite(res.stageMs)) stageMs.push(res.stageMs);
                 // A review whose agent failed (key, quota, provider) is not a
                 // measurement: production records it as the review's error.
                 if (res.lastReviewError) {
@@ -189,6 +276,9 @@ async function main() {
                 console.error(`  [case ${caseLabel} run ${r}] ${why.slice(0, 200)}`);
             }
             if (errored) erroredRuns++;
+            const used = tokensSince(before);
+            tokensByRun[r] = tokensByRun[r] || Object.fromEntries(TOKEN_FIELDS.map((k) => [k, 0]));
+            for (const k of TOKEN_FIELDS) tokensByRun[r][k] += used[k];
 
             if (targets) {
                 // v2: score every rule against its own GT. Suggestions map to
@@ -196,6 +286,7 @@ async function main() {
                 // LLM's ruleUuid there — finding-mapper.ts).
                 let hit = 0, falseOnClean = 0, coveredSites = 0, flagsN = 0, lineNoise = 0;
                 const siteOk = [];
+                const runQuality = [];
                 for (const t of targets) {
                     const tSugg = sugg.filter((s) =>
                         (s.brokenKodyRulesIds || []).includes(t.uuid) || s.ruleUuid === t.uuid);
@@ -209,8 +300,12 @@ async function main() {
                     coveredSites += tOk.filter(Boolean).length;
                     const onTarget = flags.filter((x) => t.sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
                     flagsN += flags.length; lineNoise += flags.length - onTarget;
+                    if (judge && !errored) {
+                        const rule = (c.rules || []).find((x) => x.uuid === t.uuid);
+                        if (rule) runQuality.push(await gradeFindings(judge, tSugg.filter((s) => landsOnSite(s, t.sites)), rule, fileContents, caseLabel));
+                    }
                 }
-                perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0, siteOk });
+                perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0, siteOk, quality: judge ? sumQuality(runQuality) : null });
                 continue;
             }
 
@@ -233,7 +328,8 @@ async function main() {
             const siteOk = sites.map((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL));
             const coveredSites = siteOk.filter(Boolean).length;
             const onTargetFlags = flags.filter((x) => sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
-            perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags, siteOk });
+            const runQuality = judge && !errored && c.rule ? await gradeFindings(judge, sugg.filter((s) => landsOnSite(s, sites)), c.rule, fileContents, caseLabel) : null;
+            perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags, siteOk, quality: runQuality });
         }
         // v2 denominators span all (file,rule) pairs; v1 keeps the single rule.
         const N = targets ? targets.reduce((a, t) => a + t.violFiles.length, 0) : violFiles.length;
@@ -242,7 +338,7 @@ async function main() {
         // Count only runs that actually executed — an errored (infra) run must
         // not add its sites to any denominator as if they were real misses.
         const okRuns = perRun.filter((p) => !p.errored).length;
-        caseResults.push(caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns));
+        caseResults.push(caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns, cleanCount));
         const allRuns = perRun.filter((p) => !p.errored && p.hit >= N).length;
         multiTotalSites += N * okRuns; multiCaughtSites += perRun.reduce((a, b) => a + (b.errored ? 0 : b.hit), 0);
         caughtAllRuns += allRuns; totalMultiRuns += okRuns;
@@ -266,6 +362,14 @@ async function main() {
     console.log(`specificity (files):  ${pct(cleanFiles - falseAlarmFiles, cleanFiles)}%  (${falseAlarmFiles}/${cleanFiles} clean files false-alarmed)`);
     const tok = tokensUsed();
     console.log(`TOKENS: input=${tok.in}  output=${tok.out}  cacheRead=${tok.cacheRead}  cacheWrite=${tok.cacheWrite}  over ${totalRuns} agentic sessions`);
+    tokensByRun.forEach((t, i) => console.log(`  run ${i} (${i === 0 ? 'cold' : 'warm'}): input=${t.in}  cacheRead=${t.cacheRead}  cacheWrite=${t.cacheWrite}  calls=${t.calls}`));
+    const latency = { stageMsP50: percentile(stageMs, 0.5), stageMsP95: percentile(stageMs, 0.95), stages: stageMs.length };
+    console.log(`review stage time:    p50 ${latency.stageMsP50 ?? '—'} ms  p95 ${latency.stageMsP95 ?? '—'} ms  over ${latency.stages} measured review stages`);
+    const q = QUALITY ? sumQuality(caseResults.map((c) => c.quality)) : null;
+    if (q) {
+        console.log(`title names problem:  ${pct(q.titleOk, q.graded)}%  (${q.titleOk}/${q.graded} findings on a real violation; judge ${JUDGE})`);
+        console.log(`fix passes:           ${pct(q.fixPass, q.fixGraded)}%  (${q.fixPass}/${q.fixGraded} graded fixes${q.judgeErrors ? `; ${q.judgeErrors} judge error(s)` : ''})`);
+    }
 
     // --output: the result in the shape every eval writes
     // (evals/shared/eval-result.js), plus the counts behind each rate so a
@@ -291,6 +395,17 @@ async function main() {
                 baseline: observed ? observed.spec / 100 : null,
             },
             linePrecision: ratio(flaggedTotal - lineNoiseTotal, flaggedTotal),
+            // Averaged per side by the experiment (evals/experiment.js sideSummary).
+            metrics: {
+                linePrecision: ratio(flaggedTotal - lineNoiseTotal, flaggedTotal),
+                specificity: cleanFiles ? (cleanFiles - falseAlarmFiles) / cleanFiles : null,
+                stageMsP50: latency.stageMsP50,
+                stageMsP95: latency.stageMsP95,
+                ...(q ? { titleQuality: ratio(q.titleOk, q.graded), fixQuality: ratio(q.fixPass, q.fixGraded) } : {}),
+            },
+            ...(q ? { quality: { judge: JUDGE, ...q, details: qualityDetails } } : {}),
+            latency,
+            tokensByRun,
             counts: { sites: occTotal, caught: occCaught, flagged: flaggedTotal, offSite: lineNoiseTotal, cleanFiles, falseAlarmFiles },
             cases: caseResults,
             tokens: tok,

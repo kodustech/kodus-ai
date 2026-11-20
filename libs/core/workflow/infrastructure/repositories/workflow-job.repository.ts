@@ -306,6 +306,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     'workflowType',
                     'organizationId',
                     'startedAt',
+                    'payload',
                 ])
                 .execute();
 

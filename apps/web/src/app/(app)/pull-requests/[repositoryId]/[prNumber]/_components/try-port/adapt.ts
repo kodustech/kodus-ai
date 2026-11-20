@@ -83,14 +83,11 @@ export function adaptForTryDiffViewer({
                 s.oneSentenceSummary?.trim() ||
                 "";
 
-            // Surface the before/after code in the "Suggested fix" block.
-            // improvedCode is the actionable bit; existingCode gives context.
-            let suggestion: string | undefined;
-            if (s.improvedCode?.trim()) {
-                suggestion = s.improvedCode.trim();
-            } else if (s.existingCode?.trim()) {
-                suggestion = s.existingCode.trim();
-            }
+            // The "Suggested fix" block (and "Copy fix") shows improvedCode
+            // only. A suggestion downgraded to a plain comment has none, and
+            // existingCode is the code being flagged: offering it as the fix
+            // would hand the bug back to whoever copies it.
+            const suggestion = s.improvedCode?.trim() || undefined;
 
             return {
                 id: s.id,
