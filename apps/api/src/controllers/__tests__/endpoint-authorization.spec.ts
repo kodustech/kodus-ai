@@ -74,6 +74,13 @@ const INTENTIONALLY_UNGATED = new Set<string>([
     'codeManagement.controller.ts#getWebhookStatus', // webhook connectivity status
     'organization.controller.ts#getOrganizationsByDomain', // domain→org lookup (onboarding/SSO discovery)
 
+    // --- Platform-wide internal metrics (moved from libs/core, where no spec
+    // checked them). Aggregated across every org, no tenant data, but not
+    // permission-gated either: any authenticated caller can read them. ---
+    'metrics.controller.ts#getErrorRates', // platform error rates; gate pending
+    'metrics.controller.ts#getReviewResponseTimes', // platform review timings; gate pending
+    'metrics.controller.ts#getPipelinePerformance', // platform stage timings; gate pending
+    'metrics.controller.ts#getSummary', // platform snapshot; gate pending
 ]);
 
 type Handler = {

@@ -56,8 +56,9 @@ const TEST_DB = 'kodus_metrics_repository_it';
                 event('http_request_total', 99, { component: 'api' }, 120),
                 event('code_review_duration_ms', 300),
                 event('code_review_duration_ms', 100),
+                // Distinct values: the read counts events, it does not sum them.
                 event('code_review_errors_total', 1),
-                event('code_review_errors_total', 1),
+                event('code_review_errors_total', 4),
                 event('pipeline_stage_duration_ms', 10, {
                     pipeline: 'review',
                     stage: 'finder',
