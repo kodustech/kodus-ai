@@ -127,9 +127,11 @@ export function useOrganizationRouting({
     const modelOf = ultraModelResolver(query.data?.models);
     // Whether each model still runs is in the status, not the BYOK config.
     const usable = ultraModelUsable(status?.models);
+    // By its ids, as the API counts it: reordering the slots is no edit.
+    const trioIds = (ids?: string[]) =>
+        [...new Set((ids ?? []).filter(Boolean))].sort().join();
     const trioEdited =
-        (saved.ultraModelIds ?? []).join() !==
-        (routing.ultraModelIds ?? []).join();
+        trioIds(saved.ultraModelIds) !== trioIds(routing.ultraModelIds);
     const validationError =
         dirty &&
         !pool.some(

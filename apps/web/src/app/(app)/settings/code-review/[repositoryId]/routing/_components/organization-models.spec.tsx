@@ -540,6 +540,32 @@ describe("Ultra models", () => {
                 screen.getByRole("button", { name: "Save models" }),
             );
             await waitFor(() => expect(put).toHaveBeenCalled());
+            const saved = put.mock.calls[0][1] as BYOKConfig;
+            expect(saved.routing?.defaultModelId).toBe("b");
+            expect(saved.routing?.ultraModelIds).toEqual(["a", "b", "c"]);
+        });
+
+        it("saves the trio reordered around it", async () => {
+            // A fourth model keeps three that run, so empty slots stay open.
+            config.models.push({
+                id: "d",
+                credentialId: "credential-a",
+                model: "model-delta",
+            });
+            status = metadata(config);
+            status.models[2].resolvable = false;
+            mount({ ultraAllowed: true });
+            await choose("Ultra Model 1", /^None$/);
+            await choose("Ultra Model 2", /^None$/);
+            await choose("Ultra Model 1", /Model Beta/);
+            await choose("Ultra Model 2", /Model Alpha/);
+            expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+            fireEvent.click(
+                screen.getByRole("button", { name: "Save models" }),
+            );
+            await waitFor(() => expect(put).toHaveBeenCalled());
+            const saved = put.mock.calls[0][1] as BYOKConfig;
+            expect(saved.routing?.ultraModelIds).toEqual(["b", "a", "c"]);
         });
 
         it("blocks a trio edited around it, saying why", async () => {
