@@ -3,7 +3,6 @@ import {
     ApiBearerAuth,
     ApiOkResponse,
     ApiOperation,
-    ApiQuery,
     ApiTags,
 } from '@nestjs/swagger';
 
@@ -28,6 +27,10 @@ import {
     MetricsResponseTimeResponseDto,
     MetricsSummaryResponseDto,
 } from '@libs/core/infrastructure/metrics/metrics-response.dto';
+import {
+    MetricsHoursQueryDto,
+    MetricsWindowQueryDto,
+} from '../dtos/metrics-query.dto';
 import { GetErrorRatesUseCase } from '@libs/core/metrics/application/use-cases/get-error-rates.use-case';
 import { GetMetricsSummaryUseCase } from '@libs/core/metrics/application/use-cases/get-metrics-summary.use-case';
 import { GetPipelinePerformanceUseCase } from '@libs/core/metrics/application/use-cases/get-pipeline-performance.use-case';
@@ -38,9 +41,6 @@ const canReadMetrics = checkPermissions({
     action: Action.Read,
     resource: ResourceType.Logs,
 });
-
-const toNumber = (value?: string) =>
-    value === undefined ? undefined : parseInt(value, 10);
 
 @ApiTags('Internal Metrics')
 @ApiBearerAuth('jwt')
@@ -61,19 +61,12 @@ export class MetricsController {
         description:
             'Internal endpoint (requires JWT). Returns aggregated error rates by component for the requested window. Do not expose publicly.',
     })
-    @ApiQuery({
-        name: 'window',
-        required: false,
-        description: 'Window in minutes (1 to 1440). Default: 15',
-        type: Number,
-        example: 15,
-    })
     @ApiOkResponse({ type: MetricsErrorRateResponseDto })
     getErrorRates(
-        @Query('window') windowParam?: string,
+        @Query() query: MetricsWindowQueryDto,
     ): Promise<ErrorRateResult[]> {
         return this.getErrorRatesUseCase.execute({
-            windowMinutes: toNumber(windowParam),
+            windowMinutes: query.window,
         });
     }
 
@@ -84,19 +77,12 @@ export class MetricsController {
         description:
             'Internal endpoint (requires JWT). Response time statistics for reviews in hours. Do not expose publicly.',
     })
-    @ApiQuery({
-        name: 'hours',
-        required: false,
-        description: 'Window in hours (1 to 168). Default: 24',
-        type: Number,
-        example: 24,
-    })
     @ApiOkResponse({ type: MetricsResponseTimeResponseDto })
     getReviewResponseTimes(
-        @Query('hours') hoursParam?: string,
+        @Query() query: MetricsHoursQueryDto,
     ): Promise<ResponseTimeResult> {
         return this.getReviewResponseTimesUseCase.execute({
-            hours: toNumber(hoursParam),
+            hours: query.hours,
         });
     }
 
@@ -107,19 +93,12 @@ export class MetricsController {
         description:
             'Internal endpoint (requires JWT). Aggregates average duration by pipeline and stage. Do not expose publicly.',
     })
-    @ApiQuery({
-        name: 'hours',
-        required: false,
-        description: 'Window in hours (1 to 168). Default: 24',
-        type: Number,
-        example: 24,
-    })
     @ApiOkResponse({ type: MetricsPipelinePerformanceResponseDto })
     getPipelinePerformance(
-        @Query('hours') hoursParam?: string,
+        @Query() query: MetricsHoursQueryDto,
     ): Promise<PipelinePerformanceResult[]> {
         return this.getPipelinePerformanceUseCase.execute({
-            hours: toNumber(hoursParam),
+            hours: query.hours,
         });
     }
 
