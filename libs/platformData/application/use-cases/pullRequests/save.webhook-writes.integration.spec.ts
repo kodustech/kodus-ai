@@ -181,7 +181,6 @@ let available = false;
                     ],
                 } as any,
                 service as any,
-                repository as any,
                 codeManagement as any,
             );
             for (const target of [service, useCase] as any[]) {

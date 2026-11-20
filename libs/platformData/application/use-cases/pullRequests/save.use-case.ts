@@ -16,10 +16,6 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import {
-    IPullRequestsRepository,
-    PULL_REQUESTS_REPOSITORY_TOKEN,
-} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -33,9 +29,6 @@ export class SavePullRequestUseCase {
 
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService: IPullRequestsService,
-
-        @Inject(PULL_REQUESTS_REPOSITORY_TOKEN)
-        private readonly pullRequestsRepository: IPullRequestsRepository,
 
         private readonly codeManagement: CodeManagementService,
     ) {}
