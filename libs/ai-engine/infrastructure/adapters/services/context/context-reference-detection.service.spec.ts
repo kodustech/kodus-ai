@@ -340,8 +340,15 @@ describe('ContextReferenceDetectionService.lastDetectionFailed', () => {
     it.each([
         ['recorded errors', { metadata: { syncErrorsCount: 2 } }, true],
         ['recorded none', { metadata: { syncErrorsCount: 0 } }, false],
-        ['has no count', { metadata: {} }, false],
-        ['does not exist', undefined, false],
+        // Not known to be clean: the caller writes, and the write's detection
+        // commits a revision that carries the count.
+        ['has no count', { metadata: {} }, true],
+        [
+            'carries an unreadable count',
+            { metadata: { syncErrorsCount: 'x' } },
+            true,
+        ],
+        ['does not exist', undefined, true],
     ])(
         'answers whether the latest revision %s',
         async (_label, latest, failed) => {
