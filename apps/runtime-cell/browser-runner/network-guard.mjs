@@ -4,6 +4,8 @@ import {JobError} from './steps.mjs';
 export class NetworkPolicyError extends JobError {
     constructor(){super('browser network policy refused');}
 }
+/** How long one request of the page may take upstream: past it the guard denies the round. */
+export const UPSTREAM_TIMEOUT_MS=3000;
 const SOCKET_SCHEME={'http:':'ws:','https:':'wss:'};
 export function sameOriginSocket(raw,app){
     let url;try{url=new URL(raw);}catch{return false;}
@@ -30,7 +32,7 @@ export async function installNetworkGuard(context,{origin,remaining,onDenied=()=
             const req=route.request(),url=new URL(req.url());
             if(denied||fenced||!owned||req.frame().page()!==owned||url.protocol!=='http:'||url.origin!==app.origin){deny();await abort(route);return;}
             if((req.postDataBuffer?.()?.length??0)>1024*1024){deny();await abort(route);return;}
-            response=await route.fetch({maxRedirects:0,timeout:Math.max(1,Math.min(3000,remaining()))});
+            response=await route.fetch({maxRedirects:0,timeout:Math.max(1,Math.min(UPSTREAM_TIMEOUT_MS,remaining()))});
             const headers=response.headers(),headerBytes=Object.entries(headers).reduce((n,[k,v])=>n+k.length+String(v).length,0);
             if((response.status()>=300&&response.status()<400)||headerBytes>32768||Number(headers['content-length']??0)>8*1024*1024){deny();await abort(route);return;}
             // APIRequestContext buffers before these checks. The container's

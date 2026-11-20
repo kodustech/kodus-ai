@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 
 const { runJob } = await import('./run-job.mjs').catch(() => ({ runJob: undefined }));
+// The guard's bound on one upstream request; 3 s before it was exported.
+const { UPSTREAM_TIMEOUT_MS = 3_000 } = await import('./network-guard.mjs');
 const input = (evidence) => ({ evidence, steps: [{ goto: '/' }, { screenshot: 'home' }], origin: 'http://app.kody.internal:3000', viewport: { width: 1280, height: 720 }, timeoutMs: 30_000 });
 function fakePlaywright({ failAt, requests = [], screenshotFails = false, closeFails = false } = {}) {
     const calls = [];
@@ -141,6 +143,29 @@ test('bounded quiescence observes a response finishing after the final page acti
     } });
     assert.equal(out.result.networkComplete, true); assert.equal(out.result.network[0].status, 204);
     assert.ok(waits > 0); assert.ok(f.now() <= 300);
+});
+
+// The orders page after "Place order": the last step reads the status line while the
+// list's GET /orders is still in flight, and it answers 600 ms later, inside the guard's
+// per-request bound. The round's network is complete: the cell drops a round whose
+// network is not, with its steps, screenshots and video.
+test('a request still in flight after the last step is waited for up to the per-request bound', async () => {
+    const f = fakePlaywright({ requests: [{ pending: true }] });
+    const answerAt = 600;
+    const out = await execute(f, input('lean'), { sleep: async (ms) => {
+        const before = f.now(); f.advance(before + ms);
+        if (before < answerAt && f.now() >= answerAt) {
+            const req = f.observed[0]; f.context.emit('response', { request: () => req, status: () => 200 }); f.context.emit('requestfinished', req);
+        }
+    } });
+    assert.equal(out.result.networkComplete, true); assert.equal(out.result.network[0].status, 200);
+});
+
+test('a request that never answers ends the wait near the per-request bound, incomplete', async () => {
+    const f = fakePlaywright({ requests: [{ pending: true }] });
+    const out = await execute(f);
+    assert.equal(out.result.networkComplete, false);
+    assert.ok(f.now() <= UPSTREAM_TIMEOUT_MS + 300, `waited ${f.now()} ms`);
 });
 
 test('a Chromium launch resolving after the deadline is immediately closed', async () => {

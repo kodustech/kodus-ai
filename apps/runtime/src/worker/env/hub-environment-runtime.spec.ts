@@ -6,7 +6,7 @@ import { hubEnvironments, poolCellOf } from '../dbos/run-deps.factory';
 import { SealedSecretOpener } from '../secrets/sealed-tokens';
 import { HubClaimReleaser, HubClient, HubEnvironmentClient, HubPoolTargetSender, HubRequestTimeoutError, HubRunEventSink, isNetworkError, mtlsPost } from './hub-environment-runtime';
 import { createServer } from 'node:http';
-import { verifyEvidenceSignature } from '@libs/runtime/contracts/evidence';
+import { BROWSER_ROUND_GRACE_MS, verifyEvidenceSignature } from '@libs/runtime/contracts/evidence';
 import type { EvidenceUploads } from '../run/run-evidence';
 import type { AddressInfo } from 'node:net';
 
@@ -522,6 +522,27 @@ describe('acquire when no cell may take the claim', () => {
         expect(r).toMatchObject({ status: 'blocked', blockers: [{ kind: 'capacity', signature: 'host_unavailable' }] });
         expect(r.blockers[0].message).toContain('registration_timeout');
         expect(failed.posted).toEqual([]);
+    });
+});
+
+describe('HubEnvironmentClient browser probe rounds', () => {
+    // The hub lets a browser round with browser evidence run its timeout plus
+    // BROWSER_ROUND_GRACE_MS (the runner container starts, records and uploads);
+    // the worker must not give up on the round before the hub does.
+    const browserProbe = { id: 'page', spec: { kind: 'browser', steps: [{ goto: '/' }], viewport: { width: 1280, height: 720 }, timeoutMs: 30_000 } } as any;
+    const waitOf = async (probe: any, evidence?: any) => {
+        const post = jest.fn(async (..._args: unknown[]) => ({ status: 200, text: '{}' }));
+        await runtime(client(post)).probe('c1', probe, 's1', evidence);
+        return post.mock.calls[0][3] as number;
+    };
+
+    it('a browser round that records browser evidence waits past the time the hub gives the cell for it', async () => {
+        expect(await waitOf(browserProbe, { capture: ['logs', 'outbound', 'browser'] })).toBeGreaterThan(30_000 + 10_000 + BROWSER_ROUND_GRACE_MS);
+    });
+
+    it('an http probe, or a browser probe without browser evidence, keeps the step deadline', async () => {
+        expect(await waitOf({ id: 'p', spec: { kind: 'http', timeoutMs: 30_000 } }, { capture: ['logs'] })).toBe(60_000);
+        expect(await waitOf(browserProbe)).toBe(60_000);
     });
 });
 
