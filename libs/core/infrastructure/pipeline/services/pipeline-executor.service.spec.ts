@@ -25,6 +25,22 @@ describe('PipelineExecutor', () => {
         } as any;
     });
 
+    it('marks the job as past the pipeline once it ends, for the stall watchdog', async () => {
+        const { runActivity, activitySnapshot } =
+            await import('@libs/core/infrastructure/activity/activity-registry');
+        const context: PipelineContext = {
+            statusInfo: { status: AutomationStatus.IN_PROGRESS },
+            errors: [],
+        } as any;
+        mockStage.execute.mockResolvedValue(context);
+        let after: ReturnType<typeof activitySnapshot> = [];
+        await runActivity('job', {}, async () => {
+            await executor.execute(context, [mockStage], 'TestPipeline');
+            after = activitySnapshot();
+        });
+        expect(after[0].stage).toBe('after TestPipeline');
+    });
+
     it('should notify observer on stage start and finish', async () => {
         const context: PipelineContext = {
             statusInfo: { status: AutomationStatus.IN_PROGRESS },
@@ -159,14 +175,13 @@ describe('PipelineExecutor', () => {
             const stageB = makeStage('StageB');
             const stageC = makeStage('StageC');
 
-            const result = await executor.execute(
-                context,
-                [stageA, stageB, stageC],
-            );
+            const result = await executor.execute(context, [
+                stageA,
+                stageB,
+                stageC,
+            ]);
 
-            expect(result.statusInfo.status).toBe(
-                AutomationStatus.IN_PROGRESS,
-            );
+            expect(result.statusInfo.status).toBe(AutomationStatus.IN_PROGRESS);
         });
 
         it('bypasses multiple named stages in one run', async () => {

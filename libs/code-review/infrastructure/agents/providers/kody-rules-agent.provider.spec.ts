@@ -1527,6 +1527,54 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         expect(call.byokConfig).toBeUndefined();
     });
 
+    it('declares the shard head as a shared prompt-cache prefix', async () => {
+        const runJudge = await captureRunJudge('anthropic');
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge, { user: 'HEAD\nTAIL', cachePrefix: 'HEAD\n' });
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.promptCache).toEqual({ userPrefix: 'HEAD\n' });
+    });
+
+    it('declares nothing for a shard that shares no head', async () => {
+        const runJudge = await captureRunJudge('anthropic');
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.promptCache).toBeUndefined();
+    });
+
+    it('logs how the shards were grouped for the prompt cache, with the org and PR', async () => {
+        const provider = makeBoundaryProvider();
+        const log = jest.spyOn((provider as any).shardLogger, 'log');
+        const promptCacheStats = {
+            fileShards: 5,
+            groups: 2,
+            sharedGroups: 1,
+            siblings: 3,
+            siblingsAfterLeader: 2,
+            siblingsEarly: 1,
+        };
+        mockJudge.mockImplementationOnce(async () => ({
+            violations: [],
+            shardsRun: 5,
+            shardsErrored: 0,
+            promptCacheStats,
+        }));
+        await provider.execute(boundaryInput() as any);
+        const entry = log.mock.calls
+            .map((c: any[]) => c[0])
+            .find((e: any) => /prompt cache/.test(e.message));
+        expect(entry).toBeDefined();
+        expect(entry.metadata).toMatchObject({
+            organizationAndTeamData: {
+                organizationId: 'org-xyz',
+                teamId: 'team-1',
+            },
+            prNumber: 42,
+            ...promptCacheStats,
+        });
+    });
+
     it('threads the resolved BYOK slot into the call unchanged', async () => {
         const runJudge = await captureRunJudge('openai');
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
