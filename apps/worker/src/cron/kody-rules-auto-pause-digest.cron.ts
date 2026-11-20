@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { SendKodyRulesAutoPauseDigestUseCase } from '@libs/cockpit/application/use-cases/send-kody-rules-auto-pause-digest.use-case';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
@@ -23,10 +23,13 @@ export class KodyRulesAutoPauseDigestCron {
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
-    @Cron(process.env.API_CRON_KODY_RULES_AUTO_PAUSE_DIGEST || '0 9 * * 1', {
-        name: 'kody-rules-auto-pause-digest',
-        timeZone: 'UTC',
-    })
+    @GatedCron(
+        process.env.API_CRON_KODY_RULES_AUTO_PAUSE_DIGEST || '0 9 * * 1',
+        {
+            name: 'kody-rules-auto-pause-digest',
+            timeZone: 'UTC',
+        },
+    )
     async handle(): Promise<void> {
         const lock = await this.distributedLockService
             .acquire(LOCK_KEY, { ttl: LOCK_TTL_MS })

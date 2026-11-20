@@ -904,6 +904,8 @@ const attemptedFixClaim = (id, expect) => ({
 });
 
 const cases = [
+    ...require('./hallucination-cases'),
+    ...require('./repeat-boundary-cases'),
     { id: 'U1-premise-unread', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'dead', claims: settleClaims('not_deliver_normal') },
     { id: 'U2-premise-readable', family: 'unread-premise', repo: settleRepo, changedFiles: settleDiff, sandbox: 'alive', claims: settleClaims('not_deliver') },
     { id: 'U3-cross-file-dies-in-verify', family: 'unread-premise', repo: billingRepo, changedFiles: billingDiff, sandbox: 'dies-in-verify', claims: [resubmitClaim('deliver', false)] },
@@ -955,6 +957,50 @@ const cases = [
         id: 'R7-refines-prior', family: 'rounds', repo: httpRepo, changedFiles: httpDiff, sandbox: 'alive', previousDecisions: [httpRoundA],
         claims: [{ id: 'signal-not-passed-repeat', golden: "The AbortController's signal is never passed to fetch, so controller.abort() after 5s does not cancel the request and getJson can still hang forever.", truth: 'true', premise: 'diff', expect: 'not_deliver', proposed: true }],
     },
+    // Applying the same advice changes the caller's behavior only in the
+    // destructive consumer. Both rounds have the same diff and history.
+    ...[true, false].map((reconcile) => ({
+        id: reconcile ? 'R18-offline-inventory-consequence' : 'R19-offline-inventory-safe',
+        family: 'rounds',
+        sandbox: 'alive',
+        repo: {
+            'src/inventory.ts': lines(
+                'export function listNames(source: { online: boolean; names: string[] }) {',
+                '    if (!source.online) return [];',
+                '    return source.names;',
+                '}',
+            ),
+            'src/sync.ts': reconcile ? lines(
+                "import { listNames } from './inventory';",
+                'export function sync(source: Parameters<typeof listNames>[0], catalog: Map<string, string>) {',
+                '    const active = new Set(listNames(source));',
+                '    for (const name of catalog.keys()) if (!active.has(name)) catalog.delete(name);',
+                '}',
+            ) : lines(
+                "import { listNames } from './inventory';",
+                'export function display(source: Parameters<typeof listNames>[0]) {',
+                "    return listNames(source).join(', ');",
+                '}',
+            ),
+        },
+        changedFiles: [patch('src/inventory.ts', 1, [
+            ' export function listNames(source: { online: boolean; names: string[] }) {',
+            '-    if (!source.online) throw new Error("offline");',
+            '+    if (!source.online) return [];',
+            '     return source.names;',
+            ' }',
+        ])],
+        previousDecisions: [{
+            suggestionId: 'offline-list', label: 'bug', outcome: 'implemented',
+            relevantFile: 'src/inventory.ts', relevantLinesStart: 2, relevantLinesEnd: 2,
+            suggestionContent: 'Callers listing names for display should receive an empty list during an outage so the inventory view can render.',
+        }],
+        claims: [{
+            id: 'catalog-erased-while-offline',
+            golden: 'Returning an empty list during an outage makes the consumer delete all existing catalog entries.',
+            truth: reconcile ? 'true' : 'false', expect: reconcile ? 'deliver_linked' : 'not_deliver',
+        }],
+    })),
     // #2039 exactly: the earlier suggestion came from a Kody Rule, the new finding from the bug finder.
     {
         id: 'R8-consequence-kody-rule-prior', family: 'rounds', repo: billingRepo, changedFiles: billingDiff, sandbox: 'alive',

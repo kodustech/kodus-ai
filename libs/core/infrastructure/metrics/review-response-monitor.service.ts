@@ -1,6 +1,6 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { createLogger } from '@libs/core/log/logger';
@@ -47,7 +47,7 @@ export class ReviewResponseMonitorService {
         );
     }
 
-    @Cron('*/5 * * * *') // every 5 minutes
+    @GatedCron('*/5 * * * *') // every 5 minutes
     async checkReviewResponseTimes(): Promise<void> {
         const lock = await this.acquireCronLock();
         if (!lock) {

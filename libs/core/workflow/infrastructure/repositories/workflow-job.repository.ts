@@ -190,7 +190,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 { operation: 'update', jobId: id },
             );
 
-            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
+            if (data.metadata !== undefined)
+                updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
                 updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
@@ -236,6 +237,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         workflowType?: WorkflowType;
         organizationId?: string;
         teamId?: string;
+        correlationId?: string;
         limit?: number;
         offset?: number;
     }): Promise<{ data: IWorkflowJob[]; total?: number }> {
@@ -247,6 +249,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             if (query.organizationId)
                 where.organizationId = query.organizationId;
             if (query.teamId) where.teamId = query.teamId;
+            if (query.correlationId) where.correlationId = query.correlationId;
 
             const [models, total] = await this.repository.findAndCount({
                 where,
@@ -303,6 +306,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     'workflowType',
                     'organizationId',
                     'startedAt',
+                    'payload',
                 ])
                 .execute();
 
@@ -313,6 +317,193 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 context: WorkflowJobRepository.name,
                 error,
                 metadata: { olderThan: params.olderThan },
+            });
+            throw error;
+        }
+    }
+
+    async cancelActiveByCorrelation(params: {
+        correlationId: string;
+        workflowType: string;
+    }): Promise<number> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.CANCELLED,
+                    completedAt: () => 'NOW()',
+                })
+                .where('"correlationId" = :correlationId', {
+                    correlationId: params.correlationId,
+                })
+                .andWhere('"workflowType" = :workflowType', {
+                    workflowType: params.workflowType,
+                })
+                .andWhere('status IN (:...statuses)', {
+                    statuses: [JobStatus.PENDING, JobStatus.PROCESSING],
+                })
+                .execute();
+            return result.affected ?? 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to cancel active workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: {
+                    correlationId: params.correlationId,
+                    workflowType: params.workflowType,
+                },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Deletes one batch of finished jobs last touched before `olderThan`,
+     * oldest first, and returns how many it read, how many went, and the
+     * `updatedAt` and uuid of the last one it read. Pass them back as `after`
+     * and `afterId` so the next batch starts right after it instead of
+     * re-walking rows it can never delete.
+     *
+     * Jobs an inbox or outbox row still references are kept (both FKs are
+     * ON DELETE NO ACTION; the outbox relay deletes processed messages after
+     * 7 days, so what remains is a failed message someone may still inspect),
+     * and so are the `keepWorkflowTypes` the caller names.
+     *
+     * Served by idx_workflow_jobs_updated_at and the job_id indexes on
+     * inbox/outbox (migration WorkflowJobsRetentionIndexes); without the
+     * job_id indexes every deleted row pays a sequential scan in the FK check.
+     * `updatedAt` travels as text: the column is timestamp without time zone,
+     * and a JS Date would shift it by the process time zone and drop the
+     * microseconds.
+     */
+    async deleteFinishedOlderThan(params: {
+        olderThan: Date;
+        batchSize: number;
+        after?: string;
+        afterId?: string;
+        keepWorkflowTypes?: WorkflowType[];
+    }): Promise<{
+        deleted: number;
+        candidates: number;
+        lastUpdatedAt?: string;
+        lastId?: string;
+    }> {
+        // `scan` walks idx_workflow_jobs_updated_at for the next batch and
+        // stops there (MATERIALIZED keeps the LIMIT ahead of the message
+        // checks): planned as one query, the checks read all of inbox and
+        // outbox into hashes and sorted every finished job, which on a
+        // 12M-row copy spilled to disk until it ran out. The checks are
+        // LIMIT 1 subqueries, not NOT EXISTS: the planner keeps them as one
+        // job_id index probe per row instead of turning them into a join that
+        // can still hash a whole message table.
+        //
+        // The DELETE repeats the candidate predicates: a row updated while
+        // the DELETE waited on its lock (FAILED retried back to PENDING) is
+        // re-checked against them and kept, not deleted by its uuid alone.
+        // Rows a message still holds are read and skipped, so the cursor
+        // moves past them. The cursor is ("updatedAt", uuid), exclusive: one
+        // UPDATE stamps many rows with the same updatedAt, so a timestamp
+        // alone either re-reads a held row forever or skips the rest of a
+        // tie. Without `afterId`, every row at `after` is included.
+        const raw = await this.repository.query(
+            `WITH scan AS MATERIALIZED (
+                    SELECT j."uuid", j."updatedAt"
+                      FROM "kodus_workflow"."workflow_jobs" j
+                     WHERE j."updatedAt" < $1
+                       AND ($6::timestamp IS NULL
+                            OR (j."updatedAt", j."uuid") > ($6::timestamp, COALESCE($8::uuid, '00000000-0000-0000-0000-000000000000'::uuid)))
+                       AND j."status" IN ($2, $3, $4)
+                       AND j."workflowType"::text <> ALL($7::text[])
+                     ORDER BY j."updatedAt", j."uuid"
+                     LIMIT $5
+             ),
+             last AS (
+                    SELECT s."updatedAt", s."uuid"
+                      FROM scan s
+                     ORDER BY s."updatedAt" DESC, s."uuid" DESC
+                     LIMIT 1
+             ),
+             doomed AS (
+                    SELECT s."uuid"
+                      FROM scan s
+                     WHERE (SELECT 1 FROM "kodus_workflow"."inbox_messages" i WHERE i."job_id" = s."uuid" LIMIT 1) IS NULL
+                       AND (SELECT 1 FROM "kodus_workflow"."outbox_messages" o WHERE o."job_id" = s."uuid" LIMIT 1) IS NULL
+             ),
+             gone AS (
+                DELETE FROM "kodus_workflow"."workflow_jobs" w
+                 USING doomed d
+                 WHERE w."uuid" = d."uuid"
+                   AND w."updatedAt" < $1
+                   AND w."status" IN ($2, $3, $4)
+                   AND w."workflowType"::text <> ALL($7::text[])
+             RETURNING w."uuid"
+             )
+             SELECT (SELECT count(*) FROM scan)::int AS "candidates",
+                    (SELECT count(*) FROM gone)::int AS "deleted",
+                    (SELECT l."updatedAt"::text FROM last l) AS "lastUpdatedAt",
+                    (SELECT l."uuid"::text FROM last l) AS "lastId"`,
+            [
+                params.olderThan,
+                JobStatus.COMPLETED,
+                JobStatus.FAILED,
+                JobStatus.CANCELLED,
+                params.batchSize,
+                params.after ?? null,
+                params.keepWorkflowTypes ?? [],
+                params.afterId ?? null,
+            ],
+        );
+
+        const row = (Array.isArray(raw) ? raw[0] : raw) as
+            | {
+                  candidates: number;
+                  deleted: number;
+                  lastUpdatedAt: string | null;
+                  lastId: string | null;
+              }
+            | undefined;
+
+        // The SELECT always answers one row; without it nothing is known
+        // about the batch, and a 0 would read as "nothing left".
+        if (!row) {
+            throw new Error(
+                'Workflow job retention batch returned no result row',
+            );
+        }
+        return {
+            deleted: row.deleted,
+            candidates: row.candidates,
+            lastUpdatedAt: row.lastUpdatedAt ?? undefined,
+            lastId: row.lastId ?? undefined,
+        };
+    }
+
+    async failIfProcessing(
+        id: string,
+        data: { lastError: string; errorClassification: ErrorClassification },
+    ): Promise<boolean> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.FAILED,
+                    errorClassification: data.errorClassification,
+                    lastError: data.lastError,
+                    completedAt: () => 'NOW()',
+                })
+                .where('uuid = :id', { id })
+                .andWhere('status = :status', { status: JobStatus.PROCESSING })
+                .execute();
+            return (result.affected ?? 0) > 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to mark PROCESSING workflow job as FAILED',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { jobId: id },
             });
             throw error;
         }

@@ -125,11 +125,11 @@ async function mirrorFor({ repo, prNumber, headSha, baseRef, baseSha }) {
  * base holds is deleted on the PR's branch. Returns the URL, the branches and a
  * cleanup.
  */
-async function inlineMirror(fullOrOverlay, { base, baseFiles, branch = 'feature', baseBranch = 'main' } = {}) {
+async function inlineMirror(fullOrOverlay, { base, baseFiles, lastReviewedFiles, branch = 'feature', baseBranch = 'main' } = {}) {
     let head = fullOrOverlay;
     if (baseFiles) {
         head = { ...fullOrOverlay };
-        for (const file of Object.keys(baseFiles)) if (!(file in head)) head[file] = null;
+        for (const file of [...Object.keys(baseFiles), ...Object.keys(lastReviewedFiles || {})]) if (!(file in head)) head[file] = null;
         base = baseFiles;
     }
     base = base || {};
@@ -147,12 +147,20 @@ async function inlineMirror(fullOrOverlay, { base, baseFiles, branch = 'feature'
             fs.writeFileSync(target, String(content));
         }
     };
+    let lastReviewed;
     try {
         await git(work, ['init', '-q', '-b', baseBranch]);
         write(base);
         await git(work, ['add', '-A']);
         await git(work, ['commit', '-q', '--allow-empty', '-m', 'base of the pull request'], { env: author });
         await git(work, ['checkout', '-q', '-b', branch]);
+        if (lastReviewedFiles) {
+            const deleted = Object.fromEntries(Object.keys(base).filter((file) => !(file in lastReviewedFiles)).map((file) => [file, null]));
+            write({ ...deleted, ...lastReviewedFiles });
+            await git(work, ['add', '-A']);
+            await git(work, ['commit', '-q', '--allow-empty', '-m', 'last reviewed revision'], { env: author });
+            lastReviewed = (await git(work, ['rev-parse', 'HEAD'])).stdout.trim();
+        }
         write(head);
         await git(work, ['add', '-A']);
         await git(work, ['commit', '-q', '--allow-empty', '-m', 'head of the pull request'], { env: author });
@@ -161,7 +169,7 @@ async function inlineMirror(fullOrOverlay, { base, baseFiles, branch = 'feature'
         fs.rmSync(work, { recursive: true, force: true });
         throw error;
     }
-    return { cloneUrl: `file://${work}`, branch, base: baseBranch, cleanup: async () => fs.rmSync(work, { recursive: true, force: true }) };
+    return { cloneUrl: `file://${work}`, branch, base: baseBranch, lastReviewed, cleanup: async () => fs.rmSync(work, { recursive: true, force: true }) };
 }
 
 /**

@@ -192,7 +192,7 @@ export class RabbitMQWrapperModule {
                             prefetchCount:
                                 configService.get<number>(
                                     'workflowQueue.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH',
-                                ) ?? 5,
+                                ) ?? 1,
                             default: false,
                         },
                     },

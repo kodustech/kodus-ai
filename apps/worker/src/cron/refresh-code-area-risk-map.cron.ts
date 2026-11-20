@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -57,7 +57,7 @@ export class RefreshCodeAreaRiskMapCron {
         private readonly codeManagement: CodeManagementService,
     ) {}
 
-    @Cron('0 */2 * * *', {
+    @GatedCron('0 */2 * * *', {
         name: 'REFRESH CODE AREA RISK MAP',
         waitForCompletion: true,
     })

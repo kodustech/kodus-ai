@@ -14,6 +14,11 @@
  * rabbitmq-dlq.initializer.ts — MUST reference this module so they can never
  * drift apart again. Do not inline queue arguments at either site.
  */
+
+import { SECURITY_SCAN_JOB_QUEUE } from './security-scan-runtime';
+
+export { SECURITY_SCAN_JOB_QUEUE };
+
 export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
     string,
     Record<string, unknown>
@@ -78,7 +83,7 @@ export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
     },
     // A scan slice runs at most ~30 min (the sandbox lifetime); a consumer
     // holding a message past 40 min has hung.
-    'workflow.jobs.security_scan.queue': {
+    [SECURITY_SCAN_JOB_QUEUE]: {
         'x-queue-type': 'quorum',
         'x-consumer-timeout': 40 * 60 * 1000,
         'x-dead-letter-exchange': 'workflow.exchange.dlx',

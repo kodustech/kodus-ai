@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { updateActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { produce } from 'immer';
@@ -15,6 +16,25 @@ import {
 import { PipelineStage } from '../interfaces/pipeline.interface';
 
 type SkipDecision = 'EXECUTE_STAGE' | 'SKIP_STAGE' | 'ABORT_PIPELINE';
+
+/** The PR a code review pipeline works on, for the stall watchdog. */
+function prActivity(context: unknown): {
+    organizationId?: string;
+    repository?: string;
+    prNumber?: number;
+    platform?: string;
+} {
+    const c = context as any;
+    const pr = c?.pullRequest;
+    const repo = c?.repository;
+    const n = Number(pr?.number ?? c?.prNumber);
+    return {
+        organizationId: c?.organizationAndTeamData?.organizationId,
+        repository: repo?.fullName ?? repo?.name,
+        prNumber: Number.isFinite(n) && n > 0 ? n : undefined,
+        platform: c?.platformType,
+    };
+}
 
 export class PipelineExecutor<TContext extends PipelineContext> {
     private readonly logger = createLogger(PipelineExecutor.name);
@@ -72,6 +92,30 @@ export class PipelineExecutor<TContext extends PipelineContext> {
         rootPipelineId?: string,
         observers: IPipelineObserver[] = [],
     ): Promise<TContext> {
+        try {
+            return await this.runStages(
+                context,
+                stages,
+                pipelineName,
+                parentPipelineId,
+                rootPipelineId,
+                observers,
+            );
+        } finally {
+            // The caller keeps working after the pipeline (reactions,
+            // first-review capture): a stall there is not in its last stage.
+            updateActivity({ stage: `after ${pipelineName}` });
+        }
+    }
+
+    private async runStages(
+        context: TContext,
+        stages: PipelineStage<TContext>[],
+        pipelineName: string,
+        parentPipelineId?: string,
+        rootPipelineId?: string,
+        observers: IPipelineObserver[] = [],
+    ): Promise<TContext> {
         const pipelineId = uuid();
 
         context.pipelineMetadata = {
@@ -119,9 +163,7 @@ export class PipelineExecutor<TContext extends PipelineContext> {
             // without changing pipeline status. Checked before the SKIPPED
             // fast-forward so a stage listed here is excluded from both
             // execution and any jumpToStage match.
-            if (
-                context.statusInfo.skipStages?.includes(stage.stageName)
-            ) {
+            if (context.statusInfo.skipStages?.includes(stage.stageName)) {
                 this.logger.log({
                     message: `Skipping stage '${stage.stageName}' — listed in statusInfo.skipStages`,
                     context: PipelineExecutor.name,
@@ -129,8 +171,7 @@ export class PipelineExecutor<TContext extends PipelineContext> {
                     metadata: {
                         ...context?.pipelineMetadata,
                         stage: stage.stageName,
-                        correlationId:
-                            (context as any)?.correlationId ?? null,
+                        correlationId: (context as any)?.correlationId ?? null,
                         status: context.statusInfo,
                     },
                 });
@@ -158,6 +199,11 @@ export class PipelineExecutor<TContext extends PipelineContext> {
             }
 
             const start = Date.now();
+            updateActivity({
+                pipeline: pipelineName,
+                stage: stage.stageName,
+                ...prActivity(context),
+            });
 
             if (!stage.silent) {
                 await this.notifyObservers(

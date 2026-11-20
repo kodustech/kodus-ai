@@ -243,6 +243,17 @@ describe('SecurityScanRepository.recordUnit', () => {
         expect(update.$push).toBeUndefined();
     });
 
+    it('says when nothing matched: the scan is no longer running', async () => {
+        const repository = new SecurityScanRepository({ updateOne: updateOneReturning(0, 0) } as any);
+        await expect(repository.recordUnit('scan-1', progress, {}, reported, 'job-1')).resolves.toBe(false);
+
+        const pending = new SecurityScanRepository({ updateOne: updateOneReturning(0) } as any);
+        await expect(pending.recordUnit('scan-1', { ...progress, state: 'pending' }, {})).resolves.toBe(false);
+
+        const appended = new SecurityScanRepository({ updateOne: updateOneReturning(1) } as any);
+        await expect(appended.recordUnit('scan-1', progress, {})).resolves.toBe(true);
+    });
+
     it('raises the committed spend field by field, only while the job runs the scan', async () => {
         const updateOne = jest
             .fn()

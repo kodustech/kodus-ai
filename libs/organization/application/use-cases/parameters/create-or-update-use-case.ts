@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -26,12 +26,16 @@ export class CreateOrUpdateParametersUseCase {
         parametersKey: K,
         configValue: ParametersEntity<K>['configValue'],
         organizationAndTeamData: OrganizationAndTeamData,
+        expectedConfigId?: string,
     ): Promise<ParametersEntity<K> | boolean> {
         try {
+            const precondition: [expectedConfigId?: string] =
+                expectedConfigId === undefined ? [] : [expectedConfigId];
             const result = await this.parametersService.createOrUpdateConfig(
                 parametersKey,
                 configValue,
                 organizationAndTeamData,
+                ...precondition,
             );
 
             this.findByKeyParametersUseCase.invalidateCache(
@@ -41,6 +45,7 @@ export class CreateOrUpdateParametersUseCase {
 
             return result;
         } catch (error) {
+            if (error instanceof ConflictException) throw error;
             this.logger.error({
                 message: 'Error creating or updating parameters',
                 context: CreateOrUpdateParametersUseCase.name,

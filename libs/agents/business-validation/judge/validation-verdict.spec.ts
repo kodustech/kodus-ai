@@ -156,6 +156,30 @@ describe('applyBusinessRulesVerdict — refuted claim', () => {
     });
 });
 
+describe('analyzer run — time limit', () => {
+    it('cancels the model call when the analysis runs past its time limit', async () => {
+        let callSignal: AbortSignal | undefined;
+        jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockImplementation(
+            (_spec, _input, ctx) => {
+                callSignal = (ctx as { signal: AbortSignal }).signal;
+                // A model that never answers.
+                return new Promise(() => undefined);
+            },
+        );
+        const judge = new IntentJudge(
+            undefined,
+            { analyzerTimeoutMs: 20, analyzerMaxIterations: 1 },
+            {},
+        );
+
+        const result = await judge.judge(judgeInput);
+
+        expect(result.reason).toBe('analyzer_failure');
+        expect(result.missingInfo).toContain('Timeout after 20ms');
+        expect(callSignal?.aborted).toBe(true);
+    });
+});
+
 describe('analyzer run — submitValidation result tool', () => {
     const verdict = {
         needsMoreInfo: false,
@@ -217,6 +241,56 @@ describe('analyzer run — submitValidation result tool', () => {
         const result = await makeJudge().judge(judgeInput);
 
         expect(result.status).toBe('issues_found');
+    });
+
+    it.each([
+        ['an empty result call', {}],
+        ['a result call with none of the result fields', { note: 'done' }],
+    ])(
+        'keeps the verdict the analyzer wrote as text when it made %s',
+        async (_case, payload) => {
+            jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue(
+                runResult(
+                    JSON.stringify({ ...verdict, status: 'issues_found' }),
+                    [{ type: VALIDATION_RESULT_TOOL, payload }],
+                ),
+            );
+
+            const result = await makeJudge().judge(judgeInput);
+
+            expect(result.reason).not.toBe('parser_fallback');
+            expect(result.status).toBe('issues_found');
+        },
+    );
+
+    it('keeps a text answer that only asks for more information beside an unusable result call', async () => {
+        jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue(
+            runResult(
+                JSON.stringify({
+                    needsMoreInfo: true,
+                    missingInfo:
+                        'The task does not say which plans get the discount.',
+                }),
+                [{ type: VALIDATION_RESULT_TOOL, payload: {} }],
+            ),
+        );
+
+        const result = await makeJudge().judge(judgeInput);
+
+        expect(result.reason).not.toBe('parser_fallback');
+        expect(result.missingInfo).toContain('which plans get the discount');
+    });
+
+    it('still reports a parse failure when the text beside an unusable result call holds no verdict', async () => {
+        jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue(
+            runResult('I have submitted the validation result.', [
+                { type: VALIDATION_RESULT_TOOL, payload: {} },
+            ]),
+        );
+
+        const result = await makeJudge().judge(judgeInput);
+
+        expect(result.reason).toBe('parser_fallback');
     });
 
     it('reports the provider error of a failed run, never a parse error', async () => {

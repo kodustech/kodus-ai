@@ -1,6 +1,9 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
-import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
+import {
+    SECURITY_SCAN_JOB_QUEUE,
+    WORKFLOW_JOB_QUEUE_ARGUMENTS,
+} from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
 import { isKodyRuntimeEnabled } from '@libs/runtime-publish/runtime-feature';
 import { declareRuntimeRetryTopology } from './config/runtime-retry-topology';
 import {
@@ -75,7 +78,7 @@ const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
         routingKey: 'workflow.jobs.*.RUNTIME_TRIGGER',
     },
     {
-        queue: 'workflow.jobs.security_scan.queue',
+        queue: SECURITY_SCAN_JOB_QUEUE,
         routingKey: 'workflow.jobs.*.SECURITY_SCAN',
     },
 ];

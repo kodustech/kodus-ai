@@ -13,11 +13,15 @@ configureLongFetchTimeouts();
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-worker' });
 
+import { hostname } from 'os';
 import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+
+import { securityScanSliceJobId } from '@libs/core/workflow/infrastructure/security-scan-runtime';
+import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
 
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
@@ -96,6 +100,64 @@ async function bootstrap() {
 
         await appContext.get(ObservabilityService).init('worker');
 
+        // A slice child runs the engine only: no health port (the parent
+        // already bound :3334) and no queue consumer. Skip Nest shutdown
+        // hooks so SIGTERM is ours: abort the processor, release the
+        // sandbox, then close.
+        const sliceJobId = securityScanSliceJobId();
+
+        // Kept running through shutdown (unref'd): the drain is when we most
+        // need to see whether the thread is blocked. The stall watchdog
+        // captures where a stall is stuck and alerts while it happens; not in
+        // a slice child, whose whole point is to run heavy work off the
+        // consumer's event loop. The ECS task id joins a stall alert to the
+        // task ECS stops.
+        const taskId = sliceJobId ? undefined : await ecsTaskId();
+        startEventLoopMonitor(
+            sliceJobId
+                ? {}
+                : {
+                      stallWatchdog: {
+                          // Critical: a stall past alertMs (75s), about to be killed.
+                          heartbeatUrl:
+                              process.env
+                                  .API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL ??
+                              '',
+                          // Early warning: every stall, at its first report (20s).
+                          warnHeartbeatUrl:
+                              process.env
+                                  .API_BETTERSTACK_HEARTBEAT_WORKER_STALL_WARN_URL ??
+                              '',
+                          identity: {
+                              role,
+                              instanceId: hostname(),
+                              ...(taskId ? { taskId } : {}),
+                          },
+                      },
+                  },
+        );
+
+        if (sliceJobId) {
+            logger?.log(
+                `Running security-scan slice ${sliceJobId}`,
+                'Bootstrap',
+            );
+            const code = await runSecurityScanSliceProcess(
+                appContext,
+                sliceJobId,
+                {
+                    onError: (err) =>
+                        logger?.error({
+                            message: `Security-scan slice failed: ${err.message}`,
+                            context: 'Bootstrap',
+                            error: err,
+                            metadata: { jobId: sliceJobId },
+                        }),
+                },
+            );
+            process.exit(code);
+        }
+
         appContext.enableShutdownHooks();
 
         // ECS-facing health probe: returns 503 when AMQP is disconnected so
@@ -112,9 +174,6 @@ async function bootstrap() {
             appContext,
             ...workerHealthProbeOptions(role, process.env),
         });
-        // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked.
-        startEventLoopMonitor();
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks
         // (enableShutdownHooks) fire after this on the same signal.
@@ -147,3 +206,25 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+/**
+ * This task's id from the ECS task metadata endpoint, best effort (absent
+ * outside ECS or when the endpoint does not answer within 2s).
+ */
+async function ecsTaskId(): Promise<string | undefined> {
+    const uri = process.env.ECS_CONTAINER_METADATA_URI_V4;
+    if (!uri) return undefined;
+    try {
+        const res = await fetch(`${uri}/task`, {
+            signal: AbortSignal.timeout(2_000),
+        });
+        const body = (await res.json()) as { TaskARN?: string };
+        return (
+            String(body?.TaskARN ?? '')
+                .split('/')
+                .pop() || undefined
+        );
+    } catch {
+        return undefined;
+    }
+}

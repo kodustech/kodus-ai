@@ -1782,6 +1782,17 @@
     }
   },
   {
+    "key": "riskAssessment.controller.ts#previewApprovalOnPr",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/risk/approval-preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "riskAssessment.controller.ts#previewOnPr",
     "httpMethod": "POST",
     "urlPath": "/code-review/risk/preview",
@@ -2533,6 +2544,17 @@
     "key": "runtime-settings.controller.ts#updateRepositorySettings",
     "httpMethod": "PUT",
     "urlPath": "/runtime/settings/repositories/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#cancel",
+    "httpMethod": "POST",
+    "urlPath": "/security-scans/:id/cancel",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

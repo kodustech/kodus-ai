@@ -101,7 +101,8 @@ function prOf(c) {
         headRef: 'feature',
         baseRef: 'main',
         repoFiles: c.repo,
-        baseFiles: baseTreeOf(c),
+        baseFiles: c.prBase ?? baseTreeOf(c),
+        ...(c.prBase ? { lastReviewedFiles: baseTreeOf(c) } : {}),
         commits: platformCommits(c.commits),
     };
 }

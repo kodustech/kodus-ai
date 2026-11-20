@@ -1,4 +1,8 @@
-import { buildMatrix, collectAllEndpoints, Verdict } from './rbac-matrix.shared';
+import {
+    buildMatrix,
+    collectAllEndpoints,
+    Verdict,
+} from './rbac-matrix.shared';
 
 /**
  * Effective authorization matrix — the flagship RBAC regression gate.
@@ -120,5 +124,18 @@ describe('authorization matrix (effective policy × role)', () => {
                 .map((s) => `${ep.key}: ${(s as any).text}`),
         );
         expect(unknown).toEqual([]);
+    });
+
+    it('start and cancel a security scan on the same action and resource', () => {
+        const endpoints = collectAllEndpoints();
+        const grant = (key: string) => {
+            const ep = endpoints.find((e) => e.key === key);
+            expect(ep).toBeDefined();
+            const spec = ep!.specs[0] as { action?: string; resource?: string };
+            return { action: spec.action, resource: spec.resource };
+        };
+        expect(grant('securityScans.controller.ts#cancel')).toEqual(
+            grant('securityScans.controller.ts#start'),
+        );
     });
 });

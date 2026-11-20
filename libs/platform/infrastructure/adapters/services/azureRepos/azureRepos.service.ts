@@ -9,7 +9,6 @@ import {
 } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createTwoFilesPatch } from 'diff';
 import pLimit from 'p-limit';
 import { v4 } from 'uuid';
 
@@ -124,6 +123,10 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import {
+    AZURE_FILE_DIFF_TIMEOUT_MS,
+    createFilePatchYielding,
+} from './azure-file-patch';
 import { listingFailed } from '../repository-listing';
 import {
     failWebhookSetupForAll,
@@ -1662,6 +1665,12 @@ export class AzureReposService implements Omit<
                             targetCommitId: headSha,
                             changeType: change.changeType,
                             rethrowRetryable: true,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
                         }),
                     ),
                 ),
@@ -1865,6 +1874,11 @@ export class AzureReposService implements Omit<
                     changeType: change.changeType,
                     // A rate-limited or unreachable file is not an unchanged one
                     rethrowRetryable: true,
+                    logContext: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        prNumber,
+                    },
                 });
 
                 if (fileDiff) {
@@ -4311,6 +4325,12 @@ export class AzureReposService implements Omit<
                             targetCommitId,
                             changeType: change.changeType,
                             rethrowRetryable: true,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
                         }),
                     ),
                 ),
@@ -4432,6 +4452,12 @@ export class AzureReposService implements Omit<
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
         /** Let a rate limit through instead of answering null. */
         rethrowRetryable?: boolean;
+        /** Ties this file's warnings to the org, team and PR. */
+        logContext?: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        };
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4439,7 +4465,8 @@ export class AzureReposService implements Omit<
         additions: number;
         deletions: number;
         changes: number;
-        patch: string;
+        /** Undefined when the diff could not be computed (timed out). */
+        patch: string | undefined;
         content: string; // Added content
     } | null> {
         const {
@@ -4455,7 +4482,7 @@ export class AzureReposService implements Omit<
 
         let originalFileContent = '';
         let modifiedFileContent = '';
-        let patch = '';
+        let patch: string | undefined = '';
         let additions = 0;
         let deletions = 0;
         const status: FileChange['status'] = // Use correct type from FileChange
@@ -4536,7 +4563,10 @@ export class AzureReposService implements Omit<
 
             // Generate unified diff only if we have something to compare
             if (originalFileContent || modifiedFileContent) {
-                patch = createTwoFilesPatch(
+                // Yields to the event loop while diffing and gives up on a
+                // pathological file (see createFilePatchYielding).
+                const startedAt = Date.now();
+                const computed = await createFilePatchYielding(
                     status === 'renamed' // Compare with string literal
                         ? params.filePath /* Use original path here if available and needed */
                         : filePath, // Adjust if original path is needed for renamed files
@@ -4545,17 +4575,40 @@ export class AzureReposService implements Omit<
                     modifiedFileContent,
                     baseCommitId ?? '',
                     targetCommitId,
-                    { context: 3 }, // Context lines around changes
                 );
+                if (computed === undefined) {
+                    this.logger.warn({
+                        message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; the file has no patch (unavailable, not empty)`,
+                        context: this._generateFileDiffForAzure.name,
+                        metadata: {
+                            ...params.logContext,
+                            filePath,
+                            baseCommitId,
+                            targetCommitId,
+                            elapsedMs: Date.now() - startedAt,
+                            originalChars: originalFileContent.length,
+                            modifiedChars: modifiedFileContent.length,
+                        },
+                    });
+                }
+                // A timed-out diff stays unavailable (undefined), the shape
+                // providers use for an omitted oversized patch, never an
+                // empty patch that reads as "no changes". Risk and approval
+                // checks treat a missing patch as missing evidence.
+                patch = computed;
 
-                // Calculate additions and deletions from the patch
-                const diffLines = patch.split('\n');
-                additions = diffLines.filter(
-                    (line) => line.startsWith('+') && !line.startsWith('+++'),
-                ).length;
-                deletions = diffLines.filter(
-                    (line) => line.startsWith('-') && !line.startsWith('---'),
-                ).length;
+                if (patch !== undefined) {
+                    // Calculate additions and deletions from the patch
+                    const diffLines = patch.split('\n');
+                    additions = diffLines.filter(
+                        (line) =>
+                            line.startsWith('+') && !line.startsWith('+++'),
+                    ).length;
+                    deletions = diffLines.filter(
+                        (line) =>
+                            line.startsWith('-') && !line.startsWith('---'),
+                    ).length;
+                }
             } else if (status === 'removed') {
                 // Compare with 'removed'
                 // Handle deleted files explicitly if needed (e.g., create a dummy patch or specific log)

@@ -2,9 +2,11 @@ import {
     hasConfirmedRisk,
     matchesRiskSnapshot,
     riskApprovalVeto,
+    riskSnapshotMismatch,
     type RiskAssessmentResult,
     type RiskSnapshot,
 } from './risk-assessment';
+import { prRiskDescriptionKey } from './risk-configuration';
 
 export const snapshot: RiskSnapshot = {
     organizationId: 'org',
@@ -13,14 +15,18 @@ export const snapshot: RiskSnapshot = {
     baseSha: 'base',
     headSha: 'head',
     assessmentKey: 'config-and-diff',
+    descriptionKey: prRiskDescriptionKey({}),
 };
 
-const assessed = (riskIdentified: boolean): RiskAssessmentResult => ({
+const assessed = (
+    riskIdentified: boolean,
+): Extract<RiskAssessmentResult, { status: 'assessed' }> => ({
     status: 'assessed',
     riskIdentified,
     reason: 'Assessment reason.',
     snapshot,
 });
+const current = { headSha: 'head', baseSha: 'base', description: {} };
 
 describe('shared PR risk contract', () => {
     it.each([
@@ -74,19 +80,97 @@ describe('shared PR risk contract', () => {
         { status: 'unavailable', reason: 'Failed.' },
         assessed(true),
     ] as const)('vetoes approval for %j when assessment is enabled', (risk) => {
-        expect(riskApprovalVeto(true, risk, 'head')).toBeDefined();
+        expect(riskApprovalVeto(true, risk, current)).toBeDefined();
     });
 
     it('requires verified no-risk on the reviewed head for approval', () => {
-        expect(riskApprovalVeto(true, assessed(false), 'head')).toBeUndefined();
         expect(
-            riskApprovalVeto(true, assessed(false), 'new-head'),
+            riskApprovalVeto(true, assessed(false), current),
+        ).toBeUndefined();
+        expect(
+            riskApprovalVeto(true, assessed(false), {
+                ...current,
+                headSha: 'new-head',
+            }),
         ).toBeDefined();
-        expect(riskApprovalVeto(true, assessed(false), '')).toBeDefined();
+        expect(
+            riskApprovalVeto(true, assessed(false), {
+                ...current,
+                headSha: '',
+            }),
+        ).toBeDefined();
+    });
+
+    it('shares base and description checks between routing and approval', () => {
+        const description = { title: 'Original', body: 'Context' };
+        const result = {
+            ...assessed(false),
+            snapshot: {
+                ...snapshot,
+                descriptionKey: prRiskDescriptionKey(description),
+            },
+        } as RiskAssessmentResult;
+        expect(
+            riskSnapshotMismatch(result, {
+                headSha: 'head',
+                baseSha: 'base',
+                description,
+            }),
+        ).toBeUndefined();
+        const changes = [
+            { baseSha: 'moved', description },
+            {
+                baseSha: 'base',
+                description: { ...description, title: 'Edited' },
+            },
+        ];
+        for (const { baseSha, description } of changes) {
+            const mismatch = riskSnapshotMismatch(result, {
+                headSha: 'head',
+                baseSha,
+                description,
+            });
+            expect(mismatch).toBeDefined();
+            expect(
+                riskApprovalVeto(true, result, {
+                    headSha: 'head',
+                    baseSha,
+                    description,
+                }),
+            ).toBe(mismatch);
+        }
     });
 
     it('removes only the risk veto when the engine is switched off', () => {
-        expect(riskApprovalVeto(false, assessed(true), 'head')).toBeUndefined();
-        expect(riskApprovalVeto(false, undefined, 'head')).toBeUndefined();
+        expect(
+            riskApprovalVeto(false, assessed(true), current),
+        ).toBeUndefined();
+        expect(riskApprovalVeto(false, undefined, current)).toBeUndefined();
     });
+
+    it('holds an otherwise current assessment when the PR description was not read', () => {
+        const identity = { ...current, description: undefined };
+        expect(riskApprovalVeto(true, assessed(false), identity)).toBe(
+            'Risk assessment is unavailable for the current PR context.',
+        );
+    });
+
+    it.each([undefined, '', '   '])(
+        'holds approval when the current base is %j',
+        (baseSha) => {
+            const identity = { ...current, baseSha };
+            const result = assessed(false);
+            // A persisted legacy snapshot can have the same unverified base.
+            const unverified = {
+                ...result,
+                snapshot: { ...result.snapshot, baseSha: baseSha as string },
+            };
+            expect(riskSnapshotMismatch(unverified, identity)).toContain(
+                'current PR base',
+            );
+            expect(riskApprovalVeto(true, unverified, identity)).toContain(
+                'current PR base',
+            );
+        },
+    );
 });

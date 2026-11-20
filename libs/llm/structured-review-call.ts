@@ -54,10 +54,7 @@ import {
     type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
-import {
-    declaredEnvModel,
-    resolveEnvProvider,
-} from '@libs/llm/managed-slot';
+import { declaredEnvModel, resolveEnvProvider } from '@libs/llm/managed-slot';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import {
     tracedGenerateText,
@@ -85,8 +82,51 @@ import {
 } from '@libs/llm/retry-policy';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
+import {
+    applyOneShotCache,
+    resolvePrefixCacheHint,
+    type OneShotPromptCache,
+} from '@libs/llm/one-shot-cache';
 
 const logger = createLogger('StructuredReviewCall');
+
+const AUTO_CACHE_LOG_INTERVAL_MS = 60 * 60 * 1000;
+const autoCacheLoggedAt = new Map<string, number>();
+/** Caller attrs that identify where a call came from; nothing free-form. */
+const AUTO_CACHE_LOG_ATTRS = [
+    'teamId',
+    'repositoryId',
+    'prNumber',
+    'agentName',
+] as const;
+
+/** A slot whose custom provider options turn on Anthropic's automatic cache
+ *  makes every call write its whole prompt; a call carrying its own marker
+ *  drops it. Logged once an hour per org and run, not once per call. */
+function logAutomaticCacheDropped(
+    runName: string,
+    organizationId: string | undefined,
+    callerContext: Record<string, unknown>,
+) {
+    const key = `${organizationId ?? '-'}:${runName}`;
+    const now = Date.now();
+    const last = autoCacheLoggedAt.get(key);
+    if (last !== undefined && now - last < AUTO_CACHE_LOG_INTERVAL_MS) return;
+    autoCacheLoggedAt.set(key, now);
+    logger.log({
+        message: `[prompt-cache] dropped an automatic cacheControl from the provider options of ${runName}; the call carries its own breakpoint`,
+        context: 'runReviewCall',
+        metadata: {
+            ...Object.fromEntries(
+                AUTO_CACHE_LOG_ATTRS.filter(
+                    (k) => callerContext[k] !== undefined,
+                ).map((k) => [k, callerContext[k]]),
+            ),
+            runName,
+            organizationId,
+        },
+    });
+}
 
 /** Fields shared by every review call (structured or plain-text). `byokConfig`
  *  is the bare resolved slot; `buildModelFromSlot`/`getModelName` take it directly. */
@@ -144,6 +184,10 @@ export interface BaseReviewCallParams {
      *  a bare `[]` for "no violations" at scale (#1786 / prod audit 2026-09) —
      *  turning a shard error (and a false "rules not applied") into a clean pass. */
     recoverEnvelopeShape?: boolean;
+    /** What this call shares with sibling calls issued around the same time
+     *  (one-shot-cache.ts). Marked with the provider's cache marker when it
+     *  takes one; absent → the request is sent exactly as before. */
+    promptCache?: OneShotPromptCache;
 }
 
 export interface StructuredReviewCallParams<
@@ -363,6 +407,7 @@ async function runReviewCall<T>(
         maxOutputTokens: maxOutputTokensOverride,
         providerOptions: providerOptionsOverride,
         suppressReasoning: callerSuppressReasoning,
+        promptCache,
     } = params;
 
     const mainSlot = byokConfig;
@@ -397,7 +442,8 @@ async function runReviewCall<T>(
     // on forced tool_choice + thinking), or the caller asked because the work
     // itself does not benefit from reasoning.
     const suppressReasoning =
-        structuredPlan === 'suppress-thinking' || callerSuppressReasoning === true;
+        structuredPlan === 'suppress-thinking' ||
+        callerSuppressReasoning === true;
 
     const buildInvocation = (structuredOutputs: boolean) =>
         resolveModelConfig(mainSlot, {
@@ -477,6 +523,15 @@ async function runReviewCall<T>(
         ...(organizationId ? { organizationId } : {}),
     };
 
+    // Resolved once: every attempt below runs the same model.
+    const cacheHint = promptCache
+        ? resolvePrefixCacheHint({
+              provider: mainSlot?.provider as string | undefined,
+              model: mainSlot?.model ?? mainModelName,
+              baseURL: mainSlot?.baseURL,
+          })
+        : undefined;
+
     const call = (
         model: LanguageModel,
         modelName: string,
@@ -496,11 +551,29 @@ async function runReviewCall<T>(
         // 30min agent-level fallback; also feeds the BYOK limiter cancellation.
         // Kept here so a span can tell an abort from any other failure (#2389).
         const signal = timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS);
+        const cached = applyOneShotCache({
+            system: systemOverride ?? system,
+            prompt: override?.prompt ?? user,
+            cache: promptCache,
+            hint: cacheHint,
+            providerOptions: providerOptionsOverride ?? providerOptions,
+        });
+        if (cached.droppedAutoCache) {
+            logAutomaticCacheDropped(runName, organizationId, attrs ?? {});
+        }
+        const cacheAttrs = {
+            ...(cached.marked.length
+                ? { promptCacheMarked: cached.marked.join(',') }
+                : {}),
+            ...(cached.skipped ? { promptCacheSkipped: cached.skipped } : {}),
+            ...(cached.droppedAutoCache
+                ? { promptCacheAutoDropped: true }
+                : {}),
+        };
         const exec = () =>
             tracedGenerateText({
                 model: model as any,
-                system: systemOverride ?? system,
-                prompt: override?.prompt ?? user,
+                ...cached.args,
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
                 ...(override?.outputArgs ?? mode.outputArgs),
@@ -518,7 +591,8 @@ async function runReviewCall<T>(
                 // Provider-specific reasoning/thinking + OpenRouter routing (the
                 // other SDK channel; empty when the slot sets none). A caller
                 // override (e.g. Gemini thinking off) replaces the slot-derived one.
-                providerOptions: providerOptionsOverride ?? providerOptions,
+                // A cache marker may add its request-level options here.
+                providerOptions: cached.providerOptions,
                 // Pin the AI SDK's OWN retry to 0 (ai@7 defaults to 2) so it can't
                 // stack under the app-level D-00c re-issue and the wrapper catch.
                 maxRetries: 0,
@@ -554,9 +628,7 @@ async function runReviewCall<T>(
                   // Every review call builds its SDK telemetry (falling back
                   // to the org id), so every one is traced.
                   traced: true,
-                  attrs: extraAttrs
-                      ? { ...spanAttrs, ...extraAttrs }
-                      : spanAttrs,
+                  attrs: { ...spanAttrs, ...(extraAttrs ?? {}), ...cacheAttrs },
                   exec,
                   // The one request was out when the deadline aborted it: its
                   // input is the known gap, never billed (#2389).
@@ -812,9 +884,14 @@ async function runReviewCall<T>(
                 mode.validatingSchema != null &&
                 haveBadValue
             ) {
-                const shaped = normalizeEnvelope(badValue, mode.envelopeKey, [], {
-                    liftEmptyArray: true,
-                });
+                const shaped = normalizeEnvelope(
+                    badValue,
+                    mode.envelopeKey,
+                    [],
+                    {
+                        liftEmptyArray: true,
+                    },
+                );
                 if (shaped !== badValue) {
                     const wireSchema = asSchema(mode.validatingSchema as any);
                     const check =
@@ -943,7 +1020,8 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     // envelope-key derivation below.
     const jsonForm =
         wireSchema && typeof wireSchema === 'object'
-            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ?? wireSchema)
+            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ??
+              wireSchema)
             : undefined;
 
     // Stringify the wire JSON schema so the json_object fallback can put the
@@ -963,8 +1041,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     // re-ask still runs).
     let envelopeKey: string | undefined;
     const jf = jsonForm as
-        | { required?: unknown; properties?: unknown }
-        | undefined;
+        { required?: unknown; properties?: unknown } | undefined;
     if (jf && typeof jf === 'object') {
         const required = Array.isArray(jf.required) ? jf.required : [];
         if (typeof required[0] === 'string') {
