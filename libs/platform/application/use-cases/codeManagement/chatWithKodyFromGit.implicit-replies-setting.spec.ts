@@ -110,7 +110,7 @@ function params(comment: { id: number; body: string }) {
         platformType: PlatformType.GITHUB,
         payload: {
             action: 'created',
-            repository: { id: 'repo-1', name: 'billing-api' },
+            repository: { id: 123, name: 'billing-api' },
             pull_request: {
                 number: 812,
                 head: { ref: 'feat/x' },
@@ -201,7 +201,7 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
         expect(conversationAgentUseCase.execute).toHaveBeenCalledTimes(1);
     });
 
-    it("reads the setting for the PR's repository", async () => {
+    it("reads the setting for the PR's repository, with the id as a string", async () => {
         const { useCase, codeManagementService, codeBaseConfigService } = setup(
             {
                 conversation: { implicitReplies: true },
@@ -214,9 +214,12 @@ describe('ChatWithKodyFromGitUseCase — conversation.implicitReplies (#2576)', 
 
         await useCase.execute(params(agentReply));
 
+        // GitHub sends `repository.id` as a number; the stored keys are strings
+        // and the lookup compares with `===`, so this is the value that has to
+        // arrive.
         expect(codeBaseConfigService.getSimpleConfig).toHaveBeenCalledWith(
             expect.objectContaining({ organizationId: ORG, teamId: TEAM }),
-            expect.objectContaining({ repositoryId: 'repo-1' }),
+            expect.objectContaining({ repositoryId: '123' }),
         );
     });
 

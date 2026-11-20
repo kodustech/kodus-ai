@@ -180,3 +180,47 @@ describe('independent risk configuration validation', () => {
         },
     );
 });
+
+/**
+ * #2576: the organization-wide `conversation.implicitReplies` opt-out has to
+ * survive the API's own pipe - `transform`, `whitelist` and
+ * `forbidNonWhitelisted` - or the settings endpoint answers 400 before the
+ * value is ever stored.
+ */
+describe('CreateOrUpdateCodeReviewParameterDto — conversation.implicitReplies', () => {
+    const pipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transformOptions: { enableImplicitConversion: true },
+    });
+    const through = (configValue: Record<string, unknown>) =>
+        pipe.transform(
+            {
+                organizationAndTeamData: { teamId: 'team-1' },
+                configValue,
+            },
+            {
+                type: 'body',
+                metatype: CreateOrUpdateCodeReviewParameterDto,
+            },
+        );
+
+    it('accepts the opt-out through the API pipe', async () => {
+        const result = await through({
+            conversation: { implicitReplies: false },
+        });
+
+        expect(result.configValue.conversation).toEqual({
+            implicitReplies: false,
+        });
+    });
+
+    it('rejects a key the nested conversation config does not declare', async () => {
+        await expect(
+            through({
+                conversation: { implicitReplies: false, answerEveryone: true },
+            }),
+        ).rejects.toThrow();
+    });
+});

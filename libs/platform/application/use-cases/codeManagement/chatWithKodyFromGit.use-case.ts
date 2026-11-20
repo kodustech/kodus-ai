@@ -1691,6 +1691,18 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private getRepository(params: WebhookParams): Repository {
+        const repository = this.repositoryFromPayload(params);
+
+        // Webhook payloads carry the platform's numeric id (GitHub, GitLab,
+        // Azure), while the stored configuration keys are strings and every
+        // lookup compares them with `===`. Normalizing here keeps every caller
+        // on the same side of that comparison. A payload with no id is left as
+        // it was: callers already handle that shape.
+        if (repository.id == null) return repository;
+        return { ...repository, id: String(repository.id) };
+    }
+
+    private repositoryFromPayload(params: WebhookParams): Repository {
         switch (params.platformType) {
             case PlatformType.GITHUB: {
                 const fallbackRepository =
