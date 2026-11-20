@@ -487,13 +487,13 @@ export class PullRequestsService implements IPullRequestsService {
         organizationId: string,
         prNumbers: number[],
         status: string | string[],
-        repositoryIds?: string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
             prNumbers,
             status,
-            repositoryIds,
+            pullRequestRefs,
         );
     }
 

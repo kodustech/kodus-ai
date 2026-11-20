@@ -302,8 +302,11 @@ export interface IPullRequestsRepository {
         organizationId: string,
         prNumbers: number[],
         status: string | string[],
-        /** The repositories the PRs belong to, when the caller knows them. */
-        repositoryIds?: string[],
+        /**
+         * The (repository, number) pairs, when the caller knows them: read in
+         * their place, one repository at a time.
+         */
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]>;
     findPullRequestsWithoutDeliveredSuggestionsForApproval(
         organizationId: string,

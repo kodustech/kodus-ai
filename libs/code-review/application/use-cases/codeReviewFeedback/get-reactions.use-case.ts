@@ -69,7 +69,7 @@ export class GetReactionsUseCase implements IUseCase {
     async execute(
         organizationAndTeamData: OrganizationAndTeamData,
         automationExecutionsPRs: number[],
-        repositoryIds?: string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<ICollectedReaction[]> {
         if (!automationExecutionsPRs?.length) {
             return [];
@@ -80,7 +80,7 @@ export class GetReactionsUseCase implements IUseCase {
                 organizationAndTeamData.organizationId,
                 automationExecutionsPRs,
                 [PullRequestState.MERGED, PullRequestState.CLOSED],
-                repositoryIds,
+                pullRequestRefs,
             );
 
         if (!pullRequests?.length) {

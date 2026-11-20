@@ -263,19 +263,21 @@ export class CodeReviewFeedbackCronProvider {
                                     ),
                             ),
                         ];
-                        // The repositories narrow the PR lookup only when every
-                        // execution names its own; otherwise one without it
-                        // would be left out.
-                        const repositoryIds = executions.every(
-                            (execution) => execution?.repositoryId,
+                        // The (repository, PR) pairs narrow the PR lookup only
+                        // when every execution names both; otherwise one
+                        // without them would be left out.
+                        const pullRequestRefs = executions.every(
+                            (execution) =>
+                                execution?.repositoryId &&
+                                Number.isInteger(
+                                    execution?.dataExecution?.pullRequestNumber,
+                                ),
                         )
-                            ? [
-                                  ...new Set(
-                                      executions.map(
-                                          (execution) => execution.repositoryId,
-                                      ),
-                                  ),
-                              ]
+                            ? executions.map((execution) => ({
+                                  repositoryId: execution.repositoryId,
+                                  number: execution.dataExecution
+                                      .pullRequestNumber as number,
+                              }))
                             : undefined;
 
                         if (!automationExecutionsPRs.length) {
@@ -293,7 +295,7 @@ export class CodeReviewFeedbackCronProvider {
                         await this.publishSyncCodeReviewReactionsTasks(
                             team,
                             automationExecutionsPRs,
-                            repositoryIds,
+                            pullRequestRefs,
                         );
 
                         return {
@@ -372,7 +374,7 @@ export class CodeReviewFeedbackCronProvider {
     private async publishSyncCodeReviewReactionsTasks(
         team: ITeamWithIntegrations,
         automationExecutionsPRs: number[],
-        repositoryIds?: string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ) {
         if (!team.isCodeManagementConfigured) {
             this.logger.debug({
@@ -387,7 +389,7 @@ export class CodeReviewFeedbackCronProvider {
             teamId: team.uuid,
             organizationId: team.organization.uuid,
             automationExecutionsPRs,
-            ...(repositoryIds?.length ? { repositoryIds } : {}),
+            ...(pullRequestRefs?.length ? { pullRequestRefs } : {}),
         };
 
         const runCodeReviewReactionsPayload =

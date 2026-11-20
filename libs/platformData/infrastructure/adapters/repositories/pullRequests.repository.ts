@@ -1814,107 +1814,113 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         prNumbers: number[],
         status: string | string[],
-        repositoryIds?: string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         const statusFilter = Array.isArray(status) ? { $in: status } : status;
 
-        const result = await this.pullRequestsModel
-            .aggregate([
-                {
-                    $match: {
-                        organizationId: organizationId,
-                        number: { $in: prNumbers },
-                        // A PR number alone also matches every other
-                        // repository's PR with that number, each one a whole
-                        // document fetched and unwound for nothing. With the
-                        // repositories the caller knows, the match walks the
-                        // unique (number, repository.id, organizationId) index.
-                        ...(repositoryIds?.length
-                            ? { 'repository.id': { $in: repositoryIds } }
-                            : {}),
-                        status: statusFilter,
-                    },
-                },
-                // Keep only what the stages below read before unwinding: each
-                // `$unwind` copies the document once per element, and a full PR
-                // (patches, every suggestion's content) is the dominant cost of
-                // this query (prod: ~33 runs/min from CheckIfPRCanBeApproved).
-                {
-                    $project: {
-                        'number': 1,
-                        'organizationId': 1,
-                        'status': 1,
-                        'provider': 1,
-                        'url': 1,
-                        'repository.id': 1,
-                        'repository.name': 1,
-                        'files.suggestions.id': 1,
-                        'files.suggestions.deliveryStatus': 1,
-                        'files.suggestions.comment': 1,
-                        'approvalReasonDeliveryFailure': 1,
-                    },
-                },
-                {
-                    $unwind: '$files',
-                },
-                {
-                    $unwind: '$files.suggestions',
-                },
-                {
-                    $match: {
-                        'files.suggestions.deliveryStatus': {
-                            $in: [true, 'sent', 'implemented'],
-                        },
-                        'files.suggestions.comment.id': {
-                            $exists: true,
-                            $ne: null,
+        const read = (match: Record<string, unknown>) =>
+            this.pullRequestsModel
+                .aggregate([
+                    { $match: { ...match, status: statusFilter } },
+                    // Keep only what the stages below read before unwinding: each
+                    // `$unwind` copies the document once per element, and a full PR
+                    // (patches, every suggestion's content) is the dominant cost of
+                    // this query (prod: ~33 runs/min from CheckIfPRCanBeApproved).
+                    {
+                        $project: {
+                            'number': 1,
+                            'organizationId': 1,
+                            'status': 1,
+                            'provider': 1,
+                            'url': 1,
+                            'repository.id': 1,
+                            'repository.name': 1,
+                            'files.suggestions.id': 1,
+                            'files.suggestions.deliveryStatus': 1,
+                            'files.suggestions.comment': 1,
+                            'approvalReasonDeliveryFailure': 1,
                         },
                     },
-                },
-                {
-                    $group: {
-                        _id: '$_id',
-                        number: { $first: '$number' },
-                        organizationId: { $first: '$organizationId' },
-                        status: { $first: '$status' },
-                        repositoryId: { $first: '$repository.id' },
-                        repositoryName: { $first: '$repository.name' },
-                        provider: { $first: '$provider' },
-                        url: { $first: '$url' },
-                        approvalReasonDeliveryFailure: {
-                            $first: '$approvalReasonDeliveryFailure',
-                        },
-                        suggestions: {
-                            $push: {
-                                id: '$files.suggestions.id',
-                                deliveryStatus:
-                                    '$files.suggestions.deliveryStatus',
-                                comment: '$files.suggestions.comment',
+                    {
+                        $unwind: '$files',
+                    },
+                    {
+                        $unwind: '$files.suggestions',
+                    },
+                    {
+                        $match: {
+                            'files.suggestions.deliveryStatus': {
+                                $in: [true, 'sent', 'implemented'],
+                            },
+                            'files.suggestions.comment.id': {
+                                $exists: true,
+                                $ne: null,
                             },
                         },
                     },
-                },
-                {
-                    $project: {
-                        _id: 1,
-                        number: 1,
-                        organizationId: 1,
-                        status: 1,
-                        repository: {
-                            id: '$repositoryId',
-                            name: '$repositoryName',
+                    {
+                        $group: {
+                            _id: '$_id',
+                            number: { $first: '$number' },
+                            organizationId: { $first: '$organizationId' },
+                            status: { $first: '$status' },
+                            repositoryId: { $first: '$repository.id' },
+                            repositoryName: { $first: '$repository.name' },
+                            provider: { $first: '$provider' },
+                            url: { $first: '$url' },
+                            approvalReasonDeliveryFailure: {
+                                $first: '$approvalReasonDeliveryFailure',
+                            },
+                            suggestions: {
+                                $push: {
+                                    id: '$files.suggestions.id',
+                                    deliveryStatus:
+                                        '$files.suggestions.deliveryStatus',
+                                    comment: '$files.suggestions.comment',
+                                },
+                            },
                         },
-                        provider: 1,
-                        url: 1,
-                        suggestions: 1,
-                        approvalReasonDeliveryFailure: 1,
                     },
-                },
-            ])
-            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
-            .exec();
+                    {
+                        $project: {
+                            _id: 1,
+                            number: 1,
+                            organizationId: 1,
+                            status: 1,
+                            repository: {
+                                id: '$repositoryId',
+                                name: '$repositoryName',
+                            },
+                            provider: 1,
+                            url: 1,
+                            suggestions: 1,
+                            approvalReasonDeliveryFailure: 1,
+                        },
+                    },
+                ])
+                .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+                .exec() as Promise<IPullRequestWithDeliveredSuggestions[]>;
 
-        return result;
+        // A PR number alone also matches every other repository's PR with
+        // that number, each one a whole document fetched and unwound for
+        // nothing; `$in` on the repositories too still admits the cross
+        // product. With the pairs, one read per repository walks the unique
+        // (number, repository.id, organizationId) index (see
+        // numbersByRepository), one at a time: the approval cron reads the
+        // primary and already runs teams side by side.
+        if (!pullRequestRefs?.length) {
+            return read({ organizationId, number: { $in: prNumbers } });
+        }
+        return readEachRepository(
+            numbersByRepository(pullRequestRefs),
+            (repositoryId, numbers) =>
+                read({
+                    'organizationId': organizationId,
+                    'number': { $in: numbers },
+                    'repository.id': repositoryId,
+                }),
+            1,
+        );
     }
 
     async findPullRequestsWithoutDeliveredSuggestionsForApproval(

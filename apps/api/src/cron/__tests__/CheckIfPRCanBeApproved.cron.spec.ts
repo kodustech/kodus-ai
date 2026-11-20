@@ -999,7 +999,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it('scopes the delivered-suggestions read to each repository once', async () => {
+    it('scopes the delivered-suggestions read to the eligible (repository, PR) pairs', async () => {
         const { cron, deps } = makeCron();
         deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
             [
@@ -1015,10 +1015,14 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         await cron.handleCron();
 
-        const [, , , repositoryIds] =
+        const [, , , pullRequestRefs] =
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions
                 .mock.calls[0];
-        expect(repositoryIds).toEqual(['repo-b', 'repo-c']);
+        expect(pullRequestRefs).toEqual([
+            { repositoryId: 'repo-b', number: 2 },
+            { repositoryId: 'repo-b', number: 3 },
+            { repositoryId: 'repo-c', number: 5 },
+        ]);
     });
 
     it('processes a successful PR when a different PR is in progress for the same team', async () => {
@@ -1040,7 +1044,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith('org-1', [2], expect.anything(), ['repo-b']);
+        ).toHaveBeenCalledWith('org-1', [2], expect.anything(), [
+            { repositoryId: 'repo-b', number: 2 },
+        ]);
         expect(
             deps.pullRequestService
                 .findPullRequestsWithoutDeliveredSuggestionsForApproval,
@@ -2579,7 +2585,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith('org-1', [123], expect.anything(), ['repo-b']);
+        ).toHaveBeenCalledWith('org-1', [123], expect.anything(), [
+            { repositoryId: 'repo-b', number: 123 },
+        ]);
         expect(shouldApproveSpy).toHaveBeenCalledTimes(1);
         expect(shouldApproveSpy).toHaveBeenCalledWith(
             expect.objectContaining({

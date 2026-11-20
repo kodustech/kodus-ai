@@ -29,7 +29,7 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
         teamId: string;
         automationExecutionsPRs: number[];
         /** Absent on messages published before it existed. */
-        repositoryIds?: string[];
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>;
     }): Promise<ICollectedReaction[]> {
         try {
             // Contagens já gravadas, para escrever só o que mudou
@@ -55,7 +55,7 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
                         teamId: payload.teamId,
                     },
                     payload.automationExecutionsPRs,
-                    payload.repositoryIds,
+                    payload.pullRequestRefs,
                 );
             } catch (error) {
                 if (!(error instanceof ReactionSyncAbortedError)) {
@@ -158,12 +158,12 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
     private async getReactions(
         organizationAndTeamData: OrganizationAndTeamData,
         automationExecutionsPRs: number[],
-        repositoryIds?: string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<ICollectedReaction[]> {
         return this.getReactionsUseCase.execute(
             organizationAndTeamData,
             automationExecutionsPRs,
-            repositoryIds,
+            pullRequestRefs,
         );
     }
 

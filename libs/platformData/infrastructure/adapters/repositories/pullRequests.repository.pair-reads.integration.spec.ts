@@ -136,13 +136,18 @@ let available = false;
             expect(plan).not.toMatch(/"stage":"(OR|SUBPLAN)"/);
         });
 
-        it('reads delivered suggestions only from the repositories given', async () => {
+        // A:2 and B:1 also have delivered suggestions: `$in` on both the
+        // numbers and the repositories would return them too.
+        it('reads delivered suggestions only for the pairs given', async () => {
             const found =
                 await repository.findPullRequestsWithDeliveredSuggestions(
                     ORG,
-                    [1],
+                    [1, 2],
                     'open',
-                    ['A'],
+                    [
+                        { repositoryId: 'A', number: 1 },
+                        { repositoryId: 'B', number: 2 },
+                    ],
                 );
 
             expect(found.map((p) => `${p.repository.id}:${p.number}`)).toEqual([

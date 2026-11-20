@@ -162,7 +162,7 @@ describe('CodeReviewFeedbackCronProvider', () => {
         ]);
     });
 
-    it('narrows the lookup to the repositories when every execution names its own', async () => {
+    it('narrows the lookup to the (repository, PR) pairs when every execution names both', async () => {
         const { cron, messageBroker } = makeCron([
             { repositoryId: 'repo-a', dataExecution: { pullRequestNumber: 1 } },
             { repositoryId: 'repo-b', dataExecution: { pullRequestNumber: 2 } },
@@ -171,13 +171,14 @@ describe('CodeReviewFeedbackCronProvider', () => {
 
         await cron.handleCron();
 
-        expect(published(messageBroker).repositoryIds).toEqual([
-            'repo-a',
-            'repo-b',
+        expect(published(messageBroker).pullRequestRefs).toEqual([
+            { repositoryId: 'repo-a', number: 1 },
+            { repositoryId: 'repo-b', number: 2 },
+            { repositoryId: 'repo-a', number: 3 },
         ]);
     });
 
-    it('sends no repositories when one execution lacks its own, so its PR is not left out', async () => {
+    it('sends no pairs when one execution lacks its repository, so its PR is not left out', async () => {
         const { cron, messageBroker } = makeCron([
             { repositoryId: 'repo-a', dataExecution: { pullRequestNumber: 1 } },
             { dataExecution: { pullRequestNumber: 2 } },
@@ -185,7 +186,7 @@ describe('CodeReviewFeedbackCronProvider', () => {
 
         await cron.handleCron();
 
-        expect(published(messageBroker)).not.toHaveProperty('repositoryIds');
+        expect(published(messageBroker)).not.toHaveProperty('pullRequestRefs');
         expect(published(messageBroker).automationExecutionsPRs).toEqual([
             1, 2,
         ]);
