@@ -454,11 +454,12 @@ export async function deduplicateFindings(
         // way a failed dedup keeps everything, without degrading the review.
         let followupError: string | undefined;
         if (leftOut.length > 0) {
+            // Outside the try: a stop is not a failed follow-up.
+            signal?.throwIfAborted();
             try {
                 // The same shape recovery as the first answer (#1786): a
                 // wrapped, bare-array or stringified answer still counts,
                 // and one with no assignments fails like a failed call.
-                signal?.throwIfAborted();
                 const followupOutput = await LLM.run({
                     byokConfig: resolvedSlot,
                     schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),

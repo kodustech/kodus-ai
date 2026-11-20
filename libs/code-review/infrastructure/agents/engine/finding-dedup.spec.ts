@@ -112,6 +112,30 @@ describe('deduplicateFindings with createFindingDedupDeps', () => {
         expect(runSpy).not.toHaveBeenCalled();
     });
 
+    it('stopped after the first answer, starts no follow-up and is not recorded as a failed one', async () => {
+        const stop = new AbortController();
+        runSpy = jest.spyOn(LLM, 'run').mockImplementation(async () => {
+            stop.abort();
+            // Finding 2 left out: a follow-up would be asked for it.
+            return {
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            } as any;
+        });
+
+        await expect(
+            deduplicateFindings(
+                makeDeps(),
+                [dupA(), dupA(), distinctX()],
+                7,
+                slot,
+                telemetryMeta,
+                stop.signal,
+            ),
+        ).rejects.toThrow();
+        expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps distinct findings', async () => {
         runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
             groups: [],
