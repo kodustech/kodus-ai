@@ -184,6 +184,7 @@ describe('the lease of a runtime sandbox', () => {
             ),
             renew: jest.fn(async () => void calls.push('renew')),
             release: jest.fn(async () => void calls.push('release')),
+            seal: jest.fn(async () => ({ sealed: true })),
         };
         return { client, calls };
     };
@@ -248,5 +249,89 @@ describe('the lease of a runtime sandbox', () => {
         await jest.advanceTimersByTimeAsync(TEN_MINUTES);
         await jest.advanceTimersByTimeAsync(3 * TEN_MINUTES);
         expect(client.renew).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('the egress of a runtime sandbox for a review', () => {
+    const params = {
+        organizationId: 'org-a',
+        cloneUrl: 'https://github.com/acme/app.git',
+        branch: 'feature',
+        baseBranch: 'main',
+        prNumber: 7,
+        platform: 'github',
+        authToken: 'ghs_token',
+    } as any;
+    const recording = () => {
+        const events: string[] = [];
+        const client = {
+            configured: true,
+            open: jest.fn(async () => (events.push('open'), { state: 'ready' })),
+            op: jest.fn(async (_ref: unknown, _step: string, op: any) => {
+                events.push(op.op === 'exec' ? `exec:${String(op.command)}` : op.op);
+                return op.op === 'exec'
+                    ? { ok: true, exec: { stdout: '', stderr: '', exitCode: 0 } }
+                    : { ok: true, content: '', eof: true };
+            }),
+            renew: jest.fn(async () => undefined),
+            release: jest.fn(async () => void events.push('release')),
+            seal: jest.fn(async () => (events.push('seal'), { sealed: true })),
+        };
+        return { client, events };
+    };
+
+    it('is sealed right after the clone, the base fetch and the submodules, and not before', async () => {
+        const { client, events } = recording();
+        const sandbox = await new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo(params);
+        expect(client.seal).toHaveBeenCalledTimes(1);
+        expect(client.seal).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'org-a' }));
+        const at = events.indexOf('seal');
+        const before = events.slice(0, at);
+        expect(before.some((e) => e.includes('git init'))).toBe(true);
+        expect(before.some((e) => e.includes('refs/remotes/origin/'))).toBe(true);
+        // Nothing the checkout needs comes after the seal; the sandbox is handed out sealed.
+        expect(events.slice(at + 1)).toEqual([]);
+        expect(sandbox.type).toBe('runtime');
+        await sandbox.cleanup();
+    });
+
+    it('is never handed out when the seal fails: it is released and the review runs without a sandbox', async () => {
+        const { client, events } = recording();
+        client.seal.mockRejectedValue(new RuntimeSandboxError(409, 'cell_unavailable', 'the cell did not seal it'));
+        await expect(new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo(params)).rejects.toMatchObject({ code: 'cell_unavailable' });
+        expect(client.release).toHaveBeenCalledTimes(1);
+        expect(events.at(-1)).toBe('release');
+    });
+
+    it('is not confirmed by an answer that is not the seal', async () => {
+        const { RuntimeSandboxClient } = await import('@libs/sandbox/infrastructure/providers/runtime-sandbox.client');
+        const answer = (body: unknown, status = 200) => jest.fn(async () => ({ status, text: async () => JSON.stringify(body) }));
+        const client = (fetchImpl: any) => new RuntimeSandboxClient({ baseUrl: 'http://worker', secretSealKey: SEAL }, fetchImpl);
+        const ref = { organizationId: 'org-a', sandboxId: '4c9c4d2a-1b7f-4d50-9d5b-0d1f3a6e8b11' };
+        await expect(client(answer({ sealed: true })).seal(ref)).resolves.toEqual({ sealed: true });
+        await expect(client(answer({ ok: true })).seal(ref)).rejects.toMatchObject({ code: 'seal_unconfirmed' });
+        await expect(client(answer({ code: 'cell_unavailable' }, 409)).seal(ref)).rejects.toMatchObject({ status: 409, code: 'cell_unavailable' });
+        await expect(client(jest.fn(async () => Promise.reject(new Error('down')))).seal(ref)).rejects.toMatchObject({ code: 'runtime_unreachable' });
+        const sent = answer({ sealed: true });
+        await client(sent).seal(ref);
+        expect(sent.mock.calls[0] as unknown[]).toEqual([expect.stringMatching(/\/sandbox\/seal$/), expect.objectContaining({ body: JSON.stringify(ref), headers: expect.objectContaining({ 'content-type': 'application/json' }) })]);
+    });
+
+    it('sends no op, and no seal, when the sandbox did not start', async () => {
+        const { client } = recording();
+        client.open.mockResolvedValue({ state: 'blocked', blockers: [{ signature: 'no_capacity', message: 'full' }] } as any);
+        await expect(new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo(params)).rejects.toMatchObject({ code: 'no_capacity' });
+        expect(client.op).not.toHaveBeenCalled();
+        expect(client.seal).not.toHaveBeenCalled();
+    });
+
+    it('is not sealed when the checkout fails, and the sandbox is released', async () => {
+        const { client } = recording();
+        client.op.mockImplementation(async (_r: unknown, _s: string, op: any) =>
+            op.op === 'exec' && String(op.command).includes('git init') ? { ok: true, exec: { stdout: '', stderr: 'boom', exitCode: 128 } } : { ok: true, exec: { stdout: '', stderr: '', exitCode: 0 } },
+        );
+        await expect(new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo(params)).rejects.toBeDefined();
+        expect(client.seal).not.toHaveBeenCalled();
+        expect(client.release).toHaveBeenCalledTimes(1);
     });
 });

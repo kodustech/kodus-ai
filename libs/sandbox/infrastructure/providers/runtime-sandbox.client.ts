@@ -129,6 +129,27 @@ export class RuntimeSandboxClient {
         return this.post(SANDBOX_ROUTES.renew, ref, 30_000);
     }
 
+    /**
+     * Closes the sandbox's egress for good: from the answer on its network
+     * allows nothing, and it never opens again. Resolves only with a seal
+     * the cell confirmed; anything else is an error the caller must treat as
+     * an open sandbox.
+     */
+    async seal(ref: SandboxRef): Promise<{ sealed: true }> {
+        const r = await this.post<{ sealed?: unknown }>(
+            SANDBOX_ROUTES.seal,
+            ref,
+            60_000,
+        );
+        if (r.sealed !== true)
+            throw new RuntimeSandboxError(
+                502,
+                'seal_unconfirmed',
+                'the Kody Runtime did not confirm the egress seal',
+            );
+        return { sealed: true };
+    }
+
     async release(ref: SandboxRef): Promise<void> {
         await this.post(SANDBOX_ROUTES.release, ref, 30_000);
     }

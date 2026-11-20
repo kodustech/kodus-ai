@@ -436,6 +436,13 @@ export class RuntimeSandboxService implements ISandboxProvider {
                 authHeader,
             );
             await this.fetchSubmodules(sandbox, params, authHeader, baseBranch);
+            // The checkout is complete, and the git host is the only network
+            // the sandbox needed. From here it runs attacker-controlled PR
+            // code and model-chosen commands, so its egress is closed for
+            // good (the git host, the cell's lists and its mirror included).
+            // Fail closed: a seal that did not happen throws, the catch below
+            // releases the sandbox, and the review runs without one.
+            await this.client.seal(ref);
             this.logger.log({
                 message: `Runtime sandbox ready for PR#${params.prNumber ?? '?'} in ${Date.now() - started} ms`,
                 context: RuntimeSandboxService.name,
