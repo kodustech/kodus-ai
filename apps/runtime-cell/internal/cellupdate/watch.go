@@ -37,6 +37,7 @@ package cellupdate
 // systemctl.
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -406,7 +407,7 @@ func readJSON(path string, v any) (bool, error) {
 		return false, err
 	}
 	if err := json.Unmarshal(b, v); err != nil {
-		return false, fmt.Errorf("%s does not read (%v): restore it or remove it knowingly", path, err)
+		return false, fmt.Errorf("%s does not read (%w): restore it or remove it knowingly", path, err)
 	}
 	return true, nil
 }
@@ -454,7 +455,7 @@ func copyIfThere(src, dst string, perm os.FileMode) error {
 		return err
 	}
 	tmp := dst + ".tmp-" + strconv.Itoa(os.Getpid())
-	if err := os.WriteFile(tmp, b, perm); err != nil {
+	if err := os.WriteFile(tmp, b, perm); err != nil { //nolint:gosec // G703: beside dst, a path of the installer's own layout
 		return err
 	}
 	if err := os.Chmod(tmp, perm); err != nil {
@@ -483,7 +484,7 @@ func RunWatch(args []string, stdout, stderr io.Writer) int {
 	if *systemctl != "" {
 		o.Restart = func() error {
 			for _, a := range [][]string{{"daemon-reload"}, {"restart", *unit}} {
-				cmd := exec.Command(*systemctl, a...) //nolint:gosec // G204: the operator's systemctl and unit
+				cmd := exec.CommandContext(context.Background(), *systemctl, a...) //nolint:gosec // G204: the operator's systemctl and unit
 				cmd.Stdout, cmd.Stderr = stderr, stderr
 				if err := cmd.Run(); err != nil {
 					return fmt.Errorf("%s %s: %w", *systemctl, strings.Join(a, " "), err)

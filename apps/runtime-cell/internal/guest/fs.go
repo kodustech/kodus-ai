@@ -213,9 +213,7 @@ func leafIsSymlink(dir int, leaf string) bool {
 
 // openatLeaf is the open of a file; a test swaps it for one that follows a
 // final link, as gVisor's open of a directory does.
-var openatLeaf = func(dir int, name string, flags int, mode uint32) (int, error) {
-	return unix.Openat(dir, name, flags, mode)
-}
+var openatLeaf = unix.Openat
 
 // openLeaf opens the file leaf below dir without following a link. As in
 // openDirAt, O_NOFOLLOW is not trusted alone: what was opened must be the

@@ -170,7 +170,7 @@ func TestADockerOlderThanAPI144Warns(t *testing.T) {
 
 func TestADockerWithoutComposeFails(t *testing.T) {
 	d := healthyDocker()
-	d.composeErr = errors.New("docker: 'compose' is not a docker command.")
+	d.composeErr = errors.New("docker: 'compose' is not a docker command.") //nolint:revive // docker's own message, verbatim
 	if r := byName(CheckGVisor(context.Background(), d, gvisorSettings(), plenty))[NameCompose]; r.Status != Fail || !strings.Contains(r.Fix, "plugin") {
 		t.Fatalf("compose %+v", r)
 	}

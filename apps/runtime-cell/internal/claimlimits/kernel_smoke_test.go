@@ -318,7 +318,7 @@ func TestKernelResourceHelper(t *testing.T) {
 		for i := 0; i < len(own); i += 4096 {
 			own[i] = 1
 		}
-		if _, err = os.Stdout.Write([]byte("cached")); err != nil {
+		if _, err = os.Stdout.WriteString("cached"); err != nil {
 			t.Fatal(err)
 		}
 		_, _ = io.ReadAll(os.Stdin)

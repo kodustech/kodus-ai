@@ -41,7 +41,7 @@ func writeSaved(t *testing.T, dir string, layers ...string) {
 
 func tarFile(t *testing.T, tarball, name string) string {
 	t.Helper()
-	f, err := os.Open(tarball) //nolint:gosec // G304: the test's own file
+	f, err := os.Open(tarball)
 	if err != nil {
 		t.Fatal(err)
 	}

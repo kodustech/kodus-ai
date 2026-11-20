@@ -224,7 +224,7 @@ func checkMicroVMHost(r *preflight.Report, st settings, cellID string, p preflig
 	r.Add(preflight.MicroVM(p.microvm(f))...)
 	// firecracker diskRoom: an environment with no measured need yet boots
 	// with a -firecracker-data-gb data disk, refused without room for it.
-	r.Add(preflight.FreeDisk(preflight.NameDiskMicroVM, f.StateDir, uint64(max(st.MicroVM.DataGB, 0))<<30, preflight.Warn, //nolint:gosec // G115: clamped at zero
+	r.Add(preflight.FreeDisk(preflight.NameDiskMicroVM, f.StateDir, uint64(max(st.MicroVM.DataGB, 0))<<30, preflight.Warn,
 		"an environment's first machine needs a -firecracker-data-gb data disk and is refused without room for it",
 		"give the state disk more room, or lower -firecracker-data-gb", p.free))
 	if st.MemoryAdmission {

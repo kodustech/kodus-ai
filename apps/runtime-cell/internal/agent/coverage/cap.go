@@ -21,7 +21,7 @@ const (
 	DirFiles = 4*exercised.MaxCoverageFiles + exercised.MaxStartMarkers
 )
 
-// ErrUncapped: the coverage directory could not be bounded, so the claim
+// ErrUncapped means the coverage directory could not be bounded, so the claim
 // is not instrumented.
 var ErrUncapped = errors.New("coverage: the coverage directory cannot be capped")
 

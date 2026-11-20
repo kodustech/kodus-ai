@@ -133,7 +133,13 @@ func IsJS(p string) bool {
 // request mapped, which proves the mapping works. Coverage past the budget
 // is coverage_too_large; coverage no V8 writes fails closed (Untrusted).
 func Measure(files []File, coverages []*Coverage, read Source) []Result {
-	m := newMeasurer(context.Background(), files, read)
+	return MeasureContext(context.Background(), files, coverages, read)
+}
+
+// MeasureContext is Measure bounded by ctx: an ended ctx stops the paint
+// (coverage_too_large), as in Answer.
+func MeasureContext(ctx context.Context, files []File, coverages []*Coverage, read Source) []Result {
+	m := newMeasurer(ctx, files, read)
 	for _, cov := range coverages {
 		for _, s := range cov.Result {
 			if !m.relevant(s.URL, cov.SourceMapCache) {
@@ -170,8 +176,10 @@ type checkoutText struct {
 }
 
 func newMeasurer(ctx context.Context, files []File, read Source) *measurer {
-	m := &measurer{ctx: ctx, files: files, read: read, ran: make([]map[int]bool, len(files)), mapped: make([]bool, len(files)),
-		broken: make([]bool, len(files)), texts: map[int]checkoutText{}, paint: paintBudget}
+	m := &measurer{
+		ctx: ctx, files: files, read: read, ran: make([]map[int]bool, len(files)), mapped: make([]bool, len(files)),
+		broken: make([]bool, len(files)), texts: map[int]checkoutText{}, paint: paintBudget,
+	}
 	for i, f := range files {
 		m.paths = append(m.paths, f.Path)
 		m.ran[i] = map[int]bool{}
@@ -269,7 +277,7 @@ func (m *measurer) add(script Script, smc map[string]SourceMap) error {
 	t := m.text(i)
 	if t.err != nil || len(t.units) != size {
 		m.broken[i] = true
-		return nil
+		return nil //nolint:nilerr // a text that does not read is marked broken, not a failed answer
 	}
 	counted, err := m.paintScript(script.Functions, size)
 	if err != nil {
@@ -383,9 +391,9 @@ func (m *measurer) paintScript(functions []Function, size int) ([]bool, error) {
 	return counted, nil
 }
 
-// results is what the answer says per file; any is whether a coverage
+// results is what the answer says per file; anyCoverage is whether a coverage
 // file was read at all.
-func (m *measurer) results(any bool) []Result {
+func (m *measurer) results(anyCoverage bool) []Result {
 	out := make([]Result, len(m.files))
 	proven := false
 	for i := range m.files {
@@ -396,7 +404,7 @@ func (m *measurer) results(any bool) []Result {
 		switch {
 		case !IsJS(f.Path):
 			out[i].Reason = ReasonUnsupportedLanguage
-		case !any:
+		case !anyCoverage:
 			out[i].Reason = ReasonNoCoverageWritten
 		case m.mapped[i]:
 			out[i].Measured = true
@@ -495,7 +503,7 @@ func match(paths []string, rawURL string) int {
 	}
 	best := -1
 	for i, rp := range paths {
-		if (p == "/"+rp || strings.HasSuffix(p, "/"+rp)) && (best < 0 || len(rp) > len(paths[best])) {
+		if (p == "/"+rp || strings.HasSuffix(p, "/"+rp)) && (best < 0 || len(rp) > len(paths[best])) { //nolint:gosec // G602: best is read only once it is a valid index (best < 0 short-circuits)
 			best = i
 		}
 	}

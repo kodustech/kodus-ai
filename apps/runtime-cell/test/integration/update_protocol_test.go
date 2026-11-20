@@ -131,8 +131,10 @@ func TestTheWatchReadsTheAgentsHelloAfterTheSwap(t *testing.T) {
 	install := func(root, name string, window time.Duration) {
 		t.Helper()
 		from, keys := signedRelease(t, name, releasesig.Protocol{Min: pv, Max: pv})
-		if _, err := cellupdate.Install(cellupdate.Options{Root: root, From: from, Release: name, Arch: "amd64", Keys: keys,
-			HubState: w.hubState, HelloState: w.hubState, RollbackWindow: window}); err != nil {
+		if _, err := cellupdate.Install(cellupdate.Options{
+			Root: root, From: from, Release: name, Arch: "amd64", Keys: keys,
+			HubState: w.hubState, HelloState: w.hubState, RollbackWindow: window,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}

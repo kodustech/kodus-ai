@@ -172,7 +172,7 @@ func TestAClaimStartsFromTheBakedData(t *testing.T) {
 		t.Fatalf("bake volumes after a new bake %v, want only v2", got)
 	}
 	// Another environment's claim gets nothing of this one's.
-	if n, _ := d.restoreData(ctx, machine("claim-other", "env-2"), (machine("claim-other", "env-2")).MachineID, []string{"pgdata"}); n != 0 {
+	if n, _ := d.restoreData(ctx, machine("claim-other", "env-2"), machine("claim-other", "env-2").MachineID, []string{"pgdata"}); n != 0 {
 		t.Fatal("another environment started from this one's data")
 	}
 }

@@ -34,7 +34,7 @@ func TestTheCellRunsAtMostMaxBuildsAtOnce(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		if got := most.Load(); got != int32(slots) {
+		if got := most.Load(); int(got) != slots {
 			t.Fatalf("MaxBuilds %d: %d builds ran at once", slots, got)
 		}
 	}

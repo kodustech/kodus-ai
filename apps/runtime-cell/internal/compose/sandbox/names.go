@@ -89,7 +89,7 @@ func serviceAddresses(services []string, subnet netip.Prefix, first, room int) (
 func (o Options) addresses(services []string) (map[string]netip.Addr, error) {
 	switch {
 	case !o.Subnet.IsValid():
-		return nil, nil
+		return nil, nil //nolint:nilnil // no subnet: no fixed addresses, and that is not an error
 	case o.AddressBlock == 0:
 		return ServiceAddresses(services, o.Subnet)
 	}

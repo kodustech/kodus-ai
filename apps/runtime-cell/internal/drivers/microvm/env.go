@@ -216,7 +216,7 @@ func (d *Driver) sendArchive(ctx context.Context, c *guest.Client, ref driver.Ma
 	// closes the pipe under it.
 	defer func() {
 		_ = pr.CloseWithError(errors.New("microvm: upload stopped"))
-		<-written
+		<-written //nolint:errcheck // waits for the writer to end; the upload already answered its own error
 	}()
 	buf := make([]byte, uploadChunk)
 	var sent int64

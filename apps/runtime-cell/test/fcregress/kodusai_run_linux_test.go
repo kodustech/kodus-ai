@@ -128,8 +128,10 @@ func TestFirecrackerKodusAIRunThroughTheHubProtocol(t *testing.T) {
 			t.Fatal(err)
 		}
 		injectorPolicies = policy.NewStore(time.Now)
-		inj := &injector.Injector{Policies: injectorPolicies, CA: cellCA.Cert, CAKey: cellCA.Key, TrustedProxies: []string{"127.0.0.1"},
-			Log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})).With("component", "injector")}
+		inj := &injector.Injector{
+			Policies: injectorPolicies, CA: cellCA.Cert, CAKey: cellCA.Key, TrustedProxies: []string{"127.0.0.1"},
+			Log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})).With("component", "injector"),
+		}
 		l, err := net.Listen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)

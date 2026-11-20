@@ -133,7 +133,7 @@ func newCacheFixture(t *testing.T) *cacheFixture {
 			hub.mu.Lock()
 			public := !hub.private[repo]
 			hub.mu.Unlock()
-			_, _ = w.Write([]byte(`{"token":"` + anonToken(repo, public) + `","expires_in":300}`))
+			_, _ = w.Write([]byte(`{"token":"` + anonToken(repo, public) + `","expires_in":300}`)) //nolint:gosec // G705: a test registry answering JSON to the test client
 			return
 		}
 		_, _ = w.Write([]byte(`{"token":"tok","expires_in":300}`))

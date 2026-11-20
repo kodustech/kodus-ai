@@ -13,7 +13,7 @@ import (
 func TestAnswerReadsCoverageFilesAndSkipsTheRest(t *testing.T) {
 	dir := t.TempDir()
 	raw, _ := os.ReadFile(filepath.Join("testdata", "coverage-plain.json"))
-	never := strings.Replace(string(raw), `"count": 1`, `"count": 0`, -1)
+	never := strings.ReplaceAll(string(raw), `"count": 1`, `"count": 0`)
 	for name, body := range map[string]string{"coverage-1.json": string(raw), "coverage-2.json": "{not json", "notes.txt": never} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)

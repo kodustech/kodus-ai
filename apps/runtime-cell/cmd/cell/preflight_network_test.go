@@ -108,8 +108,10 @@ func (n *networkCell) probes(t *testing.T) preflightProbes {
 	p := testProbes(t)
 	p.netDocker = netDockerFake{
 		local: map[string]bool{"holder@sha256:1111111111111111111111111111111111111111111111111111111111111111": true},
-		remote: map[string]bool{"observer@sha256:2222222222222222222222222222222222222222222222222222222222222222": true, defaultBuilderImage: true, defaultRegistryImage: true,
-			"busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662": true},
+		remote: map[string]bool{
+			"observer@sha256:2222222222222222222222222222222222222222222222222222222222222222": true, defaultBuilderImage: true, defaultRegistryImage: true,
+			"busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662": true,
+		},
 		containers: map[string]string{"kodus-egress": "running"},
 		asked:      &n.asked,
 	}
@@ -185,8 +187,10 @@ func TestPreflightNetworkOfACellWithoutImagesChecksTheHubAndTheGitAPIOnly(t *tes
 	n := newNetworkCell(t)
 	p := n.probes(t)
 	p.docker = nil
-	args := []string{"-driver", "fake", "-dev", "-network", "-cert", filepath.Join(n.dir, "cert.pem"), "-key", filepath.Join(n.dir, "key.pem"), "-ca", filepath.Join(n.dir, "ca.pem"),
-		"-hub-url", "wss://" + n.hub.Listener.Addr().String() + "/cells", "-git-api", n.git.URL}
+	args := []string{
+		"-driver", "fake", "-dev", "-network", "-cert", filepath.Join(n.dir, "cert.pem"), "-key", filepath.Join(n.dir, "key.pem"), "-ca", filepath.Join(n.dir, "ca.pem"),
+		"-hub-url", "wss://" + n.hub.Listener.Addr().String() + "/cells", "-git-api", n.git.URL,
+	}
 	_, got := runPreflightJSON(t, p, args...)
 	hub, _ := check(got, preflight.NameHub)
 	git, _ := check(got, preflight.NameGitAPI)

@@ -10,7 +10,7 @@ import (
 
 // streamText is n bytes of source-like text.
 func streamText(n int) []byte {
-	r := rand.New(rand.NewSource(1))
+	r := rand.New(rand.NewSource(1)) //nolint:gosec // G404: a fixed seed, so the benchmark input repeats
 	const al = "abcdefghijklmnopqrstuvwxyz0123456789 \n{}();=._-/ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, n)
 	for i := range b {
@@ -70,7 +70,7 @@ func BenchmarkReaderContains(b *testing.B) {
 // text, and ReaderContains sees a secret wherever it sits: three secrets
 // (with their other spellings) at random places in random text.
 func TestTheStreamMasksAsTheWholeTextWhateverTheChunks(t *testing.T) {
-	r := rand.New(rand.NewSource(7))
+	r := rand.New(rand.NewSource(7)) //nolint:gosec // G404: a fixed seed, so the benchmark input repeats
 	secrets := benchSecrets(3)
 	for round := 0; round < 200; round++ {
 		var text bytes.Buffer

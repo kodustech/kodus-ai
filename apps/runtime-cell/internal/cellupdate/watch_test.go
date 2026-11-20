@@ -353,8 +353,10 @@ func TestTheWatchCommandRestartsWithSystemctl(t *testing.T) {
 	}
 	next := s.release(t, "v1.1.0")
 	s.index(t, next, releasesig.Index{Issued: time.Now().Add(-time.Second), Expires: time.Now().Add(24 * time.Hour), Latest: "v1.1.0", Minimum: "v1.0.0"})
-	if _, err := Install(Options{Root: root, From: next, Release: "v1.1.0", Arch: "amd64", Keys: s.keys,
-		HelloState: hello, RollbackWindow: time.Minute, Now: func() time.Time { return time.Now().Add(-2 * time.Minute) }}); err != nil {
+	if _, err := Install(Options{
+		Root: root, From: next, Release: "v1.1.0", Arch: "amd64", Keys: s.keys,
+		HelloState: hello, RollbackWindow: time.Minute, Now: func() time.Time { return time.Now().Add(-2 * time.Minute) },
+	}); err != nil {
 		t.Fatal(err)
 	}
 	calls := filepath.Join(t.TempDir(), "calls")

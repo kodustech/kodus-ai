@@ -226,10 +226,14 @@ func TestTheEgressContainerMustExistAndRun(t *testing.T) {
 // when its credential file does not load (the cell refuses to start).
 func TestARegistryTheCellWritesToWarnsWhenItRefusesAndFailsWithoutItsCredentialFile(t *testing.T) {
 	answered := CheckRegistry(context.Background(), Registry{Name: NameBakeShare, Flag: "-gvisor-bake-share", Where: "https://registry.example.com/kodus-bake", Check: func(context.Context) error { return nil }})
-	refused := CheckRegistry(context.Background(), Registry{Name: NameBakeShare, Flag: "-gvisor-bake-share", AuthFlag: "-gvisor-bake-share-auth-file", HasAuth: true, Where: "https://registry.example.com/kodus-bake",
-		Check: func(context.Context) error { return errors.New("the registry refused the credential") }, Why: "bakes stay on this cell"})
-	noFile := CheckRegistry(context.Background(), Registry{Name: NameBakeShare, Flag: "-gvisor-bake-share", AuthFlag: "-gvisor-bake-share-auth-file", HasAuth: true, StartErr: errors.New("open /etc/kodus/bake-share: permission denied"),
-		Check: func(context.Context) error { t.Error("checked without its credential"); return nil }})
+	refused := CheckRegistry(context.Background(), Registry{
+		Name: NameBakeShare, Flag: "-gvisor-bake-share", AuthFlag: "-gvisor-bake-share-auth-file", HasAuth: true, Where: "https://registry.example.com/kodus-bake",
+		Check: func(context.Context) error { return errors.New("the registry refused the credential") }, Why: "bakes stay on this cell",
+	})
+	noFile := CheckRegistry(context.Background(), Registry{
+		Name: NameBakeShare, Flag: "-gvisor-bake-share", AuthFlag: "-gvisor-bake-share-auth-file", HasAuth: true, StartErr: errors.New("open /etc/kodus/bake-share: permission denied"),
+		Check: func(context.Context) error { t.Error("checked without its credential"); return nil },
+	})
 	if answered.Status != OK || !strings.Contains(answered.Reason, "registry.example.com") {
 		t.Fatalf("answered %+v", answered)
 	}

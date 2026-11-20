@@ -24,13 +24,17 @@ type preflightDockerFake struct{ runtimes []string }
 func (f preflightDockerFake) ServerVersion(context.Context) (string, error) { return "27.3.1", nil }
 func (f preflightDockerFake) APIVersion(context.Context) (string, error)    { return "1.47", nil }
 func (f preflightDockerFake) Runtimes(context.Context) ([]string, error)    { return f.runtimes, nil }
+
 func (f preflightDockerFake) CgroupInfo(context.Context) (dockercli.CgroupDaemonInfo, error) {
 	return dockercli.CgroupDaemonInfo{Version: "2", Driver: "cgroupfs", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/local/bin/runsc"}}}, nil
 }
+
 func (f preflightDockerFake) DaemonEndpoint(context.Context) (string, error) {
 	return "unix:///var/run/docker.sock", nil
 }
-func (f preflightDockerFake) DataRoot(context.Context) (string, error)       { return "/var/lib/docker", nil }
+
+func (f preflightDockerFake) DataRoot(context.Context) (string, error) { return "/var/lib/docker", nil }
+
 func (f preflightDockerFake) ComposeVersion(context.Context) (string, error) { return "2.29.7", nil }
 
 // cellFiles writes a cell's identity and hub CA as cell register leaves them.
@@ -198,8 +202,10 @@ func TestPreflightOfAMicroVMCellReportsWhatOpenWouldRefuse(t *testing.T) {
 		return []string{"no usable /dev/kvm (a host with KVM: bare metal or nested virtualization)", "the jailer needs root (chroot, device nodes, cgroups, taps)"}
 	}
 	p.docker = nil // a microVM cell never asks Docker
-	args := []string{"-driver", "docker-gvisor", "-isolation-backend", "firecracker", "-firecracker-kit", "/opt/kit", "-firecracker-kit-digest", "sha256:" + strings.Repeat("a", 64),
-		"-cert", filepath.Join(dir, "cert.pem"), "-key", filepath.Join(dir, "key.pem"), "-ca", filepath.Join(dir, "ca.pem"), "-workdir", filepath.Join(dir, "work")}
+	args := []string{
+		"-driver", "docker-gvisor", "-isolation-backend", "firecracker", "-firecracker-kit", "/opt/kit", "-firecracker-kit-digest", "sha256:" + strings.Repeat("a", 64),
+		"-cert", filepath.Join(dir, "cert.pem"), "-key", filepath.Join(dir, "key.pem"), "-ca", filepath.Join(dir, "ca.pem"), "-workdir", filepath.Join(dir, "work"),
+	}
 	code, got := runPreflightJSON(t, p, args...)
 	kvm, _ := check(got, "kvm")
 	root, _ := check(got, "root")

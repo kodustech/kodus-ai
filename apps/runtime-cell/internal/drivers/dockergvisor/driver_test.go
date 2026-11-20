@@ -74,7 +74,7 @@ func (r *recorder) labelsOf(args []string) ([]byte, error) {
 		} `json:"Config"`
 	}
 	if err := json.Unmarshal([]byte(r.answers["inspect"]), &cs); err != nil {
-		return nil, nil
+		return nil, nil //nolint:nilerr // the fake answers no containers to an inspect it cannot parse
 	}
 	keys := regexp.MustCompile(`\(\.Label ("[^"]*")\)`).FindAllStringSubmatch(args[len(args)-1], -1)
 	var out bytes.Buffer

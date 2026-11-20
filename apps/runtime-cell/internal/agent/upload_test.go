@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,7 +37,8 @@ func shellMachine(t *testing.T) (string, stubTransport) {
 		cmd.Stderr = &stderr
 		err := cmd.Run()
 		code := 0
-		if ee, ok := err.(*exec.ExitError); ok {
+		ee := &exec.ExitError{}
+		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		} else if err != nil {
 			return kodyexec.Result{}, err
@@ -111,13 +113,13 @@ func TestAnUploadWritesEachObjectAtItsPathWithItsMode(t *testing.T) {
 			t.Fatalf("%s: %d bytes, err %v; want %d bytes", name, len(got), err, len(want))
 		}
 	}
-	if st, _ := os.Stat(filepath.Join(dir, "bin/run.sh")); st.Mode().Perm() != 0o755 {
+	if st, _ := os.Stat(filepath.Join(dir, "bin", "run.sh")); st.Mode().Perm() != 0o755 {
 		t.Fatalf("mode %o", st.Mode().Perm())
 	}
 	if st, _ := os.Stat(filepath.Join(dir, "empty.txt")); st.Mode().Perm() != 0o644 {
 		t.Fatalf("default mode %o", st.Mode().Perm())
 	}
-	if leftovers, _ := filepath.Glob(filepath.Join(dir, "fixtures/deep/.*")); len(leftovers) != 0 {
+	if leftovers, _ := filepath.Glob(filepath.Join(dir, "fixtures", "deep", ".*")); len(leftovers) != 0 {
 		t.Fatalf("staging files left: %v", leftovers)
 	}
 	if strings.Contains(h.logs.String(), "SIGNATURE-VALUE") {

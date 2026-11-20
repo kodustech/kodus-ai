@@ -846,7 +846,7 @@ type Pooler interface {
 	Adopt(ctx context.Context, p PoolMachine, claimID string) error
 }
 
-// ReadySettler, on a driver with a MemoryBudget, enforces a smaller ceiling
+// ReadySettler is, on a driver with a MemoryBudget, what enforces a smaller ceiling
 // once a claim is ready: SettleReady lowers what the claim of ref may use to what
 // it holds plus room and returns that, in MB, for admission to count from
 // then on (0: nothing lowered, count ClaimMemory's ReadyMB). The enforced

@@ -255,6 +255,7 @@ func (m *memDocker) List(_ context.Context, labels map[string]string) ([]dockerc
 func (m *memDocker) ComposeConfig(context.Context, dockercli.ComposeProject) ([]byte, error) {
 	return nil, nil
 }
+
 func (m *memDocker) ComposeUp(_ context.Context, p dockercli.ComposeProject) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -283,6 +284,7 @@ func (m *memDocker) PullServiceImage(_ context.Context, ref string, maxBytes int
 	m.images[ref] = true
 	return nil
 }
+
 func (m *memDocker) ComposeStopServices(context.Context, string, ...string) error {
 	return nil
 }
@@ -519,7 +521,7 @@ func (m *memDocker) SaveImage(_ context.Context, ref, tarball string) error {
 	if !ok {
 		return fmt.Errorf("%w: %s", dockercli.ErrNoSuchImage, ref)
 	}
-	f, err := os.Create(tarball) //nolint:gosec // G304: the driver's own work file
+	f, err := os.Create(tarball)
 	if err != nil {
 		return err
 	}

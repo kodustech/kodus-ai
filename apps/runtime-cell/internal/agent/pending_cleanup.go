@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lease"
@@ -39,11 +40,7 @@ func (p *pendingCleanups) add(claimID string, l lease.Lease, release func()) {
 func (p *pendingCleanups) all() map[string]pendingCleanup {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make(map[string]pendingCleanup, len(p.byClaim))
-	for id, c := range p.byClaim {
-		out[id] = c
-	}
-	return out
+	return maps.Clone(p.byClaim)
 }
 
 // settled drops the claim and releases its hold, once.
@@ -57,20 +54,15 @@ func (p *pendingCleanups) settled(claimID string) {
 	}
 }
 
-func (p *pendingCleanups) count() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.byClaim)
-}
-
 // settlePendingCleanups destroys again what each pending claim's lease
 // named. A destroy of what is already gone succeeds (the sweep may have
 // taken it), so a clean pass is the proof the machines are gone: the hold
 // is released and the memory is the cell's again.
 func (a *Agent) settlePendingCleanups(ctx context.Context) {
-	for id, p := range a.pending.all() {
+	pending := a.pending.all()
+	for id := range pending {
 		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
-		err := a.leases.EndMachines(cctx, p.lease)
+		err := a.leases.EndMachines(cctx, pending[id].lease)
 		cancel()
 		if err != nil {
 			a.log.Warn("resource.cleanup_still_pending", "kodus.runtime.claim.id", id, "err", err)

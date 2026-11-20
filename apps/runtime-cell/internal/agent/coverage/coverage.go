@@ -142,12 +142,12 @@ func (k *Counter) Count(ctx context.Context, c Claim, req protocol.ClaimExercise
 	defer func() {
 		if r := recover(); r != nil {
 			c.Log.Error("claim.exercised.failed", "files", len(files), "alarm", true)
-			out = answer(unknown, exercised.Measure(files, nil, read))
+			out = answer(unknown, exercised.MeasureContext(ctx, files, nil, read))
 		}
 	}()
 	switch {
 	case k.Flusher == nil:
-		results := exercised.Measure(files, nil, read)
+		results := exercised.MeasureContext(ctx, files, nil, read)
 		for i := range results {
 			if results[i].Reason == exercised.ReasonNoCoverageWritten {
 				results[i].Reason = exercised.ReasonUnsupportedDriver
@@ -155,14 +155,14 @@ func (k *Counter) Count(ctx context.Context, c Claim, req protocol.ClaimExercise
 		}
 		return answer(unknown, results)
 	case len(c.Services) == 0:
-		return answer(unknown, exercised.Measure(files, nil, read))
+		return answer(unknown, exercised.MeasureContext(ctx, files, nil, read))
 	}
 	clk := clock.Or(k.Clock)
 	start := clk.Now()
 	if err := k.Flusher.FlushCoverage(ctx, c.Workload, c.Services); err != nil {
 		// The error may carry the command's output: only the counts go out.
 		c.Log.Warn("claim.exercised.flush.failed", "services", len(c.Services), "files", len(files))
-		return answer(protocol.StepResultBodyExercisedLanguageNode, exercised.Measure(files, nil, read))
+		return answer(protocol.StepResultBodyExercisedLanguageNode, exercised.MeasureContext(ctx, files, nil, read))
 	}
 	n := k.settle(ctx, clk, c.Dir)
 	results, err := k.measure(ctx, files, c.Dir, read)

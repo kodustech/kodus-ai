@@ -70,7 +70,7 @@ func RunTool(args []string, speaks Protocol, stdout, stderr io.Writer) int {
 			}
 		}
 		var keyText []byte
-		if keyText, err = os.ReadFile(*key); err == nil { //nolint:gosec // G304: the key file the release job wrote
+		if keyText, err = os.ReadFile(*key); err == nil {
 			var priv ed25519.PrivateKey
 			if priv, err = ParsePrivateKey(keyText); err == nil {
 				now := time.Now().UTC()

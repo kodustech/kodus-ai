@@ -31,7 +31,7 @@ const (
 // advisory, docs/runtime/exercised-lines.md).
 const StartMarkerPrefix = "started-"
 
-// ErrCoverageTooLarge: the claim wrote more coverage than Answer reads.
+// ErrCoverageTooLarge means the claim wrote more coverage than Answer reads.
 var ErrCoverageTooLarge = errors.New("exercised: coverage past the bound")
 
 // Answer turns a request into results from the coverage files
@@ -128,11 +128,11 @@ func pidOf(name, prefix string) string {
 }
 
 func readBounded(p string, left int64) ([]byte, error) {
-	f, err := os.OpenFile(p, os.O_RDONLY|noFollow, 0)
+	f, err := os.OpenFile(p, os.O_RDONLY|noFollow, 0) //nolint:gosec // G304: a file of the claim's own coverage directory, never followed through a link
 	if err != nil {
 		return nil, fmt.Errorf("exercised: open coverage: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(f, left+1))
 	if err != nil {
 		return nil, fmt.Errorf("exercised: read coverage: %w", err)

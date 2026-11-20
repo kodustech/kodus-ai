@@ -20,7 +20,7 @@ func TestABakedImageRoundTripsThroughARealRegistry(t *testing.T) {
 		t.Skip("REMOTECACHE_TEST_REGISTRY and REMOTECACHE_TEST_IMAGE unset")
 	}
 	docker := func(args ...string) string {
-		out, err := exec.Command("docker", args...).CombinedOutput() //nolint:gosec // G204: the test's own docker calls
+		out, err := exec.Command("docker", args...).CombinedOutput()
 		if err != nil {
 			t.Fatalf("docker %v: %v: %s", args, err, out)
 		}
@@ -45,7 +45,8 @@ func TestABakedImageRoundTripsThroughARealRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "https://")
-	pulled := host[:strings.Index(host, "/")] + "/" + k.Repository(strings.SplitN(host, "/", 2)[1]) + "@" + digest
+	registry, repo, _ := strings.Cut(host, "/")
+	pulled := registry + "/" + k.Repository(repo) + "@" + digest
 	docker("pull", "-q", pulled)
 	tarball := filepath.Join(work, "pulled.tar")
 	const tag = "kodus-bake-test/roundtrip:g1"
@@ -53,7 +54,7 @@ func TestABakedImageRoundTripsThroughARealRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	docker("load", "-q", "-i", tarball)
-	t.Cleanup(func() { _ = exec.Command("docker", "rmi", "-f", tag, pulled).Run() }) //nolint:gosec // G204: the test's own names
+	t.Cleanup(func() { _ = exec.Command("docker", "rmi", "-f", tag, pulled).Run() })
 	if got, want := docker("image", "inspect", "-f", "{{.Id}}", tag), docker("image", "inspect", "-f", "{{.Id}}", pulled); got != want {
 		t.Fatalf("loaded %s, docker pulled %s", got, want)
 	}

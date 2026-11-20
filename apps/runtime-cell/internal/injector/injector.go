@@ -186,7 +186,7 @@ func (in *Injector) Serve(ctx context.Context, l net.Listener) error {
 		c, err := l.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil //nolint:nilerr // Accept fails because Serve's context closed the listener: a clean stop
+				return nil
 			}
 			var ne net.Error
 			if errors.As(err, &ne) && ne.Timeout() || isTemporary(err) {

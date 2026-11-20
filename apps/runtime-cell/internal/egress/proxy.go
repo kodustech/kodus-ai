@@ -200,7 +200,7 @@ func (p *Proxy) Serve(ctx context.Context, l net.Listener, port int, tlsMode boo
 		c, err := l.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil //nolint:nilerr // Accept fails because shutdown closed the listener: a clean stop
+				return nil
 			}
 			if temporaryAccept(err) {
 				backoff = min(max(2*backoff, 5*time.Millisecond), time.Second)
@@ -716,7 +716,11 @@ func (h *headLimit) Read(b []byte) (int, error) {
 var copyBuffers = sync.Pool{New: func() any { b := make([]byte, 32<<10); return &b }}
 
 func copyPooled(dst io.Writer, src io.Reader) {
-	b := copyBuffers.Get().(*[]byte)
+	b, ok := copyBuffers.Get().(*[]byte)
+	if !ok {
+		buf := make([]byte, 32<<10)
+		b = &buf
+	}
 	defer copyBuffers.Put(b)
 	_, _ = io.CopyBuffer(dst, src, *b)
 }

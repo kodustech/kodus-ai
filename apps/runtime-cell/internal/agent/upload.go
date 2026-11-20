@@ -72,7 +72,7 @@ func checkUpload(b *protocol.UploadBody) error {
 	}
 	for i, f := range b.Files {
 		if err := uploadPathOK(f.Path); err != nil {
-			return fmt.Errorf("%w: files[%d].path: %v", errUploadBody, i, err)
+			return fmt.Errorf("%w: files[%d].path: %w", errUploadBody, i, err)
 		}
 		u, err := url.Parse(f.URL)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {

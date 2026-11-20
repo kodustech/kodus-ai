@@ -126,9 +126,7 @@ func CheckGVisor(ctx context.Context, d Docker, g GVisor, free FreeFunc) []Resul
 	if endpoint != "" {
 		reason += " at " + endpoint
 	}
-	out = append(out, ok(NameDocker, reason))
-	out = append(out, checkAPI(ctx, d))
-	out = append(out, checkCompose(ctx, d))
+	out = append(out, ok(NameDocker, reason), checkAPI(ctx, d), checkCompose(ctx, d))
 	info, infoErr := d.CgroupInfo(ctx)
 	out = append(out, checkRunsc(ctx, d, g, info, infoErr))
 	if g.ClaimLimits != nil {
@@ -306,16 +304,16 @@ func checkDataRoot(ctx context.Context, d Docker, configured string) Result {
 	return ok(NameDataRoot, root)
 }
 
-// FreeDisk is a free-space check: below min, status (Fail or Warn) with why.
-func FreeDisk(name, path string, min uint64, below Status, why, fix string, free FreeFunc) Result {
+// FreeDisk is a free-space check: below need, status (Fail or Warn) with why.
+func FreeDisk(name, path string, need uint64, below Status, why, fix string, free FreeFunc) Result {
 	got, err := free(path)
 	if err != nil {
 		return Result{Name: name, Status: below, Reason: "free space under " + path + " is unreadable: " + oneLine(err.Error()), Fix: "create " + path + " on the disk the cell will use"}
 	}
-	if got < min {
-		return Result{Name: name, Status: below, Reason: fmt.Sprintf("%s has %s free, under %s: %s", path, gib(got), gib(min), why), Fix: fix}
+	if got < need {
+		return Result{Name: name, Status: below, Reason: fmt.Sprintf("%s has %s free, under %s: %s", path, gib(got), gib(need), why), Fix: fix}
 	}
-	return ok(name, fmt.Sprintf("%s has %s free (needs %s)", path, gib(got), gib(min)))
+	return ok(name, fmt.Sprintf("%s has %s free (needs %s)", path, gib(got), gib(need)))
 }
 
 func gib(b uint64) string { return strconv.FormatFloat(float64(b)/(1<<30), 'f', 1, 64) + " GiB" }

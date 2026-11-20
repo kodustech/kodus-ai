@@ -248,7 +248,7 @@ func armWatch(o Options, dest string) error {
 		installed, err := filepath.EvalSymlinks(releasePath(o.Root, cur))
 		if err != nil || !strings.HasPrefix(o.Updater, installed+string(filepath.Separator)) {
 			note(o.Notes, "the automatic rollback is not armed: this cell update runs from %s, not from the installed release %s, whose cell would run the watch; run it as %s", o.Updater, cur, filepath.Join(cur, "bin", "cell"))
-			return nil
+			return nil //nolint:nilerr // an unresolved release only leaves the rollback unarmed: the note says so
 		}
 	}
 	now := o.Now().UTC()
@@ -404,8 +404,10 @@ func Run(args []string, stdout, stderr io.Writer, stateDirOf func(config string)
 		_, _ = fmt.Fprintln(stderr, "cell update:", err)
 		return 1
 	}
-	o := Options{Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir,
-		SkipProtocolCheck: *skipProtocol, RequireProtocol: *requireProtocol, Notes: stderr, RetryRolledBack: *retryRolledBack}
+	o := Options{
+		Root: *root, From: *from, Release: *release, Arch: *arch, Keys: keys, VerifyOnly: *verifyOnly, Installed: installedVersion(), AllowDowngrade: *allowDowngrade, Index: *indexDir,
+		SkipProtocolCheck: *skipProtocol, RequireProtocol: *requireProtocol, Notes: stderr, RetryRolledBack: *retryRolledBack,
+	}
 	watch := *window > 0 && !*verifyOnly
 	if !*skipProtocol || watch {
 		dir := *stateDir

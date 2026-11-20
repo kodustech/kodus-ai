@@ -196,7 +196,7 @@ func checkBlob(root *os.Root, p string, found func(io.Reader) (bool, error)) err
 	defer func() { _ = f.Close() }()
 	head := make([]byte, 4)
 	n, _ := io.ReadFull(f, head)
-	var r io.Reader = io.MultiReader(bytes.NewReader(head[:n]), f)
+	r := io.MultiReader(bytes.NewReader(head[:n]), f)
 	switch {
 	case n == 4 && bytes.Equal(head, []byte{0x28, 0xb5, 0x2f, 0xfd}):
 		return fmt.Errorf("%w: %s", ErrUnscannedLayer, p)

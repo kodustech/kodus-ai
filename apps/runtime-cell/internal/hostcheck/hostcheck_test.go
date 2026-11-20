@@ -52,7 +52,7 @@ func TestKVMVulnerableAndAnUnreadableKSMAreFindings(t *testing.T) {
 		}
 	}
 	// ksm/run exists but cannot be read (a directory in its place here).
-	if err := os.MkdirAll(filepath.Join(root, "sys/kernel/mm/ksm/run"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "sys", "kernel", "mm", "ksm", "run"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	h := Probe(nil, root, Shared)

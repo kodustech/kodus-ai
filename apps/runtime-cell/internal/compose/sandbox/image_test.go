@@ -45,8 +45,10 @@ func TestAServiceTheCellDidNotBuildNamesOnlyARegistryImage(t *testing.T) {
 			t.Errorf("image %q accepted (err %v)", img, err)
 		}
 	}
-	for _, img := range []string{"postgres:16", "pgvector/pgvector:pg16", "ghcr.io/acme/node:22", "docker.io/library/redis:7",
-		"registry.example/api@sha256:" + strings.Repeat("c", 64), "public.ecr.aws/docker/library/node:22-alpine", "quay.io/kodustech/x:1"} {
+	for _, img := range []string{
+		"postgres:16", "pgvector/pgvector:pg16", "ghcr.io/acme/node:22", "docker.io/library/redis:7",
+		"registry.example/api@sha256:" + strings.Repeat("c", 64), "public.ecr.aws/docker/library/node:22-alpine", "quay.io/kodustech/x:1",
+	} {
 		compose := "services:\n  db:\n    image: " + yamlQuote(img) + "\n"
 		if _, err := Apply([]byte(compose), opts(dir)); err != nil {
 			t.Errorf("image %q refused: %v", img, err)

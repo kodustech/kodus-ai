@@ -80,15 +80,16 @@ func runEnroll(cmd string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "cell register: already registered (%s); nothing to do\n", paths.Cert)
 		return 0
 	}
-	if cmd == "register" && boot != nil {
+	switch {
+	case cmd == "register" && boot != nil:
 		res, err = registerFromBootstrap(ctx, hubURL, *bootstrap, boot, *topology, paths)
-	} else if cmd == "register" {
+	case cmd == "register":
 		tok := *token
 		if tok == "" {
 			tok = os.Getenv("KODUS_CELL_REGISTRATION_TOKEN")
 		}
 		res, err = register(ctx, hubURL, *ca, tok, *topology, paths)
-	} else {
+	default:
 		// Writes the files itself: the agent's renewal loop takes the same path.
 		res, err = renew(ctx, hubURL, orValue(*ca, paths.CA), orValue(*cert, paths.Cert), orValue(*key, paths.Key), paths)
 	}
@@ -192,7 +193,7 @@ func registerFromBootstrap(ctx context.Context, hub, path string, b *bootstrapFi
 	res, err := register(ctx, hub, caTmp.Name(), b.Token, topology, p)
 	var transport *url.Error
 	if err == nil || !errors.As(err, &transport) {
-		if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) && err == nil {
+		if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) && err == nil { //nolint:gosec // G703: the -bootstrap file the operator named, removed once used
 			return nil, fmt.Errorf("registered, but the bootstrap file was not removed: %w", rmErr)
 		}
 	}

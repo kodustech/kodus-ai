@@ -38,7 +38,7 @@ func (Tmpfs) Cap(dir string) error {
 		return fmt.Errorf("coverage: own mount namespace: %w", err)
 	}
 	if initNS, err := os.Readlink("/proc/1/ns/mnt"); err != nil || initNS != self {
-		return fmt.Errorf("coverage: the cell is not in the host's mount namespace (%s, init %s): Docker would not see the cap: %v", self, initNS, err)
+		return fmt.Errorf("coverage: the cell is not in the host's mount namespace (%s, init %s): Docker would not see the cap: %w", self, initNS, err)
 	}
 	opts := "size=" + strconv.Itoa(DirBytes) + ",nr_inodes=" + strconv.Itoa(DirFiles) + ",mode=1777"
 	if err := syscall.Mount("kodus-coverage", dir, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, opts); err != nil {
@@ -57,7 +57,7 @@ func tmpfsCapped(dir string) (bool, error) {
 	if err := syscall.Statfs(dir, &st); err != nil {
 		return false, fmt.Errorf("coverage: statfs: %w", err)
 	}
-	if int64(st.Type) != tmpfsMagic { //nolint:gosec,unconvert // G115: f_type is a magic number; its width differs by arch
+	if int64(st.Type) != tmpfsMagic { //nolint:unconvert // f_type is a magic number; its width differs by arch
 		return false, nil
 	}
 	bytes := uint64(st.Blocks) * uint64(st.Bsize) //nolint:gosec // G115: statfs counts and block size are non-negative

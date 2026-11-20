@@ -87,6 +87,7 @@ func (f *testLimitLifecycle) Lower(string, int64) error                         
 func (f *testLimitLifecycle) Usage(string) (claimlimits.Usage, error) {
 	return claimlimits.Usage{}, nil
 }
+
 func (f *testLimitLifecycle) PruneEmpty() error {
 	f.calls = append(f.calls, "prune")
 	if f.fail == "prune" {

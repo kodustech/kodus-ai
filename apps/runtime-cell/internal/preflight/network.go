@@ -69,8 +69,10 @@ func RunNetwork(ctx context.Context, perCheck time.Duration, checks []NetCheck) 
 		case <-ctx.Done():
 			for i, c := range checks {
 				if !got[i] {
-					out[i] = Result{Name: c.Name, Status: c.Below, Reason: "no answer before the -network run's bound passed",
-						Fix: "check the network path from this host to what this check names, then run cell preflight -network again"}
+					out[i] = Result{
+						Name: c.Name, Status: c.Below, Reason: "no answer before the -network run's bound passed",
+						Fix: "check the network path from this host to what this check names, then run cell preflight -network again",
+					}
 				}
 			}
 			return out
@@ -176,6 +178,7 @@ func CheckHub(ctx context.Context, h Hub) Result {
 		return warn(NameHub, fmt.Sprintf("%s at %s took TLS but GET /health did not answer: %s", where, ip, oneLine(err.Error())),
 			"check that the hub behind "+where+" is up")
 	}
+	defer func() { _ = resp.Body.Close() }()
 	steps = append(steps, fmt.Sprintf("GET /health %d in %s", resp.StatusCode, ms(time.Since(t0))))
 	reason := where + ": " + strings.Join(steps, ", ")
 	if ip != host {
@@ -224,7 +227,7 @@ type Image struct {
 	Why   string
 }
 
-// CheckImage: the driver pulls an image the first time it runs it, so an
+// CheckImage checks that an image resolves: the driver pulls an image the first time it runs it, so an
 // image that does not resolve fails the claim that needs it there. It
 // resolves when the host has it, or when its manifest is readable from
 // its registry; no layer is pulled.
@@ -242,8 +245,10 @@ func CheckImage(ctx context.Context, d NetworkDocker, im Image) Result {
 		if im.Why != "" {
 			reason += ": " + im.Why
 		}
-		return Result{Name: im.Name, Status: im.Below, Reason: reason,
-			Fix: "check that " + reg + " answers from this host and that the digest exists; for a private registry give the cell's unit DOCKER_CONFIG with a login (the cell runs docker with its own HOME), or pull it ahead: docker pull " + im.Ref}
+		return Result{
+			Name: im.Name, Status: im.Below, Reason: reason,
+			Fix: "check that " + reg + " answers from this host and that the digest exists; for a private registry give the cell's unit DOCKER_CONFIG with a login (the cell runs docker with its own HOME), or pull it ahead: docker pull " + im.Ref,
+		}
 	}
 	return ok(im.Name, im.Ref+" is not on this host yet; its manifest is readable from "+reg+" (pulled at first use)")
 }
@@ -258,7 +263,7 @@ func registryOf(ref string) string {
 	return first
 }
 
-// CheckEgressContainer: dockergvisor attaches -gvisor-egress-container to
+// CheckEgressContainer checks the egress container: dockergvisor attaches -gvisor-egress-container to
 // every claim network (network.go, AttachEgress) and refuses a claim it
 // cannot attach; a stopped one leaves every claim without a resolver or a
 // way out.
@@ -295,7 +300,7 @@ type Registry struct {
 	Why string
 }
 
-// CheckRegistry: the cell runs without the registry (builds run cold,
+// CheckRegistry checks the optional registry: the cell runs without the registry (builds run cold,
 // bakes stay on the cell, claims build instead of pulling), so a registry
 // that does not answer or refuses the credential warns.
 func CheckRegistry(ctx context.Context, r Registry) Result {
@@ -324,7 +329,7 @@ func CheckRegistry(ctx context.Context, r Registry) Result {
 	return ok(r.Name, fmt.Sprintf("%s answered GET /v2/ in %s, %s", r.Where, ms(time.Since(t0)), with))
 }
 
-// CheckGit: the agent downloads every repository of a claim from the Git
+// CheckGit checks the Git API: the agent downloads every repository of a claim from the Git
 // API (gitsource.TarballURL, tarball.FetchExtractRevoke, with the
 // process's proxy settings and the system roots) and revokes its token
 // there. Each URL is asked GET with no token and no redirect followed: any

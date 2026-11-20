@@ -58,7 +58,7 @@ func readUsage(g directory) (Usage, error) {
 	if !okFile || !okShmem {
 		return Usage{}, fmt.Errorf("%w: memory.stat has no file or shmem line", ErrUnavailable)
 	}
-	u.FileBytes, u.ShmemBytes = int64(min(file, 1<<62)), int64(min(shmem, 1<<62)) //nolint:gosec // G115: clamped above
+	u.FileBytes, u.ShmemBytes = int64(min(file, 1<<62)), int64(min(shmem, 1<<62))
 	events, err := g.Read("memory.events")
 	if err != nil {
 		return Usage{}, fmt.Errorf("%w: read memory.events: %w", ErrUnavailable, err)
@@ -178,7 +178,7 @@ func (m *Systemd) Lower(key string, memoryBytes int64) error {
 	if memoryBytes == l.MemoryBytes {
 		return nil
 	}
-	if err = m.bus.SetMemoryMax(ctx, m.name(key), uint64(memoryBytes)); err != nil {
+	if err = m.bus.SetMemoryMax(ctx, m.name(key), uint64(memoryBytes)); err != nil { //nolint:gosec // G115: validLower refused a size under 1
 		return fmt.Errorf("%w: set MemoryMax: %w", ErrUnavailable, err)
 	}
 	got, err := m.verifiedLocked(ctx, key)

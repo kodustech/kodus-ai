@@ -110,7 +110,7 @@ func (m Manifest) Check(org, id string) error {
 	}
 	for _, name := range want {
 		f, ok := m.Files[name]
-		if !ok || f.Size <= 0 || (len(f.SHA256) != 64 && !(unhashed(m.Purpose, name) && f.SHA256 == "")) {
+		if !ok || f.Size <= 0 || (len(f.SHA256) != 64 && (!unhashed(m.Purpose, name) || f.SHA256 != "")) {
 			return refuse("snapshot %s: file %s", id, name)
 		}
 	}

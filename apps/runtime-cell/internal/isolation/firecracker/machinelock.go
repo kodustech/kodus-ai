@@ -1,6 +1,7 @@
 package firecracker
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ const machineLockName = "machines.lock"
 // lockMachines takes the machine lock, shared (a Create, a Restore) or
 // exclusive (the orphan pass); the returned func lets it go.
 func (b *Backend) lockMachines(exclusive bool) (func(), error) {
-	f, err := os.OpenFile(filepath.Join(b.cfg.StateDir, machineLockName), os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // G304: the cell's own state directory
+	f, err := os.OpenFile(filepath.Join(b.cfg.StateDir, machineLockName), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("firecracker: machine lock: %w", err)
 	}
@@ -31,8 +32,8 @@ func (b *Backend) lockMachines(exclusive bool) (func(), error) {
 		how = syscall.LOCK_EX
 	}
 	for {
-		err = syscall.Flock(int(f.Fd()), how) //nolint:gosec // G115: a file descriptor fits an int
-		if err != syscall.EINTR {
+		err = syscall.Flock(int(f.Fd()), how)
+		if !errors.Is(err, syscall.EINTR) {
 			break
 		}
 	}
@@ -41,7 +42,7 @@ func (b *Backend) lockMachines(exclusive bool) (func(), error) {
 		return nil, fmt.Errorf("firecracker: machine lock: %w", err)
 	}
 	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: as above
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		_ = f.Close()
 	}, nil
 }

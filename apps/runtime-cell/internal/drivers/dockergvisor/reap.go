@@ -531,7 +531,8 @@ func sortedSet(m map[string]bool) []string {
 // is gone is nothing for the sweep to end.
 func inspectPresent(ctx context.Context, d interface {
 	Inspect(ctx context.Context, ids ...string) ([]dockercli.Container, error)
-}, ids ...string) ([]dockercli.Container, error) {
+}, ids ...string,
+) ([]dockercli.Container, error) {
 	cs, err := d.Inspect(ctx, ids...)
 	if err == nil || !dockercli.NoSuchContainer(err) {
 		return cs, err

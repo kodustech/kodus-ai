@@ -41,7 +41,7 @@ func loadIndexState(root string) (indexState, error) {
 	var s indexState
 	if err := json.Unmarshal(b, &s); err != nil {
 		// A state the host cannot read is refused, never treated as empty: that would forget revocations.
-		return indexState{}, fmt.Errorf("cell update: %s is unreadable (%v); restore it or remove it knowingly", filepath.Join(root, IndexStateName), err)
+		return indexState{}, fmt.Errorf("cell update: %s is unreadable (%w); restore it or remove it knowingly", filepath.Join(root, IndexStateName), err)
 	}
 	return s, nil
 }
