@@ -1604,7 +1604,14 @@ async function authorIntent(run: RunScope, t: TestedRun, behavior: EntryPoint[])
     addTokens(tally, out.usage);
     t.intentProbes = out.probes;
     t.intentChecks = { state: 'checked', version: out.version, probes: out.probes.length, dropped: out.dropped.length };
-    deps.log?.info({ msg: 'run.intent.authored', runId: req.runId, probes: out.probes.length, dropped: out.dropped.length });
+    // The reasons are the checks' own (checkIntentProbes), never the PR's text: what a later look at a missed bug needs (kr-shop #15).
+    deps.log?.info({
+        msg: 'run.intent.authored',
+        runId: req.runId,
+        probes: out.probes.length,
+        dropped: out.dropped.length,
+        ...(out.dropped.length ? { droppedReasons: out.dropped.map((d) => d.reason) } : {}),
+    });
 }
 
 /** The request an intent probe sent, as the comment names it: method, path and body, redacted and cut. */

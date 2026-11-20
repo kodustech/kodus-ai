@@ -158,8 +158,16 @@ const ItemSchema = z.object({
 const normalized = (s: string) => s.replace(/\s+/g, ' ').trim();
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** `value` is a whole token of `text`: 1 is not found inside 10. */
-const hasToken = (text: string, value: string) => value !== '' && new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(value)}(?![A-Za-z0-9_])`).test(text);
+/**
+ * `value` is a whole token of `text`: 1 is not found inside 10. A word may be
+ * given in the plural ("10 keyboards" gives `keyboard`, kr-shop #15); a number
+ * never is (1 is not in "1s").
+ */
+const hasToken = (text: string, value: string) => {
+    if (value === '') return false;
+    const plural = /[A-Za-z]$/.test(value) ? '(?:e?s)?' : '';
+    return new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(value)}${plural}(?![A-Za-z0-9_])`).test(text);
+};
 
 /** A request's values by the key that names each: query values, JSON body leaves (by their own key) and path params of a matching entry point. */
 function requestValues(request: { method: string; path: string; body?: unknown }, entryPoints: IntentAuthorInput['entryPoints']): Array<{ key: string; value: string }> {

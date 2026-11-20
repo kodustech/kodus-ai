@@ -222,6 +222,26 @@ describe('request values come from the text (kr-shop #28 on release v1e)', () =>
         const one = { quote: '`quantity` 11 or more is refused with 400.', source: 'description', request: { method: 'POST', path: '/orders', body: { quantity: 1 } }, assertions: [{ kind: 'status', status: 400 }] };
         expect(checkIntentProbes(answer([one]), text).probes).toEqual([]);
     });
+
+    it('a word the text gives in the plural is given: "10 keyboards" gives item=keyboard (kr-shop #15 on release v1f)', () => {
+        const BULK = 'Adds `POST /orders/bulk-quote` (`item`, `quantity`): 5% off the subtotal from 10 units.\n\n- 10 keyboards → subtotal 500, discount 25, total 475.';
+        const bulk = input({ description: BULK, entryPoints: [{ id: 'POST /orders/bulk-quote', added: true }] });
+        const ten = (item: string) => ({
+            quote: '10 keyboards → subtotal 500, discount 25, total 475.',
+            source: 'description',
+            request: { method: 'POST', path: '/orders/bulk-quote', body: { item, quantity: 10 } },
+            assertions: [{ kind: 'equals', path: '$.total', value: 475 }],
+        });
+        const checked = checkIntentProbes(answer([ten('keyboard'), ten('keyboardish')]), bulk);
+        expect(checked.probes.map((p) => (p.probe.spec.kind === 'http' ? JSON.parse(p.probe.spec.body!).item : undefined))).toEqual(['keyboard']);
+        expect(checked.dropped).toEqual([{ reason: 'probe 2: its request sends item=keyboardish, which its source never gives' }]);
+    });
+
+    it('a plural is only a word\'s: 1 is still not found in "1s"', () => {
+        const text = input({ description: 'Retries after 1s.\n\n- `quantity` 11 or more is refused with 400.', entryPoints: [{ id: 'POST /orders' }] });
+        const one = { quote: '`quantity` 11 or more is refused with 400.', source: 'description', request: { method: 'POST', path: '/orders', body: { quantity: 1 } }, assertions: [{ kind: 'status', status: 400 }] };
+        expect(checkIntentProbes(answer([one]), text).probes).toEqual([]);
+    });
 });
 
 describe('the author prompt (kr-shop #8, #28 on release v1e)', () => {
