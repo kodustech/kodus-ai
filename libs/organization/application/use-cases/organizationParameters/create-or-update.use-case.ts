@@ -56,6 +56,7 @@ const AUDITABLE_KEYS = new Set([
     OrganizationParametersKey.AUTO_JOIN_CONFIG,
     OrganizationParametersKey.TIMEZONE_CONFIG,
     OrganizationParametersKey.COCKPIT_METRICS_VISIBILITY,
+    OrganizationParametersKey.REVIEW_COMMAND_MODES_CONFIG,
 ]);
 
 @Injectable()

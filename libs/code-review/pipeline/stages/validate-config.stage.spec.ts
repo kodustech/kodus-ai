@@ -819,6 +819,121 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         expect(result.codeReviewConfig.byokConfig).toBeUndefined();
     });
+
+    describe('review modes turned off for commands', () => {
+        const byKey = (commandModes: unknown) =>
+            mockOrganizationParametersService.findByKey.mockImplementation(
+                async (key: string) =>
+                    key === 'review_command_modes_config'
+                        ? commandModes === undefined
+                            ? null
+                            : { configValue: commandModes }
+                        : {
+                              configValue: v2(
+                                  {
+                                      defaultModelId: 'm-A',
+                                      ultraModelIds: ['m-A', 'm-B', 'm-C'],
+                                  },
+                                  [
+                                      {
+                                          id: 'm-A',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-4o',
+                                      },
+                                      {
+                                          id: 'm-B',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-5-mini',
+                                      },
+                                      {
+                                          id: 'm-C',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-6.1-sol',
+                                      },
+                                  ],
+                              ),
+                          },
+            );
+        const run = (
+            requestedReviewMode?: 'heavy' | 'ultra' | 'balanced',
+            reviewMode?: string,
+        ) => {
+            const context = buildContext(undefined) as any;
+            if (reviewMode) context.codeReviewConfig.reviewMode = reviewMode;
+            if (!requestedReviewMode) context.origin = 'github';
+            return stage.execute({ ...context, requestedReviewMode });
+        };
+        const comment = () =>
+            mockCodeManagementService.createSingleIssueComment.mock
+                .calls[0]?.[0]?.body as string | undefined;
+
+        it.each([
+            ['heavy', { heavyBlocked: true }, 'Heavy review by command'],
+            ['ultra', { ultraBlocked: true }, 'Ultra review by command'],
+        ] as const)(
+            '--%s turned off runs no review and tells the PR who can turn it on',
+            async (mode, config, text) => {
+                byKey(config);
+
+                const result = await run(mode);
+
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(result.heavy).toBeFalsy();
+                expect(result.ultra).toBeUndefined();
+                expect(comment()).toContain(text);
+                expect(comment()).toContain('organization owner');
+                expect(result.statusInfo?.message).toBe(comment());
+                expect(result.pipelineMetadata?.notificationHandled).toBe(true);
+            },
+        );
+
+        it('a reply the platform refused leaves the usual skip notification', async () => {
+            byKey({ heavyBlocked: true });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValue(
+                null,
+            );
+
+            const result = await run('heavy');
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBe(false);
+        });
+
+        it.each([
+            ['--heavy with only Ultra off', 'heavy', { ultraBlocked: true }],
+            ['--ultra with only Heavy off', 'ultra', { heavyBlocked: true }],
+            ['--heavy with nothing stored', 'heavy', undefined],
+            [
+                '--balanced with both off',
+                'balanced',
+                { heavyBlocked: true, ultraBlocked: true },
+            ],
+        ] as const)('%s runs the review', async (_, mode, config) => {
+            byKey(config);
+
+            const result = await run(mode);
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(comment()).toBeUndefined();
+        });
+
+        it.each([
+            ['heavy', { heavyBlocked: true }],
+            ['ultra', { ultraBlocked: true }],
+        ] as const)(
+            'settings routing to %s still run it with the command off',
+            async (mode, config) => {
+                byKey(config);
+
+                const result = await run(undefined, mode);
+
+                expect(result.statusInfo?.status).not.toBe('skipped');
+                expect(
+                    mode === 'heavy' ? result.heavy : result.ultra,
+                ).toBeTruthy();
+            },
+        );
+    });
 });
 
 describe('ValidateConfigStage — base branch scope', () => {

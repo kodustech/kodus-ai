@@ -61,6 +61,12 @@ export class OrgSettingsLogHandler {
                     currentValue,
                     userInfo.userEmail,
                 );
+            case 'review_command_modes_config':
+                return this.generateReviewCommandModesChanges(
+                    previousValue,
+                    currentValue,
+                    userInfo.userEmail,
+                );
             case 'byok_config':
                 return this.generateByokChanges(
                     previousValue,
@@ -123,6 +129,31 @@ export class OrgSettingsLogHandler {
         });
 
         return changes;
+    }
+
+    private generateReviewCommandModesChanges(
+        previous: any,
+        current: any,
+        userEmail: string,
+    ): ChangedDataToExport[] {
+        const switches = [
+            { key: 'heavyBlocked', label: 'Heavy review by command' },
+            { key: 'ultraBlocked', label: 'Ultra review by command' },
+        ];
+        return switches.flatMap(({ key, label }) => {
+            const wasBlocked = previous?.[key] === true;
+            const isBlocked = current?.[key] === true;
+            if (wasBlocked === isBlocked) return [];
+            const state = isBlocked ? 'off' : 'on';
+            return [
+                {
+                    actionDescription: `${label} turned ${state}`,
+                    previousValue: { [key]: wasBlocked },
+                    currentValue: { [key]: isBlocked },
+                    description: `User ${userEmail} turned ${state} ${label}`,
+                },
+            ];
+        });
     }
 
     private generateTimezoneChanges(

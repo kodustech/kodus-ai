@@ -43,6 +43,11 @@ import {
 } from '@libs/code-review/domain/review-mode';
 import { riskSnapshotMismatch } from '@libs/code-review/domain/risk/risk-assessment';
 import {
+    blockedCommandMode,
+    reviewCommandBlockedMessage,
+    type ReviewCommandModesConfig,
+} from '@libs/code-review/domain/review-command-modes';
+import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
@@ -188,6 +193,9 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     });
                 }
             }
+
+            const commandBlocked = await this.refuseBlockedCommandMode(context);
+            if (commandBlocked) return commandBlocked;
 
             // Shared risk must be known before selecting the review model.
             // The early cadence/access checks still run before paying for it.
@@ -366,6 +374,46 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
         });
         return context;
+    }
+
+    /**
+     * `--heavy` or `--ultra` on an organization that turned that command off:
+     * no review runs, whatever the settings, and the PR is told why.
+     */
+    private async refuseBlockedCommandMode(
+        context: CodeReviewPipelineContext,
+    ): Promise<CodeReviewPipelineContext | undefined> {
+        if (!context.requestedReviewMode) return undefined;
+        const stored = await this.organizationParametersService.findByKey(
+            OrganizationParametersKey.REVIEW_COMMAND_MODES_CONFIG,
+            context.organizationAndTeamData,
+        );
+        const mode = blockedCommandMode(
+            context.requestedReviewMode,
+            stored?.configValue as ReviewCommandModesConfig | undefined,
+        );
+        if (!mode) return undefined;
+
+        this.logger.log({
+            message: `${mode} review asked by command, turned off for the organization — the review does not run`,
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                repositoryId: context.repository?.id,
+            },
+        });
+        const message = reviewCommandBlockedMessage(mode);
+        const told = await this.replyToReviewCommand(context, message);
+        return this.updateContext(context, (draft) => {
+            draft.statusInfo = {
+                status: AutomationStatus.SKIPPED,
+                message,
+            };
+            if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
+            // A reply the platform refused leaves the usual skip reaction.
+            draft.pipelineMetadata.notificationHandled = told;
+        });
     }
 
     /**
