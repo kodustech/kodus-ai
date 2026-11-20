@@ -217,6 +217,10 @@ describe('startStallWatchdog (real worker thread)', () => {
         const { port } = server.address() as { port: number };
 
         const reports: StallReport[] = [];
+        // Every report, ours or not: printed when ours never comes, since this
+        // case fails on CI runners and not locally.
+        const all: StallReport[] = [];
+        const keepOurs = keep(reports);
         stop = startStallWatchdog(
             {
                 thresholdMs: 400,
@@ -230,7 +234,10 @@ describe('startStallWatchdog (real worker thread)', () => {
                 alertMs: 1,
                 writeFd: null,
                 identity: { role: 'test' },
-                onReport: keep(reports),
+                onReport: (r) => {
+                    all.push(r);
+                    keepOurs(r);
+                },
             },
             logger,
         );
@@ -242,9 +249,29 @@ describe('startStallWatchdog (real worker thread)', () => {
         execSync('sleep 2');
 
         const fail = await waitFor(() => hits.find(ourFail), 15_000);
+        // The report reaches this thread as a worker message and the alert as
+        // an HTTP request: on a loaded runner the alert can land first.
+        const stall = await waitFor(
+            () => reports.find((r) => r.kind === 'stall'),
+            15_000,
+        ).catch(() => {
+            throw new Error(
+                `no stall report of ours (armedAt ${armedAt}); alert: ${
+                    fail.body
+                }; every report: ${JSON.stringify(
+                    all.map((r) => ({
+                        kind: r.kind,
+                        startedAt: r.startedAt,
+                        stalledMs: r.stalledMs,
+                        capture: (r as any).capture,
+                        stackUnavailable: r.stackUnavailable,
+                        location: (r as any).location,
+                    })),
+                )}`,
+            );
+        });
         server.close();
 
-        const stall = reports.find((r) => r.kind === 'stall');
         expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
         // The inspector only got an answer after execSync returned: neither
         // the stack nor the profile it would carry is the stall, so neither
