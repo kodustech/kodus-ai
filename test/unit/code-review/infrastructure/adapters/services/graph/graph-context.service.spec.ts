@@ -311,9 +311,10 @@ describe('GraphContextService', () => {
         });
 
         it('should return the legacy context when only the DB-baseline read fails', async () => {
+            const legacySpy = jest.spyOn(service, 'generateContextLegacy');
             mockSandbox.readFile
                 .mockRejectedValueOnce(new Error('read timed out'))
-                .mockResolvedValue(promptContent);
+                .mockResolvedValueOnce('legacy context');
             const changedFiles = createChangedFiles(['src/handler.ts'], {
                 withPatch: true,
             });
@@ -325,7 +326,15 @@ describe('GraphContextService', () => {
                     REPO_ID,
                     'main',
                 ),
-            ).resolves.toBe(promptContent);
+            ).resolves.toBe('legacy context');
+
+            // The second read is the fallback's own, not a retry of the first.
+            expect(legacySpy).toHaveBeenCalledWith(
+                mockSandbox,
+                changedFiles,
+                'main',
+            );
+            expect(mockSandbox.readFile).toHaveBeenCalledTimes(2);
         });
     });
 
