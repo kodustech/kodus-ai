@@ -444,7 +444,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     message: recorded,
                 };
                 if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
-                draft.pipelineMetadata.notificationHandled = true;
+                // A reply the platform refused leaves the usual skip
+                // reaction on the PR.
+                draft.pipelineMetadata.notificationHandled =
+                    recorded !== ULTRA_REFUSAL_NOT_POSTED;
             });
         }
 

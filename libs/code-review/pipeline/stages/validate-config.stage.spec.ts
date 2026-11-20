@@ -601,6 +601,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             const result = await stage.execute(ultraContext('ultra'));
 
             expect(result.statusInfo?.message).toContain('could not post why');
+            // The usual skip reaction still shows on the PR.
+            expect(result.pipelineMetadata?.notificationHandled).toBe(false);
         });
 
         it('a plain start-review on settings that ask for Ultra is always answered', async () => {
