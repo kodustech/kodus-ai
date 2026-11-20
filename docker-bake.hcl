@@ -57,6 +57,10 @@ variable "RUNTIME_WORKER_TAGS" {
   default = "kodus-runtime-worker:local"
 }
 
+variable "RUNTIME_FLEET_TAGS" {
+  default = "kodus-runtime-fleet:local"
+}
+
 variable "RUNTIME_CELL_TAGS" {
   default = "kodus-runtime-cell:local"
 }
@@ -174,6 +178,12 @@ target "runtime-worker" {
   tags = split(",", RUNTIME_WORKER_TAGS)
 }
 
+target "runtime-fleet" {
+  inherits = ["base"]
+  target = "runtime-fleet"
+  tags = split(",", RUNTIME_FLEET_TAGS)
+}
+
 target "runtime-cell" {
   context = "./apps/runtime-cell"
   # The cell's own Dockerfile: distroless, nonroot, version stamped through -ldflags (apps/runtime-cell/README.md).
@@ -262,7 +272,7 @@ target "runtime-microvm-kit" {
 }
 
 group "runtime" {
-  targets = ["runtime-hub", "runtime-worker", "runtime-cell", "runtime-builder", "runtime-sandbox"]
+  targets = ["runtime-hub", "runtime-worker", "runtime-fleet", "runtime-cell", "runtime-builder", "runtime-sandbox"]
 }
 
 group "default" {

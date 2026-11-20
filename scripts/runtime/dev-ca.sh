@@ -4,6 +4,9 @@
 #   hub.pem / hub.key         hub server certificate (localhost, 127.0.0.1)
 #   cell.pem / cell.key       managed cell client certificate (CN = cell id, OU = cell)
 #   worker.pem / worker.key   runtime-worker client certificate (OU = worker)
+#   fleet.pem / fleet.key     runtime-fleet client certificate (OU = worker, CN = runtime-fleet,
+#                             which the hub admits on its fleet routes only: RUNTIME_FLEET_ALLOWED_CNS)
+#   fleet.env                 the fleet container's client certificate over container.env's
 #   hub.env                   env for the hub (paths + the cell's pinned serial)
 #   preview-tunnel.pem/.key   the preview edge's tunnel certificate (cells dial it with mTLS)
 #   preview-browser.pem/.key  a self-signed wildcard for *.$PREVIEW_DOMAIN (the browser listener)
@@ -58,6 +61,10 @@ leaf worker "/O=kodus-runtime/OU=worker/CN=runtime-worker" 30 \
   "basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature
 extendedKeyUsage=clientAuth"
+leaf fleet "/O=kodus-runtime/OU=worker/CN=runtime-fleet" 30 \
+  "basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature
+extendedKeyUsage=clientAuth"
 leaf preview-tunnel "/O=kodus-runtime/OU=edge/CN=runtime-preview-edge" 30 \
   "basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature
@@ -88,6 +95,11 @@ RUNTIME_MANAGED_CELLS={"$CELL_ID":"$SERIAL"}
 ENV
 # Sourced by sh in the containers: the JSON value is single-quoted.
 sed -e "s|$DIR|/certs|" -e "s|^\(RUNTIME_MANAGED_CELLS=\)\(.*\)$|\1'\2'|" hub.env >container.env
+# runtime-fleet reads its client certificate from the worker's variables (shared/config.ts loadFleetConfig).
+cat >fleet.env <<ENV
+RUNTIME_WORKER_TLS_CERT=/certs/fleet.pem
+RUNTIME_WORKER_TLS_KEY=/certs/fleet.key
+ENV
 cat >preview.env <<ENV
 RUNTIME_PREVIEW_DOMAIN=$PREVIEW_DOMAIN
 RUNTIME_PREVIEW_TLS_CERT=/certs/preview-browser.pem

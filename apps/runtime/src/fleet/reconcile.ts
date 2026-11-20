@@ -1,4 +1,5 @@
 import type { HostProvider } from '@libs/runtime/fleet/host-provider';
+import { cellBaseOf } from '@libs/runtime/fleet/pool';
 
 import { fleetHostId, type FleetStore, type StoredPool } from './fleet-store';
 import type { PerRunHostInput } from './per-run-host';
@@ -55,6 +56,15 @@ async function statusOf(p: StoredPool, d: ReconcileDeps): Promise<{ scalable: bo
     const failures = p.status.consecutiveFailures ?? 0;
     const lastFailureAt = p.status.lastFailureAt ? Date.parse(p.status.lastFailureAt) : 0;
     if (failures >= p.pool.health.maxConsecutiveFailures && d.now() - lastFailureAt < BREAKER_COOLDOWN_MS) return { scalable: false, reason: 'breaker_open' };
+    // A boat host boots only from a saved image: with no cell base to fall back on, a Run whose environment has no
+    // template would fail at once, so the pool takes none and placement moves it on (§8.2).
+    if (p.pool.provider === 'boat') {
+        const base = cellBaseOf(p.pool.hostClass);
+        if (!base) return { scalable: false, reason: 'base_missing' };
+        // An unanswered read changes nothing, as for quotas below.
+        const image = provider.images ? await provider.images.get(base).catch(() => undefined) : undefined;
+        if (image === null || (image && image.state !== 'ready')) return { scalable: false, reason: 'base_missing' };
+    }
     // The provider's own word on starts and sizes, when it has one; an unanswered read changes nothing.
     const quotas = await provider.quotas(p.pool.hostClass).catch(() => null);
     if (quotas && !quotas.classAvailable) return { scalable: false, reason: 'class_unavailable' };

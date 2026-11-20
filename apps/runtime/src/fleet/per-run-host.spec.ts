@@ -7,22 +7,22 @@ import { fleetHostId } from './fleet-store';
 import { runPerRunHost, type PerRunHostDeps } from './per-run-host';
 import { FakeClock, FakeHubFleet, FixedTemplates, InMemoryFleetStore, RecordingSteps } from './testing';
 
-const pool = (provider: 'fake' | 'boat' = 'fake') =>
+const pool = (provider: 'fake' | 'boat' = 'fake', base?: string) =>
     parseHostPool({
         kind: 'HostPool',
         name: 'boat-eu-perrun',
         scope: 'kodus',
         provider,
         lifecycle: 'perRun',
-        hostClass: provider === 'boat' ? { kind: 'HostClass', name: 'boat-large-cell', provider: 'boat', boat: { type: 'large' } } : { kind: 'HostClass', name: 'fake', provider: 'fake' },
+        hostClass: provider === 'boat' ? { kind: 'HostClass', name: 'boat-large-cell', provider: 'boat', boat: { type: 'large', ...(base ? { base } : {}) } } : { kind: 'HostClass', name: 'fake', provider: 'fake' },
         perRun: { registrationTimeoutSeconds: 600, maxRunMinutes: 120 },
     });
 
 /** A perRun pool with one Run waiting for its host, and everything the workflow talks to. */
-function world(opts: { provider?: 'fake' | 'boat'; template?: string | null; registersAfterMs?: number | null } = {}) {
+function world(opts: { provider?: 'fake' | 'boat'; base?: string; template?: string | null; registersAfterMs?: number | null } = {}) {
     const clock = new FakeClock();
     const store = new InMemoryFleetStore(clock);
-    const poolId = store.addPool(pool(opts.provider ?? 'fake'));
+    const poolId = store.addPool(pool(opts.provider ?? 'fake', opts.base));
     const boundKey = 'run:org-a/r-1';
     store.addDemand({ poolId, boundKey, organizationId: 'org-a', environmentId: 'env-1', runId: 'r-1' });
     const provider = new FakeHostProvider({ installation: 'it', startState: 'running' });
@@ -101,6 +101,20 @@ describe('the perRun host workflow', () => {
         expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'failed', failure: 'template_missing' });
         expect(w.provider.calls.filter((c) => c.op === 'create')).toEqual([]);
         expect(w.hub.minted).toEqual([]);
+    });
+
+    it("a boat Run host of an environment with no template of its own starts from the pool's cell base: the Run builds cold instead of failing", async () => {
+        const w = world({ provider: 'boat', base: 'kodus-cell-r42-gvisor', template: null });
+        w.runEndsAt(w.clock.t + 60_000);
+        expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'served' });
+        expect([...w.provider.hosts.values()].map((h) => h.from)).toEqual(['kodus-cell-r42-gvisor']);
+    });
+
+    it("the environment's own template wins over the cell base", async () => {
+        const w = world({ provider: 'boat', base: 'kodus-cell-r42-gvisor' });
+        w.runEndsAt(w.clock.t + 60_000);
+        await runPerRunHost(w.input, w.deps);
+        expect([...w.provider.hosts.values()].map((h) => h.from)).toEqual(['kodus-env-a1-b2-c3']);
     });
 
     it('a throttled create waits what the provider asked and retries with the same client token: one host', async () => {

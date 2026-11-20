@@ -103,6 +103,23 @@ describe('the fleet reconcile pass', () => {
         expect([...w.provider.hosts.values()].filter((h) => h.tags.host === 'host-new' && h.state !== 'gone')).toHaveLength(1);
     });
 
+    it("a boat pool takes no Run until its cell base is a ready saved image, so placement moves Runs on instead of failing them", async () => {
+        const w = world();
+        const boatPool = (base?: string) => parseHostPool({ ...perRun, name: base ? 'boat-based' : 'boat-baseless', provider: 'boat', hostClass: { kind: 'HostClass', name: 'boat-large-cell', provider: 'boat', boat: { type: 'large', ...(base ? { base } : {}) } } });
+        const based = w.store.addPool(boatPool('kodus-cell-r42-gvisor'));
+        const baseless = w.store.addPool(boatPool());
+        const deps = { ...w.deps, providerFor: (k: string) => (k === 'fake' || k === 'boat' ? w.provider : undefined) };
+        for (const poolId of [based, baseless]) w.store.addDemand({ poolId, boundKey: `run:org-a/${poolId}`, organizationId: 'org-a', environmentId: 'env-1', runId: poolId });
+        await reconcileOnce(deps);
+        expect(w.store.pools.get(based)!.status).toMatchObject({ scalable: false, reason: 'base_missing' });
+        expect(w.store.pools.get(baseless)!.status).toMatchObject({ scalable: false, reason: 'base_missing' });
+        expect(w.started).toEqual([]);
+        w.provider.savedImages.set('kodus-cell-r42-gvisor', { name: 'kodus-cell-r42-gvisor', state: 'ready' });
+        await reconcileOnce(deps);
+        expect(w.store.pools.get(based)!.status.scalable).toBe(true);
+        expect(w.started.map((s) => s.poolId)).toEqual([based]);
+    });
+
     it('leaves a pooled pool alone: its loop is not built', async () => {
         const w = world();
         const pooledId = w.store.addPool(parseHostPool({ ...perRun, name: 'aws-later', lifecycle: 'pooled', capacity: { min: 0, max: 2, warm: 1 } }));

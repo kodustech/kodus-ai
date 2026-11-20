@@ -1,6 +1,6 @@
 import { openSecret, sealSecret } from '@libs/runtime/run/sealed-secret';
 import type { BootstrapPayload, HostProvider, ProviderHost } from '@libs/runtime/fleet/host-provider';
-import type { HostPool } from '@libs/runtime/fleet/pool';
+import { cellBaseOf, type HostPool } from '@libs/runtime/fleet/pool';
 import { isProviderError } from '@libs/runtime/fleet/provider-error';
 
 import type { FleetStore, HostFailure } from './fleet-store';
@@ -99,7 +99,7 @@ class HostFailed extends Error {
     }
 }
 
-/** Which providers need the environment's template to make a Run host (the fake one boots anything). */
+/** Which providers need a template or a cell base to make a Run host (the fake one boots anything). */
 const NEEDS_TEMPLATE = new Set(['boat']);
 
 export async function runPerRunHost(input: PerRunHostInput, d: PerRunHostDeps): Promise<PerRunOutcome> {
@@ -119,7 +119,9 @@ export async function runPerRunHost(input: PerRunHostInput, d: PerRunHostDeps): 
     try {
         try {
             if (!provider) throw new HostFailed('provider_unavailable');
-            const from = await d.step('template', () => d.templates.resolve({ organizationId: input.organizationId, environmentId: input.environmentId, poolId, provider: pool.provider }), FLEET_STEP_RETRY);
+            // The environment's own template, else the class's cell base (the Run then builds its environment cold).
+            const template = await d.step('template', () => d.templates.resolve({ organizationId: input.organizationId, environmentId: input.environmentId, poolId, provider: pool.provider }), FLEET_STEP_RETRY);
+            const from = template ?? cellBaseOf(pool.hostClass) ?? null;
             if (!from && NEEDS_TEMPLATE.has(pool.provider)) throw new HostFailed('template_missing');
             if (!providerId) {
                 // Known before anything else can fail: a host the provider made is always destroyed (v-core N9).

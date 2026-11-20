@@ -763,6 +763,8 @@ services:
             RUNTIME_PRODUCT_SECRETS_READ_URL: ${RUNTIME_PRODUCT_SECRETS_READ_URL:-}
             # The preview edge's tunnel endpoint (profile preview); empty: no preview is routed.
             RUNTIME_PREVIEW_TUNNEL_URL: ${RUNTIME_PREVIEW_TUNNEL_URL:-}
+            # The only client CN the fleet routes (/internal/fleet/*) admit: runtime-fleet's (dev-ca.sh fleet.pem).
+            RUNTIME_FLEET_ALLOWED_CNS: ${RUNTIME_FLEET_ALLOWED_CNS:-runtime-fleet}
         ports:
             - '127.0.0.1:${RUNTIME_HUB_PORT:-3410}:3410'
             - '127.0.0.1:${RUNTIME_HUB_METRICS_PORT:-9464}:9464'
@@ -864,6 +866,40 @@ services:
                 required: false
             runtime-hub:
                 condition: service_started
+
+    # runtime-fleet (docs/runtime/host-providers.md §4.1): makes and removes the hosts of perRun
+    # pools. Off unless `--profile runtime-fleet` is on, next to `--profile runtime` (the hub it
+    # mints tokens at). It needs fleet.pem and fleet.env from scripts/runtime/dev-ca.sh. Without
+    # RUNTIME_BOAT_API_KEY no boat pool is scalable; RUNTIME_FLEET_FAKE_PROVIDER=1 drives `fake`
+    # pools in-process. Pools come from files (§5.2):
+    #   docker compose -f docker-compose.dev.yml --profile runtime-fleet run --rm runtime-fleet \
+    #     node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/fleet/main.ts apply -f <dir>
+    runtime-fleet:
+        <<: *runtime-service-defaults
+        container_name: kodus_runtime_fleet
+        profiles: ['runtime-fleet']
+        init: true
+        command: sh -c 'set -a && . /certs/container.env && . /certs/fleet.env && set +a && exec node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/fleet/main.ts'
+        environment:
+            <<: *runtime-env
+            RUNTIME_RELEASE_VERSION: ${RUNTIME_RELEASE_VERSION-development}
+            # Seals the fleet token inside the host workflow's step outputs (dev-only key, as the worker's).
+            RUNTIME_SECRET_SEAL_KEY: ${RUNTIME_SECRET_SEAL_KEY:-de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de70}
+            # The tag every host of this install carries; the orphan pass lists the provider by it.
+            RUNTIME_FLEET_INSTALLATION: ${RUNTIME_FLEET_INSTALLATION:-dev}
+            # Where new hosts register: reachable from the host, so a boat host needs a public hub URL.
+            RUNTIME_FLEET_HUB_PUBLIC_URL: ${RUNTIME_FLEET_HUB_PUBLIC_URL:-https://localhost:3410}
+            RUNTIME_FLEET_FAKE_PROVIDER: ${RUNTIME_FLEET_FAKE_PROVIDER:-0}
+            RUNTIME_BOAT_API_KEY: ${RUNTIME_BOAT_API_KEY:-}
+            RUNTIME_METRICS_PORT: '9466'
+        ports:
+            - '127.0.0.1:${RUNTIME_FLEET_METRICS_PORT:-9466}:9466'
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+            runtime-hub:
+                condition: service_started
+                required: false
 
     # Optional S3-compatible evidence store (RUNTIME_EVIDENCE_STORE=s3), off by default:
     #   docker compose -f docker-compose.dev.yml --profile evidence-s3 up -d runtime-minio runtime-minio-init

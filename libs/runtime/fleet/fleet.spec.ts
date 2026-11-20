@@ -22,6 +22,12 @@ describe('host pools', () => {
         expect(pool.perRun).toEqual({ registrationTimeoutSeconds: 600, maxRunMinutes: 120 });
     });
 
+    it("a boat class may name the cell base its Run hosts start from: a kodus-cell- saved image, never an environment template", () => {
+        const cls = (base: string) => ({ kind: 'HostPool', name: 'boat-eu', scope: 'kodus', provider: 'boat', lifecycle: 'perRun', hostClass: { kind: 'HostClass', name: 'boat-l', provider: 'boat', boat: { type: 'large', base } } });
+        expect(parseHostPool(cls('kodus-cell-r42-gvisor')).hostClass).toMatchObject({ boat: { base: 'kodus-cell-r42-gvisor' } });
+        for (const base of ['kodus-env-0a1b2c3d4e-5f6a7b8c9d-0011223344556677', 'my-snapshot', `kodus-cell-${'a'.repeat(53)}`]) expect(() => parseHostPool(cls(base))).toThrow();
+    });
+
     it('a pool whose class is another provider than its own is refused', () => {
         expect(() => parseHostPool({ ...boatPool, provider: 'aws' })).toThrow(/provider/);
     });
