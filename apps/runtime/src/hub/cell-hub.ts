@@ -564,6 +564,19 @@ export class CellHub {
     sandboxOp(ref: ClaimRef, stepId: string, op: SandboxOp): Promise<SandboxResult | EnvError> {
         return this.steps.sandboxOp(ref, stepId, op);
     }
+    /**
+     * Seals the egress of an org's own live sandbox claim (egress.policy sealed): from the ack on
+     * its signed policy allows nothing. Scoped like every claim call (another org's claim throws
+     * ClaimScopeError); anything but a confirmed seal is an error, so a caller never takes an
+     * open sandbox for a sealed one.
+     */
+    async sealSandboxEgress(ref: ClaimRef): Promise<{ sealed: true } | EnvError> {
+        const claim = await this.claims.findActiveClaim(ref);
+        if (!claim) return { code: 'lease_expired' };
+        if (claim.consumer !== 'sandbox') return { code: 'workload_exec_unavailable' };
+        const ids = { cellId: claim.cellId, claimId: claim.claimId };
+        return (await this.claims.egress.sealSandbox(claim.cellId, claim.claimId, ids)) ? { sealed: true } : { code: 'cell_unavailable', cellId: claim.cellId };
+    }
     /** preview.tunnel and preview.route to a preview claim's cell. */
     previewRoute(ref: ClaimRef, body: { previewId: string; target: { service: string; port: number }; until: string }): Promise<PreviewRouteOutcome> {
         return this.previews.route(ref, body);

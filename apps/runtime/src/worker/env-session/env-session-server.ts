@@ -46,7 +46,7 @@ export interface EnvSessionServerOptions {
     /** The nonces this listener accepted (one per signed request); a fresh set when absent. */
     nonces?: EnvSessionNonces;
     /** The code sandboxes' routes (/sandbox/*, the runtime-sandbox provider); absent: they answer 404. */
-    sandboxes?: Pick<SandboxService, 'open' | 'op' | 'renew' | 'release' | 'snapshot' | 'template'>;
+    sandboxes?: Pick<SandboxService, 'open' | 'op' | 'renew' | 'release' | 'seal' | 'snapshot' | 'template'>;
     /** Preview URLs' routes (/preview/*, docs/runtime/preview-urls.md §9.2); absent: they answer 404. */
     previews?: Pick<PreviewService, 'open' | 'status' | 'stop'>;
 }
@@ -92,6 +92,7 @@ const SANDBOX: Record<string, (s: NonNullable<EnvSessionServerOptions['sandboxes
     [SANDBOX_ROUTES.op]: (s, body) => s.op(SandboxOpRequestSchema.parse(body)),
     [SANDBOX_ROUTES.renew]: (s, body) => s.renew(SandboxRefSchema.parse(body)),
     [SANDBOX_ROUTES.release]: (s, body) => s.release(SandboxRefSchema.parse(body)),
+    [SANDBOX_ROUTES.seal]: (s, body) => s.seal(SandboxRefSchema.parse(body)),
     [SANDBOX_ROUTES.snapshot]: (s, body) => s.snapshot(SandboxSnapshotRequestSchema.parse(body)),
     [SANDBOX_ROUTES.template]: (s, body) => s.template(SandboxTemplateSchema.parse(body)),
 };

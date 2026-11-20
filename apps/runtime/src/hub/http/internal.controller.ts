@@ -194,6 +194,14 @@ export class InternalController {
         return this.hub.sandboxOp(ref(claimId, b), b.stepId, b.op).catch(mapped);
     }
 
+    /** Seals a sandbox claim's egress for good (egress.policy sealed); org-scoped like the op route. */
+    @Post('claims/:claimId/sandbox-seal')
+    @HttpCode(200)
+    async sealSandbox(@Param('claimId') claimId: string, @Body() body: unknown) {
+        const b = parseBody(z.strictObject(Tenant), body);
+        return this.hub.sealSandboxEgress(ref(claimId, b)).catch(mapped);
+    }
+
     /** Where a claim's preparation is (its cell's claim.progress), for the worker's setup view. */
     @Post('claims/:claimId/progress')
     @HttpCode(200)

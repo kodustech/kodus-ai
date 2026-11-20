@@ -153,6 +153,46 @@ describe('code sandbox on the hub', () => {
         expect(c.sock.sent.filter((m) => m.type === 'sandbox.op')).toHaveLength(0);
     });
 
+    describe('sealing the sandbox egress', () => {
+        const ref = (claimId: string, organizationId = 'org-a') => ({ claimId, organizationId, runId: null });
+
+        it('sends an egress.policy that seals only that claim, and resolves once the cell acks it', async () => {
+            const ctx = setup();
+            const c = await ctx.connect(['sandbox']);
+            const { claim } = await ctx.sandbox(c, 'sandbox:s1');
+            const p = ctx.hub.sealSandboxEgress(ref(claim.claimId));
+            await tick();
+            await tick();
+            const sent = c.sock.last('egress.policy');
+            expect(sent).toMatchObject({ claimId: claim.claimId, body: { allow: [], sealed: true } });
+            await c.onMessage(frame('cell-a', 'ack', {}, { re: sent.id }));
+            expect(await p).toEqual({ sealed: true });
+        });
+
+        it('is not sealed when the cell refuses it: the caller gets an error, never a success', async () => {
+            const ctx = setup();
+            const c = await ctx.connect(['sandbox']);
+            const { claim } = await ctx.sandbox(c, 'sandbox:s1');
+            const p = ctx.hub.sealSandboxEgress(ref(claim.claimId));
+            await tick();
+            await tick();
+            const sent = c.sock.last('egress.policy');
+            await c.onMessage(frame('cell-a', 'nack', { code: 'seal_failed', message: 'the sealed policy was not pushed' }, { re: sent.id }));
+            expect(await p).toMatchObject({ code: 'cell_unavailable' });
+        });
+
+        it("never seals another org's sandbox, nor a claim that is not a sandbox, nor one that ended", async () => {
+            const ctx = setup();
+            const c = await ctx.connect(['sandbox']);
+            const { claim } = await ctx.sandbox(c, 'sandbox:s1');
+            await expect(ctx.hub.sealSandboxEgress(ref(claim.claimId, 'org-b'))).rejects.toThrow('not this tenant');
+            await ctx.store.insertClaim({ claimId: 'run-claim', cellId: 'cell-a', orgId: 'org-a', side: 'pr', state: 'bound', consumer: 'runtime', hardExpiresAt: new Date(Date.now() + 60_000).toISOString(), leaseExpiresAt: new Date(Date.now() + 60_000).toISOString() } as any);
+            expect(await ctx.hub.sealSandboxEgress(ref('run-claim'))).toEqual({ code: 'workload_exec_unavailable' });
+            expect(await ctx.hub.sealSandboxEgress(ref(claimIdFor('org-a', 'sandbox:none')))).toEqual({ code: 'lease_expired' });
+            expect(c.sock.sent.filter((m) => m.type === 'egress.policy')).toHaveLength(0);
+        });
+    });
+
     describe('memory snapshots (feature snapshots)', () => {
         const sid = 'ksn-0123456789abcdef0123456789abcdef';
         const fcCapabilities = { backends: ['firecracker'], snapshotMemory: true, nestedDocker: true, kvm: true, arch: 'x86_64' };

@@ -102,6 +102,8 @@ export const SANDBOX_ROUTES = {
     op: '/sandbox/op',
     renew: '/sandbox/renew',
     release: '/sandbox/release',
+    // Seals the sandbox's egress for good (the provider asks once its checkout is prepared).
+    seal: '/sandbox/seal',
     snapshot: '/sandbox/snapshot',
     template: '/sandbox/template',
 } as const;

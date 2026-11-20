@@ -102,6 +102,46 @@ describe('code sandbox on the worker', () => {
         await expect(s.snapshot({ organizationId: 'org-a', sandboxId, stepId: randomUUID(), purpose: 'template' })).rejects.toMatchObject({ code: 'not_template_source' });
     });
 
+    it("seals the org's own sandbox claim through the hub, and anything but a confirmed seal is an error", async () => {
+        const { hub, posts } = fakeHub({ '/sandbox-seal': { sealed: true } });
+        const s = new SandboxService({ hub, isStopped: async () => false });
+        expect(await s.seal({ organizationId: 'org-a', sandboxId })).toEqual({ sealed: true });
+        expect(posts).toEqual([{ url: 'http://hub-1', path: `/internal/claims/${encodeURIComponent(claimId)}/sandbox-seal`, body: { organizationId: 'org-a', runId: null } }]);
+        const gone = fakeHub({ '/sandbox-seal': { code: 'lease_expired' } });
+        await expect(new SandboxService({ hub: gone.hub, isStopped: async () => false }).seal({ organizationId: 'org-a', sandboxId })).rejects.toMatchObject({ status: 404, code: 'lease_expired' });
+        const refused = fakeHub({ '/sandbox-seal': { code: 'cell_unavailable', cellId: 'cell-a' } });
+        await expect(new SandboxService({ hub: refused.hub, isStopped: async () => false }).seal({ organizationId: 'org-a', sandboxId })).rejects.toMatchObject({ status: 409, code: 'cell_unavailable' });
+        // A hub answer that is neither the seal nor an error (an older hub, a bad body) is not a seal.
+        const odd = fakeHub({ '/sandbox-seal': { ok: true } });
+        await expect(new SandboxService({ hub: odd.hub, isStopped: async () => false }).seal({ organizationId: 'org-a', sandboxId })).rejects.toMatchObject({ status: 409, code: 'seal_unconfirmed' });
+    });
+
+    it('the seal route needs the same signature as the other sandbox routes and names its org only in the signed body', async () => {
+        const key = Buffer.alloc(32, 7);
+        const sealed: unknown[] = [];
+        const server = await startEnvSessionServer({
+            port: 0,
+            host: '127.0.0.1',
+            key,
+            service: {} as any,
+            sandboxes: { open: jest.fn(), renew: jest.fn(), release: jest.fn(), snapshot: jest.fn(), template: jest.fn(), op: jest.fn(), seal: async (r) => (sealed.push(r), { sealed: true as const }) },
+        });
+        try {
+            const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}${SANDBOX_ROUTES.seal}`;
+            const body = JSON.stringify({ organizationId: 'org-a', sandboxId });
+            const signed = await fetch(url, { method: 'POST', body, headers: { [ENV_SESSION_SIGNATURE_HEADER]: signEnvSessionRequest(key, { method: 'POST', path: SANDBOX_ROUTES.seal, body, at: Date.now() }) } });
+            expect(signed.status).toBe(200);
+            expect(await signed.json()).toEqual({ sealed: true });
+            expect((await fetch(url, { method: 'POST', body })).status).toBe(401);
+            // A signature made for another path does not seal.
+            const other = await fetch(url, { method: 'POST', body, headers: { [ENV_SESSION_SIGNATURE_HEADER]: signEnvSessionRequest(key, { method: 'POST', path: SANDBOX_ROUTES.release, body, at: Date.now() }) } });
+            expect(other.status).toBe(401);
+            expect(sealed).toEqual([{ organizationId: 'org-a', sandboxId }]);
+        } finally {
+            await new Promise((r) => server.close(r));
+        }
+    });
+
     it('no sandbox opens while the org is stopped', async () => {
         const { hub, posts } = fakeHub({});
         const s = new SandboxService({ hub, isStopped: async () => true });
@@ -117,7 +157,7 @@ describe('code sandbox on the worker', () => {
             host: '127.0.0.1',
             key,
             service: {} as any,
-            sandboxes: { open: jest.fn(), renew: jest.fn(), release: jest.fn(), snapshot: jest.fn(), template: jest.fn(), op: async (r) => (ops.push(r), { ok: true, written: 524_288 }) },
+            sandboxes: { open: jest.fn(), renew: jest.fn(), release: jest.fn(), seal: jest.fn(), snapshot: jest.fn(), template: jest.fn(), op: async (r) => (ops.push(r), { ok: true, written: 524_288 }) },
         });
         try {
             const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}${SANDBOX_ROUTES.op}`;

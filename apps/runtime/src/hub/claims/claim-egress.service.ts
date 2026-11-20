@@ -81,6 +81,23 @@ export class ClaimEgressService {
         return (await this.sandboxEgressOf(orgId, asked, ids)).allow;
     }
 
+    /**
+     * Seals a sandbox claim's egress for good: egress.policy with `sealed` and nothing allowed.
+     * True only when the cell acked, which it does once the enforcers hold the sealed policy;
+     * a nack (an older cell refuses the field), a lost connection or a timeout is false, and the
+     * caller must treat the sandbox as open.
+     */
+    async sealSandbox(cellId: string, claimId: string, ids: LogIds): Promise<boolean> {
+        try {
+            const reply = await this.connections.request(cellId, 'egress.policy', { allow: [], sealed: true, issuedAt: this.now().toISOString() }, claimId);
+            this.log(reply.type === 'ack' ? 'info' : 'warn', 'claim.egress_sealed', { ...ids, reply: reply.type, ...(reply.type === 'nack' ? { code: (reply.body as { code?: string }).code } : {}) });
+            return reply.type === 'ack';
+        } catch (e) {
+            this.log('warn', 'claim.egress_sealed', { ...ids, error: (e as Error).message });
+            return false;
+        }
+    }
+
     /** egress.policy with the environment's approved hosts, to one claim right after claim.ready. */
     async pushApprovedHosts(cellId: string, claimId: string, orgId: string, environmentId: string, ids: LogIds): Promise<void> {
         const egress = await this.approvedEgressOf(orgId, environmentId, ids);

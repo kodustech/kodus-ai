@@ -169,6 +169,17 @@ export class SandboxService {
         return r;
     }
 
+    /**
+     * Seals the sandbox's egress for good (egress.policy sealed on its cell). The hub scopes the claim to the org,
+     * so an org seals only its own sandbox; the answer is a seal the cell acked or an error, never a guess.
+     */
+    async seal(ref: SandboxRef): Promise<{ sealed: true }> {
+        const r = await this.onClaim<{ sealed: true } | EnvError>(ref, '/sandbox-seal', {}, SHORT_MS);
+        if ('code' in r) throw new SandboxError(r.code === 'lease_expired' ? 404 : 409, r.code, sandboxErrorMessage(r));
+        if (r.sealed !== true) throw new SandboxError(409, 'seal_unconfirmed', 'The hub did not confirm the seal.');
+        return { sealed: true };
+    }
+
     async release(ref: SandboxRef): Promise<{ ok: true }> {
         const claimId = this.claimId(ref);
         // No replica holds the cell any more: any one records the release, and the cell's lease takes the machine back.
