@@ -295,6 +295,28 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
             ).not.toHaveBeenCalled();
         });
 
+        it('stays quiet when the license read fails', async () => {
+            const reply = githubReply(900, 'why?', 'dev-one', 1);
+            const {
+                useCase,
+                codeManagementService,
+                permissionValidationService,
+            } = setup([githubKodyRoot, reply]);
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.LICENSE_UNAVAILABLE,
+                },
+            );
+
+            await useCase.execute(githubParams(reply));
+
+            expect(classify).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).not.toHaveBeenCalled();
+        });
+
         describe('bot loop cap', () => {
             // Kody root, then `pairs` rounds of (bot, Kody), then a new bot reply.
             function botLoop(pairs: number) {
