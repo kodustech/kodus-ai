@@ -4,7 +4,6 @@ import { Document } from 'mongoose';
 @Schema({
     collection: 'observability_metrics',
     timestamps: false,
-    autoIndex: true,
 })
 export class MetricsEventModel extends Document {
     @Prop({ type: String, required: true, index: true })

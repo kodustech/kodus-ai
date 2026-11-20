@@ -12,6 +12,7 @@ import {
     PULL_REQUESTS_REPOSITORY_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 export const CUSTOM_AGENT_STATUS_WINDOW_DAYS = 30;
 
@@ -321,6 +322,7 @@ export class GetCustomAgentsStatusUseCase {
                         suggestionRowsPipeline(match, 'files.suggestions'),
                         {
                             allowDiskUse: true,
+                            maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
                         },
                     )
                     .toArray(),
@@ -329,12 +331,14 @@ export class GetCustomAgentsStatusUseCase {
                         suggestionRowsPipeline(match, 'prLevelSuggestions'),
                         {
                             allowDiskUse: true,
+                            maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
                         },
                     )
                     .toArray(),
                 collection
                     .aggregate(unfollowedCitationsPipeline(match), {
                         allowDiskUse: true,
+                        maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
                     })
                     .toArray(),
                 // A page that cannot read the runs still shows the findings.

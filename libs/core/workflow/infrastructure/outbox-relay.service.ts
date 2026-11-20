@@ -48,6 +48,7 @@ import {
     BackoffOptions,
 } from '@libs/common/utils/polling';
 import { formatHeartbeatContext } from '@libs/core/infrastructure/incident/heartbeat-context.util';
+import { describeLostJobs, describeStaleHolders } from './lost-work-alerts';
 import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
@@ -78,9 +79,14 @@ const DEFAULT_OUTBOX_PUBLISH_TIMEOUT_MS = 15000;
 // so an actively running or reclaimable job is never reaped.
 const DEFAULT_STALE_JOB_TIMEOUT_MINUTES = 180;
 
-// Above this many orphans reaped in a single pass, fire the incident
-// heartbeat — a spike means workers are crash-looping.
-const STALE_JOB_HIGH_REAP_THRESHOLD = 5;
+// Every reaped job's lastError starts with this; the loss alert counts them.
+const REAPED_LAST_ERROR_PREFIX = 'Orphaned:';
+
+// Loss alert: jobs reaped within the window, alerted when the count crosses
+// the threshold (edge-triggered across passes, so a burst alerts once, and
+// losses spread over many small passes still alert).
+const LOSS_ALERT_WINDOW_MINUTES = 60;
+const LOSS_ALERT_THRESHOLD = 5;
 
 // Cadence of the stale-job reaper. Overridable for ops/testing; the
 // threshold (WORKFLOW_STALE_JOB_TIMEOUT_MINUTES) still bounds eligibility,
@@ -96,9 +102,27 @@ export const INBOX_REAPER_CONSUMER_TIMEOUTS = {
     'workflow-job-consumer.ast_graph_build': 30 * 60 * 1000,
     'workflow-job-consumer.ast_graph_incremental': 15 * 60 * 1000,
     'workflow-job-consumer.security_scan': 45 * 60 * 1000,
+    // 28-min job timeout (job-processor-router.service.ts) plus margin.
+    'workflow-job-consumer.cli_code_review': 45 * 60 * 1000,
     'workflow-events-stage-completed': 20 * 60 * 1000,
     'workflow-events-ast': 20 * 60 * 1000,
+    // MessageClaimService claims (one conversation reply per comment event)
+    // expire after 15 min; a claim whose worker died is never redelivered, so
+    // without this it stayed PROCESSING forever.
+    'chat-with-kody-from-git': 30 * 60 * 1000,
 } as const;
+
+// Consumers whose messages carry a workflow job that reapStaleProcessingJobs
+// reaps and alerts.
+const JOB_CONSUMER_PREFIX = 'workflow-job-consumer.';
+
+function countBy(values: string[]): Record<string, number> {
+    // A Map, not a plain object: a key like 'constructor' must not read an
+    // inherited member.
+    const counts = new Map<string, number>();
+    for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+    return Object.fromEntries(counts);
+}
 
 function parsePositiveIntEnv(envKey: string, fallback: number): number {
     const raw = process.env[envKey];
@@ -144,6 +168,14 @@ export class OutboxRelayService
     private currentInterval = 1000;
 
     private readonly logger = createLogger(OutboxRelayService.name);
+
+    /**
+     * When each consumer last raised the reclaim incident. A dead worker's
+     * locks cross the claim timeout over several passes; one incident per
+     * consumer per loss window, not one per pass. Per process: an instance
+     * that takes over the reaper lock may alert once more.
+     */
+    private readonly reclaimAlertedAt = new Map<string, number>();
 
     constructor(
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
@@ -391,6 +423,15 @@ export class OutboxRelayService
                                 const threshold = new Date(
                                     Date.now() - timeoutMs,
                                 );
+                                // Read before the reclaim clears lockedBy:
+                                // which workers left these messages. Best
+                                // effort, the reclaim runs either way.
+                                const holders = await this.inboxRepository
+                                    .staleHoldersByConsumer(
+                                        consumerId,
+                                        threshold,
+                                    )
+                                    .catch(() => []);
                                 const reclaimed =
                                     await this.inboxRepository.reclaimStaleMessagesByConsumer(
                                         consumerId,
@@ -402,6 +443,7 @@ export class OutboxRelayService
                                     timeoutMs,
                                     threshold,
                                     reclaimed,
+                                    holders,
                                 };
                             },
                         ),
@@ -421,8 +463,13 @@ export class OutboxRelayService
                             continue;
                         }
 
-                        const { consumerId, timeoutMs, threshold, reclaimed } =
-                            result.value;
+                        const {
+                            consumerId,
+                            timeoutMs,
+                            threshold,
+                            reclaimed,
+                            holders,
+                        } = result.value;
 
                         if (reclaimed <= 0) {
                             continue;
@@ -437,44 +484,37 @@ export class OutboxRelayService
                                 thresholdMinutes: timeoutMs / 60000,
                                 reclaimedCount: reclaimed,
                                 ageThreshold: threshold.toISOString(),
+                                holders,
                             },
                         });
 
+                        // A workflow-job-consumer.* lock belongs to a job that
+                        // reapStaleProcessingJobs reaps (and alerts, with the
+                        // loss count) once it has been PROCESSING for the reap
+                        // timeout, so its reclaim raises no incident: alerting
+                        // both reported one event twice. The other consumers
+                        // have no such job: workflow-events-* resume
+                        // WAITING_FOR_EVENT jobs, which that reaper never
+                        // touches, and chat-with-kody-from-git has no job at
+                        // all. For them this reclaim is the only signal, so it
+                        // raises the incident.
                         if (reclaimed > 5) {
                             this.logger.error({
-                                message: `HIGH RECLAIM RATE: ${reclaimed} ${consumerId} jobs stuck!`,
+                                message: `HIGH RECLAIM RATE: ${reclaimed} ${consumerId} locks held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}`,
                                 context: OutboxRelayService.name,
                                 metadata: {
                                     consumerId,
                                     reclaimed,
-                                    possibleCause:
-                                        'Worker crashes, memory issues, or job timeouts',
+                                    cause: 'The owning worker stopped (froze or was killed) without releasing its claims; see StallWatchdog reports from about the lock age ago',
                                 },
                             });
-
-                            this.incidentManager
-                                ?.failHeartbeat(
-                                    'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                                    `High inbox reclaim rate for ${consumerId}: ${reclaimed} stale messages reclaimed. Possible cause: worker crashes, memory issues, or job timeouts. ${this.formatContext(
-                                        {
-                                            monitor: 'inbox_reclaim_rate',
-                                            consumerId,
-                                            reclaimed,
-                                        },
-                                    )}`,
-                                )
-                                .catch((err) => {
-                                    this.logger.error({
-                                        message:
-                                            'Failed to report outbox heartbeat failure',
-                                        context: OutboxRelayService.name,
-                                        error:
-                                            err instanceof Error
-                                                ? err
-                                                : undefined,
-                                        metadata: { consumerId, reclaimed },
-                                    });
-                                });
+                            if (!consumerId.startsWith(JOB_CONSUMER_PREFIX)) {
+                                this.alertUnreapedReclaim(
+                                    consumerId,
+                                    reclaimed,
+                                    holders,
+                                );
+                            }
                         }
                     }
 
@@ -515,11 +555,13 @@ export class OutboxRelayService
      * A worker SIGKILLed mid-job (OOM / node eviction / /tmp overflow) never
      * runs the consumer's catch/finally, so its workflow_jobs row is left at
      * PROCESSING forever: the inbox reaper frees the message lock, but the
-     * requeued RabbitMQ message is rejected as "already claimed" and DLQ'd
-     * (the DLX has no consumer) long before the 150-min claim can be
-     * reclaimed — so the job is never reprocessed and no other path resets
-     * its status. This flips such rows to FAILED so they stop reporting as
-     * running, are observable, and can be re-driven by a new review.
+     * requeued RabbitMQ message is rejected as "already claimed" long before
+     * the 150-min claim can be reclaimed, and its delayed retry never comes
+     * back (the topic-typed delayed exchange routes it to no queue on
+     * RabbitMQ 4.2 + Khepri) — so the job is never reprocessed and no other
+     * path resets its status. This flips such rows to FAILED so they stop
+     * reporting as running, are observable, and can be re-driven by a new
+     * review.
      *
      * The UI "in progress" badge is reaped separately by the automation
      * execution watchdog (staleReviewWatchdog.cron); this closes the job
@@ -541,22 +583,25 @@ export class OutboxRelayService
                 Date.now() - this.staleJobTimeoutMinutes * 60 * 1000,
             );
 
-            const reaped = await this.jobRepository.failStaleProcessing?.({
-                olderThan,
-                lastError: `Orphaned: worker crashed/evicted while job was PROCESSING (no terminal update within ${this.staleJobTimeoutMinutes}min). Reaped by stale-job watchdog.`,
-                errorClassification: ErrorClassification.PERMANENT,
-            });
+            const reaped =
+                (await this.jobRepository.failStaleProcessing?.({
+                    olderThan,
+                    lastError: `${REAPED_LAST_ERROR_PREFIX} the worker running this job stopped (froze or was killed) without a terminal update within ${this.staleJobTimeoutMinutes}min. Reaped by stale-job watchdog; not retried.`,
+                    errorClassification: ErrorClassification.PERMANENT,
+                })) ?? [];
 
-            const reapedCount = reaped?.length ?? 0;
+            const reapedCount = reaped.length;
             if (reapedCount === 0) {
                 return;
             }
 
+            const byType = countBy(reaped.map((job) => job.workflowType));
             this.logger.warn({
                 message: `Reaped ${reapedCount} stale PROCESSING workflow jobs`,
                 context: OutboxRelayService.name,
                 metadata: {
                     reapedCount,
+                    byType,
                     staleTimeoutMinutes: this.staleJobTimeoutMinutes,
                     olderThan: olderThan.toISOString(),
                     jobs: reaped.map((job) => {
@@ -577,37 +622,7 @@ export class OutboxRelayService
                 },
             });
 
-            if (reapedCount > STALE_JOB_HIGH_REAP_THRESHOLD) {
-                this.logger.error({
-                    message: `HIGH REAP RATE: ${reapedCount} workflow jobs orphaned in PROCESSING!`,
-                    context: OutboxRelayService.name,
-                    metadata: {
-                        reapedCount,
-                        possibleCause:
-                            'Worker crashes/evictions (OOM, node pressure, restarts)',
-                    },
-                });
-
-                this.incidentManager
-                    ?.failHeartbeat(
-                        'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                        `High stale-job reap rate: ${reapedCount} workflow jobs orphaned in PROCESSING. Possible cause: worker crashes/evictions (OOM, node pressure, restarts). ${this.formatContext(
-                            {
-                                monitor: 'stale_job_reap_rate',
-                                reapedCount,
-                            },
-                        )}`,
-                    )
-                    .catch((err) => {
-                        this.logger.error({
-                            message:
-                                'Failed to report stale-job reap heartbeat failure',
-                            context: OutboxRelayService.name,
-                            error: err instanceof Error ? err : undefined,
-                            metadata: { reapedCount },
-                        });
-                    });
-            }
+            await this.alertOnJobLoss(reaped);
         } catch (error) {
             this.logger.error({
                 message: 'Failed to reap stale PROCESSING workflow jobs',
@@ -929,6 +944,151 @@ export class OutboxRelayService
                 error: error instanceof Error ? error : undefined,
             });
         }
+    }
+
+    /**
+     * Alerts on job loss. Counts every job reaped in the last
+     * LOSS_ALERT_WINDOW_MINUTES (this pass included) and fires only when the
+     * count crosses LOSS_ALERT_THRESHOLD in this pass, so a burst alerts once
+     * and losses spread over many small passes (which a per-pass threshold
+     * never saw) alert too. The window slides: an episode that keeps the count
+     * hovering at the threshold as old reaps age out can cross it again and
+     * alert again. The jobs were lost ~3h ago: the stall that caused it was
+     * reported by the worker's StallWatchdog at the time.
+     *
+     * The heartbeat is not awaited: the reaper holds its lock for this pass,
+     * and a slow BetterStack endpoint must not hold it.
+     */
+    private async alertOnJobLoss(
+        reaped: Array<{
+            workflowType: string;
+            organizationId: string | null;
+            startedAt?: Date | null;
+            payload?: Record<string, unknown> | null;
+        }>,
+    ): Promise<void> {
+        const reapedCount = reaped.length;
+        let lostInWindow = reapedCount;
+        // Without the window count, the number is this pass alone and is
+        // reported as such, not as the window total.
+        let windowCounted = false;
+        try {
+            const counted = await this.jobRepository.countReapedSince?.(
+                LOSS_ALERT_WINDOW_MINUTES,
+                REAPED_LAST_ERROR_PREFIX,
+            );
+            if (typeof counted === 'number') {
+                lostInWindow = counted;
+                windowCounted = true;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not count reaped jobs in the alert window; alerting on this pass alone',
+                context: OutboxRelayService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+        }
+        // The count includes this pass (already committed).
+        lostInWindow = Math.max(lostInWindow, reapedCount);
+        const before = lostInWindow - reapedCount;
+        if (!(
+            before < LOSS_ALERT_THRESHOLD &&
+            lostInWindow >= LOSS_ALERT_THRESHOLD
+        )) {
+            return;
+        }
+
+        const byType = countBy(reaped.map((job) => job.workflowType));
+        const orgs = new Set(
+            reaped.map((job) => job.organizationId).filter(Boolean),
+        ).size;
+        const typeSummary = Object.entries(byType)
+            .map(([type, n]) => `${type}: ${n}`)
+            .join(', ');
+        const lost = windowCounted
+            ? `${lostInWindow} workflow jobs lost in the last ${LOSS_ALERT_WINDOW_MINUTES} min`
+            : `${reapedCount} workflow jobs lost in this reaper pass (the ${LOSS_ALERT_WINDOW_MINUTES}-min window count is unavailable, so earlier passes are not included)`;
+        const message = `${lost} (this pass: ${typeSummary}; ${orgs} orgs). The worker running them stopped mid-job (froze or was killed) about ${this.staleJobTimeoutMinutes} min ago; they were marked FAILED and are not retried.${describeLostJobs(
+            reaped.map((job) => ({
+                startedAt: job.startedAt,
+                ...jobFields({ payload: job.payload }),
+            })),
+        )} The stuck code is in that worker's StallWatchdog report / worker_stall alert from then; this alert's host only ran the reaper.`;
+
+        this.logger.error({
+            message: `JOB LOSS: ${message}`,
+            context: OutboxRelayService.name,
+            metadata: {
+                lostInWindow,
+                windowCounted,
+                reapedCount,
+                byType,
+                orgs,
+            },
+        });
+
+        void this.incidentManager
+            ?.failHeartbeat(
+                'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
+                `${message} ${this.formatContext({
+                    monitor: 'workflow_job_loss',
+                    ...(windowCounted ? { lostInWindow } : {}),
+                    reapedCount,
+                })}`,
+            )
+            .catch((err) => {
+                this.logger.error({
+                    message: 'Failed to report job-loss heartbeat failure',
+                    context: OutboxRelayService.name,
+                    error: err instanceof Error ? err : undefined,
+                    metadata: { lostInWindow, reapedCount },
+                });
+            });
+    }
+
+    /**
+     * The incident for a reclaim whose loss no job reaper reports. Not
+     * awaited: the reaper pass and its lock never wait on BetterStack.
+     */
+    private alertUnreapedReclaim(
+        consumerId: string,
+        reclaimed: number,
+        holders: Parameters<typeof describeStaleHolders>[0],
+    ) {
+        if (!this.incidentManager) return;
+        const now = Date.now();
+        const last = this.reclaimAlertedAt.get(consumerId);
+        if (
+            last !== undefined &&
+            now - last < LOSS_ALERT_WINDOW_MINUTES * 60_000
+        ) {
+            return;
+        }
+        this.reclaimAlertedAt.set(consumerId, now);
+        void this.incidentManager
+            .failHeartbeat(
+                'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
+                `High inbox reclaim rate for ${consumerId}: ${reclaimed} messages held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}. No job reaper reports this loss. ${this.formatContext(
+                    {
+                        monitor: 'inbox_reclaim_rate',
+                        consumerId,
+                        reclaimed,
+                    },
+                )}`,
+            )
+            .catch((err) => {
+                // Not delivered: the next qualifying pass tries again.
+                if (this.reclaimAlertedAt.get(consumerId) === now) {
+                    this.reclaimAlertedAt.delete(consumerId);
+                }
+                this.logger.error({
+                    message: 'Failed to report inbox reclaim heartbeat failure',
+                    context: OutboxRelayService.name,
+                    error: err instanceof Error ? err : undefined,
+                    metadata: { consumerId, reclaimed },
+                });
+            });
     }
 
     private formatContext(extra: Record<string, Date | number | string>) {

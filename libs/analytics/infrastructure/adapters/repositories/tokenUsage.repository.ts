@@ -497,7 +497,13 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 {
                     $match: {
                         ...this._tuMatch(query),
-                        'attributes.tu.credentialId': { $nin: ['', null] },
+                        // A non-empty string. Same rows as `$nin: ['', null]`
+                        // (tu.credentialId is always a string, '' when there
+                        // is none), but a range the partial index
+                        // `tu_cred_byok_v1` can prove, so the pairs come from
+                        // the index instead of fetching every span of the
+                        // month.
+                        'attributes.tu.credentialId': { $gt: '' },
                     },
                 },
                 {

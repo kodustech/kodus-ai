@@ -808,6 +808,31 @@ describe('ChatWithKodyFromGitUseCase', () => {
             );
         });
 
+        it('says the subscription check is unavailable, not that the trial ended, when the license read fails', async () => {
+            // Billing answered 5xx / timed out (#2452): the org may be paying,
+            // so the reply must not send it to the plan page.
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: 'LICENSE_UNAVAILABLE',
+                },
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).toHaveBeenCalledTimes(1);
+            const { body } =
+                codeManagementService.createResponseToComment.mock.calls[0][0];
+            expect(body).toContain(
+                'the license service is temporarily unreachable',
+            );
+            expect(body).not.toContain('trial has ended');
+            expect(body).not.toContain('BYOK');
+        });
+
         it('runs the agent for a managed/BYOK plan that returns NOT_ERROR (no per-seat block)', async () => {
             // A paid managed (or BYOK) org validated without a userGitId comes
             // back allowed:false + errorType NOT_ERROR — the "we skipped the

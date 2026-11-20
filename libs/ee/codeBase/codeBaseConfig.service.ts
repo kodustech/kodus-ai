@@ -129,7 +129,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     organizationAndTeamData,
                 ),
                 this.getDefaultBranch(organizationAndTeamData, repository),
-                this.kodyRulesService.findByOrganizationId(
+                // The review never applies a deleted rule, and deleted rules
+                // stay in the document: they are left on the server.
+                this.kodyRulesService.findLiveRulesByOrganizationId(
                     organizationAndTeamData.organizationId,
                 ),
                 this.getReviewModeConfigParameter(organizationAndTeamData),

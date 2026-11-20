@@ -52,6 +52,7 @@ describe('ImplementationVerificationProcessor', () => {
         };
         pullRequestsService = {
             findOne: jest.fn().mockResolvedValue({
+                uuid: 'pr-doc-1',
                 files: [{ suggestions: [sentSuggestion('s-1')] }],
             }),
         };
@@ -149,6 +150,15 @@ describe('ImplementationVerificationProcessor', () => {
         );
     });
 
+    it('tells the check which PR document holds the suggestions', async () => {
+        await processor.process('job-1');
+
+        expect(
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .pullRequestId,
+        ).toBe('pr-doc-1');
+    });
+
     it('tells the check which files the push deleted', async () => {
         pullRequestManagerService.getChangedFiles.mockImplementation(
             async (...args: any[]) => {
@@ -218,6 +228,7 @@ describe('ImplementationVerificationProcessor', () => {
             savedSuggestions: [expect.objectContaining({ id: 's-1' })],
             diffSource: undefined,
             removedFiles: [],
+            pullRequestId: 'pr-doc-1',
         });
         expect(
             suggestionService.resolveImplementedSuggestionsOnPlatform,

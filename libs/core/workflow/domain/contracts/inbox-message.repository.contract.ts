@@ -12,6 +12,15 @@ export interface InboxHealthStats {
     oldestProcessing?: Date;
 }
 
+/** Who held messages a reclaim is about to take, and since when. */
+export interface StaleInboxHolder {
+    /** The worker's hostname: one per ECS task (awsvpc). */
+    lockedBy: string;
+    count: number;
+    oldestLockedAt?: string;
+    newestLockedAt?: string;
+}
+
 export interface IInboxMessageRepository {
     claim(
         messageId: string,
@@ -62,6 +71,10 @@ export interface IInboxMessageRepository {
         consumerId: string,
         olderThan: Date,
     ): Promise<number>;
+    staleHoldersByConsumer(
+        consumerId: string,
+        olderThan: Date,
+    ): Promise<StaleInboxHolder[]>;
     /**
      * Releases every PROCESSING lock held by the given instance (hostname).
      * Used during graceful shutdown so new workers can reclaim the messages

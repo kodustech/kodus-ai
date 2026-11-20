@@ -234,6 +234,32 @@ describe('patch utils (mutation-killing)', () => {
             expect(exceedsPatchLineLimit(undefined)).toBe(false);
         });
 
+        it('does not count the newline that ends a patch as a line', () => {
+            // A 50,000-line patch ending in '\n' splits into 50,001 strings,
+            // the last one empty: nothing is cut, so nothing may say it was.
+            const atLimit = `${patchOfLines(MAX_PATCH_LINES)}\n`;
+            expect(exceedsPatchLineLimit(atLimit)).toBe(false);
+            expect(
+                convertToUnifiedDiffWithLineNumbers(atLimit, {
+                    filename: 'big.ts',
+                }),
+            ).not.toContain('diff truncated');
+            expect(
+                convertToHunksWithLinesNumbers(atLimit, { filename: 'big.ts' }),
+            ).not.toContain('diff truncated');
+
+            // One real line over still counts as over, and names the real total.
+            const overByOne = `${patchOfLines(MAX_PATCH_LINES + 1)}\n`;
+            expect(exceedsPatchLineLimit(overByOne)).toBe(true);
+            expect(
+                convertToUnifiedDiffWithLineNumbers(overByOne, {
+                    filename: 'big.ts',
+                }),
+            ).toContain(
+                `first ${MAX_PATCH_LINES} of ${MAX_PATCH_LINES + 1} lines shown`,
+            );
+        });
+
         it('keeps the note out of the added-line ranges', () => {
             const out = convertToUnifiedDiffWithLineNumbers(
                 patchOfLines(MAX_PATCH_LINES + 10),

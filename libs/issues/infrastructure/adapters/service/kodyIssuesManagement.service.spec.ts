@@ -480,6 +480,40 @@ describe('KodyIssuesManagementService', () => {
                 label: 'security',
             });
         });
+
+        const matches = (condition: any, text: string) =>
+            new RegExp(condition.$regex, condition.$options).test(text);
+
+        it('searches the title for the text the user typed, taken literally', async () => {
+            const filter = await service.buildFilter({
+                organizationId: 'org-uuid',
+                title: 'user.save(',
+            } as any);
+
+            expect(matches(filter.title, 'Guard User.save( calls')).toBe(true);
+            expect(matches(filter.title, 'userXsave call')).toBe(false);
+        });
+
+        it('does not let a search act as a pattern', async () => {
+            const filter = await service.buildFilter({
+                organizationId: 'org-uuid',
+                title: '.*',
+                repositoryName: '(a+)+$',
+            } as any);
+
+            expect(matches(filter.title, 'any issue title')).toBe(false);
+            expect(matches(filter.title, 'a regex .* in a title')).toBe(true);
+            expect(matches(filter['repository.name'], 'aaaa')).toBe(false);
+        });
+
+        it('caps the search text at 200 characters', async () => {
+            const filter = await service.buildFilter({
+                organizationId: 'org-uuid',
+                title: 'x'.repeat(5000),
+            } as any);
+
+            expect(filter.title.$regex).toHaveLength(200);
+        });
     });
 
     describe('processClosedPr', () => {

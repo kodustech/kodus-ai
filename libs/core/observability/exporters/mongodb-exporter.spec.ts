@@ -37,11 +37,13 @@ describe('MongoDBExporter (log flush resilience)', () => {
             batchSize: 500,
             flushIntervalMs: 60_000,
         });
-        const insertMany = jest.fn().mockRejectedValue(
-            new Error(
-                'BSONObj size: 34233013 (0x20A5AB5) is invalid. Size must be between 0 and 16793600(16MB)',
-            ),
-        );
+        const insertMany = jest
+            .fn()
+            .mockRejectedValue(
+                new Error(
+                    'BSONObj size: 34233013 (0x20A5AB5) is invalid. Size must be between 0 and 16793600(16MB)',
+                ),
+            );
 
         (exporter as any).collections = {
             logs: { insertMany },
@@ -167,11 +169,9 @@ describe('MongoDBExporter (log flush resilience)', () => {
             enableObservability: false,
         });
 
-        await exporter.exportLog(
-            'error',
-            'should-not-buffer',
-            { component: 'test-component' } as any,
-        );
+        await exporter.exportLog('error', 'should-not-buffer', {
+            component: 'test-component',
+        } as any);
 
         expect((exporter as any).logBuffer).toHaveLength(0);
     });
@@ -240,5 +240,25 @@ describe('MongoDBExporter (log flush resilience)', () => {
         expect(settled).toBe(false);
         release();
         await running;
+    });
+});
+
+describe('MongoDBExporter indexes', () => {
+    it('indexes telemetry by correlationId only, the key the per-execution lookups read', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        const telemetry = { createIndex: jest.fn().mockResolvedValue('ok') };
+        (exporter as any).collections = {
+            logs: { createIndex: jest.fn().mockResolvedValue('ok') },
+            telemetry,
+        };
+
+        await (exporter as any).createIndexes();
+
+        expect(telemetry.createIndex.mock.calls).toEqual([
+            [{ correlationId: 1 }],
+        ]);
     });
 });

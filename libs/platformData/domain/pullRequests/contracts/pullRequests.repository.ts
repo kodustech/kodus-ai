@@ -200,6 +200,15 @@ export interface IPullRequestsRepository {
             openOnly?: boolean;
         },
     ): Promise<number>;
+    /**
+     * Pull requests an author opened in the organization, counting no further
+     * than `limit`: callers that only tell 0, 1 and "more" apart stop there.
+     */
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
+    ): Promise<number>;
     findFileWithSuggestions(
         prnumber: number,
         repositoryName: string,

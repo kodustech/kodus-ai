@@ -344,8 +344,12 @@ async function main() {
     console.log(`  reset-target: ${args.resetTarget}`);
     console.log(`  collections : ${args.collections.join(', ')}`);
 
-    const sourceClient = new MongoClient(source.uri);
-    const destClient = new MongoClient(dest.uri);
+    const sourceClient = new MongoClient(source.uri, {
+        appName: 'kodus-script-clone-org-from-prod',
+    });
+    const destClient = new MongoClient(dest.uri, {
+        appName: 'kodus-script-clone-org-from-prod',
+    });
 
     const startedAt = Date.now();
     let totalScanned = 0;
