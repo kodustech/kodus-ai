@@ -10,6 +10,7 @@ import { NullSandboxProvider } from '@libs/sandbox/infrastructure/providers/null
 import {
     cloneHost,
     lineRange,
+    RuntimeSandbox,
     RuntimeSandboxService,
     toGuestPath,
 } from '@libs/sandbox/infrastructure/providers/runtime-sandbox.service';
@@ -19,6 +20,7 @@ import {
     runtimeSandboxId,
     setRuntimeSandboxReleaser,
 } from '@libs/sandbox/infrastructure/services/immediate-sandbox-cleanup';
+import { SandboxReadBudget } from '@libs/sandbox/infrastructure/providers/sandbox-read-budget';
 import { selectSandboxProvider } from '@libs/sandbox/modules/sandbox.module';
 
 const SEAL = 'ab'.repeat(32);
@@ -333,5 +335,52 @@ describe('the egress of a runtime sandbox for a review', () => {
         await expect(new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo(params)).rejects.toBeDefined();
         expect(client.seal).not.toHaveBeenCalled();
         expect(client.release).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('what the worker holds of a runtime sandbox’s answers (a shared worker, 2026-11-20 OOM)', () => {
+    const CHUNK = 512 * 1024;
+    /** A sandbox whose every file is `size` bytes of the letter a, one chunk per op. */
+    const sandboxOf = (size: number, budget = new SandboxReadBudget(64 * 1024 * 1024)) => {
+        let peak = 0;
+        const client = {
+            op: jest.fn(async (_ref: unknown, _id: string, op: any) => {
+                peak = Math.max(peak, budget.inUse);
+                const length = Math.max(0, Math.min(op.length, size - op.offset));
+                return { ok: true, content: Buffer.alloc(length, 'a').toString('base64'), eof: op.offset + length >= size };
+            }),
+        };
+        const sb = new RuntimeSandbox(client as any, { organizationId: 'o', sandboxId: 's' }, budget);
+        return { sb, client, peak: () => peak, budget };
+    };
+
+    it("the agent's read pulls at most 4 MiB of a huge file and says the rest was not read", async () => {
+        const { sb, client } = sandboxOf(900 * 1024 * 1024);
+        const out = await sb.remoteCommands().read('big.txt', 0, 0);
+        expect(client.op.mock.calls.length).toBeLessThanOrEqual((4 * 1024 * 1024) / CHUNK + 1);
+        expect(out.length).toBeLessThanOrEqual(4 * 1024 * 1024 + 300);
+        expect(out).toContain('only its first 4 MiB were read');
+    });
+
+    it('a small file reads whole, with no note', async () => {
+        const { sb } = sandboxOf(1000);
+        expect(await sb.remoteCommands().read('a.txt', 0, 0)).toBe('a'.repeat(1000));
+    });
+
+    it('parallel reads never hold more than the budget at once, and all finish', async () => {
+        const budget = new SandboxReadBudget(8 * 1024 * 1024);
+        const { sb, peak } = sandboxOf(3 * 1024 * 1024, budget);
+        const reads = await Promise.all(Array.from({ length: 6 }, (_, i) => sb.readBytes(`f${i}`, 4 * 1024 * 1024)));
+        expect(reads.every((r) => r.data.length === 3 * 1024 * 1024)).toBe(true);
+        expect(peak()).toBeLessThanOrEqual(8 * 1024 * 1024);
+        expect(budget.inUse).toBe(0);
+    });
+
+    it('gives its bytes back when a read fails', async () => {
+        const budget = new SandboxReadBudget(8 * 1024 * 1024);
+        const client = { op: jest.fn(async () => ({ ok: false, error: { code: 'not_found' } })) };
+        const sb = new RuntimeSandbox(client as any, { organizationId: 'o', sandboxId: 's' }, budget);
+        await expect(sb.readBytes('gone')).rejects.toThrow('read gone');
+        expect(budget.inUse).toBe(0);
     });
 });

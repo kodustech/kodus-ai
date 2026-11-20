@@ -37,6 +37,7 @@ import {
     RuntimeSandboxClient,
     RuntimeSandboxError,
 } from './runtime-sandbox.client';
+import { SandboxReadBudget, sandboxReadBudget } from './sandbox-read-budget';
 
 // The runtime-sandbox provider (docs/runtime/sandbox.md): a code sandbox on a
 // Kody Runtime cell, one tool machine under gVisor with the guest agent
@@ -76,6 +77,12 @@ const INLINE_STDOUT = 180_000;
 const INLINE_STDERR = 30_000;
 /** readFile reads at most this much (graph files are the largest readers). */
 const MAX_READ_FILE = 64 * 1024 * 1024;
+/**
+ * The agent's read shows at most MAX_READ_LENGTH characters of a range, so it
+ * pulls at most this much of a file: a PR's 900 MB file is never pulled whole
+ * into a shared worker to show 8,000 characters of it.
+ */
+const MAX_TOOL_READ = 4 * 1024 * 1024;
 /** How often a live sandbox's lease is renewed (its lease is 30 minutes). */
 const RENEW_EVERY_MS = 10 * 60_000;
 
@@ -134,20 +141,38 @@ function check(r: SandboxResult, what: string): SandboxResult {
 }
 
 /** One live sandbox on a cell: its ops, and what the review sees of it. */
-class RuntimeSandbox {
+export class RuntimeSandbox {
     constructor(
         private readonly client: RuntimeSandboxClient,
         readonly ref: SandboxRef,
+        private readonly budget: SandboxReadBudget = sandboxReadBudget,
     ) {}
 
     op(op: SandboxOp): Promise<SandboxResult> {
         return this.client.op(this.ref, randomUUID(), op);
     }
 
-    /** The whole of a file (bounded), in chunks. */
+    /**
+     * The whole of a file (bounded), in chunks. The read reserves its bound
+     * from the worker's budget before its first chunk and gives it back at the
+     * end: all at once, so two large reads never each hold half and wait for
+     * the other.
+     */
     async readBytes(
         path: string,
         max = MAX_READ_FILE,
+    ): Promise<{ data: Buffer; truncated: boolean }> {
+        const held = await this.budget.acquire(max);
+        try {
+            return await this.readChunks(path, max);
+        } finally {
+            this.budget.release(held);
+        }
+    }
+
+    private async readChunks(
+        path: string,
+        max: number,
     ): Promise<{ data: Buffer; truncated: boolean }> {
         const parts: Buffer[] = [];
         let offset = 0;
@@ -298,8 +323,14 @@ class RuntimeSandbox {
             read: async (path, start, end, root) => {
                 const rel = `${readRoot(root)}/${resolveRepoPath(path)}`;
                 sedLineRange(start, end);
-                const { data } = await this.readBytes(rel);
-                return lineRange(data.toString('utf8'), start, end);
+                const { data, truncated } = await this.readBytes(
+                    rel,
+                    MAX_TOOL_READ,
+                );
+                const range = lineRange(data.toString('utf8'), start, end);
+                return truncated
+                    ? `${range}\n[file larger than 4 MiB: only its first 4 MiB were read; grep it, or read a narrower range of a smaller file]`
+                    : range;
             },
             listDir: async (path, maxDepth) => {
                 resolveRepoPath(path);
