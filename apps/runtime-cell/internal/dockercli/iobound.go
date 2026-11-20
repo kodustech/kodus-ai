@@ -28,7 +28,7 @@ type IOBound struct {
 }
 
 var (
-	devicePath = regexp.MustCompile(`^/dev/[a-z0-9]+$`)
+	devicePath = regexp.MustCompile(`^/dev/[a-z0-9][a-z0-9_-]*$`)
 	// peerIndex is a veth's peer index in `ip -o link` ("2: eth0@if151:").
 	peerIndex = regexp.MustCompile(`(?m)^\d+: eth\d+@if(\d+):`)
 )

@@ -18,6 +18,18 @@ func TestAContainersIOBoundIsDockersBlkioAndTwoTCRules(t *testing.T) {
 	if _, err := (&IOBound{Device: "/dev/../etc", WriteBps: 1}).args(); err == nil {
 		t.Fatal("a path that is no device")
 	}
+	for _, dev := range []string{"/dev/dm-0", "/dev/md0", "/dev/mapper/x"} {
+		got, err := (&IOBound{Device: dev, WriteBps: 5}).args()
+		if dev == "/dev/mapper/x" {
+			if err == nil {
+				t.Fatalf("%s has a slash past /dev/", dev)
+			}
+			continue
+		}
+		if err != nil || !slices.Equal(got, []string{"--device-write-bps", dev + ":5"}) {
+			t.Fatalf("%s: %v %v", dev, got, err)
+		}
+	}
 	if got, _ := (*IOBound)(nil).args(); got != nil {
 		t.Fatal("no bound, no flags")
 	}
