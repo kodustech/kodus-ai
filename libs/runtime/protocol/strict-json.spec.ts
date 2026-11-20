@@ -79,15 +79,24 @@ describe('parseStrictJson cost (P13: the hub decodes every cell frame with it)',
         return times.sort((a, b) => a - b)[Math.floor(runs / 2)];
     };
 
-    // Measured on the old value-building parser: 22 ms against JSON.parse's 3 ms on this ~840 KB frame (7x).
-    // Under Stryker the parser runs instrumented and JSON.parse does not: the ratio says nothing there.
+    // Under Stryker the parser runs instrumented and JSON.parse does not: the ratios say nothing there.
     const instrumented = '__stryker__' in globalThis;
-    (instrumented ? it.skip : it)('reads an object-heavy frame in at most 5x what JSON.parse takes', () => {
-        const items = Array.from({ length: 9_000 }, (_, i) => ({ id: i, name: `item${i}`, ok: true, price: 12.5, tags: ['a', 'b'], meta: { k: 'v\n"q"' } }));
-        const text = JSON.stringify({ v: 1, data: items });
-        const strict = median(() => parseStrictJson(text), 15);
-        const plain = median(() => JSON.parse(text), 15);
-        expect(strict / plain).toBeLessThan(5);
+    const frame = (n: number) =>
+        JSON.stringify({ v: 1, data: Array.from({ length: n }, (_, i) => ({ id: i, name: `item${i}`, ok: true, price: 12.5, tags: ['a', 'b'], meta: { k: 'v\n"q"' } })) });
+
+    // The guard that holds on any machine: the parser against itself. 4x the frame took 4.1x the time
+    // (2026-11-20, arm64); a parser quadratic in the frame would take 16x.
+    (instrumented ? it.skip : it)('reads a frame four times larger in at most 6x the time', () => {
+        const small = frame(9_000);
+        const large = frame(36_000);
+        expect(median(() => parseStrictJson(large), 9) / median(() => parseStrictJson(small), 9)).toBeLessThan(6);
+    });
+
+    // Against JSON.parse the ratio moves with the machine: 4.1x to 4.4x on arm64 (over 5x one run in three),
+    // 6.6x on a shared x86 CI runner deep in a test shard (2026-11-20), so this bound only catches a parser gone far off.
+    (instrumented ? it.skip : it)('reads an object-heavy frame in at most 10x what JSON.parse takes', () => {
+        const text = frame(9_000);
+        expect(median(() => parseStrictJson(text), 15) / median(() => JSON.parse(text), 15)).toBeLessThan(10);
     });
 });
 
