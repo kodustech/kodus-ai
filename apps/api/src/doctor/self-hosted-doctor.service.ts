@@ -376,8 +376,9 @@ export class SelfHostedDoctorService {
     }
 
     /**
-     * Every received Git event is enqueued as a WEBHOOK_PROCESSING job. Jobs are
-     * never deleted, so the `updatedAt` bound lets idx_workflow_jobs_type_updated
+     * Every received Git event is enqueued as a WEBHOOK_PROCESSING job. Finished
+     * jobs are deleted after WORKFLOW_JOB_RETENTION_DAYS (30), well past the
+     * RECENT_DAYS read here. The `updatedAt` bound lets idx_workflow_jobs_updated_at
      * cut the scan to the window (a job is never updated before it is created),
      * and the LIMIT caps the heap reads on an install with heavy traffic.
      */

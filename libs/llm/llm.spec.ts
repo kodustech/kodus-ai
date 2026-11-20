@@ -54,7 +54,8 @@ jest.mock('./resolve-task-model', () => ({
 import { LLM } from './llm';
 import type { NormalizedModel } from './byok-config';
 
-const authErr = () => Object.assign(new Error('unauth'), { __cat: 'AUTH_INVALID' });
+const authErr = () =>
+    Object.assign(new Error('unauth'), { __cat: 'AUTH_INVALID' });
 const transientErr = () =>
     Object.assign(new Error('5xx'), { __cat: 'TRANSIENT' });
 const unknownErr = (msg = 'boom') =>
@@ -109,8 +110,12 @@ describe('LLM.run — one-shot failover wiring', () => {
         expect(out).toBe('from-fallback');
         expect(runTextReviewCall).toHaveBeenCalledTimes(2);
         // primary then fallback, each injected as byokConfig
-        expect(runTextReviewCall.mock.calls[0][0].byokConfig.model).toBe('primary');
-        expect(runTextReviewCall.mock.calls[1][0].byokConfig.model).toBe('fallback');
+        expect(runTextReviewCall.mock.calls[0][0].byokConfig.model).toBe(
+            'primary',
+        );
+        expect(runTextReviewCall.mock.calls[1][0].byokConfig.model).toBe(
+            'fallback',
+        );
     });
 
     it('does not cascade when there is no fallback on the slot', async () => {
@@ -142,6 +147,30 @@ describe('LLM.run — one-shot failover wiring', () => {
 
         expect(out).toEqual({ ok: true });
         expect(runStructuredReviewCall).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('LLM.run — one-shot prompt cache', () => {
+    it('hands the declared shared prefix to every attempt, the fallback included', async () => {
+        runStructuredReviewCall
+            .mockRejectedValueOnce(authErr())
+            .mockResolvedValueOnce({ ok: true });
+        const promptCache = { userPrefix: '<Rules>\n</Rules>\n' };
+
+        await LLM.run({
+            byokConfig: slotWithFallback,
+            user: '<Rules>\n</Rules>\n<File path="a.ts"></File>',
+            runName: 'r',
+            schema: passSchema,
+            promptCache,
+        });
+
+        expect(runStructuredReviewCall.mock.calls[0][0].promptCache).toEqual(
+            promptCache,
+        );
+        expect(runStructuredReviewCall.mock.calls[1][0].promptCache).toEqual(
+            promptCache,
+        );
     });
 });
 
@@ -228,7 +257,11 @@ describe('LLM.run — output passthrough, no silent transform [matrix A/B/C-reso
         'text: returns %s verbatim (no trim, no default)',
         async (_label, value) => {
             runTextReviewCall.mockResolvedValueOnce(value);
-            const out = await LLM.run({ byokConfig: bareSlot, user: 'u', runName: 'r' });
+            const out = await LLM.run({
+                byokConfig: bareSlot,
+                user: 'u',
+                runName: 'r',
+            });
             expect(out).toBe(value);
             expect(runTextReviewCall).toHaveBeenCalledTimes(1);
             expect(runStructuredReviewCall).not.toHaveBeenCalled();
@@ -312,7 +345,9 @@ describe('LLM.run — slot resolution + request assembly [threading]', () => {
             runName: 'r',
         });
 
-        expect(resolveTaskSlot).toHaveBeenCalledWith(config, 'code_review', { ctx });
+        expect(resolveTaskSlot).toHaveBeenCalledWith(config, 'code_review', {
+            ctx,
+        });
         expect(runTextReviewCall.mock.calls[0][0].byokConfig).toBe(routed);
     });
 
@@ -342,20 +377,37 @@ describe('LLM.run — slot resolution + request assembly [threading]', () => {
 
         const params = runTextReviewCall.mock.calls[0][0];
         // Routing / loop-only fields must NOT reach the one-shot executor.
-        for (const stripped of ['config', 'task', 'ctx', 'reporter', 'signal', 'loop', 'messages']) {
+        for (const stripped of [
+            'config',
+            'task',
+            'ctx',
+            'reporter',
+            'signal',
+            'loop',
+            'messages',
+        ]) {
             expect(params).not.toHaveProperty(stripped);
         }
         // Injected slot + fixed-tuning overrides DO pass through.
         expect(params.byokConfig).toBe(bareSlot);
         expect(params.temperature).toBe(0.4);
         expect(params.maxOutputTokens).toBe(1024);
-        expect(params.providerOptions).toEqual({ reasoning: { effort: 'high' } });
+        expect(params.providerOptions).toEqual({
+            reasoning: { effort: 'high' },
+        });
     });
 
     it('structured call carries the schema; text call carries none', async () => {
         runStructuredReviewCall.mockResolvedValueOnce({});
-        await LLM.run({ byokConfig: bareSlot, user: 'u', runName: 'r', schema: passSchema });
-        expect(runStructuredReviewCall.mock.calls[0][0].schema).toBe(passSchema);
+        await LLM.run({
+            byokConfig: bareSlot,
+            user: 'u',
+            runName: 'r',
+            schema: passSchema,
+        });
+        expect(runStructuredReviewCall.mock.calls[0][0].schema).toBe(
+            passSchema,
+        );
 
         runTextReviewCall.mockResolvedValueOnce('ok');
         await LLM.run({ byokConfig: bareSlot, user: 'u', runName: 'r' });
@@ -385,10 +437,16 @@ describe('LLM.run — input variants threaded verbatim [matrix D]', () => {
 
 describe('LLM.run — loop assembly + guaranteed return shape', () => {
     it('threads every loop seam + tuning field to runAgentLoopCall with the per-attempt slot', async () => {
-        runAgentLoopCall.mockResolvedValueOnce({ text: 'done', steps: [], usage: {} });
+        runAgentLoopCall.mockResolvedValueOnce({
+            text: 'done',
+            steps: [],
+            usage: {},
+        });
         const signal = new AbortController().signal;
         const reporter = jest.fn();
-        const providerOptions = { anthropic: { thinking: { type: 'enabled' } } };
+        const providerOptions = {
+            anthropic: { thinking: { type: 'enabled' } },
+        };
         const telemetryMetadata = { organizationId: 'org' } as any;
         const loop = { tools: { t: {} }, maxSteps: 7, stopWhen: [] } as any;
 
@@ -447,7 +505,11 @@ describe('LLM.run — loop assembly + guaranteed return shape', () => {
     });
 
     it('returns the raw AgentLoopResult verbatim (guaranteed loop return shape)', async () => {
-        const result = { text: 'answer', steps: [{ n: 1 }], usage: { total: 5 } };
+        const result = {
+            text: 'answer',
+            steps: [{ n: 1 }],
+            usage: { total: 5 },
+        };
         runAgentLoopCall.mockResolvedValueOnce(result);
         const out = await LLM.run({
             byokConfig: bareSlot,

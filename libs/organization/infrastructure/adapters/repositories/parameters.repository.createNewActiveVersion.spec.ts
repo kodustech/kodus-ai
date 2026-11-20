@@ -120,4 +120,22 @@ describe('ParametersRepository.createNewActiveVersion — serializes same-key wr
             'team-2:code_review_config',
         ]);
     });
+
+    it('refuses a stale configuration under the lock before replacing the active row', async () => {
+        const { repo, calls, updateExecute, insertExecute } = makeRepo();
+        await expect(
+            repo.createNewActiveVersion(
+                'code_review_config' as any,
+                'team-1',
+                {} as any,
+                2,
+                'stale-id',
+            ),
+        ).rejects.toMatchObject({ status: 409 });
+        expect(calls).toEqual([
+            'query(SELECT pg_advisory_xact_lock(hashtext($1)))',
+        ]);
+        expect(updateExecute).not.toHaveBeenCalled();
+        expect(insertExecute).not.toHaveBeenCalled();
+    });
 });

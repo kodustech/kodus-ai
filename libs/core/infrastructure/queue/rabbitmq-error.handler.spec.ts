@@ -129,13 +129,34 @@ describe('RabbitMQErrorHandler', () => {
         const channel = { ack: jest.fn() };
         const msg = makeMessage();
 
+        // The consumer callback does not await this handler, so a throw here
+        // only surfaces as an unhandled rejection; the unacked delivery is
+        // what makes the broker redeliver it.
         await expect(
             handler.handle(channel, msg, new Error('processor failed'), {
                 dlqRoutingKey: 'workflow.job.failed',
             }),
-        ).rejects.toThrow('may be lost');
+        ).resolves.toBeUndefined();
 
         expect(channel.ack).not.toHaveBeenCalled();
+    });
+
+    it('finishes without raising when the connection drops after the retry was published', async () => {
+        const { handler, amqpConnection } = makeHandler();
+        const channel = {
+            ack: jest.fn(() => {
+                throw new Error('Channel closed');
+            }),
+        };
+        const msg = makeMessage();
+
+        await expect(
+            handler.handle(channel, msg, new Error('Channel closed'), {
+                dlqRoutingKey: 'workflow.job.failed',
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(amqpConnection.publish).toHaveBeenCalledTimes(1);
     });
 
     // Covers H8-H11 — RATE_LIMITED delay handling.

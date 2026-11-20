@@ -159,13 +159,6 @@ const BOUNDARIES = [
         requires: ['schema', 'shape'],
     },
     {
-        phase: 'documentation-search',
-        files: [
-            'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts',
-        ],
-        requires: ['schema'],
-    },
-    {
         phase: 'approval-risk',
         files: [
             'libs/code-review/domain/approval/assess-approval-risk.ts',
@@ -218,6 +211,14 @@ const BOUNDARIES = [
         ],
         accepted: true,
         note: 'text call; output is used as prose, no JSON parse — no shape concern',
+    },
+    {
+        phase: 'documentation-search',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts',
+        ],
+        accepted: true,
+        note: 'text call; the answer is the markdown document itself, no JSON parse; an empty or failed answer falls back to the raw summary truncation',
     },
     {
         phase: 'reference-detector',

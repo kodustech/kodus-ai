@@ -13,6 +13,7 @@ configureLongFetchTimeouts();
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-worker' });
 
+import { hostname } from 'os';
 import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
@@ -108,8 +109,35 @@ async function bootstrap() {
         const sliceJobId = securityScanSliceJobId();
 
         // Kept running through shutdown (unref'd): the drain is when we most
-        // need to see whether the thread is blocked.
-        startEventLoopMonitor();
+        // need to see whether the thread is blocked. The stall watchdog
+        // captures where a stall is stuck and alerts while it happens; not in
+        // a slice child, whose whole point is to run heavy work off the
+        // consumer's event loop. The ECS task id joins a stall alert to the
+        // task ECS stops.
+        const taskId = sliceJobId ? undefined : await ecsTaskId();
+        startEventLoopMonitor(
+            sliceJobId
+                ? {}
+                : {
+                      stallWatchdog: {
+                          // Critical: a stall past alertMs (75s), about to be killed.
+                          heartbeatUrl:
+                              process.env
+                                  .API_BETTERSTACK_HEARTBEAT_WORKER_STALL_URL ??
+                              '',
+                          // Early warning: every stall, at its first report (20s).
+                          warnHeartbeatUrl:
+                              process.env
+                                  .API_BETTERSTACK_HEARTBEAT_WORKER_STALL_WARN_URL ??
+                              '',
+                          identity: {
+                              role,
+                              instanceId: hostname(),
+                              ...(taskId ? { taskId } : {}),
+                          },
+                      },
+                  },
+        );
 
         if (sliceJobId) {
             logger?.log(
@@ -189,3 +217,25 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+/**
+ * This task's id from the ECS task metadata endpoint, best effort (absent
+ * outside ECS or when the endpoint does not answer within 2s).
+ */
+async function ecsTaskId(): Promise<string | undefined> {
+    const uri = process.env.ECS_CONTAINER_METADATA_URI_V4;
+    if (!uri) return undefined;
+    try {
+        const res = await fetch(`${uri}/task`, {
+            signal: AbortSignal.timeout(2_000),
+        });
+        const body = (await res.json()) as { TaskARN?: string };
+        return (
+            String(body?.TaskARN ?? '')
+                .split('/')
+                .pop() || undefined
+        );
+    } catch {
+        return undefined;
+    }
+}

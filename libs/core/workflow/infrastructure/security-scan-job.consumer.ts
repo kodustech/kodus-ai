@@ -25,6 +25,7 @@ import {
     SECURITY_SCAN_CLAIM_HEARTBEAT_MS,
     SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
     SECURITY_SCAN_HEARTBEAT_STALE_MS,
+    SECURITY_SCAN_JOB_QUEUE,
 } from './security-scan-runtime';
 import { INBOX_RELEASE_TIMEOUT_MS } from './drain-timeout';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
@@ -227,17 +228,14 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
         name: 'security-scan',
         exchange: 'workflow.exchange',
         routingKey: 'workflow.jobs.*.SECURITY_SCAN',
-        queue: 'workflow.jobs.security_scan.queue',
+        queue: SECURITY_SCAN_JOB_QUEUE,
         errorBehavior: MessageHandlerErrorBehavior.ACK,
         errorHandler: createRabbitMQErrorHandlerWithFallback(
             'workflow.job.failed',
         ),
         queueOptions: {
             channel: 'channel-security-scan',
-            arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS[
-                    'workflow.jobs.security_scan.queue'
-                ],
+            arguments: WORKFLOW_JOB_QUEUE_ARGUMENTS[SECURITY_SCAN_JOB_QUEUE],
         },
     })
     async handleSecurityScanJob(
@@ -246,7 +244,7 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
     ): Promise<void> {
         return this.handleWorkflowJob(
             'workflow-job-consumer.security_scan',
-            'workflow.jobs.security_scan.queue',
+            SECURITY_SCAN_JOB_QUEUE,
             message,
             amqpMsg,
         );

@@ -23,7 +23,12 @@ import {
 import { SecurityScanJobProcessor } from './application/security-scan-job.processor';
 import { StartSecurityScanUseCase } from './application/start-security-scan.use-case';
 import { GetSecurityScansUseCase } from './application/get-security-scans.use-case';
+import { CancelSecurityScanUseCase } from './application/cancel-security-scan.use-case';
 import { DeepScanGate } from './application/deep-scan.gate';
+import {
+    SECURITY_SCAN_QUEUE_PROBE_TOKEN,
+    SecurityScanQueueProbe,
+} from './infrastructure/security-scan-queue.probe';
 
 @Module({
     imports: [
@@ -53,8 +58,13 @@ import { DeepScanGate } from './application/deep-scan.gate';
             useClass: WorkflowJobQueueService,
         },
         SecurityScanJobProcessor,
+        {
+            provide: SECURITY_SCAN_QUEUE_PROBE_TOKEN,
+            useClass: SecurityScanQueueProbe,
+        },
         StartSecurityScanUseCase,
         GetSecurityScansUseCase,
+        CancelSecurityScanUseCase,
         DeepScanGate,
     ],
     exports: [
@@ -62,6 +72,7 @@ import { DeepScanGate } from './application/deep-scan.gate';
         SecurityScanJobProcessor,
         StartSecurityScanUseCase,
         GetSecurityScansUseCase,
+        CancelSecurityScanUseCase,
         DeepScanGate,
     ],
 })

@@ -96,15 +96,21 @@ export class GetSecurityScansUseCase {
             !scan ||
             scan.organizationId !== organizationId ||
             (scope &&
-                !scope.some(
-                    (r) =>
-                        r.id === scan.repository.id &&
-                        r.platform === scan.repository.platform &&
-                        r.host === scan.repository.host,
-                ))
+                !scope.some((r) => this.matchesRepository(r, scan.repository)))
         ) {
             throw new NotFoundException('Security scan not found.');
         }
         return scan;
+    }
+
+    private matchesRepository(
+        candidate: ScanRepositoryKey,
+        repository: { id: string; platform: string; host: string },
+    ): boolean {
+        return (
+            candidate.id === repository.id &&
+            candidate.platform === repository.platform &&
+            candidate.host === repository.host
+        );
     }
 }

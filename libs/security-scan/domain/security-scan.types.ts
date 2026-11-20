@@ -8,6 +8,8 @@ export enum SecurityScanStatus {
     /** Stopped before the end because the spend cap was reached. */
     STOPPED_BY_BUDGET = 'stopped_by_budget',
     FAILED = 'failed',
+    /** Stopped by the user before it finished. */
+    CANCELLED = 'cancelled',
 }
 
 /**

@@ -48,16 +48,6 @@
         "authMethods": [{ "id": "none", "type": "none", "default": true }]
     },
     {
-        "id": "kodus-osv-default",
-        "name": "Kodus OSV",
-        "category": "security",
-        "baseUrl": "https://mcp-osv.kodus.io/mcp",
-        "protocol": "http",
-        "logoUrl": "https://kodus.io/wp-content/uploads/2025/11/Kodus-AI-Logo-6.png",
-        "headers": {},
-        "authMethods": [{ "id": "none", "type": "none", "default": true }]
-    },
-    {
         "id": "linear-default",
         "name": "Linear",
         "category": "task-management",
