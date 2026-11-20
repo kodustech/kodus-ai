@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { checkJob, MAX_SCREENSHOTS, playSteps } from './steps.mjs';
-import {installNetworkGuard,NetworkPolicyError} from './network-guard.mjs';
+import {installNetworkGuard,NetworkPolicyError,UPSTREAM_TIMEOUT_MS} from './network-guard.mjs';
 
 const MAX_NETWORK = 200;
 const MAX_LINES = 500;
@@ -62,10 +62,18 @@ function observeNetwork(context, now) {
     };
     return { finish, async drain(deadline, sleep) {
         // A short quiet window lets already queued body-completion events arrive.
-        // Never wait indefinitely for polling pages or unfinished requests.
+        // A request still in flight (the page's fetch after the last click) is
+        // waited for up to the guard's bound on one request: past it the guard
+        // has answered or denied every request, so the wait never outlives a
+        // polling page or an unfinished request by more than that. One request
+        // left incomplete makes the round's network incomplete, and the cell
+        // drops that round whole (internal/browser capture.go).
         const startedAt = now();
-        const until = Math.min(deadline, startedAt + 250);
-        while (now() < until) {
+        const quietUntil = Math.min(deadline, startedAt + 250);
+        const pendingUntil = Math.min(deadline, startedAt + UPSTREAM_TIMEOUT_MS + 250);
+        for (;;) {
+            const until = pending ? pendingUntil : quietUntil;
+            if (now() >= until) break;
             await sleep(Math.min(50, until - now()));
             if (!pending && now() - Math.max(activityAt, startedAt) >= 100) break;
         }

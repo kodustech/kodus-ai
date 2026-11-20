@@ -203,7 +203,13 @@ Per fix:
 - **Fix 2, the prefix:** the added equivalent case probed the prefixed path in both Runs. The revision round is proven
   at the unit level (`runtime-agent.harness.spec.ts`), not yet on a product Run.
 - **Fix 2, the HTML page case: not measured.** The planner wrote a browser probe of the base's text, but no Run of it
-  measured the plan: the cell's browser path failed on both sides.
+  measured the plan: the cell's browser path failed on both sides. Cause, from the cell log (`browser.unavailable`,
+  `url not http(s): scheme ws`): the recipe ran `next dev`, and both browser paths refused its HMR WebSocket. Since
+  then a WebSocket to the app's own origin is allowed and not measured (`internal/browser/capture.go` `appSocketURL`,
+  `browser-runner/network-guard.mjs` `sameOriginSocket`), and a later Run of the same PR kept its transport on every
+  round. A round still ends without a result when one of the page's requests is unfinished as the steps end (the cell
+  takes only a complete network measurement); the runner now waits for such a request up to the guard's per-request
+  bound (`run-job.mjs` `drain`) instead of 250 ms.
 - **Fix 3, the extractor:** over-mapped 23 routes → 0, route mapping 10/15 → 16/16 on the recorded diffs. A Nest
   handler with a second decorator holding an object ended at that object, so its body was outside every handler; the
   method's range now comes from the parsed file.

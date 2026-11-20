@@ -1,4 +1,5 @@
 import { DEFAULT_RESET_TIMEOUT_MS } from './ready-check';
+import { BROWSER_ROUND_GRACE_MS } from '@libs/runtime/contracts/evidence';
 import { BROWSER_EXPLORE_LIMITS, BrowserExploreRequestSchema, BrowserExploreResultSchema, type BrowserExploreRequest, type BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import { z } from 'zod';
 import { request as httpRequest } from 'http';
@@ -530,7 +531,10 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
     }
 
     probe(claimId: string, probe: Probe, stepId: string, evidence?: EvidenceRequest): Promise<ProbeOutcome | EnvError> {
-        return this.onClaim(claimId, '/probe', { probe, stepId, ...(evidence ? { evidence } : {}) }, TIMEOUT.step(probe.spec.timeoutMs));
+        // A browser round with browser evidence also starts the runner container and uploads its artifacts:
+        // the hub gives the cell the same grace (step-dispatcher.ts), so the worker waits past it.
+        const grace = probe.spec.kind === 'browser' && evidence?.capture.includes('browser') ? BROWSER_ROUND_GRACE_MS : 0;
+        return this.onClaim(claimId, '/probe', { probe, stepId, ...(evidence ? { evidence } : {}) }, TIMEOUT.step(probe.spec.timeoutMs + grace));
     }
 
     async exploreBrowser(claimId: string, request: BrowserExploreRequest, stepId: string): Promise<BrowserExploreResult | EnvError> {
