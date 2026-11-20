@@ -95,7 +95,14 @@ function attributeShape(tag: string, name: string, value: string, attribs: Recor
 export function isHtmlResponse(headers: Record<string, string> | undefined, body: string): boolean {
     const type = Object.entries(headers ?? {}).find(([k]) => k.toLowerCase() === 'content-type')?.[1];
     if (type) return /^\s*(text\/html|application\/xhtml\+xml)\b/i.test(type);
-    return /^\s*(<!--[\s\S]*?-->\s*)*<(!doctype\s+html|html[\s>])/i.test(body.slice(0, 4096));
+    // Leading comments are skipped one at a time: a nested lazy repeat over them backtracks exponentially.
+    let rest = body.slice(0, 4096).trimStart();
+    while (rest.startsWith('<!--')) {
+        const end = rest.indexOf('-->', 4);
+        if (end < 0) return false;
+        rest = rest.slice(end + 3).trimStart();
+    }
+    return /^<(!doctype\s+html|html[\s>])/i.test(rest);
 }
 
 export interface HtmlShape {

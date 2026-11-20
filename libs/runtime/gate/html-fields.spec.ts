@@ -100,4 +100,14 @@ describe('isHtmlResponse', () => {
         expect(isHtmlResponse({}, '<p>10</p>')).toBe(false);
         expect(isHtmlResponse(undefined, '{"html":"<html>"}')).toBe(false);
     });
+
+    it('skips leading comments, and a body of many empty comments answers at once', () => {
+        expect(isHtmlResponse({}, '<!-- built 1 -->\n<!---->  <html lang="en"></html>')).toBe(true);
+        expect(isHtmlResponse({}, '<!-- never closed <html>')).toBe(false);
+        // A nested lazy repeat backtracks exponentially here: 40 comments took longer than the test's timeout.
+        const start = process.hrtime.bigint();
+        expect(isHtmlResponse({}, '<!---->'.repeat(40) + 'x')).toBe(false);
+        expect(isHtmlResponse({}, '<!---->'.repeat(40) + '<html>')).toBe(true);
+        expect(Number(process.hrtime.bigint() - start) / 1e6).toBeLessThan(200);
+    });
 });
