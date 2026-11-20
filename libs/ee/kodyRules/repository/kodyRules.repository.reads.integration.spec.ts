@@ -143,5 +143,24 @@ let available = false;
             expect(byId['live-1'].rule).toContain('text of live-1');
             expect(doc.rules).toHaveLength(52);
         });
+
+        it("another organization cannot write this organization's rules by their ids", async () => {
+            const before: any = await model.findById(docId).lean();
+
+            const failed = await repository.updateRulesFields(
+                'another-org',
+                docId,
+                [
+                    {
+                        ruleId: 'live-1',
+                        patch: { status: KodyRulesStatus.DELETED },
+                    },
+                ],
+            );
+
+            expect(failed).toEqual(['live-1']);
+            const after: any = await model.findById(docId).lean();
+            expect(after.rules).toEqual(before.rules);
+        });
     },
 );
