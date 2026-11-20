@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { IConfigFileMeta } from '@libs/centralized-config/domain/contracts/CentralizedConfigService.contract';
@@ -107,6 +108,12 @@ describe('CentralizedConfigService', () => {
             providers: [
                 CentralizedConfigService,
                 {
+                    provide: ContextReferenceDetectionService,
+                    useValue: {
+                        lastDetectionFailed: jest.fn().mockResolvedValue(false),
+                    },
+                },
+                {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: mockParametersService,
                 },
@@ -159,6 +166,12 @@ describe('CentralizedConfigService', () => {
 
         service = module.get<CentralizedConfigService>(
             CentralizedConfigService,
+            {
+                provide: ContextReferenceDetectionService,
+                useValue: {
+                    lastDetectionFailed: jest.fn().mockResolvedValue(false),
+                },
+            },
         );
 
         // Mock the logger to avoid console output during tests
@@ -873,7 +886,9 @@ describe('CentralizedConfigService', () => {
             });
 
             expect(result.success).toBe(true);
-            expect(mockPullRequestMessagesService.delete).not.toHaveBeenCalled();
+            expect(
+                mockPullRequestMessagesService.delete,
+            ).not.toHaveBeenCalled();
         });
     });
 
@@ -1179,10 +1194,9 @@ describe('CentralizedConfigService', () => {
                 mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
                     {
                         data: {
-                            content: Buffer.from(
-                                yamlContent,
-                                'utf-8',
-                            ).toString('base64'),
+                            content: Buffer.from(yamlContent, 'utf-8').toString(
+                                'base64',
+                            ),
                             encoding: 'base64',
                         },
                     },
@@ -1934,9 +1948,7 @@ describe('CentralizedConfigService', () => {
                 // Non-empty discovery (a real file list that just doesn't
                 // include pending.yml) so the #1518 empty-discovery guard does
                 // not trigger — this validates genuine stale removal.
-                ruleFiles: [
-                    { path: '.kody-rules/review/other.yml' } as any,
-                ],
+                ruleFiles: [{ path: '.kody-rules/review/other.yml' } as any],
             });
 
             expect(result.success).toBe(true);
@@ -1978,9 +1990,7 @@ describe('CentralizedConfigService', () => {
             const result = await service.removeStaleKodyRules({
                 organizationAndTeamData,
                 actor,
-                ruleFiles: [
-                    { path: '.kody-rules/review/kept.yml' } as any,
-                ],
+                ruleFiles: [{ path: '.kody-rules/review/kept.yml' } as any],
             });
 
             expect(result.success).toBe(true);
@@ -2024,9 +2034,7 @@ describe('CentralizedConfigService', () => {
             const result = await service.removeStaleKodyRules({
                 organizationAndTeamData,
                 actor,
-                ruleFiles: [
-                    { path: '.kody-rules/review/kept.yml' } as any,
-                ],
+                ruleFiles: [{ path: '.kody-rules/review/kept.yml' } as any],
             });
 
             expect(result.success).toBe(true);
@@ -2055,9 +2063,7 @@ describe('CentralizedConfigService', () => {
             const result = await service.removeStaleKodyRules({
                 organizationAndTeamData,
                 actor,
-                ruleFiles: [
-                    { path: '.kody-rules/review/other.yml' } as any,
-                ],
+                ruleFiles: [{ path: '.kody-rules/review/other.yml' } as any],
             });
 
             expect(result.success).toBe(true);
@@ -2097,9 +2103,7 @@ describe('CentralizedConfigService', () => {
             const result = await service.removeStaleKodyRules({
                 organizationAndTeamData,
                 actor,
-                ruleFiles: [
-                    { path: '.kody-rules/review/other.yml' } as any,
-                ],
+                ruleFiles: [{ path: '.kody-rules/review/other.yml' } as any],
             });
 
             expect(result.success).toBe(true);
@@ -2185,6 +2189,7 @@ describe('CentralizedConfigService.synchronizeKodyRules — rejected rule files'
             createOrUpdateKodyRulesUseCase as any,
             {} as any,
             { findByOrganizationId: jest.fn().mockResolvedValue(null) } as any,
+            { lastDetectionFailed: jest.fn().mockResolvedValue(false) } as any,
         );
         jest.spyOn(service, 'getCentralizedConfigRepository').mockResolvedValue(
             { id: 'repo-central', name: 'central' } as any,

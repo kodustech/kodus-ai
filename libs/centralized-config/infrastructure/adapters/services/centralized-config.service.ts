@@ -63,6 +63,7 @@ import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import z from 'zod';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
 import { syncedRuleIsUnchanged } from '@libs/centralized-config/utils/synced-rule-is-unchanged';
+import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 
 @Injectable()
 export class CentralizedConfigService implements ICentralizedConfigService {
@@ -88,6 +89,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        private readonly contextReferenceDetectionService: ContextReferenceDetectionService,
     ) {}
 
     async validateCentralizedConfig(params: {
@@ -2060,7 +2062,8 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             return false;
         }
         try {
-            return await this.createOrUpdateKodyRulesUseCase.referenceDetectionFailed(
+            return await this.contextReferenceDetectionService.lastDetectionFailed(
+                'kodyRule',
                 rule.uuid,
             );
         } catch {
