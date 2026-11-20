@@ -407,7 +407,7 @@ describe('KodyRulesRepository.updateRulesFields', () => {
         new KodyRulesRepository({ bulkWrite } as any, {} as any);
 
     it('writes every rule that has a field to set, in one unordered batch', async () => {
-        const bulkWrite = jest.fn().mockResolvedValue({});
+        const bulkWrite = jest.fn().mockResolvedValue({ matchedCount: 2 });
 
         const failed = await build(bulkWrite).updateRulesFields('doc-1', [
             { ruleId: 'r1', patch: { status: KodyRulesStatus.PAUSED } },
@@ -441,6 +441,38 @@ describe('KodyRulesRepository.updateRulesFields', () => {
             },
         ]);
         expect(options).toEqual({ ordered: false });
+    });
+
+    it('matches an id that arrives as an object literally, not as an operator', async () => {
+        const injected = { $ne: null } as unknown as string;
+        const bulkWrite = jest.fn().mockResolvedValue({ matchedCount: 1 });
+
+        await build(bulkWrite).updateRulesFields(injected, [
+            { ruleId: injected, patch: { lockedByPlan: true } },
+        ]);
+
+        const [[op]] = bulkWrite.mock.calls[0];
+        expect(op.updateOne.filter).toEqual({
+            '_id': { $eq: injected },
+            'rules.uuid': { $eq: injected },
+        });
+    });
+
+    it('checks which rules exist when the write reports no count', async () => {
+        const bulkWrite = jest.fn().mockResolvedValue({});
+        const findOne = jest.fn(() => ({
+            lean: () => ({ exec: async () => ({ rules: [] }) }),
+        }));
+        const repository = new KodyRulesRepository(
+            { bulkWrite, findOne } as any,
+            {} as any,
+        );
+
+        await expect(
+            repository.updateRulesFields('doc-1', [
+                { ruleId: 'r1', patch: { lockedByPlan: true } },
+            ]),
+        ).resolves.toEqual(['r1']);
     });
 
     it('reports a rule that matched nothing as not written', async () => {

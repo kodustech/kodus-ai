@@ -120,12 +120,13 @@ let available = false;
                         lockedByPlan: false,
                     },
                 },
-                // A rule that is not in the document matches nothing.
+                // A rule that is not in the document matches nothing, and is
+                // reported as not written (one read back to tell which).
                 { ruleId: 'missing', patch: { lockedByPlan: true } },
             ]);
 
-            expect(failed).toEqual([]);
-            expect(commands).toEqual(['update']);
+            expect(failed).toEqual(['missing']);
+            expect(commands).toEqual(['update', 'find']);
             const doc: any = await model.findById(docId).lean();
             const byId = Object.fromEntries(
                 doc.rules.map((r: any) => [r.uuid, r]),

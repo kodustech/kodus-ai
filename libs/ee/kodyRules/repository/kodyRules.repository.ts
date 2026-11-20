@@ -257,7 +257,14 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                 })),
                 { ordered: false },
             );
-            if ((result?.matchedCount ?? ops.length) >= ops.length) return [];
+            // Only a readable count proves every rule was written; without one
+            // the rules are checked below.
+            if (
+                typeof result?.matchedCount === 'number' &&
+                result.matchedCount >= ops.length
+            ) {
+                return [];
+            }
             // A rule removed between the read and this write matched
             // nothing: report it as not written instead of counting it.
             const stored = (await this.kodyRulesModel
