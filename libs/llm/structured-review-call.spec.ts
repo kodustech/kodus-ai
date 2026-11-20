@@ -5,6 +5,17 @@ import { z } from 'zod';
 // carrier's `.main` slot at its boundary, so the fallback slot is never handed
 // to the builder — tests assert the single `main` model is used everywhere and
 // that a 2nd (fallback) slot is NEVER built.
+const mockLoggerLog = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    ...jest.requireActual('@libs/core/log/logger'),
+    createLogger: () => ({
+        log: (...args: unknown[]) => mockLoggerLog(...args),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+    }),
+}));
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
@@ -1505,6 +1516,277 @@ describe('MATRIX D — input variants (request assembly threading, happy LLM.run
             byokConfig: slot,
         });
         expect(mockBuild.mock.calls[0][0]).toEqual(slot);
+    });
+});
+
+describe('promptCache — a one-shot call that shares a prefix with sibling calls', () => {
+    const claude = {
+        provider: 'anthropic',
+        apiKey: 'enc',
+        model: 'claude-sonnet-5-5',
+    } as any;
+    const claudeOnBedrock = {
+        provider: 'amazon_bedrock',
+        model: 'eu.anthropic.claude-sonnet-5-5',
+    } as any;
+    const gpt = {
+        provider: 'openai',
+        apiKey: 'enc',
+        model: 'gpt-6.1-sol',
+    } as any;
+    const gemini = {
+        provider: 'google_gemini',
+        apiKey: 'enc',
+        model: 'gemini-3.8-flash',
+    } as any;
+    const head = '<Rules>\n[1] no console\n</Rules>\n';
+    const user = `${head}<File path="a.ts">\n+console.log(1)\n</File>`;
+    const sent = (i = 0) => mockGenerate.mock.calls[i][0];
+    // Structured answer for both channels: Output.object and the reroute-json
+    // text path Claude 5.5 takes (always thinking, no forced tool_choice).
+    const answer = {
+        experimental_output: { ok: true },
+        text: '{"ok":true}',
+        usage: {},
+    };
+    const spanAttrs = (i = 0) =>
+        observabilityService.runAiSdkLLMInSpan.mock.calls[i][0].attrs;
+
+    it('sends today’s request when the call declares nothing', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({ ...base, user, byokConfig: claude });
+        expect(sent().prompt).toBe(user);
+        expect(sent().messages).toBeUndefined();
+        expect(typeof sent().system).toBe('string');
+        expect(spanAttrs().promptCacheMarked).toBeUndefined();
+    });
+
+    it('marks the shared head of the user turn on native Claude', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt).toBeUndefined();
+        expect(sent().messages).toEqual([
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: head,
+                        providerOptions: {
+                            anthropic: { cacheControl: { type: 'ephemeral' } },
+                        },
+                    },
+                    { type: 'text', text: user.slice(head.length) },
+                ],
+            },
+        ]);
+        expect(spanAttrs().promptCacheMarked).toBe('userPrefix');
+    });
+
+    it('marks it with a cachePoint on Claude on Bedrock', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claudeOnBedrock,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].providerOptions).toEqual({
+            bedrock: { cachePoint: { type: 'default' } },
+        });
+    });
+
+    it('marks it on OpenAI gpt-5.6+ and puts the request in explicit mode', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: gpt,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].providerOptions).toEqual({
+            openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        });
+        expect(sent().providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+            openai: { promptCacheOptions: { mode: 'explicit' } },
+        });
+    });
+
+    it('leaves a provider that takes no marker on today’s request', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: gemini,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(sent().messages).toBeUndefined();
+    });
+
+    it('marks the system prompt when the call declares it shared', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { system: true },
+        });
+        expect(sent().system).toEqual({
+            role: 'system',
+            content: expect.stringMatching(/^sys/),
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        expect(sent().prompt).toBe(user);
+    });
+
+    it('marks the head and keeps the JSON hint in the tail when the re-ask appends it', async () => {
+        const parseFail = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response',
+            text: 'not json at all',
+            cause: new JSONParseError({ text: 'not json at all', cause: null }),
+            usage: undefined,
+            finishReason: 'stop',
+            response: undefined,
+        } as any);
+        mockGenerate
+            .mockRejectedValueOnce(parseFail)
+            .mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ ok: z.boolean() }),
+            user,
+            byokConfig: gpt,
+            promptCache: { userPrefix: head },
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const [headPart, tailPart] = sent(1).messages[0].content;
+        expect(headPart.text).toBe(head);
+        expect(headPart.providerOptions).toEqual({
+            openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        });
+        expect(tailPart.text.startsWith(user.slice(head.length))).toBe(true);
+        expect(tailPart.text.toLowerCase()).toContain('json');
+    });
+
+    it('leaves the turn whole, JSON hint included, on a provider that takes no marker', async () => {
+        const glm = {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.3',
+            apiKey: 'enc',
+        } as any;
+        mockGenerate.mockResolvedValueOnce(answer);
+        // open_router takes no marker: the split must not happen, and the hint must survive.
+        await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ ok: z.boolean() }),
+            user,
+            byokConfig: glm,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt.startsWith(user)).toBe(true);
+        expect(sent().prompt.toLowerCase()).toContain('json');
+    });
+
+    it('keeps the marker on a re-issue after a rate limit', async () => {
+        const rateLimited = Object.assign(new Error('429 Too Many Requests'), {
+            statusCode: 429,
+        });
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited)
+            .mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(sent(1).messages[0].content[0].text).toBe(head);
+    });
+
+    it('drops an automatic Anthropic cacheControl from caller options on a marked call', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+            providerOptions: {
+                anthropic: {
+                    cacheControl: { type: 'ephemeral' },
+                    effort: 'low',
+                },
+            },
+        });
+        expect(sent().providerOptions).toEqual({
+            anthropic: { effort: 'low' },
+        });
+        expect(spanAttrs().promptCacheAutoDropped).toBe(true);
+    });
+
+    it('logs the dropped automatic cacheControl with the caller’s PR context', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            runName: 'drop-log-context-run',
+            organizationId: 'org-log-context',
+            attrs: {
+                prNumber: 42,
+                teamId: 'team-1',
+                note: 'free text from the caller',
+            },
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        const logged = mockLoggerLog.mock.calls
+            .map(([entry]) => entry)
+            .find((e: any) =>
+                String(e?.message).includes('drop-log-context-run'),
+            );
+        expect(logged?.metadata).toMatchObject({
+            runName: 'drop-log-context-run',
+            organizationId: 'org-log-context',
+            prNumber: 42,
+            teamId: 'team-1',
+        });
+        expect(logged?.metadata).not.toHaveProperty('note');
+    });
+
+    it('records a declared head the turn does not start with', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: 'something else' },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(spanAttrs().promptCacheSkipped).toBe('prefix-mismatch');
+    });
+
+    it('applies to plain-text calls too', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'ok', usage: {} });
+        await runTextReviewCall({
+            system: 'sys',
+            user,
+            runName: 'text.run',
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].text).toBe(head);
     });
 });
 
