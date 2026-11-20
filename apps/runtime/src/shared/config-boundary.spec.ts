@@ -27,8 +27,13 @@ function runtimeSources(): string[] {
     return [...sources('apps/runtime/src'), ...sources('libs/runtime'), ...sources('libs/runtime-publish'), ...product].filter((path) => !isTestCode(path));
 }
 
+/** Stryker's instrumentation header reads its active mutant from the environment in every file it instruments. */
+const STRYKER_HEADER = /__STRYKER_ACTIVE_MUTANT__/;
+
 export function readsProcessEnv(text: string): boolean {
-    return text.split('\n').some((line) => !/^\s*(\/\/|\*|\/\*)/.test(line) && /\bprocess\.env\b/.test(line));
+    return text
+        .split('\n')
+        .some((line) => !/^\s*(\/\/|\*|\/\*)/.test(line) && !STRYKER_HEADER.test(line) && /\bprocess\.env\b/.test(line));
 }
 
 describe('process environment reads stay in the config loaders', () => {
@@ -51,5 +56,11 @@ describe('process environment reads stay in the config loaders', () => {
     it('flags a read in code and ignores one in a comment', () => {
         expect(readsProcessEnv('const cron = process.env.RUNTIME_CRON_X;')).toBe(true);
         expect(readsProcessEnv('// process.env.RUNTIME_CRON_X is read by the loader')).toBe(false);
+    });
+
+    it("ignores the active-mutant read Stryker writes into every file it instruments", () => {
+        const header = 'if (ns.activeMutant === undefined && g.process && g.process.env && g.process.env.__STRYKER_ACTIVE_MUTANT__) {';
+        expect(readsProcessEnv(header)).toBe(false);
+        expect(readsProcessEnv(`${header}\nconst cron = process.env.RUNTIME_CRON_X;`)).toBe(true);
     });
 });

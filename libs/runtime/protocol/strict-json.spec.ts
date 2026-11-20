@@ -80,7 +80,9 @@ describe('parseStrictJson cost (P13: the hub decodes every cell frame with it)',
     };
 
     // Measured on the old value-building parser: 22 ms against JSON.parse's 3 ms on this ~840 KB frame (7x).
-    it('reads an object-heavy frame in at most 5x what JSON.parse takes', () => {
+    // Under Stryker the parser runs instrumented and JSON.parse does not: the ratio says nothing there.
+    const instrumented = '__stryker__' in globalThis;
+    (instrumented ? it.skip : it)('reads an object-heavy frame in at most 5x what JSON.parse takes', () => {
         const items = Array.from({ length: 9_000 }, (_, i) => ({ id: i, name: `item${i}`, ok: true, price: 12.5, tags: ['a', 'b'], meta: { k: 'v\n"q"' } }));
         const text = JSON.stringify({ v: 1, data: items });
         const strict = median(() => parseStrictJson(text), 15);
