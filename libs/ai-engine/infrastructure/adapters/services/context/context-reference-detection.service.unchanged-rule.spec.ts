@@ -191,12 +191,15 @@ describe('reference detection — unchanged kody rule text', () => {
             llmRun.mockResolvedValueOnce(ANSWER);
             llmRun.mockResolvedValueOnce('I could not find any references.');
             llmRun.mockResolvedValueOnce(ANSWER);
-            const { service } = makeServices();
+            const { service, store } = makeServices();
 
             await save(service, TEXT);
             await save(service, `${TEXT} and docs/errors.md`);
+            // The failed detection is what the third write clears.
+            expect(store.revisions[1].metadata.syncErrorsCount).toBe(1);
             await save(service, `${TEXT} and docs/errors.md`);
 
+            expect(store.revisions[2].metadata.syncErrorsCount).toBe(0);
             await expect(
                 service.lastDetectionFailed('kodyRule', 'rule-1'),
             ).resolves.toBe(false);
