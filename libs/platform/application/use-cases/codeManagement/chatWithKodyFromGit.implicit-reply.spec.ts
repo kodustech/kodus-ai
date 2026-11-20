@@ -295,6 +295,38 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
             ).not.toHaveBeenCalled();
         });
 
+        it('stays quiet when the license read fails, logged as such rather than as a plan block', async () => {
+            const reply = githubReply(900, 'why?', 'dev-one', 1);
+            const {
+                useCase,
+                codeManagementService,
+                permissionValidationService,
+            } = setup([githubKodyRoot, reply]);
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.LICENSE_UNAVAILABLE,
+                },
+            );
+            const log = jest.spyOn((useCase as any).logger, 'log');
+
+            await useCase.execute(githubParams(reply));
+
+            expect(classify).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).not.toHaveBeenCalled();
+            // An unmentioned reply is never answered; what changes is the
+            // reason on record, so an outage is not counted as plan blocks.
+            expect(log).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        implicitReplySilence: 'license_unavailable',
+                    }),
+                }),
+            );
+        });
+
         describe('bot loop cap', () => {
             // Kody root, then `pairs` rounds of (bot, Kody), then a new bot reply.
             function botLoop(pairs: number) {

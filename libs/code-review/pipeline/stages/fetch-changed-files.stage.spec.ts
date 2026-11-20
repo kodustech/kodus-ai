@@ -334,6 +334,34 @@ describe('FetchChangedFilesStage', () => {
             ]);
         });
 
+        it('neither notes nor records a cut for a patch right at the limit that ends in a newline', async () => {
+            const atLimit = `${[
+                '@@ -0,0 +1,49999 @@',
+                ...Array.from({ length: 49999 }, (_, i) => `+row ${i}`),
+            ].join('\n')}\n`;
+            const files = [
+                {
+                    filename: 'data/at-limit.sql',
+                    status: 'added',
+                    patch: atLimit,
+                },
+                smallFile,
+            ];
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+                files,
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.changedFiles[0].patchWithLinesStr).not.toContain(
+                'diff truncated',
+            );
+            expect(result.reviewWarnings ?? []).toEqual([]);
+        });
+
         it('records the cut of an ignored file a custom agent names', async () => {
             const files = [
                 { filename: 'data/big.sql', status: 'added', patch: bigPatch },

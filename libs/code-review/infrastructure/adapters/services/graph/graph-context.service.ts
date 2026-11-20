@@ -481,17 +481,19 @@ export class GraphContextService {
             diffPath: options.diffPath,
         });
 
+        // `kodus-graph context` writes --out on every run that exits 0, even
+        // when the analysis is empty, so a read that fails here lost the graph:
+        // throw for the caller to fall back or record CALLGRAPH_FAILED (#2207).
         try {
             return await sandbox.readFile(
                 `${sandbox.repoDir}/${CONTEXT_OUTPUT_PATH}`,
                 { timeoutMs: 10_000 },
             );
-        } catch {
-            this.logger.warn({
-                message: `[KODUS-GRAPH] prompt file is empty (context command succeeded but produced no output)`,
-                context: GraphContextService.name,
-            });
-            return '';
+        } catch (error) {
+            throw new Error(
+                `kodus-graph context exited 0 but ${CONTEXT_OUTPUT_PATH} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
+            );
         }
     }
 }

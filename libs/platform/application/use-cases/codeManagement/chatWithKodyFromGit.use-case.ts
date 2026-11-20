@@ -61,6 +61,7 @@ import {
     getOriginalKodyComment,
     getOthersReplies,
     prepareContext,
+    CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE,
     CONVERSATION_PLAN_GATE_MESSAGE,
     isKodyComment,
     KODY_ACKNOWLEDGMENT_MESSAGE,
@@ -1263,18 +1264,26 @@ export class ChatWithKodyFromGitUseCase {
         const permissionBlocked =
             !permission.allowed &&
             permission.errorType !== ValidationErrorType.NOT_ERROR;
+        // The license read never answered: the org may be paying, so this is
+        // our outage to report, not a plan to point at (#2452).
+        const licenseUnavailable =
+            permission.errorType === ValidationErrorType.LICENSE_UNAVAILABLE;
 
         // Nobody asked for Kody here, so the BYOK pointer would land on every
         // reply of every thread. Stay quiet; the log carries the reason.
         if (permissionBlocked && implicit) {
-            this.logImplicitReplySilence('plan_blocked', silenceContext);
+            this.logImplicitReplySilence(
+                licenseUnavailable ? 'license_unavailable' : 'plan_blocked',
+                silenceContext,
+            );
             return;
         }
 
         if (permissionBlocked) {
             this.logger.warn({
-                message:
-                    'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
+                message: licenseUnavailable
+                    ? 'Conversation not run: the license check is unavailable; replying with a retry note'
+                    : 'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
                 context: ChatWithKodyFromGitUseCase.name,
                 metadata: {
                     organizationAndTeamData,
@@ -1293,7 +1302,9 @@ export class ChatWithKodyFromGitUseCase {
                     comment.discussionId,
                 threadId: comment.threadId,
                 body: this.withKodyMarker(
-                    CONVERSATION_PLAN_GATE_MESSAGE,
+                    licenseUnavailable
+                        ? CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE
+                        : CONVERSATION_PLAN_GATE_MESSAGE,
                     params.platformType,
                 ),
                 repository,

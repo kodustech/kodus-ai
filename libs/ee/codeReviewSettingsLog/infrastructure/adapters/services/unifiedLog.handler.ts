@@ -2,6 +2,7 @@ import {
     CONTEXT_RESOLUTION_SERVICE_TOKEN,
     IContextResolutionService,
 } from '@libs/core/context-resolution/domain/contracts/context-resolution.service.contract';
+import { RepositoryNotConfiguredError } from '@libs/core/context-resolution/domain/errors/repository-not-configured.error';
 import { RepositoryNotIntegratedError } from '@libs/core/context-resolution/domain/errors/repository-not-integrated.error';
 import {
     ActionType,
@@ -201,10 +202,11 @@ export class UnifiedLogHandler {
             directoryId?: string;
         },
     ): void {
-        // A repository removed from the integration still gets entries:
-        // removing its synced Kody Rules writes one per rule (issue #2581).
-        // Nothing is wrong there, and "Unknown" is all that can be said.
-        if (error instanceof RepositoryNotIntegratedError) {
+        // A repository removed from the integration, or never added to the
+        // code review config, still gets entries: removing its synced Kody
+        // Rules writes one per rule (issue #2581). Nothing is wrong there,
+        // and "Unknown" is all that can be said.
+        if (isUnresolvableRepository(error)) {
             return;
         }
         this.logger.error({
@@ -427,8 +429,9 @@ export class UnifiedLogHandler {
      * rule, 26 in a row in prod (issue #2581), and each one asked for the
      * same name. The events are emitted without being awaited, so those
      * entries run at the same time: the lookup in flight is shared, and its
-     * answer is kept briefly per repository, "not in the integration"
-     * included. Any other failure is dropped, so the next entry asks again.
+     * answer is kept briefly per repository, "not in the integration" and
+     * "not in the code review config" included. Any other failure is
+     * dropped, so the next entry asks again.
      */
     private getRepositoryName(
         repositoryId: string,
@@ -449,7 +452,7 @@ export class UnifiedLogHandler {
         this.remember(key, { name, expiresAt: now + REPOSITORY_NAME_TTL_MS });
         name.catch((error) => {
             if (
-                !(error instanceof RepositoryNotIntegratedError) &&
+                !isUnresolvableRepository(error) &&
                 this.repositoryNames.get(key)?.name === name
             ) {
                 this.repositoryNames.delete(key);
@@ -471,3 +474,7 @@ const REPOSITORY_NAME_TTL_MS = 60_000;
 const REPOSITORY_NAME_CACHE_MAX = 1_000;
 
 type CachedRepositoryName = { name: Promise<string>; expiresAt: number };
+
+const isUnresolvableRepository = (error: unknown): boolean =>
+    error instanceof RepositoryNotIntegratedError ||
+    error instanceof RepositoryNotConfiguredError;
