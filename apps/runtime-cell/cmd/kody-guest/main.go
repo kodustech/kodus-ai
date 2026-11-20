@@ -75,6 +75,11 @@ func run(root string, stdio bool, listen string, vport uint32) error {
 	if modes != 1 {
 		return errors.New("give exactly one of -stdio, -listen and -vsock")
 	}
+	// Before any stream opens: the sandbox's commands run as this process's
+	// user and must not open its fds or trace it (internal/guest Undumpable).
+	if err := guest.Undumpable(); err != nil {
+		return fmt.Errorf("undumpable: %w", err)
+	}
 	fs, err := guest.OpenRoot(root)
 	if err != nil {
 		return err
