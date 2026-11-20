@@ -71,6 +71,9 @@ func SandboxArgs(s SandboxSpec) ([]string, error) {
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--read-only",
 		"--pids-limit", strconv.Itoa(pids), "--user", s.User,
 		"--tmpfs", tmpfsOpt("/workspace", s.WorkspaceSize, s.User), "--tmpfs", tmpfsOpt("/tmp", s.TmpSize, s.User),
+		// A command runs as PID 1's user and can write to its stdout: with a
+		// log driver that is a file on the host's disk with no bound.
+		"--log-driver", "none",
 	}
 	if s.Memory != "" {
 		args = append(args, "--memory", s.Memory, "--memory-swap", s.Memory)

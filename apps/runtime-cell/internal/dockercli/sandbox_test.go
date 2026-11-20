@@ -39,6 +39,20 @@ func TestASandboxContainerGetsNoWayOut(t *testing.T) {
 	}
 }
 
+// A command in the sandbox runs as PID 1's user and can write to /proc/1/fd/1,
+// which Docker's json-file driver appended to a file on the host with no bound:
+// 1.2 GB of the host's disk in 30 s on the dev cell (2026-11-20). Nothing reads
+// a sandbox's container log, so it keeps none.
+func TestASandboxWritesNothingToTheHostsDisk(t *testing.T) {
+	args, err := SandboxArgs(sandboxSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "--log-driver none") {
+		t.Fatalf("a sandbox's PID 1 output reaches a log file on the host: %s", strings.Join(args, " "))
+	}
+}
+
 func TestASandboxSpecWithInjectedFlagsIsRefused(t *testing.T) {
 	for _, edit := range []func(*SandboxSpec){
 		func(s *SandboxSpec) { s.User = "0:0 --privileged" },
