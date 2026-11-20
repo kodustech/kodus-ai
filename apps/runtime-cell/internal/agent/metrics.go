@@ -20,6 +20,7 @@ type agentMetrics struct {
 	sqlObserverDuration  *metrics.Vec
 	sandboxOps           *metrics.Vec
 	sandboxOpMillis      *metrics.Vec
+	egressSeals          *metrics.Vec
 }
 
 func newAgentMetrics(reg *metrics.Registry) agentMetrics {
@@ -39,5 +40,6 @@ func newAgentMetrics(reg *metrics.Registry) agentMetrics {
 		sqlObserverDuration:  reg.Counter("cell_sql_observer_provision_duration_ms_total", "Cumulative managed SQL observer provisioning time in milliseconds."),
 		sandboxOps:           reg.Counter("cell_sandbox_ops_total", "Sandbox operations the guest agent ran, by op and outcome (ok, refused, failed).", "op", "outcome"),
 		sandboxOpMillis:      reg.Counter("cell_sandbox_op_milliseconds_total", "Time in sandbox operations, by op; divide by cell_sandbox_ops_total for the mean.", "op"),
+		egressSeals:          reg.Counter("cell_egress_seals_total", "Sandbox egress seals (egress.policy sealed), by outcome (ok, failed): the policy pushed to the enforcers allows nothing.", "outcome"),
 	}
 }

@@ -37,6 +37,11 @@ func (r EgressRules) ClaimPolicy(c ClaimInfo, now time.Time) (pol policy.ClaimPo
 	if err != nil {
 		return policy.ClaimPolicy{}, nil, err
 	}
+	if c.Sealed {
+		// Not the base list, the recommended one, an approval nor the build's
+		// passthrough: a sealed claim's policy is who it is and nothing to reach.
+		return policy.Build(spec, r.Deny.Denies)
+	}
 	spec.Inspect = InspectRulesFor(c, r.Inspect)
 	// A host the operator put on the base list keeps reaching the builder as before.
 	for i := range spec.Inspect {
@@ -120,6 +125,7 @@ func PolicySpec(c ClaimInfo, base []string, issuedAt time.Time) (policy.Spec, er
 		BuildSources:     c.Network.Sources,
 		BuildPassthrough: passthroughApprovals(c),
 		BuildTrusted:     c.Network.SourcesTrustCellCA,
+		Sealed:           c.Sealed,
 		ExpiresAt:        hard, IssuedAt: issuedAt.UTC(),
 	}, nil
 }

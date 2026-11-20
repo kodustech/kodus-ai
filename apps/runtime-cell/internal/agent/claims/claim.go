@@ -127,10 +127,13 @@ type Claim struct {
 	allow       []string
 	inspect     []policy.InspectRule
 	allowIssued time.Time
-	allowGen    int
-	appliedGen  int
-	applied     bool
-	egressMu    sync.Mutex
+	// sealed: the claim's egress is closed for good (Seal); no egress.policy
+	// opens it again.
+	sealed     bool
+	allowGen   int
+	appliedGen int
+	applied    bool
+	egressMu   sync.Mutex
 }
 
 // New is a claim from its acquire. The acquire's approved hosts are its
@@ -566,12 +569,35 @@ func (c *Claim) SetAllow(allow []string, inspect []policy.InspectRule, issued ti
 	if c.state == Released {
 		return false, false
 	}
-	if issued.Before(c.allowIssued) {
+	if c.sealed || issued.Before(c.allowIssued) {
+		// A sealed claim keeps nothing a policy says: not stale for the hub, ignored.
 		return true, true
 	}
 	c.allow, c.inspect, c.allowIssued = slices.Clone(allow), slices.Clone(inspect), issued
 	c.allowGen++
 	return false, true
+}
+
+// Seal closes the claim's egress for good: the allowlist and the inspected
+// approvals it held are dropped, a later egress.policy changes nothing, and
+// the next push says so (ClaimInfo.Sealed). It returns the generation to
+// mark applied once that push is done, and whether this call sealed it.
+func (c *Claim) Seal() (gen int, first bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	first = !c.sealed
+	if first {
+		c.sealed, c.allow, c.inspect = true, nil, nil
+		c.allowGen++
+	}
+	return c.allowGen, first
+}
+
+// Sealed reports whether the claim's egress is closed.
+func (c *Claim) Sealed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sealed
 }
 
 // PendingInspect is the hub's inspected approvals that go with

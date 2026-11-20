@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -30,5 +31,23 @@ func TestTheMirrorServesNoSealedClaim(t *testing.T) {
 	req.RemoteAddr = "10.0.0.9:5555"
 	if servesClaim(store, req) {
 		t.Fatal("an unknown source reads from the mirror")
+	}
+}
+
+// No mirror route (Go, OCI, npm, PyPI) answers a sealed claim, whatever pins its policy had.
+func TestNoMirrorRouteAnswersASealedClaim(t *testing.T) {
+	store := policy.NewStore(nil)
+	if err := store.Put(policy.ClaimPolicy{ClaimID: "c", OrgID: "o", Sources: []string{"10.0.0.2"}, Phase: policy.PhaseTest, Sealed: true, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	h := refuseSealed(store, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
+	for _, path := range []string{"/npm/left-pad", "/pypi/simple/requests/", "/go/example.com/m/@v/list", "/v2/library/alpine/manifests/3"} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.RemoteAddr = "10.0.0.2:5555"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != 403 {
+			t.Errorf("%s: %d", path, rec.Code)
+		}
 	}
 }

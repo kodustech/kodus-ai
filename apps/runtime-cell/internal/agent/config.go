@@ -61,6 +61,9 @@ type ClaimInfo struct {
 	// (policy.ClaimPolicy.InspectSources). A pool machine booted before the
 	// claim never has it.
 	CellTrusted bool
+	// Sealed: the claim's egress is closed for good (egress.policy sealed):
+	// its policy allows nothing, whatever the lists above and the cell's say.
+	Sealed bool
 }
 
 // ObserverFactory returns the client for a claim's observer machine.

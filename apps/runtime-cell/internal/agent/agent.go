@@ -457,5 +457,5 @@ const maxRebuildSeconds = 604_800
 // info is the ClaimInfo of c as it stands.
 func info(c *claims.Claim) ClaimInfo {
 	m := c.Machines()
-	return ClaimInfo{ClaimID: c.ID, ObserverGeneration: c.ObserverGeneration(), Acquire: c.Acquire, Workload: m.Workload, Observer: m.Observer, Network: m.Network, Sources: m.Sources, GoPins: m.GoPins, ImagePins: m.ImagePins, OrgSecrets: policySecrets(c), CellTrusted: c.CellTrusted(), Running: c.Running()}
+	return ClaimInfo{ClaimID: c.ID, ObserverGeneration: c.ObserverGeneration(), Acquire: c.Acquire, Workload: m.Workload, Observer: m.Observer, Network: m.Network, Sources: m.Sources, GoPins: m.GoPins, ImagePins: m.ImagePins, OrgSecrets: policySecrets(c), CellTrusted: c.CellTrusted(), Running: c.Running(), Sealed: c.Sealed()}
 }

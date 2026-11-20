@@ -218,7 +218,7 @@ func start(ctx context.Context, g *lifecycle.Group, log *slog.Logger, d *dataPla
 		if err != nil {
 			return fmt.Errorf("mirror: %w", err)
 		}
-		ms, ml := newMirrorServer(mm, ml, mirrorIdleTimeout, mirrorConnsPerSource)
+		ms, ml := newMirrorServer(refuseSealed(d.store, mm), ml, mirrorIdleTimeout, mirrorConnsPerSource)
 		g.Go("mirror", lifecycle.ServeHTTP(ms, ml, shutdownGrace))
 	}
 	peer := f.agent
@@ -288,4 +288,18 @@ func servesClaim(store *policy.Store, r *http.Request) bool {
 	}
 	pol, ok := store.ForSource(net.ParseIP(host))
 	return ok && !pol.Sealed
+}
+
+// refuseSealed answers 403 to a sealed claim on every mirror route (Go, OCI,
+// npm, PyPI), before the route's own pin or claim check.
+func refuseSealed(store *policy.Store, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			if pol, ok := store.ForSource(net.ParseIP(host)); ok && pol.Sealed {
+				http.Error(w, "this claim's egress is sealed", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

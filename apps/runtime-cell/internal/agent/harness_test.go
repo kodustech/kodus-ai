@@ -135,11 +135,16 @@ type recEgress struct {
 	mu      sync.Mutex
 	applied []ClaimInfo
 	removed []string
+	// fail is what Apply returns instead of taking the policy.
+	fail error
 }
 
 func (r *recEgress) Apply(_ context.Context, c ClaimInfo) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.fail != nil {
+		return r.fail
+	}
 	r.applied = append(r.applied, c)
 	return nil
 }
