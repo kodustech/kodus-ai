@@ -144,6 +144,40 @@ let available = false;
             expect(doc.rules).toHaveLength(52);
         });
 
+        it('a rule id that arrives as an object matches no rule and writes nothing', async () => {
+            const before: any = await model.findById(docId).lean();
+            // Without `$eq` this would be an operator matching every rule.
+            const injected = { $ne: null } as unknown as string;
+
+            const failed = await repository.updateRulesFields(ORG, docId, [
+                {
+                    ruleId: injected,
+                    patch: { status: KodyRulesStatus.DELETED },
+                },
+            ]);
+
+            expect(failed).toEqual([injected]);
+            const after: any = await model.findById(docId).lean();
+            expect(after.rules).toEqual(before.rules);
+        });
+
+        it('a document id that arrives as an object is refused and writes nothing', async () => {
+            const before: any = await model.findById(docId).lean();
+            const injected = { $ne: null } as unknown as string;
+
+            await expect(
+                repository.updateRulesFields(ORG, injected, [
+                    {
+                        ruleId: 'live-1',
+                        patch: { status: KodyRulesStatus.DELETED },
+                    },
+                ]),
+            ).rejects.toThrow(/Cast to ObjectId failed/);
+
+            const after: any = await model.findById(docId).lean();
+            expect(after.rules).toEqual(before.rules);
+        });
+
         it("another organization cannot write this organization's rules by their ids", async () => {
             const before: any = await model.findById(docId).lean();
 

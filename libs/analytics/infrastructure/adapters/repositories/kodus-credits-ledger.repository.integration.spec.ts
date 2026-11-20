@@ -73,6 +73,9 @@ const TEST_DB = 'kodus_credits_ledger_it';
                     debitedAt: settledAt,
                 }),
                 charge('other-org', 'org-2', 'pending'),
+                // Pending and in org-1, but never passed: proves the writes
+                // follow the span ids and not just organization + status.
+                charge('unlisted-1', 'org-1', 'pending'),
             ] as any[]);
         });
 
@@ -101,6 +104,11 @@ const TEST_DB = 'kodus_credits_ledger_it';
                 status: 'pending',
             });
             expect((await stored('other-org')).debitedAt).toBeUndefined();
+            // A pending charge of the same organization that was not listed.
+            expect(await stored('unlisted-1')).toMatchObject({
+                status: 'pending',
+            });
+            expect((await stored('unlisted-1')).debitedAt).toBeUndefined();
         });
 
         it("records a debit error only on the organization's pending charges", async () => {
@@ -113,6 +121,7 @@ const TEST_DB = 'kodus_credits_ledger_it';
             expect((await stored('pending-1')).lastError).toBe('billing down');
             expect((await stored('settled-1')).lastError).toBeUndefined();
             expect((await stored('other-org')).lastError).toBeUndefined();
+            expect((await stored('unlisted-1')).lastError).toBeUndefined();
         });
     },
 );

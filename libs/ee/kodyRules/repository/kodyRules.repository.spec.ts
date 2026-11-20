@@ -449,22 +449,6 @@ describe('KodyRulesRepository.updateRulesFields', () => {
         expect(options).toEqual({ ordered: false });
     });
 
-    it('matches an id that arrives as an object literally, not as an operator', async () => {
-        const injected = { $ne: null } as unknown as string;
-        const bulkWrite = jest.fn().mockResolvedValue({ matchedCount: 1 });
-
-        await build(bulkWrite).updateRulesFields('org-1', injected, [
-            { ruleId: injected, patch: { lockedByPlan: true } },
-        ]);
-
-        const [[op]] = bulkWrite.mock.calls[0];
-        expect(op.updateOne.filter).toEqual({
-            '_id': { $eq: injected },
-            'organizationId': { $eq: 'org-1' },
-            'rules.uuid': { $eq: injected },
-        });
-    });
-
     it('checks which rules exist when the write reports no count', async () => {
         const bulkWrite = jest.fn().mockResolvedValue({});
         const findOne = jest.fn(() => ({

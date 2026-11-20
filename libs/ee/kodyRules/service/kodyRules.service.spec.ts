@@ -106,6 +106,9 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
 
         // One round trip for the document, holding only #11 and #12.
         expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
+        // The write is scoped to this organization: another org's id would
+        // match no document and leave the rules past the ceiling.
+        expect(repo.updateRulesFields.mock.calls[0][0]).toBe('org-1');
         expect(repo.updateRulesFields.mock.calls[0][1]).toBe('doc-1');
         expect(written().map((c) => c.ruleId)).toEqual(['r11', 'r12']);
         for (const change of written()) {
