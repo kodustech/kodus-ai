@@ -101,6 +101,8 @@ function setup(fx: Fixture) {
         released: [] as string[],
         leaseTtls: [] as number[],
         merges: [] as string[],
+        mergeSignals: {} as Record<string, AbortSignal | undefined>,
+        crossDedupSignal: undefined as AbortSignal | undefined,
         published: undefined as any,
         timeline: [] as any[],
         crossDedup: undefined as any,
@@ -216,8 +218,9 @@ function setup(fx: Fixture) {
             recipe(draft);
             return draft;
         },
-        mergeFindings: async (findings, _pr, slot) => {
+        mergeFindings: async (findings, _pr, slot, _ctx, signal) => {
             calls.merges.push(slot.model);
+            calls.mergeSignals[slot.model] = signal;
             const plan = fx.merge?.[slot.model] ?? 'ok';
             if (plan === 'throw') throw new Error('merge threw');
             if (plan === 'hang') return new Promise(() => undefined);
@@ -240,8 +243,9 @@ function setup(fx: Fixture) {
             });
             return { suggestions: kept, trace: { status: 'success' } as any };
         },
-        crossDedupStreams: async (nonRules, rules) => {
+        crossDedupStreams: async (nonRules, rules, _pr, _ctx, signal) => {
             calls.crossDedup = { nonRules, rules };
+            calls.crossDedupSignal = signal;
             if (fx.crossDedupHangs) return new Promise(() => undefined);
             return [...nonRules, ...rules];
         },
@@ -608,6 +612,8 @@ describe('executeUltraReview', () => {
                 'rule1',
             ]);
             expect(out.ultra?.outcome).toBe('success');
+            // The dedup left behind starts no further model call.
+            expect(calls.crossDedupSignal?.aborted).toBe(true);
         });
 
         it('the fallback does not start without time left to review', async () => {
@@ -648,6 +654,8 @@ describe('executeUltraReview', () => {
                 status: 'fallback',
                 modelName: 'p:f',
             });
+            // The merge left behind starts no further model call.
+            expect(calls.mergeSignals.b?.aborted).toBe(true);
         });
 
         it('Kody Rules that never return do not hold the models back', async () => {
@@ -669,6 +677,41 @@ describe('executeUltraReview', () => {
             ]);
             expect(out.ultra?.outcome).toBe('success');
             expect(calls.released).toContain('base');
+            // The review is incomplete without them: approval is held.
+            expect(out.errors).toEqual([
+                expect.objectContaining({
+                    substage: 'ultra-auxiliary',
+                    severity: 'partial',
+                }),
+            ]);
+        });
+
+        it('a stage that starts with no time left in the job starts no review', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected(['rule1']),
+                },
+                state: { fallback: undefined },
+                // The job's 2 s budget ran out before this step.
+                context: { pipelineStartedAt: Date.now() - 2_500 } as any,
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(calls.passes).toEqual([]);
+            expect(calls.sandboxes).toEqual([]);
+            expect(out.ultra?.outcome).toBe('failed');
+            for (const run of out.ultra?.runs ?? []) {
+                expect(run.failureReason).toBe(
+                    'No time was left in the job for its review.',
+                );
+            }
+            expect(out.errors).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ substage: 'ultra-auxiliary' }),
+                ]),
+            );
         });
     });
 

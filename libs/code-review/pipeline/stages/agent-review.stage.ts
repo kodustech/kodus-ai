@@ -556,22 +556,41 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     draft.lastReviewError = undefined;
                 }),
             update: (context, recipe) => this.updateContext(context, recipe),
-            mergeFindings: (findings, prNumber, slot, context) =>
-                this.deduplicateSuggestions(findings, prNumber, slot, {
-                    organizationId:
-                        context.organizationAndTeamData?.organizationId,
-                    teamId: context.organizationAndTeamData?.teamId,
-                    pullRequestId: prNumber,
-                    repositoryId: context.repository?.id,
-                }),
-            crossDedupStreams: (nonRules, kodyRules, prNumber, context) =>
-                this.crossDedupStreams(nonRules, kodyRules, prNumber, context, {
-                    organizationId:
-                        context.organizationAndTeamData?.organizationId,
-                    teamId: context.organizationAndTeamData?.teamId,
-                    pullRequestId: prNumber,
-                    repositoryId: context.repository?.id,
-                }),
+            mergeFindings: (findings, prNumber, slot, context, signal) =>
+                this.deduplicateSuggestions(
+                    findings,
+                    prNumber,
+                    slot,
+                    {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        pullRequestId: prNumber,
+                        repositoryId: context.repository?.id,
+                    },
+                    signal,
+                ),
+            crossDedupStreams: (
+                nonRules,
+                kodyRules,
+                prNumber,
+                context,
+                signal,
+            ) =>
+                this.crossDedupStreams(
+                    nonRules,
+                    kodyRules,
+                    prNumber,
+                    context,
+                    {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        pullRequestId: prNumber,
+                        repositoryId: context.repository?.id,
+                    },
+                    signal,
+                ),
             customAgentsById: async (context) =>
                 indexCustomAgents(await this.resolveCustomAgents(context)),
             publishFindings: (context, input) =>
@@ -2951,6 +2970,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         prNumber: number,
         context: CodeReviewPipelineContext,
         telemetryMeta: LangfuseTelemetryMetadata | undefined,
+        /** Once it fires, no further model call starts. */
+        signal?: AbortSignal,
     ): Promise<Partial<CodeSuggestion>[]> {
         let dedupedNonRules = nonRules;
         // Cross-stream dedup (PR #1527 follow-up): a file-scope Kody Rule and
@@ -2968,6 +2989,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     prNumber,
                     context.codeReviewConfig?.byokConfig,
                     telemetryMeta,
+                    signal,
                 ),
             );
             dedupedNonRules = dedupedNonRules.filter(
@@ -2996,6 +3018,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         prNumber,
                         context.codeReviewConfig?.byokConfig,
                         telemetryMeta,
+                        signal,
                     );
             } catch (crossErr) {
                 this.logger.warn({
@@ -3399,6 +3422,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         prNumber: number,
         byokConfig?: NormalizedModel,
         telemetryMeta?: LangfuseTelemetryMetadata,
+        signal?: AbortSignal,
     ): Promise<Partial<CodeSuggestion>[]> {
         const fileScopedRules = kodyRules.filter((r) => !!r.relevantFile);
         if (!suggestions.length || !fileScopedRules.length) {
@@ -3426,6 +3450,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (rule.relevantFile !== s.relevantFile) {
                     continue;
                 }
+                signal?.throwIfAborted();
                 const decision = await this.resolveDedupMerge(
                     s,
                     rule,
@@ -3474,6 +3499,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         prNumber: number,
         resolvedSlot?: NormalizedModel,
         telemetryMeta?: LangfuseTelemetryMetadata,
+        signal?: AbortSignal,
     ): Promise<{
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
@@ -3484,6 +3510,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             prNumber,
             resolvedSlot,
             telemetryMeta,
+            signal,
         );
     }
 

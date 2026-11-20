@@ -102,7 +102,7 @@ async function withDeadline<T>(
 function deadlineSignal(
     parent: AbortSignal | undefined,
     ms: number,
-): { signal: AbortSignal; clear: () => void } {
+): { signal: AbortSignal; clear: () => void; abort: () => void } {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
     return {
@@ -110,6 +110,10 @@ function deadlineSignal(
             ? AbortSignal.any([parent, controller.signal])
             : controller.signal,
         clear: () => clearTimeout(timer),
+        abort: () => {
+            clearTimeout(timer);
+            controller.abort();
+        },
     };
 }
 
@@ -147,6 +151,8 @@ export interface UltraReviewHost {
         prNumber: number,
         slot: NormalizedModel,
         context: CodeReviewPipelineContext,
+        /** Fires at the merge's deadline: no further model call starts. */
+        signal?: AbortSignal,
     ): Promise<{
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
@@ -156,6 +162,8 @@ export interface UltraReviewHost {
         kodyRules: Partial<CodeSuggestion>[],
         prNumber: number,
         context: CodeReviewPipelineContext,
+        /** Fires at the dedup's deadline: no further model call starts. */
+        signal?: AbortSignal,
     ): Promise<Partial<CodeSuggestion>[]>;
     customAgentsById(
         context: CodeReviewPipelineContext,
@@ -295,9 +303,18 @@ async function mergeAcrossModels(
 
     let lastError = '';
     for (const { model, status } of candidates) {
+        // Past its deadline a merge starts no further model call, so it is
+        // not still spending while the next one runs.
+        const stop = deadlineSignal(context.parentSignal, deadlineMs);
         try {
             const attempt = await withDeadline(
-                host.mergeFindings(findings, prNumber, model.slot, context),
+                host.mergeFindings(
+                    findings,
+                    prNumber,
+                    model.slot,
+                    context,
+                    stop.signal,
+                ),
                 deadlineMs,
             );
             if (attempt === TIMED_OUT) {
@@ -326,6 +343,9 @@ async function mergeAcrossModels(
                 'The merge model returned no answer.';
         } catch (error) {
             lastError = error instanceof Error ? error.message : String(error);
+        } finally {
+            // Whatever is still running stops at its next model call.
+            stop.abort();
         }
         logger.warn({
             message: `[ULTRA] The merge failed on ${model.modelName}`,
@@ -390,9 +410,12 @@ export async function executeUltraReview(
     // A run's review loop gets the deadline or what is left of the window,
     // keeping the grace its later steps need.
     const runWindow = () =>
-        Math.min(
-            limits.runDeadlineMs,
-            runsEndAt - Date.now() - limits.runGraceMs,
+        Math.max(
+            0,
+            Math.min(
+                limits.runDeadlineMs,
+                runsEndAt - Date.now() - limits.runGraceMs,
+            ),
         );
 
     // Kody Rules and the custom agents, once, on the PR's own sandbox, which
@@ -414,7 +437,18 @@ export async function executeUltraReview(
     const checkoutExpected = !!context.sandboxHandle;
     let auxiliaryRun: Promise<CodeReviewPipelineContext> =
         Promise.resolve(context);
-    if (hasAuxiliaryWork(context)) {
+    // Kody Rules and custom agents that did not finish: the review is not
+    // complete, so it holds approval.
+    let auxiliaryMissed = false;
+    if (hasAuxiliaryWork(context) && runWindow() <= 0) {
+        auxiliaryMissed = true;
+        void releaseBase();
+        logger.warn({
+            message: `[ULTRA] PR#${prNumber}: no time left in the job for Kody Rules and custom agents; the review goes on without them`,
+            context: 'UltraReview',
+            metadata: logMeta,
+        });
+    } else if (hasAuxiliaryWork(context)) {
         const stop = deadlineSignal(context.parentSignal, runWindow());
         let abandoned = false;
         // Left behind, its later steps stop before their next model call.
@@ -441,6 +475,7 @@ export async function executeUltraReview(
         ).then((result) => {
             if (result !== TIMED_OUT) return result;
             abandoned = true;
+            auxiliaryMissed = true;
             leftBehind.abort();
             void releaseBase();
             logger.warn({
@@ -463,6 +498,14 @@ export async function executeUltraReview(
         run: async (model) => {
             const tag = runTag(model);
             const window = runWindow();
+            // The stage started too late in the job: no review starts.
+            if (window <= 0) {
+                return {
+                    completed: false,
+                    failureReason:
+                        'No time was left in the job for its review.',
+                };
+            }
             const startedAt = Date.now();
             // The deadline covers the wait for a sandbox slot too: a run
             // that waits past it reviews with what time is left, or none.
@@ -624,10 +667,20 @@ export async function executeUltraReview(
         metadata: { merge },
     });
 
-    const crossDeduped = await withDeadline(
-        host.crossDedupStreams(merged, auxRules, prNumber, main),
+    const dedupStop = deadlineSignal(
+        context.parentSignal,
         limits.crossDedupDeadlineMs,
     );
+    const crossDeduped = await withDeadline(
+        host.crossDedupStreams(
+            merged,
+            auxRules,
+            prNumber,
+            main,
+            dedupStop.signal,
+        ),
+        limits.crossDedupDeadlineMs,
+    ).finally(dedupStop.abort);
     // Past its deadline the comments go out without that dedup.
     if (crossDeduped === TIMED_OUT) {
         logger.warn({
@@ -662,6 +715,23 @@ export async function executeUltraReview(
             ...runWarnings,
         ]);
         if (warnings.length) draft.reviewWarnings = warnings;
+        if (auxiliaryMissed) {
+            if (!draft.errors) draft.errors = [];
+            draft.errors.push({
+                pipelineId: context.pipelineMetadata?.pipelineId,
+                stage: 'AgentReviewStage',
+                substage: 'ultra-auxiliary',
+                error: new Error(
+                    'Kody Rules and custom agents did not finish in time',
+                ),
+                severity: 'partial',
+                metadata: {
+                    prNumber,
+                    reason: ULTRA_REVIEW_DEGRADED_REASON,
+                    outcome,
+                },
+            });
+        }
         if (outcome === 'success') return;
         if (!draft.errors) draft.errors = [];
         const failed = runs

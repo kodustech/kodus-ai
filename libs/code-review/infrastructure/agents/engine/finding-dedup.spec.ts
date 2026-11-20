@@ -94,6 +94,24 @@ describe('deduplicateFindings with createFindingDedupDeps', () => {
         );
     });
 
+    it('past its deadline, stops without calling the model', async () => {
+        runSpy = jest.spyOn(LLM, 'run');
+        const stop = new AbortController();
+        stop.abort();
+
+        await expect(
+            deduplicateFindings(
+                makeDeps(),
+                [dupA(), dupA()],
+                7,
+                slot,
+                telemetryMeta,
+                stop.signal,
+            ),
+        ).rejects.toThrow();
+        expect(runSpy).not.toHaveBeenCalled();
+    });
+
     it('keeps distinct findings', async () => {
         runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
             groups: [],
@@ -174,7 +192,9 @@ describe('deduplicateFindings with createFindingDedupDeps', () => {
 
     it('logs an embedding outage with the review it happened in', async () => {
         (buildPlatformEmbedder as jest.Mock).mockReturnValueOnce({} as any);
-        (tracedEmbed as jest.Mock).mockRejectedValue(new Error('embeddings down'));
+        (tracedEmbed as jest.Mock).mockRejectedValue(
+            new Error('embeddings down'),
+        );
         runSpy = jest
             .spyOn(LLM, 'run')
             .mockResolvedValueOnce({
