@@ -94,6 +94,17 @@ KodusCreditChargeModelSchema.index(
     { organizationId: 1, spanAt: -1 },
     { background: true },
 );
+// listCharges for one PR: without it the read walked the organization's
+// (organizationId, spanAt) entries until it found `limit` charges of that PR.
+// Partial: only charges that carry a PR number enter it.
+KodusCreditChargeModelSchema.index(
+    { organizationId: 1, prNumber: 1, spanAt: -1 },
+    {
+        name: 'idx_org_pr_spanAt',
+        background: true,
+        partialFilterExpression: { prNumber: { $exists: true } },
+    },
+);
 
 /**
  * Per-org sweep cursor: the `timestamp` up to which spans have been journaled.

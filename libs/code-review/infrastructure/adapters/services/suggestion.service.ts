@@ -123,6 +123,7 @@ export class SuggestionService implements ISuggestionService {
         savedSuggestions,
         diffSource = 'incremental',
         removedFiles = [],
+        pullRequestId,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -131,6 +132,8 @@ export class SuggestionService implements ISuggestionService {
         diffSource?: ChangedFilesSource;
         /** Files the diff deleted: not in `changedFiles`, which leaves them out. */
         removedFiles?: string[];
+        /** `_id` of the PR document the suggestions live in. */
+        pullRequestId?: string;
     }): Promise<ImplementationCheckResult> {
         const candidates = savedSuggestions.filter(
             (s) =>
@@ -422,7 +425,7 @@ export class SuggestionService implements ISuggestionService {
                 id,
                 data,
                 organizationAndTeamData,
-                { ...options, returnDocument: false },
+                { ...options, returnDocument: false, pullRequestId },
             );
         // The record field by field: replacing the whole record would drop
         // the locations another check of the group stored meanwhile.
@@ -452,6 +455,7 @@ export class SuggestionService implements ISuggestionService {
                                 {},
                                 organizationAndTeamData,
                                 {
+                                    pullRequestId,
                                     addToSet: {
                                         [LOCATIONS_FIELD]: group.fixedNow,
                                     },

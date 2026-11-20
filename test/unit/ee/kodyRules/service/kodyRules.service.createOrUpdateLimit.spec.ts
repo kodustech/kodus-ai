@@ -421,15 +421,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
                 currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
                 return Promise.resolve(currentEntity);
             }),
-            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
-                const rules = currentEntity.toObject().rules.map((r) =>
-                    r.uuid === ruleId ? { ...r, ...patch } : r,
-                );
+            updateRulesFields: jest.fn().mockImplementation((_uuid, changes) => {
+                const rules = currentEntity.toObject().rules.map((r) => {
+                    const change = changes.find((c) => c.ruleId === r.uuid);
+                    return change ? { ...r, ...change.patch } : r;
+                });
                 currentEntity = KodyRulesEntity.create({
                     ...currentEntity.toObject(),
                     rules,
                 });
-                return Promise.resolve(currentEntity);
+                return Promise.resolve([]);
             }),
         };
 
@@ -457,8 +458,8 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
         // Wait briefly for the background syncRulesWithPlanLimit to complete
         await new Promise((r) => setTimeout(r, 100));
 
-        // Check that repository.updateRule was called to persist updated active rules to MongoDB
-        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        // The reactivated rules are persisted to MongoDB in one bulk write.
+        expect(repositoryMock.updateRulesFields).toHaveBeenCalledTimes(1);
         const updatedRules = currentEntity.toObject().rules;
 
         // r1 and r2 flipped to ACTIVE & lockedByPlan: false
@@ -489,17 +490,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             findByOrganizationId: jest
                 .fn()
                 .mockImplementation(() => Promise.resolve(currentEntity)),
-            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
-                const rules = currentEntity
-                    .toObject()
-                    .rules.map((r) =>
-                        r.uuid === ruleId ? { ...r, ...patch } : r,
-                    );
+            updateRulesFields: jest.fn().mockImplementation((_uuid, changes) => {
+                const rules = currentEntity.toObject().rules.map((r) => {
+                    const change = changes.find((c) => c.ruleId === r.uuid);
+                    return change ? { ...r, ...change.patch } : r;
+                });
                 currentEntity = KodyRulesEntity.create({
                     ...currentEntity.toObject(),
                     rules,
                 });
-                return Promise.resolve(currentEntity);
+                return Promise.resolve([]);
             }),
         };
         const permissionValidationServiceMock = {
@@ -532,7 +532,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
         // once, for the fresh re-fetch after the write.
         expect(repositoryMock.findByOrganizationId).toHaveBeenCalledTimes(1);
         // Still reconciles: the plan-locked rule is reactivated.
-        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        expect(repositoryMock.updateRulesFields).toHaveBeenCalledTimes(1);
         expect(currentEntity.toObject().rules[0].status).toBe(
             KodyRulesStatus.ACTIVE,
         );

@@ -594,7 +594,10 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     ParametersKey.CODE_REVIEW_CONFIG,
                     organizationAndTeamData,
                 ),
-                this.kodyRulesService.findByOrganizationId(
+                // Deleted rules never apply and do not count toward the plan's
+                // active cap, so the review does not load them (as in
+                // codeBaseConfig).
+                this.kodyRulesService.findLiveRulesByOrganizationId(
                     organizationAndTeamData.organizationId,
                 ),
             ]);

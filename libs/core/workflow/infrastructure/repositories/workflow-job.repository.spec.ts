@@ -188,3 +188,35 @@ describe('WorkflowJobRepository.cancelActiveByCorrelation', () => {
         });
     });
 });
+
+describe('WorkflowJobRepository.countReapedSince', () => {
+    it('bounds the window on the DB clock and on the indexed updatedAt', async () => {
+        const qb = {
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getCount: jest.fn().mockResolvedValue(7),
+        };
+        const repo = new WorkflowJobRepository({
+            createQueryBuilder: jest.fn().mockReturnValue(qb),
+        } as any);
+
+        await expect(repo.countReapedSince(60, 'Orphaned:')).resolves.toBe(7);
+
+        const clauses = qb.andWhere.mock.calls.map(([sql]) => String(sql));
+        // No JS Date reaches the SQL: the cut-off is NOW() on the DB, the
+        // clock that stamped completedAt, whatever the process time zone.
+        for (const [, params] of qb.andWhere.mock.calls) {
+            for (const v of Object.values(params ?? {}))
+                expect(v).not.toBeInstanceOf(Date);
+        }
+        expect(clauses).toContain(
+            'job."updatedAt" >= NOW() - make_interval(mins => :windowMinutes)',
+        );
+        expect(clauses).toContain(
+            'job."completedAt" >= NOW() - make_interval(mins => :windowMinutes)',
+        );
+        expect(qb.where).toHaveBeenCalledWith('job.status = :status', {
+            status: JobStatus.FAILED,
+        });
+    });
+});

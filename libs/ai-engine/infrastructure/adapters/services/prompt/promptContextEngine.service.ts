@@ -13,6 +13,7 @@ import {
     IFileReference,
     IPromptReferenceSyncError,
     PromptReferenceErrorType,
+    NO_USABLE_DETECTION_ANSWER,
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { ReferenceDetectorService } from '@libs/ai-engine/infrastructure/adapters/services/reference-detector.service';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
@@ -157,17 +158,30 @@ export class PromptContextEngineService implements IPromptContextEngineService {
                 : undefined;
 
             if (!detectedReferences.length) {
+                // No usable answer means "could not tell", not "no
+                // references": it is recorded as a failed detection, so the
+                // entity's next write retries it instead of a clean revision
+                // standing in for it.
+                const syncErrors: IPromptReferenceSyncError[] = reliable
+                    ? []
+                    : [
+                          {
+                              type: PromptReferenceErrorType.DETECTION_FAILED,
+                              message: NO_USABLE_DETECTION_ANSWER,
+                              details: { timestamp: new Date() },
+                          },
+                      ];
                 const requirement = this.buildRequirement({
                     params,
                     references: [],
-                    syncErrors: [],
+                    syncErrors,
                     markers: [],
                     promptHash,
                 });
 
                 return {
                     references: [],
-                    syncErrors: [],
+                    syncErrors,
                     detectedMarkers: [],
                     promptHash,
                     requirements: requirement ? [requirement] : [],

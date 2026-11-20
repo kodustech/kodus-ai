@@ -18,6 +18,10 @@ import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
+import {
+    runtimeIdentity,
+    setRuntimeTaskId,
+} from '@libs/core/log/runtime-identity';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 import { securityScanSliceJobId } from '@libs/core/workflow/infrastructure/security-scan-runtime';
@@ -47,6 +51,11 @@ async function bootstrap() {
     const role = resolveWorkerRole();
     let appContext: INestApplicationContext | undefined;
     let logger: LoggerWrapperService | undefined;
+    // Before the app boots, so every log line and alert from boot on names
+    // its ECS task (the release comes from RELEASE_VERSION in the image).
+    // A slice child skips it: it runs only the engine, off the consumer.
+    const taskId = securityScanSliceJobId() ? undefined : await ecsTaskId();
+    setRuntimeTaskId(taskId);
 
     try {
         appContext = await NestFactory.createApplicationContext(
@@ -113,8 +122,7 @@ async function bootstrap() {
         // captures where a stall is stuck and alerts while it happens; not in
         // a slice child, whose whole point is to run heavy work off the
         // consumer's event loop. The ECS task id joins a stall alert to the
-        // task ECS stops.
-        const taskId = sliceJobId ? undefined : await ecsTaskId();
+        // task ECS stops (resolved before boot, above).
         startEventLoopMonitor(
             sliceJobId
                 ? {}
@@ -133,7 +141,7 @@ async function bootstrap() {
                           identity: {
                               role,
                               instanceId: hostname(),
-                              ...(taskId ? { taskId } : {}),
+                              ...runtimeIdentity(),
                           },
                       },
                   },

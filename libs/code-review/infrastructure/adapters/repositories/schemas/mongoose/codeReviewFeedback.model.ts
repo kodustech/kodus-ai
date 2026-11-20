@@ -4,7 +4,6 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 @Schema({
     collection: 'codeReviewFeedback',
     timestamps: true,
-    autoIndex: true,
 })
 export class CodeReviewFeedbackModel extends CoreDocument {
     @Prop({ type: String, required: true })

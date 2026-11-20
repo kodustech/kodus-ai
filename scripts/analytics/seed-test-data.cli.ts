@@ -280,7 +280,7 @@ async function main() {
     const args = parseArgs();
     const { uri, db } = buildMongoUri(args);
 
-    const client = new MongoClient(uri);
+    const client = new MongoClient(uri, { appName: 'kodus-script-seed-test-data' });
     await client.connect();
     const collection = client.db(db).collection('pullRequests');
 

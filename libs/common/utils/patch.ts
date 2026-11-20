@@ -66,9 +66,18 @@ function omitDeletionHunks(patchLines: string[]): string {
 // Maximum number of lines to process to prevent DoS attacks
 export const MAX_PATCH_LINES = 50000;
 
+/** Lines in a patch split on '\n'. A final newline ends the last line, it
+ *  does not start another, so the '' that `split` leaves after it is not
+ *  counted: a 50,000-line patch ending in '\n' is not over the limit. */
+function patchLineCount(lines: string[]): number {
+    return lines.length > 1 && lines[lines.length - 1] === ''
+        ? lines.length - 1
+        : lines.length;
+}
+
 /** True when the converters below drop the end of `patch` (#2206). */
 export function exceedsPatchLineLimit(patch: string | undefined): boolean {
-    return !!patch && patch.split('\n').length > MAX_PATCH_LINES;
+    return !!patch && patchLineCount(patch.split('\n')) > MAX_PATCH_LINES;
 }
 
 /** Ends a diff cut at MAX_PATCH_LINES, so the reader knows the rest is not
@@ -196,11 +205,10 @@ export function convertToHunksWithLinesNumbers(
         }
     }
 
-    if (allPatchLines.length > MAX_PATCH_LINES) {
+    const totalLines = patchLineCount(allPatchLines);
+    if (totalLines > MAX_PATCH_LINES) {
         patchWithLinesStr =
-            patchWithLinesStr.trimEnd() +
-            '\n' +
-            patchLineLimitNote(allPatchLines.length);
+            patchWithLinesStr.trimEnd() + '\n' + patchLineLimitNote(totalLines);
     }
 
     return patchWithLinesStr.trim();
@@ -261,8 +269,9 @@ export function convertToUnifiedDiffWithLineNumbers(
         }
     }
 
-    if (allLines.length > MAX_PATCH_LINES) {
-        result.push(patchLineLimitNote(allLines.length));
+    const totalLines = patchLineCount(allLines);
+    if (totalLines > MAX_PATCH_LINES) {
+        result.push(patchLineLimitNote(totalLines));
     }
 
     return result.join('\n');

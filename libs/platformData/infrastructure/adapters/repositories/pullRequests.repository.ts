@@ -44,7 +44,10 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { clampPatchForPersistWithFlag } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
-import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
+import {
+    MONGO_LONG_QUERY_MAX_TIME_MS,
+    MONGO_QUERY_MAX_TIME_MS,
+} from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 // Bounds findSuggestionsByPRAndFilenames / findPrLevelSuggestionsByPR in the
 // aggregation itself, instead of fetching a whole PR's suggestion history and
@@ -499,6 +502,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     organizationId: 1,
                 },
             )
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
             .lean()
             .exec();
 
@@ -1157,6 +1161,24 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         }));
     }
 
+    // Walks `idx_org_user_id_createdAt_for_seat_labels` and stops at `limit`,
+    // so the answer costs at most `limit` index keys and no document. Loading
+    // the author's PRs to take `.length` read every one of them, patches
+    // included, for a number the license check only compares with 1.
+    async countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
+    ): Promise<number> {
+        return this.pullRequestsModel
+            .countDocuments(
+                { organizationId, 'user.id': String(authorId) },
+                { limit },
+            )
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
+    }
+
     // Counts DISTINCT PRs that delivered ≥1 suggestion, optionally narrowed by
     // severity (lowercased) and/or author email. Powers the "Needs attention"
     // (severities critical/high) and "Mine" (authorEmail) segment facets.
@@ -1368,6 +1390,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return result[0] || null;
@@ -1411,6 +1434,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return result;
@@ -1504,6 +1528,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return result;
@@ -1536,6 +1561,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 { $sort: { createdAt: -1 } },
                 { $limit: limit },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
 
@@ -1601,6 +1627,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return result;
@@ -1636,6 +1663,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return result;
@@ -1685,6 +1713,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         const prLevelSuggestions = await this.pullRequestsModel
@@ -1723,6 +1752,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return [...fileSuggestions, ...prLevelSuggestions];
@@ -2025,6 +2055,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const cursor = this.pullRequestsModel
             .aggregate(pipeline)
             .allowDiskUse(true)
+            .option({ maxTimeMS: MONGO_LONG_QUERY_MAX_TIME_MS })
             .cursor({ batchSize });
 
         const result: PullRequestsEntity[] = [];
@@ -2135,6 +2166,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const cursor = this.pullRequestsModel
             .aggregate(pipeline)
             .allowDiskUse(true)
+            .option({ maxTimeMS: MONGO_LONG_QUERY_MAX_TIME_MS })
             .cursor({ batchSize });
 
         const result: PullRequestsEntity[] = [];
@@ -2316,6 +2348,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
         const row = result?.[0];
         return {
@@ -2375,6 +2408,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
         return result?.[0]?.embeddedPatchBytes ?? 0;
     }
@@ -2710,15 +2744,24 @@ export class PullRequestsRepository implements IPullRequestsRepository {
               }
             : null;
 
+        // An _id that is not an ObjectId would throw a CastError and lose the
+        // write; such a PR is found by the suggestion id alone, as before.
+        const pullRequestFilter =
+            options?.pullRequestId &&
+            mongoose.Types.ObjectId.isValid(options.pullRequestId)
+                ? { _id: options.pullRequestId }
+                : {};
         const doc = await this.pullRequestsModel
             .findOneAndUpdate(
                 suggestionMatch
                     ? {
+                          ...pullRequestFilter,
                           'organizationId':
                               organizationAndTeamData.organizationId,
                           'files.suggestions': { $elemMatch: suggestionMatch },
                       }
                     : {
+                          ...pullRequestFilter,
                           'files.suggestions.id': suggestionId,
                           'organizationId':
                               organizationAndTeamData.organizationId,
