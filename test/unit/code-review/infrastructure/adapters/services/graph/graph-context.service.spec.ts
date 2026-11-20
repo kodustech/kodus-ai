@@ -402,23 +402,18 @@ describe('GraphContextService', () => {
             ).rejects.toThrow('sandbox crashed');
         });
 
-        it('should reject when the context output cannot be read, so the stage can record CALLGRAPH_FAILED', async () => {
-            mockSandbox.readFile.mockRejectedValue(new Error('read timed out'));
+        it('should reject when the context output cannot be read, so the stage can record CALLGRAPH_FAILED, but not when it is empty', async () => {
             const changedFiles = createChangedFiles(['src/handler.ts'], {
                 withPatch: true,
             });
 
+            mockSandbox.readFile.mockRejectedValue(new Error('read timed out'));
             await expect(
                 service.generateContextLegacy(mockSandbox, changedFiles),
             ).rejects.toThrow('context.xml could not be read: read timed out');
-        });
 
-        it('should still return an empty context when the output file is empty', async () => {
+            // A file that was read and is empty is an empty context.
             mockSandbox.readFile.mockResolvedValue('');
-            const changedFiles = createChangedFiles(['src/handler.ts'], {
-                withPatch: true,
-            });
-
             await expect(
                 service.generateContextLegacy(mockSandbox, changedFiles),
             ).resolves.toBe('');
