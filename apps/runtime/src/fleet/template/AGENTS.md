@@ -16,7 +16,8 @@ The environment template on boat (docs/runtime/host-providers.md §8.2): a provi
 - Never a PR's code: the bake must report the default branch and the requested fingerprint, or nothing is saved.
 - The saved disk holds no identity: the seal step removes the key, the certificate, the token file and `/tmp` before the save.
 - The setup host is destroyed whatever happens; a failed save keeps the older template.
-- The live `SetupHostPort` waits for the boat spike; only the flow and its fakes are built.
+- The live `SetupHostPort` waits for the boat spike; only the flow and its fakes are built. Until it exists, a Run host whose environment has no template starts from its class's cell base (`boat.base`) and builds the environment cold.
+- The cell base (`kodus-cell-<release>-<backend>`) is made outside runtime-fleet, once per cell release: the host recipe on a boat sandbox created with no env, `cell preflight` passing, never enrolled, saved; then named in the pool file and applied with `runtime-fleet apply`.
 
 ## Where new code goes
 - The live setup host: a `SetupHostPort` implementation here, wired in `../runtime-fleet.module.ts`.

@@ -44,6 +44,15 @@ export const BoatClassSchema = z.strictObject({
     ttlSeconds: z.number().int().min(600).max(86_400).default(7200),
     /** The boat organization (wallet) the hosts are billed to. */
     org: z.string().min(1).max(128).optional(),
+    /**
+     * The cell base (§8.2): the saved snapshot of a cell release on boat's image, never enrolled, that a Run host
+     * starts from when its environment has no template of its own. Org-neutral by construction, so never an
+     * environment template (kodus-env-…): one org's baked data would boot every org's hosts.
+     */
+    base: z
+        .string()
+        .regex(/^kodus-cell-[a-z0-9][a-z0-9-]{0,51}$/, 'a cell base is a kodus-cell-<release>-<backend> saved snapshot of at most 63 characters, never an environment template')
+        .optional(),
 });
 
 const ClassBase = { kind: z.literal('HostClass'), name: Slug };
@@ -56,6 +65,9 @@ export const HostClassSchema = z.discriminatedUnion('provider', [
     z.strictObject({ ...ClassBase, provider: z.literal('baremetal'), baremetal: z.record(z.string(), z.unknown()) }),
 ]);
 export type HostClass = z.infer<typeof HostClassSchema>;
+
+/** What a Run host of this class starts from when its environment has no template: the class's cell base. */
+export const cellBaseOf = (cls: HostClass): string | undefined => (cls.provider === 'boat' ? cls.boat.base : undefined);
 
 const Capacity = z
     .strictObject({ min: z.number().int().min(0), max: z.number().int().min(0).max(1000), warm: z.number().int().min(0).default(0), stopped: z.number().int().min(0).default(0) })

@@ -136,6 +136,16 @@
                 "tsConfigPath": "apps/runtime/tsconfig.json",
                 "deleteOutDir": false
             }
+        },
+        "runtime-fleet": {
+            "type": "application",
+            "root": "apps/runtime",
+            "entryFile": "fleet/main",
+            "sourceRoot": "apps/runtime/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/runtime/tsconfig.json",
+                "deleteOutDir": false
+            }
         }
     }
 }

@@ -251,6 +251,17 @@ CMD ["node", "dist/apps/runtime/worker/main.js"]
 FROM runtime-control-plane AS runtime-preview-edge
 CMD ["node", "dist/apps/runtime/edge/main.js"]
 
+# runtime-fleet (docs/runtime/host-providers.md §4.1): makes and removes the hosts
+# of perRun pools; the only process that holds a host provider key. The same image
+# runs `apply -f <dir>` from the deploy pipeline to write the pools (§5.2):
+#   docker run --rm -e RUNTIME_DATABASE_URL -v ./pools:/pools:ro <image> \
+#     node dist/apps/runtime/fleet/main.js apply -f /pools
+# Stops here, with the reason, until build:apps builds runtime-fleet (package.json).
+FROM runtime-control-plane AS runtime-fleet
+RUN test -s dist/apps/runtime/fleet/main.js \
+ || { echo "dist/apps/runtime/fleet/main.js is missing: build:apps must run 'nest build runtime-fleet'" >&2; exit 1; }
+CMD ["node", "dist/apps/runtime/fleet/main.js"]
+
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]
 CMD ["node", "dist/apps/mcp-manager/main.js"]

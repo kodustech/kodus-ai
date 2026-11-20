@@ -582,6 +582,24 @@ export function loadFleetConfig(env: Env = process.env): FleetConfig {
     };
 }
 
+/**
+ * `runtime-fleet apply` (docs/runtime/host-providers.md §5.2): only the Runtime database. It holds no provider
+ * key, hub certificate or seal key, so the deploy pipeline that runs it needs nothing else.
+ */
+export interface FleetApplyConfig {
+    databaseUrl: string;
+    /** `fake` pools are accepted only outside the production image, with RUNTIME_FLEET_FAKE_PROVIDER=1. */
+    allowFake: boolean;
+}
+
+export function loadFleetApplyConfig(env: Env = process.env): FleetApplyConfig {
+    const productionImage = isProductionImage(env);
+    const databaseUrl = required(env, 'RUNTIME_DATABASE_URL', productionImage ? undefined : 'postgres://runtime:runtime@localhost:5442/kodus_runtime');
+    const allowFake = flag01(env, 'RUNTIME_FLEET_FAKE_PROVIDER');
+    if (allowFake && productionImage) throw new Error('refused in the production image: RUNTIME_FLEET_FAKE_PROVIDER');
+    return { databaseUrl, allowFake };
+}
+
 /** The Runtime database URL with `_fleet` after its name: the fleet's DBOS system database by default. */
 export function fleetSystemDatabaseOf(databaseUrl: string): string {
     const u = new URL(databaseUrl);
