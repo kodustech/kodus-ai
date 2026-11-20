@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { RUNTIME_CRON_SCHEDULES } from './runtime-cron-schedules';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -20,7 +20,7 @@ export class RuntimePullRequestSessionSweepCron {
         private readonly locks: DistributedLockService,
     ) {}
 
-    @Cron(RUNTIME_CRON_SCHEDULES.prSessionSweep, { name: 'Runtime PR session sweep' })
+    @GatedCron(RUNTIME_CRON_SCHEDULES.prSessionSweep, { name: 'Runtime PR session sweep' })
     async handleCron(): Promise<void> {
         // The API imports the Runtime everywhere; a deployment without it sweeps nothing.
         if (!kodyRuntimeEnabledInThisProcess()) return;

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { RUNTIME_CRON_SCHEDULES } from './runtime-cron-schedules';
 import { metrics, type Meter } from '@opentelemetry/api';
 
@@ -51,7 +51,7 @@ export class RuntimePoolSchedulerCron {
         private readonly metrics: PoolSchedulerMetrics = new OtelPoolSchedulerMetrics(),
     ) {}
 
-    @Cron(RUNTIME_CRON_SCHEDULES.poolScheduler, { name: 'Runtime pool scheduler' })
+    @GatedCron(RUNTIME_CRON_SCHEDULES.poolScheduler, { name: 'Runtime pool scheduler' })
     async handleCron(): Promise<void> {
         // The API imports the Runtime everywhere; a deployment without it has no pool to schedule.
         if (!kodyRuntimeEnabledInThisProcess()) return;

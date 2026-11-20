@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { RUNTIME_CRON_SCHEDULES } from './runtime-cron-schedules';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -31,7 +31,7 @@ export class RuntimeWebhookReconcilerCron {
         private readonly config: WebhookReconcilerConfig,
     ) {}
 
-    @Cron(RUNTIME_CRON_SCHEDULES.webhookReconciler, { name: 'Runtime webhook reconciler' })
+    @GatedCron(RUNTIME_CRON_SCHEDULES.webhookReconciler, { name: 'Runtime webhook reconciler' })
     async handleCron(): Promise<void> {
         if (!this.config.enabled) return;
         let lock: DistributedLock | null;

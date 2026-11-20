@@ -10,7 +10,7 @@ import {
     Optional,
     type OnModuleDestroy,
 } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import type {
     DistributedLock,
     DistributedLockService,
@@ -115,7 +115,7 @@ export class RuntimeExternalMaintenanceCron implements OnModuleDestroy {
         )
             throw new RangeError('Invalid external maintenance budget');
     }
-    @Cron('0 * * * * *', { name: 'Runtime external task maintenance' })
+    @GatedCron('0 * * * * *', { name: 'Runtime external task maintenance' })
     async handleCron(): Promise<void> {
         if (!this.options.enabled || this.closing || this.running) return;
         this.running = true;

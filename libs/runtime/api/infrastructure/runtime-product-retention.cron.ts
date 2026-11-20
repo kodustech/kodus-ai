@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { RUNTIME_CRON_SCHEDULES } from './runtime-cron-schedules';
 import { DataSource } from 'typeorm';
 
@@ -68,7 +68,7 @@ export class RuntimeProductRetentionCron {
         this.sql = new TypeOrmSql(source);
     }
 
-    @Cron(RUNTIME_CRON_SCHEDULES.productRetention, { name: 'Runtime product retention' })
+    @GatedCron(RUNTIME_CRON_SCHEDULES.productRetention, { name: 'Runtime product retention' })
     async handleCron(): Promise<void> {
         // Off, the Runtime costs nothing: no lock, no delete every tick.
         if (!kodyRuntimeEnabledInThisProcess()) return;

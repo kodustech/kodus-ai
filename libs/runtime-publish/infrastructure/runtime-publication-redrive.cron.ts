@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { RUNTIME_CRON_SCHEDULES } from '@libs/runtime/api/infrastructure/runtime-cron-schedules';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -18,7 +18,7 @@ export class RuntimePublicationRedriveCron {
 
     constructor(private readonly redrive: RedriveRuntimePublicationsUseCase) {}
 
-    @Cron(RUNTIME_CRON_SCHEDULES.publicationRedrive, { name: 'Runtime publication redrive' })
+    @GatedCron(RUNTIME_CRON_SCHEDULES.publicationRedrive, { name: 'Runtime publication redrive' })
     async handleCron(): Promise<void> {
         // A slow sweep (a platform answering slowly) never overlaps the next tick.
         if (this.running) return;
