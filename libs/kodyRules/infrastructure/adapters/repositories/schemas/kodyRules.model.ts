@@ -4,7 +4,6 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 @Schema({
     collection: 'kodyRules',
     timestamps: true,
-    autoIndex: true,
 })
 export class KodyRulesModel {
     // findOne({ organizationId }) is the hottest query on this

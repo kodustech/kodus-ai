@@ -24,10 +24,12 @@ export function jobFields(job: {
     organizationId?: string;
 }): JobFields {
     const p = (job.payload ?? {}) as any;
-    // Webhook jobs wrap the provider payload.
-    const w = (
-        p.payload && typeof p.payload === 'object' ? p.payload : p
-    ) as any;
+    // The provider's webhook body: a code review job carries it as
+    // `codeManagementPayload` (EnqueueCodeReviewJobUseCase), a webhook job as
+    // `payload`.
+    const w = ([p.codeManagementPayload, p.payload].find(
+        (v) => v && typeof v === 'object',
+    ) ?? p) as any;
     const repo =
         p.repository ?? w.repository ?? w.project ?? w.resource?.repository;
     return {

@@ -571,6 +571,26 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             },
         );
 
+        it('writes every verdict to the PR document it was given, grouped or not', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            await service.checkImplementedSuggestions({
+                organizationAndTeamData: org,
+                prNumber: 42,
+                changedFiles: [fileA, fileB] as any,
+                savedSuggestions: [grouped(), sent('s-2', 'app/a.rb')] as any,
+                pullRequestId: 'pr-doc-1',
+            });
+
+            const calls = pullRequestService.updateSuggestion.mock.calls;
+            expect(calls.map(([id]) => id)).toEqual(
+                expect.arrayContaining(['s-1', 's-2']),
+            );
+            for (const [, , , options] of calls) {
+                expect(options.pullRequestId).toBe('pr-doc-1');
+            }
+        });
+
         it('reads the other locations from the comment when the suggestion carries no list', async () => {
             answerAll(ImplementationStatus.IMPLEMENTED);
 

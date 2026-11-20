@@ -418,6 +418,18 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
+    ): Promise<number> {
+        return this.pullRequestsRepository.countByAuthor(
+            organizationId,
+            authorId,
+            limit,
+        );
+    }
+
     async findSuggestionsByPRAndFilename(
         prNumber: number,
         repoFullName: string,

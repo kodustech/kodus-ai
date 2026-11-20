@@ -11,6 +11,7 @@ import {
     mapSimpleModelsToEntities,
     mapSimpleModelToEntity,
 } from '@libs/core/infrastructure/repositories/mappers';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 @Injectable()
 export class RuleLikesRepository implements IRuleLikeRepository {
@@ -94,6 +95,7 @@ export class RuleLikesRepository implements IRuleLikeRepository {
                 { $match: { ruleId } },
                 { $group: { _id: '$ruleId', count: { $sum: 1 } } },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return res?.count ?? 0;
@@ -111,6 +113,7 @@ export class RuleLikesRepository implements IRuleLikeRepository {
                 { $limit: limit },
                 { $project: { _id: 0, ruleId: '$_id', count: 1 } },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
 
@@ -164,6 +167,9 @@ export class RuleLikesRepository implements IRuleLikeRepository {
             },
         ];
 
-        return this.likeModel.aggregate(pipeline).exec();
+        return this.likeModel
+            .aggregate(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
     }
 }
