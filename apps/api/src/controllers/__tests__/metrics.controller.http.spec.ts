@@ -31,7 +31,9 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
-// Stands in for the JWT layer: the request carries whatever user the test sets.
+// Stands in for the global JwtAuthGuard, which answers 401 to a request with no
+// valid token before PolicyGuard runs. Past it, the request carries whatever
+// user the test sets.
 let currentUser: any;
 
 @Injectable()
@@ -50,9 +52,10 @@ const memberOf = (role: Role) => ({
 });
 
 /**
- * The internal metrics routes as a client sees them: a request without a
- * signed-in member is refused before any metric is read, a member who may read
- * logs gets the metrics, and a window that is not a whole number is a 400.
+ * The internal metrics routes as a client sees them: a request that reaches the
+ * policy check with no member is refused before any metric is read, a member
+ * who may read logs gets the metrics, and a window that is not a whole number
+ * is a 400.
  * The real PolicyGuard and the same ValidationPipe options as main.ts run here.
  */
 describe('MetricsController (HTTP)', () => {
@@ -121,7 +124,7 @@ describe('MetricsController (HTTP)', () => {
         '/internal/metrics/pipeline-performance',
         '/internal/metrics/summary',
     ])(
-        '%s is 403 without a signed-in member and reads no metric',
+        '%s is 403 when the request carries no member, and reads no metric',
         async (path) => {
             currentUser = undefined;
 
