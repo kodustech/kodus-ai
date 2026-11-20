@@ -38,11 +38,14 @@ export function normalizeModelId(modelId: string): string {
     id = id.split('/').pop() ?? '';
     id = id.split('@')[0];
     id = id.replace(/^(?:(?:us|eu|apac|global)\.)?[a-z]+\.(?=[a-z])/, '');
+    // A Bedrock version (`-v1:0`) goes; a `-v4` that names the model stays.
+    id = id.replace(/-v\d+:.*$/, '');
     id = id.split(':')[0];
-    id = id.replace(/-v\d+$/, '');
     id = id.replace(/(\d)p(\d)/g, '$1-$2');
     id = id.replace(/[._\s]+/g, '-');
-    id = id.replace(/-(?:\d{8}|latest)$/, '');
+    // A release date, `-20261101` or `-2026-11-01`. Not `-MMDD`: that
+    // names a distinct release (Kimi K2 0711 and 0905).
+    id = id.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2}|latest)$/, '');
     return id;
 }
 

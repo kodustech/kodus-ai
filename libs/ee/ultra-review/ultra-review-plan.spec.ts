@@ -334,8 +334,20 @@ describe('the merge ranking', () => {
         ['Qwen/Qwen3.8-27B', 'qwen3-8-27b'],
         ['deepseek-v4.1-flash@fireworks', 'deepseek-v4-1-flash'],
         ['moonshotai/kimi-k3.1-pro:free', 'kimi-k3-1-pro'],
+        ['gpt-6.1-sol-2026-05-01', 'gpt-6-1-sol'],
+        ['deepseek-v4', 'deepseek-v4'],
+        ['kimi-k2-0905', 'kimi-k2-0905'],
     ])('reads %s as %s', (raw, normalized) => {
         expect(normalizeModelId(raw)).toBe(normalized);
+    });
+
+    it('keeps two versions of a model apart, and two dated releases', () => {
+        expect(normalizeModelId('deepseek-v4')).not.toBe(
+            normalizeModelId('deepseek-v3'),
+        );
+        expect(normalizeModelId('kimi-k2-0711')).not.toBe(
+            normalizeModelId('kimi-k2-0905'),
+        );
     });
 
     it('keeps a model and its Flash sibling apart', () => {
