@@ -166,12 +166,6 @@ describe('CentralizedConfigService', () => {
 
         service = module.get<CentralizedConfigService>(
             CentralizedConfigService,
-            {
-                provide: ContextReferenceDetectionService,
-                useValue: {
-                    lastDetectionFailed: jest.fn().mockResolvedValue(false),
-                },
-            },
         );
 
         // Mock the logger to avoid console output during tests
