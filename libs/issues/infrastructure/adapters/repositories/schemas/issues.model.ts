@@ -17,7 +17,6 @@ import {
 @Schema({
     collection: 'issues',
     timestamps: true,
-    autoIndex: true,
 })
 export class IssuesModel extends CoreDocument {
     @Prop({ type: String, required: true })

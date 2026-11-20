@@ -521,8 +521,11 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
 
             this.client = new mongoClient(this.config.connectionString, {
                 appName: mongoAppName('exporter'),
-                maxPoolSize: 20, // Aumentado para alto volume
-                minPoolSize: 5, // Pool mínimo sempre ativo
+                // One batched insertMany every few seconds per process: a few
+                // connections are plenty, and none needs to stay open idle
+                // (minPoolSize holds per replica-set member).
+                maxPoolSize: 5,
+                minPoolSize: 0,
                 serverSelectionTimeoutMS: 3000, // Mais rápido
                 connectTimeoutMS: 5000, // Timeout menor
                 socketTimeoutMS: 30000, // Evita conexões travadas

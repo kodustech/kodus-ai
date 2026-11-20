@@ -24,6 +24,23 @@ export interface IKodyRulesRepository {
     findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null>;
+    /**
+     * The organization's rules minus the deleted ones, filtered by the
+     * server. For readers that never act on a deleted rule (the review):
+     * deleted rules stay in the document and can be most of it.
+     */
+    findLiveRulesByOrganizationId(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null>;
+    /**
+     * Applies several per-rule field patches to one rules document in a
+     * single round trip, each patch touching only its rule's fields. Returns
+     * the ids whose patch could not be written.
+     */
+    updateRulesFields(
+        uuid: string,
+        changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
+    ): Promise<string[]>;
 
     /**
      * Projected list of an organization's rules — id, title and scope only.

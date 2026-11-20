@@ -410,7 +410,10 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
             findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
         };
         const kodyRulesService = {
-            findByOrganizationId: jest.fn().mockResolvedValue(loadedEntity),
+            // The review reads the rules without the deleted ones.
+            findLiveRulesByOrganizationId: jest
+                .fn()
+                .mockResolvedValue(loadedEntity),
             // Paid → reconcile returns the fresh doc with the rule reactivated.
             syncRulesWithPlanLimit: jest.fn().mockResolvedValue({
                 toObject: () => ({ rules: [unlockedRule] }),
@@ -470,7 +473,10 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         const { service, kodyRulesService, filterKodyRules, loadedEntity } =
             buildService(false);
 
-        await service.getConfig(organizationAndTeamData, repository);
+        const config = await service.getConfig(
+            organizationAndTeamData,
+            repository,
+        );
 
         // Called with the already-loaded entity + the resolved plan gate.
         expect(kodyRulesService.syncRulesWithPlanLimit).toHaveBeenCalledWith(
@@ -479,19 +485,31 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         );
         // filterKodyRules must receive the reconciled (ACTIVE) rule.
         expect(filterKodyRules.mock.calls[0][0]).toEqual([unlockedRule]);
+        // And the review gets the reactivated rule.
+        expect(config.kodyRules).toEqual([unlockedRule]);
     });
 
     it('passes the free-plan gate through so the sync can enforce the cap', async () => {
-        const { service, kodyRulesService } = buildService(true);
+        const { service, kodyRulesService, filterKodyRules } =
+            buildService(true);
         // On free the reconcile no-ops here (returns null); the parked rule
         // flows through unchanged.
         kodyRulesService.syncRulesWithPlanLimit.mockResolvedValue(null);
+        filterKodyRules.mockImplementation((rules) => ({
+            standardRules: rules,
+            memoryRules: [],
+        }));
 
-        await service.getConfig(organizationAndTeamData, repository);
+        const config = await service.getConfig(
+            organizationAndTeamData,
+            repository,
+        );
 
         expect(kodyRulesService.syncRulesWithPlanLimit).toHaveBeenCalledWith(
             organizationAndTeamData,
             expect.objectContaining({ limited: true }),
         );
+        // The review gets the rule still parked by the plan, as loaded.
+        expect(config.kodyRules).toEqual([lockedRule]);
     });
 });

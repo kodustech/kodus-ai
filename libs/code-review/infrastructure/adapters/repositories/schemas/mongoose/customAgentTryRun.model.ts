@@ -7,7 +7,6 @@ import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongo
 @Schema({
     collection: 'customAgentTryRuns',
     timestamps: true,
-    autoIndex: true,
 })
 export class CustomAgentTryRunModel extends CoreDocument {
     @Prop({ type: String, required: true, unique: true })

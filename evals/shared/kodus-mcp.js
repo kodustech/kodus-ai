@@ -72,6 +72,15 @@ async function startKodusMcp({ storedConfig = null } = {}) {
     const doc = (data) => ({ _id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date(), ...data });
     const entity = (row, Entity) => (row ? mapSimpleModelToEntity(copy(row), Entity) : null);
 
+    // Field by field, as kodyRules.repository.ts sets `rules.$.<field>`.
+    const updateRule = async (uuid, ruleId, patch) => {
+        const saved = db.kodyRules.find((d) => d._id === uuid);
+        const rule = saved?.rules.find((r) => r.uuid === ruleId);
+        if (!rule) return null;
+        for (const [key, value] of Object.entries(patch)) if (value !== undefined) rule[key] = copy(value);
+        return entity(saved, KodyRulesEntity);
+        };
+
     const kodyRulesRepository = repository('kody rules repository', {
         findByOrganizationId: async (organizationId) => entity(db.kodyRules.find((d) => d.organizationId === organizationId), KodyRulesEntity),
         create: async (kodyRules) => {
@@ -89,13 +98,18 @@ async function startKodusMcp({ storedConfig = null } = {}) {
             saved.rules.push(copy(rule));
             return entity(saved, KodyRulesEntity);
         },
+        // The rules the review reads: every rule but the deleted ones.
+        findLiveRulesByOrganizationId: async (organizationId) => {
+            const saved = db.kodyRules.find((d) => d.organizationId === organizationId);
+            return saved ? entity({ ...saved, rules: saved.rules.filter((r) => r.status !== 'deleted') }, KodyRulesEntity) : null;
+        },
         // Field by field, as kodyRules.repository.ts sets `rules.$.<field>`.
-        updateRule: async (uuid, ruleId, patch) => {
-            const saved = db.kodyRules.find((d) => d._id === uuid);
-            const rule = saved?.rules.find((r) => r.uuid === ruleId);
-            if (!rule) return null;
-            for (const [key, value] of Object.entries(patch)) if (value !== undefined) rule[key] = copy(value);
-            return entity(saved, KodyRulesEntity);
+        updateRule,
+        // The plan sync's per-rule writes in one call; returns the ids it missed.
+        updateRulesFields: async (uuid, changes) => {
+            const failed = [];
+            for (const { ruleId, patch } of changes) if (!(await updateRule(uuid, ruleId, patch))) failed.push(ruleId);
+            return failed;
         },
     });
 

@@ -403,6 +403,9 @@ async function printStageDataIfAvailable(
         const stagesAgg = await db.collection('observability_logs_ts').aggregate([
             {
                 $match: {
+                    // correlationId is indexed on the logs; the pipelineId
+                    // alone scanned every log bucket of the collection.
+                    correlationId: exec.correlationId,
                     'attributes.pipelineId': pipelineId,
                     message: { $regex: 'Stage.*completed' },
                 },
@@ -434,7 +437,11 @@ async function printStageDataIfAvailable(
                 },
             },
             { $sort: { timestamp: 1 } },
-        ]).toArray();
+        ], {
+            // A diagnostic: never hold the primary, never run unbounded.
+            maxTimeMS: 60_000,
+            readPreference: 'secondaryPreferred',
+        }).toArray();
 
         if (stagesAgg.length === 0) continue;
 
