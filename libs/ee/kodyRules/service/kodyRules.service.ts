@@ -1419,10 +1419,13 @@ export class KodyRulesService implements IKodyRulesService {
     }
 
     async deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null> {
-        return this.kodyRulesRepository.deleteRuleLogically(uuid, ruleId);
+    ): Promise<boolean> {
+        return this.kodyRulesRepository.deleteRuleLogically(
+            organizationId,
+            ruleId,
+        );
     }
 
     async deleteRuleWithLogging(
@@ -1431,22 +1434,21 @@ export class KodyRulesService implements IKodyRulesService {
         userInfo: UserInfo,
     ): Promise<boolean> {
         try {
-            const existing = await this.findByOrganizationId(
+            // The audit entry needs the rule, not the organization's whole
+            // rules document: reading that once per deleted rule made a sync
+            // that removed 154 rules read the document 154 times.
+            const deletedRule = await this.findById(
+                ruleId,
                 organizationAndTeamData.organizationId,
-            );
-
-            if (!existing?.rules?.length) {
-                return false;
-            }
-
-            const deletedRule = existing.rules.find(
-                (rule) => rule.uuid === ruleId,
             );
             if (!deletedRule) {
                 return false;
             }
 
-            const rule = await this.deleteRuleLogically(existing.uuid, ruleId);
+            const deleted = await this.deleteRuleLogically(
+                organizationAndTeamData.organizationId,
+                ruleId,
+            );
 
             this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
                 organizationAndTeamData,
@@ -1458,7 +1460,7 @@ export class KodyRulesService implements IKodyRulesService {
                 ruleTitle: deletedRule.title,
             });
 
-            return !!rule;
+            return deleted;
         } catch (error) {
             this.logger.error({
                 message: 'Error deleting rule with logging',

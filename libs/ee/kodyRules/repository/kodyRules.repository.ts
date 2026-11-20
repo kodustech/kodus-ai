@@ -341,12 +341,26 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null> {
         const setFields = ruleFieldSet(updateData);
+        // Every caller reads back only the rule it wrote
+        // (`entity.rules.find(r => r.uuid === ruleId)`), so the document
+        // returned carries that rule alone instead of every rule of the
+        // organization.
+        const projection = {
+            organizationId: 1,
+            // `$eq`: a ruleId that arrives as an object (`{ $ne: null }`)
+            // must not turn into an operator that matches any rule.
+            rules: { $elemMatch: { uuid: { $eq: ruleId } } },
+        };
 
         // Nothing concrete to set (all-undefined patch) — avoid an empty $set,
         // which Mongo rejects. Return the current doc unchanged.
         if (!setFields) {
             const current = await this.kodyRulesModel
-                .findOne({ '_id': uuid, 'rules.uuid': ruleId })
+                .findOne(
+                    { '_id': uuid, 'rules.uuid': { $eq: ruleId } },
+                    projection,
+                )
+                .lean()
                 .exec();
             return current
                 ? mapSimpleModelToEntity(current, KodyRulesEntity)
@@ -355,10 +369,11 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
         const updated = await this.kodyRulesModel
             .findOneAndUpdate(
-                { '_id': uuid, 'rules.uuid': ruleId },
+                { '_id': uuid, 'rules.uuid': { $eq: ruleId } },
                 { $set: setFields },
-                { new: true },
+                { new: true, projection },
             )
+            .lean()
             .exec();
         return updated
             ? mapSimpleModelToEntity(updated, KodyRulesEntity)
@@ -383,8 +398,11 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         updateData: Partial<IKodyRule>,
     ): Promise<Partial<IKodyRule> | null> {
         const setFields = ruleFieldSet(updateData);
-        const filter = { organizationId, 'rules.uuid': ruleId };
-        const projection = { rules: { $elemMatch: { uuid: ruleId } } };
+        const filter = {
+            'organizationId': { $eq: organizationId },
+            'rules.uuid': { $eq: ruleId },
+        };
+        const projection = { rules: { $elemMatch: { uuid: { $eq: ruleId } } } };
 
         // All-undefined patch: Mongo rejects an empty $set, so read instead.
         const doc = !setFields
@@ -430,26 +448,32 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
     async deleteRule(uuid: string, ruleId: string): Promise<boolean> {
         const deleted = await this.kodyRulesModel
-            .updateOne({ _id: uuid }, { $pull: { rules: { uuid: ruleId } } })
+            .updateOne(
+                { _id: { $eq: uuid } },
+                // `$eq`: an object ruleId would otherwise pull every rule.
+                { $pull: { rules: { uuid: { $eq: ruleId } } } },
+            )
             .exec();
 
         return deleted.acknowledged;
     }
 
+    // updateOne: the caller only needs to know the rule was found. A
+    // findAndModify with `new: true` sent the whole rules document back.
     async deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null> {
-        const updated = await this.kodyRulesModel
-            .findOneAndUpdate(
-                { '_id': uuid, 'rules.uuid': ruleId },
+    ): Promise<boolean> {
+        const result = await this.kodyRulesModel
+            .updateOne(
+                {
+                    'organizationId': { $eq: organizationId },
+                    'rules.uuid': { $eq: ruleId },
+                },
                 { $set: { 'rules.$.status': KodyRulesStatus.DELETED } },
-                { new: true },
             )
             .exec();
-        return updated
-            ? mapSimpleModelToEntity(updated, KodyRulesEntity)
-            : null;
+        return result.matchedCount > 0;
     }
 
     async markAutoPausesDigested(

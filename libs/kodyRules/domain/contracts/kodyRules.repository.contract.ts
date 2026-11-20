@@ -89,10 +89,11 @@ export interface IKodyRulesRepository {
     /** Whether the organization has a Kody Rules document at all. */
     existsForOrganization(organizationId: string): Promise<boolean>;
     deleteRule(uuid: string, ruleId: string): Promise<boolean>;
+    /** Marks the organization's rule deleted; true when the rule was found. */
     deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null>;
+    ): Promise<boolean>;
     /**
      * Stamps `digestedAt` on the rule's `autoPause` / `lastAutoPause` whose
      * `pausedAt` is one of `pausedAts`. Matching on `pausedAt` keeps a resume

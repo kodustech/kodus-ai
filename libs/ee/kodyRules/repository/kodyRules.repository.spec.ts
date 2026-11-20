@@ -131,8 +131,9 @@ describe('KodyRulesRepository.updateRulesStatusByFilter', () => {
 describe('KodyRulesRepository.updateRule — clearing a field', () => {
     function build() {
         const exec = jest.fn().mockResolvedValue(null);
-        const findOneAndUpdate = jest.fn().mockReturnValue({ exec });
-        const findOne = jest.fn().mockReturnValue({ exec });
+        const query = { exec, lean: () => ({ exec }) };
+        const findOneAndUpdate = jest.fn().mockReturnValue(query);
+        const findOne = jest.fn().mockReturnValue(query);
         const repo = new KodyRulesRepository(
             { findOneAndUpdate, findOne } as any,
             {} as any,
@@ -270,8 +271,9 @@ describe('KodyRulesRepository.countRulesByRepository', () => {
 describe('KodyRulesRepository.updateRule (field-level merge)', () => {
     const buildRepo = () => {
         const exec = jest.fn().mockResolvedValue(null);
-        const findOneAndUpdate = jest.fn().mockReturnValue({ exec });
-        const findOne = jest.fn().mockReturnValue({ exec });
+        const query = { exec, lean: () => ({ exec }) };
+        const findOneAndUpdate = jest.fn().mockReturnValue(query);
+        const findOne = jest.fn().mockReturnValue(query);
         const modelMock = { findOneAndUpdate, findOne } as any;
         const repo = new KodyRulesRepository(modelMock, {} as any);
         return { repo, findOneAndUpdate, findOne };
@@ -286,7 +288,10 @@ describe('KodyRulesRepository.updateRule (field-level merge)', () => {
         } as any);
 
         const [filter, update] = findOneAndUpdate.mock.calls[0];
-        expect(filter).toEqual({ '_id': 'doc-1', 'rules.uuid': 'rule-1' });
+        expect(filter).toEqual({
+            '_id': 'doc-1',
+            'rules.uuid': { $eq: 'rule-1' },
+        });
         // Per-field $set — NOT { 'rules.$': {...} } which would wipe omitted fields.
         expect(update).toEqual({
             $set: {
@@ -318,9 +323,81 @@ describe('KodyRulesRepository.updateRule (field-level merge)', () => {
 
         // Empty $set is rejected by Mongo — must fall back to a read.
         expect(findOneAndUpdate).not.toHaveBeenCalled();
-        expect(findOne).toHaveBeenCalledWith({
-            '_id': 'doc-1',
-            'rules.uuid': 'rule-1',
+        expect(findOne).toHaveBeenCalledWith(
+            { '_id': 'doc-1', 'rules.uuid': { $eq: 'rule-1' } },
+            expect.anything(),
+        );
+    });
+
+    it('returns the rule it wrote, not every rule of the organization', async () => {
+        const { repo, findOneAndUpdate } = buildRepo();
+
+        await repo.updateRule('doc-1', 'rule-1', { title: 'New' } as any);
+
+        const [, , options] = findOneAndUpdate.mock.calls[0];
+        expect(options.projection.rules).toEqual({
+            $elemMatch: { uuid: { $eq: 'rule-1' } },
+        });
+    });
+
+    it('matches a ruleId sent as an object literally, never as an operator', async () => {
+        const { repo, findOneAndUpdate } = buildRepo();
+        const injected = { $ne: null } as unknown as string;
+
+        await repo.updateRule('doc-1', injected, { title: 'New' } as any);
+
+        const [filter, , options] = findOneAndUpdate.mock.calls[0];
+        expect(filter['rules.uuid']).toEqual({ $eq: injected });
+        expect(options.projection.rules.$elemMatch.uuid).toEqual({
+            $eq: injected,
+        });
+    });
+});
+
+describe('KodyRulesRepository writes keyed by a rule id', () => {
+    const injected = { $ne: null } as unknown as string;
+    const buildRepo = () => {
+        const exec = jest.fn().mockResolvedValue({ acknowledged: true });
+        const query = { exec, lean: () => ({ exec }) };
+        const updateOne = jest.fn().mockReturnValue(query);
+        const findOneAndUpdate = jest.fn().mockReturnValue(query);
+        const modelMock = { updateOne, findOneAndUpdate } as any;
+        return {
+            repo: new KodyRulesRepository(modelMock, {} as any),
+            updateOne,
+            findOneAndUpdate,
+        };
+    };
+
+    it('deleteRule pulls only the rule whose id equals the one given', async () => {
+        const { repo, updateOne } = buildRepo();
+
+        // Distinct values, so a swapped uuid/ruleId would show.
+        await repo.deleteRule('doc-1', injected);
+
+        const [filter, update] = updateOne.mock.calls[0];
+        expect(filter).toEqual({ _id: { $eq: 'doc-1' } });
+        expect(update).toEqual({
+            $pull: { rules: { uuid: { $eq: injected } } },
+        });
+
+        await repo.deleteRule(injected, 'rule-1');
+        expect(updateOne.mock.calls[1][0]).toEqual({
+            _id: { $eq: injected },
+        });
+    });
+
+    it('updateRuleFieldsByOrganization patches only the rule whose id equals the one given', async () => {
+        const { repo, findOneAndUpdate } = buildRepo();
+
+        await repo.updateRuleFieldsByOrganization('org-1', injected, {
+            title: 'New',
+        } as any);
+
+        const [filter, , options] = findOneAndUpdate.mock.calls[0];
+        expect(filter['rules.uuid']).toEqual({ $eq: injected });
+        expect(options.projection.rules.$elemMatch.uuid).toEqual({
+            $eq: injected,
         });
     });
 });
