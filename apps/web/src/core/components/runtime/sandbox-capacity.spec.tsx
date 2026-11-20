@@ -28,6 +28,13 @@ const view = (over: Partial<SandboxCapacityView> = {}): SandboxCapacityView => (
     ...over,
 });
 
+// Radix Switch measures its box; jsdom has no ResizeObserver.
+(globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+};
+
 const mutate = jest.fn();
 beforeEach(() => {
     mutate.mockReset();
@@ -58,7 +65,7 @@ describe("capacity model", () => {
 describe("SandboxCapacityForm", () => {
     it("shows the live numbers, the size and the pool", () => {
         render(<SandboxCapacityForm view={view()} />);
-        expect(screen.getByText("4/5")).toBeInTheDocument();
+        expect(screen.getByText("4 of 5")).toBeInTheDocument();
         expect(screen.getByText("2")).toBeInTheDocument();
         expect(screen.getByText("1m12s")).toBeInTheDocument();
         expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
@@ -75,8 +82,10 @@ describe("SandboxCapacityForm", () => {
                 })}
             />,
         );
-        expect(screen.getByText("no limit")).toBeInTheDocument();
+        expect(screen.getByText("No limit set")).toBeInTheDocument();
         expect(screen.queryByRole("progressbar")).toBeNull();
+        expect(screen.queryByLabelText("Maximum at the same time")).toBeNull();
+        expect(screen.getByRole("switch")).not.toBeChecked();
     });
 
     it("says why there is no suggestion when the cell is unknown", () => {
@@ -102,11 +111,27 @@ describe("SandboxCapacityForm", () => {
         );
     });
 
-    it("saves an empty cap as null (no limit)", () => {
+    it("saves no limit as null when the switch is turned off", () => {
         render(<SandboxCapacityForm view={view()} />);
-        fireEvent.change(screen.getByLabelText("Maximum at the same time"), { target: { value: "" } });
+        fireEvent.click(screen.getByRole("switch"));
         fireEvent.click(screen.getByRole("button", { name: "Save" }));
         expect(mutate).toHaveBeenCalledWith({ maxConcurrent: null, maxWaitMs: 600_000 }, expect.any(Object));
+    });
+
+    it("shows the unsaved state, Discard restores it", () => {
+        render(<SandboxCapacityForm view={view()} />);
+        fireEvent.change(screen.getByLabelText("Maximum at the same time"), { target: { value: "4" } });
+        expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+        fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+        expect(screen.getByLabelText("Maximum at the same time")).toHaveValue(5);
+        expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+
+    it("refuses an empty cap while the limit is on", () => {
+        render(<SandboxCapacityForm view={view()} />);
+        fireEvent.change(screen.getByLabelText("Maximum at the same time"), { target: { value: "" } });
+        expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+        expect(screen.getByRole("alert")).toHaveTextContent(/turn the limit off/);
     });
 
     it("refuses an invalid cap", () => {
@@ -128,6 +153,7 @@ describe("SandboxCapacitySection states", () => {
         (useSandboxCapacity as jest.Mock).mockReturnValue({ isLoading: false, isError: true });
         render(<SandboxCapacitySection />);
         expect(screen.getByText(/not available right now/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     });
     it("ready", () => {
         (useSandboxCapacity as jest.Mock).mockReturnValue({ isLoading: false, isError: false, data: view() });
