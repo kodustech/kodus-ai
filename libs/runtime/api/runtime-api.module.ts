@@ -107,6 +107,7 @@ import {
     RUNTIME_AGENT_RUNNER_FACTORY,
     RUNTIME_API_CONFIG,
     RUNTIME_CELL_READER,
+    RUNTIME_SANDBOX_CELL_FACTS_READER,
     RUNTIME_CELL_TOKEN_READER,
     RUNTIME_CLOCK,
     RUNTIME_ENVIRONMENT_READER,
@@ -164,7 +165,7 @@ import {
 } from './infrastructure/typeorm-runtime-product.stores';
 import { TypeOrmRuntimeLlmBudgetStore } from './infrastructure/typeorm-llm-budget.store';
 import { PgBuildStateEvictionReader, PgEnvironmentSetupReader, PgLessonReader, ProjectionEnvironmentReader, ReadOnlyRunProjectionStore } from './infrastructure/pg-runtime-readers';
-import { PgRuntimeCellReader, PgRuntimeCellTokenReader } from './infrastructure/pg-runtime-cell.reader';
+import { PgRuntimeCellReader, PgRuntimeCellTokenReader, PgSandboxCellFactsReader } from './infrastructure/pg-runtime-cell.reader';
 import { loadDashboardUrl, loadRuntimeApiConfig, loadWebhookReconcilerConfig } from './infrastructure/runtime-api.config';
 import { RuntimeReadDb } from './infrastructure/runtime-read-db';
 import { RuntimeProductRetentionCron } from './infrastructure/runtime-product-retention.cron';
@@ -380,6 +381,11 @@ const useCases = [
                     : new PgRuntimeRunStreamReader(db, config.streamDir ? new FileRunStreamStore(config.streamDir) : undefined),
         },
         {
+            provide: RUNTIME_SANDBOX_CELL_FACTS_READER,
+            inject: [RuntimeReadDb],
+            useFactory: (db: RuntimeReadDb) => new PgSandboxCellFactsReader(db),
+        },
+        {
             provide: RUNTIME_CELL_READER,
             inject: [RuntimeReadDb],
             useFactory: (db: RuntimeReadDb) => new PgRuntimeCellReader(db),
@@ -554,6 +560,6 @@ const useCases = [
         RuntimeA2ABearerGuard,
         ...useCases,
     ],
-    exports: [RUNTIME_RUN_PROJECTION_STORE, RUNTIME_RELEASE_GATE, RUNTIME_CLOCK, RUNTIME_WEBHOOK_RECONCILER_CONFIG, RuntimeWebhookReconciler, ...useCases, RuntimeReaderAuthGuard, RuntimeRunEnqueuer, RuntimeEnvToolsService, RuntimePoolController, RuntimeA2AAdapter, RuntimeA2ABearerGuard],
+    exports: [RUNTIME_RUN_PROJECTION_STORE, RUNTIME_SANDBOX_CELL_FACTS_READER, RUNTIME_RELEASE_GATE, RUNTIME_CLOCK, RUNTIME_WEBHOOK_RECONCILER_CONFIG, RuntimeWebhookReconciler, ...useCases, RuntimeReaderAuthGuard, RuntimeRunEnqueuer, RuntimeEnvToolsService, RuntimePoolController, RuntimeA2AAdapter, RuntimeA2ABearerGuard],
 })
 export class RuntimeApiModule {}

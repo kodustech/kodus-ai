@@ -117,6 +117,28 @@ function setup(extra: { allowInsecureCells?: boolean; readyTimeoutMs?: number; n
     return { hub, store, streams, violations, logs, connect, acquireOn };
 }
 
+describe('heartbeat memory persisted for the API', () => {
+    it('writes it on the first heartbeat, then only when allocatable changes or every five minutes', async () => {
+        let t = Date.parse('2026-01-01T00:00:00Z');
+        const { store, connect } = setup({ now: () => new Date(t) });
+        const c = await connect('cell-a');
+        const beat = (allocatableMb: number, committedMb: number) =>
+            c.onMessage(frame('cell-a', 'heartbeat', { freeSlots: 1, claims: [], memory: { allocatableMb, committedMb, bootMb: 2048, readyMb: 1024 } }));
+        const mem = () => (store.sessions.get('cell-a') as any)?.memory;
+        await beat(22_528, 0);
+        expect(mem()).toEqual({ allocatableMb: 22_528, committedMb: 0 });
+        t += 10_000;
+        await beat(22_528, 4096);
+        expect(mem()).toEqual({ allocatableMb: 22_528, committedMb: 0 });
+        t += 10_000;
+        await beat(30_000, 4096);
+        expect(mem()).toEqual({ allocatableMb: 30_000, committedMb: 4096 });
+        t += 5 * 60_000;
+        await beat(30_000, 8192);
+        expect(mem()).toEqual({ allocatableMb: 30_000, committedMb: 8192 });
+    });
+});
+
 describe('a cell that goes silent', () => {
     const heartbeat = (cellId: string) => frame(cellId, 'heartbeat', { freeSlots: 4, claims: [] });
 

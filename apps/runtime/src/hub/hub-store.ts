@@ -160,6 +160,8 @@ export interface CellSessionRepository {
     upsertSession(s: CellSession): Promise<void>;
     heartbeat(cellId: string, replicaId: string, freeSlots: number,
         sessionEpoch?: string,
+        /** The cell's heartbeat memory, when the hub decided to persist it now (throttled by the caller). */
+        memory?: { allocatableMb: number; committedMb: number },
     ): Promise<void>;
     /** Ends the session only if this replica still holds it; the cell row follows only then. */
     disconnect(cellId: string, replicaId: string,
@@ -423,12 +425,15 @@ export class PgHubStore implements HubStore {
     }
     async heartbeat(cellId: string, replicaId: string, freeSlots: number,
         sessionEpoch?: string,
+        memory?: { allocatableMb: number; committedMb: number },
     ) {
         await this.pool.query(
-            `UPDATE runtime.runtime_cell_sessions SET last_heartbeat_at = now(), free_slots = $3 WHERE cell_id = $1 AND replica_id = $2 AND ($4::text IS NULL OR session_epoch::text = $4)`, [
+            `UPDATE runtime.runtime_cell_sessions SET last_heartbeat_at = now(), free_slots = $3,
+               memory_allocatable_mb = COALESCE($5::integer, memory_allocatable_mb), memory_committed_mb = COALESCE($6::integer, memory_committed_mb)
+              WHERE cell_id = $1 AND replica_id = $2 AND ($4::text IS NULL OR session_epoch::text = $4)`, [
             cellId,
             replicaId,
-            freeSlots, sessionEpoch ?? null]);
+            freeSlots, sessionEpoch ?? null, memory?.allocatableMb ?? null, memory?.committedMb ?? null]);
     }
     async disconnect(cellId: string, replicaId: string, sessionEpoch?: string) {
         await this.pool.query(

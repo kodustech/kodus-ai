@@ -29,10 +29,11 @@ describe('SandboxCapacityController', () => {
         const gate: any = {
             numbers: jest.fn().mockResolvedValue({ inUse: 4, cap: 5, queued: 2, oldestWaitMs: 72_000 }),
         };
-        return { settings, gate, c: new SandboxCapacityController(settings, gate) };
+        const cells: any = { liveCells: jest.fn().mockResolvedValue([]) };
+        return { settings, gate, cells, c: new SandboxCapacityController(settings, gate, cells) };
     }
 
-    it('returns the settings, the live numbers and no cell facts with the reason', async () => {
+    it('returns the settings, the live numbers and no cell facts with the reason when no cell is live', async () => {
         const { c } = make();
         expect(await c.get()).toEqual({
             settings: { maxConcurrent: 5, maxWaitMs: 600_000 },
@@ -40,8 +41,28 @@ describe('SandboxCapacityController', () => {
             live: { inUse: 4, cap: 5, queued: 2, oldestWaitMs: 72_000 },
             suggestedMaxConcurrent: null,
             cell: null,
-            cellUnavailableReason: 'cell_facts_not_exposed_by_hub',
+            cellUnavailableReason: 'no_live_cell',
         });
+    });
+
+    it('sums the live cells memory, takes the sandbox size and suggests the cap leaving room for a 12 GB Run', async () => {
+        const { c, cells } = make();
+        cells.liveCells.mockResolvedValue([
+            { cellId: 'a', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2 },
+            { cellId: 'b', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2 },
+        ]);
+        const r = await c.get();
+        expect(r.cell).toEqual({ allocatableMemoryMb: 45_056, sandboxMemoryMb: 2048, sandboxCpus: 2, poolReady: null });
+        expect(r.suggestedMaxConcurrent).toBe(Math.floor((45_056 - 12_288) / 2048));
+        expect(r.cellUnavailableReason).toBeNull();
+    });
+
+    it('says why when the Runtime database cannot be read', async () => {
+        const { c, cells } = make();
+        cells.liveCells.mockRejectedValue(new Error('503'));
+        const r = await c.get();
+        expect(r.cell).toBeNull();
+        expect(r.cellUnavailableReason).toBe('runtime_database_unreadable');
     });
 
     it('reports no cap as null', async () => {

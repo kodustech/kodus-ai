@@ -42,6 +42,9 @@ export type { CellCredential, ClaimRef, HubLogLine, IssuedIdentity, PeerCert, So
 
 const CELL_TO_HUB: ReadonlySet<MessageType> = new Set(['hello', 'heartbeat', 'claim.ready', 'claim.failed', 'claim.progress', 'step.result', 'step.stream', 'blocked', 'egress.blocked', 'image.shared', 'ack', 'nack']);
 
+/** How often a heartbeat's memory is written to the cell's session when only committed moved. */
+const MEMORY_PERSIST_MS = 5 * 60_000;
+
 /** A cell sends a heartbeat every 10 s: one that sent no frame for this long (four missed) is taken for gone. */
 export const CELL_SILENCE_MS = 45_000;
 
@@ -261,6 +264,7 @@ export class CellHub {
                 conn.freeSlots = body.freeSlots;
                 await this.store.heartbeat(conn.cred.cellId, this.opts.replicaId, body.freeSlots,
                     conn.sessionEpoch,
+                    this.memoryToPersist(conn, body.memory),
                 );
                 if (conn.closed || !this.connections.isCurrent(conn)) return;
                 await this.syncEvictedBuildStates(conn, body);
@@ -336,6 +340,23 @@ export class CellHub {
                 return;
             }
         }
+    }
+
+    /** What each connection last had persisted of its heartbeat memory, and when. */
+    private readonly persistedMemory = new WeakMap<CellConnection, { allocatableMb: number; at: number }>();
+
+    /**
+     * The heartbeat memory to write to the cell's session now: on the first heartbeat of a connection, when
+     * allocatable changed, and otherwise (committed moves with every claim) at most every MEMORY_PERSIST_MS.
+     * undefined: leave the stored value.
+     */
+    private memoryToPersist(conn: CellConnection, memory: MessageBody<'heartbeat'>['memory']): { allocatableMb: number; committedMb: number } | undefined {
+        if (!memory) return undefined;
+        const now = (this.opts.now?.() ?? new Date()).getTime();
+        const last = this.persistedMemory.get(conn);
+        if (last && last.allocatableMb === memory.allocatableMb && now - last.at < MEMORY_PERSIST_MS) return undefined;
+        this.persistedMemory.set(conn, { allocatableMb: memory.allocatableMb, at: now });
+        return { allocatableMb: memory.allocatableMb, committedMb: memory.committedMb };
     }
 
     /** The last host report of each connection (heartbeat host), to log only a change. */

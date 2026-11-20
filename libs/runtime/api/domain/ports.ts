@@ -25,6 +25,7 @@ import type { RuntimeMode, TriggerRule } from './trigger-rules';
 export const RUNTIME_RUN_PROJECTION_STORE = Symbol.for('RuntimeApi.RunProjectionStore');
 export const RUNTIME_RUN_STREAM_STORE = Symbol.for('RuntimeApi.RunStreamStore');
 export const RUNTIME_CELL_READER = Symbol.for('RuntimeApi.CellReader');
+export const RUNTIME_SANDBOX_CELL_FACTS_READER = Symbol.for('RuntimeApi.SandboxCellFactsReader');
 export const RUNTIME_CELL_TOKEN_READER = Symbol.for('RuntimeApi.CellTokenReader');
 export const RUNTIME_ENVIRONMENT_READER = Symbol.for('RuntimeApi.EnvironmentReader');
 export const RUNTIME_GIT_PORT = Symbol.for('RuntimeApi.GitPort');
@@ -154,6 +155,20 @@ export interface RuntimeCell {
     certificateExpiresAt?: string;
     lastHeartbeatAt?: string;
     registeredAt?: string;
+}
+
+/** What one connected cell's hello and heartbeat said (runtime_cell_sessions); null for a fact the cell never sent. */
+export interface SandboxCellFactsRow {
+    cellId: string;
+    allocatableMb: number | null;
+    sandboxMemoryMb: number | null;
+    sandboxCpus: number | null;
+}
+
+/** The self-hosted install's live cells, for the sandbox capacity screen. */
+export interface SandboxCellFactsReader {
+    /** Cells of this install (owner other than kodus) with a live session and a heartbeat in the last two minutes. */
+    liveCells(): Promise<SandboxCellFactsRow[]>;
 }
 
 export interface RuntimeCellReader {

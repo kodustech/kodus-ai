@@ -1041,6 +1041,14 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
             { name: 'runtime_cells_cert_expiry_idx', sql: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS runtime_cells_cert_expiry_idx ON runtime.runtime_cells (certificate_expires_at)' },
         ],
     },
+    {
+        version: 44,
+        name: 'the cell memory the heartbeat reports, for the API',
+        // memory_allocatable_mb / memory_committed_mb: heartbeat memory (ADR-070), written by the hub when it
+        // changes and at most every few minutes otherwise, so the API (read-only) can suggest the sandbox cap.
+        sql: `ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS memory_allocatable_mb integer;
+        ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS memory_committed_mb integer;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

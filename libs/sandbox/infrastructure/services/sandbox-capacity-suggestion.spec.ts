@@ -14,3 +14,21 @@ describe('suggestMaxConcurrent', () => {
         expect(suggestMaxConcurrent({ allocatableMemoryMb: 7168, sandboxMemoryMb: 2048 })).toBe(3);
     });
 });
+
+import { aggregateCellFacts } from './sandbox-capacity-suggestion';
+
+describe('aggregateCellFacts', () => {
+    it('is null with no cell', () => expect(aggregateCellFacts([])).toBeNull());
+    it('sums memory and takes the largest sandbox size', () => {
+        expect(
+            aggregateCellFacts([
+                { allocatableMb: 10_000, sandboxMemoryMb: 2048, sandboxCpus: 2 },
+                { allocatableMb: 20_000, sandboxMemoryMb: 4096, sandboxCpus: 4 },
+                { allocatableMb: null, sandboxMemoryMb: null, sandboxCpus: null },
+            ]),
+        ).toEqual({ allocatableMemoryMb: 30_000, sandboxMemoryMb: 4096, sandboxCpus: 4, poolReady: null });
+    });
+    it('keeps unknown memory null (no suggestion)', () => {
+        expect(aggregateCellFacts([{ allocatableMb: null, sandboxMemoryMb: 2048, sandboxCpus: 2 }])?.allocatableMemoryMb).toBeNull();
+    });
+});

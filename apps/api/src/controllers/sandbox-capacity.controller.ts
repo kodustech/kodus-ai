@@ -24,7 +24,9 @@ import {
     SandboxCapacitySettingsService,
     validateCapacityInput,
 } from '@libs/sandbox/infrastructure/services/sandbox-capacity-settings.service';
+import { RUNTIME_SANDBOX_CELL_FACTS_READER, SandboxCellFactsReader } from '@libs/runtime/api/domain/ports';
 import {
+    aggregateCellFacts,
     CellSandboxFacts,
     suggestMaxConcurrent,
 } from '@libs/sandbox/infrastructure/services/sandbox-capacity-suggestion';
@@ -41,12 +43,13 @@ export class SelfHostedOnlyGuard implements CanActivate {
 }
 
 /**
- * What the hub knows of a cell is its hello (sandbox size) and heartbeat, held
- * in the hub process only: the product API has no reader for it (RuntimeCell
- * carries no memory, size or pool). Until the hub persists it, the screen
- * gets nulls and says why.
+ * The hub writes each cell's hello (sandbox size) and heartbeat memory to
+ * runtime_cell_sessions; the API reads them read-only. With several live cells
+ * the memory is summed and the sandbox size is the largest (aggregateCellFacts).
+ * poolReady is never known: the heartbeat does not carry the warm pool count.
  */
-const CELL_FACTS_UNAVAILABLE = 'cell_facts_not_exposed_by_hub';
+const NO_LIVE_CELL = 'no_live_cell';
+const RUNTIME_UNREADABLE = 'runtime_database_unreadable';
 
 @ApiTags('Sandbox capacity')
 @ApiStandardResponses()
@@ -58,6 +61,8 @@ export class SandboxCapacityController {
         private readonly settings: SandboxCapacitySettingsService,
         @Inject(SANDBOX_CAPACITY_GATE_TOKEN)
         private readonly gate: SandboxCapacityGate,
+        @Inject(RUNTIME_SANDBOX_CELL_FACTS_READER)
+        private readonly cells: SandboxCellFactsReader,
     ) {}
 
     @Get()
@@ -71,7 +76,14 @@ export class SandboxCapacityController {
         await this.settings.refresh(true);
         const live = await this.gate.numbers();
         const current = this.settings.current();
-        const cell: CellSandboxFacts | null = null;
+        let cell: CellSandboxFacts | null = null;
+        let reason: string | null = null;
+        try {
+            cell = aggregateCellFacts(await this.cells.liveCells());
+            if (!cell) reason = NO_LIVE_CELL;
+        } catch {
+            reason = RUNTIME_UNREADABLE;
+        }
         return {
             settings: {
                 maxConcurrent: current.maxConcurrent > 0 ? current.maxConcurrent : null,
@@ -81,7 +93,7 @@ export class SandboxCapacityController {
             live,
             suggestedMaxConcurrent: suggestMaxConcurrent(cell),
             cell,
-            cellUnavailableReason: cell ? null : CELL_FACTS_UNAVAILABLE,
+            cellUnavailableReason: reason,
         };
     }
 

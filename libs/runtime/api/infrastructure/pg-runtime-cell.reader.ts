@@ -2,7 +2,7 @@ import type { QueryResultRow } from 'pg';
 
 import type { SqlQuery } from '@libs/runtime/run/adapters/pg-sql';
 
-import type { RuntimeCell, RuntimeCellReader, RuntimeCellTokenReader, RuntimeCellTokenRow } from '../domain/ports';
+import type { RuntimeCell, RuntimeCellReader, SandboxCellFactsReader, SandboxCellFactsRow, RuntimeCellTokenReader, RuntimeCellTokenRow } from '../domain/ports';
 
 interface CellRow extends QueryResultRow {
     cell_id: string;
@@ -107,5 +107,24 @@ export class PgRuntimeCellTokenReader extends PgRuntimeReadOnly implements Runti
     async get(tokenHash: string) {
         const rows = await this.query<TokenRow>(`SELECT ${TOKEN_COLUMNS} FROM runtime.runtime_cell_tokens WHERE token_hash = $1`, [tokenHash]);
         return rows[0] ? toToken(rows[0]) : null;
+    }
+}
+
+/** The sandbox size and heartbeat memory of this install's live cells, read-only (the hub writes them). */
+export class PgSandboxCellFactsReader extends PgRuntimeReadOnly implements SandboxCellFactsReader {
+    async liveCells(): Promise<SandboxCellFactsRow[]> {
+        const rows = await this.query<{ cell_id: string; memory_allocatable_mb: number | null; sandbox_claim_memory_mb: number | null; sandbox_claim_cpus: number | null }>(
+            `SELECT cell_id, memory_allocatable_mb, sandbox_claim_memory_mb, sandbox_claim_cpus
+               FROM runtime.runtime_cell_sessions
+              WHERE owner <> 'kodus' AND disconnected_at IS NULL AND last_heartbeat_at > now() - interval '2 minutes'
+              ORDER BY cell_id LIMIT 200`,
+            [],
+        );
+        return rows.map((r) => ({
+            cellId: r.cell_id,
+            allocatableMb: r.memory_allocatable_mb,
+            sandboxMemoryMb: r.sandbox_claim_memory_mb,
+            sandboxCpus: r.sandbox_claim_cpus,
+        }));
     }
 }
