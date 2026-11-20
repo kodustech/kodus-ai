@@ -246,10 +246,28 @@ func claimLimitFindings(c ClaimLimits, runtime string, info dockercli.CgroupDaem
 		out = append(out, fail(NameClaimLimitsCg, runtime+" does not run with --systemd-cgroup",
 			"add \"runtimeArgs\": [\"--systemd-cgroup\"] to the "+runtime+" runtime in /etc/docker/daemon.json and restart Docker"))
 	}
+	if rt, ok := info.Runtimes[runtime]; ok && !ociSeccomp(rt) {
+		out = append(out, fail(NameClaimLimitsCg, runtime+" does not apply the container's seccomp profile (--oci-seccomp)",
+			"add \"--oci-seccomp\" to the "+runtime+" runtime's \"runtimeArgs\" in /etc/docker/daemon.json and reload Docker (kill -HUP dockerd)"))
+	}
 	if len(out) == 0 {
 		out = append(out, fail(NameClaimLimitsCg, refused.Error(), "see docs/runtime/self-hosted.md, \"Host preflight\""))
 	}
 	return out
+}
+
+// ociSeccomp mirrors dockergvisor.OCISeccomp (preflight does not import the driver).
+func ociSeccomp(rt dockercli.RuntimeInfo) bool {
+	on := false
+	for _, a := range rt.RuntimeArgs {
+		switch {
+		case a == "--oci-seccomp" || a == "--oci-seccomp=true":
+			on = true
+		case strings.HasPrefix(a, "--oci-seccomp="):
+			return false
+		}
+	}
+	return on
 }
 
 func systemdCgroup(rt dockercli.RuntimeInfo) bool {

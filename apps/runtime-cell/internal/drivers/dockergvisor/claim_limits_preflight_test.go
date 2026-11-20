@@ -33,14 +33,14 @@ func TestClaimLimitsRefuseUnsupportedDockerBeforeLaunch(t *testing.T) {
 }
 
 func TestSystemdBackendPreflightRequiresExactDaemonAndRunscMode(t *testing.T) {
-	info := dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/bin/runsc", RuntimeArgs: []string{"--systemd-cgroup"}}}}
+	info := dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/bin/runsc", RuntimeArgs: []string{"--systemd-cgroup", "--oci-seccomp"}}}}
 	docker := incompatibleCgroupDocker{memDocker: newMemDocker(), info: info}
 	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "h", WorkDir: t.TempDir(), ClaimLimits: &fakeClaimLimits{}, ClaimLimitBackend: "systemd"})
 	if err != nil || d.cfg.ClaimLimitBackend != "systemd" {
 		t.Fatalf("driver=%+v err=%v", d, err)
 	}
 	for _, args := range [][]string{nil, {"--systemd-cgroup=false"}, {"--systemd-cgroup=true", "--systemd-cgroup=false"}, {"--systemd-cgroup", "--root=/tmp/other"}} {
-		info.Runtimes["runsc"] = dockercli.RuntimeInfo{Path: "/usr/bin/runsc", RuntimeArgs: args}
+		info.Runtimes["runsc"] = dockercli.RuntimeInfo{Path: "/usr/bin/runsc", RuntimeArgs: append(append([]string{}, args...), "--oci-seccomp")}
 		// An unrelated runtime flag is allowed; only missing/disabled systemd mode is refused.
 		want := len(args) == 2 && args[0] == "--systemd-cgroup"
 		err := ValidateClaimLimitDaemon(info, "systemd", "runsc")
@@ -73,7 +73,7 @@ func (f *sliceClaimLimits) Ensure(key string, l claimlimits.Limits) (string, err
 
 func TestSystemdParentFlowsThroughDriverIntoHolder(t *testing.T) {
 	m := newMemDocker()
-	docker := incompatibleCgroupDocker{memDocker: m, info: dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/runsc", RuntimeArgs: []string{"--systemd-cgroup"}}}}}
+	docker := incompatibleCgroupDocker{memDocker: m, info: dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/runsc", RuntimeArgs: []string{"--systemd-cgroup", "--oci-seccomp"}}}}}
 	limits := &sliceClaimLimits{cell: "cell-1"}
 	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "holder", WorkDir: t.TempDir(), ClaimLimits: limits, ClaimLimitBackend: "systemd"})
 	if err != nil {
@@ -92,5 +92,29 @@ func TestSystemdParentFlowsThroughDriverIntoHolder(t *testing.T) {
 	cs, err := m.Inspect(context.Background(), ref.MachineID)
 	if err != nil || len(cs) != 1 || !strings.HasSuffix(cs[0].CgroupParent, ".slice") || strings.HasPrefix(cs[0].CgroupParent, "/") {
 		t.Fatalf("holder=%+v err=%v", cs, err)
+	}
+}
+
+// runsc ignores the container's seccomp profile without --oci-seccomp, so a
+// sandbox command could unshare a user namespace (boundary probe P01): the
+// cell refuses to take work on such a host, whatever the cgroup backend.
+func TestRunscMustApplyTheContainersSeccompProfile(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		ok   bool
+	}{
+		{[]string{"--systemd-cgroup"}, false},
+		{[]string{"--systemd-cgroup", "--oci-seccomp=false"}, false},
+		{[]string{"--systemd-cgroup", "--oci-seccomp"}, true},
+		{[]string{"--systemd-cgroup", "--oci-seccomp=true"}, true},
+	} {
+		info := dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/bin/runsc", RuntimeArgs: tc.args}}}
+		err := ValidateClaimLimitDaemon(info, "systemd", "runsc")
+		if (err == nil) != tc.ok {
+			t.Fatalf("args=%v err=%v", tc.args, err)
+		}
+		if !tc.ok && !strings.Contains(err.Error(), "--oci-seccomp") {
+			t.Fatalf("the refusal does not name the flag: %v", err)
+		}
 	}
 }

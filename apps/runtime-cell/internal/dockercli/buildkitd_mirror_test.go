@@ -202,3 +202,23 @@ func TestRunBuildOffersTheClaimsSecretsByID(t *testing.T) {
 		}
 	}
 }
+
+// runsc runs with --oci-seccomp (the cell refuses a host without it), which
+// applies Docker's default profile inside the sandbox; buildkitd needs the
+// mount and unshare that profile refuses, so the builder alone asks for none
+// (as it had before runsc applied profiles). It stays in gVisor with its
+// capability drops, on the claim's network only.
+func TestRunBuildRunsWithoutDockersSeccompProfile(t *testing.T) {
+	var got []string
+	c := CLI{Run: func(_ context.Context, _ []byte, _ string, args ...string) ([]byte, error) {
+		got = args
+		return nil, nil
+	}}
+	b := BuildRun{Image: "buildkit", Runtime: "runsc", Network: "n", Address: "10.0.0.9", Resolv: "/r", Context: "/c", Dockerfile: "Dockerfile", Tag: "t", Out: t.TempDir()}
+	if err := c.RunBuild(context.Background(), b); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(got, " "), "--security-opt seccomp=unconfined") {
+		t.Fatalf("the builder gets Docker's default profile, which refuses buildkitd's mounts: %s", strings.Join(got, " "))
+	}
+}

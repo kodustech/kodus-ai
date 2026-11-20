@@ -296,5 +296,27 @@ func ValidateClaimLimitDaemon(info dockercli.CgroupDaemonInfo, backend, runtime 
 			return fmt.Errorf("%w: runsc must enable --systemd-cgroup", ErrResourceEnforcement)
 		}
 	}
+	if !OCISeccomp(info.Runtimes[runtime]) {
+		return fmt.Errorf("%w: runsc must enable --oci-seccomp", ErrResourceEnforcement)
+	}
 	return nil
+}
+
+// OCISeccomp: runsc applies the container's seccomp profile (Docker's
+// default) inside the sandbox. Without --oci-seccomp runsc ignores it, and a
+// command could unshare a user namespace and be root with every capability in
+// it (boundary probe P01, dev cell 2026-11-20): nothing it reached then, but
+// all of the Sentry's namespace and mount code is in reach. With it, unshare
+// is refused while git, node and the workloads run as before.
+func OCISeccomp(rt dockercli.RuntimeInfo) bool {
+	on := false
+	for _, a := range rt.RuntimeArgs {
+		switch {
+		case a == "--oci-seccomp" || a == "--oci-seccomp=true":
+			on = true
+		case strings.HasPrefix(a, "--oci-seccomp="):
+			return false
+		}
+	}
+	return on
 }

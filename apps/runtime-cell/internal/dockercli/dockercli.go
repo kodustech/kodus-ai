@@ -950,6 +950,12 @@ func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 		"run", "--rm", "--name", name, "--runtime", b.Runtime, "--network", b.Network, "--ip", b.Address,
 		"--pids-limit", strconv.Itoa(pids), "-e", "BUILDKITD_FLAGS=" + flags,
 		"-v", b.Resolv + ":/etc/resolv.conf:ro", "-v", b.Context + ":/ctx:ro", "-v", b.Out + ":/out",
+		// runsc applies a container's seccomp profile (--oci-seccomp, which the
+		// cell requires for the sandboxes): buildkitd mounts and unshares, which
+		// Docker's default profile refuses, so the builder asks for none, as it
+		// had before runsc applied profiles. gVisor and the capability drops
+		// below still hold it.
+		"--security-opt", "seccomp=unconfined",
 	}
 	// buildkitd's own log (builder_log.go), through a wrapper that
 	// buildctl-daemonless.sh starts in buildkitd's place. A diagnostic: a build

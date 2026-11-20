@@ -55,7 +55,7 @@ func (f fakeDocker) ComposeVersion(context.Context) (string, error) {
 func healthyDocker() fakeDocker {
 	return fakeDocker{
 		api: "1.47", runtimes: []string{"io.containerd.runc.v2", "runc", "runsc"}, endpoint: "unix:///var/run/docker.sock", dataRoot: "/var/lib/docker",
-		info: dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/local/bin/runsc", RuntimeArgs: []string{"--systemd-cgroup"}}}},
+		info: dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/local/bin/runsc", RuntimeArgs: []string{"--systemd-cgroup", "--oci-seccomp"}}}},
 	}
 }
 
@@ -189,8 +189,8 @@ type fakeDir struct{ os.FileInfo }
 func (fakeDir) IsDir() bool { return true }
 
 // Claim limits with the systemd backend on a Docker that uses cgroupfs and
-// a runsc without --systemd-cgroup: the cell refuses to start
-// (configureClaimLimitsWith); preflight names both, each with its fix.
+// a runsc without --systemd-cgroup or --oci-seccomp: the cell refuses to start
+// (configureClaimLimitsWith); preflight names all three, each with its fix.
 func TestClaimLimitsNameEachDaemonFactTheDriverRefuses(t *testing.T) {
 	d := healthyDocker()
 	d.info = dockercli.CgroupDaemonInfo{Version: "2", Driver: "cgroupfs", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/bin/runsc"}}}
@@ -207,7 +207,7 @@ func TestClaimLimitsNameEachDaemonFactTheDriverRefuses(t *testing.T) {
 		}
 	}
 	joined := strings.Join(reasons, "\n")
-	if len(reasons) != 2 || !strings.Contains(joined, "native.cgroupdriver=systemd") || !strings.Contains(joined, "--systemd-cgroup") {
+	if len(reasons) != 3 || !strings.Contains(joined, "native.cgroupdriver=systemd") || !strings.Contains(joined, "--systemd-cgroup") || !strings.Contains(joined, "--oci-seccomp") {
 		t.Fatalf("claim limit findings:\n%s", joined)
 	}
 }

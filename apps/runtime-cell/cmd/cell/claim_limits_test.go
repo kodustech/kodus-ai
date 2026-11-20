@@ -113,7 +113,7 @@ func TestClaimLimitsFactoryPrunesBeforeAdmissionAndClosesOnFailure(t *testing.T)
 				s := settings{GVisorClaimLimitBackend: backend, GVisorClaimCgroupRoot: "/sys/fs/cgroup/cell", GVisorClaimRootSlice: claimlimits.RootSliceName("cell-1")}
 				m := &testLimitLifecycle{fail: fail}
 				cli := dockercli.CLI{Run: func(context.Context, []byte, string, ...string) ([]byte, error) {
-					return []byte(`{"CgroupDriver":"` + backend + `","CgroupVersion":"2","SecurityOptions":[],"Runtimes":{"runsc":{"path":"/usr/bin/runsc","runtimeArgs":["--systemd-cgroup"]}}}`), nil
+					return []byte(`{"CgroupDriver":"` + backend + `","CgroupVersion":"2","SecurityOptions":[],"Runtimes":{"runsc":{"path":"/usr/bin/runsc","runtimeArgs":["--systemd-cgroup","--oci-seccomp"]}}}`), nil
 				}}
 				got, err := configureClaimLimitsWith(context.Background(), cli, s, "cell-1", func(_ context.Context, b, root, cell string) (claimlimits.Lifecycle, error) {
 					want := s.GVisorClaimCgroupRoot

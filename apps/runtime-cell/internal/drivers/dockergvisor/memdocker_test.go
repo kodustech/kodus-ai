@@ -695,7 +695,7 @@ func (m *memDocker) CopyVolumeBound(ctx context.Context, runtime, helper, from, 
 }
 
 func (m *memDocker) CgroupInfo(context.Context) (dockercli.CgroupDaemonInfo, error) {
-	return dockercli.CgroupDaemonInfo{Version: "2", Driver: "cgroupfs"}, nil
+	return dockercli.CgroupDaemonInfo{Version: "2", Driver: "cgroupfs", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/usr/bin/runsc", RuntimeArgs: []string{"--oci-seccomp"}}}}, nil
 }
 
 func (m *memDocker) DaemonEndpoint(context.Context) (string, error) {
