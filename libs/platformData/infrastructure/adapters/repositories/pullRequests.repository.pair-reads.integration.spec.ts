@@ -266,6 +266,21 @@ let available = false;
             ).toBe(2);
         });
 
+        it('reads only the pairs asked for the delivered suggestions', async () => {
+            expect(
+                await docsExamined(
+                    () =>
+                        repository.findPullRequestsWithDeliveredSuggestions(
+                            ORG,
+                            crossing.map((c) => c.number),
+                            'open',
+                            crossing,
+                        ),
+                    'aggregate',
+                ),
+            ).toBe(2);
+        });
+
         it('reads only the pairs asked for the approval cron', async () => {
             expect(
                 await docsExamined(
