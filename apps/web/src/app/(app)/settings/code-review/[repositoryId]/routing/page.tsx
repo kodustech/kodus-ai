@@ -397,14 +397,16 @@ function RoutingSettings() {
                 });
                 return;
             }
+            // Saved first, the review settings are not left unsaved here.
+            const reviewUnsaved = reviewDirty && !reviewSavedFirst;
             toast({
                 description: modelsSaved
                     ? providerDisconnected
-                        ? reviewDirty
+                        ? reviewUnsaved
                             ? "Models saved. Connect an AI provider to save review settings."
                             : "Models saved. Connect an AI provider to continue."
                         : checkingSavedModels
-                          ? reviewDirty
+                          ? reviewUnsaved
                               ? "Models saved. Could not verify provider status. Review settings are still unsaved."
                               : "Models saved. Refresh provider status to continue."
                           : `Models saved. ${reviewError ?? "Review settings could not be saved. Try again."}`

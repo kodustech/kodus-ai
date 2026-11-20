@@ -906,6 +906,31 @@ describe("Ultra review mode", () => {
         expect(save).toHaveBeenCalledTimes(1);
     });
 
+    it("when the mode saved first and the status check after the models fails, does not call the mode unsaved", async () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mockByok.routing!.ultraModelIds = ["c", "a", "b"];
+        saveModels.mockImplementation(async () => {
+            mockReadStatus.mockRejectedValue(new Error("status down"));
+            return true;
+        });
+        mount(false, false, { reviewMode: leaf("ultra") });
+        await chooseReviewMode("All PRs", "Balanced");
+        for (const n of [1, 2, 3]) {
+            await chooseOrgModel(`Ultra Model ${n}`, /^None$/);
+        }
+        await waitFor(() => expect(saveButton()).toBeEnabled());
+        fireEvent.click(saveButton());
+        await waitFor(() =>
+            expect(mockToast).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    description:
+                        "Models saved. Refresh provider status to continue.",
+                }),
+            ),
+        );
+        expect(save).toHaveBeenCalledTimes(1);
+    });
+
     it("a saved trio that is one model twice is not a trio: models save first, as without one", async () => {
         mockByok.models.push({
             id: "a2",
