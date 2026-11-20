@@ -40,6 +40,7 @@ import {
     effectiveStoredCustomAgents,
     maskCliSecrets,
     sealCustomAgentSecrets,
+    storedConfigsAtLevel,
     storedCustomAgentsAtLevel,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
@@ -301,6 +302,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 organizationAndTeamData,
                 configValue,
                 body.actor?.source,
+                { repositoryId, directoryId, directoryPaths: resolvedPaths },
             );
 
             if (!body.skipAuthorization) {
@@ -869,38 +871,78 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
      * The review modes a plan or the org's models lock: Heavy on a plan
      * without it, Ultra without the plan or three of the team's own models
      * set for it. Checked wherever a mode is saved, the review mode and both
-     * risk routes. A save from the web or the API is refused with the reason
-     * (400); a kodus-config.yml sync leaves the locked fields out and saves
-     * the rest.
+     * risk routes. The trio is checked only on a mode the save changes to:
+     * a field sent with the Ultra this scope already runs leaves the other
+     * settings free to save while a model is unavailable. The plan is checked
+     * on every one. A save from the web or the API is refused with the reason (400);
+     * a kodus-config.yml sync leaves the locked fields out and saves the rest.
      */
     private async leaveHeavyOutIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue:
             CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
         source: string | undefined,
+        level: {
+            repositoryId?: string;
+            directoryId?: string;
+            directoryPaths?: string[];
+        },
     ): Promise<void> {
         if (!configValue) return;
+        const sent = [
+            configValue.reviewMode,
+            configValue.riskReviewRouting?.noRisk,
+            configValue.riskReviewRouting?.riskFound,
+        ];
+        if (!sent.some((mode) => mode === 'heavy' || mode === 'ultra')) {
+            return;
+        }
+        // The modes this scope runs now: its own, else inherited. Read only
+        // for the trio check.
+        const stored = sent.includes('ultra')
+            ? await this.getCodeReviewConfigs(organizationAndTeamData)
+            : undefined;
+        const chain = [
+            storedConfigsAtLevel(stored, level),
+            storedConfigsAtLevel(stored, { repositoryId: level.repositoryId }),
+            stored?.configs,
+        ];
+        const current = (
+            read: (configs: any) => string | undefined,
+        ): string | undefined =>
+            chain.map((configs) => read(configs)).find((mode) => !!mode);
         const modes = (): Array<{
             mode: string | undefined;
+            current: string | undefined;
             clear: () => void;
         }> => [
             {
                 mode: configValue.reviewMode,
+                current: current((c) => c?.reviewMode),
                 clear: () => delete configValue.reviewMode,
             },
             {
                 mode: configValue.riskReviewRouting?.noRisk,
+                current: current((c) => c?.riskReviewRouting?.noRisk),
                 clear: () => delete configValue.riskReviewRouting!.noRisk,
             },
             {
                 mode: configValue.riskReviewRouting?.riskFound,
+                current: current((c) => c?.riskReviewRouting?.riskFound),
                 clear: () => delete configValue.riskReviewRouting!.riskFound,
             },
         ];
         const asks = (mode: 'heavy' | 'ultra') =>
             modes().some((m) => m.mode === mode);
+        const changesTo = (mode: 'ultra') =>
+            modes().some((m) => m.mode === mode && m.current !== mode);
 
-        const refusals: Array<{ mode: 'heavy' | 'ultra'; reason: string }> = [];
+        const refusals: Array<{
+            mode: 'heavy' | 'ultra';
+            reason: string;
+            /** Refused only where the save changes the mode to it. */
+            changedOnly?: boolean;
+        }> = [];
         if (
             asks('heavy') &&
             !(await isHeavyModePlanAllowed(
@@ -926,7 +968,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     mode: 'ultra',
                     reason: ultraSaveRefusalMessage('plan'),
                 });
-            } else {
+            } else if (changesTo('ultra')) {
                 const refusal = ultraTrioRefusal(
                     resolveUltraTrio(
                         await this.permissionValidationService.getBYOKConfig(
@@ -939,6 +981,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     refusals.push({
                         mode: 'ultra',
                         reason: ultraSaveRefusalMessage(refusal),
+                        changedOnly: true,
                     });
                 }
             }
@@ -963,7 +1006,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
         const locked = new Set(refusals.map((r) => r.mode));
         for (const m of modes()) {
-            if (m.mode && locked.has(m.mode as 'heavy' | 'ultra')) m.clear();
+            const refusal = refusals.find((r) => r.mode === m.mode);
+            if (refusal && !(refusal.changedOnly && m.mode === m.current)) {
+                m.clear();
+            }
         }
         this.logger.log({
             message: `Left a locked review mode out of the sync (${[...locked].join(', ')})`,

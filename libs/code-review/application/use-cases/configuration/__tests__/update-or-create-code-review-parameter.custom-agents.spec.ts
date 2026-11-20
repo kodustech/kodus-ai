@@ -739,6 +739,33 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
         );
     });
 
+    it('a scope already on Ultra saves its other settings while a model of the three is unavailable', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'ultra' },
+            { byok: trioConfig(['m1', 'm2']) },
+        ).save(
+            { reviewMode: 'ultra', summary: { generatePRSummary: false } },
+            { source: 'web' },
+        );
+        expect(configs.reviewMode).toBe('ultra');
+        expect(configs.summary).toEqual({ generatePRSummary: false });
+    });
+
+    it('a risk route changed to Ultra is still refused while a model of the three is unavailable', async () => {
+        await expect(
+            buildUseCase(
+                { reviewMode: 'ultra' },
+                { byok: trioConfig(['m1', 'm2']) },
+            ).save(
+                {
+                    reviewMode: 'ultra',
+                    riskReviewRouting: { riskFound: 'ultra' },
+                },
+                { source: 'web' },
+            ),
+        ).rejects.toThrow('three different models set under Ultra models');
+    });
+
     it('refuses heavy on free when it comes through a risk route too', async () => {
         await expect(
             buildUseCase({}, { license: FREE }).save(
