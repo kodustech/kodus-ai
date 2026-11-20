@@ -13,6 +13,9 @@ export interface RuntimeIdentity {
     taskId?: string;
 }
 
+// Fixed for the life of the process: read once, not on every log line.
+const version = process.env.RELEASE_VERSION?.trim() || undefined;
+
 let taskId: string | undefined;
 
 export function setRuntimeTaskId(id: string | undefined): void {
@@ -20,7 +23,6 @@ export function setRuntimeTaskId(id: string | undefined): void {
 }
 
 export function runtimeIdentity(): RuntimeIdentity {
-    const version = process.env.RELEASE_VERSION?.trim() || undefined;
     return {
         ...(version ? { version } : {}),
         ...(taskId ? { taskId } : {}),
