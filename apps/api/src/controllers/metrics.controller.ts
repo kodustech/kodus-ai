@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import {
     ApiBearerAuth,
     ApiOkResponse,
@@ -7,6 +7,15 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import {
+    CheckPolicies,
+    PolicyGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import {
     ErrorRateResult,
     MetricsSummary,
@@ -24,11 +33,18 @@ import { GetMetricsSummaryUseCase } from '@libs/core/metrics/application/use-cas
 import { GetPipelinePerformanceUseCase } from '@libs/core/metrics/application/use-cases/get-pipeline-performance.use-case';
 import { GetReviewResponseTimesUseCase } from '@libs/core/metrics/application/use-cases/get-review-response-times.use-case';
 
+// Operational metrics of the platform: readable by whoever may read logs.
+const canReadMetrics = checkPermissions({
+    action: Action.Read,
+    resource: ResourceType.Logs,
+});
+
 const toNumber = (value?: string) =>
     value === undefined ? undefined : parseInt(value, 10);
 
 @ApiTags('Internal Metrics')
 @ApiBearerAuth('jwt')
+@UseGuards(PolicyGuard)
 @Controller('internal/metrics')
 export class MetricsController {
     constructor(
@@ -39,6 +55,7 @@ export class MetricsController {
     ) {}
 
     @Get('error-rates')
+    @CheckPolicies(canReadMetrics)
     @ApiOperation({
         summary: 'Error rate by component',
         description:
@@ -61,6 +78,7 @@ export class MetricsController {
     }
 
     @Get('review-response-times')
+    @CheckPolicies(canReadMetrics)
     @ApiOperation({
         summary: 'Review response times',
         description:
@@ -83,6 +101,7 @@ export class MetricsController {
     }
 
     @Get('pipeline-performance')
+    @CheckPolicies(canReadMetrics)
     @ApiOperation({
         summary: 'Pipeline performance',
         description:
@@ -105,6 +124,7 @@ export class MetricsController {
     }
 
     @Get('summary')
+    @CheckPolicies(canReadMetrics)
     @ApiOperation({
         summary: 'Metrics summary',
         description:
