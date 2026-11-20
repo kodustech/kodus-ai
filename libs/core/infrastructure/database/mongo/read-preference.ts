@@ -19,8 +19,11 @@ import { ReadPreference, type ReadPreferenceMode, type TagSet } from 'mongodb';
 
 const MAX_STALENESS_SECONDS = 90;
 
-/** The analytics member first, then any secondary, then the primary. */
-export const ANALYTICS_READ_TAGS: TagSet[] = [{ workload: 'analytics' }, {}];
+/**
+ * The analytics member first, then any secondary, then the primary. Module
+ * private: the preference holds this array by reference.
+ */
+const ANALYTICS_READ_TAGS: TagSet[] = [{ workload: 'analytics' }, {}];
 
 export const ANALYTICS_READ_PREFERENCE = new ReadPreference(
     ReadPreference.SECONDARY_PREFERRED,
