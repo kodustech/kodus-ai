@@ -7,6 +7,7 @@ import { RuntimeErrorState } from "@components/runtime/empty-state";
 import { ExercisedLinesThreshold } from "@components/runtime/exercised-lines-threshold";
 import { MachineHostPrice } from "@components/runtime/machine-host-price";
 import { MachineMinuteLimit } from "@components/runtime/machine-minute-limit";
+import { SandboxCapacitySection } from "@components/runtime/sandbox-capacity";
 import { RuntimePreviewSettingsSection } from "@components/runtime/preview-settings";
 import { RuntimeHeader } from "@components/runtime/runtime-header";
 import { RuntimeSecretsSection } from "@components/runtime/runtime-secrets";
@@ -33,6 +34,7 @@ import {
     TableRow,
 } from "@components/ui/table";
 import { toast } from "@components/ui/toaster/use-toast";
+import { isSelfHosted } from "src/core/utils/self-hosted";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type {
@@ -589,6 +591,9 @@ export const RuntimeOrgSettingsPage = () => {
 
                 {/* /runtime/settings/preview and the preview activity are the org owner's (checkRole OWNER). */}
                 {canStop && <RuntimePreviewSettingsSection />}
+
+                {/* /sandbox-capacity is the org owner's and self-hosted only (404 on Kodus Cloud). */}
+                {canStop && isSelfHosted && <SandboxCapacitySection />}
 
                 {canStop && (
                     <RuntimeSection

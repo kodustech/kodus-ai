@@ -45,6 +45,7 @@ import type {
     RuntimeStopScope,
     RuntimeUsageReport,
     SpeedWindowDays,
+    SandboxCapacityView,
 } from "./contracts";
 import { readReproductionDownload } from "./model/reproduction";
 import type { RuntimeSettingsPayload } from "./model/rules";
@@ -147,6 +148,7 @@ export const RUNTIME_PATHS = {
     ENVIRONMENT_PREVIEWS: (environmentId: string) =>
         pathToApiUrl(`/runtime/environments/${enc(environmentId)}/previews`),
     PREVIEW_SETTINGS: () => pathToApiUrl("/runtime/settings/preview"),
+    SANDBOX_CAPACITY: () => pathToApiUrl("/sandbox-capacity"),
     PREVIEW_AUDIT: (before?: string) =>
         pathToApiUrl(
             `/runtime/audit?kind=preview&limit=50${before ? `&before=${enc(before)}` : ""}`,
@@ -715,3 +717,15 @@ export const removeEnvironmentRepository = (params: {
         ),
         { method: "DELETE" },
     );
+
+export const getSandboxCapacity = () =>
+    runtimeFetch<SandboxCapacityView>(RUNTIME_PATHS.SANDBOX_CAPACITY());
+
+export const updateSandboxCapacity = (settings: {
+    maxConcurrent: number | null;
+    maxWaitMs: number;
+}) =>
+    runtimeFetch<SandboxCapacityView>(RUNTIME_PATHS.SANDBOX_CAPACITY(), {
+        method: "PUT",
+        body: JSON.stringify(settings),
+    });

@@ -937,3 +937,24 @@ export interface RuntimePreviewAuditRecord {
         | "expired";
     reason?: string;
 }
+
+/** GET/PUT /sandbox-capacity (self-hosted owner): the cap, the live numbers and what is known of the cell. */
+export interface SandboxCapacityView {
+    settings: { maxConcurrent: number | null; maxWaitMs: number };
+    saved: boolean;
+    live: {
+        inUse: number | null;
+        cap: number;
+        queued: number;
+        oldestWaitMs: number;
+    };
+    suggestedMaxConcurrent: number | null;
+    /** null when the hub does not expose the cell (see cellUnavailableReason). */
+    cell: {
+        allocatableMemoryMb: number | null;
+        sandboxMemoryMb: number | null;
+        sandboxCpus: number | null;
+        poolReady: number | null;
+    } | null;
+    cellUnavailableReason: string | null;
+}

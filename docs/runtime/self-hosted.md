@@ -178,6 +178,14 @@ How it behaves:
 - Unset `SANDBOX_MAX_CONCURRENT` is today's behavior; E2B and local providers wait as they did.
 - The numbers a screen can show (in use, queued, oldest wait, deployment-wide, read from Mongo) come from `SandboxLeaseManager.capacityNumbers()`.
 
+
+The same two numbers are editable without a deploy under Runtime > Settings > Sandboxes (owner only, self-hosted
+only; the API is `GET/PUT /sandbox-capacity`). They are stored in the `sandbox_capacity` global parameter
+(`{ "maxConcurrent": 5 | null, "maxWaitMs": 600000 }`); the database value wins over `SANDBOX_MAX_CONCURRENT` and
+`SANDBOX_QUEUE_MAX_WAIT_MS`, which stay as the defaults, and workers pick a change up within about 10 seconds. The
+suggested cap and the sandbox size and pool shown there appear only when the deployment reports the cell's memory;
+until then they read "unknown" and the size is still set on the cell host.
+
 ## Docker host disk (docker-gvisor)
 
 Every claim's containers, volumes and logs share the disk of Docker's data root, so one PR service that writes

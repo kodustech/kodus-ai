@@ -18,6 +18,8 @@ import {
     getEnvironmentPreview,
     getOrgEgress,
     getPreviewSettings,
+    getSandboxCapacity,
+    updateSandboxCapacity,
     getRunPreview,
     getRunPreviews,
     getRunReproduction,
@@ -1000,5 +1002,25 @@ export const useRemoveEnvironmentRepository = () => {
         mutationFn: removeEnvironmentRepository,
         onSuccess: (result, v) =>
             afterRepositoriesChange(queryClient, v.environmentId, result),
+    });
+};
+
+/** Live numbers: refreshed every 10 s while the screen is open. */
+export const SANDBOX_CAPACITY_POLL_MS = 10_000;
+
+export const useSandboxCapacity = (enabled = true) =>
+    useQuery({
+        queryKey: ["runtime", "sandbox-capacity"],
+        queryFn: getSandboxCapacity,
+        enabled,
+        refetchInterval: SANDBOX_CAPACITY_POLL_MS,
+    });
+
+export const useUpdateSandboxCapacity = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: updateSandboxCapacity,
+        onSuccess: (view) =>
+            queryClient.setQueryData(["runtime", "sandbox-capacity"], view),
     });
 };
