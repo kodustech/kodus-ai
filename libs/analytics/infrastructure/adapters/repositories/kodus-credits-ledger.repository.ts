@@ -134,15 +134,17 @@ export class KodusCreditsLedgerRepository implements IKodusCreditsLedgerReposito
         spanIds: string[],
         debitedAt: Date,
     ): Promise<void> {
+        // Only a pending charge moves to debited: one another pass already
+        // settled keeps its own debitedAt.
         await this.chargeModel.updateMany(
-            { spanId: { $in: spanIds } },
+            { spanId: { $in: spanIds }, status: 'pending' },
             { $set: { status: 'debited', debitedAt } },
         );
     }
 
     async recordChargeError(spanIds: string[], message: string): Promise<void> {
         await this.chargeModel.updateMany(
-            { spanId: { $in: spanIds } },
+            { spanId: { $in: spanIds }, status: 'pending' },
             { $set: { lastError: message } },
         );
     }
