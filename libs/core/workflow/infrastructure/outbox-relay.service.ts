@@ -1,5 +1,6 @@
 import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import * as os from 'os';
+import { jobFields } from '@libs/core/infrastructure/activity/job-fields';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { IncidentManagerService } from '@libs/core/infrastructure/incident/incident-manager.service';
@@ -532,12 +533,21 @@ export class OutboxRelayService
                     reapedCount,
                     staleTimeoutMinutes: this.staleJobTimeoutMinutes,
                     olderThan: olderThan.toISOString(),
-                    jobs: reaped.map((job) => ({
-                        jobId: job.uuid,
-                        workflowType: job.workflowType,
-                        organizationId: job.organizationId,
-                        startedAt: job.startedAt,
-                    })),
+                    jobs: reaped.map((job) => {
+                        // Which PR lost its run: the review never finished.
+                        const { repository, prNumber, platform } = jobFields({
+                            payload: job.payload,
+                        });
+                        return {
+                            jobId: job.uuid,
+                            workflowType: job.workflowType,
+                            organizationId: job.organizationId,
+                            repository,
+                            prNumber,
+                            platform,
+                            startedAt: job.startedAt,
+                        };
+                    }),
                 },
             });
 

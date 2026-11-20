@@ -48,7 +48,31 @@ const BYOK_PROVIDER = {
     openai_compatible: 'openai_compatible',
     'openai-compatible': 'openai_compatible',
     openrouter: 'open_router',
+    amazon_bedrock: 'amazon_bedrock',
 };
+
+/**
+ * One stored credential, shaped the way production stores it
+ * (libs/llm/resolve-model-slot.ts): Bedrock authenticates with an encrypted
+ * bearer token and a region in `settings`, never `apiKey`.
+ */
+function credentialOf(id, provider, m, encrypt) {
+    const bedrock = provider === 'amazon_bedrock';
+    return {
+        id,
+        provider,
+        apiKey: bedrock ? '' : encrypt(m.apiKey),
+        settings: {
+            ...(m.baseURL ? { baseURL: m.baseURL } : {}),
+            ...(bedrock
+                ? { awsBearerToken: encrypt(m.apiKey), ...(m.awsRegion ? { awsRegion: m.awsRegion } : {}) }
+                : {}),
+            ...(m.openrouterProviderOrder?.length
+                ? { openrouterProviderOrder: m.openrouterProviderOrder, openrouterAllowFallbacks: false }
+                : {}),
+        },
+    };
+}
 
 /** A model the eval cannot run the way production would: not measured. */
 class NotAProductionRoute extends Error {
@@ -67,7 +91,7 @@ function loadEncrypt() {
     return encrypt;
 }
 
-function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, openrouterProviderOrder }) {
+function storedByokConfig({ provider, model, apiKey, baseURL, awsRegion, reasoningEffort, openrouterProviderOrder }) {
     const byokProvider = openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[provider];
     if (!byokProvider) {
         throw new NotAProductionRoute(`provider '${provider}' has no BYOK route in production`);
@@ -75,20 +99,8 @@ function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, o
     const encrypt = loadEncrypt();
     return {
         version: 2,
-        credentials: [
-            {
-                id: 'eval-credential',
-                provider: byokProvider,
-                apiKey: encrypt(apiKey),
-                // Where resolveModelSlot reads them (resolve-model-slot.ts).
-                settings: {
-                    ...(baseURL ? { baseURL } : {}),
-                    ...(openrouterProviderOrder?.length
-                        ? { openrouterProviderOrder, openrouterAllowFallbacks: false }
-                        : {}),
-                },
-            },
-        ],
+        // Where resolveModelSlot reads them (resolve-model-slot.ts).
+        credentials: [credentialOf('eval-credential', byokProvider, { apiKey, baseURL, awsRegion, openrouterProviderOrder }, encrypt)],
         models: [
             {
                 id: 'eval-model',
@@ -104,7 +116,7 @@ function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, o
 /**
  * A stored BYOK config (version 2) holding several models, one credential each,
  * with `routing` as the org would save it. Each model: { id, provider, model,
- * apiKey, baseURL?, reasoningEffort?, openrouterProviderOrder? }.
+ * apiKey, baseURL?, awsRegion?, reasoningEffort?, openrouterProviderOrder? }.
  */
 function storedByokConfigOf(models, routing) {
     const encrypt = loadEncrypt();
@@ -113,17 +125,7 @@ function storedByokConfigOf(models, routing) {
         credentials: models.map((m) => {
             const provider = m.openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[m.provider];
             if (!provider) throw new NotAProductionRoute(`provider '${m.provider}' has no BYOK route in production`);
-            return {
-                id: `${m.id}-credential`,
-                provider,
-                apiKey: encrypt(m.apiKey),
-                settings: {
-                    ...(m.baseURL ? { baseURL: m.baseURL } : {}),
-                    ...(m.openrouterProviderOrder?.length
-                        ? { openrouterProviderOrder: m.openrouterProviderOrder, openrouterAllowFallbacks: false }
-                        : {}),
-                },
-            };
+            return credentialOf(`${m.id}-credential`, provider, m, encrypt);
         }),
         models: models.map((m) => ({
             id: m.id,
@@ -142,7 +144,7 @@ function tier0ModelEntry(id, modelId) {
     if (!spec) throw new Error(`unknown model ${modelId} (evals/shared/tier0-models.js)`);
     const apiKey = (spec.keyEnvs || []).map((name) => process.env[name]).find(Boolean);
     if (!apiKey) throw new Error(`no key for ${modelId} (${(spec.keyEnvs || []).join(', ') || 'none known'})`);
-    return { id, provider: spec.provider, model: spec.doModel || modelId, apiKey, baseURL: spec.baseURL, openrouterProviderOrder: spec.openrouterProviderOrder };
+    return { id, provider: spec.provider, model: spec.doModel || modelId, apiKey, baseURL: spec.baseURL, awsRegion: spec.awsRegion, openrouterProviderOrder: spec.openrouterProviderOrder };
 }
 
 /**
@@ -175,6 +177,7 @@ function resolveRoute(config) {
                 model: spec.doModel || modelId,
                 apiKey: key,
                 baseURL: spec.baseURL,
+                awsRegion: spec.awsRegion,
                 reasoningEffort: effort,
                 openrouterProviderOrder: spec.openrouterProviderOrder,
             }),

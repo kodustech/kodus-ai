@@ -93,6 +93,96 @@ function remember(text: string, tokens: number): number {
     return tokens;
 }
 
+/**
+ * Longest run without whitespace that tiktoken is asked to encode.
+ *
+ * tiktoken's BPE is quadratic in the length of one pre-token piece, and a
+ * piece never spans whitespace. A long run with no separator (a repeated
+ * character, a hex blob, a minified line pasted by a grep) took 0.9s at 40KB
+ * locally and froze a worker for 88s in prod (2026-11-19, inside the context
+ * compressor). Longer runs are counted with the conservative char ratio
+ * instead: a code token is never this long, so ordinary text is counted
+ * exactly as before.
+ */
+export const MAX_ENCODED_RUN_CHARS = 1_000;
+
+function isWhitespace(code: number): boolean {
+    // Unicode White_Space, the set tiktoken's `\s` splits on: a character
+    // missing here would restart a whitespace run at every step, so a run
+    // alternating it with a space would never reach the limit while
+    // tiktoken still saw one quadratic piece.
+    return (
+        (code >= 9 && code <= 13) ||
+        code === 32 ||
+        code === 0x85 ||
+        code === 0xa0 ||
+        code === 0x1680 ||
+        (code >= 0x2000 && code <= 0x200a) ||
+        code === 0x2028 ||
+        code === 0x2029 ||
+        code === 0x202f ||
+        code === 0x205f ||
+        code === 0x3000
+    );
+}
+
+/**
+ * tiktoken count, except that any run of more than MAX_ENCODED_RUN_CHARS
+ * characters of one kind (whitespace, or anything but whitespace) is
+ * estimated instead: tiktoken is quadratic on both, since a whitespace run is
+ * one pre-token piece too (80k spaces took 3.8s). A whitespace run counts by
+ * the fallback ratio (conservative: tiktoken packs many spaces per token).
+ * In any other run, ASCII characters count by the fallback ratio and every
+ * other character as one token (CJK and other scripts written without spaces
+ * run about 1-1.5 characters per token, so 3 would under-count them). One
+ * linear pass over the text; no regex (a `\S{n,}` scan would itself be
+ * O(n·k)).
+ */
+function countTokens(enc: Tiktoken, text: string): number {
+    if (text.length <= MAX_ENCODED_RUN_CHARS) {
+        return enc.encode_ordinary(text).length;
+    }
+    let tokens = 0;
+    let segmentStart = 0;
+    let runStart = 0;
+    let runIsWhitespace = isWhitespace(text.charCodeAt(0));
+    let longRuns = false;
+    // Non-ASCII code units in the current (non-whitespace) run.
+    let runNonAscii = 0;
+    const flushRun = (runEnd: number) => {
+        const length = runEnd - runStart;
+        if (length <= MAX_ENCODED_RUN_CHARS) return;
+        longRuns = true;
+        if (runStart > segmentStart) {
+            tokens += enc.encode_ordinary(
+                text.slice(segmentStart, runStart),
+            ).length;
+        }
+        tokens += runIsWhitespace
+            ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
+            : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
+              runNonAscii;
+        segmentStart = runEnd;
+    };
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        const whitespace = isWhitespace(code);
+        if (whitespace !== runIsWhitespace) {
+            flushRun(i);
+            runStart = i;
+            runIsWhitespace = whitespace;
+            runNonAscii = 0;
+        }
+        if (!whitespace && code > 0x7f) runNonAscii++;
+    }
+    flushRun(text.length);
+    if (!longRuns) return enc.encode_ordinary(text).length;
+    if (segmentStart < text.length) {
+        tokens += enc.encode_ordinary(text.slice(segmentStart)).length;
+    }
+    return tokens;
+}
+
 /** Token count of a single string; transient slices can bypass the shared memo. */
 export function estimateTextTokens(
     text: string,
@@ -109,7 +199,7 @@ export function estimateTextTokens(
     const enc = getEncoder();
     if (enc) {
         try {
-            const tokens = enc.encode_ordinary(text).length;
+            const tokens = countTokens(enc, text);
             return useMemo ? remember(text, tokens) : tokens;
         } catch {
             // fall through to the char estimate

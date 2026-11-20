@@ -97,6 +97,14 @@ export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
  *  so it stays loose here; 01-04 owns each mapping. */
 export type ProviderReasoningOptions = Record<string, unknown>;
 
+/** A provider's marker for a shared one-shot prefix (`prefixCacheHint`). */
+export interface PrefixCacheHint {
+    /** providerOptions for the last content block of the shared prefix. */
+    part: Record<string, unknown>;
+    /** providerOptions merged into the request, per vendor namespace. */
+    request?: Record<string, Record<string, unknown>>;
+}
+
 /** Normalized usage — Phase 3 fills the real extraction; declared now for shape
  *  stability so callers can type against it before Phase 3 lands. */
 export interface NormalizedUsage {
@@ -257,6 +265,13 @@ export interface ProviderModule {
     systemCacheControl?(
         cfg: ProviderBuildConfig,
     ): Record<string, unknown> | undefined;
+    /** Optional marker for a prefix that several ONE-SHOT calls share (the
+     *  rules head of every Kody Rules shard of a review). `part` goes on the
+     *  last content block of the shared prefix; `request` merges into the
+     *  call's providerOptions (OpenAI needs explicit mode, or its automatic
+     *  breakpoint also writes each call's unique tail). Absent → the
+     *  module's `systemCacheControl` hint is used as `part`. */
+    prefixCacheHint?(cfg: ProviderBuildConfig): PrefixCacheHint | undefined;
     /** How this model treats `temperature` — the ONE per-model answer, sibling to
      *  `reasoning()`. Only the module knows, per its own id + model id, whether a
      *  request carrying temperature 400s (real Anthropic 4.7+), must be pinned to a

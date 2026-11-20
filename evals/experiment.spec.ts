@@ -454,3 +454,70 @@ describe('evals/experiment.js run names', () => {
         expect(runName('feat/dedup-v2', '896fa156c1234', at)).not.toBe(runName('feat/dedup-v2', '896fa156c1234', at));
     });
 });
+
+describe('evals/experiment.js the Kody Rules agent', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { deriveRuns, STEP_EVALS } = require('./experiment');
+    const plan = STEP_EVALS['kody-rules'];
+    const run = {
+        metric: { name: 'occurrence recall', value: 0.5 },
+        cases: [
+            { id: 'a', hits: 3, total: 4, flagged: 5, offSite: 1, cleanFiles: 10, falseAlarms: 1, quality: { graded: 4, titleOk: 2, fixGraded: 3, fixPass: 1, judgeErrors: 0 } },
+            { id: 'b', hits: 0, total: 0, flagged: 0, offSite: 0, cleanFiles: 4, falseAlarms: 0 },
+        ],
+    };
+    const derived = (id: string) => plan.primary.derived.find((d: { id: string }) => d.id === id);
+    const rows = (id: string) => deriveRuns([run], derived(id))[0].cases.map((c: Case) => [c.id, c.hits, c.total]);
+
+    it('grades the quality of what it says, beside how much it flags', () => {
+        expect(plan.primary.run).toEqual(expect.arrayContaining(['evals/kody-rules/real-agent.js', '--quality']));
+    });
+
+    it('reads line precision and specificity from the same cases', () => {
+        expect(rows('kody-line-precision')).toEqual([['a', 4, 5], ['b', 0, 0]]);
+        expect(rows('kody-specificity')).toEqual([['a', 9, 10], ['b', 4, 4]]);
+    });
+
+    it('leaves a case without its off-site or false-alarm count unmeasured rather than perfect', () => {
+        const partial = { metric: run.metric, cases: [run.cases[0], { id: 'd', hits: 1, total: 1, flagged: 3, cleanFiles: 5 }] };
+        const partialRows = (id: string) => deriveRuns([partial], derived(id))[0].cases.map((c: Case) => [c.id, c.hits, c.total]);
+        expect(partialRows('kody-line-precision')).toEqual([['a', 4, 5]]);
+        expect(partialRows('kody-specificity')).toEqual([['a', 9, 10]]);
+    });
+
+    it('reads title and fix quality only where the judge graded', () => {
+        expect(rows('kody-title-quality')).toEqual([['a', 2, 4]]);
+        expect(rows('kody-fix-quality')).toEqual([['a', 1, 3]]);
+    });
+
+    it('leaves a case unmeasured for title and fix quality when its judge erred', () => {
+        const erred = {
+            metric: run.metric,
+            cases: [
+                run.cases[0],
+                { id: 'c', hits: 2, total: 2, flagged: 2, offSite: 0, cleanFiles: 3, falseAlarms: 0, quality: { graded: 1, titleOk: 1, fixGraded: 1, fixPass: 1, judgeErrors: 1 } },
+            ],
+        };
+        const erredRows = (id: string) => deriveRuns([erred], derived(id))[0].cases.map((c: Case) => [c.id, c.hits, c.total]);
+        expect(erredRows('kody-title-quality')).toEqual([['a', 2, 4]]);
+        expect(erredRows('kody-fix-quality')).toEqual([['a', 1, 3]]);
+        expect(erredRows('kody-line-precision')).toEqual([['a', 4, 5], ['c', 2, 2]]);
+    });
+
+    it('guards the files outside a rule’s language with the polyglot set, scored as specificity', () => {
+        const [guard] = plan.guards;
+        expect(guard.run).toEqual(expect.arrayContaining(['--dataset=polyglot-cases']));
+        const read = guard.read({ metric: {}, cases: [{ id: 'r', hits: 0, total: 0, cleanFiles: 12, falseAlarms: 2 }] });
+        expect(read.cases.map((c: Case) => [c.id, c.hits, c.total])).toEqual([['r', 10, 12]]);
+    });
+
+    it('leaves a guard case without a false-alarm count unmeasured rather than perfect', () => {
+        const [guard] = plan.guards;
+        const read = guard.read({ metric: {}, cases: [{ id: 'r', cleanFiles: 12 }, { id: 's', cleanFiles: 3, falseAlarms: 0 }] });
+        expect(read.cases.map((c: Case) => [c.id, c.hits, c.total])).toEqual([['s', 3, 3]]);
+    });
+
+    it('never runs on a PR check: every case is a real review on a real model', () => {
+        expect(plan.smoke).toEqual([]);
+    });
+});
