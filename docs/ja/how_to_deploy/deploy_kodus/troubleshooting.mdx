@@ -95,7 +95,7 @@ docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERN
 
 プロンプトが表示されたら、MongoDB の root パスワードを入力します。
 
-### 「MongoDBがSERVER-121912で終了する」
+### MongoDBがSERVER-121912で終了する
 
 MongoDB 8.3 と新しい Linux カーネルの一部の組み合わせでは、起動時に `SERVER-121912` が発生します。Docker のカーネルが 6.19 以降でイメージの上書きがない場合、`install.sh` は `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11` を保存します。Compose で直接新規インストールする場合はこの値を `.env` に設定します。Helm で新規インストールする場合は `mongodb.bundled.image=mongo:8.2.11` を設定します。
 

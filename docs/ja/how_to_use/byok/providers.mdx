@@ -165,7 +165,7 @@ description: "Kimi、GLM、OpenRouter の固定を含め、対応する各プロ
 
 Moonshot と Z.ai はそれぞれ、トークン従量課金の Developer API とは**別のエンドポイント**でサブスクリプションプランを提供しています。各プランは独自のキーを持つ別のアカウントです。お持ちのキーに対応するベース URL を選択してください。
 
-**Providers** の下にある **Moonshot** タイルと **Z.ai** タイルは、キーだけで Developer API に接続します。Kodus が Anthropic プロトコルのエンドポイント（`https://api.moonshot.ai/anthropic`、`https://api.z.ai/api/anthropic`）を入力するため、フォームにベース URL のフィールドはありません。コーディングプランのキーや別のエンドポイントを使う場合は、**Custom** の下で **OpenAI-compatible** または **Anthropic-compatible** を選択し、表のベース URL を入力してください。
+**Moonshot** タイルは Developer API の Anthropic 互換エンドポイント（`https://api.moonshot.ai/anthropic`）を使用します。**Z.ai** タイルは Z.AI が GLM Coding Plan 向けに案内している `https://api.z.ai/api/anthropic` を使用します。Z.AI の Developer API を使用する場合は、**Custom** で **OpenAI-compatible** を選択し、`https://api.z.ai/api/paas/v4/` を入力してください。Kimi Code Plan のキーを使う場合は、**Custom** で互換プロバイダーを選択し、表のベース URL を入力してください。
 
 <Tabs>
   <Tab title="Kimi (Moonshot AI)">

@@ -95,7 +95,7 @@ docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERN
 
 出现提示时，输入 MongoDB 的 root 密码。
 
-### "MongoDB 因 SERVER-121912 退出"
+### MongoDB 因 SERVER-121912 退出
 
 MongoDB 8.3 与部分较新的 Linux 内核组合使用时，会在启动时报出 `SERVER-121912`。Docker 内核为 6.19 或更高版本且未指定其他镜像时，`install.sh` 会保存 `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11`。直接通过 Compose 全新安装时，请在 `.env` 中设置该值。通过 Helm 全新安装时，请设置 `mongodb.bundled.image=mongo:8.2.11`。
 

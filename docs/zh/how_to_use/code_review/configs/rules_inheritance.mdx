@@ -14,9 +14,9 @@ description: "审查会应用哪些全局、代码库和目录规则,以及 Inhe
 
 在父级范围编写的规则始终会被其下级范围继承。在两个范围中以相同指令出现的规则只会运行一次。
 
-<Note>
-  **Inheritable** 开关和 **Override and disable for this scope** 会改变规则在 **Kody Rules** 页面上的列出方式。它们不会改变审查应用哪些规则。详见下文。
-</Note>
+<Warning>
+  即使 **Kody Rules** 页面将继承的规则显示为禁用，审查仍会应用上级范围的有效规则。要停止应用规则，请在创建它的范围内暂停规则，或在支持该字段的范围内缩小 **Path**。
+</Warning>
 
 ## 在应用中
 

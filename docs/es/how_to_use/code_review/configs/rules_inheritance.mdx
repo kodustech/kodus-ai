@@ -14,9 +14,9 @@ Cada revisión aplica las reglas activas de tres ámbitos: **Global → Reposito
 
 Una regla escrita en un ámbito padre siempre la heredan los ámbitos que están por debajo. Una regla que aparece en dos ámbitos con instrucciones idénticas se ejecuta una sola vez.
 
-<Note>
-  El interruptor **Inheritable** y **Override and disable for this scope** cambian cómo se listan las reglas en la página **Kody Rules**. No cambian qué reglas aplica una revisión. Consulta más abajo.
-</Note>
+<Warning>
+  Las revisiones aplican las reglas activas de ámbitos superiores aunque la página **Kody Rules** las muestre como deshabilitadas en ese ámbito. Para impedir que una regla se aplique, páusala en el ámbito donde se creó o limita su **Path** si el campo está disponible.
+</Warning>
 
 ## En la aplicación
 

@@ -131,6 +131,6 @@ ignorePaths:
 
 - 每个目录从 2-3 条规则开始，再根据团队在审查中实际标记的内容逐步扩展
 - 使用规则继承 — 组织级规则覆盖安全，仓库级覆盖约定，目录级覆盖架构
-- 如果某条规则在一个包中触发过于频繁，但在其他地方有效，请收窄它的 **Path** 或重写它。**Override and disable for this scope** 只会在列表中把继承来的规则标记为已禁用；审查时仍会应用它
+- 如果规则在某个包中触发过于频繁，请在创建规则的范围内缩小 **Path** 或重写规则。
 
 有关目录范围的更多信息，请参阅[目录级设置](/zh/how_to_use/code_review/configs/directory_level)。有关规则继承，请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。

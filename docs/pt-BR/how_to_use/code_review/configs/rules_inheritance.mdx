@@ -14,9 +14,9 @@ Todo review aplica as regras ativas de três escopos: **Global → Repository �
 
 Uma regra escrita em um escopo pai é sempre herdada pelos escopos abaixo dele. Uma regra que aparece em dois escopos com instruções idênticas roda uma vez.
 
-<Note>
-  O switch **Inheritable** e **Override and disable for this scope** mudam como as regras são listadas na página **Kody Rules**. Eles não mudam quais regras um review aplica. Veja abaixo.
-</Note>
+<Warning>
+  As revisões aplicam as regras ativas dos escopos superiores mesmo quando a página **Kody Rules** as mostra como desabilitadas no escopo atual. Para interromper a aplicação, pause a regra no escopo de origem ou restrinja o **Path** quando esse campo estiver disponível.
+</Warning>
 
 ## No app
 

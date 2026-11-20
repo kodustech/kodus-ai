@@ -15,7 +15,7 @@ Z.AI 还在其标准开发者 API 上提供按 token 付费的访问方式。
 ## 方案概览
 
 <Info>
-  请使用 **Developer API** 密钥在 Kodus 中运行审查。Z.AI 将 GLM Coding Plan 限定于[支持的工具](https://docs.z.ai/devpack/tool/others#supported-tools)。在 Kodus 中使用 Coding Plan 订阅前，请先向 Z.AI 确认可用资格。
+  使用 **Developer API** 时，请在 **Custom** 中选择 **OpenAI-compatible** 并输入 `https://api.z.ai/api/paas/v4/`。Z.AI 将 GLM Coding Plan 限定于[支持的工具](https://docs.z.ai/devpack/tool/others#supported-tools)。在 Kodus 中使用 Coding Plan 订阅前，请先向 Z.AI 确认可用资格。
 </Info>
 
 ### GLM Coding Plan(订阅)
@@ -76,7 +76,7 @@ Z.AI 还在其标准开发者 API 上提供按 token 付费的访问方式。
   </Step>
 
   <Step title="粘贴 API 密钥并输入模型">
-    在 **API key** 卡片中粘贴 Z.AI 密钥,然后在 **Model** 中输入模型 ID(例如 `glm-5.3`)。Kodus 会为您填入 `https://api.z.ai/api/anthropic` 端点 — 即 Z.AI 为 GLM Coding Plan 提供文档说明的 Anthropic 兼容端点 — 因此此磁贴没有套餐选择器,也没有 base URL 字段。若要改用特定的 OpenAI 兼容端点,请使用下面的方式 2。
+    在 **API key** 卡片中粘贴 Coding Plan 密钥,然后在 **Model** 中输入模型 ID(例如 `glm-5.3`)。Kodus 会为您填入 `https://api.z.ai/api/anthropic` 端点 — 即 Z.AI 为 GLM Coding Plan 提供文档说明的 Anthropic 兼容端点 — 因此此磁贴没有套餐选择器,也没有 base URL 字段。若要改用特定的 OpenAI 兼容端点,请使用下面的方式 2。
   </Step>
 
   <Step title="设置并发(Coding Plan)">

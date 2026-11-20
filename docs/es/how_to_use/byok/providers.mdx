@@ -166,7 +166,7 @@ Elige tu proveedor para ver cómo obtener una clave y qué ingresar. Agrega el m
 
 Moonshot y Z.ai ofrecen cada uno un plan de suscripción en un **endpoint distinto** al de su Developer API de pago por token. Cada plan es una cuenta separada con su propia clave: elige la URL base que coincida con la clave que tienes.
 
-Los mosaicos **Moonshot** y **Z.ai** en **Providers** se conectan a la Developer API solo con una clave: Kodus completa el endpoint de protocolo Anthropic (`https://api.moonshot.ai/anthropic`, `https://api.z.ai/api/anthropic`) y el formulario no tiene un campo de URL base. Para una clave de un plan de código u otro endpoint, elige **OpenAI-compatible** o **Anthropic-compatible** en **Custom** e ingresa la URL base de la tabla.
+El mosaico **Moonshot** usa el endpoint de la Developer API compatible con Anthropic (`https://api.moonshot.ai/anthropic`). El mosaico **Z.ai** usa `https://api.z.ai/api/anthropic`, el endpoint que Z.AI documenta para el GLM Coding Plan. Para usar la Developer API de Z.AI, selecciona **OpenAI-compatible** en **Custom** y usa `https://api.z.ai/api/paas/v4/`. Para una clave de Kimi Code Plan, elige un proveedor compatible en **Custom** e introduce la URL base de la tabla.
 
 <Tabs>
   <Tab title="Kimi (Moonshot AI)">

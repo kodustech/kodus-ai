@@ -155,7 +155,7 @@ description: "如何获取密钥并连接每个受支持的提供商,包括 Kimi
 
 Moonshot 和 Z.ai 各自提供一个订阅套餐,其**端点**与各自按 token 付费的开发者 API 不同。每个套餐是独立的账号,有各自的密钥 — 请选择与您持有的密钥匹配的 base URL。
 
-**Providers** 下的 **Moonshot** 和 **Z.ai** 磁贴仅用密钥连接到开发者 API:Kodus 会填入 Anthropic 协议端点(`https://api.moonshot.ai/anthropic`、`https://api.z.ai/api/anthropic`),表单没有 base URL 字段。对于编码套餐密钥或其他端点,请在 **Custom** 下选择 **OpenAI-compatible** 或 **Anthropic-compatible**,并输入表中的 base URL。
+**Moonshot** 磁贴使用开发者 API 的 Anthropic 兼容端点（`https://api.moonshot.ai/anthropic`）。**Z.ai** 磁贴使用 Z.AI 为 GLM Coding Plan 提供的 `https://api.z.ai/api/anthropic`。使用 Z.AI Developer API 时，请在 **Custom** 中选择 **OpenAI-compatible** 并输入 `https://api.z.ai/api/paas/v4/`。使用 Kimi Code Plan 密钥时，请在 **Custom** 中选择兼容的提供商并输入表中的基础 URL。
 
 <Tabs>
   <Tab title="Kimi (Moonshot AI)">

@@ -15,7 +15,7 @@ Os dois caminhos expõem um endpoint compatível com OpenAI, então a Kodus pode
 ## Visão geral dos planos
 
 <Info>
-  Use uma chave da **Developer API** para rodar reviews na Kodus. A Z.AI restringe o GLM Coding Plan às [ferramentas que ela autoriza](https://docs.z.ai/devpack/tool/others#supported-tools). Confirme a elegibilidade com a Z.AI antes de usar uma assinatura do Coding Plan na Kodus.
+  Para usar a **Developer API**, escolha **OpenAI-compatible** em **Custom** e informe `https://api.z.ai/api/paas/v4/`. A Z.AI restringe o GLM Coding Plan às [ferramentas que ela autoriza](https://docs.z.ai/devpack/tool/others#supported-tools). Confirme a elegibilidade com a Z.AI antes de usar uma assinatura do Coding Plan na Kodus.
 </Info>
 
 ### GLM Coding Plan (assinatura)
@@ -76,7 +76,7 @@ Para a **Developer API**, siga a Opção 2 com uma conexão OpenAI-compatible.
   </Step>
 
   <Step title="Colar sua chave de API e informar o modelo">
-    Cole sua chave da Z.AI no card **API key** e digite o ID do modelo (ex.: `glm-5.3`) em **Model**. A Kodus preenche o endpoint `https://api.z.ai/api/anthropic` para você — o endpoint compatível com Anthropic que a Z.AI documenta para o GLM Coding Plan — então este card não tem seletor de plano nem campo de base URL. Para usar um endpoint compatível com OpenAI específico, use a Opção 2 abaixo.
+    Cole sua chave do Coding Plan no card **API key** e digite o ID do modelo (ex.: `glm-5.3`) em **Model**. A Kodus preenche o endpoint `https://api.z.ai/api/anthropic` para você — o endpoint compatível com Anthropic que a Z.AI documenta para o GLM Coding Plan — então este card não tem seletor de plano nem campo de base URL. Para usar um endpoint compatível com OpenAI específico, use a Opção 2 abaixo.
   </Step>
 
   <Step title="Definir a simultaneidade (Coding Plan)">

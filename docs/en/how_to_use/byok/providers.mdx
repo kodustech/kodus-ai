@@ -166,7 +166,7 @@ Pick your provider for how to get a key and what to enter. Add the model on the 
 
 Moonshot and Z.ai each offer a subscription plan on a **different endpoint** than their pay-per-token Developer API. Each plan is a separate account with its own key — pick the base URL that matches the key you have.
 
-The **Moonshot** and **Z.ai** tiles under **Providers** connect to the Developer API with only a key: Kodus fills in the Anthropic-protocol endpoint (`https://api.moonshot.ai/anthropic`, `https://api.z.ai/api/anthropic`) and the form has no base URL field. For a coding plan key or another endpoint, pick **OpenAI-compatible** or **Anthropic-compatible** under **Custom** and enter the base URL from the table.
+The **Moonshot** tile uses the Developer API's Anthropic-compatible endpoint (`https://api.moonshot.ai/anthropic`). The **Z.ai** tile uses `https://api.z.ai/api/anthropic`, which Z.AI documents for its GLM Coding Plan. To use the Z.AI Developer API, choose **OpenAI-compatible** under **Custom** and use `https://api.z.ai/api/paas/v4/`. For a Kimi Code Plan key, choose a compatible provider under **Custom** and enter the base URL from the table.
 
 <Tabs>
   <Tab title="Kimi (Moonshot AI)">

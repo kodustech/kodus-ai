@@ -131,6 +131,6 @@ ignorePaths:
 
 - Start with 2-3 rules per directory and expand based on what your team actually flags in reviews
 - Use rule inheritance — org-level rules cover security, repo-level covers conventions, directory-level covers architecture
-- If a rule fires too often in one package but is valid elsewhere, narrow its **Path** or rewrite it. **Override and disable for this scope** only marks an inherited rule as disabled in the list; a review still applies it
+- If a rule fires too often in one package, narrow its **Path** or rewrite it at the scope where it was created.
 
 For more on directory scopes, see [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level). For rule inheritance, see [Rules Inheritance](/en/how_to_use/code_review/configs/rules_inheritance).

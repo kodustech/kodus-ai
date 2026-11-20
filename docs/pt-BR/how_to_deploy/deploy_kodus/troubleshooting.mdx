@@ -95,7 +95,7 @@ docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERN
 
 Digite a senha root do MongoDB quando solicitado.
 
-### "MongoDB encerra com SERVER-121912"
+### MongoDB encerra com SERVER-121912
 
 Algumas combinações de MongoDB 8.3 e kernels Linux recentes falham ao iniciar com `SERVER-121912`. Quando o kernel do Docker é 6.19 ou mais recente, o `install.sh` grava `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11` se você ainda não definiu uma imagem. Em uma instalação nova direto pelo Compose, defina esse valor no `.env`. Para uma instalação nova com Helm, defina `mongodb.bundled.image=mongo:8.2.11`.
 
