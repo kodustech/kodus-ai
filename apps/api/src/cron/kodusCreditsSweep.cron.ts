@@ -69,11 +69,17 @@ export class KodusCreditsSweepCronProvider {
             const limit = pLimit(SWEEP_CONCURRENCY);
             const startedAt = Date.now();
             const deadline = startedAt + SWEEP_RUN_BUDGET_MS;
-            // Each run starts one organization further along, so the ones a
-            // run defers lead a later one instead of trailing every tick.
-            const offset =
-                Math.floor(startedAt / SWEEP_RUN_BUDGET_MS) % orgs.length;
-            const ordered = [...orgs.slice(offset), ...orgs.slice(0, offset)];
+            // Each run starts at a random organization of the sorted list, so
+            // the ones a run defers are as likely as any to lead the next: an
+            // organization waits about N/K runs (K swept per run), with no
+            // state kept between runs. Sorted, so its place does not hang on
+            // the order the read returns them in.
+            const sorted = [...orgs].sort();
+            const offset = Math.floor(Math.random() * sorted.length);
+            const ordered = [
+                ...sorted.slice(offset),
+                ...sorted.slice(0, offset),
+            ];
             let started = 0;
             const results = await Promise.allSettled(
                 ordered.map((organizationId) =>

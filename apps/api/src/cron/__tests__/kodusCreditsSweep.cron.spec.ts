@@ -1,6 +1,14 @@
 import { KodusCreditsSweepCronProvider } from '../kodusCreditsSweep.cron';
 
 describe('KodusCreditsSweepCronProvider', () => {
+    // Runs start at the first organization unless a test says otherwise.
+    beforeEach(() => {
+        jest.spyOn(Math, 'random').mockReturnValue(0);
+    });
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     it('holds the sweep lock longer than the schedule, so a slow run is not overlapped', async () => {
         const release = jest.fn().mockResolvedValue(undefined);
         const lockService = {
@@ -80,44 +88,54 @@ describe('KodusCreditsSweepCronProvider', () => {
         ]);
     });
 
-    it('starts each run one organization further along, so a deferred one leads a later run', async () => {
-        // Two runs, one budget period apart, over the same six organizations.
-        const run = async (at: number) => {
-            let now = at;
-            const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
-            const metering = {
-                listOrganizationsWithKodusCredential: jest
-                    .fn()
-                    .mockResolvedValue(['o1', 'o2', 'o3', 'o4', 'o5', 'o6']),
-                sweepOrganization: jest.fn(async (_organizationId: string) => {
-                    now += 60 * 1000;
-                    return { debited: 0, debitedUsd: 0 };
-                }),
-            };
-            const cron = new KodusCreditsSweepCronProvider(
-                metering as any,
-                {
-                    acquire: jest.fn().mockResolvedValue({
-                        release: jest.fn().mockResolvedValue(undefined),
-                    }),
-                } as any,
-            );
-            jest.spyOn((cron as any).logger, 'log').mockImplementation(
-                () => {},
-            );
-            await cron.handleCron();
-            clock.mockRestore();
-            return metering.sweepOrganization.mock.calls.map(([o]) => o);
+    // One run over six organizations whose sweeps take a minute each: four
+    // fit in the budget.
+    const sweptByOneRun = async (orgs: string[]) => {
+        let now = Date.parse('2026-11-19T00:00:00Z');
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        const metering = {
+            listOrganizationsWithKodusCredential: jest
+                .fn()
+                .mockResolvedValue(orgs),
+            sweepOrganization: jest.fn(async (_organizationId: string) => {
+                now += 60 * 1000;
+                return { debited: 0, debitedUsd: 0 };
+            }),
         };
-        const first = Date.parse('2026-11-19T00:00:00Z');
+        const cron = new KodusCreditsSweepCronProvider(
+            metering as any,
+            {
+                acquire: jest.fn().mockResolvedValue({
+                    release: jest.fn().mockResolvedValue(undefined),
+                }),
+            } as any,
+        );
+        jest.spyOn((cron as any).logger, 'log').mockImplementation(() => {});
+        await cron.handleCron();
+        clock.mockRestore();
+        return metering.sweepOrganization.mock.calls.map(([o]) => o);
+    };
 
-        expect(await run(first)).toEqual(['o1', 'o2', 'o3', 'o4']);
-        expect(await run(first + 4 * 60 * 1000)).toEqual([
-            'o2',
-            'o3',
-            'o4',
-            'o5',
-        ]);
+    it('starts at a random organization of the sorted list, whatever order the read returns', async () => {
+        jest.spyOn(Math, 'random').mockReturnValue(0.5);
+
+        expect(
+            await sweptByOneRun(['o3', 'o6', 'o1', 'o5', 'o2', 'o4']),
+        ).toEqual(['o4', 'o5', 'o6', 'o1']);
+    });
+
+    it('sweeps every organization within a few runs when each run defers some', async () => {
+        jest.spyOn(Math, 'random').mockRestore();
+        const orgs = ['o1', 'o2', 'o3', 'o4', 'o5', 'o6'];
+        const swept = new Set<string>();
+
+        // An organization is left out of a run with probability 2/6: missing
+        // it in all 20 runs is about 3 in 10 billion.
+        for (let run = 0; run < 20; run++) {
+            for (const org of await sweptByOneRun(orgs)) swept.add(org);
+        }
+
+        expect([...swept].sort()).toEqual(orgs);
     });
 
     it('sweeps at most four organizations at a time', async () => {
