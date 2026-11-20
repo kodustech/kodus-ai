@@ -294,16 +294,28 @@ function sameRequestShape(a: Probe, b: Probe): boolean {
  * and those of the same request shape (`sameRequestShape`) their status too:
  * a sentence quoted for one request may explain another's difference, never
  * flag it (`explainOnly`). A literal `equals` stays with its own request.
+ * A probe with an intent probe of its own request still gets the route's rules
+ * of the others: one sentence may read `unitPrice` there and another state
+ * `total` for every order (kr-shop #12, release v1f).
  */
 export function statedIntentChecksFor(planned: { probe: Probe; entryPoint: string }, intents: readonly IntentProbeLike[]): { checks: StatedIntentCheck[]; explainOnly: boolean } {
     const twins = intents.filter((ip) => sameHttpRequest(planned.probe, ip.probe));
-    if (twins.length) return { checks: twins.map((ip) => checkOf(ip)), explainOnly: false };
-    if (planned.probe.spec.kind !== 'http' || planned.entryPoint === 'unmapped') return { checks: [], explainOnly: true };
+    const routeRules = routeRulesFor(
+        planned,
+        intents.filter((ip) => !twins.includes(ip)),
+    );
+    if (twins.length) return { checks: [...twins.map((ip) => checkOf(ip)), ...routeRules], explainOnly: false };
+    return { checks: routeRules, explainOnly: true };
+}
+
+/** The rules over response fields of the intent probes of the planned probe's method and route, and their status for the same request shape. */
+function routeRulesFor(planned: { probe: Probe; entryPoint: string }, intents: readonly IntentProbeLike[]): StatedIntentCheck[] {
+    if (planned.probe.spec.kind !== 'http' || planned.entryPoint === 'unmapped') return [];
     const route = planned.entryPoint;
-    const checks = intents
-        .filter((ip) => ip.probe.spec.kind === 'http' && ip.probe.spec.method === (planned.probe.spec as { method: string }).method)
-        .filter((ip) => requestMatchesEntryPoint(route, { method: (ip.probe.spec as { method: string }).method, route: routeShapeOf((ip.probe.spec as { path: string }).path) }))
+    const method = planned.probe.spec.method;
+    return intents
+        .filter((ip) => ip.probe.spec.kind === 'http' && ip.probe.spec.method === method)
+        .filter((ip) => requestMatchesEntryPoint(route, { method, route: routeShapeOf((ip.probe.spec as { path: string }).path) }))
         .map((ip) => checkOf(ip, ip.intentAssertions.filter((a) => isRouteInvariant(a) || (a.kind === 'status' && sameRequestShape(planned.probe, ip.probe)))))
         .filter((c) => c.assertions.length > 0);
-    return { checks, explainOnly: true };
 }

@@ -291,6 +291,20 @@ describe('statedIntentChecksFor: which intent checks a planned probe gets', () =
         const { decision, steps } = replay(planned, { status: 200, body: { id: 2, item: 'monitor', quantity: 1 } }, { status: 200, body: { id: 2, item: 'monitor', quantity: 1, unitPrice: 200, total: 200 } });
         expect(decideStatedIntent(decision, steps, checks, { mismatch: false, pinnedImageId: IMAGE }).decision.verdict).toBe('described_change');
     });
+
+    it("keeps the route's rules when an intent probe of its own request reads only part of the difference (kr-shop #12, release v1f)", () => {
+        const price = { quote: "`GET /orders/:id` also returns the order's price.", source: 'description' as const };
+        const ownPrice = { probe: probe('intent-price', 'GET', '/orders/2'), intent: price, intentAssertions: [assertion({ kind: 'equals', path: '$.unitPrice', value: 200 })] };
+        const planned = probe('order-2', 'GET', '/orders/2');
+        const { checks, explainOnly } = statedIntentChecksFor({ probe: planned, entryPoint: 'GET /orders/:id' }, [ownPrice, ...intents]);
+        expect(explainOnly).toBe(false);
+        expect(checks.map((c) => [c.probeId, c.assertions.length])).toEqual([
+            ['intent-price', 1],
+            ['intent-1', 1],
+        ]);
+        const { decision, steps } = replay(planned, { status: 200, body: { id: 2, item: 'monitor', quantity: 1 } }, { status: 200, body: { id: 2, item: 'monitor', quantity: 1, unitPrice: 200, total: 200 } });
+        expect(decideStatedIntent(decision, steps, checks, { mismatch: false, pinnedImageId: IMAGE }).decision.verdict).toBe('described_change');
+    });
 });
 
 describe('every and includes (kr-shop #10 and #13 on release v1d)', () => {
