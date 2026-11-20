@@ -1108,6 +1108,16 @@ export const MessageBodySchemas = {
         // Feature egressTiers: the hosts of allow approved as inspected.
         inspect: EgressInspectListSchema.optional(),
         issuedAt: z.iso.datetime(),
+        // Seals a sandbox claim's egress for good (the product asks it once the
+        // checkout is prepared): from then on its signed policy allows nothing,
+        // whatever any later egress.policy or the cell's own lists say. Only on a
+        // sandbox claim, with an empty allow and no inspect; acked after the
+        // enforcers hold the sealed policy. An older cell refuses the field
+        // (strict body), so a seal never silently does nothing.
+        sealed: z.literal(true).optional(),
+    }).refine((b) => !b.sealed || (b.allow.length === 0 && !b.inspect?.length), {
+        message: 'a sealed egress policy allows nothing: allow and inspect are empty',
+        path: ['sealed'],
     }),
     // Dial the preview edge (feature preview): one more outbound WebSocket,
     // with the cell's own client certificate and this one-time ticket, that

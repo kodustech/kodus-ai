@@ -216,6 +216,11 @@ func refine(body any) error {
 		return refineSandboxSnapshot(b)
 	case *StepResultBody:
 		return checkStepResult(b)
+	case *EgressPolicyBody:
+		// A sealed policy allows nothing (the egress.policy refine in messages.ts).
+		if b.Sealed != nil && *b.Sealed && (len(b.Allow) > 0 || len(b.Inspect) > 0) {
+			return fmt.Errorf("sealed: a sealed egress policy allows nothing: allow and inspect are empty")
+		}
 	case *SandboxOpBody:
 		return CheckSandboxOp(b.Op)
 	case *BlockedBody:

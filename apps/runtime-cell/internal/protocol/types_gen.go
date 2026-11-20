@@ -1287,6 +1287,7 @@ type EgressPolicyBody struct {
 	Allow    []string                            `json:"allow"`
 	Inspect  []ClaimAcquireBodyEgressInspectItem `json:"inspect,omitempty"`
 	IssuedAt string                              `json:"issuedAt"`
+	Sealed   *bool                               `json:"sealed,omitempty"`
 }
 
 type PreviewTunnelBody struct {
