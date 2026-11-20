@@ -87,8 +87,13 @@ export default async function OrganizationSettingsPage() {
                 key: OrganizationParametersConfigKey.REVIEW_COMMAND_MODES_CONFIG,
             });
             return result?.configValue ?? {};
-        } catch {
-            return {};
+        } catch (error: unknown) {
+            // Only "not stored" means both commands are on; a failed read
+            // must not show them on.
+            if (error instanceof TypedFetchError && error.statusCode === 404) {
+                return {};
+            }
+            throw error;
         }
     };
 
