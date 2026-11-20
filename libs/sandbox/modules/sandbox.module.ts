@@ -24,6 +24,13 @@ import {
     SANDBOX_EGRESS_POLICY_TOKEN,
     SandboxEgressPolicyService,
 } from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
+import {
+    AdvisoryLockCapacityStore,
+    SANDBOX_CAPACITY_GATE_TOKEN,
+    SandboxCapacityGate,
+    readSandboxCapacityEnv,
+} from '@libs/sandbox/infrastructure/services/sandbox-capacity-gate';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
@@ -73,6 +80,19 @@ export function selectSandboxProvider(
             useClass: SandboxEgressPolicyService,
         },
         SandboxLeaseRepository,
+        // Deployment-wide cap (SANDBOX_MAX_CONCURRENT): a no-op while unset.
+        // The lock service only needs the TypeORM DataSource.
+        DistributedLockService,
+        {
+            provide: SANDBOX_CAPACITY_GATE_TOKEN,
+            useFactory: (locks: DistributedLockService) =>
+                new SandboxCapacityGate(
+                    readSandboxCapacityEnv().maxConcurrent > 0
+                        ? new AdvisoryLockCapacityStore(locks)
+                        : undefined,
+                ),
+            inject: [DistributedLockService],
+        },
         {
             provide: SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
             useClass: SandboxConcurrencyConfigService,

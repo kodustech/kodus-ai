@@ -20,6 +20,7 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     SandboxCircuitOpenError,
+    SandboxCapacityTimeoutError,
     SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -281,6 +282,25 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // sandbox (a worker slot or room in the E2B plan). The review
             // never skips its sandbox for lack of capacity; it only stops
             // waiting once its job is gone.
+            // The wait for capacity outlasted SANDBOX_QUEUE_MAX_WAIT_MS: the
+            // review goes on without a sandbox and the SANDBOX_UNAVAILABLE
+            // warning says why, instead of a generic checkout failure.
+            if (err instanceof SandboxCapacityTimeoutError) {
+                const minutes = Math.max(1, Math.round(err.waitedMs / 60_000));
+                this.logger.warn({
+                    message: `No sandbox capacity for ${label} after ${err.waitedMs}ms (${err.waitingFor}); continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
+                        waitedMs: err.waitedMs,
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.sandboxUnavailableReason = `no sandbox capacity: waited about ${minutes} min for ${err.waitingFor}`;
+                });
+            }
             if (err instanceof SandboxWaitAbortedError) {
                 this.logger.warn({
                     message: `Job aborted while ${label} waited for a sandbox`,

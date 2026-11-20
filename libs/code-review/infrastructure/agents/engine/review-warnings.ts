@@ -174,13 +174,15 @@ export function withFallbackWarnings(
  */
 export function buildSandboxUnavailableWarning(params: {
     modelName: string;
+    /** A capacity wait that ran out, when that is why there is no sandbox. */
+    reason?: string;
 }): ReviewWarning {
     return {
         kind: 'SANDBOX_UNAVAILABLE',
         reason: 'sandbox_unavailable',
         contextWindowTokens: 0,
         modelName: params.modelName,
-        detail: 'the repository could not be checked out, so the review read only the diff (no tools, no call graph)',
+        detail: `${params.reason ? `${params.reason}; ` : 'the repository could not be checked out, '}so the review read only the diff (no tools, no call graph)`,
     };
 }
 

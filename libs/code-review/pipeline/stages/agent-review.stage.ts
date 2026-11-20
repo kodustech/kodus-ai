@@ -978,6 +978,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 stageWarnings.push(
                     buildSandboxUnavailableWarning({
                         modelName: effectiveModelName || 'unknown',
+                        reason: context.sandboxUnavailableReason,
                     }),
                 );
             }

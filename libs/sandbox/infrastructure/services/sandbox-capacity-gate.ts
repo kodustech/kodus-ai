@@ -58,6 +58,8 @@ export const SANDBOX_CAPACITY_STORE_TOKEN = Symbol(
     'SANDBOX_CAPACITY_STORE_TOKEN',
 );
 
+export const SANDBOX_CAPACITY_GATE_TOKEN = Symbol('SANDBOX_CAPACITY_GATE_TOKEN');
+
 const SLOT_KEY = (i: number) => `sandbox-capacity:slot:${i}`;
 
 export class AdvisoryLockCapacityStore implements SandboxCapacityStore {
@@ -114,6 +116,10 @@ export class SandboxCapacityGate {
 
     get enabled(): boolean {
         return !!this.store && this.env().maxConcurrent > 0;
+    }
+
+    get maxConcurrent(): number {
+        return this.env().maxConcurrent;
     }
 
     get maxWaitMs(): number {
