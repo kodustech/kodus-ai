@@ -72,6 +72,12 @@ type sandboxPool struct {
 	// One that does not fit is not made.
 	Mem   *admission.Ledger
 	MemMB int
+	// Trusted: every blank sandbox is made trusting the cell CA, as a claim's
+	// own would be under the inspected tier (Config.InspectEgress with
+	// CellTrust and a driver that mounts the trust files into a sandbox). The
+	// CA is the cell's, the same for every org, so a blank one can carry it;
+	// a sandbox that takes one is then inspected like one made for it.
+	Trusted bool
 
 	mu       sync.Mutex
 	ready    []*pooledSandbox
@@ -243,11 +249,12 @@ func (p *sandboxPool) make(ctx context.Context) (pooledSandbox, error) {
 		return pooledSandbox{}, err
 	}
 	hard := start.Add(sandboxPoolCeiling)
-	// A blank sandbox asks no trust: it is made before any claim.
+	// Made before any claim, with the cell CA when the inspected tier asks
+	// every sandbox for it (Trusted).
 	ref, err := p.Sandboxes.CreateSandbox(ctx, driver.SandboxRequest{Spec: driver.MachineSpec{
 		CellID: p.CellID, EnvironmentID: protocol.SandboxEnvironmentID, Role: driver.RolePool, OrgID: SandboxPoolOrg, ClaimID: id,
 		ImageID: sandboxImageID, Size: p.Size, ClaimSize: p.ClaimSize, ClaimGroupID: net.WorkloadGroupID, KMSKeyRef: key, ExpiresAt: hard, HardExpiresAt: hard,
-	}})
+	}, CellTrust: p.Trusted})
 	if err != nil {
 		_ = p.Driver.ReleaseClaim(context.WithoutCancel(ctx), net)
 		p.forget(id)

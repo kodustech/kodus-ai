@@ -199,8 +199,8 @@ type Config struct {
 	// InspectEgress: the cell inspects the hosts of the inspected tier
 	// (docs/runtime/egress-allowlist.md §6), so every claim the cell boots
 	// itself gets the trust files too, not only one with org secrets. Only
-	// with CellTrust; a blank pool sandbox still has none, and its TLS to an
-	// inspected host stays SNI passthrough.
+	// with CellTrust; a blank pool sandbox is then made trusting it too
+	// (sandboxPool.Trusted), so one taken from the pool is inspected as well.
 	InspectEgress bool
 	// Outbound is a claim's egress in a probe round's window, next to its
 	// service logs (Parts.ServiceLogs, evidence.go). EvidenceHTTP is the

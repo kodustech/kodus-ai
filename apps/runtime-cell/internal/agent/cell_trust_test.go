@@ -224,8 +224,11 @@ func TestASecretNamedAfterATrustVariableIsDropped(t *testing.T) {
 
 // The inspected tier (InspectEgress): every machine the claim's own boot
 // makes trusts the cell CA, secrets or not, and the claim says so, so its
-// policy lists them as inspect sources. A blank pool sandbox, made before
-// the claim, does not: TLS from it to an inspected host stays passthrough.
+// policy lists them as inspect sources. A blank pool sandbox is made trusting
+// it too (the cell CA is the same for every org): a sandbox that takes one is
+// inspected like one made for it. Before, a pooled sandbox's TLS to an
+// inspected host was passthrough, so turning the pool on turned inspection
+// off (a PUT to registry.npmjs.org would reach npm).
 func TestInspectEgressBootsTheClaimsOwnMachinesTrustingTheCellCA(t *testing.T) {
 	files, cp := trustFiles(t), &trustComposer{}
 	h := newHarness(t, func(c *Config) {
@@ -256,11 +259,16 @@ func TestInspectEgressBootsTheClaimsOwnMachinesTrustingTheCellCA(t *testing.T) {
 	if m := h.a.claimMachine("sbx-pool"); m.Tags[driver.TagRole] != string(driver.RolePool) {
 		t.Fatalf("no blank sandbox taken: %s", m.Tags[driver.TagRole])
 	}
+	if !h.machineTrusted("sbx-pool") {
+		t.Fatal("the blank pool sandbox was made without the cell CA")
+	}
 	pc, _ := h.a.claims.Get("sbx-pool")
-	if pci := info(pc); pci.CellTrusted {
-		t.Fatal("a blank pool sandbox is marked as trusting the cell CA")
-	} else if spec, _ := PolicySpec(pci, nil, time.Now()); len(spec.InspectSources) != 0 {
-		t.Fatalf("a blank pool sandbox is an inspect source: %v", spec.InspectSources)
+	pci := info(pc)
+	if !pci.CellTrusted {
+		t.Fatal("a sandbox that took a trusted blank one is not counted trusted")
+	}
+	if spec, _ := PolicySpec(pci, nil, time.Now()); len(spec.InspectSources) == 0 {
+		t.Fatal("a sandbox from the pool is no inspect source: its TLS to an inspected host would pass through")
 	}
 }
 

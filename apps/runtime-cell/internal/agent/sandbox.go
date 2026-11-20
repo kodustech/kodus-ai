@@ -205,8 +205,9 @@ func (a *Agent) prepareSandbox(ctx context.Context, c *claims.Claim, hard time.T
 	if err != nil {
 		return err
 	}
-	// A blank pool sandbox was made before any claim, without the cell's
-	// trust files: a claim whose machines need them makes its own. A claim
+	// A blank pool sandbox was made before any claim, without an org's
+	// secrets: a claim with secrets makes its own (takesBlankSandbox). Under
+	// the inspected tier it was made trusting the cell CA (sandboxPool.Trusted). A claim
 	// that prepares a template or starts from a snapshot makes its own too,
 	// and is asked first: a blank one taken for it would leave the pool with
 	// no claim to end it.
@@ -227,6 +228,10 @@ func (a *Agent) prepareSandbox(ctx context.Context, c *claims.Claim, hard time.T
 			return blockerErr(protocol.BlockerKindResources, "create_workload", err)
 		}
 		cl = m.guest
+		if a.sandboxPool.Trusted {
+			// Made trusting the cell CA: its TLS to an inspected host is inspected.
+			c.MarkCellTrusted()
+		}
 		c.Log.Info("sandbox.pool.taken", "machine", m.ref.MachineID, "ageMs", a.clock.Now().Sub(m.at).Milliseconds())
 		ph.done("pool")
 	} else {

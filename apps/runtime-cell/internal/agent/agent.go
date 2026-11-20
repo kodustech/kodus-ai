@@ -164,6 +164,7 @@ func New(cfg Config) (*Agent, error) {
 		a.sandboxPool = &sandboxPool{
 			Target: cfg.SandboxPool, CellID: cfg.CellID, Driver: cfg.Driver, Sandboxes: cfg.Parts.Sandboxes, OrgKey: cfg.OrgKey,
 			Size: cfg.WorkloadSize, ClaimSize: cfg.SandboxSize, Clock: cfg.Clock, Log: a.log, Accepting: a.acceptingWork, dial: a.dialGuest,
+			Trusted: cfg.CellTrust && cfg.InspectEgress && cfg.Driver.Capabilities().SandboxCellTrust,
 		}
 		if a.mem != nil {
 			// A blank sandbox holds its machine's memory, at the figure the
