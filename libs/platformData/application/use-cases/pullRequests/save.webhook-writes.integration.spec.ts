@@ -329,15 +329,20 @@ let available = false;
                     },
                 );
 
+            // The repair rewrites no file: the totals come from the stored
+            // ones, server-side.
             await breakTotals();
-            await webhook('closed');
+            const closed = await measure(() => webhook('closed'));
             const afterClose = (await stored()).doc;
             expect(totals(afterClose)).toEqual(expected(afterClose));
+            expect(closed.fileWrites).toBe(0);
+            expect(afterClose.updatedAt).toBeInstanceOf(Date);
 
             await breakTotals();
-            await webhook('synchronize');
+            const resync = await measure(() => webhook('synchronize'));
             const afterResync = (await stored()).doc;
             expect(totals(afterResync)).toEqual(expected(afterResync));
+            expect(resync.fileWrites).toBe(0);
 
             // Right totals: the update matches nothing, so nothing is written.
             await expect(
@@ -348,6 +353,34 @@ let available = false;
                     ORG,
                 ),
             ).resolves.toBe(false);
+
+            // A backfilled PR stores the provider's totals and no file: an
+            // empty list proves nothing, so its totals stay.
+            const backfilled = await model.collection.insertOne({
+                organizationId: ORG,
+                number: 8,
+                repository: { id: '4242', name: 'repo-it' },
+                files: [],
+                totalAdded: 120,
+                totalDeleted: 30,
+                totalChanges: 150,
+            } as any);
+            await expect(
+                (
+                    service as any
+                ).pullRequestsRepository.refreshFileTotalsIfStale(
+                    String(backfilled.insertedId),
+                    ORG,
+                ),
+            ).resolves.toBe(false);
+            const kept: any = await model
+                .findById(backfilled.insertedId)
+                .lean();
+            expect(totals(kept)).toEqual({
+                totalAdded: 120,
+                totalDeleted: 30,
+                totalChanges: 150,
+            });
         }, 120_000);
     },
 );

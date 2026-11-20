@@ -2338,7 +2338,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
      * differ: one update the server evaluates on the PR itself, so a save
      * that writes no file still repairs totals an earlier save left stale
      * (its totals step failed after the file writes), at no write when they
-     * are right.
+     * are right. A PR with no stored file is left alone: its totals may come
+     * from the provider (a backfill stores them without the files), and an
+     * empty list proves nothing about them.
      */
     async refreshFileTotalsIfStale(
         prUuid: string,
@@ -2361,16 +2363,19 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             .updateOne(
                 {
                     organizationId,
-                    _id: mongoose.Types.ObjectId.isValid(prUuid)
+                    '_id': mongoose.Types.ObjectId.isValid(prUuid)
                         ? new mongoose.Types.ObjectId(prUuid)
                         : prUuid,
-                    $expr: {
+                    'files.0': { $exists: true },
+                    '$expr': {
                         $or: Object.entries(totals).map(([key, sum]) => ({
                             $ne: [{ $ifNull: [`$${key}`, 0] }, sum],
                         })),
                     },
                 },
-                [{ $set: { ...totals, updatedAt: new Date().toISOString() } }],
+                // `$$NOW`: the server's clock, stored as the Date the
+                // schema's timestamps hold.
+                [{ $set: { ...totals, updatedAt: '$$NOW' } }],
                 { updatePipeline: true },
             )
             .exec();
