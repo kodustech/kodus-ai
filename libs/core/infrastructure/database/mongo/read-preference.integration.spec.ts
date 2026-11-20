@@ -20,7 +20,6 @@ import { TokenUsageRepository } from '@libs/analytics/infrastructure/adapters/re
 import {
     ANALYTICS_QUERY_READ,
     ANALYTICS_READ_PREFERENCE,
-    parseReadTags,
 } from './read-preference';
 
 const TEST_DB = 'kodus_read_preference_it';
@@ -107,14 +106,7 @@ const uri = process.env.MONGO_RS_IT_URI;
         };
 
         it('puts the analytics tag first and any secondary after it', () => {
-            expect(parseReadTags(undefined)).toEqual([
-                { workload: 'analytics' },
-                {},
-            ]);
-            expect(
-                parseReadTags('dc:east,workload:bi;workload:analytics'),
-            ).toEqual([
-                { dc: 'east', workload: 'bi' },
+            expect(ANALYTICS_READ_PREFERENCE.tags).toEqual([
                 { workload: 'analytics' },
                 {},
             ]);

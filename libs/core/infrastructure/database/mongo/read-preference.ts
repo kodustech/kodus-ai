@@ -8,8 +8,8 @@
  * - Prefers members with the analytics tag, then any secondary (`{}`), then
  *   the primary: a missing tag or a member down never fails the read.
  * - `maxStalenessSeconds` keeps a member that fell far behind out of it.
- * - MONGO_ANALYTICS_READ_TAGS overrides the tag sets without a code change:
- *   `key:value,key:value;key:value` (`;` separates sets, tried in order).
+ * - The tag is a constant: one tagging exists. A second would come with its
+ *   own configuration, documented, rather than a key nobody sets.
  *
  * Not for anything that bills or approves: those read the primary.
  *
@@ -17,31 +17,14 @@
  */
 import { ReadPreference, type ReadPreferenceMode, type TagSet } from 'mongodb';
 
-const DEFAULT_TAGS = 'workload:analytics';
 const MAX_STALENESS_SECONDS = 90;
 
-export function parseReadTags(raw: string | undefined): TagSet[] {
-    const sets = (raw?.trim() ? raw : DEFAULT_TAGS)
-        .split(';')
-        .map((set) => set.trim())
-        .filter(Boolean)
-        .map(
-            (set) =>
-                Object.fromEntries(
-                    set
-                        .split(',')
-                        .map((pair) => pair.split(':').map((s) => s.trim()))
-                        .filter(([key, value]) => key && value),
-                ) as TagSet,
-        )
-        .filter((set) => Object.keys(set).length > 0);
-    // The empty set last: any secondary when no tagged member is available.
-    return [...sets, {}];
-}
+/** The analytics member first, then any secondary, then the primary. */
+export const ANALYTICS_READ_TAGS: TagSet[] = [{ workload: 'analytics' }, {}];
 
 export const ANALYTICS_READ_PREFERENCE = new ReadPreference(
     ReadPreference.SECONDARY_PREFERRED,
-    parseReadTags(process.env.MONGO_ANALYTICS_READ_TAGS),
+    ANALYTICS_READ_TAGS,
     { maxStalenessSeconds: MAX_STALENESS_SECONDS },
 );
 

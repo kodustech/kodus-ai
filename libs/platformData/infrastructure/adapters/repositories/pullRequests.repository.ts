@@ -63,7 +63,6 @@ function isUnknownIndexHint(error: unknown): boolean {
     );
 }
 
-/** A pull request that is neither merged nor closed. */
 /**
  * The (repository, number) pairs grouped by repository. One read per
  * repository with `number: { $in }` fetches exactly the pairs asked on the
@@ -134,6 +133,7 @@ async function readEachRepository<T>(
     }
 }
 
+/** A pull request that is neither merged nor closed. */
 const OPEN_PULL_REQUEST_MATCH = {
     merged: { $ne: true },
     status: { $nin: ['closed'] },
