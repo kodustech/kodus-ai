@@ -117,7 +117,7 @@ it('budgets the same model again for tool repair and applies the repair output c
         usageIdentity: {},
     });
     const finished: any[] = [];
-    const before = jest.fn(async () => ({
+    const before = jest.fn(async (_call: any) => ({
         maxOutputTokens: 7,
         finish: (result: any) => {
             finished.push(result);
