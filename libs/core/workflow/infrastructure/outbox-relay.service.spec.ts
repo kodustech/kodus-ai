@@ -404,6 +404,32 @@ describe('OutboxRelayService names the lost work', () => {
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
 
+    it('raises one reclaim incident per consumer per loss window, not one per pass', async () => {
+        const inboxRepository = {
+            staleHoldersByConsumer: jest.fn().mockResolvedValue([]),
+            reclaimStaleMessagesByConsumer: jest.fn(
+                async (consumerId: string) =>
+                    consumerId === 'workflow-events-ast' ? 7 : 0,
+            ),
+        };
+        const { service, incidentManager } = build({ inboxRepository });
+        const now = jest.spyOn(Date, 'now');
+        const start = Date.parse('2026-11-20T12:00:00Z');
+        try {
+            now.mockReturnValue(start);
+            await service.reclaimStaleInbox();
+            now.mockReturnValue(start + 5 * 60_000);
+            await service.reclaimStaleInbox();
+            expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+
+            now.mockReturnValue(start + 61 * 60_000);
+            await service.reclaimStaleInbox();
+            expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(2);
+        } finally {
+            now.mockRestore();
+        }
+    });
+
     it('still reclaims when the holders cannot be read', async () => {
         const inboxRepository = {
             staleHoldersByConsumer: jest

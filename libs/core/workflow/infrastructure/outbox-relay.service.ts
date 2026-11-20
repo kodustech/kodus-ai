@@ -163,6 +163,14 @@ export class OutboxRelayService
 
     private readonly logger = createLogger(OutboxRelayService.name);
 
+    /**
+     * When each consumer last raised the reclaim incident. A dead worker's
+     * locks cross the claim timeout over several passes; one incident per
+     * consumer per loss window, not one per pass. Per process: an instance
+     * that takes over the reaper lock may alert once more.
+     */
+    private readonly reclaimAlertedAt = new Map<string, number>();
+
     constructor(
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
         private readonly outboxRepository: IOutboxMessageRepository,
@@ -1022,6 +1030,15 @@ export class OutboxRelayService
         reclaimed: number,
         holders: Parameters<typeof describeStaleHolders>[0],
     ) {
+        const now = Date.now();
+        const last = this.reclaimAlertedAt.get(consumerId);
+        if (
+            last !== undefined &&
+            now - last < LOSS_ALERT_WINDOW_MINUTES * 60_000
+        ) {
+            return;
+        }
+        this.reclaimAlertedAt.set(consumerId, now);
         void this.incidentManager
             ?.failHeartbeat(
                 'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
