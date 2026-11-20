@@ -285,6 +285,48 @@ describe('GraphContextService', () => {
 
             expect(legacySpy).toHaveBeenCalledTimes(1);
         });
+        it('should fall back to legacy when the context output cannot be read, and reject when the fallback cannot read it either', async () => {
+            // #2207: a failed context.xml read used to come back as '', so
+            // neither the fallback nor CALLGRAPH_FAILED ever ran.
+            const legacySpy = jest.spyOn(service, 'generateContextLegacy');
+            mockSandbox.readFile.mockRejectedValue(new Error('read timed out'));
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContext(
+                    mockSandbox,
+                    changedFiles,
+                    REPO_ID,
+                    'main',
+                ),
+            ).rejects.toThrow('context.xml could not be read: read timed out');
+
+            expect(legacySpy).toHaveBeenCalledWith(
+                mockSandbox,
+                changedFiles,
+                'main',
+            );
+        });
+
+        it('should return the legacy context when only the DB-baseline read fails', async () => {
+            mockSandbox.readFile
+                .mockRejectedValueOnce(new Error('read timed out'))
+                .mockResolvedValue(promptContent);
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContext(
+                    mockSandbox,
+                    changedFiles,
+                    REPO_ID,
+                    'main',
+                ),
+            ).resolves.toBe(promptContent);
+        });
     });
 
     describe('generateContextLegacy', () => {
@@ -349,6 +391,28 @@ describe('GraphContextService', () => {
             await expect(
                 service.generateContextLegacy(mockSandbox, changedFiles),
             ).rejects.toThrow('sandbox crashed');
+        });
+
+        it('should reject when the context output cannot be read, so the stage can record CALLGRAPH_FAILED', async () => {
+            mockSandbox.readFile.mockRejectedValue(new Error('read timed out'));
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContextLegacy(mockSandbox, changedFiles),
+            ).rejects.toThrow('context.xml could not be read: read timed out');
+        });
+
+        it('should still return an empty context when the output file is empty', async () => {
+            mockSandbox.readFile.mockResolvedValue('');
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContextLegacy(mockSandbox, changedFiles),
+            ).resolves.toBe('');
         });
 
         it('should pass baseBranch to buildBaseGraphFromGit when provided', async () => {
