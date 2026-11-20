@@ -362,6 +362,48 @@ describe('OutboxRelayService names the lost work', () => {
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
 
+    it.each([
+        'workflow-events-stage-completed',
+        'workflow-events-ast',
+        'chat-with-kody-from-git',
+    ])(
+        'raises the incident for %s, whose loss no job reaper reports',
+        async (consumer) => {
+            const inboxRepository = {
+                staleHoldersByConsumer: jest.fn().mockResolvedValue([]),
+                reclaimStaleMessagesByConsumer: jest.fn(
+                    async (consumerId: string) =>
+                        consumerId === consumer ? 7 : 0,
+                ),
+            };
+            const { service, incidentManager } = build({ inboxRepository });
+
+            await service.reclaimStaleInbox();
+
+            expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+            const [, message] = incidentManager.failHeartbeat.mock.calls[0];
+            expect(message).toContain(
+                `High inbox reclaim rate for ${consumer}`,
+            );
+            expect(message).toContain('monitor=inbox_reclaim_rate');
+        },
+    );
+
+    it('raises no incident for an event consumer at or under the rate', async () => {
+        const inboxRepository = {
+            staleHoldersByConsumer: jest.fn().mockResolvedValue([]),
+            reclaimStaleMessagesByConsumer: jest.fn(
+                async (consumerId: string) =>
+                    consumerId === 'workflow-events-ast' ? 5 : 0,
+            ),
+        };
+        const { service, incidentManager } = build({ inboxRepository });
+
+        await service.reclaimStaleInbox();
+
+        expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
+    });
+
     it('still reclaims when the holders cannot be read', async () => {
         const inboxRepository = {
             staleHoldersByConsumer: jest

@@ -108,6 +108,10 @@ export const INBOX_REAPER_CONSUMER_TIMEOUTS = {
     'chat-with-kody-from-git': 30 * 60 * 1000,
 } as const;
 
+// Consumers whose messages carry a workflow job that reapStaleProcessingJobs
+// reaps and alerts.
+const JOB_CONSUMER_PREFIX = 'workflow-job-consumer.';
+
 function countBy(values: string[]): Record<string, number> {
     // A Map, not a plain object: a key like 'constructor' must not read an
     // inherited member.
@@ -450,15 +454,16 @@ export class OutboxRelayService
                             },
                         });
 
-                        // No incident here: a reclaimed lock belongs to a
-                        // worker that stopped mid-job, and its workflow job
-                        // is reaped (and alerted, with the loss count) by
-                        // reapStaleProcessingJobs once it has been PROCESSING
-                        // for the reap timeout (180 min by default). For a
-                        // code review that is ~30 min after this reclaim; for
-                        // consumers with shorter claim timeouts the reclaim
-                        // comes earlier, but the job is still alerted there.
-                        // Alerting both reported one event twice.
+                        // A workflow-job-consumer.* lock belongs to a job that
+                        // reapStaleProcessingJobs reaps (and alerts, with the
+                        // loss count) once it has been PROCESSING for the reap
+                        // timeout, so its reclaim raises no incident: alerting
+                        // both reported one event twice. The other consumers
+                        // have no such job: workflow-events-* resume
+                        // WAITING_FOR_EVENT jobs, which that reaper never
+                        // touches, and chat-with-kody-from-git has no job at
+                        // all. For them this reclaim is the only signal, so it
+                        // raises the incident.
                         if (reclaimed > 5) {
                             this.logger.error({
                                 message: `HIGH RECLAIM RATE: ${reclaimed} ${consumerId} locks held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}`,
@@ -469,6 +474,13 @@ export class OutboxRelayService
                                     cause: 'The owning worker stopped (froze or was killed) without releasing its claims; see StallWatchdog reports from about the lock age ago',
                                 },
                             });
+                            if (!consumerId.startsWith(JOB_CONSUMER_PREFIX)) {
+                                this.alertUnreapedReclaim(
+                                    consumerId,
+                                    reclaimed,
+                                    holders,
+                                );
+                            }
                         }
                     }
 
@@ -997,6 +1009,36 @@ export class OutboxRelayService
                     context: OutboxRelayService.name,
                     error: err instanceof Error ? err : undefined,
                     metadata: { lostInWindow, reapedCount },
+                });
+            });
+    }
+
+    /**
+     * The incident for a reclaim whose loss no job reaper reports. Not
+     * awaited: the reaper pass and its lock never wait on BetterStack.
+     */
+    private alertUnreapedReclaim(
+        consumerId: string,
+        reclaimed: number,
+        holders: Parameters<typeof describeStaleHolders>[0],
+    ) {
+        void this.incidentManager
+            ?.failHeartbeat(
+                'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
+                `High inbox reclaim rate for ${consumerId}: ${reclaimed} messages held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}. No job reaper reports this loss. ${this.formatContext(
+                    {
+                        monitor: 'inbox_reclaim_rate',
+                        consumerId,
+                        reclaimed,
+                    },
+                )}`,
+            )
+            .catch((err) => {
+                this.logger.error({
+                    message: 'Failed to report inbox reclaim heartbeat failure',
+                    context: OutboxRelayService.name,
+                    error: err instanceof Error ? err : undefined,
+                    metadata: { consumerId, reclaimed },
                 });
             });
     }
