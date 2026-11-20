@@ -35,7 +35,7 @@ export const ULTRA_MERGE_RANKING: readonly string[] = [
  */
 export function normalizeModelId(modelId: string): string {
     let id = modelId.trim().toLowerCase();
-    id = id.split('/').pop() ?? '';
+    id = id.slice(id.lastIndexOf('/') + 1);
     id = id.split('@')[0];
     id = id.replace(/^(?:(?:us|eu|apac|global)\.)?[a-z]+\.(?=[a-z])/, '');
     // A Bedrock version (`-v1:0`) goes; a `-v4` that names the model stays.

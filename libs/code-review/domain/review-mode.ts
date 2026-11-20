@@ -39,26 +39,45 @@ export function resolveRiskReviewMode(input: {
     return mode === 'heavy' && !input.heavyAllowed ? 'balanced' : mode;
 }
 
+const REQUESTED_REVIEW_MODES: readonly RequestedReviewMode[] = [
+    'balanced',
+    'heavy',
+    'ultra',
+];
+
+const isRequestedReviewMode = (mode: unknown): mode is RequestedReviewMode =>
+    REQUESTED_REVIEW_MODES.includes(mode as RequestedReviewMode);
+
 /**
- * Whether a review runs heavy: the mode the command asked for, else the mode
- * set in settings. A `fast` review never runs heavy. Ultra is not heavy here:
- * its runs route their own models (libs/ee/ultra-review).
+ * Whether a review asks for `mode`: the mode the command asked for, else the
+ * mode set in settings. A `fast` review asks for none.
+ */
+function asksReviewMode(
+    mode: RequestedReviewMode,
+    requested: RequestedReviewMode | undefined,
+    configured: ReviewMode | undefined,
+): boolean {
+    if (configured === 'fast') return false;
+    return (requested ?? configured) === mode;
+}
+
+/**
+ * Whether a review runs heavy. Ultra is not heavy here: its runs route their
+ * own models (libs/ee/ultra-review).
  */
 export function isHeavyReview(
     requested: RequestedReviewMode | undefined,
     configured: ReviewMode | undefined,
 ): boolean {
-    if (configured === 'fast') return false;
-    return (requested ?? configured) === 'heavy';
+    return asksReviewMode('heavy', requested, configured);
 }
 
-/** Whether a review asks for Ultra: the command's mode, else the settings'. */
+/** Whether a review asks for Ultra. */
 export function isUltraReview(
     requested: RequestedReviewMode | undefined,
     configured: ReviewMode | undefined,
 ): boolean {
-    if (configured === 'fast') return false;
-    return (requested ?? configured) === 'ultra';
+    return asksReviewMode('ultra', requested, configured);
 }
 
 /**
@@ -88,11 +107,7 @@ export function reviewModeOfExecution(
         typeof dataExecution.lastAnalyzedCommit === 'object' &&
         Object.keys(dataExecution.lastAnalyzedCommit).length > 0;
     if (!reviewed) return undefined;
-    if (
-        dataExecution.reviewMode === 'heavy' ||
-        dataExecution.reviewMode === 'balanced' ||
-        dataExecution.reviewMode === 'ultra'
-    ) {
+    if (isRequestedReviewMode(dataExecution.reviewMode)) {
         return dataExecution.reviewMode;
     }
     return dataExecution.heavy === true ? 'heavy' : 'balanced';
@@ -107,9 +122,7 @@ export function lastReviewModeOf(
     dataExecution: Record<string, any> | null | undefined,
 ): RequestedReviewMode {
     const mode = dataExecution?.reviewMode;
-    if (mode === 'heavy' || mode === 'balanced' || mode === 'ultra') {
-        return mode;
-    }
+    if (isRequestedReviewMode(mode)) return mode;
     return dataExecution?.heavy === true ? 'heavy' : 'balanced';
 }
 
