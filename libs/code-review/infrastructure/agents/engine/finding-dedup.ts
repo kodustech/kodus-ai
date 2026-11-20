@@ -458,6 +458,7 @@ export async function deduplicateFindings(
                 // The same shape recovery as the first answer (#1786): a
                 // wrapped, bare-array or stringified answer still counts,
                 // and one with no assignments fails like a failed call.
+                signal?.throwIfAborted();
                 const followupOutput = await LLM.run({
                     byokConfig: resolvedSlot,
                     schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
