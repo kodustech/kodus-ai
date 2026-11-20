@@ -114,7 +114,7 @@ On the same model and cases, a later pre-merge commit of the Kody Runtime branch
 
 Where the tokens went: every step re-sends the conversation, and a round began again from the notes alone. Grafana-5 took 172k in three rounds: `http_server.go` read whole (64 KB) in every round, and every step after it carried it again. Two of the three rounds were `exec_on_base` calls of `/api/health` with curl, which the image does not have, to learn what the probe itself would answer. Grafana-6 (go.mod) read code with nothing to trace.
 
-What changed (`libs/runtime/api/application/test-planner/`):
+What changed (`libs/runtime/planner/`):
 
 - `read_file` answers numbered lines: a file of up to 160 lines whole, a longer one around the lines this round's searches found and the diff changed (25 on each side, 220 at most), or the `startLine`/`endLine` asked for. The whole file is redacted before it is windowed; secret files still show names only. Lines already shown this round are named, not sent again; a repeated search too.
 - When a round ends with commands, the notes carry what it found: search hits and the line ranges read (never their text), so the next round reads only what it lacks.
