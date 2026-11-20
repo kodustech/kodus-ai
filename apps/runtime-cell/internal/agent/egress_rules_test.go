@@ -7,6 +7,7 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/netguard"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -166,5 +167,69 @@ func TestADeniedHostIsLeftOutOfTheClaimPolicyAndReported(t *testing.T) {
 	}
 	if !slices.Equal(refused, []string{"api.openai.com"}) {
 		t.Fatalf("refused %v", refused)
+	}
+}
+
+func sbxEgressClaim() ClaimInfo {
+	c := recommendedClaim(protocol.SidePr)
+	c.Acquire.Consumer = protocol.ConsumerSandbox
+	return c
+}
+
+var sandboxBase = []string{"registry.npmjs.org", "ghcr.io", "rubygems.org", "crates.io", "proxy.golang.org", "sum.golang.org"}
+
+// A sandbox claim reaches no base host uninspected: ghcr.io, rubygems.org and
+// crates.io have write APIs a raw passthrough would expose.
+func TestASandboxClaimHasNoUninspectedBaseHost(t *testing.T) {
+	p := EgressRules{Base: sandboxBase, Inspect: netguard.RecommendedInspectRules()}
+	pol, _, err := p.ClaimPolicy(sbxEgressClaim(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range pol.Allow {
+		if _, ok := pol.Inspects(h); !ok {
+			t.Errorf("%s is allowed uninspected", h)
+		}
+	}
+	if !pol.Allows("registry.npmjs.org") || !pol.InspectsFrom("registry.npmjs.org", "10.213.0.2") {
+		t.Fatal("an inspected base host must stay, inspected")
+	}
+	for _, h := range []string{"ghcr.io", "rubygems.org", "crates.io"} {
+		if pol.Allows(h) {
+			t.Errorf("%s reaches a sandbox", h)
+		}
+	}
+}
+
+func TestARunClaimKeepsTheFullBaseList(t *testing.T) {
+	p := EgressRules{Base: sandboxBase, Inspect: netguard.RecommendedInspectRules()}
+	pol, _, err := p.ClaimPolicy(recommendedClaim(protocol.SidePr), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range sandboxBase {
+		if !pol.Allows(h) {
+			t.Errorf("%s left out of a Run claim", h)
+		}
+	}
+}
+
+func TestTheGoProxyHostsAreOutOfASandboxUnlessAsked(t *testing.T) {
+	p := EgressRules{Base: sandboxBase, Inspect: []policy.InspectRule{{Host: "proxy.golang.org", Paths: []string{"/"}}}}
+	pol, _, err := p.ClaimPolicy(sbxEgressClaim(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pol.Allows("proxy.golang.org") || pol.Allows("sum.golang.org") {
+		t.Fatal("the Go proxy hosts reach a sandbox that did not ask")
+	}
+	c := sbxEgressClaim()
+	c.ExtraAllow = []string{"proxy.golang.org"}
+	pol, _, err = p.ClaimPolicy(c, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pol.Allows("proxy.golang.org") {
+		t.Fatal("an asked host stays")
 	}
 }

@@ -52,8 +52,38 @@ func (r EgressRules) ClaimPolicy(c ClaimInfo, now time.Time) (pol policy.ClaimPo
 	if RecommendedOn(c) {
 		spec.Base = append(slices.Clone(spec.Base), r.RecommendedHosts()...)
 	}
+	if c.Acquire.Consumer == protocol.ConsumerSandbox {
+		spec.Base = SandboxBase(spec.Base, spec.Inspect, c.ExtraAllow)
+	}
 	spec.BuildPassthrough = append(spec.BuildPassthrough, r.Build...)
 	return policy.Build(spec, r.Deny.Denies)
+}
+
+// goProxyHosts are the Go module proxy and checksum database: an inspected
+// GET there makes Google fetch an attacker-chosen module path (H5), so a
+// sandbox gets them only when its caller asked (ExtraAllow).
+var goProxyHosts = []string{"proxy.golang.org", "sum.golang.org"}
+
+// SandboxBase is the part of the base list an unsealed sandbox claim keeps:
+// a host only when an inspect rule covers it (read-only), never uninspected
+// (ghcr.io, rubygems.org and crates.io write APIs were reachable that way),
+// and never the Go proxy hosts unless the caller asked for them. Run, setup
+// and build claims keep the whole base list.
+func SandboxBase(base []string, inspect []policy.InspectRule, asked []string) []string {
+	inspected := map[string]bool{}
+	for _, r := range inspect {
+		inspected[r.Host] = true
+	}
+	var out []string
+	for _, h := range base {
+		if slices.Contains(goProxyHosts, h) && !slices.Contains(asked, h) {
+			continue
+		}
+		if inspected[h] {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // RecommendedHosts are the hosts of the recommended list this cell applies
