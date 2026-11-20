@@ -74,7 +74,7 @@ export class LinkedTasksAdapter implements RuntimeLinkedTasksReader {
             });
         } finally {
             const closed = await Promise.allSettled(trackers.map((t) => t.close?.()));
-            if (closed.some((c) => c.status === 'rejected')) this.logger.warn({ message: 'Runtime linked tasks: a tracker did not close', metadata: { organizationId: input.organizationId } });
+            if (closed.some((c) => c.status === 'rejected')) this.logger.warn({ message: 'Runtime linked tasks: a tracker did not close', context: LinkedTasksAdapter.name, metadata: { organizationId: input.organizationId } });
         }
     }
 }

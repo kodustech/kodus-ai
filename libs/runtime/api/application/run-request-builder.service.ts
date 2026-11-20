@@ -118,7 +118,7 @@ export class RuntimeRunRequestBuilder {
             ]);
             return tasks.length ? { linkedTasks: tasks.slice(0, 3) } : {};
         } catch (error) {
-            this.logger.warn({ message: 'Runtime: the linked tasks could not be read; the Run goes without them', error, metadata: { organizationId: input.organizationId } });
+            this.logger.warn({ message: 'Runtime: the linked tasks could not be read; the Run goes without them', context: RuntimeRunRequestBuilder.name, error: error as Error, metadata: { organizationId: input.organizationId } });
             return {};
         } finally {
             if (timer) clearTimeout(timer);
