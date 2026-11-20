@@ -141,6 +141,42 @@ anyway. A cell-local client certificate for the agent would remove that edge; it
   the host's CPUs, at least one) is how many image builds the cell runs at once, and a build past it waits for a slot
   (`build.slot.waited` in the cell's log).
 
+## Sizing sandbox capacity
+
+A review holds one sandbox (2048 MB / 2 CPUs by default, `-sandbox-memory-mb` / `-sandbox-cpus`) for its whole run.
+The cell admits claims until its memory is full (`-memory-allocatable-mb`, by default the host's MemTotal less
+`-memory-reserve-mb`, 1024 MB) and then answers `no_capacity`. With N pull requests open at once, size the install so
+the reviews wait in line instead of failing:
+
+1. Memory for sandboxes = host RAM, minus what the Kodus stack needs (API, worker, web, Postgres, Mongo, RabbitMQ: plan
+   for the whole compose stack, typically 6 to 8 GB), minus `-memory-reserve-mb`.
+2. `SANDBOX_MAX_CONCURRENT` = that memory divided by the sandbox size, rounded down. A 16 GB host with 8 GB for the
+   stack and 1 GB reserved leaves 7 GB, so 3 sandboxes of 2 GB. Leave room for one Run claim too: a Run asks for the
+   environment's machine size (up to 12 GB), and it is refused with `size_unavailable` when the cell's allocatable
+   memory is smaller. Lower the cap, or raise the host, until one 12 GB claim still fits when the sandboxes are idle.
+3. `-sandbox-pool` (warm sandboxes kept ready) costs memory even when idle: use 0 or 1 on small hosts and count the
+   pooled sandboxes against the same budget.
+
+| Setting | Where | Default | Effect |
+|---|---|---|---|
+| `SANDBOX_MAX_CONCURRENT` | API/worker env | unset (no cap) | Sandboxes held at once by the whole install, across every worker. Reviews over it wait in line. |
+| `SANDBOX_QUEUE_MAX_WAIT_MS` | API/worker env | `600000` (10 min) | The longest a review waits for a sandbox, in this line or on a full cell (`no_capacity`, `org_capacity`). After it the review runs without a sandbox and its status carries a SANDBOX_UNAVAILABLE warning saying it waited for capacity. |
+| `sandbox_concurrency` global parameter | database | no cap | The older cap per worker process; independent of the two above. |
+
+How it behaves:
+
+- With the cap set, a slot is a Postgres advisory lock (`sandbox-capacity:slot:<i>`), so a worker that dies frees its
+  slots. Within one worker the line is first in, first out; across workers the next free slot goes to whichever polls
+  first (a lock has no queue).
+- A full Runtime cell is waited out with backoff (5 s doubling to 60 s) until `SANDBOX_QUEUE_MAX_WAIT_MS`; before, the
+  review retried once after 10 s and then ran without a sandbox.
+- A PR closed or force-pushed cancels the queued wait of its older review, on the worker that holds it. A plain newer
+  push does not: reviews of the same PR on one worker already share one sandbox (one slot).
+- Unset `SANDBOX_MAX_CONCURRENT` is today's behavior; E2B and local providers wait as they did.
+- Each held slot keeps one Postgres connection for the life of its sandbox: keep `SANDBOX_MAX_CONCURRENT` well under
+  the Postgres pool size of the worker.
+- The numbers a screen can show (in use, queued, oldest wait) come from `SandboxLeaseManager.capacityNumbers()`.
+
 ## Docker host disk (docker-gvisor)
 
 Every claim's containers, volumes and logs share the disk of Docker's data root, so one PR service that writes
