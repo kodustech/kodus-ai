@@ -4,6 +4,8 @@ import { Socket } from 'net';
 import { trace } from '@opentelemetry/api';
 import pino from 'pino';
 
+import { runtimeIdentity } from './runtime-identity';
+
 /**
  * Structured application logger — ported out of the legacy flow engine's observability
  * module so app code (`libs/*`, `apps/*`) depends on `libs/core` instead of the
@@ -194,6 +196,10 @@ function getPinoLogger(): pino.Logger {
                 pid: process.pid,
                 hostname: undefined,
             },
+            // Release and ECS task on every line: which build wrote it, and
+            // which task (the id is known only after startup, hence a
+            // mixin rather than a fixed base field).
+            mixin: () => runtimeIdentity(),
         };
 
         try {
