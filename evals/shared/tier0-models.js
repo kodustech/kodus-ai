@@ -24,7 +24,7 @@
 // model-route.js): through a stored BYOK config holding its key from `keyEnvs`.
 // `kodus-managed` alone has no stored config: an org with no model of its own.
 
-// id → { provider, keyEnvs (first present wins), baseURL? }
+// id → { provider, keyEnvs (first present wins), baseURL?, awsRegion? }
 // keyEnvs mirror the benchmark's secret names so the same CI secrets work.
 const TIER0 = {
     'gpt-5.4': { provider: 'openai', keyEnvs: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
@@ -32,6 +32,9 @@ const TIER0 = {
     'gpt-6-sol': { tier0: true, provider: 'openai', keyEnvs: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
     'claude-sonnet-4-6': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'claude-sonnet-5-5': { tier0: true, provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
+    // Claude on Amazon Bedrock, as a BYOK org reaches it: a Bedrock API key
+    // (bearer token) and a region. Not tier-0: it measures the Bedrock route.
+    'claude-sonnet-5-5@bedrock': { provider: 'amazon_bedrock', doModel: 'us.anthropic.claude-sonnet-5-5', awsRegion: 'us-east-1', keyEnvs: ['API_AWS_BEDROCK', 'BYOK_AWS_BEDROCK_API_KEY'] },
     'claude-opus-4-7': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'gemini-3.1-pro-preview-customtools': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },

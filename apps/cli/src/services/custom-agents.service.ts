@@ -203,6 +203,7 @@ export type AgentInput = {
     enabled?: boolean;
     /** Partial agent fields read from a JSON file, applied before the flags. */
     fromJson?: Partial<CustomAgent>;
+    runWhen?: string;
     linkSkills?: string[];
     linkDocs?: string[];
     unlink?: string[];
@@ -609,6 +610,7 @@ export function prepareAgentForSave(agent: CustomAgent): CustomAgent {
         name: agent.name,
         enabled: agent.enabled === true,
         instructions: agent.instructions ?? '',
+        ...(agent.runWhen !== undefined && { runWhen: agent.runWhen }),
         scope: {
             ...(include?.length && { include }),
             ...(exclude?.length && { exclude }),
@@ -716,6 +718,13 @@ export function applyAgentInput(
     }
     if (input.instructions !== undefined) {
         agent.instructions = input.instructions;
+    }
+    if (input.runWhen !== undefined || agent.runWhen !== undefined) {
+        agent.runWhen = oneOf(
+            input.runWhen ?? agent.runWhen,
+            ['always', 'risk-found'] as const,
+            '--run-when',
+        );
     }
     if (input.include !== undefined) {
         agent.scope = { ...agent.scope, include: input.include };

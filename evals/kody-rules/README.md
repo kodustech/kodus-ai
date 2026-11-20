@@ -85,10 +85,30 @@ node evals/kody-rules/freeze-atoms.js --dataset=reference-cases # record the ato
 ```
 
 Flags: `--model=<tier-0 id>`, `--runs=`, `--cases=<caseId,...>`, `--limit=`,
-`--gate` with `--occ-min=70 --spec-min=95`. Needs the model key in
+`--gate` with `--occ-min=70 --spec-min=95`, `--quality` with `--judge=<tier-0 id>`. Needs the model key in
 `~/.kodus-dev/config` (or `.env`) and network to GitHub: every run clones the
 PR's head, and the call graph is built by `kodus-graph` (installed by the stage
 on first use).
+
+## Quality, cost and time
+
+- **`--quality`** grades every finding that lands on a real violation with the
+  fix/title judge of the enrichment eval (`suggestion-quality.js`, judge
+  `gpt-5.6-luna` unless `--judge=` or `JUDGE_MODEL`): does the title name the
+  problem, and does `improvedCode` fix the cited lines under the rule. The rule
+  is the judge's reference. Reported as `metrics.titleQuality` and
+  `metrics.fixQuality`; the judge's own tokens are kept out of `TOKENS`.
+- **Prompt cache, cold and warm.** `tokensByRun` splits the tokens per run:
+  run 0 is cold when nothing ran in the last five minutes, a second run
+  (`--runs=2`) repeats the same prompts at once and shows the warm reads.
+- **Time.** `latency.stageMsP50` / `stageMsP95`: how long the review stage ran,
+  over the runs that measured.
+- **Claude on Bedrock**: `--model=claude-sonnet-5-5@bedrock`, with a Bedrock API
+  key in `API_AWS_BEDROCK` (stored as production stores it: bearer token and
+  region).
+- **Two versions side by side**: `node evals/experiment.js --step=kody-rules`
+  compares occurrence recall, line precision, specificity and the two quality
+  metrics case by case, with `polyglot-cases` as the guard.
 
 ## CI gate
 

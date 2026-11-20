@@ -363,6 +363,14 @@ export type RunJudge = (args: {
     ruleUuids: string[];
     ruleUnits: Array<Partial<IKodyRule>>;
     verifyRepositoryFacts: boolean;
+    /**
+     * The head of `user` this shard shares with at least one other shard of
+     * the review (same rules, references and intent), for the runner to mark
+     * for the provider's prompt cache. Set on the group's first shard and on
+     * shards started after it returned; a shard sent while the first is still
+     * running could read nothing and would only pay the cache write again.
+     */
+    cachePrefix?: string;
 }) => Promise<RawShardViolation[]>;
 
 /**
@@ -474,11 +482,27 @@ export interface ShardReferenceStats {
     perUnitCopies: number;
 }
 
+/** How the file shards were grouped by shared head and scheduled. */
+export interface ShardPromptCacheStats {
+    fileShards: number;
+    /** Distinct heads. */
+    groups: number;
+    /** Heads shared by two or more shards. */
+    sharedGroups: number;
+    /** Shards that are not the first of their shared group. */
+    siblings: number;
+    /** Siblings started after their group's first shard had returned. */
+    siblingsAfterLeader: number;
+    /** Siblings started earlier, so a worker would not sit idle. */
+    siblingsEarly: number;
+}
+
 export interface ShardedJudgeResult {
     violations: ShardViolation[];
     shardsRun: number;
     shardsErrored: number;
     referenceStats: ShardReferenceStats;
+    promptCacheStats: ShardPromptCacheStats;
 }
 
 // ── prompts (aligned with the validated batched eval prompt) ─────────────────
@@ -825,7 +849,7 @@ function fileShardUser(
     previousDecisions?: PrDecisionRecord[],
     ruleTitleByUuid?: ReadonlyMap<string, string>,
     referenceSection?: ReferenceSection,
-): string {
+): { user: string; head: string } {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     // The PR's whole history (capped upstream at MAX_PR_DECISIONS), not only
     // this file's: a rule violation repeated after the code moved to another
@@ -835,13 +859,17 @@ function fileShardUser(
         ruleTitleByUuid,
         { repeatsCheckedLater: true },
     );
-    return [
+    // Everything before the file is the same for every shard with the same
+    // rules: the prefix those shards can share in the provider's prompt cache.
+    const head = [
         `<Rules>`,
         ruleBlock(rules, referenceSection?.idsByRule),
         `</Rules>`,
         ``,
         ...(referenceSection?.lines ?? []),
         ...intentLines(prTitle, prBody),
+    ].join('\n');
+    const tail = [
         // The whole file BEFORE the diff: the reader needs the world before
         // the change to it.
         //
@@ -889,6 +917,7 @@ function fileShardUser(
             : []),
         `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>",${verifyRepositoryFacts ? '"needsRepositoryEvidence":<true|false>,' : ''}"revisesSuggestionId":"<Id or null>"}]}`,
     ].join('\n');
+    return { head: `${head}\n`, user: `${head}\n${tail}` };
 }
 
 /**
@@ -1075,25 +1104,103 @@ function reportUnjudgedFileRules(
 const isPrLevel = (r: Partial<IKodyRule>) =>
     r.scope === KodyRulesScope.PULL_REQUEST;
 
-async function mapLimit<T, R>(
-    items: T[],
+/**
+ * Run grouped jobs under one concurrency limit so the later jobs of a group
+ * can read what its first job wrote to the provider's prompt cache: an entry
+ * is readable only once its request has been answered, so siblings sent in
+ * parallel with their leader all write and none reads.
+ *
+ * A free worker takes, in order: a sibling whose leader has returned, then a
+ * group's leader (largest group first), then — rather than sit idle — a
+ * sibling whose leader is still running. Never waiting is what keeps the
+ * stage's latency where it was. `fn` learns whether the job can use the
+ * cache: a leader writes it, a sibling after its leader reads it, an early
+ * sibling can do neither.
+ */
+async function runLeaderFirst<T, R>(
+    groups: T[][],
     limit: number,
-    fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-    const out = new Array<R>(items.length);
-    let i = 0;
+    fn: (item: T, cacheable: boolean) => Promise<R>,
+): Promise<{
+    results: Map<T, R>;
+    siblingsAfterLeader: number;
+    siblingsEarly: number;
+}> {
+    const ordered = groups
+        .map((items, order) => ({ items, order }))
+        .sort((a, b) => b.items.length - a.items.length || a.order - b.order)
+        .map(({ items }) => ({
+            items,
+            next: 1,
+            leaderStarted: false,
+            leaderDone: false,
+        }));
+    const results = new Map<T, R>();
+    let siblingsAfterLeader = 0;
+    let siblingsEarly = 0;
+
+    const pick = ():
+        | {
+              item: T;
+              group: (typeof ordered)[number];
+              leader: boolean;
+              cacheable: boolean;
+          }
+        | undefined => {
+        const ready = ordered.find(
+            (g) => g.leaderDone && g.next < g.items.length,
+        );
+        if (ready) {
+            siblingsAfterLeader++;
+            return {
+                item: ready.items[ready.next++],
+                group: ready,
+                leader: false,
+                cacheable: true,
+            };
+        }
+        const leader = ordered.find((g) => !g.leaderStarted);
+        if (leader) {
+            leader.leaderStarted = true;
+            return {
+                item: leader.items[0],
+                group: leader,
+                leader: true,
+                cacheable: true,
+            };
+        }
+        const waiting = ordered.find((g) => g.next < g.items.length);
+        if (waiting) {
+            siblingsEarly++;
+            return {
+                item: waiting.items[waiting.next++],
+                group: waiting,
+                leader: false,
+                cacheable: false,
+            };
+        }
+        return undefined;
+    };
+
+    const total = groups.reduce((n, g) => n + g.length, 0);
     await Promise.all(
         Array.from(
-            { length: Math.min(Math.max(1, limit), items.length || 1) },
+            { length: Math.min(Math.max(1, limit), total || 1) },
             async () => {
-                while (i < items.length) {
-                    const idx = i++;
-                    out[idx] = await fn(items[idx]);
+                for (let job = pick(); job; job = pick()) {
+                    try {
+                        results.set(
+                            job.item,
+                            await fn(job.item, job.cacheable),
+                        );
+                    } finally {
+                        if (job.leader) job.group.leaderDone = true;
+                    }
                 }
             },
         ),
     );
-    return out;
+    return { results, siblingsAfterLeader, siblingsEarly };
 }
 
 /**
@@ -1353,41 +1460,63 @@ export async function judgeKodyRulesSharded(
 
     reportUnjudgedFileRules(fileRules, fileShards, logger);
 
-    const perFile = await mapLimit(
-        fileShards,
+    // Build every file shard's prompt first: shards whose head (rules,
+    // references, intent) is identical form a group, and the group's later
+    // shards run after its first so they can read its prompt-cache write.
+    const prepared = fileShards.map(({ file, applicable }) => {
+        const referenceSection = referenceSectionFor(applicable);
+        const verifyRepositoryFacts = applicable.some((r) => !r.detector);
+        const system = withReferencesLine(
+            fileSystemPrompt(verifyRepositoryFacts),
+            referenceSection,
+        );
+        const prompt = fileShardUser(
+            file,
+            applicable,
+            verifyRepositoryFacts,
+            languageLabel,
+            detectorHits,
+            prTitle,
+            prBody,
+            contextSlices,
+            fileContents,
+            previousDecisions,
+            ruleTitleByUuid,
+            referenceSection,
+        );
+        return { file, applicable, verifyRepositoryFacts, system, ...prompt };
+    });
+    const groupsByHead = new Map<string, typeof prepared>();
+    for (const shard of prepared) {
+        const key = `${shard.system}\u0000${shard.head}`;
+        const group = groupsByHead.get(key);
+        if (group) group.push(shard);
+        else groupsByHead.set(key, [shard]);
+    }
+    const groups = [...groupsByHead.values()];
+    const shared = new Set(groups.filter((g) => g.length > 1).flat());
+
+    const scheduled = await runLeaderFirst(
+        groups,
         concurrency,
-        async ({ file, applicable }) => {
+        async (shard, cacheable) => {
+            const { file, applicable } = shard;
             shardsRun++;
             // Index-aligned with the rules `ruleBlock` presents (a ruleId of N
             // maps to applicable[N-1]); keep '' holes rather than filtering so
             // the indices don't shift.
             const ruleUuids = applicable.map((r) => r.uuid ?? '');
-            const referenceSection = referenceSectionFor(applicable);
-            const verifyRepositoryFacts = applicable.some((r) => !r.detector);
             try {
                 const vs = await runJudge({
-                    system: withReferencesLine(
-                        fileSystemPrompt(verifyRepositoryFacts),
-                        referenceSection,
-                    ),
-                    user: fileShardUser(
-                        file,
-                        applicable,
-                        verifyRepositoryFacts,
-                        languageLabel,
-                        detectorHits,
-                        prTitle,
-                        prBody,
-                        contextSlices,
-                        fileContents,
-                        previousDecisions,
-                        ruleTitleByUuid,
-                        referenceSection,
-                    ),
+                    system: shard.system,
+                    user: shard.user,
                     filename: file.filename,
                     ruleUuids,
                     ruleUnits: applicable,
-                    verifyRepositoryFacts,
+                    verifyRepositoryFacts: shard.verifyRepositoryFacts,
+                    ...(cacheable && shared.has(shard)
+                        ? { cachePrefix: shard.head }
+                        : {}),
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
@@ -1436,7 +1565,17 @@ export async function judgeKodyRulesSharded(
             }
         },
     );
-    for (const vs of perFile) violations.push(...vs);
+    for (const shard of prepared) {
+        violations.push(...(scheduled.results.get(shard) ?? []));
+    }
+    const promptCacheStats: ShardPromptCacheStats = {
+        fileShards: prepared.length,
+        groups: groups.length,
+        sharedGroups: groups.filter((g) => g.length > 1).length,
+        siblings: groups.reduce((n, g) => n + Math.max(0, g.length - 1), 0),
+        siblingsAfterLeader: scheduled.siblingsAfterLeader,
+        siblingsEarly: scheduled.siblingsEarly,
+    };
 
     // ── PR-scope shard: one call over the whole PR ──────────────────────────
     if (prRules.length > 0) {
@@ -1479,5 +1618,11 @@ export async function judgeKodyRulesSharded(
         }
     }
 
-    return { violations, shardsRun, shardsErrored, referenceStats };
+    return {
+        violations,
+        shardsRun,
+        shardsErrored,
+        referenceStats,
+        promptCacheStats,
+    };
 }

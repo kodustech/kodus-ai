@@ -23,10 +23,8 @@ import {
 } from '@libs/code-review/domain/risk/risk-configuration';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
-import {
-    hasOpenFinding,
-    hostCommentKey,
-} from '@libs/code-review/domain/approval/own-change-request';
+import { hostCommentKey } from '@libs/code-review/domain/approval/own-change-request';
+import { deliveredReviewFindingsHoldReason } from '@libs/code-review/domain/approval/verify-delivered-review-findings';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
@@ -1227,35 +1225,26 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 return hold(
                     'PR-level findings require a new clean review before automatic approval.',
                 );
-            if (summary.lineFindings > 0 || pr.suggestions?.length) {
-                if (!pr.suggestions?.length)
-                    return hold('Review findings could not be verified.');
-                const comments = await runWithBoundedTimeout(
-                    platformType === PlatformType.GITHUB
-                        ? this.codeManagementService.getPullRequestReviewThreads(
-                              request,
-                              platformType,
-                          )
-                        : this.codeManagementService.getPullRequestReviewComments(
-                              request,
-                              platformType,
-                          ),
-                    FINAL_PROVIDER_TIMEOUT_MS,
-                    'policy review findings',
-                );
-                if (!Array.isArray(comments))
-                    return hold('Review findings remain unresolved.');
-                if (
-                    hasOpenFinding(
-                        pr.suggestions.map((suggestion) =>
-                            String(suggestion.comment?.id),
-                        ),
-                        comments,
-                        platformType,
-                    )
-                )
-                    return hold('Review findings remain unresolved.');
-            }
+            const findingsHold = await deliveredReviewFindingsHoldReason(
+                pr.suggestions,
+                summary,
+                platformType,
+                () =>
+                    runWithBoundedTimeout(
+                        platformType === PlatformType.GITHUB
+                            ? this.codeManagementService.getPullRequestReviewThreads(
+                                  request,
+                                  platformType,
+                              )
+                            : this.codeManagementService.getPullRequestReviewComments(
+                                  request,
+                                  platformType,
+                              ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'policy review findings',
+                    ),
+            );
+            if (findingsHold) return hold(findingsHold);
             if (
                 codeReviewConfig.riskAssessmentActive === true &&
                 !(await this.sharedRiskIsCurrent({
@@ -1731,8 +1720,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     ? riskApprovalVeto(
                           codeReviewConfig?.riskAssessmentActive === true,
                           lastExecution.dataExecution.riskAssessment,
-                          currentHeadSha,
-                          currentPullRequest,
+                          {
+                              headSha: currentHeadSha,
+                              baseSha: currentPullRequest?.base?.sha ?? '',
+                              description: currentPullRequest ?? undefined,
+                          },
                       )
                     : undefined;
                 if (sharedVeto) {

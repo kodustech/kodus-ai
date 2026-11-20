@@ -34,6 +34,8 @@ import {
     SUMMARY_GENERATION_FAILED_REASON,
 } from '../constants/error-reasons';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
+import { normalizeReviewFindingId } from '@libs/code-review/domain/approval/verify-delivered-review-findings';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
 @Injectable()
 export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -84,6 +86,9 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             });
         }
         if (usesNamedApprovalPolicies(config)) {
+            // A fallback posts a different suggestion. The replaced finding
+            // still belongs in the review and lacks publication evidence.
+            const lineFindings = context.lineComments ?? [];
             const result = await this.approvalPolicies.evaluate({
                 organizationAndTeamData: context.organizationAndTeamData,
                 repository: context.repository,
@@ -91,7 +96,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 config,
                 platformType: context.platformType,
                 reviewClean:
-                    (context.lineComments?.length ?? 0) === 0 &&
+                    lineFindings.length === 0 &&
                     (context.prLevelCommentResults?.length ?? 0) === 0 &&
                     !hasBlockingFailure,
                 risk: context.riskAssessment,
@@ -104,7 +109,14 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 draft.approvalDecision = result.decision;
                 draft.approvalPolicyEligibility = result.eligibility;
                 draft.approvalReviewSummary = {
-                    lineFindings: context.lineComments?.length ?? 0,
+                    lineFindings: lineFindings.length,
+                    lineCommentIds: lineFindings.map((finding) =>
+                        finding.deliveryStatus === DeliveryStatus.SENT
+                            ? (normalizeReviewFindingId(
+                                  finding.codeReviewFeedbackData?.commentId,
+                              ) ?? null)
+                            : null,
+                    ),
                     prFindings: context.prLevelCommentResults?.length ?? 0,
                     complete:
                         Array.isArray(context.lineComments) &&
@@ -305,7 +317,11 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
         const sharedVeto =
             config.riskAssessmentActive === true
-                ? riskApprovalVeto(true, sharedRisk, headSha, livePr)
+                ? riskApprovalVeto(true, sharedRisk, {
+                      headSha,
+                      baseSha: livePr.base?.sha,
+                      description: livePr,
+                  })
                 : undefined;
         const decision = sharedVeto
             ? { kind: 'hold' as const, reason: sharedVeto }

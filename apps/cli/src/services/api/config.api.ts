@@ -14,6 +14,10 @@ import type {
     LLMConfigStatus,
     SaveCodeReviewConfigParams,
     SaveCodeReviewConfigResult,
+    PreviewPrRiskParams,
+    PreviewPrRiskResult,
+    PreviewPrApprovalParams,
+    PreviewPrApprovalResult,
     TestByokModelResult,
 } from '../../types/review-settings.js';
 import type { IConfigApi } from './api.interface.js';
@@ -274,7 +278,37 @@ export class RealConfigApi implements IConfigApi {
                     repositoryId: params.repositoryId,
                     directoryId: params.directoryId,
                     directoryPaths: params.directoryPaths,
+                    inheritFields: params.inheritFields,
+                    expectedConfigId: params.expectedConfigId,
                 }),
+            },
+        );
+    }
+
+    async previewPrRisk(
+        accessToken: string,
+        params: PreviewPrRiskParams,
+    ): Promise<PreviewPrRiskResult> {
+        return this.requester<PreviewPrRiskResult>(
+            '/code-review/risk/preview',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(params),
+            },
+        );
+    }
+
+    async previewPrApproval(
+        accessToken: string,
+        params: PreviewPrApprovalParams,
+    ): Promise<PreviewPrApprovalResult> {
+        return this.requester<PreviewPrApprovalResult>(
+            '/code-review/risk/approval-preview',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(params),
             },
         );
     }

@@ -13,6 +13,12 @@ import {
     withoutSecretFileLines,
 } from '@libs/code-review/infrastructure/agents/engine/secret-files';
 import {
+    cutLongLines,
+    MAX_TOOL_LINE_CHARS,
+} from '@libs/code-review/infrastructure/agents/engine/long-lines';
+import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
+import { beginToolActivity } from '@libs/core/infrastructure/activity/activity-registry';
+import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
     isProjectLevelTypeScriptLine,
@@ -1839,7 +1845,8 @@ fi
         );
     }
 
-    guardSecretFiles(tools);
+    guardSecretFiles(tools, repositoryFullName);
+    trackToolActivity(tools);
 
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
@@ -1850,13 +1857,60 @@ fi
 }
 
 /**
+ * Argument fields that say which call it was, in a few words. Never the
+ * agent's search text (pattern, regex, query, functionName): it can quote a
+ * secret or code from the diff, and this summary reaches the stall report
+ * and the BetterStack alert.
+ */
+const ACTIVITY_ARG_KEYS = [
+    'path',
+    'filePath',
+    'file',
+    'directory',
+    'dir',
+    'glob',
+    'repo',
+    'startLine',
+    'endLine',
+];
+
+/**
+ * Every tool call is marked in flight for the job running it, so a stall
+ * report names the call that froze the worker (activity-registry.ts).
+ * Outermost wrapper: it covers the secret filter and the line cut too.
+ */
+function trackToolActivity(tools: Record<string, any>): void {
+    for (const [name, tool] of Object.entries(tools)) {
+        if (!tool || typeof tool.execute !== 'function') continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any, ...rest: unknown[]) => {
+            const summary = ACTIVITY_ARG_KEYS.filter(
+                (k) => args?.[k] !== undefined && args?.[k] !== '',
+            )
+                .map((k) => `${k}=${String(args[k]).slice(0, 120)}`)
+                .join(' ');
+            const end = beginToolActivity(name, summary);
+            try {
+                return await execute(args, ...rest);
+            } finally {
+                end();
+            }
+        };
+    }
+}
+
+/**
  * No tool returns the content of a secret file the repository committed
  * (secret-files.ts): it would reach the model provider and the trace. The
  * readers refuse the path, and search output drops the file's lines, on
  * every route a tool takes (linked repositories, sandbox rg, the provider's
  * grep).
  */
-function guardSecretFiles(tools: Record<string, any>): void {
+function guardSecretFiles(
+    tools: Record<string, any>,
+    /** The reviewed repository, named in the long-line warning. */
+    repositoryFullName?: string,
+): void {
     for (const name of ['readFile', 'readReference']) {
         const tool = tools[name];
         if (!tool) continue;
@@ -1884,7 +1938,42 @@ function guardSecretFiles(tools: Record<string, any>): void {
                 return secretFileRefusal(searchPath);
             }
             const out = await execute(args);
-            return typeof out === 'string' ? withoutSecretFileLines(out) : out;
+            if (typeof out !== 'string') return out;
+            // Secret lines leave first, on the whole line; then no line the
+            // agent gets is longer than MAX_TOOL_LINE_CHARS.
+            const capped = timeSync(
+                'code-review tool output (secret filter, line cut)',
+                () => cutLongLines(withoutSecretFileLines(out)),
+                () => ({ tool: name, outputChars: out.length }),
+            );
+            if (capped.cut > 0) {
+                // The trace of a search that returned a huge line: which
+                // search, so the file behind it can be found.
+                logger.warn({
+                    message: `[AGENT-TOOLS] ${name} returned ${capped.cut} line(s) longer than ${MAX_TOOL_LINE_CHARS} characters; cut before the agent`,
+                    context: 'agent-tools.factory',
+                    metadata: {
+                        tool: name,
+                        // The files behind the long lines, not the
+                        // agent's pattern: a pattern can quote a secret or
+                        // code from the diff.
+                        files: capped.files,
+                        path: searchPath.slice(0, 300),
+                        glob: args?.glob
+                            ? String(args.glob).slice(0, 200)
+                            : undefined,
+                        // A linked repository when the call named one, else
+                        // the reviewed repository.
+                        repository: String(
+                            args?.repo || repositoryFullName || '',
+                        ).slice(0, 200),
+                        outputChars: out.length,
+                        longestLine: capped.longest,
+                        linesCut: capped.cut,
+                    },
+                });
+            }
+            return capped.text;
         };
     }
 }

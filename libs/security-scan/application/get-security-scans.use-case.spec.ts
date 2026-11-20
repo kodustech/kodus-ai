@@ -54,4 +54,24 @@ describe('scan read scope', () => {
         ).not.toHaveBeenCalled();
         expect(scans.findRecent).toHaveBeenCalledWith('org', undefined, 20);
     });
+
+    it('finds a scan on the granted instance, and anywhere with an organization-wide scope', async () => {
+        const { useCase } = setup();
+        await expect(useCase.get('org', id, ['123'])).resolves.toMatchObject({ repository });
+        await expect(useCase.get('org', id, undefined)).resolves.toMatchObject({ repository });
+    });
+
+    it('does not find the same id on another instance', async () => {
+        const { useCase, scans } = setup();
+        scans.findById.mockResolvedValue({
+            organizationId: 'org',
+            repository: { id: '123', platform: 'GITLAB', host: 'gitlab.com' },
+        });
+        await expect(useCase.get('org', id, ['123'])).rejects.toThrow('Security scan not found');
+    });
+
+    it('does not find the same id and platform on another host', async () => {
+        const { useCase } = setup([config('GITHUB', 'github.enterprise')]);
+        await expect(useCase.get('org', id, ['123'])).rejects.toThrow('Security scan not found');
+    });
 });
