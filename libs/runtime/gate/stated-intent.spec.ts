@@ -409,3 +409,30 @@ describe('a held status explains a planned probe of the same request shape (kr-s
         }
     });
 });
+
+describe('a status the text gives for one value only (kr-shop #44 on release v1f)', () => {
+    const intents = [
+        {
+            probe: probe('intent-1', 'POST', '/orders', { item: 'sofa', quantity: 1 }),
+            intent: { quote: '- An unknown item like `sofa` is refused with 400 `unknown item`.', source: 'description' as const },
+            intentAssertions: [assertion({ kind: 'status', status: 400 }), assertion({ kind: 'includes', path: '$', value: 'unknown item' })],
+        },
+        {
+            probe: probe('intent-2', 'POST', '/orders', { item: 'keyboard', quantity: 2 }),
+            intent: { quote: '- `keyboard` is still accepted (201).', source: 'description' as const },
+            intentAssertions: [assertion({ kind: 'status', status: 201 })],
+        },
+    ];
+
+    it('two statuses for the same request shape lend neither: the outcome depends on the value', () => {
+        const planned = probe('unknown-item-rejected', 'POST', '/orders', { item: 'laptop', quantity: 1 });
+        expect(statedIntentChecksFor({ probe: planned, entryPoint: 'POST /orders' }, intents).checks).toEqual([]);
+    });
+
+    it('the intent probe of its own request still gives its status', () => {
+        const planned = probe('known-item-order', 'POST', '/orders', { item: 'keyboard', quantity: 2 });
+        const { checks, explainOnly } = statedIntentChecksFor({ probe: planned, entryPoint: 'POST /orders' }, intents);
+        expect(explainOnly).toBe(false);
+        expect(checks.map((c) => [c.probeId, c.assertions])).toEqual([['intent-2', [assertion({ kind: 'status', status: 201 })]]]);
+    });
+});
