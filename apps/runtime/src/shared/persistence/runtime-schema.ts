@@ -1049,6 +1049,14 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS memory_allocatable_mb integer;
         ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS memory_committed_mb integer;`,
     },
+    {
+        version: 45,
+        name: 'the sandbox pool the heartbeat reports, for the API',
+        // sandbox_pool_target / sandbox_pool_ready: the warm pool of blank sandboxes (heartbeat sandboxPool), written
+        // by the hub on the same throttle as the heartbeat memory. Null: a cell older than it or without a pool.
+        sql: `ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS sandbox_pool_target integer;
+        ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS sandbox_pool_ready integer;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

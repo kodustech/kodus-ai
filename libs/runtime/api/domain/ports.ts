@@ -163,6 +163,9 @@ export interface SandboxCellFactsRow {
     allocatableMb: number | null;
     sandboxMemoryMb: number | null;
     sandboxCpus: number | null;
+    /** The warm pool of blank sandboxes the heartbeat reported; null for a cell older than the field. */
+    poolTarget: number | null;
+    poolReady: number | null;
 }
 
 /** The self-hosted install's live cells, for the sandbox capacity screen. */

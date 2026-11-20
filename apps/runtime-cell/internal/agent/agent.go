@@ -329,6 +329,9 @@ func (a *Agent) hello(trim bool) *protocol.HelloBody {
 		if feature == protocol.FeatureHostHardening && a.cfg.Host == nil {
 			continue
 		}
+		if feature == protocol.FeatureSandboxPool && a.sandboxPool == nil {
+			continue // a cell without a warm pool has none to report
+		}
 		if feature == protocol.FeatureCellProtocols && a.cfg.HubProtocolState == "" {
 			continue // the range is kept only for cell update, on a host that keeps it
 		}
@@ -422,6 +425,10 @@ func (a *Agent) Heartbeat() *protocol.HeartbeatBody {
 	if a.cfg.Host != nil && a.hubAccepts(protocol.FeatureHostHardening) {
 		h := *a.cfg.Host
 		hb.Host = &h
+	}
+	// The warm pool, only to a hub that accepts it (an older hub's strict decoder refuses the field).
+	if a.sandboxPool != nil && a.hubAccepts(protocol.FeatureSandboxPool) {
+		hb.SandboxPool = &protocol.HeartbeatBodySandboxPool{Target: int64(a.sandboxPool.Target), Ready: int64(a.sandboxPool.Ready())}
 	}
 	return hb
 }

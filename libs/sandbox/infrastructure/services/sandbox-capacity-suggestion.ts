@@ -6,6 +6,7 @@ export interface CellSandboxFacts {
     sandboxMemoryMb: number | null;
     sandboxCpus: number | null;
     poolReady: number | null;
+    poolTarget: number | null;
 }
 
 /**
@@ -27,12 +28,15 @@ export interface LiveCellFacts {
     allocatableMb: number | null;
     sandboxMemoryMb: number | null;
     sandboxCpus: number | null;
+    /** The warm pool the cell's heartbeat reported; null for a cell older than the field or without a pool. */
+    poolReady?: number | null;
+    poolTarget?: number | null;
 }
 
 /**
  * One CellSandboxFacts for the install's live cells: allocatable memory is the SUM over the cells that reported
  * it; the sandbox size is the LARGEST any cell runs (so the suggestion never over-promises on a mixed fleet).
- * poolReady stays null: the hub does not receive the warm pool count (heartbeat carries none).
+ * poolReady and poolTarget are the SUM over the cells that reported a pool, null when none did (older cells).
  * null when there is no live cell.
  */
 export function aggregateCellFacts(cells: readonly LiveCellFacts[]): CellSandboxFacts | null {
@@ -46,6 +50,12 @@ export function aggregateCellFacts(cells: readonly LiveCellFacts[]): CellSandbox
         allocatableMemoryMb: reported.length ? reported.reduce((n, c) => n + (c.allocatableMb as number), 0) : null,
         sandboxMemoryMb: biggest?.sandboxMemoryMb ?? null,
         sandboxCpus: biggest?.sandboxCpus ?? null,
-        poolReady: null,
+        poolReady: sumReported(cells.map((c) => c.poolReady)),
+        poolTarget: sumReported(cells.map((c) => c.poolTarget)),
     };
+}
+
+function sumReported(values: readonly (number | null | undefined)[]): number | null {
+    const reported = values.filter((v): v is number => v != null);
+    return reported.length ? reported.reduce((n, v) => n + v, 0) : null;
 }

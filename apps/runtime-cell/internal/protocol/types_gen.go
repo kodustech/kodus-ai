@@ -157,12 +157,18 @@ type HeartbeatBodyHost struct {
 	Microcode  *string                 `json:"microcode,omitempty"`
 }
 
+type HeartbeatBodySandboxPool struct {
+	Target int64 `json:"target"`
+	Ready  int64 `json:"ready"`
+}
+
 type HeartbeatBody struct {
 	Claims             []HeartbeatClaim                      `json:"claims"`
 	FreeSlots          int64                                 `json:"freeSlots"`
 	Memory             *HeartbeatBodyMemory                  `json:"memory,omitempty"`
 	EvictedBuildStates []HeartbeatBodyEvictedBuildStatesItem `json:"evictedBuildStates,omitempty"`
 	Host               *HeartbeatBodyHost                    `json:"host,omitempty"`
+	SandboxPool        *HeartbeatBodySandboxPool             `json:"sandboxPool,omitempty"`
 }
 
 type Side string

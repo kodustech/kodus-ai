@@ -39,6 +39,7 @@ const (
 	FeatureCellProtocols         = "cellProtocols"
 	FeatureExercisedLines        = "exercisedLines"
 	FeatureBakeShare             = "bakeShare"
+	FeatureSandboxPool           = "sandboxPool"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -77,6 +78,7 @@ var CellFeatures = []string{
 	FeatureCellProtocols,
 	FeatureExercisedLines,
 	FeatureBakeShare,
+	FeatureSandboxPool,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):
@@ -98,6 +100,7 @@ var HubAcceptedFeatures = []string{
 	FeatureHostHardening,
 	FeatureBuildStateRebuildCost,
 	FeatureBakeShare,
+	FeatureSandboxPool,
 }
 
 // ClaimScopedTypeNames is CLAIM_SCOPED_TYPES (libs/runtime/protocol/envelope.ts): the message types that act on one claim, whose envelope must name it (claimId).

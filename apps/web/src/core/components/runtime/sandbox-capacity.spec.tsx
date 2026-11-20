@@ -73,6 +73,16 @@ describe("SandboxCapacityForm", () => {
         expect(screen.getByText(/Suggested: 5/)).toBeInTheDocument();
     });
 
+    it("shows the warm pool as ready of target, and unknown when an older cell reports none", () => {
+        const { unmount } = render(
+            <SandboxCapacityForm view={view({ cell: { allocatableMemoryMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2, poolReady: 3, poolTarget: 6 } })} />,
+        );
+        expect(screen.getByText("3 of 6")).toBeInTheDocument();
+        unmount();
+        render(<SandboxCapacityForm view={view({ cell: { allocatableMemoryMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2, poolReady: null } })} />);
+        expect(screen.getByText("unknown")).toBeInTheDocument();
+    });
+
     it("says no limit when no cap is set and does not draw a bar", () => {
         render(
             <SandboxCapacityForm

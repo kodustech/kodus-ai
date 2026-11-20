@@ -240,7 +240,13 @@ export const SandboxCapacityForm = ({ view }: { view: SandboxCapacityView }) => 
                     />
                     <Fact
                         label="Ready in the pool"
-                        value={cell?.poolReady != null ? String(cell.poolReady) : "unknown"}
+                        value={
+                            cell?.poolReady == null
+                                ? "unknown"
+                                : cell.poolTarget != null
+                                  ? `${cell.poolReady} of ${cell.poolTarget}`
+                                  : String(cell.poolReady)
+                        }
                     />
                 </dl>
                 <span className="text-text-tertiary text-xs">{CELL_HOST_HINT}</span>

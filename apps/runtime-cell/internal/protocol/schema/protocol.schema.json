@@ -419,6 +419,26 @@
             "vulnerable"
           ],
           "additionalProperties": false
+        },
+        "sandboxPool": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            },
+            "ready": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            }
+          },
+          "required": [
+            "target",
+            "ready"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

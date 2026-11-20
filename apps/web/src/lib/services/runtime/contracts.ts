@@ -955,6 +955,8 @@ export interface SandboxCapacityView {
         sandboxMemoryMb: number | null;
         sandboxCpus: number | null;
         poolReady: number | null;
+        /** Absent from an API older than the field. */
+        poolTarget?: number | null;
     } | null;
     cellUnavailableReason: string | null;
 }

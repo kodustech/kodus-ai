@@ -162,6 +162,8 @@ export interface CellSessionRepository {
         sessionEpoch?: string,
         /** The cell's heartbeat memory, when the hub decided to persist it now (throttled by the caller). */
         memory?: { allocatableMb: number; committedMb: number },
+        /** The cell's heartbeat sandbox pool, when the hub decided to persist it now (throttled by the caller). */
+        sandboxPool?: { target: number; ready: number },
     ): Promise<void>;
     /** Ends the session only if this replica still holds it; the cell row follows only then. */
     disconnect(cellId: string, replicaId: string,
@@ -426,14 +428,16 @@ export class PgHubStore implements HubStore {
     async heartbeat(cellId: string, replicaId: string, freeSlots: number,
         sessionEpoch?: string,
         memory?: { allocatableMb: number; committedMb: number },
+        sandboxPool?: { target: number; ready: number },
     ) {
         await this.pool.query(
             `UPDATE runtime.runtime_cell_sessions SET last_heartbeat_at = now(), free_slots = $3,
-               memory_allocatable_mb = COALESCE($5::integer, memory_allocatable_mb), memory_committed_mb = COALESCE($6::integer, memory_committed_mb)
+               memory_allocatable_mb = COALESCE($5::integer, memory_allocatable_mb), memory_committed_mb = COALESCE($6::integer, memory_committed_mb),
+               sandbox_pool_target = COALESCE($7::integer, sandbox_pool_target), sandbox_pool_ready = COALESCE($8::integer, sandbox_pool_ready)
               WHERE cell_id = $1 AND replica_id = $2 AND ($4::text IS NULL OR session_epoch::text = $4)`, [
             cellId,
             replicaId,
-            freeSlots, sessionEpoch ?? null, memory?.allocatableMb ?? null, memory?.committedMb ?? null]);
+            freeSlots, sessionEpoch ?? null, memory?.allocatableMb ?? null, memory?.committedMb ?? null, sandboxPool?.target ?? null, sandboxPool?.ready ?? null]);
     }
     async disconnect(cellId: string, replicaId: string, sessionEpoch?: string) {
         await this.pool.query(

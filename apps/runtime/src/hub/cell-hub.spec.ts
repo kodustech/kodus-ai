@@ -139,6 +139,31 @@ describe('heartbeat memory persisted for the API', () => {
     });
 });
 
+describe('heartbeat sandbox pool persisted for the API', () => {
+    it('writes it on the first heartbeat, then only when the target changes or every five minutes; a heartbeat without it leaves it', async () => {
+        let t = Date.parse('2026-01-01T00:00:00Z');
+        const { store, connect } = setup({ now: () => new Date(t) });
+        const c = await connect('cell-a');
+        const beat = (sandboxPool?: { target: number; ready: number }) =>
+            c.onMessage(frame('cell-a', 'heartbeat', { freeSlots: 1, claims: [], ...(sandboxPool ? { sandboxPool } : {}) }));
+        const pool = () => (store.sessions.get('cell-a') as any)?.sandboxPool;
+        await beat({ target: 4, ready: 4 });
+        expect(pool()).toEqual({ target: 4, ready: 4 });
+        t += 10_000;
+        await beat({ target: 4, ready: 1 });
+        expect(pool()).toEqual({ target: 4, ready: 4 });
+        t += 10_000;
+        await beat({ target: 6, ready: 2 });
+        expect(pool()).toEqual({ target: 6, ready: 2 });
+        t += 10_000;
+        await beat();
+        expect(pool()).toEqual({ target: 6, ready: 2 });
+        t += 5 * 60_000;
+        await beat({ target: 6, ready: 5 });
+        expect(pool()).toEqual({ target: 6, ready: 5 });
+    });
+});
+
 describe('a cell that goes silent', () => {
     const heartbeat = (cellId: string) => frame(cellId, 'heartbeat', { freeSlots: 4, claims: [] });
 

@@ -113,8 +113,9 @@ export class PgRuntimeCellTokenReader extends PgRuntimeReadOnly implements Runti
 /** The sandbox size and heartbeat memory of this install's live cells, read-only (the hub writes them). */
 export class PgSandboxCellFactsReader extends PgRuntimeReadOnly implements SandboxCellFactsReader {
     async liveCells(): Promise<SandboxCellFactsRow[]> {
-        const rows = await this.query<{ cell_id: string; memory_allocatable_mb: number | null; sandbox_claim_memory_mb: number | null; sandbox_claim_cpus: number | null }>(
-            `SELECT cell_id, memory_allocatable_mb, sandbox_claim_memory_mb, sandbox_claim_cpus
+        const rows = await this.query<{ cell_id: string; memory_allocatable_mb: number | null; sandbox_claim_memory_mb: number | null; sandbox_claim_cpus: number | null; sandbox_pool_target: number | null; sandbox_pool_ready: number | null }>(
+            `SELECT cell_id, memory_allocatable_mb, sandbox_claim_memory_mb, sandbox_claim_cpus,
+                    sandbox_pool_target, sandbox_pool_ready
                FROM runtime.runtime_cell_sessions
               WHERE owner <> 'kodus' AND disconnected_at IS NULL AND last_heartbeat_at > now() - interval '2 minutes'
               ORDER BY cell_id LIMIT 200`,
@@ -125,6 +126,8 @@ export class PgSandboxCellFactsReader extends PgRuntimeReadOnly implements Sandb
             allocatableMb: r.memory_allocatable_mb,
             sandboxMemoryMb: r.sandbox_claim_memory_mb,
             sandboxCpus: r.sandbox_claim_cpus,
+            poolTarget: r.sandbox_pool_target,
+            poolReady: r.sandbox_pool_ready,
         }));
     }
 }

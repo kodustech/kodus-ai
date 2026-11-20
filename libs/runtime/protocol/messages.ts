@@ -354,6 +354,11 @@ export const CELL_FEATURES = [
     // image.shared only to a hub that accepts it. Like exercisedLines, a cell
     // names it only while its hello stays within HELLO_FEATURES_OLDER_HUB_MAX.
     'bakeShare',
+    // heartbeat sandboxPool: the warm pool of blank sandboxes (target and
+    // ready), for the self-hosted Sandboxes screen. Cell to hub, sent only to
+    // a hub whose hello ack accepts it; a cell without a pool does not name it.
+    // Like bakeShare, only while the hello stays within HELLO_FEATURES_OLDER_HUB_MAX.
+    'sandboxPool',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -426,7 +431,7 @@ export type ExercisedResult = z.infer<typeof ExercisedResultSchema>;
  * without `accepts`, so it never sees the field; an older cell never names
  * it, so it never gets an ack with `accepts` it would refuse.
  */
-export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare'] as const satisfies readonly CellFeature[];
+export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool'] as const satisfies readonly CellFeature[];
 export type HubAcceptedFeature = (typeof HUB_ACCEPTED_FEATURES)[number];
 
 /** What a hello ack's `accepts` names: the cell's features this hub accepts fields of. Empty: send `accepts` not at all. */
@@ -645,6 +650,15 @@ export const HeartbeatMemorySchema = z.strictObject({
 });
 export type HeartbeatMemory = z.infer<typeof HeartbeatMemorySchema>;
 
+/** The most blank sandboxes a heartbeat may name in sandboxPool. */
+export const MAX_SANDBOX_POOL = 1_024;
+
+/** heartbeat sandboxPool (feature sandboxPool): blank sandboxes the cell keeps warm, and how many are ready now. */
+export const HeartbeatSandboxPoolSchema = z.strictObject({
+    target: z.number().int().min(0).max(MAX_SANDBOX_POOL),
+    ready: z.number().int().min(0).max(MAX_SANDBOX_POOL),
+});
+
 /** The most environments one heartbeat names in evictedBuildStates (the cell's ledger keeps as many). */
 export const MAX_EVICTED_BUILD_STATES = 64;
 
@@ -753,6 +767,8 @@ export const MessageBodySchemas = {
         evictedBuildStates: z.array(EvictedBuildStateSchema).max(MAX_EVICTED_BUILD_STATES).optional(),
         // Only to a hub whose hello ack accepts hostHardening.
         host: HeartbeatHostSchema.optional(),
+        // Only to a hub whose hello ack accepts sandboxPool: the warm pool of blank sandboxes. Absent: no pool, or an older cell.
+        sandboxPool: HeartbeatSandboxPoolSchema.optional(),
     }),
     'claim.acquire': z.strictObject({
         orgId: id,

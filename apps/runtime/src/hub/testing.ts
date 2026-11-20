@@ -40,11 +40,12 @@ export class InMemoryHubStore implements HubStore {
     async heartbeat(cellId: string, replicaId: string, freeSlots: number,
         sessionEpoch?: string,
         memory?: { allocatableMb: number; committedMb: number },
+        sandboxPool?: { target: number; ready: number },
     ) {
         const s = this.sessions.get(cellId);
         if (s && s.replicaId === replicaId &&
             (!sessionEpoch || s.sessionEpoch === sessionEpoch)
-        ) Object.assign(s, { lastHeartbeatAt: Date.now(), freeSlots }, memory ? { memory: { ...memory } } : {});
+        ) Object.assign(s, { lastHeartbeatAt: Date.now(), freeSlots }, memory ? { memory: { ...memory } } : {}, sandboxPool ? { sandboxPool: { ...sandboxPool } } : {});
     }
     async disconnect(cellId: string, replicaId: string, sessionEpoch?: string) {
         const s = this.sessions.get(cellId);

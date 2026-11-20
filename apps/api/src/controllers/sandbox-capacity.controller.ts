@@ -46,7 +46,7 @@ export class SelfHostedOnlyGuard implements CanActivate {
  * The hub writes each cell's hello (sandbox size) and heartbeat memory to
  * runtime_cell_sessions; the API reads them read-only. With several live cells
  * the memory is summed and the sandbox size is the largest (aggregateCellFacts).
- * poolReady is never known: the heartbeat does not carry the warm pool count.
+ * poolReady and poolTarget (the warm pool) come from the heartbeat's sandboxPool; null for older cells.
  */
 const NO_LIVE_CELL = 'no_live_cell';
 const RUNTIME_UNREADABLE = 'runtime_database_unreadable';

@@ -48,13 +48,20 @@ describe('SandboxCapacityController', () => {
     it('sums the live cells memory, takes the sandbox size and suggests the cap leaving room for a 12 GB Run', async () => {
         const { c, cells } = make();
         cells.liveCells.mockResolvedValue([
-            { cellId: 'a', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2 },
-            { cellId: 'b', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2 },
+            { cellId: 'a', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2, poolTarget: 4, poolReady: 3 },
+            { cellId: 'b', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2, poolTarget: null, poolReady: null },
         ]);
         const r = await c.get();
-        expect(r.cell).toEqual({ allocatableMemoryMb: 45_056, sandboxMemoryMb: 2048, sandboxCpus: 2, poolReady: null });
+        expect(r.cell).toEqual({ allocatableMemoryMb: 45_056, sandboxMemoryMb: 2048, sandboxCpus: 2, poolReady: 3, poolTarget: 4 });
         expect(r.suggestedMaxConcurrent).toBe(Math.floor((45_056 - 12_288) / 2048));
         expect(r.cellUnavailableReason).toBeNull();
+    });
+
+    it('leaves the pool unknown when no live cell reported one (older cells)', async () => {
+        const { c, cells } = make();
+        cells.liveCells.mockResolvedValue([{ cellId: 'a', allocatableMb: 22_528, sandboxMemoryMb: 2048, sandboxCpus: 2, poolTarget: null, poolReady: null }]);
+        const r = await c.get();
+        expect(r.cell).toMatchObject({ poolReady: null, poolTarget: null });
     });
 
     it('says why when the Runtime database cannot be read', async () => {

@@ -265,6 +265,7 @@ export class CellHub {
                 await this.store.heartbeat(conn.cred.cellId, this.opts.replicaId, body.freeSlots,
                     conn.sessionEpoch,
                     this.memoryToPersist(conn, body.memory),
+                    this.poolToPersist(conn, body.sandboxPool),
                 );
                 if (conn.closed || !this.connections.isCurrent(conn)) return;
                 await this.syncEvictedBuildStates(conn, body);
@@ -357,6 +358,23 @@ export class CellHub {
         if (last && last.allocatableMb === memory.allocatableMb && now - last.at < MEMORY_PERSIST_MS) return undefined;
         this.persistedMemory.set(conn, { allocatableMb: memory.allocatableMb, at: now });
         return { allocatableMb: memory.allocatableMb, committedMb: memory.committedMb };
+    }
+
+    /** What each connection last had persisted of its heartbeat sandbox pool, and when. */
+    private readonly persistedPool = new WeakMap<CellConnection, { target: number; at: number }>();
+
+    /**
+     * The heartbeat sandbox pool to write to the cell's session now: on the first heartbeat of a connection, when
+     * the target changed, and otherwise (ready moves with every claim) at most every MEMORY_PERSIST_MS.
+     * undefined: leave the stored value.
+     */
+    private poolToPersist(conn: CellConnection, pool: MessageBody<'heartbeat'>['sandboxPool']): { target: number; ready: number } | undefined {
+        if (!pool) return undefined;
+        const now = (this.opts.now?.() ?? new Date()).getTime();
+        const last = this.persistedPool.get(conn);
+        if (last && last.target === pool.target && now - last.at < MEMORY_PERSIST_MS) return undefined;
+        this.persistedPool.set(conn, { target: pool.target, at: now });
+        return { target: pool.target, ready: pool.ready };
     }
 
     /** The last host report of each connection (heartbeat host), to log only a change. */
