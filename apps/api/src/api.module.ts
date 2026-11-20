@@ -117,6 +117,8 @@ import { RuntimeAuditController } from './controllers/runtime/runtime-audit.cont
 import { RuntimeSecretsController } from './controllers/runtime/runtime-secrets.controller';
 import { RuntimeOpsController } from './controllers/runtime/runtime-ops.controller';
 import { RuntimeEnvironmentsController } from './controllers/runtime/runtime-environments.controller';
+import { SandboxCapacityController } from './controllers/sandbox-capacity.controller';
+import { SandboxCapacityModule } from '@libs/sandbox/modules/sandbox-capacity.module';
 import { RuntimeSettingsController } from './controllers/runtime/runtime-settings.controller';
 import { RuntimeLlmGatewayController } from './controllers/runtime/runtime-llm-gateway.controller';
 import { RuntimePullRequestRunsController } from './controllers/runtime/runtime-pull-request-runs.controller';
@@ -127,6 +129,7 @@ import { SetTeamCliKeyRepositoriesUseCase } from './use-cases/set-team-cli-key-r
 
 @Module({
     imports: [
+        SandboxCapacityModule,
         // EventEmitterModule.forRoot() registers a @Global()
         // EventEmitterCoreModule, so exactly one call per process graph is
         // both necessary and sufficient. It used to reach the API only as a
@@ -249,6 +252,7 @@ import { SetTeamCliKeyRepositoriesUseCase } from './use-cases/set-team-cli-key-r
         RuntimeOpsController,
         RuntimeEnvironmentsController,
         RuntimeSettingsController,
+        SandboxCapacityController,
         RuntimeLlmGatewayController,
         RuntimePullRequestRunsController,
         TeamCliKeyRepositoriesController,

@@ -150,3 +150,33 @@ describe('SandboxCapacityGate (Mongo tickets)', () => {
         expect(readSandboxCapacityEnv({ SANDBOX_MAX_CONCURRENT: 'abc' }).maxConcurrent).toBe(0);
     });
 });
+
+describe('SandboxCapacityGate persisted settings', () => {
+    it('refreshes the settings before it decides and before it reports numbers', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 0, maxWaitMs: 600_000 };
+        const refresh = jest.fn(async () => {
+            env.maxConcurrent = 1;
+        });
+        const gate = new SandboxCapacityGate(store, () => env, () => clock.t, async () => { clock.t += 1000; }, timing, refresh);
+        const g = await gate.acquire('a', 'org:repo:1');
+        expect(g.outcome).toBe('granted');
+        expect(store.slots).toHaveLength(1);
+        expect((await gate.numbers()).cap).toBe(1);
+        expect(refresh).toHaveBeenCalled();
+        await rel(g);
+    });
+
+    it('a waiting review is freed when the cap is removed', async () => {
+        const store = new FakeCapacityStore();
+        const clock = { t: 1_000_000 };
+        const env = { maxConcurrent: 1, maxWaitMs: 600_000 };
+        const gate = new SandboxCapacityGate(store, () => env, () => clock.t, async () => { clock.t += 1000; env.maxConcurrent = 0; }, timing);
+        const first = await gate.acquire('a', 'org:repo:1');
+        const second = await gate.acquire('b', 'org:repo:2');
+        expect(second.outcome).toBe('granted');
+        await rel(first);
+    });
+});
+

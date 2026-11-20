@@ -115,6 +115,8 @@ export class SandboxCapacityGate {
         private readonly sleep: (ms: number) => Promise<void> = (ms) =>
             new Promise((r) => setTimeout(r, ms)),
         private readonly timing: SandboxCapacityTiming = DEFAULT_CAPACITY_TIMING,
+        /** Brings `env` up to date (the persisted settings); cached by the caller. */
+        private readonly refresh?: () => Promise<void>,
     ) {}
 
     get enabled(): boolean {
@@ -144,9 +146,10 @@ export class SandboxCapacityGate {
         prKey: string,
         signal?: AbortSignal,
     ): Promise<CapacityGrant> {
-        const { maxConcurrent, maxWaitMs } = this.env();
+        await this.refresh?.();
+        const { maxConcurrent: firstCap } = this.env();
         const store = this.store;
-        if (!store || maxConcurrent <= 0) {
+        if (!store || firstCap <= 0) {
             return { outcome: 'granted', waitedMs: 0, release: async () => {} };
         }
         const startedAt = this.now();
@@ -156,7 +159,15 @@ export class SandboxCapacityGate {
         );
         try {
             for (;;) {
+                // The settings can change while a review waits: a raised cap
+                // frees it at once, no deploy and no restart.
+                await this.refresh?.();
+                const { maxConcurrent, maxWaitMs } = this.env();
                 const waitedMs = this.now() - startedAt;
+                // The cap was removed while waiting: nothing left to wait for
+                if (maxConcurrent <= 0) {
+                    return { outcome: 'granted', waitedMs, release: async () => {} };
+                }
                 if (signal?.aborted) {
                     return { outcome: 'cancelled', waitedMs };
                 }
@@ -232,6 +243,7 @@ export class SandboxCapacityGate {
 
     /** The numbers for a later screen, deployment-wide, read from Mongo. */
     async numbers(): Promise<SandboxCapacityNumbers> {
+        await this.refresh?.();
         const { maxConcurrent } = this.env();
         if (!this.store || maxConcurrent <= 0) {
             return { inUse: null, cap: 0, queued: 0, oldestWaitMs: 0 };

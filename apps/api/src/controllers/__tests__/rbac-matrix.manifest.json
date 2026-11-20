@@ -2552,6 +2552,28 @@
     }
   },
   {
+    "key": "sandbox-capacity.controller.ts#get",
+    "httpMethod": "GET",
+    "urlPath": "/sandbox-capacity",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "sandbox-capacity.controller.ts#update",
+    "httpMethod": "PUT",
+    "urlPath": "/sandbox-capacity",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "securityScans.controller.ts#cancel",
     "httpMethod": "POST",
     "urlPath": "/security-scans/:id/cancel",
