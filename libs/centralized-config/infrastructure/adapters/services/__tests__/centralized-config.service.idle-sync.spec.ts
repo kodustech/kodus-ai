@@ -56,7 +56,10 @@ const storedRule = (name: string, overrides: Record<string, unknown> = {}) => ({
 });
 
 function build(rules: any[], files: Record<string, any>) {
-    const createOrUpdate = { execute: jest.fn().mockResolvedValue({}) };
+    const createOrUpdate = {
+        execute: jest.fn().mockResolvedValue({}),
+        referenceDetectionFailed: jest.fn().mockResolvedValue(false),
+    };
     const deleteRule = { execute: jest.fn().mockResolvedValue(true) };
     const kodyRulesService = {
         findByOrganizationId: jest.fn().mockResolvedValue({
@@ -162,6 +165,53 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
 
             expect(createOrUpdate.execute).not.toHaveBeenCalled();
             expect(result).toMatchObject({ success: true, syncedRuleCount: 1 });
+        });
+
+        // The write is what re-runs reference detection, so a rule whose last
+        // detection failed keeps being written until one succeeds.
+        it.each([
+            ['failed', () => Promise.resolve(true), 1],
+            ['could not be read', () => Promise.reject(new Error('down')), 1],
+            ['succeeded', () => Promise.resolve(false), 0],
+        ])(
+            'writes an unchanged rule with references when its last detection %s',
+            async (_label, answer, writes) => {
+                const { service, createOrUpdate } = build(
+                    [storedRule('refs', { contextReferenceId: 'ref-1' })],
+                    { [pathOf('refs')]: fileOf('refs') },
+                );
+                createOrUpdate.referenceDetectionFailed.mockImplementation(
+                    answer,
+                );
+
+                await service.synchronizeKodyRules({
+                    organizationAndTeamData,
+                    ruleFiles: [meta('refs')],
+                    actor,
+                });
+
+                expect(
+                    createOrUpdate.referenceDetectionFailed,
+                ).toHaveBeenCalledWith('uuid-refs');
+                expect(createOrUpdate.execute).toHaveBeenCalledTimes(writes);
+            },
+        );
+
+        it('does not ask about the detection of a rule without references', async () => {
+            const { service, createOrUpdate } = build([storedRule('plain')], {
+                [pathOf('plain')]: fileOf('plain'),
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles: [meta('plain')],
+                actor,
+            });
+
+            expect(
+                createOrUpdate.referenceDetectionFailed,
+            ).not.toHaveBeenCalled();
+            expect(createOrUpdate.execute).not.toHaveBeenCalled();
         });
 
         it('writes a rule whose file changed', async () => {

@@ -97,6 +97,25 @@ describe('syncedRuleIsUnchanged', () => {
         ).toBe(false);
     });
 
+    it.each([
+        [
+            'a directory that stopped resolving',
+            { directoryId: 'dir-1' },
+            'directoryId',
+        ],
+        ['a severity', { severity: 'high' }, 'severity'],
+    ])(
+        'is unchanged when the file yields %s as undefined: the write would keep it',
+        (_label, storedField, key) => {
+            expect(
+                syncedRuleIsUnchanged(
+                    { ...stored(), ...storedField } as any,
+                    { ...incoming(), [key]: undefined } as any,
+                ),
+            ).toBe(true);
+        },
+    );
+
     it('writes a stored rule the sync had marked deleted, so the file brings it back', () => {
         expect(
             syncedRuleIsUnchanged(

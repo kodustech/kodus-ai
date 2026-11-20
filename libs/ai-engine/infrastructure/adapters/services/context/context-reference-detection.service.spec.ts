@@ -329,3 +329,25 @@ describe('ContextReferenceDetectionService — deterministic logic', () => {
         });
     });
 });
+
+describe('ContextReferenceDetectionService.lastDetectionFailed', () => {
+    const withLatest = (latest: unknown) =>
+        new ContextReferenceDetectionService(
+            {} as any,
+            { getLatestRevision: jest.fn().mockResolvedValue(latest) } as any,
+        );
+
+    it.each([
+        ['recorded errors', { metadata: { syncErrorsCount: 2 } }, true],
+        ['recorded none', { metadata: { syncErrorsCount: 0 } }, false],
+        ['has no count', { metadata: {} }, false],
+        ['does not exist', undefined, false],
+    ])(
+        'answers whether the latest revision %s',
+        async (_label, latest, failed) => {
+            await expect(
+                withLatest(latest).lastDetectionFailed('kodyRule', 'rule-1'),
+            ).resolves.toBe(failed);
+        },
+    );
+});

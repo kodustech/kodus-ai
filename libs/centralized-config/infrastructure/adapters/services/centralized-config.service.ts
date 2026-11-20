@@ -2043,6 +2043,28 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         }
     }
 
+    /**
+     * The write is also what re-runs a rule's reference detection. A rule
+     * whose last detection failed (a referenced file not there yet, a
+     * provider or model error) is written again, so the next sync retries it
+     * as every sync did before. Only a rule with references has a revision to
+     * ask; when the answer cannot be read, the rule is written, as before.
+     */
+    private async referenceDetectionFailed(
+        rule: Partial<IKodyRule>,
+    ): Promise<boolean> {
+        if (!rule.uuid || !rule.contextReferenceId) {
+            return false;
+        }
+        try {
+            return await this.createOrUpdateKodyRulesUseCase.referenceDetectionFailed(
+                rule.uuid,
+            );
+        } catch {
+            return true;
+        }
+    }
+
     async synchronizeKodyRules(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         ruleFiles: IKodyRuleFileMeta[];
@@ -2369,7 +2391,8 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         : undefined;
                     if (
                         storedRule &&
-                        syncedRuleIsUnchanged(storedRule, ruleDto)
+                        syncedRuleIsUnchanged(storedRule, ruleDto) &&
+                        !(await this.referenceDetectionFailed(storedRule))
                     ) {
                         syncedCount++;
                         continue;

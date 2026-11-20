@@ -5,8 +5,8 @@ import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface
  * rule file) over `stored` would change anything.
  *
  * The sync writes with a top-level merge (`{ ...stored, ...incoming }`), so
- * only the fields `incoming` carries can change. Each of them must match the
- * stored value exactly; anything this cannot prove equal counts as a change
+ * only the fields `incoming` carries with a value can change. Each of them
+ * must match the stored value exactly; anything this cannot prove equal counts as a change
  * and is written, as before.
  */
 export function syncedRuleIsUnchanged(
@@ -15,6 +15,9 @@ export function syncedRuleIsUnchanged(
 ): boolean {
     for (const [key, value] of Object.entries(incoming)) {
         if (key === 'uuid') continue;
+        // The write skips undefined fields (ruleFieldSet), so one cannot
+        // change the stored rule; counting it would write on every sync.
+        if (value === undefined) continue;
         const current = (stored as Record<string, unknown>)[key];
 
         // The write lowercases severity: a file saying `High` over a stored

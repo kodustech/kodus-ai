@@ -73,6 +73,21 @@ export class ContextReferenceDetectionService {
         private readonly contextReferenceService: IContextReferenceService,
     ) {}
 
+    /**
+     * Whether the entity's latest revision recorded a reference it could not
+     * resolve (a file not found, a provider or model error).
+     */
+    async lastDetectionFailed(
+        entityType: string,
+        entityId: string,
+    ): Promise<boolean> {
+        const latest = await this.contextReferenceService.getLatestRevision(
+            entityType,
+            entityId,
+        );
+        return !!Number(latest?.metadata?.syncErrorsCount);
+    }
+
     async detectAndSaveReferences(
         params: ContextReferenceDetectionParams,
     ): Promise<string | undefined> {
