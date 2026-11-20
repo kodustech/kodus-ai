@@ -10,7 +10,6 @@ import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongo
 @Schema({
     collection: 'customAgentRuns',
     timestamps: false,
-    autoIndex: true,
 })
 export class CustomAgentRunModel extends CoreDocument {
     @Prop({ type: String, required: true })

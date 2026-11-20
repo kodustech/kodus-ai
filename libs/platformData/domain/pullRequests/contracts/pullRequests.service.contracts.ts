@@ -138,6 +138,15 @@ export interface IPullRequestsService extends IPullRequestsRepository {
             openOnly?: boolean;
         },
     ): Promise<number>;
+    /**
+     * Pull requests an author opened in the organization, counting no further
+     * than `limit`: callers that only tell 0, 1 and "more" apart stop there.
+     */
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
+    ): Promise<number>;
     /** PR numbers of one repository — see the repository contract. */
     findNumbersByRepositoryId(
         organizationId: string,

@@ -48,7 +48,7 @@ function createMocks() {
     };
 
     const kodyRulesService = {
-        findByOrganizationId: jest.fn().mockResolvedValue(null),
+        findLiveRulesByOrganizationId: jest.fn().mockResolvedValue(null),
         // Default: nothing to reconcile (returns null → caller keeps loaded rules).
         syncRulesWithPlanLimit: jest.fn().mockResolvedValue(null),
     };
@@ -619,7 +619,7 @@ describe('ExecuteCliReviewUseCase', () => {
                 }),
             });
 
-            kodyRulesService.findByOrganizationId.mockResolvedValue({
+            kodyRulesService.findLiveRulesByOrganizationId.mockResolvedValue({
                 toObject: () => ({
                     rules: [globalRule, repoRule],
                 }),
@@ -687,7 +687,9 @@ describe('ExecuteCliReviewUseCase', () => {
                         },
                     }),
                 });
-                kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+                kodyRulesService.findLiveRulesByOrganizationId.mockResolvedValue(
+                    null,
+                );
 
                 const result = await (useCase as any).loadUserConfigWithRules(
                     orgAndTeam,
@@ -733,7 +735,9 @@ describe('ExecuteCliReviewUseCase', () => {
                     },
                 }),
             });
-            kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+            kodyRulesService.findLiveRulesByOrganizationId.mockResolvedValue(
+                null,
+            );
             codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
                 reviewMode: 'heavy',
             });
@@ -769,7 +773,7 @@ describe('ExecuteCliReviewUseCase', () => {
                 }),
             });
 
-            kodyRulesService.findByOrganizationId.mockResolvedValue({
+            kodyRulesService.findLiveRulesByOrganizationId.mockResolvedValue({
                 toObject: () => ({ rules: [] }),
             });
 
@@ -828,7 +832,7 @@ describe('ExecuteCliReviewUseCase', () => {
                     configValue: { configs: {}, repositories: [] },
                 }),
             });
-            kodyRulesService.findByOrganizationId.mockResolvedValue({
+            kodyRulesService.findLiveRulesByOrganizationId.mockResolvedValue({
                 toObject: () => ({ rules: [lockedRule] }),
             });
             // Paid plan → sync reactivates and returns the fresh doc.
@@ -895,7 +899,7 @@ describe('ExecuteCliReviewUseCase', () => {
 
             // In trial mode, should NOT load kody rules
             expect(
-                kodyRulesService.findByOrganizationId,
+                kodyRulesService.findLiveRulesByOrganizationId,
             ).not.toHaveBeenCalled();
             expect(result.issues).toHaveLength(0);
 
@@ -1111,7 +1115,7 @@ describe('ExecuteCliReviewUseCase', () => {
                 }),
             });
 
-            kodyRulesService.findByOrganizationId.mockResolvedValue({
+            kodyRulesService.findLiveRulesByOrganizationId.mockResolvedValue({
                 toObject: () => ({
                     rules: [makeRule({ repositoryId: 'repo-555' })],
                 }),

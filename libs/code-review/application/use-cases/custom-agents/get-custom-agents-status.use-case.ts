@@ -13,6 +13,7 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 export const CUSTOM_AGENT_STATUS_WINDOW_DAYS = 30;
 
@@ -342,6 +343,7 @@ export class GetCustomAgentsStatusUseCase {
                         {
                             allowDiskUse: true,
                             readPreference: ANALYTICS_READ_PREFERENCE,
+                            maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
                         },
                     )
                     .toArray(),
@@ -351,6 +353,7 @@ export class GetCustomAgentsStatusUseCase {
                         {
                             allowDiskUse: true,
                             readPreference: ANALYTICS_READ_PREFERENCE,
+                            maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
                         },
                     )
                     .toArray(),
@@ -358,6 +361,7 @@ export class GetCustomAgentsStatusUseCase {
                     .aggregate(unfollowedCitationsPipeline(match), {
                         allowDiskUse: true,
                         readPreference: ANALYTICS_READ_PREFERENCE,
+                        maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
                     })
                     .toArray(),
                 // A page that cannot read the runs still shows the findings.

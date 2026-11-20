@@ -115,6 +115,7 @@ function setup(
         parameters as any,
         {
             findByOrganizationId: async () => null,
+            findLiveRulesByOrganizationId: async () => null,
             syncRulesWithPlanLimit: async () => null,
         } as any,
         {} as any,

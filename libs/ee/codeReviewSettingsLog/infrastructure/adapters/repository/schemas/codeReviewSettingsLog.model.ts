@@ -9,7 +9,6 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 @Schema({
     collection: 'codeReviewSettingsLog',
     timestamps: true,
-    autoIndex: true,
 })
 export class CodeReviewSettingsLogModel extends CoreDocument {
     @Prop({ type: String, required: true })

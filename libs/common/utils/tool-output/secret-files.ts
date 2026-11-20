@@ -79,6 +79,55 @@ const SECRET_BASENAME =
 const isSeparator = (c: number) => c === 47 || c === 92; // `/` or `\\`
 
 /**
+ * The `/` segments of the path read so far, resolved the way
+ * `posix.normalize` (in isSecretFilePath) resolves them: `.` and empty
+ * segments dropped, `..` removing the segment before it. Kept as the line is
+ * walked, so a `..` boundary knows what it names without normalizing the
+ * whole prefix again: per boundary that was O(prefix) more work, and every
+ * such boundary went to the glob (~31ms each).
+ */
+class ResolvedSegments {
+    private readonly stack: string[] = [];
+
+    constructor(private readonly absolute: boolean) {}
+
+    push(segment: string): void {
+        if (segment === '' || segment === '.') return;
+        if (segment === '..') {
+            const top = this.stack[this.stack.length - 1];
+            if (top !== undefined && top !== '..') this.stack.pop();
+            else if (!this.absolute) this.stack.push('..');
+            return;
+        }
+        this.stack.push(segment);
+    }
+
+    /** The last segment of the path once `pending` is appended, if any. */
+    lastWith(pending: string): string | undefined {
+        const n = this.stack.length;
+        if (pending === '' || pending === '.') return this.stack[n - 1];
+        if (pending !== '..') return pending;
+        const top = this.stack[n - 1];
+        if (top !== undefined && top !== '..') return this.stack[n - 2];
+        return this.absolute ? undefined : '..';
+    }
+}
+
+/**
+ * The screen on what the glob matches: the resolved last segment, with `\\`
+ * read as `/` (the glob does). A name only the glob can judge passes.
+ */
+function mightBeSecretName(name: string | undefined): boolean {
+    if (name === undefined) return true;
+    const path = name.replace(/\\/g, '/');
+    let k = path.length;
+    while (k > 0 && path.charCodeAt(k - 1) === 47) k--;
+    const base = path.slice(path.lastIndexOf('/', k - 1) + 1, k);
+    if (base === '' || base === '.' || base === '..') return true;
+    return SECRET_BASENAME.test(base);
+}
+
+/**
  * Whether the path that ends at `end` could be a secret file: a cheap screen
  * on its last segment before the glob. `lastSep` is the last separator
  * before `end` (isSecretFilePath reads `\\` as one too), kept by the caller
@@ -88,6 +137,7 @@ function mightBeSecretPrefix(
     line: string,
     lastSep: number,
     end: number,
+    resolvedLast: () => string | undefined,
 ): boolean {
     const base = line.slice(lastSep + 1, end);
     if (base !== '' && base !== '.' && base !== '..') {
@@ -111,9 +161,9 @@ function mightBeSecretPrefix(
     let start = k;
     while (start > 0 && !isSeparator(line.charCodeAt(start - 1))) start--;
     const last = line.slice(start, k);
+    if (last !== '' && last !== '..') return SECRET_BASENAME.test(last);
     // `..` (or nothing left): only normalization knows the segment.
-    if (last === '' || last === '..') return true;
-    return SECRET_BASENAME.test(last);
+    return mightBeSecretName(resolvedLast());
 }
 
 function lineFromSecretFile(tagged: string): boolean {
@@ -125,15 +175,27 @@ function lineFromSecretFile(tagged: string): boolean {
     // pass over the line (boundaries come in order).
     let scanned = 0;
     let lastSep = -1;
+    // The same pass resolves the `/` segments for a `..` boundary.
+    const segments = new ResolvedSegments(line.charCodeAt(0) === 47);
+    let segmentStart = 0;
     while ((match = boundary.exec(line))) {
         prefixed = true;
         if (match.index > MAX_PATH_LENGTH) break;
         for (; scanned < match.index; scanned++) {
-            if (isSeparator(line.charCodeAt(scanned))) lastSep = scanned;
+            const c = line.charCodeAt(scanned);
+            if (!isSeparator(c)) continue;
+            lastSep = scanned;
+            if (c === 47) {
+                segments.push(line.slice(segmentStart, scanned));
+                segmentStart = scanned + 1;
+            }
         }
+        const end = match.index;
         if (
-            mightBeSecretPrefix(line, lastSep, match.index) &&
-            isSecretFilePath(line.slice(0, match.index))
+            mightBeSecretPrefix(line, lastSep, end, () =>
+                segments.lastWith(line.slice(segmentStart, end)),
+            ) &&
+            isSecretFilePath(line.slice(0, end))
         )
             return true;
     }

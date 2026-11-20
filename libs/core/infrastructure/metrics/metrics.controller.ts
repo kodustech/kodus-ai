@@ -23,6 +23,7 @@ import {
     MetricsSummaryResponseDto,
 } from './metrics-response.dto';
 import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 @ApiTags('Internal Metrics')
 @ApiBearerAuth('jwt')
@@ -83,7 +84,8 @@ export class MetricsController {
 
             const results = await this.metricsModel
                 .aggregate(pipeline)
-                .read(ANALYTICS_READ_PREFERENCE);
+                .read(ANALYTICS_READ_PREFERENCE)
+                .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS });
 
             const componentMap = new Map<
                 string,
@@ -242,7 +244,8 @@ export class MetricsController {
 
             const results = await this.metricsModel
                 .aggregate(pipeline)
-                .read(ANALYTICS_READ_PREFERENCE);
+                .read(ANALYTICS_READ_PREFERENCE)
+                .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS });
 
             return results.map((r) => ({
                 pipeline: r._id.pipeline ?? 'unknown',

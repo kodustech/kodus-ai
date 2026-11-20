@@ -326,6 +326,11 @@ function kodyRulesRepository(rules = []) {
     let doc = rules.length ? { uuid: `eval-kody-rules-${EVAL_ORG.organizationId}`, organizationId: EVAL_ORG.organizationId, rules } : null;
     return {
         findByOrganizationId: async (organizationId) => (doc && doc.organizationId === organizationId ? KodyRulesEntity.create(doc) : null),
+        // The rules the review reads: every rule but the deleted ones.
+        findLiveRulesByOrganizationId: async (organizationId) =>
+            doc && doc.organizationId === organizationId
+                ? KodyRulesEntity.create({ ...doc, rules: (doc.rules || []).filter((r) => r.status !== 'deleted') })
+                : null,
         create: async (kodyRules) => {
             doc = { uuid: `eval-kody-rules-${kodyRules.organizationId}`, ...kodyRules };
             return KodyRulesEntity.create(doc);

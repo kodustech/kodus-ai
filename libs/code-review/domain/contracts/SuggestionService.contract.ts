@@ -57,6 +57,8 @@ export interface ISuggestionService {
         diffSource?: ChangedFilesSource;
         /** Files the diff deleted: not in `changedFiles`, which leaves them out. */
         removedFiles?: string[];
+        /** `_id` of the PR document the suggestions live in. */
+        pullRequestId?: string;
     }): Promise<ImplementationCheckResult>;
 
 

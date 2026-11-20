@@ -52,6 +52,10 @@ export interface IFileReference {
     lastFetchError?: IFileReferenceError;
 }
 
+/** The sync error a detection records when the model gave no usable answer. */
+export const NO_USABLE_DETECTION_ANSWER =
+    'Reference detection got no usable answer from the model';
+
 export interface IPromptReferenceSyncError {
     readonly type: PromptReferenceErrorType;
     readonly message: string;

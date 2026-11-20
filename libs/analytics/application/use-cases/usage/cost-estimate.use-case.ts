@@ -133,20 +133,25 @@ export class CostEstimateUseCase {
         organizationId: string,
     ): Promise<number> {
         const uniquePrNumbers = [...new Set(prNumbers)];
-        const developers = new Set<string>();
 
-        for (const prNumber of uniquePrNumbers) {
-            const pr = await this.pullRequestsService.findOne({
-                organizationId,
-                number: prNumber,
-            });
+        // One query for every PR, projecting only the author, instead of one
+        // round trip per PR that loaded the whole document (patches included).
+        const pullRequests = await this.pullRequestsService.findManyByNumbers(
+            uniquePrNumbers,
+            organizationId,
+        );
 
-            if (pr?.user?.username) {
-                developers.add(pr.user.username);
+        // Token usage keys a span by PR number only, so a number two
+        // repositories share still stands for one PR: its first author counts,
+        // as before.
+        const authorByNumber = new Map<number, string>();
+        for (const pr of pullRequests) {
+            if (pr.user?.username && !authorByNumber.has(pr.number)) {
+                authorByNumber.set(pr.number, pr.user.username);
             }
         }
 
-        return developers.size;
+        return new Set(authorByNumber.values()).size;
     }
 
     private roundToTwoDecimals(value: number): number {

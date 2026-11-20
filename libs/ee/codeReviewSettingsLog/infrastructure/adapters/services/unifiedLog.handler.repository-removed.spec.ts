@@ -11,20 +11,23 @@ import { UnifiedLogHandler } from './unifiedLog.handler';
  * integration wrote one audit entry per rule, and every entry logged
  * "Error getting repository additional info" (26 per repository in prod).
  */
-describe('UnifiedLogHandler – repository no longer in the integration', () => {
+describe('UnifiedLogHandler – repository whose name cannot be resolved', () => {
     const organizationId = 'org-1';
 
-    function build(integrationConfigs: unknown[]) {
+    const codeReviewConfig = {
+        configValue: {
+            repositories: [{ id: 'repo-kept', name: 'kept' }],
+        },
+    };
+
+    function build(
+        integrationConfigs: unknown[],
+        findByKey: () => Promise<unknown> = async () => codeReviewConfig,
+    ) {
         const created: any[] = [];
         const integrationLookup = jest.fn(async () => integrationConfigs);
         const resolver = new ContextResolutionService(
-            {
-                findByKey: async () => ({
-                    configValue: {
-                        repositories: [{ id: 'repo-kept', name: 'kept' }],
-                    },
-                }),
-            } as any,
+            { findByKey } as any,
             {
                 findByOrganizationAndConfigKey: integrationLookup,
             } as any,
@@ -76,7 +79,7 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
         expect(errorLog).not.toHaveBeenCalled();
     });
 
-    it('still logs an error when the lookup fails for any other reason', async () => {
+    it('writes "Unknown" and logs no error for a repository in the integration but not in the code review config', async () => {
         const { handler, created, errorLog } = build([
             {
                 configValue: [{ id: 'repo-orphan' }],
@@ -84,8 +87,24 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
             },
         ]);
 
-        // In the integration, but missing from the code review config.
         await handler.logAction(deleteRuleOf('repo-orphan'));
+
+        expect(created[0].repository).toEqual({
+            id: 'repo-orphan',
+            name: 'Unknown',
+        });
+        expect(errorLog).not.toHaveBeenCalled();
+    });
+
+    it('still logs an error when the lookup fails for any other reason', async () => {
+        const { handler, created, errorLog } = build(
+            [{ configValue: [{ id: 'repo-kept' }], team: { uuid: 'team-1' } }],
+            async () => {
+                throw new Error('connection reset');
+            },
+        );
+
+        await handler.logAction(deleteRuleOf('repo-kept'));
 
         expect(created[0].repository.name).toBe('Unknown');
         expect(errorLog).toHaveBeenCalledTimes(1);
@@ -93,7 +112,7 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
             expect.objectContaining({
                 metadata: expect.objectContaining({
                     organizationId,
-                    repositoryId: 'repo-orphan',
+                    repositoryId: 'repo-kept',
                 }),
             }),
         );
@@ -136,16 +155,35 @@ describe('UnifiedLogHandler – repository no longer in the integration', () => 
         expect(errorLog).not.toHaveBeenCalled();
     });
 
-    it('asks again after a failure that is not a removed repository', async () => {
-        const { handler, integrationLookup } = build([
+    it('looks a repository missing from the code review config up once for a burst of entries', async () => {
+        const { handler, created, errorLog, integrationLookup } = build([
             {
                 configValue: [{ id: 'repo-orphan' }],
                 team: { uuid: 'team-1' },
             },
         ]);
 
-        await handler.logAction(deleteRuleOf('repo-orphan'));
-        await handler.logAction(deleteRuleOf('repo-orphan'));
+        await Promise.all(
+            Array.from({ length: 26 }, () =>
+                handler.logAction(deleteRuleOf('repo-orphan')),
+            ),
+        );
+
+        expect(created).toHaveLength(26);
+        expect(integrationLookup).toHaveBeenCalledTimes(1);
+        expect(errorLog).not.toHaveBeenCalled();
+    });
+
+    it('asks again after a failure that is not an unresolvable repository', async () => {
+        const { handler, integrationLookup } = build(
+            [{ configValue: [{ id: 'repo-kept' }], team: { uuid: 'team-1' } }],
+            async () => {
+                throw new Error('connection reset');
+            },
+        );
+
+        await handler.logAction(deleteRuleOf('repo-kept'));
+        await handler.logAction(deleteRuleOf('repo-kept'));
 
         expect(integrationLookup).toHaveBeenCalledTimes(2);
     });

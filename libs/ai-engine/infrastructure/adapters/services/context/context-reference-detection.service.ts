@@ -12,6 +12,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
     IDetectedReference,
     IPromptReferenceSyncError,
+    NO_USABLE_DETECTION_ANSWER,
     PromptSourceType,
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -72,6 +73,28 @@ export class ContextReferenceDetectionService {
         @Inject(CONTEXT_REFERENCE_SERVICE_TOKEN)
         private readonly contextReferenceService: IContextReferenceService,
     ) {}
+
+    /**
+     * Whether the entity's latest revision recorded a reference it could not
+     * resolve (a file not found, a provider or model error). No revision, or
+     * one without a count, is not known to be clean and answers true: the
+     * caller's write runs detection again, which commits a revision carrying
+     * the count or clears the entity's pointer.
+     */
+    async lastDetectionFailed(
+        entityType: string,
+        entityId: string,
+    ): Promise<boolean> {
+        const latest = await this.contextReferenceService.getLatestRevision(
+            entityType,
+            entityId,
+        );
+        const count = latest?.metadata?.syncErrorsCount;
+        if (count === undefined || count === null) {
+            return true;
+        }
+        return Number(count) !== 0;
+    }
 
     async detectAndSaveReferences(
         params: ContextReferenceDetectionParams,
@@ -168,6 +191,20 @@ export class ContextReferenceDetectionService {
             }
 
             aggregatedSyncErrors.push(...result.syncErrors);
+        }
+
+        // No usable answer and nothing stored before: there is no state to
+        // mark as failed, and an id for a rule that references nothing makes
+        // every review load its (empty) references. Nothing is saved, as before.
+        if (
+            !previous &&
+            knowledgeRefsMap.size === 0 &&
+            aggregatedSyncErrors.length > 0 &&
+            aggregatedSyncErrors.every(
+                (error) => error.message === NO_USABLE_DETECTION_ANSWER,
+            )
+        ) {
+            return undefined;
         }
 
         const entityHash = this.calculateEntityHash(

@@ -1,3 +1,4 @@
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 import {
     BadRequestException,
     ForbiddenException,
@@ -1565,9 +1566,10 @@ describe('GetCustomAgentsStatusUseCase', () => {
             }),
         });
         // The status counts are analytics: they read from the analytics
-        // member, never the primary.
+        // member, never the primary, and are bounded like any other read.
         const options = aggregate.mock.calls[0][1];
         expect(options.allowDiskUse).toBe(true);
+        expect(options.maxTimeMS).toBe(MONGO_QUERY_MAX_TIME_MS);
         expect(options.readPreference.mode).toBe('secondaryPreferred');
         expect(options.readPreference.tags).toEqual([
             { workload: 'analytics' },

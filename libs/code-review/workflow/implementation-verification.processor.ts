@@ -230,6 +230,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     savedSuggestions,
                     diffSource,
                     removedFiles,
+                    pullRequestId: savedPr.uuid,
                 });
 
             if (check.skipped) {

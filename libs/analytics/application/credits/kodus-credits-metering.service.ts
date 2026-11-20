@@ -45,6 +45,7 @@ import {
     KodusCreditChargeModel,
     KodusCreditSweepStateModel,
 } from '@libs/analytics/infrastructure/adapters/repositories/schemas/kodusCreditCharge.model';
+import { MONGO_LONG_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 /** A span is considered settled this long after its timestamp (flush lag). */
 export const SWEEP_SETTLE_MS = 2 * 60 * 1000;
@@ -197,6 +198,7 @@ export class KodusCreditsMeteringService {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_LONG_QUERY_MAX_TIME_MS })
             .exec()) as TelemetrySpan[];
 
         summary.spansSeen = spans.length;
