@@ -14,6 +14,7 @@ import {
 } from '@libs/runtime/protocol/sandbox';
 import {
     CreateSandboxParams,
+    PreSealCliInstallResult,
     ISandboxProvider,
     SandboxInstance,
     SandboxRunOptions,
@@ -21,6 +22,12 @@ import {
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { resolvePrRefspec } from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
+import {
+    buildCliPrefixInstallScript,
+    cliPrefixHome,
+    CLI_PREFIX_INSTALL_TIMEOUT_SEC,
+    parseCliPrefixBinary,
+} from '@libs/sandbox/infrastructure/providers/cli-prefix-install';
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
 import { sedLineRange } from '@libs/sandbox/infrastructure/providers/read-within-root';
 import {
@@ -399,10 +406,18 @@ export class RuntimeSandboxService implements ISandboxProvider {
             );
         const ref: SandboxRef = { organizationId, sandboxId: randomUUID() };
         const host = cloneHost(params.cloneUrl);
+        // The git host, plus the registries the team CLIs install from: the
+        // sandbox is open to them only until the seal below.
+        const egressAllow = [
+            ...new Set([
+                ...(host ? [host] : []),
+                ...(params.cliInstalls ?? []).flatMap((i) => i.egressAllow),
+            ]),
+        ];
         const started = Date.now();
         const view = await this.client.open({
             ...ref,
-            ...(host ? { egressAllow: [host] } : {}),
+            ...(egressAllow.length ? { egressAllow } : {}),
         });
         if (view.state !== 'ready') {
             const why =
@@ -467,6 +482,7 @@ export class RuntimeSandboxService implements ISandboxProvider {
                 authHeader,
             );
             await this.fetchSubmodules(sandbox, params, authHeader, baseBranch);
+            const cliInstalls = await this.installClis(sandbox, params);
             // The checkout is complete, and the git host is the only network
             // the sandbox needed. From here it runs attacker-controlled PR
             // code and model-chosen commands, so its egress is closed for
@@ -494,6 +510,7 @@ export class RuntimeSandboxService implements ISandboxProvider {
                 baseBranch,
                 repoDir: REPO_DIR,
                 privilegesDropped,
+                ...(cliInstalls && { cliInstalls }),
                 run: (command, opts) => sandbox.run(command, opts),
                 readFile: async (path) =>
                     (await sandbox.readBytes(toGuestPath(path))).data.toString(
@@ -510,6 +527,47 @@ export class RuntimeSandboxService implements ISandboxProvider {
             await release();
             throw error;
         }
+    }
+
+    /**
+     * Installs each team CLI into its own prefix under /workspace as the
+     * sandbox user, while the egress is still open. A failed install is a
+     * result, not an error: the review runs without that CLI.
+     */
+    private async installClis(
+        sandbox: RuntimeSandbox,
+        params: CreateSandboxParams,
+    ): Promise<Record<string, PreSealCliInstallResult> | undefined> {
+        if (!params.cliInstalls?.length) return undefined;
+        const out: Record<string, PreSealCliInstallResult> = {};
+        for (const install of params.cliInstalls) {
+            const home = cliPrefixHome(install.id);
+            try {
+                const run = await sandbox.run(
+                    buildCliPrefixInstallScript(install),
+                    {
+                        timeoutMs:
+                            (CLI_PREFIX_INSTALL_TIMEOUT_SEC + 60) * 1000,
+                    },
+                );
+                const binaryPath =
+                    run.exitCode === 0
+                        ? parseCliPrefixBinary(install.id, run.stdout ?? '')
+                        : undefined;
+                out[install.id] = binaryPath
+                    ? { home, binaryPath }
+                    : {
+                          home,
+                          error: `install failed (exit ${run.exitCode}): ${(run.stderr ?? '').slice(-500)}`,
+                      };
+            } catch (error) {
+                out[install.id] = {
+                    home,
+                    error: `install failed: ${error instanceof Error ? error.message : String(error)}`,
+                };
+            }
+        }
+        return out;
     }
 
     private stopRenewing(sandboxId: string): void {

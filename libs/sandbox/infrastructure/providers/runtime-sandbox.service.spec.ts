@@ -384,3 +384,98 @@ describe('what the worker holds of a runtime sandbox’s answers (a shared worke
         expect(budget.inUse).toBe(0);
     });
 });
+
+describe('team CLIs installed into a runtime sandbox before its seal', () => {
+    const params = {
+        organizationId: 'org-a',
+        cloneUrl: 'https://github.com/acme/app.git',
+        branch: 'main',
+        platform: 'github',
+        cliInstalls: [
+            {
+                id: 'kcliabc',
+                argv: ['npm', 'install', 'left-pad@1.3.0'],
+                binary: 'left-pad',
+                egressAllow: ['registry.npmjs.org'],
+            },
+        ],
+    } as any;
+    const make = (installStdout: string, exitCode = 0) => {
+        const order: string[] = [];
+        const client = {
+            configured: true,
+            open: jest.fn(async () => ({ state: 'ready' })),
+            op: jest.fn(async (_r: unknown, _s: string, op: any) => {
+                if (op.op !== 'exec')
+                    return { ok: true, content: '', eof: true };
+                const isInstall = op.command.includes('KODUS_CLI_BINARY');
+                if (isInstall) order.push('install');
+                return {
+                    ok: true,
+                    exec: {
+                        stdout: isInstall ? installStdout : '',
+                        stderr: '',
+                        exitCode: isInstall ? exitCode : 0,
+                    },
+                };
+            }),
+            renew: jest.fn(async () => undefined),
+            release: jest.fn(async () => undefined),
+            seal: jest.fn(async () => {
+                order.push('seal');
+                return { sealed: true };
+            }),
+        };
+        return { client, order };
+    };
+
+    it('opens the sandbox to the install hosts, installs as the review user into /workspace, then seals', async () => {
+        const home = '/workspace/.kcli/kcliabc';
+        const { client, order } = make(
+            `KODUS_CLI_BINARY=${home}/node_modules/.bin/left-pad\n`,
+        );
+        const sandbox = await new RuntimeSandboxService(
+            conf({}),
+            client as any,
+        ).createSandboxWithRepo(params);
+
+        expect(client.open.mock.calls[0][0].egressAllow).toEqual([
+            'github.com',
+            'registry.npmjs.org',
+        ]);
+        expect(order).toEqual(['install', 'seal']);
+        expect(sandbox.cliInstalls).toEqual({
+            kcliabc: { home, binaryPath: `${home}/node_modules/.bin/left-pad` },
+        });
+    });
+
+    it('keeps the sandbox, still sealed, when an install fails', async () => {
+        const { client, order } = make('', 3);
+        const sandbox = await new RuntimeSandboxService(
+            conf({}),
+            client as any,
+        ).createSandboxWithRepo(params);
+
+        expect(order).toEqual(['install', 'seal']);
+        expect(sandbox.cliInstalls!.kcliabc.binaryPath).toBeUndefined();
+        expect(sandbox.cliInstalls!.kcliabc.error).toMatch(/install failed/);
+    });
+
+    it('ignores a binary path outside its prefix', async () => {
+        const { client } = make('KODUS_CLI_BINARY=/usr/bin/evil\n');
+        const sandbox = await new RuntimeSandboxService(
+            conf({}),
+            client as any,
+        ).createSandboxWithRepo(params);
+        expect(sandbox.cliInstalls!.kcliabc.binaryPath).toBeUndefined();
+    });
+
+    it('adds nothing to the egress when no CLI is asked for', async () => {
+        const { client } = make('');
+        await new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo({
+            ...params,
+            cliInstalls: undefined,
+        });
+        expect(client.open.mock.calls[0][0].egressAllow).toEqual(['github.com']);
+    });
+});

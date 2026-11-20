@@ -35,6 +35,30 @@ export interface CreateSandboxParams {
      */
     organizationId?: string;
     teamId?: string;
+    /**
+     * Runtime sandbox only: team CLIs installed into a user prefix while the
+     * sandbox is still open to `egressAllow`, before its egress is sealed.
+     * Other providers ignore it (E2B installs as root after creation).
+     */
+    cliInstalls?: PreSealCliInstall[];
+}
+
+export interface PreSealCliInstall {
+    /** Stable key of the (agent, CLI) pair; names the prefix directory. */
+    id: string;
+    /** Pinned install command, already validated. */
+    argv: string[];
+    binary: string;
+    /** Registry hosts the install needs while the sandbox is open. */
+    egressAllow: string[];
+}
+
+export interface PreSealCliInstallResult {
+    /** Absolute path of the installed binary, inside the prefix. */
+    binaryPath?: string;
+    /** The prefix the CLI runs with as HOME. */
+    home: string;
+    error?: string;
 }
 
 export interface SandboxRunOptions {
@@ -72,6 +96,8 @@ export interface SandboxInstance {
      * reach (custom agent CLIs). Unset means unknown, and is treated as no.
      */
     privilegesDropped?: boolean;
+    /** Runtime sandbox: outcome of each pre-seal CLI install, by install id. */
+    cliInstalls?: Record<string, PreSealCliInstallResult>;
     /**
      * Run a shell command inside the sandbox.
      * `envs` are merged into the process environment for this command only
