@@ -91,7 +91,7 @@ export function UltraModelsRow({
                         return (
                             <div
                                 key={label}
-                                className="grid items-center gap-2 sm:grid-cols-[minmax(0,20rem)_auto]">
+                                className="flex w-full flex-col gap-2 sm:max-w-[20rem]">
                                 <ModelCombobox
                                     models={options}
                                     value={id}
@@ -129,11 +129,8 @@ export function UltraModelsRow({
                                         </Button>
                                     }
                                 />
-                                <span className="text-text-secondary text-xs font-medium">
-                                    {label}
-                                </span>
                                 {id && (!model || model.disabled) && (
-                                    <p className="text-warning text-xs sm:col-span-2">
+                                    <p className="text-warning text-xs">
                                         {model?.label ?? "This model"} can no
                                         longer run: reconnect its provider or
                                         pick another.
