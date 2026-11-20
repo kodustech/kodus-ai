@@ -2047,13 +2047,16 @@ export class CentralizedConfigService implements ICentralizedConfigService {
      * The write is also what re-runs a rule's reference detection. A rule
      * whose last detection failed (a referenced file not there yet, a
      * provider or model error) is written again, so the next sync retries it
-     * as every sync did before. Only a rule with references has a revision to
-     * ask; when the answer cannot be read, the rule is written, as before.
+     * as every sync did before. Every rule is asked, not only one with a
+     * reference id: a first detection that failed leaves none. A clean
+     * detection stores a revision (with its answer), so a rule that
+     * references nothing reads as clean and is skipped. When the answer
+     * cannot be read, the rule is written, as before.
      */
     private async referenceDetectionFailed(
         rule: Partial<IKodyRule>,
     ): Promise<boolean> {
-        if (!rule.uuid || !rule.contextReferenceId) {
+        if (!rule.uuid) {
             return false;
         }
         try {

@@ -197,21 +197,25 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
             },
         );
 
-        it('does not ask about the detection of a rule without references', async () => {
-            const { service, createOrUpdate } = build([storedRule('plain')], {
-                [pathOf('plain')]: fileOf('plain'),
-            });
+        // A first detection that failed leaves no reference id on the rule,
+        // so the rule is asked whatever its pointer holds.
+        it('writes an unchanged rule without a reference id whose first detection failed', async () => {
+            const { service, createOrUpdate } = build(
+                [storedRule('first', { contextReferenceId: null })],
+                { [pathOf('first')]: fileOf('first') },
+            );
+            createOrUpdate.referenceDetectionFailed.mockResolvedValue(true);
 
             await service.synchronizeKodyRules({
                 organizationAndTeamData,
-                ruleFiles: [meta('plain')],
+                ruleFiles: [meta('first')],
                 actor,
             });
 
             expect(
                 createOrUpdate.referenceDetectionFailed,
-            ).not.toHaveBeenCalled();
-            expect(createOrUpdate.execute).not.toHaveBeenCalled();
+            ).toHaveBeenCalledWith('uuid-first');
+            expect(createOrUpdate.execute).toHaveBeenCalledTimes(1);
         });
 
         it('writes a rule whose file changed', async () => {
