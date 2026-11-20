@@ -59,7 +59,7 @@ export class MetricsController {
     @ApiOperation({
         summary: 'Error rate by component',
         description:
-            'Internal endpoint (requires JWT). Returns aggregated error rates by component for the requested window. Do not expose publicly.',
+            'Internal endpoint (requires JWT and the logs read permission of an active member). Returns aggregated error rates by component for the requested window. Do not expose publicly.',
     })
     @ApiOkResponse({ type: MetricsErrorRateResponseDto })
     getErrorRates(
@@ -75,7 +75,7 @@ export class MetricsController {
     @ApiOperation({
         summary: 'Review response times',
         description:
-            'Internal endpoint (requires JWT). Response time statistics for reviews in hours. Do not expose publicly.',
+            'Internal endpoint (requires JWT and the logs read permission of an active member). Response time statistics for reviews in hours. Do not expose publicly.',
     })
     @ApiOkResponse({ type: MetricsResponseTimeResponseDto })
     getReviewResponseTimes(
@@ -91,7 +91,7 @@ export class MetricsController {
     @ApiOperation({
         summary: 'Pipeline performance',
         description:
-            'Internal endpoint (requires JWT). Aggregates average duration by pipeline and stage. Do not expose publicly.',
+            'Internal endpoint (requires JWT and the logs read permission of an active member). Aggregates average duration by pipeline and stage. Do not expose publicly.',
     })
     @ApiOkResponse({ type: MetricsPipelinePerformanceResponseDto })
     getPipelinePerformance(
@@ -107,7 +107,7 @@ export class MetricsController {
     @ApiOperation({
         summary: 'Metrics summary',
         description:
-            'Internal endpoint (requires JWT). Consolidated metrics snapshot. Do not expose publicly.',
+            'Internal endpoint (requires JWT and the logs read permission of an active member). Consolidated metrics snapshot. Do not expose publicly.',
     })
     @ApiOkResponse({ type: MetricsSummaryResponseDto })
     getSummary(): Promise<MetricsSummary> {

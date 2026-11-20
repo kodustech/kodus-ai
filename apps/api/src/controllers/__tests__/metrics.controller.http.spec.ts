@@ -141,6 +141,33 @@ describe('MetricsController (HTTP)', () => {
         },
     );
 
+    it.each([STATUS.PENDING, STATUS.INACTIVE])(
+        'a %s member of an allowed role is 403 and reads no metric',
+        async (status) => {
+            currentUser = { ...memberOf(Role.OWNER), status };
+
+            await get('/internal/metrics/error-rates').expect(403);
+
+            expect(errorRates.execute).not.toHaveBeenCalled();
+        },
+    );
+
+    // As before this change: the use case turns 0 or a blank window into the
+    // default and clamps a negative one to the minimum, so these reach it.
+    it.each([
+        ['0', 0],
+        ['', 0],
+        ['-5', -5],
+    ])('window=%s reaches the use case as %d', async (value, expected) => {
+        currentUser = memberOf(Role.OWNER);
+
+        await get(`/internal/metrics/error-rates?window=${value}`).expect(200);
+
+        expect(errorRates.execute).toHaveBeenCalledWith({
+            windowMinutes: expected,
+        });
+    });
+
     it.each([
         Role.OWNER,
         Role.REPO_ADMIN,

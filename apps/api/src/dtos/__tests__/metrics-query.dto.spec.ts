@@ -34,6 +34,27 @@ describe('metrics query DTOs', () => {
         }
     });
 
+    // As before this change: 0 or a blank value fall back to the default and a
+    // negative one is clamped to the minimum, both in the use case. The DTO
+    // lets these whole numbers through untouched.
+    it.each([
+        [MetricsWindowQueryDto, 'window'],
+        [MetricsHoursQueryDto, 'hours'],
+    ])(
+        '%p hands 0, a blank value and a negative one to the use case',
+        async (dto, key) => {
+            for (const [value, expected] of [
+                ['0', 0],
+                ['', 0],
+                ['-5', -5],
+            ] as const) {
+                const { instance, errors } = await check(dto, { [key]: value });
+                expect(errors).toEqual([]);
+                expect(instance[key]).toBe(expected);
+            }
+        },
+    );
+
     it('accepts an absent value (the use case applies the default)', async () => {
         const { errors } = await check(MetricsWindowQueryDto, {});
 
