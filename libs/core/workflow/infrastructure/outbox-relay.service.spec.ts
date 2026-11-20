@@ -430,6 +430,51 @@ describe('OutboxRelayService names the lost work', () => {
         }
     });
 
+    it("keeps each consumer's window apart: one consumer's alert never silences another's", async () => {
+        let lossy = ['workflow-events-ast'];
+        const inboxRepository = {
+            staleHoldersByConsumer: jest.fn().mockResolvedValue([]),
+            reclaimStaleMessagesByConsumer: jest.fn(
+                async (consumerId: string) =>
+                    lossy.includes(consumerId) ? 7 : 0,
+            ),
+        };
+        const { service, incidentManager } = build({ inboxRepository });
+
+        await service.reclaimStaleInbox();
+        lossy = ['workflow-events-ast', 'chat-with-kody-from-git'];
+        await service.reclaimStaleInbox();
+
+        const alerted = incidentManager.failHeartbeat.mock.calls.map(
+            ([, message]: [string, string]) =>
+                message.match(/rate for (\S+):/)?.[1],
+        );
+        expect(alerted).toEqual([
+            'workflow-events-ast',
+            'chat-with-kody-from-git',
+        ]);
+    });
+
+    it('tries again on the next pass when the incident was not delivered', async () => {
+        const inboxRepository = {
+            staleHoldersByConsumer: jest.fn().mockResolvedValue([]),
+            reclaimStaleMessagesByConsumer: jest.fn(
+                async (consumerId: string) =>
+                    consumerId === 'workflow-events-ast' ? 7 : 0,
+            ),
+        };
+        const { service, incidentManager } = build({ inboxRepository });
+        incidentManager.failHeartbeat.mockRejectedValueOnce(
+            new Error('betterstack down'),
+        );
+
+        await service.reclaimStaleInbox();
+        await new Promise((resolve) => setImmediate(resolve));
+        await service.reclaimStaleInbox();
+
+        expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(2);
+    });
+
     it('still reclaims when the holders cannot be read', async () => {
         const inboxRepository = {
             staleHoldersByConsumer: jest

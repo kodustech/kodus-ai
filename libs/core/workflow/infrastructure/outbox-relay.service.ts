@@ -1030,6 +1030,7 @@ export class OutboxRelayService
         reclaimed: number,
         holders: Parameters<typeof describeStaleHolders>[0],
     ) {
+        if (!this.incidentManager) return;
         const now = Date.now();
         const last = this.reclaimAlertedAt.get(consumerId);
         if (
@@ -1040,7 +1041,7 @@ export class OutboxRelayService
         }
         this.reclaimAlertedAt.set(consumerId, now);
         void this.incidentManager
-            ?.failHeartbeat(
+            .failHeartbeat(
                 'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
                 `High inbox reclaim rate for ${consumerId}: ${reclaimed} messages held by a worker that stopped mid-job${holders.length ? ` (${describeStaleHolders(holders)})` : ''}. No job reaper reports this loss. ${this.formatContext(
                     {
@@ -1051,6 +1052,10 @@ export class OutboxRelayService
                 )}`,
             )
             .catch((err) => {
+                // Not delivered: the next qualifying pass tries again.
+                if (this.reclaimAlertedAt.get(consumerId) === now) {
+                    this.reclaimAlertedAt.delete(consumerId);
+                }
                 this.logger.error({
                     message: 'Failed to report inbox reclaim heartbeat failure',
                     context: OutboxRelayService.name,
