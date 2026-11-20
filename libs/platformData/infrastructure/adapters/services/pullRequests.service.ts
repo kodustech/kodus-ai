@@ -109,10 +109,6 @@ export class PullRequestsService implements IPullRequestsService {
         });
     }
 
-    getNativeCollection() {
-        throw new Error('Method not implemented.');
-    }
-
     findCustomAgentSuggestionRows(scope: CustomAgentFindingsScope) {
         return this.pullRequestsRepository.findCustomAgentSuggestionRows(scope);
     }

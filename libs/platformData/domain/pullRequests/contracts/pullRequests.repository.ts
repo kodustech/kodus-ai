@@ -72,7 +72,6 @@ export interface BulkApplyResult {
 }
 
 export interface IPullRequestsRepository {
-    getNativeCollection(): any;
     /**
      * Each custom agent's stored findings (file and PR level) in one
      * repository, one row per agent, pull request and statuses. Analytics

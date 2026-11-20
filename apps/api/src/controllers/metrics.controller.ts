@@ -12,7 +12,7 @@ import {
     MetricsSummary,
     PipelinePerformanceResult,
     ResponseTimeResult,
-} from '@libs/core/infrastructure/metrics/interfaces/metrics.interfaces';
+} from '@libs/core/metrics/domain/metrics.types';
 import {
     MetricsErrorRateResponseDto,
     MetricsPipelinePerformanceResponseDto,

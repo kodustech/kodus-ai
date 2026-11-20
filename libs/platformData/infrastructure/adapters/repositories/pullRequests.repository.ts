@@ -166,7 +166,8 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         private readonly pullRequestsModel: Model<PullRequestsModel>,
     ) {}
 
-    getNativeCollection() {
+    /** The raw collection, for this repository's own reads only. */
+    private getNativeCollection() {
         return this.pullRequestsModel.db.collection('pullRequests');
     }
 

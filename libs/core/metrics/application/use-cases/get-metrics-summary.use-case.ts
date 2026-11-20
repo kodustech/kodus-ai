@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { MetricsSummary } from '@libs/core/infrastructure/metrics/interfaces/metrics.interfaces';
+import { MetricsSummary } from '@libs/core/metrics/domain/metrics.types';
 import {
     IMetricsRepository,
     METRICS_REPOSITORY_TOKEN,
