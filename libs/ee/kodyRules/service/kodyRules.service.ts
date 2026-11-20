@@ -318,10 +318,15 @@ export class KodyRulesService implements IKodyRulesService {
     }
 
     async updateRulesFields(
+        organizationId: string,
         uuid: string,
         changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
     ): Promise<string[]> {
-        return this.kodyRulesRepository.updateRulesFields(uuid, changes);
+        return this.kodyRulesRepository.updateRulesFields(
+            organizationId,
+            uuid,
+            changes,
+        );
     }
 
     async findRulesIndex(
@@ -434,6 +439,7 @@ export class KodyRulesService implements IKodyRulesService {
         let writeError: unknown;
         try {
             failedRuleIds = await this.kodyRulesRepository.updateRulesFields(
+                organizationId,
                 entity.uuid,
                 changedRules,
             );

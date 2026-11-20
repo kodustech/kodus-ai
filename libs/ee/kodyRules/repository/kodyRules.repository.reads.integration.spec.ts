@@ -105,7 +105,7 @@ let available = false;
         it("writes each rule's changes in one round trip and only its fields", async () => {
             commands.length = 0;
 
-            const failed = await repository.updateRulesFields(docId, [
+            const failed = await repository.updateRulesFields(ORG, docId, [
                 {
                     ruleId: 'live-1',
                     patch: {

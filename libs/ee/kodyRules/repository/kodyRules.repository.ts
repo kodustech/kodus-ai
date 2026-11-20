@@ -227,6 +227,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     }
 
     async updateRulesFields(
+        organizationId: string,
         uuid: string,
         changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
     ): Promise<string[]> {
@@ -248,8 +249,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                     updateOne: {
                         // `$eq`: an id that arrives as an object must not
                         // become an operator, as in the other rule writes.
+                        // Scoped to the organization in the query itself.
                         filter: {
                             '_id': { $eq: uuid },
+                            'organizationId': { $eq: organizationId },
                             'rules.uuid': { $eq: ruleId },
                         },
                         update: { $set: setFields },
@@ -268,7 +271,13 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             // A rule removed between the read and this write matched
             // nothing: report it as not written instead of counting it.
             const stored = (await this.kodyRulesModel
-                .findOne({ _id: { $eq: uuid } }, { 'rules.uuid': 1 })
+                .findOne(
+                    {
+                        _id: { $eq: uuid },
+                        organizationId: { $eq: organizationId },
+                    },
+                    { 'rules.uuid': 1 },
+                )
                 .lean()
                 .exec()) as { rules?: Array<{ uuid?: string }> } | null;
             const present = new Set(

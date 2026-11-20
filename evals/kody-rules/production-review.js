@@ -55,7 +55,7 @@ class InMemoryKodyRulesRepository {
     }
 
     // The plan sync's per-rule writes in one call; returns the ids it missed.
-    async updateRulesFields(uuid, changes) {
+    async updateRulesFields(_organizationId, uuid, changes) {
         const failed = [];
         for (const { ruleId, patch } of changes) {
             if (!(await this.updateRule(uuid, ruleId, patch))) failed.push(ruleId);

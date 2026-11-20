@@ -58,7 +58,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
 
     // The per-rule changes the sync wrote, in its one round trip.
     const written = (): Array<{ ruleId: string; patch: any }> =>
-        repo.updateRulesFields.mock.calls.flatMap(([, changes]) => changes);
+        repo.updateRulesFields.mock.calls.flatMap(([, , changes]) => changes);
 
     beforeEach(() => {
         repo = {
@@ -106,7 +106,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
 
         // One round trip for the document, holding only #11 and #12.
         expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
-        expect(repo.updateRulesFields.mock.calls[0][0]).toBe('doc-1');
+        expect(repo.updateRulesFields.mock.calls[0][1]).toBe('doc-1');
         expect(written().map((c) => c.ruleId)).toEqual(['r11', 'r12']);
         for (const change of written()) {
             expect(change.patch).toMatchObject({
