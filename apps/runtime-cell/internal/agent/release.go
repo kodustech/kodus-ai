@@ -61,6 +61,7 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 	defer cancel()
+	held, _ := a.leases.Get(c.ID) // what to destroy again if this release cannot confirm it
 	if err := a.leases.Release(ctx, c.ID); err != nil && !errors.Is(err, lease.ErrUnknownClaim) {
 		a.m.cleanupsFailed.Inc()
 		c.Log.Warn("claim.cleanup.machines", "err", err)
@@ -68,9 +69,12 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 			// Logical removal is not physical release. Convert the active
 			// reservation to an exceptional hold before removing the claim,
 			// so neither a new id nor reuse of this id borrows its capacity.
-			_, retained := a.mem.Retain(c.ID, a.mem.Count(c.ID))
+			release, retained := a.mem.Retain(c.ID, a.mem.Count(c.ID))
 			if retained {
 				a.mem.Forget(c.ID)
+				// The next sweep tick destroys it again and, once that is
+				// clean, lets the memory go (pending_cleanup.go).
+				a.pending.add(c.ID, held, release)
 			}
 			c.Log.Error("resource.cleanup_pending", "alarm", true, "memoryRetained", retained, "err", err)
 			a.nudgeHeartbeat()

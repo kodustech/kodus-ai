@@ -3,7 +3,7 @@
 The mTLS material every cell process uses: PEM pools, client and server configs, Ed25519 keys, and the pin that lets a control port answer only the cell agent's certificate rather than every certificate its CA signed. A leaf used by `cmd/cell`, `cmd/egress`, `cmd/resolver`, `cmd/injector` and the observer's server (`observer/observersrv`).
 
 ## Owns
-- `tlsutil.go` `Pool`, `Client`, `Server` (client certificate required and verified), `PrivateKey` (PKCS#8), `PublicKey` (PKIX).
+- `tlsutil.go` `Pool`, `Client`, `ReloadingClient` (reads the pair again when its files change, for a certificate renewed while the process runs; a pair that does not load keeps the last one), `Server` (client certificate required and verified; serves the current pair of its files on each handshake, as `ReloadingClient` presents it), `PrivateKey` (PKCS#8), `PublicKey` (PKIX).
 - Pinning: `Peer` (CN, the cell id, and or SPKI hash; `IsZero`, `Matches`), `PinnedServer` (the handshake fails for any other certificate), `RequirePeer` (403 on a route for anyone else), `ControlServer`, `ErrPeerNotPinned`.
 
 ## Does not own

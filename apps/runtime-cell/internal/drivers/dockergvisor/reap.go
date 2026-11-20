@@ -132,7 +132,7 @@ func (r *Reaper) groups(ctx context.Context) ([]reapGroup, error) {
 	if err != nil || len(ids) == 0 {
 		return nil, err
 	}
-	cs, err := r.d.Inspect(ctx, ids...)
+	cs, err := inspectPresent(ctx, r.d, ids...)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (r *Reaper) machineContainers(ctx context.Context, machine string) ([]docke
 			ids = append(ids, id)
 		}
 	}
-	cs, err := r.d.Inspect(ctx, ids...)
+	cs, err := inspectPresent(ctx, r.d, ids...)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +428,7 @@ func (r *Reaper) onlyEgressOn(ctx context.Context, n string) (bool, error) {
 	if err != nil || len(left) == 0 {
 		return err == nil, err
 	}
-	cs, err := r.d.Inspect(ctx, left...)
+	cs, err := inspectPresent(ctx, r.d, left...)
 	if err != nil {
 		return false, err
 	}
@@ -523,4 +523,29 @@ func sortedSet(m map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// inspectPresent inspects the containers a ps listed, leaving out the ones
+// removed since: one docker inspect fails as a whole when any id is gone
+// (the sweep running while a release ends a machine), and a container that
+// is gone is nothing for the sweep to end.
+func inspectPresent(ctx context.Context, d interface {
+	Inspect(ctx context.Context, ids ...string) ([]dockercli.Container, error)
+}, ids ...string) ([]dockercli.Container, error) {
+	cs, err := d.Inspect(ctx, ids...)
+	if err == nil || !dockercli.NoSuchContainer(err) {
+		return cs, err
+	}
+	cs = cs[:0]
+	for _, id := range ids {
+		one, err := d.Inspect(ctx, id)
+		if dockercli.NoSuchContainer(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		cs = append(cs, one...)
+	}
+	return cs, nil
 }

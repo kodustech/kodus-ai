@@ -52,6 +52,11 @@ type Manager struct {
 	now    func() time.Time
 	log    *slog.Logger
 	leases map[string]*entry
+	// releasing are the claims whose Release is destroying their machines:
+	// the lease is already gone, so the sweep would otherwise take them
+	// for machines no one holds and destroy them under the release (the
+	// two docker rm of one container, dev cell 2026-11-19).
+	releasing map[string]int
 }
 
 func NewManager(cellID string, drv Machines, now func() time.Time, log *slog.Logger) *Manager {
@@ -61,7 +66,7 @@ func NewManager(cellID string, drv Machines, now func() time.Time, log *slog.Log
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Manager{cellID: cellID, drv: drv, now: now, log: log, leases: map[string]*entry{}}
+	return &Manager{cellID: cellID, drv: drv, now: now, log: log, leases: map[string]*entry{}, releasing: map[string]int{}}
 }
 
 func cloneLease(l Lease) Lease {
@@ -154,16 +159,44 @@ func (m *Manager) Renew(ctx context.Context, claimID string, until time.Time) (t
 	return until, nil
 }
 
-// Release destroys the claim's machines and its network.
+// Release destroys the claim's machines and its network. The lease goes at
+// once (the claim is no longer live for a renewal or a count), and until
+// the destroys return the sweep leaves the claim's machines to it.
 func (m *Manager) Release(ctx context.Context, claimID string) error {
 	m.mu.Lock()
 	e, ok := m.leases[claimID]
 	delete(m.leases, claimID)
+	if ok {
+		m.releasing[claimID]++ // in the same lock: no sweep sees it unowned
+	}
 	m.mu.Unlock()
 	if !ok {
 		return ErrUnknownClaim
 	}
-	l := e.Lease
+	return m.end(ctx, e.Lease)
+}
+
+// EndMachines destroys the machines and the network a lease named, the
+// lease itself already gone: Release, and a retry of a release whose
+// destroys the driver could not confirm. Destroying what is already gone
+// succeeds, so a nil error is what confirms nothing of the lease is left.
+// While it runs the sweep leaves the claim's machines to it.
+func (m *Manager) EndMachines(ctx context.Context, l Lease) error {
+	m.mu.Lock()
+	m.releasing[l.ClaimID]++
+	m.mu.Unlock()
+	return m.end(ctx, l)
+}
+
+// end destroys what l names and then lifts the releasing mark its caller set.
+func (m *Manager) end(ctx context.Context, l Lease) error {
+	defer func() {
+		m.mu.Lock()
+		if m.releasing[l.ClaimID]--; m.releasing[l.ClaimID] <= 0 {
+			delete(m.releasing, l.ClaimID)
+		}
+		m.mu.Unlock()
+	}()
 	var errs []error
 	for _, ref := range l.Machines {
 		if err := m.drv.Destroy(ctx, ref); err != nil {
@@ -187,6 +220,9 @@ func (m *Manager) Sweep(ctx context.Context) (destroyed int, err error) {
 	now := m.now()
 	var errs []error
 	for _, ref := range refs {
+		if m.isReleasing(ref.Tags[driver.TagClaim]) {
+			continue // its Release destroys it
+		}
 		reason := ""
 		switch {
 		case driver.Expired(ref.Tags, now):
@@ -208,6 +244,15 @@ func (m *Manager) Sweep(ctx context.Context) (destroyed int, err error) {
 		m.forgetMachine(ref)
 	}
 	return destroyed, errors.Join(errs...)
+}
+
+func (m *Manager) isReleasing(claimID string) bool {
+	if claimID == "" {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.releasing[claimID] > 0
 }
 
 func (m *Manager) forgetMachine(ref driver.MachineRef) {

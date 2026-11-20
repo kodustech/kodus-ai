@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 )
 
 func Pool(caFile string) (*x509.CertPool, error) {
@@ -41,19 +42,80 @@ func Client(certFile, keyFile, caFile string) (*tls.Config, error) {
 	return &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: pool, MinVersion: tls.VersionTLS13}, nil
 }
 
-// Server requires and verifies a client certificate from caFile. Any
-// certificate that chains to caFile is answered; a control port that only
-// one client may use pins it with PinnedServer.
-func Server(certFile, keyFile, caFile string) (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
+// ReloadingClient is Client for a certificate that is replaced while the
+// process runs, such as the cell's identity, which the renewer rewrites
+// before it expires: each handshake presents what certFile and keyFile hold
+// now. A pair that does not load (caught between the two renames of a
+// renewal) keeps the last one that did, and the next handshake tries again.
+func ReloadingClient(certFile, keyFile, caFile string) (*tls.Config, error) {
+	kp := &reloadingPair{certFile: certFile, keyFile: keyFile}
+	if _, err := kp.current(); err != nil {
 		return nil, err
 	}
 	pool, err := Pool(caFile)
 	if err != nil {
 		return nil, err
 	}
-	return &tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: pool, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS13}, nil
+	return &tls.Config{
+		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return kp.current() },
+		RootCAs:              pool,
+		MinVersion:           tls.VersionTLS13,
+	}, nil
+}
+
+// reloadingPair reads the key pair again only when either file changed.
+type reloadingPair struct {
+	certFile, keyFile string
+
+	mu                sync.Mutex
+	cert              *tls.Certificate
+	certStat, keyStat os.FileInfo
+}
+
+func (p *reloadingPair) current() (*tls.Certificate, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	cs, cerr := os.Stat(p.certFile)
+	ks, kerr := os.Stat(p.keyFile)
+	if p.cert != nil && cerr == nil && kerr == nil && sameFile(p.certStat, cs) && sameFile(p.keyStat, ks) {
+		return p.cert, nil
+	}
+	c, err := tls.LoadX509KeyPair(p.certFile, p.keyFile)
+	if err != nil {
+		if p.cert != nil {
+			return p.cert, nil
+		}
+		return nil, err
+	}
+	p.cert, p.certStat, p.keyStat = &c, cs, ks
+	return p.cert, nil
+}
+
+func sameFile(a, b os.FileInfo) bool {
+	return a != nil && b != nil && os.SameFile(a, b) && a.ModTime().Equal(b.ModTime()) && a.Size() == b.Size()
+}
+
+// Server requires and verifies a client certificate from caFile. Any
+// certificate that chains to caFile is answered; a control port that only
+// one client may use pins it with PinnedServer. Like ReloadingClient, each
+// handshake presents what certFile and keyFile hold now, so a server
+// certificate replaced while the process runs is served from the next
+// handshake on, and a pair caught between two renames keeps the last one.
+func Server(certFile, keyFile, caFile string) (*tls.Config, error) {
+	kp := &reloadingPair{certFile: certFile, keyFile: keyFile}
+	if _, err := kp.current(); err != nil {
+		return nil, err
+	}
+	pool, err := Pool(caFile)
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return kp.current() },
+		ClientCAs:      pool,
+		ClientAuth:     tls.RequireAndVerifyClientCert,
+		MinVersion:     tls.VersionTLS13,
+	}, nil
 }
 
 // Peer is the one client a pinned server answers. A CA that signs the

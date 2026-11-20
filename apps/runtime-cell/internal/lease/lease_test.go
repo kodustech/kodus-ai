@@ -3,6 +3,7 @@ package lease
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -172,5 +173,62 @@ func TestDeadManActsOnChangeThenAtItsCadence(t *testing.T) {
 	dm.Tick(context.Background())
 	if n := d.ListCalls(); n != 2 {
 		t.Fatalf("after ActEvery: %d lists, want 2", n)
+	}
+}
+
+// slowDestroy holds the first destroy of a machine open until the test lets
+// it go, so a sweep can run in the middle of a release.
+type slowDestroy struct {
+	*fake.Driver
+	once    chan struct{} // closed when the first destroy has started
+	proceed chan struct{}
+	mu      sync.Mutex
+	started bool
+}
+
+func (s *slowDestroy) Destroy(ctx context.Context, ref driver.MachineRef) error {
+	s.mu.Lock()
+	first := !s.started
+	s.started = true
+	s.mu.Unlock()
+	if first {
+		close(s.once)
+		<-s.proceed
+	}
+	return s.Driver.Destroy(ctx, ref)
+}
+
+// Release dropped the lease and then destroyed the machines one by one: a
+// sweep in between found the rest with no live lease and destroyed them
+// too, and the release's own docker rm failed on a removal already in
+// progress (dev cell, 2026-11-19). A sweep during a release leaves the
+// claim's machines to the release.
+func TestSweepLeavesTheMachinesOfAClaimBeingReleased(t *testing.T) {
+	c, d, _ := setup(t)
+	workload := machine(t, c, d, "claim-1", driver.RoleWorkload, 5*time.Minute, time.Hour)
+	observer := machine(t, c, d, "claim-1", driver.RoleObserver, 5*time.Minute, time.Hour)
+	slow := &slowDestroy{Driver: d, once: make(chan struct{}), proceed: make(chan struct{})}
+	m := NewManager("cell-1", slow, c.now, nil)
+	m.Track(Lease{ClaimID: "claim-1", Machines: []driver.MachineRef{workload, observer}, ExpiresAt: c.t.Add(5 * time.Minute), HardExpiresAt: c.t.Add(time.Hour)})
+
+	released := make(chan error, 1)
+	go func() { released <- m.Release(context.Background(), "claim-1") }()
+	<-slow.once // the release is destroying the workload
+	n, err := m.Sweep(context.Background())
+	close(slow.proceed)
+	if err := <-released; err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if err != nil || n != 0 {
+		t.Fatalf("the sweep destroyed %d machine(s) of a claim being released (err %v)", n, err)
+	}
+	if len(d.Machines()) != 0 {
+		t.Fatalf("release left %v", d.Machines())
+	}
+	// Once the release returned, the claim is no one's: a later machine of
+	// it (a leftover) is swept again.
+	machine(t, c, d, "claim-1", driver.RoleWorkload, 5*time.Minute, time.Hour)
+	if n, _ := m.Sweep(context.Background()); n != 1 {
+		t.Fatalf("a leftover of a released claim was not swept: %d", n)
 	}
 }

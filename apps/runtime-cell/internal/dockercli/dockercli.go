@@ -450,9 +450,41 @@ func (c CLI) RunHolder(ctx context.Context, h HolderSpec) (Container, error) {
 	return cs[0], nil
 }
 
+// Remove removes the container. One the daemon no longer has is removed;
+// one another removal is taking down (a sweep and a release ending the same
+// machine) is removed once the daemon no longer has it, which Remove waits
+// for, up to removalWait.
 func (c CLI) Remove(ctx context.Context, name string) error {
 	_, err := c.run(ctx, nil, "rm", "-f", name)
+	switch {
+	case err == nil, NoSuchContainer(err):
+		return nil
+	case RemovalInProgress(err):
+		return c.waitRemoved(ctx, name)
+	}
 	return err
+}
+
+// removalWait bounds how long Remove waits for another removal of the same
+// container; removalPoll is how often it looks.
+var removalWait, removalPoll = 2 * time.Minute, 250 * time.Millisecond
+
+func (c CLI) waitRemoved(ctx context.Context, name string) error {
+	ctx, cancel := context.WithTimeout(ctx, removalWait)
+	defer cancel()
+	for {
+		_, err := c.run(ctx, nil, "inspect", "--type", "container", "--format", "{{.Id}}", name)
+		if NoSuchContainer(err) {
+			return nil
+		}
+		t := time.NewTimer(removalPoll)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("dockercli: container %s still being removed: %w", name, ctx.Err())
+		case <-t.C:
+		}
+	}
 }
 
 // Filters are docker ps filters, by kind ("label", "name"); a label value

@@ -263,6 +263,7 @@ func (a *Agent) housekeeping(ctx context.Context, rc RunConfig) {
 			if n, err := a.leases.Sweep(ctx); n > 0 || err != nil {
 				a.log.Info("sweep", "destroyed", n, "err", err)
 			}
+			a.settlePendingCleanups(ctx)
 			a.ReapDeadClaims(ctx)
 			a.pool.RefillAll()
 		}

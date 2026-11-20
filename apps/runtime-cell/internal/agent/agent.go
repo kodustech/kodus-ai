@@ -98,6 +98,10 @@ type Agent struct {
 	// without one.
 	guests      guests
 	sandboxPool *sandboxPool
+
+	// pending are the released claims whose teardown is not confirmed yet,
+	// with their memory held (pending_cleanup.go).
+	pending pendingCleanups
 }
 
 const (

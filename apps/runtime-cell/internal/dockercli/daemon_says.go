@@ -12,6 +12,10 @@ func NoSuchImage(err error) bool { return daemonSays(err, "No such image") }
 // NoSuchContainer is a container the daemon does not have.
 func NoSuchContainer(err error) bool { return daemonSays(err, "No such container") }
 
+// RemovalInProgress is a removal of a container another removal is already
+// taking down ("removal of container X is already in progress").
+func RemovalInProgress(err error) bool { return daemonSays(err, "is already in progress") }
+
 // NotConnected is a disconnect of a container not attached to the network.
 func NotConnected(err error) bool { return daemonSays(err, "is not connected") }
 

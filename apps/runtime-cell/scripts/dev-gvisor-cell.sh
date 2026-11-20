@@ -109,7 +109,7 @@ server() {
   key "$2/key.pem"
   openssl req -new -key "$2/key.pem" -subj "/O=kodus-runtime/OU=$1/CN=$1" -out "$2/cert.csr"
   printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=%s\n' "$3" >"$2/cert.ext"
-  openssl x509 -req -in "$2/cert.csr" -CA "$P/ca.pem" -CAkey "$P/ca.key" -CAcreateserial -sha256 -days 2 -extfile "$2/cert.ext" -out "$2/cert.pem" 2>/dev/null
+  openssl x509 -req -in "$2/cert.csr" -CA "$P/ca.pem" -CAkey "$P/ca.key" -CAcreateserial -sha256 -days 30 -extfile "$2/cert.ext" -out "$2/cert.pem" 2>/dev/null
   rm -f "$2/cert.csr" "$2/cert.ext" "$P/ca.srl"
 }
 # The control ports are published on this host's loopback only.
@@ -122,7 +122,7 @@ openssl genpkey -algorithm ed25519 -out "$P/policy.key.pem"
 openssl pkey -in "$P/policy.key.pem" -pubout -out "$P/policy.pub.pem"
 # The injector's own CA for the leaves it shows the claims (never the hub's).
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout "$STATE/injector/cell-ca.key.pem" \
-  -out "$STATE/injector/cell-ca.pem" -days 2 -subj "/O=kodus-runtime/CN=kodus dev injector CA" \
+  -out "$STATE/injector/cell-ca.pem" -days 30 -subj "/O=kodus-runtime/CN=kodus dev injector CA" \
   -addext "basicConstraints=critical,CA:TRUE,pathlen:0" -addext "keyUsage=critical,keyCertSign" 2>/dev/null
 for d in egress injector observer-tls; do
   cp "$P/ca.pem" "$STATE/$d/ca.pem"

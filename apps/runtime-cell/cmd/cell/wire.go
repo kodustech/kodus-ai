@@ -258,9 +258,12 @@ func inProcessObservers(remap func(claimID string, in []observer.Target) ([]obse
 	return observers, previews
 }
 
-// observerClient is the cell's mTLS client of the observer machines.
+// observerClient is the cell's mTLS client of the observer machines. Its
+// certificate is read again whenever the files change: -observer-cert is
+// often the cell's own identity, which the renewer replaces long before the
+// process ends, and an observer refuses the expired one at its handshake.
 func observerClient(st settings) (*tls.Config, *http.Client, error) {
-	obsTLS, err := tlsutil.Client(st.ObsCert, st.ObsKey, st.ObsCA)
+	obsTLS, err := tlsutil.ReloadingClient(st.ObsCert, st.ObsKey, st.ObsCA)
 	if err != nil {
 		return nil, nil, fmt.Errorf("observer tls: %w", err)
 	}

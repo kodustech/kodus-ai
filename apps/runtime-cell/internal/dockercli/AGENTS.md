@@ -3,7 +3,7 @@
 The one adapter to the `docker` binary on the cell's host. `drivers/dockergvisor` (and its `registry`), the dev-only `drivers/localdocker`, `isolation/gvisor`, `placement/docker` and `cmd/reaper` reach Docker only through `CLI`. It runs in the cell process; it knows no claim, only the containers, networks, volumes and images a caller names.
 
 ## Owns
-- Running the binary: `dockercli.go` `CLI`, `ExecCommand`, `ExecCommandWith`, `MinimalEnv` (only `passEnv` reaches docker), bounded stdout, `ExitError` with a redacted tail of stderr; `daemon_says.go` (`NoSuchImage`, `NoSuchContainer`, `NotConnected`, `PoolOverlap`).
+- Running the binary: `dockercli.go` `CLI`, `ExecCommand`, `ExecCommandWith`, `MinimalEnv` (only `passEnv` reaches docker), bounded stdout, `ExitError` with a redacted tail of stderr; `daemon_says.go` (`NoSuchImage`, `NoSuchContainer`, `RemovalInProgress`, `NotConnected`, `PoolOverlap`); `Remove` takes a container already gone as removed and, when another removal is taking it down, waits (bounded) until the daemon no longer has it.
 - Holders and sandboxes: `dockercli.go` `HolderSpec`, `RunHolder` (runtime, claim network, no capability, read-only root, the cell's resolver, `ValidDiskSize`); `sandbox.go` `SandboxSpec`, `SandboxArgs`, `RunSandbox`, `ExecStream` (the guest agent's stream over docker exec).
 - Builds: `dockercli.go` `BuildRun`, `RunBuild` (rootless BuildKit in a container on the claim network, plain progress, the cell trust bundle and secrets by id when asked); `builder_log.go` `ReadBuilderLog`; `registry.go` `BuildPush`, `BuiltDigest`, `RunRegistry`, `PullImage` (by digest only).
 - Loading a built image: `image_tarball.go` `LoadImage`, `CheckImageTarball` (exactly the one image asked for, bounded size and entries).

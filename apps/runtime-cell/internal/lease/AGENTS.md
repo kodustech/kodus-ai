@@ -3,8 +3,8 @@
 Each claim's lease, the sweep of machines by tag, and the dead-man switch that cleans the cell when the hub is gone. A part of the agent with its own lock, in the cell process: `internal/agent` tracks, renews and releases leases; `internal/reaper` uses the sweep.
 
 ## Owns
-- `lease.go` `Manager.Track`, `Get`, `HasLiveLease`, `Count`; `Renew` (moves every machine's `kodus:expires` tag, capped at the claim's ceiling, and only then the lease; `ErrTagsBehind` keeps the old end); `Release` (the claim's machines and network).
-- `Manager.Sweep`: destroys every machine of this cell with no live lease, past `kodus:expires` or past `kodus:hard-expires`; pool machines live by their own tags until adopted. `DestroyAll`, `DestroyExpired`.
+- `lease.go` `Manager.Track`, `Get`, `HasLiveLease`, `Count`; `Renew` (moves every machine's `kodus:expires` tag, capped at the claim's ceiling, and only then the lease; `ErrTagsBehind` keeps the old end); `Release` (the claim's machines and network; the lease goes at once, and the claim is marked releasing in the same lock until the destroys return); `EndMachines` (the same teardown for a lease already gone: the retry of an unconfirmed release; a nil error confirms nothing of the lease is left).
+- `Manager.Sweep`: destroys every machine of this cell with no live lease, past `kodus:expires` or past `kodus:hard-expires`; pool machines live by their own tags until adopted; a claim being released (`Release`, `EndMachines`) is left to its release, so the two never remove the same container at once. `DestroyAll`, `DestroyExpired`.
 - `deadman.go` `DeadMan`: `Healthy`, `Lost` after `StopAfter` (5 min without the hub: no new work, expired machines destroyed), `Abandoned` after `DestroyAfter` (15 min: every machine destroyed); `Revoke` stops a revoked cell at once. It acts on each change of state, then every `ActEvery`.
 - `Machines`: the part of a driver the leases need.
 
