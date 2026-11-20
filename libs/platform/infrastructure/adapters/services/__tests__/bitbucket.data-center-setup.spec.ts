@@ -241,7 +241,10 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
 
     it('probes the repository list the setup reads next, not the project list', async () => {
         const svc = dataCenter();
-        const get = jest.fn(async () => ({ status: 200 }));
+        const get = jest.fn(async () => ({
+            status: 200,
+            data: { values: [] },
+        }));
         const create = jest
             .spyOn(axios, 'create')
             .mockReturnValue({ get } as any);
@@ -281,9 +284,55 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
         expect(svc.addAccessToken).not.toHaveBeenCalled();
     });
 
+    it('refuses a 200 that is a login page, not a repository page', async () => {
+        const svc = dataCenter();
+        // An SSO in front of Bitbucket answers the API path with its own page:
+        // status 200 and HTML, no pagination envelope.
+        const get = jest.fn(async () => ({
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+            data: '<!DOCTYPE html><html><body>Sign in</body></html>',
+        }));
+        jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                authMode: AuthMode.TOKEN,
+                token: 'pat',
+                host: HOST,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(svc.addAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('accepts a valid page with no repositories', async () => {
+        const svc = dataCenter();
+        const get = jest.fn(async () => ({
+            status: 200,
+            data: { values: [], size: 0, isLastPage: true },
+        }));
+        jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                authMode: AuthMode.TOKEN,
+                token: 'pat',
+                host: HOST,
+            }),
+        ).resolves.toMatchObject({ success: true });
+
+        expect(svc.addAccessToken).toHaveBeenCalled();
+    });
+
     it('keeps the Basic request the setup form sends for a first-time connection', async () => {
         const svc = dataCenter();
-        const get = jest.fn(async () => ({ status: 200 }));
+        const get = jest.fn(async () => ({
+            status: 200,
+            data: { values: [] },
+        }));
         const create = jest
             .spyOn(axios, 'create')
             .mockReturnValue({ get } as any);

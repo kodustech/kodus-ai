@@ -256,7 +256,14 @@ export class BitbucketDataCenterService implements Omit<
             // administer projects.
             const testResponse = await axiosClient.get('/repos?limit=1');
 
-            if (testResponse.status !== 200) {
+            // A 200 is not proof that Bitbucket answered: an SSO login page
+            // also answers 200, with HTML in the body. Only the paginated
+            // shape the repository picker reads proves the token works, and an
+            // empty page is a valid answer.
+            if (
+                testResponse.status !== 200 ||
+                !Array.isArray(testResponse.data?.values)
+            ) {
                 throw new Error(
                     'Bitbucket Data Center failed to validate the provided token.',
                 );
