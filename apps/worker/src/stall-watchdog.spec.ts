@@ -221,6 +221,18 @@ describe('startStallWatchdog (real worker thread)', () => {
         // case fails on CI runners and not locally.
         const all: StallReport[] = [];
         const keepOurs = keep(reports);
+        const startedAt = Date.now();
+        const seen = () =>
+            `armed ${armedAt - startedAt} ms after start; every report: ${JSON.stringify(
+                all.map((r) => ({
+                    kind: r.kind,
+                    startedAt: r.startedAt - startedAt,
+                    stalledMs: r.stalledMs,
+                    capture: (r as any).capture,
+                    stackUnavailable: r.stackUnavailable,
+                    location: (r as any).location,
+                })),
+            )}`;
         stop = startStallWatchdog(
             {
                 thresholdMs: 400,
@@ -255,34 +267,27 @@ describe('startStallWatchdog (real worker thread)', () => {
             () => reports.find((r) => r.kind === 'stall'),
             15_000,
         ).catch(() => {
-            throw new Error(
-                `no stall report of ours (armedAt ${armedAt}); alert: ${
-                    fail.body
-                }; every report: ${JSON.stringify(
-                    all.map((r) => ({
-                        kind: r.kind,
-                        startedAt: r.startedAt,
-                        stalledMs: r.stalledMs,
-                        capture: (r as any).capture,
-                        stackUnavailable: r.stackUnavailable,
-                        location: (r as any).location,
-                    })),
-                )}`,
-            );
+            throw new Error(`no stall report of ours; ${seen()}`);
         });
         server.close();
 
-        expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
-        // The inspector only got an answer after execSync returned: neither
-        // the stack nor the profile it would carry is the stall, so neither
-        // is used, and the alert says why instead of naming this file.
-        const message = JSON.parse(fail.body).message as string;
-        expect(stall?.stack).toBeNull();
-        expect(stall?.hottest).toBeUndefined();
-        expect(stall?.stackUnavailable).toBe('answered-late');
-        expect(message).toContain('could not interrupt');
-        expect(message).not.toContain('stall-watchdog.spec');
-        expect(message).toContain('stalled');
+        try {
+            expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
+            // The inspector only got an answer after execSync returned: neither
+            // the stack nor the profile it would carry is the stall, so neither
+            // is used, and the alert says why instead of naming this file.
+            const message = JSON.parse(fail.body).message as string;
+            expect(stall?.stack).toBeNull();
+            expect(stall?.hottest).toBeUndefined();
+            expect(stall?.stackUnavailable).toBe('answered-late');
+            expect(message).toContain('could not interrupt');
+            expect(message).not.toContain('stall-watchdog.spec');
+            expect(message).toContain('stalled');
+        } catch (error) {
+            throw new Error(
+                `${(error as Error).message}\nalert: ${fail.body}\n${seen()}`,
+            );
+        }
     });
     it('closes a stall that recovers during its capture, so the next stall gets its own report', async () => {
         const reports: StallReport[] = [];
