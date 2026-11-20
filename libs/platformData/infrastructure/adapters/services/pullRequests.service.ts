@@ -620,6 +620,13 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    refreshFileTotalsIfStale(prUuid: string, organizationId: string) {
+        return this.pullRequestsRepository.refreshFileTotalsIfStale(
+            prUuid,
+            organizationId,
+        );
+    }
+
     computeEmbeddedPatchBytes(prUuid: string, organizationId: string) {
         return this.pullRequestsRepository.computeEmbeddedPatchBytes(
             prUuid,
@@ -1050,6 +1057,7 @@ export class PullRequestsService implements IPullRequestsService {
         // is nothing to rewrite. Re-saving them from the stored copy rewrote
         // every file (and blanked what the review recorded on each).
         if (options?.filesUnchanged) {
+            await this.repairStaleTotals(existingPR, organizationAndTeamData);
             return updatedPr;
         }
 
@@ -2050,6 +2058,9 @@ export class PullRequestsService implements IPullRequestsService {
                 (op) => op.kind === 'updateFile' || op.kind === 'addFile',
             );
             if (!fileWritten) {
+                await this.repairStaleTotals(existingPR, {
+                    organizationId,
+                });
                 return existingPR;
             }
 
@@ -2079,6 +2090,38 @@ export class PullRequestsService implements IPullRequestsService {
                 },
             });
             return null;
+        }
+    }
+
+    /**
+     * A save that writes no file skips the totals step, so totals an earlier
+     * save left stale (its totals step failed) are repaired here, writing
+     * only when they differ. Never fails the save.
+     */
+    private async repairStaleTotals(
+        existingPR: { uuid?: string; number?: number },
+        organizationAndTeamData: Pick<
+            OrganizationAndTeamData,
+            'organizationId'
+        >,
+    ): Promise<void> {
+        if (!existingPR?.uuid || !organizationAndTeamData?.organizationId) {
+            return;
+        }
+        try {
+            await this.pullRequestsRepository.refreshFileTotalsIfStale(
+                existingPR.uuid,
+                organizationAndTeamData.organizationId,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not refresh the totals of PR#${existingPR.number}`,
+                context: PullRequestsService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                },
+            });
         }
     }
 

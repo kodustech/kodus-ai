@@ -2334,6 +2334,50 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     }
 
     /**
+     * The totals as the sum of the stored files, written only when they
+     * differ: one update the server evaluates on the PR itself, so a save
+     * that writes no file still repairs totals an earlier save left stale
+     * (its totals step failed after the file writes), at no write when they
+     * are right.
+     */
+    async refreshFileTotalsIfStale(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<boolean> {
+        if (!organizationId) {
+            throw new Error(
+                'refreshFileTotalsIfStale requires organizationId for tenant isolation',
+            );
+        }
+        const sumOf = (field: string) => ({
+            $sum: { $ifNull: [`$files.${field}`, 0] },
+        });
+        const totals = {
+            totalAdded: sumOf('added'),
+            totalDeleted: sumOf('deleted'),
+            totalChanges: sumOf('changes'),
+        };
+        const result = await this.pullRequestsModel
+            .updateOne(
+                {
+                    organizationId,
+                    _id: mongoose.Types.ObjectId.isValid(prUuid)
+                        ? new mongoose.Types.ObjectId(prUuid)
+                        : prUuid,
+                    $expr: {
+                        $or: Object.entries(totals).map(([key, sum]) => ({
+                            $ne: [{ $ifNull: [`$${key}`, 0] }, sum],
+                        })),
+                    },
+                },
+                [{ $set: { ...totals, updatedAt: new Date().toISOString() } }],
+                { updatePipeline: true },
+            )
+            .exec();
+        return result.modifiedCount > 0;
+    }
+
+    /**
      * Server-side sum of the UTF-8 bytes actually embedded in
      * `files[].patch` for one PR. Uses `$strLenBytes` (which counts UTF-8
      * bytes, exactly like `Buffer.byteLength` and BSON) so the caller gets

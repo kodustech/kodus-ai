@@ -294,5 +294,60 @@ let available = false;
             // The push keeps what the review recorded on the files it did not edit.
             expect(afterPush.doc.files[5].reviewMode).toBe('heavy_mode');
         }, 120_000);
+
+        // Runs on the PR the case above left stored.
+        it('a save that writes no file repairs totals left stale, and writes nothing when they are right', async () => {
+            const expected = (doc: any) => ({
+                totalAdded: doc.files.reduce(
+                    (n: number, f: any) => n + (f.added ?? 0),
+                    0,
+                ),
+                totalDeleted: doc.files.reduce(
+                    (n: number, f: any) => n + (f.deleted ?? 0),
+                    0,
+                ),
+                totalChanges: doc.files.reduce(
+                    (n: number, f: any) => n + (f.changes ?? 0),
+                    0,
+                ),
+            });
+            const totals = (doc: any) => ({
+                totalAdded: doc.totalAdded,
+                totalDeleted: doc.totalDeleted,
+                totalChanges: doc.totalChanges,
+            });
+            // Totals a save left behind when its totals step failed.
+            const breakTotals = () =>
+                model.updateOne(
+                    { organizationId: ORG, number: 7 },
+                    {
+                        $set: {
+                            totalAdded: 1,
+                            totalDeleted: 2,
+                            totalChanges: 3,
+                        },
+                    },
+                );
+
+            await breakTotals();
+            await webhook('closed');
+            const afterClose = (await stored()).doc;
+            expect(totals(afterClose)).toEqual(expected(afterClose));
+
+            await breakTotals();
+            await webhook('synchronize');
+            const afterResync = (await stored()).doc;
+            expect(totals(afterResync)).toEqual(expected(afterResync));
+
+            // Right totals: the update matches nothing, so nothing is written.
+            await expect(
+                (
+                    service as any
+                ).pullRequestsRepository.refreshFileTotalsIfStale(
+                    String(afterResync._id),
+                    ORG,
+                ),
+            ).resolves.toBe(false);
+        }, 120_000);
     },
 );
