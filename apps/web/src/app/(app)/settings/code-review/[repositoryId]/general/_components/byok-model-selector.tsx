@@ -25,6 +25,7 @@ import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
 import {
     isUltraTrioSet,
     ultraModelResolver,
+    ultraModelUsable,
 } from "src/features/ee/ultra-review/plan";
 
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
@@ -81,6 +82,7 @@ export const BYOKModelSelectorSection = ({
     const ultraSet = isUltraTrioSet(
         llmConfigStatus?.modelRouting?.ultraModelIds,
         ultraModelResolver(llmConfigStatus?.models),
+        ultraModelUsable(llmConfigStatus?.models),
     );
     const modelFor = indexRoutingModels(models);
     const labels = routingModelLabels(models);

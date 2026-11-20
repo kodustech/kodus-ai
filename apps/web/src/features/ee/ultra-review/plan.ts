@@ -26,11 +26,14 @@ export const normalizeUltraModel = (modelId: string): string => {
     id = id.split("/").pop() ?? "";
     id = id.split("@")[0];
     id = id.replace(/^(?:(?:us|eu|apac|global)\.)?[a-z]+\.(?=[a-z])/, "");
+    // A Bedrock version (`-v1:0`) goes; a `-v4` that names the model stays.
+    id = id.replace(/-v\d+:.*$/, "");
     id = id.split(":")[0];
-    id = id.replace(/-v\d+$/, "");
     id = id.replace(/(\d)p(\d)/g, "$1-$2");
     id = id.replace(/[._\s]+/g, "-");
-    id = id.replace(/-(?:\d{8}|latest)$/, "");
+    // A release date, `-20261101` or `-2026-11-01`. Not `-MMDD`: that
+    // names a distinct release (Kimi K2 0711 and 0905).
+    id = id.replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2}|latest)$/, "");
     return id;
 };
 
@@ -50,15 +53,40 @@ export const ultraModelResolver = (
 };
 
 /**
+ * id → whether Ultra can run that model, as the server checks on save: one of
+ * the organization's own models whose provider still connects.
+ */
+export const ultraModelUsable = (
+    models:
+        | ReadonlyArray<{
+              id?: string;
+              modelId?: string;
+              resolvable?: boolean;
+              managed?: boolean;
+          }>
+        | undefined,
+): ((id: string) => boolean) => {
+    const usable = new Set(
+        (models ?? [])
+            .filter((m) => m.resolvable !== false && !m.managed)
+            .map((m) => m.modelId ?? m.id),
+    );
+    return (id) => usable.has(id);
+};
+
+/**
  * Three different models picked, the only trio Ultra runs on. With
  * `modelOf` (id → provider model), two ids for the same model count once,
- * as the server does.
+ * as the server does; with `usable`, a model that can no longer run leaves
+ * the trio unset.
  */
 export const isUltraTrioSet = (
     ids?: string[],
     modelOf?: (id: string) => string | undefined,
+    usable?: (id: string) => boolean,
 ): boolean => {
     const picked = (ids ?? []).filter(Boolean);
+    if (usable && !picked.every(usable)) return false;
     const keys = picked.map((id) => {
         const model = modelOf?.(id);
         return model ? normalizeUltraModel(model) : id;
@@ -78,9 +106,13 @@ export const ultraTrioError = (
     ids?: string[],
     required = false,
     modelOf?: (id: string) => string | undefined,
+    usable?: (id: string) => boolean,
 ): string | undefined => {
-    if (isUltraTrioSet(ids, modelOf)) return undefined;
+    if (isUltraTrioSet(ids, modelOf, usable)) return undefined;
     const picked = (ids ?? []).filter(Boolean);
+    if (usable && !picked.every(usable)) {
+        return "A model picked for Ultra can no longer run. Reconnect its provider or pick another.";
+    }
     if (picked.length) return "Select three different models to save Ultra.";
     return required
         ? "Ultra is a review mode here. Keep three models, or change the mode first."

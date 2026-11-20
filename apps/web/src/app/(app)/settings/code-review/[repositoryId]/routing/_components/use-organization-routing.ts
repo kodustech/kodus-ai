@@ -30,6 +30,7 @@ import {
     isUltraTrioSet,
     ULTRA_MODEL_COUNT,
     ultraModelResolver,
+    ultraModelUsable,
     ultraTrioError,
 } from "src/features/ee/ultra-review/plan";
 
@@ -124,6 +125,7 @@ export function useOrganizationRouting({
             return { ...current, ultraModelIds: slots };
         });
     const modelOf = ultraModelResolver(query.data?.models);
+    const usable = ultraModelUsable(query.data?.models);
     const validationError =
         dirty &&
         !pool.some(
@@ -131,7 +133,12 @@ export function useOrganizationRouting({
         )
             ? "Select a connected default model."
             : dirty
-              ? ultraTrioError(routing.ultraModelIds, ultraInUse, modelOf)
+              ? ultraTrioError(
+                    routing.ultraModelIds,
+                    ultraInUse,
+                    modelOf,
+                    usable,
+                )
               : undefined;
 
     useUnsavedChangesGuard({
@@ -242,8 +249,8 @@ export function useOrganizationRouting({
         // Counted as the API counts a trio: one model through two providers once.
         breaksUltraTrio:
             dirty &&
-            isUltraTrioSet(saved.ultraModelIds, modelOf) &&
-            !isUltraTrioSet(routing.ultraModelIds, modelOf),
+            isUltraTrioSet(saved.ultraModelIds, modelOf, usable) &&
+            !isUltraTrioSet(routing.ultraModelIds, modelOf, usable),
         pool,
         dirty,
         validationError,

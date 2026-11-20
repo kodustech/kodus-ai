@@ -132,6 +132,13 @@ export function UltraModelsRow({
                                 <span className="text-text-secondary text-xs font-medium">
                                     {label}
                                 </span>
+                                {id && (!model || model.disabled) && (
+                                    <p className="text-warning text-xs sm:col-span-2">
+                                        {model?.label ?? "This model"} can no
+                                        longer run: reconnect its provider or
+                                        pick another.
+                                    </p>
+                                )}
                             </div>
                         );
                     })}

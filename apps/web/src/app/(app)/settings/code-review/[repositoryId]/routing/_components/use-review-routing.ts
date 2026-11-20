@@ -18,6 +18,7 @@ import {
     isUltraReviewPlan,
     isUltraTrioSet,
     ultraModelResolver,
+    ultraModelUsable,
 } from "src/features/ee/ultra-review/plan";
 
 import type { CodeReviewFormType } from "../../../_types";
@@ -79,6 +80,7 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
     const ultraSet = isUltraTrioSet(
         ultraModelIds,
         ultraModelResolver(status?.models),
+        ultraModelUsable(status?.models),
     );
     const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
     const selectedScope = useWatch({ control, name: "byokModelId.value" });

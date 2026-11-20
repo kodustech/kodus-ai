@@ -4,7 +4,13 @@ import {
     sameRouting,
 } from "src/features/ee/byok/_components/routing/routing-state";
 
-import { isUltraReviewPlan, isUltraTrioSet, ultraTrioError } from "./plan";
+import {
+    isUltraReviewPlan,
+    isUltraTrioSet,
+    normalizeUltraModel,
+    ultraModelUsable,
+    ultraTrioError,
+} from "./plan";
 
 describe("isUltraReviewPlan", () => {
     it("allows the plans that run heavy, a trial included, and refuses free", () => {
@@ -79,5 +85,39 @@ describe("the Ultra trio", () => {
                 current,
             ).ultraModelIds,
         ).toEqual(["c", "a", "b"]);
+    });
+});
+
+describe("normalizeUltraModel", () => {
+    it.each([
+        ["us.anthropic.claude-opus-5-5-v1:0", "claude-opus-5-5"],
+        ["claude-opus-5-5-20261101", "claude-opus-5-5"],
+        ["gpt-6.1-sol-2026-05-01", "gpt-6-1-sol"],
+        ["deepseek-v4", "deepseek-v4"],
+        ["kimi-k2-0905", "kimi-k2-0905"],
+    ])("reads %s as %s, as the API does", (raw, normalized) => {
+        expect(normalizeUltraModel(raw)).toBe(normalized);
+    });
+});
+
+describe("a trio model that can no longer run", () => {
+    const models = [
+        { modelId: "a", model: "m-a", resolvable: true },
+        { modelId: "b", model: "m-b", resolvable: false },
+        { modelId: "c", model: "m-c", resolvable: true },
+        { modelId: "k", model: "m-k", resolvable: true, managed: true },
+    ];
+    const usable = ultraModelUsable(models);
+
+    it("leaves the trio unset, as the server's save check does", () => {
+        expect(isUltraTrioSet(["a", "b", "c"], undefined, usable)).toBe(false);
+        expect(isUltraTrioSet(["a", "k", "c"], undefined, usable)).toBe(false);
+        expect(isUltraTrioSet(["a", "b", "c"])).toBe(true);
+    });
+
+    it("blocks the save, naming why", () => {
+        expect(ultraTrioError(["a", "b", "c"], false, undefined, usable)).toBe(
+            "A model picked for Ultra can no longer run. Reconnect its provider or pick another.",
+        );
     });
 });
