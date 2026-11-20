@@ -10,6 +10,8 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
 import { TeamModule } from '@libs/organization/modules/team.module';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { GithubService } from '@libs/platform/infrastructure/adapters/services/github/github.service';
+import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
+import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { GithubModule } from '@libs/platform/modules/github.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { RUNTIME_RUN_TARGET_STORE_TOKEN } from '@libs/runtime-publish/domain/run-target';
@@ -61,6 +63,7 @@ import { OrganizationModule } from '@libs/organization/modules/organization.modu
 import { ReleaseTrackRuntimeRelease } from './infrastructure/release-track-runtime-release.gate';
 import { RuntimePullRequestTriggerUseCase } from './application/use-cases/pull-request-trigger.use-case';
 import { RuntimeRunRequestBuilder } from './application/run-request-builder.service';
+import { LinkedTasksAdapter } from './infrastructure/linked-tasks.adapter';
 import { RuntimeEnvironmentMembers } from './application/environment-members.service';
 import { EnvironmentRepositoriesUseCase } from './application/use-cases/environment-repositories.use-cases';
 import { ListRuntimeRunsUseCase } from './application/use-cases/list-runs.use-case';
@@ -111,6 +114,7 @@ import {
     RUNTIME_LLM_PROVIDER,
     RUNTIME_LLM_USAGE_STORE,
     RUNTIME_REPO_TOKEN_ISSUER,
+    RUNTIME_LINKED_TASKS,
     RUNTIME_RELEASE_GATE,
     RUNTIME_RUN_PROJECTION_STORE,
     RUNTIME_RUN_STREAM_STORE,
@@ -294,8 +298,11 @@ const useCases = [
         forwardRef(() => GithubModule),
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => McpCoreModule),
     ],
     providers: [
+        // The tasks a PR links, for the intent author: business validation's tracker reads, without its model.
+        { provide: RUNTIME_LINKED_TASKS, useFactory: (mcp: MCPManagerService) => LinkedTasksAdapter.fromMcp(mcp), inject: [MCPManagerService] },
         // Kody Runtime is released by the org's release track (alpha): every entry point asks it.
         { provide: RUNTIME_RELEASE_GATE, useClass: ReleaseTrackRuntimeRelease },
         RuntimePoolController,

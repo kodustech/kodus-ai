@@ -143,6 +143,9 @@ const VERDICT_META: Record<Verdict, Meta> = {
     unverified: { label: "Unverified", tone: "neutral" },
     // A route this PR adds that main does not have: new behavior, not a regression.
     new_endpoint: { label: "New endpoint", tone: "neutral" },
+    // The intent oracle (docs/runtime/intent-oracle.md). Labels only: the screens for it wait on the owner's choice.
+    described_change: { label: "Described change", tone: "neutral" },
+    intent_mismatch: { label: "Not what the PR describes", tone: "alert" },
 };
 
 export const verdictLabel = (v: Verdict | string) =>

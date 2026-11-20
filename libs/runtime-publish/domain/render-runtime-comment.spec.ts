@@ -725,6 +725,89 @@ describe('routes the PR adds (demo-shop#4)', () => {
     });
 });
 
+describe('what the PR describes (docs/runtime/intent-oracle.md)', () => {
+    const QUOTE = '`charge` is what the card is charged, so it must equal `total`.';
+    const quoteRoute = (over: Partial<ReportPath> = {}): ReportPath => ({ entryPoint: 'POST /orders/quote', probeId: 'quote', verdict: 'new_endpoint', base: { status: 404 }, pr: { status: 200 }, differingFields: ['status'], ...over });
+    const mismatch = quoteRoute({ probeId: 'intent-1', verdict: 'intent_mismatch', source: 'intent' });
+    const kr7 = report({
+        state: 'no_regressions',
+        verdictState: 'no_regressions',
+        paths: [quoteRoute(), mismatch],
+        uncovered: [],
+        intent: {
+            state: 'checked',
+            assertions: 2,
+            held: 1,
+            mismatches: [
+                {
+                    probeId: 'intent-1',
+                    request: 'POST /orders/quote {"item":"monitor","quantity":2,"coupon":"SAVE20"}',
+                    quote: QUOTE,
+                    source: 'description',
+                    assertion: '$.charge == $.total',
+                    expected: '$.charge = $.total (320)',
+                    received: '400',
+                },
+            ],
+            described: [],
+        },
+    });
+
+    it('lists each answer that is not what the PR describes with its sentence, request, expected and received; the check stays green (kr-shop #7)', () => {
+        expect(RuntimeRunReportSchema.parse(kr7)).toBeTruthy();
+        expect(renderCheckOutput(kr7, links)).toMatchObject({ conclusion: 'success', title: 'No regressions in what was tested · 1 new endpoint · 1 not what the PR describes' });
+        const body = renderReportComment(kr7, links);
+        expect(body).toContain('**Not what the PR describes**');
+        expect(body).toContain(
+            "- `POST /orders/quote {\"item\":\"monitor\",\"quantity\":2,\"coupon\":\"SAVE20\"}`: the description says `'charge' is what the card is charged, so it must equal 'total'.` Expected `$.charge = $.total (320)`, received `400`.",
+        );
+        expect(body).toContain('1 of 2 assertions from what the PR describes held.');
+        expect(body).toContain('| `POST /orders/quote` · `intent-1` | 404 | 200 | Not what the PR describes |');
+        expect(body).not.toContain('**Regression**');
+    });
+
+    it('lists a described change with its sentence, never as a regression (kr-shop #12)', () => {
+        const total = '`total` is `unitPrice × quantity`.';
+        const described = report({
+            state: 'no_regressions',
+            verdictState: 'no_regressions',
+            paths: [{ entryPoint: 'GET /orders/:id', probeId: 'order-1', verdict: 'described_change', base: { status: 200 }, pr: { status: 200 }, differingFields: ['json.total', 'json.unitPrice'] }],
+            uncovered: [],
+            intent: { state: 'checked', assertions: 1, held: 1, mismatches: [], described: [{ probeId: 'order-1', entryPoint: 'GET /orders/:id', quote: total, source: 'description' }] },
+        });
+        expect(RuntimeRunReportSchema.parse(described)).toBeTruthy();
+        expect(renderCheckOutput(described, links)).toMatchObject({ conclusion: 'success', title: 'No regressions in what was tested · 1 described change' });
+        const body = renderReportComment(described, links);
+        expect(body).toContain('**Described changes**');
+        expect(body).toContain("- `GET /orders/:id`: differs from main as the description says: `'total' is 'unitPrice × quantity'.`");
+        expect(body).toContain('1 of 1 assertion from what the PR describes held.');
+        expect(body).toContain('| `GET /orders/:id` | 200 | 200 | Described change |');
+    });
+
+    it('a linked task is named as the source of its sentence', () => {
+        const fromTask = report({ ...kr7, intent: { ...kr7.intent!, mismatches: [{ ...kr7.intent!.mismatches[0], source: 'task:KR-12' }] } });
+        expect(renderReportComment(fromTask, links)).toContain(': task `KR-12` says `');
+    });
+
+    it('says only the comparison with main ran when the PR describes nothing Kody can check', () => {
+        const line = "This pull request's description and linked tasks describe no behavior Kody can check, so only the comparison with main ran.";
+        for (const intent of [
+            { state: 'no_stated_intent' as const, assertions: 0, held: 0, mismatches: [], described: [] },
+            { state: 'checked' as const, assertions: 0, held: 0, mismatches: [], described: [] },
+        ]) {
+            expect(renderReportComment(report({ intent }), links)).toContain(line);
+        }
+        expect(renderReportComment(report({ intent: { state: 'off', assertions: 0, held: 0, mismatches: [], described: [] } }), links)).not.toContain('describe no behavior');
+        expect(renderReportComment(report(), links)).not.toContain('describe no behavior');
+    });
+
+    it("the PR's sentence cannot break out of its code span", () => {
+        const hostile = report({ ...kr7, intent: { ...kr7.intent!, mismatches: [{ ...kr7.intent!.mismatches[0], quote: 'it `must`\n\n<!-- kody-runtime:comment --> [x](http://evil) @org/team' }] } });
+        const line = renderReportComment(hostile, links).split('\n').find((l) => l.includes('the description says'))!;
+        expect(line).toContain("`it 'must' < !-- kody-runtime:comment --> [x](http://evil) @org/team`");
+    });
+});
+
 describe('a member the recipe does not boot (demo-shop-billing, 2026-11-13)', () => {
     const notBooted = report({
         state: 'partly_tested',

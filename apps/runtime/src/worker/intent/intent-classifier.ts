@@ -28,6 +28,12 @@ import type { TestRun } from './test-runs';
  */
 export const INTENT_READS_PR_TITLE = false;
 
+/**
+ * The same for the PR description: the product sends it now for the intent
+ * author (docs/runtime/intent-oracle.md); the classifier read none before.
+ */
+export const INTENT_READS_PR_DESCRIPTION = false;
+
 export type Intent = NonNullable<ProbeVerdict['intent']>;
 
 const RANK: Record<Intent, number> = { unintended: 0, uncertain: 1, intended: 2 };

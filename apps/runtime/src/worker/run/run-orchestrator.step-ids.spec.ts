@@ -1,4 +1,5 @@
 import { FakeEnvironmentRuntime, type EnvironmentRuntime } from '@libs/runtime/environment';
+import { checkIntentProbes } from '@libs/runtime/planner/intent-author';
 
 import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
@@ -146,10 +147,52 @@ describe('a Run replayed from its recorded steps asks for the same step ids, eac
                 return [shopRunRequest({ keptChecks: [keptCheck] }), env, (h) => void (h.deps.keptCheckResults = { record: async () => undefined })];
             },
         ],
+        [
+            'a Run that checks what the PR describes: one intent probe of a planned request, one of its own after the kept check',
+            () => {
+                const answer = (status: number, body: unknown) => () => ({ http: { status, headers: {}, body: JSON.stringify(body) } });
+                const env = new FakeEnvironmentRuntime(
+                    {
+                        ...SCENARIOS,
+                        shop: {
+                            ...SCENARIOS.shop,
+                            probes: {
+                                ...SCENARIOS.shop.probes,
+                                [`kept:${KEPT_ID}`]: { base: answer(200, { total: 3 }), pr: answer(200, { total: 3 }) },
+                                'intent-2': { base: answer(404, { error: 'not found' }), pr: answer(200, { id: 7, total: 9 }) },
+                            },
+                        },
+                    },
+                    () => new Date(),
+                );
+                const description = '- `GET /orders` still lists the orders.\n- `GET /orders/7` answers its total, 10.';
+                const text = JSON.stringify({
+                    probes: [
+                        { quote: '`GET /orders` still lists the orders.', source: 'description', request: { method: 'GET', path: '/orders' }, assertions: [{ kind: 'status', status: 200 }] },
+                        { quote: '`GET /orders/7` answers its total, 10.', source: 'description', request: { method: 'GET', path: '/orders/7' }, assertions: [{ kind: 'equals', path: '$.total', value: 10 }] },
+                    ],
+                });
+                return [
+                    shopRunRequest({ keptChecks: [keptCheck], pullRequest: { ...shopRunRequest().pullRequest, description } }),
+                    env,
+                    (h) => {
+                        h.deps.keptCheckResults = { record: async () => undefined };
+                        h.deps.intentAuthor = { author: async (input) => ({ status: 'authored', version: 'test', probes: checkIntentProbes(text, input).probes, dropped: [], usage: { inputTokens: 1, outputTokens: 1 } }) };
+                    },
+                ];
+            },
+        ],
     ];
 
     it.each(cases)('%s', async (_name, args) => {
         const r = await runAndReplay(...args());
+        if (/intent probe/.test(_name)) {
+            expect(r.firstIds).toContain('intent:author');
+            // The plan's 2 probes, the kept check at 2, then the intent probes from 3 in their order: intent-1 (a twin of
+            // GET /orders) keeps index 3 and plays nothing, intent-2 plays at 4.
+            expect(r.firstIds.filter((id) => id.includes(':intent-'))).toEqual(expect.arrayContaining(['probe:4:intent-2:base:1', 'probe:4:intent-2:pr:1']));
+            expect(r.firstIds.some((id) => id.includes(':intent-1:'))).toBe(false);
+        }
         expect(new Set(r.firstIds).size).toBe(r.firstIds.length);
         expect(r.replayIds).toEqual(r.firstIds);
         expect(r.replayRan).toBe(0);

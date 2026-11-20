@@ -4,7 +4,7 @@ import { BROWSER_EXPLORE_LIMITS, BrowserExploreRequestSchema, BrowserExploreResu
 import type { EntryPoint } from '@libs/runtime/entry-points/extract';
 import type { AgentClaim } from '@libs/runtime/gate/gate';
 import { CompareFieldSchema, decidesVerdict, type Probe, ProbeSchema } from '@libs/runtime/probe/probe.schema';
-import { type ProbeAssertions, ProbeAssertionsSchema } from './probe-assertions';
+import { type IntentAssertion, type ProbeAssertions, ProbeAssertionsSchema, type StatedIntent } from './probe-assertions';
 
 // POST /internal/runtime/plan (ADR-069): the Run's test planner, an agent on
 // the product's harness with the org's BYOK (ADR-057). It reads the repository
@@ -48,7 +48,14 @@ export interface PlannedProbe {
      * route itself is still covered only by the observer's log (S-32).
      */
     via?: string;
+    /** An intent probe (docs/runtime/intent-oracle.md): the sentence of the PR it comes from. Absent: the planner's probe. */
+    intent?: StatedIntent;
+    /** What that sentence says the PR answers, as closed assertions on the PR side (probe-assertions.ts IntentAssertionSchema). */
+    intentAssertions?: IntentAssertion[];
 }
+
+/** A probe the intent author wrote from the PR's text: never from its code. */
+export type IntentProbe = PlannedProbe & Required<Pick<PlannedProbe, 'intent' | 'intentAssertions'>>;
 
 /**
  * A test of the repository the agent asks to run on base and PR. Its result is

@@ -263,7 +263,7 @@ export class RuntimeMetrics {
 /** The kodus.llm.task of a gateway task (runtime.plan → run_agent, as the usage report names it). */
 export function llmTaskOf(task: string): string {
     if (task === 'runtime.plan') return 'run_agent';
-    if (task === 'runtime.intent') return 'intent';
+    if (task === 'runtime.intent' || task === 'runtime.intent_author') return 'intent';
     if (task === 'runtime.setup_learn') return 'setup_learn';
     if (task === 'runtime.recipe_author') return 'recipe_author';
     return 'other';

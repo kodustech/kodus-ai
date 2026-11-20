@@ -1,4 +1,5 @@
 import { checkClaims, decideNewEndpoint, decideProbe, GateStep, markUnbackedClaims } from './gate';
+import { normalizeFields } from './probe-fields';
 
 const IMAGE = 'ami-0abc';
 
@@ -431,8 +432,34 @@ describe('decideNewEndpoint', () => {
         expect(gate(same)).toEqual(decide(same));
         const oneRound = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '200' })];
         expect(gate(oneRound)).toMatchObject({ kind: 'more_rounds' });
-        // The body differs but the status does not: not an absent route.
+        // The body differs but the status does not: on a route the diff adds, main still has no such route (kr-shop #20, v1e).
         const sameStatus = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '404', json: '"other"' }), prAnswers(2, { status: '404', json: '"other"' })];
-        expect(gate(sameStatus)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        expect(gate(sameStatus)).toMatchObject({ verdict: 'new_endpoint' });
+    });
+});
+
+describe('decideNewEndpoint: a route the diff adds that answers 404 on the PR too (kr-shop #20 on release v1e)', () => {
+    const del = { id: 'delete-missing', origin: 'agent', purpose: 'p', expected: 'e', compare: ['status', 'json'], spec: { kind: 'http', target: { service: 'app', port: 3000 }, method: 'DELETE', path: '/orders/999', timeoutMs: 5_000 } } as any;
+    const EXPRESS_404 = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot DELETE /orders/999</pre>\n</body>\n</html>\n';
+    const fields = (status: number, contentType: string, body: string) => normalizeFields(del, { http: { status, headers: { 'content-type': contentType }, body } } as any);
+    const steps = (prStatus: number, prBody: string) => [
+        step('base', 1, fields(404, 'text/html; charset=utf-8', EXPRESS_404), { readyStatus: 200 }),
+        step('base', 2, fields(404, 'text/html; charset=utf-8', EXPRESS_404), { readyStatus: 200 }),
+        step('pr', 1, fields(prStatus, 'application/json', prBody), { readyStatus: 200 }),
+        step('pr', 2, fields(prStatus, 'application/json', prBody), { readyStatus: 200 }),
+    ];
+
+    it("main's Express 404 page and the PR's JSON 404 for a missing order: new behavior, not a regression", () => {
+        const s = steps(404, '{"error":"not found"}');
+        const d = decide(s);
+        expect(d).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        expect(decideNewEndpoint(d, s, { addedByDiff: true })).toMatchObject({ verdict: 'new_endpoint' });
+    });
+
+    it('a 5xx on the added route stays an error on a new endpoint, and a route the diff does not add stays a regression', () => {
+        const s = steps(500, '{"error":"boom"}');
+        expect(decideNewEndpoint(decide(s), s, { addedByDiff: true })).toMatchObject({ verdict: 'finding', findingKind: 'new_endpoint_error' });
+        const missing = steps(404, '{"error":"not found"}');
+        expect(decideNewEndpoint(decide(missing), missing, { addedByDiff: false })).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
     });
 });

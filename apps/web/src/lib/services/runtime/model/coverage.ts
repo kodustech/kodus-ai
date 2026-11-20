@@ -47,6 +47,7 @@ const UNDECIDED_REASON: Partial<Record<ProbeVerdict["verdict"], string>> = {
     inconclusive: UNCOVERED_REASON.inconclusive,
     blocker: "Something the app needs was missing, so the check could not run.",
     unverified: UNCOVERED_REASON.unverified,
+    intent_mismatch: "The PR's answer is not what its description says; this does not fail the check.",
 };
 
 const reasonLabel = (reason: RunUncovered["reason"], baseLabel: string) =>

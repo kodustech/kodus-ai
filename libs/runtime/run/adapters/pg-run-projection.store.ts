@@ -94,7 +94,8 @@ export class PgRunProjectionStore implements RunProjectionStore {
         const columns = ['run_id', ...split.columns, 'report'];
         const values: unknown[] = [runId, ...split.values, jsonb(split.rest)];
         const placeholders = columns.map((c, i) => (c === 'report' ? `$${i + 1}::jsonb` : `$${i + 1}`));
-        values.push(TERMINAL);
+        // Only a patch with a state reads the terminal list: Postgres refuses a parameter the statement never names.
+        if (split.columns.includes('state')) values.push(TERMINAL);
         const terminal = `$${values.length}::text[]`;
         const updates = [
             ...split.columns.map((c) =>

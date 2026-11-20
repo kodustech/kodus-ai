@@ -39,14 +39,15 @@ export interface RuntimeLlmSpendRow {
  *  - the recipe author (setup): agentName RuntimeRecipeAuthor, task runtime.recipe_author;
  *  - the product's test planner (ADR-069): agentName RuntimeTestPlanner;
  *  - the Run agent in the worker: the gateway's runtime.plan calls and its model turns (runtime.plan.model-turn);
- *  - the finding-intent label (runtime.intent) and the setup's learn loop (runtime.setup_learn).
+ *  - the finding-intent label (runtime.intent) and the setup's learn loop (runtime.setup_learn);
+ *  - the intent author (runtime.intent_author, docs/runtime/intent-oracle.md), counted with intent.
  */
 export function runtimeLlmAgentOf(span: { agentName?: string; task?: string; runName?: string }): RuntimeLlmAgent {
     const { agentName, task, runName } = span;
     if (agentName === 'RuntimeRecipeAuthor' || task === 'runtime.recipe_author' || runName === 'runtime.recipe_author') return 'recipe_author';
     if (agentName === 'RuntimeTestPlanner') return 'planner';
     if (task === 'runtime.setup_learn' || runName === 'runtime.setup_learn') return 'setup_learn';
-    if (task === 'runtime.intent' || runName === 'runtime.intent') return 'intent';
+    if (task === 'runtime.intent' || runName === 'runtime.intent' || task === 'runtime.intent_author' || runName === 'runtime.intent_author') return 'intent';
     if (task === 'runtime.plan' || runName?.startsWith('runtime.plan')) return 'run_agent';
     return 'other';
 }

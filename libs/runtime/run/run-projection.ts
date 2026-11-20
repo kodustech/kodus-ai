@@ -8,7 +8,7 @@ import type { RunBootFailure } from './boot-failure';
 import type { ClaimReadyTiming } from './environment-setup';
 
 import type { RunReproduction } from './reproduction';
-import type { ReportExercised, Uncovered } from './run-report';
+import type { IntentCheckState, ReportExercised, Uncovered } from './run-report';
 import type {
     CheckConclusion,
     ProbeVerdict,
@@ -104,6 +104,12 @@ export interface RuntimeRunProjection {
      * the order played; in `report`. Absent: the Run carried none.
      */
     keptChecks?: KeptCheckOutcome[];
+    /**
+     * What the intent oracle did on this Run (docs/runtime/intent-oracle.md): its
+     * state, the author's version, how many probes it kept and dropped; in `report`.
+     * Absent on Runs before it and on an external finding's.
+     */
+    intentChecks?: { state: IntentCheckState; version?: string; probes: number; dropped: number };
     publishStartedAt?: string;
     published?: string[];
     requestedAt: string;

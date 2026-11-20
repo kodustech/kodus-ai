@@ -7,6 +7,7 @@ import { SCENARIOS } from '../../fake-cell/scenarios';
 import { RecordedLlmGateway, RecordedTurn } from '../agent/llm-gateway';
 import { RuntimeAgent } from '../agent/runtime-agent';
 import { CanaryGuardedLlmGateway, CanaryVault, HmacCanaryVault, isCanaryLeak } from '../canary/canary';
+import { IntentAuthor } from '../intent/intent-author';
 import { IntentClassifier } from '../intent/intent-classifier';
 import shopTurns from '../agent/fixtures/shop-orders.json';
 import type { RunClaims, RunDeps, RunLogEvent } from './ports';
@@ -94,6 +95,7 @@ export function inMemoryRunDeps(opts: { env?: EnvironmentRuntime; turns?: Record
         env,
         agent: new RuntimeAgent(guarded, env),
         intent: new IntentClassifier(guarded, { rethrow: isCanaryLeak }),
+        intentAuthor: new IntentAuthor(guarded, { rethrow: isCanaryLeak }),
         canaries,
         projection,
         events: stream,

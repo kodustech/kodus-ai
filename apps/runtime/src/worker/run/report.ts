@@ -7,7 +7,8 @@ import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
 import type { Observed, ProbeVerdict, ReportBrowserStep, ReportPath, RunState, RuntimeRunReport, RuntimeRunRequested, Uncovered, VerdictState } from '@libs/runtime/run';
 import type { RunBootFailure } from '@libs/runtime/run/boot-failure';
 import { isKeptCheckNotRun, KEPT_CHECK_SOURCE, type KeptCheckOutcome, MAX_KEPT_CHECKS_PER_REPOSITORY } from '@libs/runtime/contracts/kept-check';
-import { BOOT_BLOCKER_CAUSES, type BootBlockerCause } from '@libs/runtime/run/run-report';
+import { BOOT_BLOCKER_CAUSES, type BootBlockerCause, INTENT_PROBE_SOURCE, type ReportIntent } from '@libs/runtime/run/run-report';
+import type { RuntimeRunProjection } from '@libs/runtime/run/run-projection';
 
 // The structured result the product renders into the comment, the replies and
 // the check. Only fields the gate and the replay produced: verdicts,
@@ -121,6 +122,8 @@ export function buildReport(args: {
     keptChecks?: KeptCheckOutcome[];
     /** The request's partlyTestedCheck: the org's choice for a partly tested Run with something left to decide. */
     partlyTestedCheck?: RuntimeRunReport['partlyTestedCheck'];
+    /** The projection's intentChecks: what the intent oracle did (docs/runtime/intent-oracle.md). */
+    intentChecks?: RuntimeRunProjection['intentChecks'];
 }): RuntimeRunReport {
     const paths = args.probes.slice(0, 100).map((p) => ({
         entryPoint: clip(p.entryPoint || 'unknown', 512),
@@ -137,6 +140,7 @@ export function buildReport(args: {
         ...browserFindingOf(p),
         ...(p.suggestionId && SUGGESTION_ID.test(p.suggestionId) ? { suggestionId: p.suggestionId } : {}),
         ...(p.source === KEPT_CHECK_SOURCE && p.keptCheckId ? { source: KEPT_CHECK_SOURCE, keptCheckId: p.keptCheckId } : {}),
+        ...(p.source === INTENT_PROBE_SOURCE ? { source: INTENT_PROBE_SOURCE } : {}),
     }));
     // The projection's own list when the Run wrote one (a boot blocker names its cause there), so the comment and the page agree.
     const uncovered = args.uncoveredDetail?.length ? args.uncoveredDetail.slice(0, 100) : uncoveredOf(args.probes, args.uncovered, args.stoppedEarly);
@@ -167,7 +171,44 @@ export function buildReport(args: {
         ...(args.state === 'nothing_to_test' && args.noRuntimeEffect?.length ? { noRuntimeEffect: args.noRuntimeEffect.slice(0, 20).map((f) => clip(f.file, 512)) } : {}),
         ...(args.partlyTestedCheck ? { partlyTestedCheck: args.partlyTestedCheck } : {}),
         ...prEgressDeniedOf(args.state, args.bootFailure),
+        ...(args.intentChecks ? { intent: intentOf(args.intentChecks.state, args.probes) } : {}),
     };
+}
+
+const INTENT_SOURCE = /^(description|task:\S{1,256})$/;
+const nonEmpty = (s: string | undefined, max: number, fallback: string) => clip(s?.trim() ? s : fallback, max);
+
+/**
+ * The intent oracle on the PR (docs/runtime/intent-oracle.md): each stated
+ * intent that failed (its first failed assertion), the assertions that held
+ * of all checked, and each described change with its sentence.
+ */
+function intentOf(state: ReportIntent['state'], probes: ProbeVerdict[]): ReportIntent {
+    const mismatches: ReportIntent['mismatches'] = [];
+    const described: ReportIntent['described'] = [];
+    let assertions = 0;
+    let held = 0;
+    for (const p of probes) {
+        for (const s of p.statedIntents ?? []) {
+            if (!INTENT_SOURCE.test(s.source)) continue;
+            assertions += s.assertions;
+            held += s.held;
+            const failed = s.failures[0];
+            const base = { probeId: clip(p.probeId || 'probe', 128), quote: nonEmpty(s.quote, 500, 'quoted sentence'), source: s.source };
+            if (failed) {
+                mismatches.push({
+                    ...base,
+                    request: nonEmpty(s.request ?? p.exercised ?? p.entryPoint, 256, 'request'),
+                    assertion: nonEmpty(failed.assertion, 200, 'assertion'),
+                    expected: nonEmpty(failed.expected, 200, 'expected'),
+                    received: nonEmpty(failed.received, 200, 'received'),
+                });
+            } else if (p.verdict === 'described_change') {
+                described.push({ ...base, entryPoint: clip(p.entryPoint || 'unknown', 512) });
+            }
+        }
+    }
+    return { state, assertions: Math.min(assertions, 1_000), held: Math.min(held, 1_000), mismatches: mismatches.slice(0, 20), described: described.slice(0, 20) };
 }
 
 /** A PR boot the egress proxy stopped (bootFailure.deniedHosts): the hosts the check asks to approve. Never on a regression. */

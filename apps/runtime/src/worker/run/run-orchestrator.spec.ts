@@ -781,6 +781,16 @@ describe('runRuntimeRun', () => {
         expect(await deps.claims.forRun(req.organizationId, req.runId)).toEqual([]);
     });
 
+    it('a Run whose workflow failed before it booted ends errored, so the sweep frees its head', async () => {
+        const { deps, projection } = inMemoryRunDeps();
+        const req = shopRunRequest();
+        await seed(projection, req);
+        expect((await projection.get(req.runId))!.state).toBe('queued');
+        const moved = await finalizeStoppedRun(deps, { ...req, headSha: req.pullRequest.headSha }, 'errored', 'workflow failed');
+        expect(moved).toBe(true);
+        expect((await projection.get(req.runId))!.state).toBe('errored');
+    });
+
     it('cancel does nothing once publishing started', async () => {
         const { deps, projection, published } = inMemoryRunDeps();
         const req = shopRunRequest();

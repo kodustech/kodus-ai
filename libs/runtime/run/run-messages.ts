@@ -186,9 +186,24 @@ export const RuntimeRunRequestedSchema = z.strictObject({
          */
         forkApprovalRequired: z.boolean().optional(),
         authorId: z.string().max(128).optional(),
-        /** Untrusted text, read only by the intent classifier (§4). */
+        /** Untrusted text, read as data by the intent classifier (§4) and the intent author (docs/runtime/intent-oracle.md). */
         title: z.string().max(1_024).optional(),
         description: z.string().max(65_536).optional(),
+        /**
+         * The tasks the PR links (GitHub issue, Jira, Linear, Notion, Azure), as the product
+         * resolved them: untrusted text, read only by the intent author (docs/runtime/intent-oracle.md).
+         */
+        linkedTasks: z
+            .array(
+                z.strictObject({
+                    source: z.string().min(1).max(32),
+                    id: z.string().min(1).max(256),
+                    title: z.string().max(1_024).optional(),
+                    body: z.string().max(16_384),
+                }),
+            )
+            .max(3)
+            .optional(),
     }),
     environment: z.strictObject({
         environmentId: id,
@@ -288,6 +303,14 @@ export const RuntimeRunRequestedSchema = z.strictObject({
      * before the product sends it: an older worker's strict schema refuses it.
      */
     partlyTestedCheck: z.enum(PARTLY_TESTED_CHECKS).optional(),
+    /**
+     * The org's intent checks switch when the Run was asked (Runtime settings,
+     * docs/runtime/intent-oracle.md §9): false, the intent author is never
+     * called. Absent: on, the default for an org the Runtime is released to.
+     * Deploy the runtime-worker before the product sends it: an older worker's
+     * strict schema refuses the field.
+     */
+    intentChecks: z.boolean().optional(),
     trigger: z.enum(RUN_TRIGGERS),
     /**
      * The W3C trace the product asked in (the webhook's, the API call's): the

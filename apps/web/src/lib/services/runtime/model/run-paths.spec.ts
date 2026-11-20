@@ -3,10 +3,12 @@ import {
     healthRegressionRun,
     healthRegressionView,
 } from "./__fixtures__/run-detail";
+import { verdictLabel } from "../labels";
 import {
     buildRunPaths,
     checkLabel,
     OUTSIDE_DIFF_MARKER,
+    outcomeOf,
     resultOf,
     shownRouteOf,
 } from "./run-paths";
@@ -261,5 +263,21 @@ describe("checkLabel", () => {
     it("names no check whose id is opaque", () => {
         expect(checkLabel("3f2a9c1e-77b0-4c5e-9a1d-0b6e2f8c4d11")).toBeUndefined();
         expect(checkLabel("1234")).toBeUndefined();
+    });
+});
+
+describe("the intent oracle's verdicts (docs/runtime/intent-oracle.md)", () => {
+    const probe = (verdict: "described_change" | "intent_mismatch") => ({
+        probeId: "intent-1",
+        entryPoint: "GET /orders/:id",
+        verdict,
+        reason: "r",
+    });
+
+    it("reads a described change as a change the PR intends, and an intent mismatch as nothing settled", () => {
+        expect(outcomeOf(probe("described_change"))).toBe("intended");
+        expect(outcomeOf(probe("intent_mismatch"))).toBe("could_not_test");
+        expect(verdictLabel("described_change")).toBe("Described change");
+        expect(verdictLabel("intent_mismatch")).toBe("Not what the PR describes");
     });
 });

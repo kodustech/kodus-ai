@@ -8,7 +8,27 @@ import type { ReportExercised } from '@libs/runtime/run/run-report';
 import type { RuntimeRunProjection } from '@libs/runtime/run/run-projection';
 import { exercisedOf } from '@libs/runtime/probe/exercised';
 import { AcquireRequest, Blocked, Claim, isBlocked, isCapacityWait, readyDeadlineOf } from '@libs/runtime/environment';
-import { baseUnstableFields, browserStepKindsOf, decideIntendedChange, decideNewEndpoint, GateStep, LATEST_IMAGE, markUnbackedClaims, NORMALIZER_VERSION, probeKeyOf, StabilityRecord, stabilityPolicyFor } from '@libs/runtime/gate';
+import {
+    baseUnstableFields,
+    browserStepKindsOf,
+    decideIntendedChange,
+    decideNewEndpoint,
+    decideStatedIntent,
+    GateStep,
+    sameHttpRequest,
+    statedIntentChecksFor,
+    LATEST_IMAGE,
+    markUnbackedClaims,
+    NORMALIZER_VERSION,
+    probeKeyOf,
+    StabilityRecord,
+    stabilityPolicyFor,
+    type StatedIntentCheck,
+    type StatedIntentResult,
+} from '@libs/runtime/gate';
+import type { IntentProbe } from '@libs/runtime/contracts/run-plan';
+import type { Probe } from '@libs/runtime/probe';
+import { hasStatedIntent, type IntentAuthorInput, requestTemplatesOf } from '@libs/runtime/planner/intent-author';
 import {
     canTransition,
     decideRunVerdict,
@@ -41,7 +61,7 @@ import { LlmBudgetExceededError, LlmUnavailableError } from '../agent/llm-gatewa
 import type { AgentPlan } from '../agent/runtime-agent';
 import { Canary, canaryLeakSite, containsCanary, LeakSite, redactCanaries, redactDeep } from '../canary/canary';
 import { acquireWaitingForRoom, capacityWaitReason } from '../env/capacity-wait';
-import { classifyIntents, INTENT_READS_PR_TITLE } from '../intent/intent-classifier';
+import { classifyIntents, INTENT_READS_PR_DESCRIPTION, INTENT_READS_PR_TITLE } from '../intent/intent-classifier';
 import { runPlannedTests, TestRun } from '../intent/test-runs';
 import { buildComment } from './comment';
 import { changesOnlyTheRecipe, memberNotBootedOf, recipeChangedInPr } from './recipe-change';
@@ -539,6 +559,7 @@ export async function publish(
                       coldBuild: current?.coldBuild,
                       exercised: current?.exercised,
                       keptChecks: current?.keptChecks,
+                      intentChecks: current?.intentChecks,
                       partlyTestedCheck: req.partlyTestedCheck,
                   }),
                   canaries,
@@ -782,6 +803,9 @@ interface TestedRun {
     testingAt: number;
     /** What the kept-check phase did with each kept check of the request (kept-checks.ts), in request order. */
     kept: PlayedKeptCheck[];
+    /** The probes the intent author wrote from the PR's text (docs/runtime/intent-oracle.md), and what the oracle did. */
+    intentProbes: IntentProbe[];
+    intentChecks?: NonNullable<RuntimeRunProjection['intentChecks']>;
 }
 
 /** The step 'start' (when the Run left the queue) and the Run's canaries, derived again on every replay. */
@@ -1532,6 +1556,176 @@ async function replayKeptChecks(run: RunScope, ready: ReadySides, t: TestedRun, 
     });
 }
 
+/**
+ * What the intent author reads (docs/runtime/intent-oracle.md §3): the PR's text, the diff's HTTP routes and the
+ * planner's requests to them as templates (their shape only), never the diff's content.
+ */
+function intentAuthorInput(req: RuntimeRunRequested, behavior: EntryPoint[], target: { service: string; port: number }, planned: AgentPlan['probes']): IntentAuthorInput {
+    const routes = new Map<string, boolean>();
+    for (const e of behavior) if (e.kind === 'http_route') routes.set(e.id, (routes.get(e.id) ?? false) || e.added === true);
+    return {
+        ...(req.pullRequest.title ? { title: req.pullRequest.title } : {}),
+        ...(req.pullRequest.description ? { description: req.pullRequest.description } : {}),
+        ...(req.pullRequest.linkedTasks?.length ? { linkedTasks: req.pullRequest.linkedTasks } : {}),
+        entryPoints: [...routes].map(([id, added]) => ({ id, ...(added ? { added } : {}) })),
+        target,
+        ...requestTemplatesIn(planned, [...routes.keys()]),
+    };
+}
+
+const requestTemplatesIn = (planned: AgentPlan['probes'], routes: string[]) => {
+    const requestTemplates = requestTemplatesOf(planned, routes);
+    return requestTemplates.length ? { requestTemplates } : {};
+};
+
+/**
+ * The intent author, after the plan and before the replay, in the step
+ * `intent:author`: probes written from the PR's description and linked tasks.
+ * The org's switch off, no HTTP target, or a PR that states nothing: no step
+ * and no turn. A failed turn leaves the Run with its base comparison only.
+ */
+async function authorIntent(run: RunScope, t: TestedRun, behavior: EntryPoint[]): Promise<void> {
+    const { deps, req, tally } = run;
+    const none = (state: NonNullable<TestedRun['intentChecks']>['state']) => (t.intentChecks = { state, probes: 0, dropped: 0 });
+    const author = deps.intentAuthor;
+    if (req.intentChecks === false || !author) return void none('off');
+    const target = req.environment.expose.find((e) => e.kind === 'http');
+    if (!target) return void none('unavailable');
+    const input = intentAuthorInput(req, behavior, { service: target.service, port: target.port }, t.plan.probes);
+    if (!hasStatedIntent(input)) return void none('no_stated_intent');
+    const out = await run.span('runtime.run.intent_author')(() =>
+        deps.step('intent:author', () => author.author(input, { runId: req.runId, organizationId: req.organizationId, runToken: req.runToken })),
+    );
+    if (out.status !== 'authored') {
+        if (out.status === 'unavailable') deps.log?.warn({ msg: 'run.intent.author_unavailable', runId: req.runId, reason: out.reason });
+        t.intentChecks = { state: out.status === 'unavailable' ? 'unavailable' : 'no_stated_intent', version: out.version, probes: 0, dropped: 0 };
+        return;
+    }
+    addTokens(tally, out.usage);
+    t.intentProbes = out.probes;
+    t.intentChecks = { state: 'checked', version: out.version, probes: out.probes.length, dropped: out.dropped.length };
+    deps.log?.info({ msg: 'run.intent.authored', runId: req.runId, probes: out.probes.length, dropped: out.dropped.length });
+}
+
+/** The request an intent probe sent, as the comment names it: method, path and body, redacted and cut. */
+function intentRequestOf(p: Probe): string {
+    if (p.spec.kind !== 'http') return p.id;
+    const text = `${p.spec.method} ${p.spec.path}${p.spec.body ? ` ${p.spec.body}` : ''}`;
+    const clean = redactPatterns(text).text.replace(/\s+/g, ' ');
+    return clean.length > 256 ? `${clean.slice(0, 255)}…` : clean;
+}
+
+const cleanStatedIntents = (results: StatedIntentResult[], request: string) =>
+    results.map(({ rounds: _rounds, ...r }) => ({
+        ...r,
+        quote: redactPatterns(r.quote).text,
+        request,
+        failures: r.failures.map((f) => ({ assertion: redactPatterns(f.assertion).text, expected: redactPatterns(f.expected).text, received: redactPatterns(f.received).text })),
+    }));
+
+const checkOf = (p: IntentProbe): StatedIntentCheck => ({ probeId: p.probe.id, intent: p.intent, assertions: p.intentAssertions });
+
+/**
+ * The intent probes (docs/runtime/intent-oracle.md), after the plan's probes
+ * and the kept checks. One whose request a planned probe already sent is not
+ * played again: its assertions are read on that probe's PR rounds and may
+ * only explain its difference (a `described_change`), never hide its
+ * regression. Every other one is replayed like a planned probe, at the indexes
+ * after the plan's and the kept checks', with the default stability policy
+ * and never written to the history; a failed assertion makes it an
+ * `intent_mismatch`, which never fails the check.
+ */
+async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun, securityOf: (claimId: string) => Promise<string | undefined>): Promise<void> {
+    const { deps, req, canaries } = run;
+    if (!t.intentProbes.length) return;
+    await phase(deps, req, 'intent_probes', { probes: t.intentProbes.length });
+    const firstIndex = t.plan.probes.length + (req.keptChecks?.length ?? 0);
+    const policy = stabilityPolicyFor([]);
+    for (const [i, ip] of t.intentProbes.entries()) {
+        // A request the plan already sent is read on that probe's rounds (below), not played again.
+        if (t.plan.probes.some((p) => sameHttpRequest(p.probe, ip.probe))) continue;
+        const check = checkOf(ip);
+        const probe = withRunIdentity(ip.probe, ready.base.identity);
+        const replayed = await run.span('runtime.run.replay')(() =>
+            replayProbe({
+                run: { runId: req.runId, attempt: req.attempt },
+                index: firstIndex + i,
+                probe,
+                intent: [check],
+                securityOf,
+                claims: { base: ready.base.claimId, pr: ready.pr.claimId },
+                pinnedImageId: ready.pinnedImageId,
+                rounds: ready.rounds,
+                env: deps.env,
+                step: deps.step,
+                canaries,
+                ...(req.environment.ready ? { ready: req.environment.ready } : {}),
+                ...(deps.evidence ? { evidence: runEvidence(deps, req, 'probe') } : {}),
+                stability: policy,
+            }),
+        );
+        const { steps, lanes, responseDiff } = replayed;
+        t.allSteps.push(...steps);
+        const requestsOf = (side: 'base' | 'pr') => steps.filter((x) => x.side === side).flatMap((x) => x.requests ?? []);
+        const entryPoint = coveredEntryPoint(ip.entryPoint, t.verdictEntryPoints, { base: requestsOf('base'), pr: requestsOf('pr') });
+        const added = decideNewEndpoint(replayed.decision, steps, { addedByDiff: t.entryPoints.some((e) => e.id === entryPoint && e.added === true) });
+        const intended = decideIntendedChange(added, steps, { diff: req.diff, reachableFiles: routeFilesOf(t.entryPoints, entryPoint) });
+        const skewed = skewedByIdentity(intended, ip.probe, ready.identityMismatch);
+        const { decision, statedIntents } = decideStatedIntent(skewed, steps, [check], {
+            mismatch: true,
+            pinnedImageId: ready.pinnedImageId,
+            ...(probe.spec.kind === 'http' && probe.spec.body ? { requestBody: probe.spec.body } : {}),
+        });
+        const intendedChange = decision.intendedChange?.map((c) => ({ ...c, base: redactPatterns(c.base).text, pr: redactPatterns(c.pr).text }));
+        const exercised = exercisedOf(ip.probe.spec);
+        t.verdicts.push({
+            probeId: ip.probe.id,
+            entryPoint,
+            ...(exercised ? { exercised } : {}),
+            verdict: decision.verdict,
+            findingKind: decision.findingKind,
+            intent: decision.verdict === 'finding' ? (intendedChange ? 'intended' : 'unintended') : undefined,
+            reason: intendedChange ? redactPatterns(decision.reason).text : decision.reason,
+            ...(intendedChange ? { intendedChange } : {}),
+            differingFields: decision.differingFields,
+            normalizerVersion: NORMALIZER_VERSION,
+            stabilityPolicy: policy.snapshot,
+            baseStepIds: steps.filter((x) => x.side === 'base').map((x) => x.stepId),
+            prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
+            ...(lanes ? { lanes } : {}),
+            ...(responseDiff ? { responseDiff } : {}),
+            source: 'intent',
+            ...(statedIntents.length ? { statedIntents: cleanStatedIntents(statedIntents, intentRequestOf(ip.probe)) } : {}),
+        });
+        deps.metrics.recordVerdict(decision.verdict, { orgId: req.organizationId });
+    }
+    // The planned probes: the plan's verdicts come first, in plan order. Each gets the checks of an intent probe of
+    // its request, else the rules over response fields of those of its route, which only ever explain (kr-shop #12).
+    for (const [index, planned] of t.plan.probes.entries()) {
+        const v = t.verdicts[index];
+        if (!v || v.probeId !== planned.probe.id) continue;
+        const { checks, explainOnly } = statedIntentChecksFor({ probe: planned.probe, entryPoint: v.entryPoint }, t.intentProbes);
+        if (!checks.length) continue;
+        const ids = new Set([...(v.baseStepIds ?? []), ...(v.prStepIds ?? [])]);
+        const steps = t.allSteps.filter((s) => ids.has(s.stepId));
+        const { decision, statedIntents } = decideStatedIntent(v, steps, checks, {
+            mismatch: false,
+            pinnedImageId: ready.pinnedImageId,
+            ...(planned.probe.spec.kind === 'http' && planned.probe.spec.body ? { requestBody: planned.probe.spec.body } : {}),
+        });
+        const explained = decision.verdict === 'described_change';
+        if (explainOnly && !explained) continue;
+        const { intendedChange: _ic, findingKind: _fk, intent: _in, ...rest } = v;
+        t.verdicts[index] = {
+            ...(explained ? rest : v),
+            verdict: decision.verdict,
+            reason: decision.reason,
+            ...(statedIntents.length ? { statedIntents: cleanStatedIntents(statedIntents, intentRequestOf(planned.probe)) } : {}),
+        };
+        if (explained) deps.metrics.recordVerdict(decision.verdict, { orgId: req.organizationId });
+    }
+}
+
 /** A finding the diff already explains is intended: no classifier turn is spent on it. */
 const needsIntent = (v: ProbeVerdict) => v.verdict === 'finding' && v.intent !== 'intended';
 
@@ -1572,7 +1766,7 @@ async function classifyFindings(run: RunScope, ready: ReadySides, t: TestedRun, 
                     runToken: req.runToken,
                     diff: req.diff.map((d) => ({ path: d.path, patch: d.patch })),
                     title: INTENT_READS_PR_TITLE ? req.pullRequest.title : undefined,
-                    description: req.pullRequest.description,
+                    description: INTENT_READS_PR_DESCRIPTION ? req.pullRequest.description : undefined,
                     tests: t.testRuns,
                 },
                 classifier: deps.intent,
@@ -1608,12 +1802,16 @@ async function testSides(run: RunScope, ready: ReadySides, providedPlan: AgentPl
         classified: verdicts,
         testingAt,
         kept: [],
+        intentProbes: [],
     };
     const securityOf = async (claimId: string) => (await deps.claims.securityViolations(req.organizationId, [claimId]))[0]?.signature;
     try {
         t.plan = await planProbes(run, ready, behavior, providedPlan, securityOf);
+        // An external finding's plan is closed: no intent of the PR's text is checked on it.
+        if (!providedPlan) await authorIntent(run, t, behavior);
         await replayProbes(run, ready, t, behavior, securityOf);
         if (!providedPlan) await replayKeptChecks(run, ready, t, securityOf);
+        await replayIntentProbes(run, ready, t, securityOf);
         await classifyFindings(run, ready, t, providedPlan, securityOf);
     } catch (e) {
         if (e instanceof SecurityViolationError) {
@@ -1717,7 +1915,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
     // probe as sent, secrets and canaries redacted, and the recipe's boot commands.
     const reproduction = reproductionFor({
         findings: verdict.findings,
-        probes: plan.probes.map((p) => p.probe),
+        probes: [...plan.probes, ...t.intentProbes].map((p) => p.probe),
         observed: (f) => ({ ...withObserved('base', observedOf(allSteps, f.baseStepIds)), ...withObserved('pr', observedOf(allSteps, f.prStepIds)) }),
         expose: req.environment.expose,
         recipe: req.environment.recipe,
@@ -1732,6 +1930,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
             verdictState: verdict.verdictState,
             ...(exercised ? { exercised } : {}),
             ...(kept ? { keptChecks: kept } : {}),
+            ...(t.intentChecks ? { intentChecks: t.intentChecks } : {}),
         });
         await deps.events.append(req.organizationId, req.runId, {
             type: 'verdict',
@@ -1741,6 +1940,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
                 findings: verdict.findings.length,
                 intended: verdict.intendedFindings.length,
                 tests: t.testRuns.length,
+                ...(t.intentChecks ? { intent: t.intentChecks.state, describedChanges: verdict.describedChanges?.length ?? 0, intentMismatches: verdict.intentMismatches?.length ?? 0 } : {}),
                 uncovered: verdict.uncoveredEntryPoints,
                 forcedNeutral: verdict.forcedNeutral,
                 unverifiedClaims: unverifiedClaims.length,

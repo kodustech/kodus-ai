@@ -40,17 +40,28 @@ const splitFullName = (name: string) => {
     const i = name.lastIndexOf('/');
     return i > 0 ? { owner: name.slice(0, i), name: name.slice(i + 1) } : { name };
 };
-/** The Run request's bound on the PR title (run-messages.ts pullRequest.title), in UTF-16 units as the schema counts. */
+/** The Run request's bounds on the PR title and description (run-messages.ts pullRequest), in UTF-16 units as the schema counts. */
 const MAX_TITLE = 1_024;
+const MAX_DESCRIPTION = 65_536;
+/** Text cut to a bound on a whole character. */
+const cutTo = (text: string, max: number): string => {
+    let cut = '';
+    for (const ch of text) {
+        if (cut.length + ch.length > max) break;
+        cut += ch;
+    }
+    return cut;
+};
 /** The PR title as the Git API answered it, cut to the request's bound on a whole character; none when it did not answer one. */
 const titleOf = (title: unknown): { title?: string } => {
     if (typeof title !== 'string' || !title) return {};
-    let cut = '';
-    for (const ch of title) {
-        if (cut.length + ch.length > MAX_TITLE) break;
-        cut += ch;
-    }
+    const cut = cutTo(title, MAX_TITLE);
     return cut ? { title: cut } : {};
+};
+/** The PR description as the Git API answered it, cut the same way; none when it answered nothing but whitespace. */
+const descriptionOf = (body: unknown): { description?: string } => {
+    if (typeof body !== 'string' || !body.trim()) return {};
+    return { description: cutTo(body, MAX_DESCRIPTION) };
 };
 const MAX_PATCH = 1_000_000;
 /** A full commit SHA (SHA-1 or SHA-256). */
@@ -108,6 +119,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
             ...(baseBranch.success ? { baseBranch: baseBranch.data } : {}),
             ...(typeof pr.head.ref === 'string' && pr.head.ref.length > 0 && pr.head.ref.length <= 256 ? { headBranch: pr.head.ref } : {}),
             ...titleOf(pr.title),
+            ...descriptionOf((pr as { body?: unknown }).body),
             // Unknown repos count as a fork: approval is the safe side.
             fork: !headRepo || !baseRepo || String(headRepo) !== String(baseRepo),
             authorId: pr.user?.id !== undefined ? String(pr.user.id) : undefined,

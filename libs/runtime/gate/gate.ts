@@ -361,14 +361,16 @@ const baseAnsweredReady = (s: GateStep) => s.readyStatus !== undefined && s.read
  */
 export function decideNewEndpoint<D extends GateDecision>(decision: D, steps: GateStep[], opts: { addedByDiff: boolean }): D {
     if (decision.kind !== 'verdict' || decision.verdict !== 'finding' || decision.findingKind !== 'behavior_change') return decision;
-    if (!opts.addedByDiff || !decision.differingFields.includes('status')) return decision;
+    if (!opts.addedByDiff) return decision;
     const observer = steps.filter((s) => s.executor === 'observer');
     const base = observer.filter((s) => s.side === 'base');
     const pr = observer.filter((s) => s.side === 'pr');
     if (base.length === 0 || pr.length === 0) return decision;
     const absentOnBase = base.every((s) => ROUTE_ABSENT.has(s.fields.status ?? '') && baseAnsweredReady(s));
     const prStatuses = pr.map(statusOf);
-    if (!absentOnBase || prStatuses.some((s) => s === undefined || ROUTE_ABSENT.has(String(s)))) return decision;
+    // A PR that answers 404 or 405 too (a missing order on a route it adds, kr-shop #20) answers in its own words, where
+    // main answers its framework's: main has no such route to compare with.
+    if (!absentOnBase || prStatuses.some((s) => s === undefined)) return decision;
     const mainSays = base[0].fields.status;
     const prSays = [...new Set(prStatuses)].join('/');
     if (prStatuses.some((s) => s! >= 500)) {

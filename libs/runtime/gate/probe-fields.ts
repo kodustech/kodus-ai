@@ -4,6 +4,7 @@ import { httpExpectedHolds, type ProbeAssertions } from '@libs/runtime/contracts
 import type { Probe, ProbeResult } from '@libs/runtime/probe/probe.schema';
 
 import { htmlFields, isHtmlResponse } from './html-fields';
+import { type StatedIntentCheck, statedIntentHolds } from './stated-intent';
 
 // Normalizes an observer result into the compared fields of the gate: the
 // fields the probe asked for in `compare`, plus a floor per kind the agent
@@ -128,8 +129,15 @@ export function normalizeFields(probe: Probe, result: ProbeResult, opts: { basel
     return fields;
 }
 
-/** HTTP assertions are explicit; legacy prose that cannot be demonstrated stays unknown. */
-export function expectedHolds(probe: Probe, result: ProbeResult, assertions?: ProbeAssertions): boolean | undefined {
+/**
+ * HTTP assertions are explicit; legacy prose that cannot be demonstrated stays unknown.
+ * An intent probe expects what the PR says (stated-intent.ts): every assertion it quotes holds.
+ */
+export function expectedHolds(probe: Probe, result: ProbeResult, assertions?: ProbeAssertions, intent?: readonly StatedIntentCheck[]): boolean | undefined {
+    if (probe.spec.kind === 'http' && intent?.length) {
+        const stated = statedIntentHolds(result, intent, probe.spec.body);
+        return assertions && stated !== undefined ? stated && httpExpectedHolds(probe, result, assertions) === true : stated;
+    }
     if (probe.spec.kind === 'http') return httpExpectedHolds(probe, result, assertions);
     // A browser probe's expectation is its steps: every one passed.
     if (probe.spec.kind === 'browser' && result.browser?.steps?.length) return result.browser.steps.every((s) => s.ok);

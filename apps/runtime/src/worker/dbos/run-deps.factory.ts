@@ -21,6 +21,7 @@ import { CanaryGuardedLlmGateway, CanaryVault, HmacCanaryVault, isCanaryLeak } f
 import shopTurns from '../agent/fixtures/shop-orders.json';
 import { HubClient, HubEnvironmentClient } from '../env/hub-environment-runtime';
 import { resetTimeoutMs } from '../env/ready-check';
+import { IntentAuthor } from '../intent/intent-author';
 import { IntentClassifier } from '../intent/intent-classifier';
 import { ClaimLeaseKeeper, type LeaseEvent, type LeaseKeeperOptions } from '../run/lease-keeper';
 import type { ClaimReleaser, PublishRequester, RunClaims, RunDeps, RunEventSink, RunLog } from '../run/ports';
@@ -189,6 +190,7 @@ export class RunDependenciesFactory implements RunDepsFactory {
             env,
             agent: new RuntimeAgent(llm, env, this.deps.planner ? new CanaryGuardedRunPlanClient(this.deps.planner, this.canaries) : undefined),
             intent: new IntentClassifier(llm, { rethrow: isCanaryLeak }),
+            intentAuthor: new IntentAuthor(llm, { rethrow: isCanaryLeak }),
             canaries: this.canaries,
             projection: this.deps.projection,
             events: this.deps.events,

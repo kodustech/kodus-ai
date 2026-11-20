@@ -329,6 +329,28 @@ describe('Runtime messages', () => {
         }
     });
 
+    it("carries the org's intent checks switch as a boolean; absent, the worker checks intent", () => {
+        const runId = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+        const key = Buffer.alloc(32, 7);
+        const req = {
+            runId,
+            attempt: 1,
+            correlationId: 'c',
+            requestedAt: '2026-10-29T12:00:00.000Z',
+            organizationId: 'o',
+            teamId: 't',
+            repository: { id: 'r', name: 'acme/shop' },
+            pullRequest: { number: 1, headSha: 'a'.repeat(40), baseSha: 'b'.repeat(40), fork: false },
+            environment: { environmentId: 'e', imageId: 'i', expose: [] },
+            diff: [],
+            repoToken: sealSecret('ghs_x', key, runId),
+            runToken: sealSecret('krt1.x.y', key, runId),
+            trigger: 'pull_request' as const,
+        };
+        for (const ok of [true, false]) expect(RuntimeRunRequestedSchema.safeParse({ ...req, intentChecks: ok }).success).toBe(true);
+        expect(RuntimeRunRequestedSchema.safeParse({ ...req, intentChecks: 'off' }).success).toBe(false);
+    });
+
     it('refuses an unknown field in RuntimeRunRequested', () => {
         const r = RuntimeRunRequestedSchema.safeParse({ runId: 'x', extra: 1 });
         expect(r.success).toBe(false);
@@ -406,6 +428,54 @@ describe('kept checks in the verdict (docs/runtime/kept-checks.md §6)', () => {
         const v = decideRunVerdict({ entryPoints: ['POST /orders'], probes: [kept('not_reproduced')] });
         expect(v.verdictState).toBe('partly_tested');
         expect(v.uncoveredEntryPoints).toEqual(['POST /orders']);
+    });
+});
+
+describe('the intent oracle in the verdict (docs/runtime/intent-oracle.md)', () => {
+    const said = (failed: boolean) => [
+        {
+            probeId: 'intent-1',
+            quote: '`charge` is what the card is charged, so it must equal `total`.',
+            source: 'description',
+            assertions: 1,
+            held: failed ? 0 : 1,
+            failures: failed ? [{ assertion: '$.charge == $.total', expected: '$.charge = $.total (320)', received: '400' }] : [],
+        },
+    ];
+    const quote = 'POST /orders/quote';
+
+    it('a described change settles its entry point and never fails the check', () => {
+        const described = { probeId: 'order-1', entryPoint: 'GET /orders/:id', verdict: 'described_change' as const, reason: 'as described', statedIntents: said(false) };
+        const v = decideRunVerdict({ entryPoints: ['GET /orders/:id'], probes: [described] });
+        expect(v).toMatchObject({ verdictState: 'no_regressions', findings: [], uncoveredEntryPoints: [] });
+        expect(v.describedChanges?.map((p) => p.probeId)).toEqual(['order-1']);
+        expect(checkConclusionFor(v.verdictState, v)).toEqual({ conclusion: 'success', title: 'No regressions in what was tested · 1 described change' });
+    });
+
+    it('an intent mismatch is advisory: never a finding, never a failure (kr-shop #7)', () => {
+        const added = { probeId: 'quote', entryPoint: quote, verdict: 'new_endpoint' as const, reason: 'main has no such route' };
+        const mismatch = { probeId: 'intent-1', entryPoint: quote, verdict: 'intent_mismatch' as const, reason: 'fails', source: 'intent' as const, statedIntents: said(true) };
+        const v = decideRunVerdict({ entryPoints: [quote], probes: [added, mismatch] });
+        expect(v).toMatchObject({ verdictState: 'no_regressions', findings: [] });
+        expect(v.intentMismatches?.map((p) => p.probeId)).toEqual(['intent-1']);
+        expect(checkConclusionFor(v.verdictState, v)).toEqual({ conclusion: 'success', title: 'No regressions in what was tested · 1 new endpoint · 1 not what the PR describes' });
+    });
+
+    it('an intent mismatch alone settles nothing', () => {
+        const mismatch = { probeId: 'intent-1', entryPoint: quote, verdict: 'intent_mismatch' as const, reason: 'fails', source: 'intent' as const, statedIntents: said(true) };
+        expect(decideRunVerdict({ entryPoints: [quote], probes: [mismatch] })).toMatchObject({ verdictState: 'partly_tested', uncoveredEntryPoints: [quote] });
+    });
+
+    it("a planned regression whose quoted assertion fails stays a regression, and the check counts the mismatch", () => {
+        const regression = { probeId: 'order-1', entryPoint: 'GET /orders/:id', verdict: 'finding' as const, findingKind: 'behavior_change' as const, reason: 'differs', statedIntents: said(true) };
+        const v = decideRunVerdict({ entryPoints: ['GET /orders/:id'], probes: [regression] });
+        expect(v.verdictState).toBe('regression');
+        expect(checkConclusionFor(v.verdictState, v)).toEqual({ conclusion: 'failure', title: '1 regression · 1 not what the PR describes' });
+    });
+
+    it("an intent probe the gate could not decide never holds its entry point back", () => {
+        const undecided = { probeId: 'intent-1', entryPoint: 'GET /orders', verdict: 'inconclusive' as const, reason: 'base varies', source: 'intent' as const };
+        expect(decideRunVerdict({ entryPoints: ['GET /orders'], probes: [nr('GET /orders'), undecided] }).verdictState).toBe('no_regressions');
     });
 });
 

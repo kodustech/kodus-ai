@@ -82,7 +82,7 @@ const database = isolatedDatabase(base ?? '', 'external_stop');
                         [role],
                     );
                     expect(killed.rows).toEqual([{ killed: true }]);
-                    expect(await idleWarning).toEqual({
+                    expect(await idleWarning).toMatchObject({
                         event: 'runtime.read_db.unavailable',
                         reason: 'idle_connection_error',
                     });

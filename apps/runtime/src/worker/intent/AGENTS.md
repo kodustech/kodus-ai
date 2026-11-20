@@ -6,6 +6,7 @@ The Run's intent phase: for each finding the gate produced, whether the change l
 - The classifier: `intent-classifier.ts` `IntentClassifier.classify` (one `runtime.intent` turn through the `LlmGateway`, apart from the agent and without its exploration), the answer held to its contract by `decide` (never `intended`: a model `intended` with a backing test is `uncertain` naming the test), and `downgrade` (unintended → uncertain → intended, never back).
 - Which test a model `intended` may name: `intentEvidence` (a test that existed on base, not added or changed by the PR, ran and passed on both sides, and exercises the finding's entry point). It never clears a finding: the PR's machine runs it and the PR's code decides its exit code, and a pre-existing test passing on both sides is also what a regression the tests do not cover looks like (s1-security-crosscut S1-02). Only the diff (`libs/runtime/gate` `decideIntendedChange`) makes a finding `intended`.
 - Classifying a Run's findings: `classifyIntents`, `INTENT_CONCURRENCY` (4) at a time, one step per finding (`intent:<i>:<probeId>`), started in index order. A finding the diff already explains arrives intended (`libs/runtime/gate` `decideIntendedChange`) and spends no turn.
+- The intent author's turn: `intent-author.ts` `IntentAuthor.author`, one `runtime.intent_author` call through the `LlmGateway` with the prompt and checks of `libs/runtime/planner/intent-author.ts`. It asks for `INTENT_AUTHOR_LIMITS.maxOutputTokens` and asks once more when the answer is not the JSON asked for (both turns counted). No description and no linked task: no call (`no_stated_intent`); an LLM error or a spent budget: `unavailable`, the Run compares with the base only; only `rethrow` stops the Run.
 - Running the tests the planner named: `test-runs.ts` `runPlannedTests` (a command outside the planned-test shape, `libs/runtime/contracts` `plannedTestCommandProblem`, never runs; reset to the side's pinned image or round snapshot, exec with `TEST_TIMEOUT_MS`, exit 0 = pass; one cast grant per side and step, read back for canaries).
 
 ## Does not own
@@ -31,7 +32,7 @@ The Run's intent phase: for each finding the gate produced, whether the change l
 
 ## Module map
 
-Files (2, tests apart): `intent-classifier.ts`, `test-runs.ts`
+Files (3, tests apart): `intent-author.ts`, `intent-classifier.ts`, `test-runs.ts`
 
 Imports these Runtime modules:
 
@@ -41,6 +42,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
+- [`libs/runtime/planner`](../../../../../libs/runtime/planner/AGENTS.md)
 - [`libs/runtime/probe`](../../../../../libs/runtime/probe/AGENTS.md)
 - [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
 

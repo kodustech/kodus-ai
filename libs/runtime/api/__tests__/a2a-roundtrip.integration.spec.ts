@@ -1,3 +1,4 @@
+import { RUNTIME_RELEASE_GATE } from '@libs/runtime/api/domain/ports';
 import { randomUUID } from 'crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -36,6 +37,16 @@ function task(result: Task | unknown): Task {
     return result as Task;
 }
 
+// The agent card answers only where this process runs the Runtime (RUNTIME_ENABLED).
+const savedRuntimeEnabled = process.env.RUNTIME_ENABLED;
+beforeAll(() => {
+    process.env.RUNTIME_ENABLED = 'true';
+});
+afterAll(() => {
+    if (savedRuntimeEnabled === undefined) delete process.env.RUNTIME_ENABLED;
+    else process.env.RUNTIME_ENABLED = savedRuntimeEnabled;
+});
+
 describe('official A2A client → product admission → independent worker replay → task proof', () => {
     let app: INestApplication | undefined;
     afterEach(async () => {
@@ -55,6 +66,8 @@ describe('official A2A client → product admission → independent worker repla
             const module = await Test.createTestingModule({
                 controllers: [RuntimeA2AController],
                 providers: [
+            // The org is released: these tests are about the transport, not the release gate.
+            { provide: RUNTIME_RELEASE_GATE, useValue: { isEnabledFor: async () => true } },
                     {
                         provide: APP_INTERCEPTOR,
                         useClass: TransformInterceptor,

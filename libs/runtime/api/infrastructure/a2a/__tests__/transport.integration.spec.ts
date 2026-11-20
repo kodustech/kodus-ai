@@ -1,3 +1,4 @@
+import { RUNTIME_RELEASE_GATE } from '@libs/runtime/api/domain/ports';
 import { randomUUID } from 'crypto';
 import {
     Controller,
@@ -147,6 +148,8 @@ async function fixture(
     const module = await Test.createTestingModule({
         controllers: [RuntimeA2AController, RestControlController],
         providers: [
+            // The org is released: these tests are about the transport, not the release gate.
+            { provide: RUNTIME_RELEASE_GATE, useValue: { isEnabledFor: async () => true } },
             { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
             RuntimeA2AAdapter,
             RuntimeA2ABearerGuard,
@@ -212,6 +215,16 @@ async function fixture(
     };
     return { app, port, keys, rpc, client, url, close: () => app.close() };
 }
+
+// The agent card answers only where this process runs the Runtime (RUNTIME_ENABLED).
+const savedRuntimeEnabled = process.env.RUNTIME_ENABLED;
+beforeAll(() => {
+    process.env.RUNTIME_ENABLED = 'true';
+});
+afterAll(() => {
+    if (savedRuntimeEnabled === undefined) delete process.env.RUNTIME_ENABLED;
+    else process.env.RUNTIME_ENABLED = savedRuntimeEnabled;
+});
 
 describe('Runtime A2A1.0 real HTTP and official SDK transport', () => {
     let h: Awaited<ReturnType<typeof fixture>> | undefined;

@@ -51,8 +51,16 @@ export const SECURITY_VIOLATION_SIGNATURE = /^[a-z][a-z0-9_]{0,63}$/;
  * absent on main (404 or 405 on every round of a base whose ready check
  * answered) and answered under 500 on the PR. New behavior, not a regression:
  * it settles its entry point and never fails the check (gate decideNewEndpoint).
+ *
+ * The intent oracle (docs/runtime/intent-oracle.md, gate/stated-intent.ts):
+ * `intent_mismatch`, an intent probe whose answer on the PR breaks an
+ * assertion quoted from the PR's text: advisory, never a finding, it settles
+ * nothing and never fails the check; `described_change`, a difference from
+ * main that only touches what passed assertions read, on a PR that did not
+ * answer 5xx: it settles its entry point like `not_reproduced` and never
+ * fails the check.
  */
-export const VERDICTS = ['finding', 'pre_existing', 'not_reproduced', 'inconclusive', 'blocker', 'unverified', 'new_endpoint'] as const;
+export const VERDICTS = ['finding', 'pre_existing', 'not_reproduced', 'inconclusive', 'blocker', 'unverified', 'new_endpoint', 'intent_mismatch', 'described_change'] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
 /** Pixels alone ask a question; they never prove a regression. */

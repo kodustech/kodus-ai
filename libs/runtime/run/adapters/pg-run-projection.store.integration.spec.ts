@@ -93,6 +93,15 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect(await store.get(run.runId, { organizationId: org() })).toBeNull();
     });
 
+    it('a write without a state keeps the state and sets its fields (the start step writes only startedAt)', async () => {
+        const o = org();
+        const run = queued(o, 'env-a');
+        await run.write();
+        await store.upsert(run.runId, { startedAt: '2026-11-18T19:47:07.000Z' });
+
+        expect(await store.get(run.runId, { organizationId: o })).toMatchObject({ state: 'queued', startedAt: '2026-11-18T19:47:07.000Z' });
+    });
+
     it("lists an org's Runs newest first, by repository, environment, trigger and time, never another org's", async () => {
         const o = org();
         const at = (min: number) => new Date(Date.UTC(2026, 10, 12, 10, min)).toISOString();

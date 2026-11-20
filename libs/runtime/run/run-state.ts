@@ -51,7 +51,8 @@ export const TERMINAL_STATES: ReadonlySet<RunState> = new Set([
 const TRANSITIONS: Record<RunState, RunState[]> = {
     // partly_tested straight from the queue: a PR that changes only the recipe the Run replaces boots nothing (S-19).
     // nothing_to_test straight from the queue: a PR whose every change is a comment, layout or documentation.
-    queued: ['skipped', 'awaiting_approval', 'booting', 'partly_tested', 'nothing_to_test', 'timed_out', 'superseded', 'cancelled'],
+    // errored straight from the queue: a workflow that failed before it booted, or never started (the sweep).
+    queued: ['skipped', 'awaiting_approval', 'booting', 'partly_tested', 'nothing_to_test', 'errored', 'timed_out', 'superseded', 'cancelled'],
     awaiting_approval: ['queued', 'cancelled', 'superseded', 'timed_out'],
     booting: ['could_not_boot', 'regression', 'partly_tested', 'testing', 'errored', 'superseded', 'cancelled', 'timed_out', 'halted'],
     testing: [
@@ -97,6 +98,27 @@ export function assertTransition(from: RunState, to: RunState): void {
 }
 
 export type CheckConclusion = SharedCheckConclusion;
+
+/**
+ * What one intent probe's assertions did on a probe's PR rounds
+ * (gate/stated-intent.ts, docs/runtime/intent-oracle.md): the sentence of the
+ * PR they quote, how many held, and each one that failed with what it
+ * expected and received (values cut and redacted).
+ */
+export interface ProbeStatedIntent {
+    /** The intent probe that carries the assertions. */
+    probeId: string;
+    quote: string;
+    /** `description` or `task:<id>`. */
+    source: string;
+    /** The intent probe's request as sent (`POST /orders/quote {"item":…}`), redacted and cut. */
+    request?: string;
+    assertions: number;
+    held: number;
+    /** Assertions no round could evaluate: neither held nor failed. Absent on Runs before it. */
+    inconclusive?: number;
+    failures: Array<{ assertion: string; expected: string; received: string }>;
+}
 
 /** Verdict of one probe, with the entry point it covers (ADR-044 coverage). */
 export interface ProbeVerdict {
@@ -162,12 +184,20 @@ export interface ProbeVerdict {
     intendedChange?: Array<{ field: string; base: string; pr: string; file: string; line: number }>;
     /**
      * Where the probe came from when it is not the Run's plan: a kept check
-     * (docs/runtime/kept-checks.md), played on base and PR through the same gate.
-     * Absent: the planner's (or an external finding's) probe.
+     * (docs/runtime/kept-checks.md), played on base and PR through the same gate,
+     * or an intent probe the intent author wrote from the PR's text
+     * (docs/runtime/intent-oracle.md). Absent: the planner's (or an external finding's) probe.
      */
-    source?: 'kept_check';
+    source?: 'kept_check' | 'intent';
     /** The kept check this probe played, with `source: 'kept_check'`. */
     keptCheckId?: string;
+    /**
+     * The PR's stated intent checked on this probe's PR rounds: an intent
+     * probe's own, or, on a planned probe, those of an intent probe of the
+     * same request. A failure never fails the check; all held may make the
+     * difference a `described_change`.
+     */
+    statedIntents?: ProbeStatedIntent[];
 }
 
 export interface VerdictInput {
@@ -213,6 +243,10 @@ export interface VerdictOutcome {
     intendedFindings: ProbeVerdict[];
     /** Routes the PR adds that main does not have, answered on the PR: informational, never a finding. */
     newEndpoints: ProbeVerdict[];
+    /** Differences from main the PR's text describes and that held (docs/runtime/intent-oracle.md): never a finding. */
+    describedChanges?: ProbeVerdict[];
+    /** Probes whose answer on the PR breaks an assertion quoted from the PR's text: advisory, never a failure on their own. */
+    intentMismatches?: ProbeVerdict[];
     uncoveredEntryPoints: string[];
     forcedNeutral: string[];
     /** A partly tested Run with nothing to test: no entry point of the diff and no probe. Its check stays neutral. */
@@ -221,9 +255,16 @@ export interface VerdictOutcome {
     actionRequired?: string[];
 }
 
-const DECIDED_WITHOUT_FINDING: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'pre_existing', 'new_endpoint']);
-/** What settles an entry point: the same result on both sides, or a route the PR adds that main does not have. */
-const SETTLES: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'new_endpoint']);
+const DECIDED_WITHOUT_FINDING: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'pre_existing', 'new_endpoint', 'described_change', 'intent_mismatch']);
+/**
+ * What settles an entry point: the same result on both sides, a route the PR
+ * adds that main does not have, or a difference the PR describes that held.
+ * An intent mismatch settles nothing.
+ */
+const SETTLES: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'new_endpoint', 'described_change']);
+
+/** A probe whose answer on the PR breaks an assertion quoted from the PR's text. */
+export const breaksStatedIntent = (p: Pick<ProbeVerdict, 'statedIntents'>) => !!p.statedIntents?.some((s) => s.failures.length > 0);
 
 /**
  * The verdict table of §3: regression > partly_tested > no_regressions.
@@ -240,7 +281,8 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     const intended = findings.filter((p) => p.intent === 'intended');
 
     const settled = new Set(input.probes.filter((p) => SETTLES.has(p.verdict)).map((p) => p.entryPoint));
-    const undecided = new Set(input.probes.filter((p) => p.verdict !== 'finding' && !DECIDED_WITHOUT_FINDING.has(p.verdict)).map((p) => p.entryPoint));
+    // An intent probe the gate could not decide holds nothing back: the oracle is advisory until measured.
+    const undecided = new Set(input.probes.filter((p) => p.verdict !== 'finding' && !DECIDED_WITHOUT_FINDING.has(p.verdict) && p.source !== 'intent').map((p) => p.entryPoint));
     const uncovered = input.entryPoints.filter(
         (e) => !findings.some((f) => f.entryPoint === e) && (!settled.has(e) || undecided.has(e)),
     );
@@ -281,6 +323,8 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
         findings: unintended,
         intendedFindings: intended,
         newEndpoints,
+        describedChanges: input.probes.filter((p) => p.verdict === 'described_change'),
+        intentMismatches: input.probes.filter(breaksStatedIntent),
         uncoveredEntryPoints: uncovered,
         forcedNeutral,
         ...(nothingToTest ? { nothingToTest: true as const } : {}),
@@ -300,7 +344,8 @@ export interface CheckOutcome {
 }
 
 type VerdictForCheck =
-    | (Pick<VerdictOutcome, 'verdictState' | 'findings' | 'intendedFindings' | 'forcedNeutral'> & Partial<Pick<VerdictOutcome, 'newEndpoints' | 'nothingToTest' | 'actionRequired'>>)
+    | (Pick<VerdictOutcome, 'verdictState' | 'findings' | 'intendedFindings' | 'forcedNeutral'> &
+          Partial<Pick<VerdictOutcome, 'newEndpoints' | 'describedChanges' | 'intentMismatches' | 'nothingToTest' | 'actionRequired'>>)
     | { verdictState: 'could_not_boot' };
 
 export interface CheckOptions {
@@ -379,7 +424,13 @@ export function checkConclusionFor(state: RunState, verdict?: VerdictForCheck, r
         if (v.verdictState === 'could_not_boot') return { conclusion: 'neutral', title: 'Could not boot' };
         if (v.verdictState === 'nothing_to_test') return { conclusion: 'neutral', title: NOTHING_TO_TEST_TITLE };
         const held = v.forcedNeutral.length > 0 || !!v.actionRequired?.length;
-        const added = v.newEndpoints?.length ? ` · ${count(v.newEndpoints.length, 'new endpoint')}` : '';
+        const added = [
+            ...(v.newEndpoints?.length ? [count(v.newEndpoints.length, 'new endpoint')] : []),
+            ...(v.describedChanges?.length ? [count(v.describedChanges.length, 'described change')] : []),
+            ...(v.intentMismatches?.length ? [`${v.intentMismatches.length} not what the PR describes`] : []),
+        ]
+            .map((part) => ` · ${part}`)
+            .join('');
         if (v.verdictState === 'regression') {
             return { conclusion: 'failure', title: `${findingsTitle(v.findings)}${added}${suffix(v)}` };
         }

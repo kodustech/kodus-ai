@@ -75,6 +75,8 @@ export const outcomeOf = (p: ProbeVerdict): RunPathOutcome => {
             : "regression";
     }
     if (p.verdict === "new_endpoint") return "new_endpoint";
+    // A difference the PR's own text describes and that held: the PR's intended change.
+    if (p.verdict === "described_change") return "intended";
     if (p.verdict === "not_reproduced") return "same";
     if (p.verdict === "pre_existing") return "pre_existing";
     return "could_not_test";

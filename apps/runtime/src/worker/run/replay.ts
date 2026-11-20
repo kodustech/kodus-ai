@@ -1,4 +1,4 @@
-import { decideProbe, GateDecision, GateStep, StabilityPolicy } from '@libs/runtime/gate';
+import { decideProbe, GateDecision, GateStep, StabilityPolicy, type StatedIntentCheck } from '@libs/runtime/gate';
 import { EnvironmentRuntime, isEnvError } from '@libs/runtime/environment';
 import type { ProbeOutcome } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
@@ -73,6 +73,8 @@ export interface ReplayArgs {
     index: number;
     probe: Probe;
     assertions?: ProbeAssertions;
+    /** An intent probe's quoted assertions: what each round expects (gate/stated-intent.ts). */
+    intent?: StatedIntentCheck[];
     securityOf?: (claimId: string) => Promise<string | undefined>;
     claims: { base: string; pr: string };
     pinnedImageId: string;
@@ -112,7 +114,7 @@ export interface ReplayArgs {
 }
 
 /** What a round needs from the replay's arguments. */
-type RoundArgs = Pick<ReplayArgs, 'run' | 'index' | 'probe' | 'assertions' | 'securityOf' | 'claims' | 'pinnedImageId' | 'rounds' | 'env' | 'canaries' | 'evidence' | 'ready' | 'now' | 'sleep'>;
+type RoundArgs = Pick<ReplayArgs, 'run' | 'index' | 'probe' | 'assertions' | 'intent' | 'securityOf' | 'claims' | 'pinnedImageId' | 'rounds' | 'env' | 'canaries' | 'evidence' | 'ready' | 'now' | 'sleep'>;
 
 /** The step name of one round: the same whether the replay or playFirstBaseRound plays it, so its stepId and evidence are the same. */
 const roundName = (args: Pick<RoundArgs, 'index' | 'probe'>, side: 'base' | 'pr', round: number) => `probe:${args.index}:${args.probe.id}:${side}:${round}`;
@@ -180,7 +182,7 @@ async function playRoundBody(args: RoundArgs, side: 'base' | 'pr', round: number
     }
     // The first healthy base round of a browser probe is the baseline: its screenshots are `same` by definition.
     const isBaseline = browser && side === 'base' && !knownBaseline && !('code' in result) && result.transport === 'ok' && (result.vmHealth ?? 'ok') === 'ok' && !!result.browser?.steps?.length;
-    const gate = toGateStep({ probe, assertions: args.assertions, side, round, stepId: 'stepId' in result ? result.stepId : stepId, result, baselineRound: isBaseline, readyStatus });
+    const gate = toGateStep({ probe, assertions: args.assertions, intent: args.intent, side, round, stepId: 'stepId' in result ? result.stepId : stepId, result, baselineRound: isBaseline, readyStatus });
     // Inside the step: a resumed workflow does not write it twice. Only the redacted result, never a canary;
     // a round without one says why, so the Run page never links to nothing.
     if (args.evidence) {

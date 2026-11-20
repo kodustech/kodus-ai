@@ -2,7 +2,7 @@ import { TRACEPARENT } from '@libs/runtime/contracts/trace-context';
 import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 import { randomUUID } from 'crypto';
 
-import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
 
 import { RepositoryFullNameSchema } from '@libs/runtime/contracts/workspace';
 import { type KeptCheck, KeptCheckSchema, MAX_KEPT_CHECKS_PER_REPOSITORY } from '@libs/runtime/contracts/kept-check';
@@ -21,17 +21,20 @@ import {
     RUNTIME_ENVIRONMENT_READER,
     RUNTIME_GIT_PORT,
     RUNTIME_KEPT_CHECK_STORE,
+    RUNTIME_LINKED_TASKS,
     RUNTIME_REPO_TOKEN_ISSUER,
     RUNTIME_SETTINGS_STORE,
     type Clock,
     type EnvironmentRepository,
     type KeptCheckStore,
+    type LinkedTask,
     type ProductEnvironment,
     type PullRequestDiff,
     type PullRequestHead,
     type RuntimeApiConfig,
     type RuntimeEnvironmentReader,
     type RuntimeGitPort,
+    type RuntimeLinkedTasksReader,
     type RuntimeRepoTokenIssuer,
     type RuntimeSettingsStore,
 } from '../domain/ports';
@@ -61,6 +64,9 @@ export function diffForRun(diff: PullRequestDiff): Pick<RuntimeRunRequested, 'di
  * sealed for this Run, and the environment the setup recorded. The PR
  * trigger, "Run again" and "Try it" share it.
  */
+/** How long the linked tasks may take to read before the Run goes without them. */
+const LINKED_TASKS_BUDGET_MS = 15_000;
+
 @Injectable()
 export class RuntimeRunRequestBuilder {
     private readonly logger = createLogger(RuntimeRunRequestBuilder.name);
@@ -85,7 +91,39 @@ export class RuntimeRunRequestBuilder {
         // Required by Nest; a builder made without it (the older tests) sends no kept checks.
         @Inject(RUNTIME_KEPT_CHECK_STORE)
         private readonly keptChecks?: Pick<KeptCheckStore, 'listActive'>,
+        // Optional: a builder made without it sends no linked tasks.
+        @Optional()
+        @Inject(RUNTIME_LINKED_TASKS)
+        private readonly linkedTasks?: RuntimeLinkedTasksReader,
     ) {}
+
+    /** The tasks the PR links, within a budget: a slow or failing tracker never holds up the Run, it only leaves them out. */
+    private async linkedTasksOf(input: { organizationId: string; teamId: string; repositoryName: string; head: PullRequestHead }): Promise<{ linkedTasks?: LinkedTask[] }> {
+        if (!this.linkedTasks) return {};
+        const { head } = input;
+        let timer: NodeJS.Timeout | undefined;
+        try {
+            const tasks = await Promise.race([
+                this.linkedTasks.read({
+                    organizationId: input.organizationId,
+                    teamId: input.teamId,
+                    repositoryName: input.repositoryName,
+                    ...(head.title ? { title: head.title } : {}),
+                    ...(head.headBranch ? { headBranch: head.headBranch } : {}),
+                    ...(head.description ? { description: head.description } : {}),
+                }),
+                new Promise<LinkedTask[]>((resolve) => {
+                    timer = setTimeout(() => resolve([]), LINKED_TASKS_BUDGET_MS);
+                }),
+            ]);
+            return tasks.length ? { linkedTasks: tasks.slice(0, 3) } : {};
+        } catch (error) {
+            this.logger.warn({ message: 'Runtime: the linked tasks could not be read; the Run goes without them', error, metadata: { organizationId: input.organizationId } });
+            return {};
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
 
     async build(input: {
         /** The environment (its primary repository is `repositoryId`). */
@@ -131,6 +169,7 @@ export class RuntimeRunRequestBuilder {
         // Every commit is pinned before any token is minted: a repository Kodus cannot read stops the Run with nothing issued.
         const pins = members.length > 1 ? await this.pinWorkspace({ ...orgTeam, members, own: own.repositoryId, head, pinned: input.workspace }) : undefined;
         const tokens = await this.mintTokens({ ...orgTeam, ...repo, runId, attempt, prNumber, fork: head.fork });
+        const linked = await this.linkedTasksOf({ ...orgTeam, repositoryName: repo.repositoryName, head });
         const workspace = pins ? await this.sealWorkspace({ ...orgTeam, pins, runId }) : undefined;
         const ownMember = members.find((m) => m.repositoryId === own.repositoryId);
         const fullName =
@@ -163,6 +202,9 @@ export class RuntimeRunRequestBuilder {
                 ...(head.authorId ? { authorId: head.authorId } : {}),
                 // Untrusted: the intent classifier reads it as data, and the Run keeps one clean line of it for display.
                 ...(head.title ? { title: head.title } : {}),
+                // Untrusted: the intent author reads it as data, to write the checks of what the PR says it does.
+                ...(head.description ? { description: head.description } : {}),
+                ...linked,
             },
             environment: {
                 environmentId: env.environmentId,

@@ -17,8 +17,10 @@ export interface LlmRequest {
     runToken: string;
     /** What the sealed token is bound to when it is not the Run: a setup's learn loop seals it to the setup key. */
     sealedFor?: string;
-    task: 'runtime.plan' | 'runtime.intent' | 'runtime.setup_learn';
+    task: 'runtime.plan' | 'runtime.intent' | 'runtime.intent_author' | 'runtime.setup_learn';
     messages: LlmMessage[];
+    /** This turn's output budget, over the gateway's default; the product lowers it to what the Run's budget has left. */
+    maxOutputTokens?: number;
 }
 
 export interface LlmResponse {

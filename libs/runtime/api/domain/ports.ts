@@ -213,6 +213,8 @@ export interface PullRequestHead {
     headBranch?: string;
     /** The PR's title as the Git API answers it: the author's untrusted text, at most the Run request's 1024. */
     title?: string;
+    /** The PR's description as the Git API answers it: the author's untrusted text, at most the Run request's 65,536. */
+    description?: string;
     fork: boolean;
     authorId?: string;
     authorLogin?: string;
@@ -224,6 +226,23 @@ export interface PullRequestHead {
     /** Live labels; undefined when the platform has none or did not answer. */
     labels?: string[];
 }
+
+/** A task the PR links, as a connected tracker returned it: the author's or the team's untrusted text. */
+export interface LinkedTask {
+    source: string;
+    id: string;
+    title?: string;
+    body: string;
+}
+
+/**
+ * The tasks a PR links (the reference in its title, branch or description) that
+ * a connected tracker confirms. It reads, never searches, and never calls a model.
+ */
+export interface RuntimeLinkedTasksReader {
+    read(input: OrgTeam & { repositoryName: string; title?: string; headBranch?: string; description?: string }): Promise<LinkedTask[]>;
+}
+export const RUNTIME_LINKED_TASKS = Symbol.for('RuntimeApi.LinkedTasks');
 
 /**
  * An open pull request as a platform's listing gives it. `updatedAt` is the

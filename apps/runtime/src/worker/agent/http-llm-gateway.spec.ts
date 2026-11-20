@@ -33,6 +33,12 @@ describe('HttpLlmGateway', () => {
         expect(metrics.recordLlmTokens).toHaveBeenCalledWith({ inputTokens: 10, outputTokens: 5 }, { orgId: 'org-1', task: 'runtime.intent' });
     });
 
+    it("a turn's own output budget wins over the gateway's default", async () => {
+        const f = fakeFetch(200, { text: '{}', usage: { inputTokens: 1, outputTokens: 1 } });
+        await new HttpLlmGateway('http://api.test/', { secrets, fetch: f.fn, maxOutputTokens: 900 }).complete({ ...req, task: 'runtime.intent_author', maxOutputTokens: 16_000 });
+        expect(JSON.parse(f.calls[0].init.body).maxOutputTokens).toBe(16_000);
+    });
+
     it('maps 429 llm_budget_exceeded to LlmBudgetExceededError', async () => {
         const f = fakeFetch(429, { code: 'llm_budget_exceeded', scope: 'run' });
         await expect(new HttpLlmGateway('http://api.test', { secrets, fetch: f.fn }).complete(req)).rejects.toBeInstanceOf(LlmBudgetExceededError);

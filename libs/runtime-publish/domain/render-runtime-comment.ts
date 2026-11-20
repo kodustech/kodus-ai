@@ -143,6 +143,30 @@ export function codeExcerpt(value: string): string {
     return `\`${flat.slice(0, head)}…${flat.slice(flat.length - (MAX_CODE - 1 - head))}\``;
 }
 
+/** The longest sentence of the PR the comment quotes. */
+const MAX_QUOTE = 300;
+
+/**
+ * A sentence of the PR's own text (an intent assertion's quote, checked as a
+ * substring of its source) as an inline code span: one line, its backticks
+ * as quotes, bidi and zero-width characters gone, an HTML comment opener
+ * broken, cut at the end.
+ */
+function quoteSpan(value: string): string {
+    const flat = value
+        .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+        .replace(/<!--/g, '< !--')
+        .replace(/`/g, "'")
+        .replace(/[\r\n\t]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const cut = flat.length > MAX_QUOTE ? `${flat.slice(0, MAX_QUOTE - 1)}…` : flat;
+    return `\`${cut || ' '}\``;
+}
+
+/** Where a quoted sentence comes from, as the reader knows it. */
+const sourceWords = (source: string) => (source.startsWith('task:') ? `task ${code(source.slice('task:'.length))}` : 'the description');
+
 /** A code span inside a table row: a pipe would end the cell. */
 const cell = (value: string) => code(value).replace(/\|/g, '\\|');
 
@@ -427,6 +451,10 @@ const INTENDED_BY_TEXT: Record<NonNullable<ReportPath['intendedBy']>, string> = 
 };
 /** A route the PR adds, absent on main and answered on the PR: new behavior, informational. */
 const isNewEndpoint = (p: ReportPath) => p.verdict === 'new_endpoint';
+/** A difference from main the PR's text describes and that held (docs/runtime/intent-oracle.md): never a regression. */
+const isDescribedChange = (p: ReportPath) => p.verdict === 'described_change';
+/** The probes whose answer breaks a sentence of the PR, one each: what the check title counts. */
+const intentMismatchesOf = (report: RuntimeRunReport) => [...new Set((report.intent?.mismatches ?? []).map((m) => m.probeId))].map((probeId) => ({ probeId }));
 
 /** The check of the §3 table, computed by the product from the structured fields. */
 export function checkOf(report: RuntimeRunReport): CheckOutcome {
@@ -450,6 +478,8 @@ export function checkOf(report: RuntimeRunReport): CheckOutcome {
                     findings: findings as any[],
                     intendedFindings: intended as any[],
                     newEndpoints: report.paths.filter(isNewEndpoint) as any[],
+                    describedChanges: report.paths.filter(isDescribedChange) as any[],
+                    intentMismatches: intentMismatchesOf(report) as any[],
                     forcedNeutral,
                 }
               : undefined;
@@ -591,6 +621,10 @@ const resultLabel = (p: ReportPath) => {
     switch (p.verdict) {
         case 'new_endpoint':
             return 'New endpoint';
+        case 'described_change':
+            return 'Described change';
+        case 'intent_mismatch':
+            return 'Not what the PR describes';
         case 'not_reproduced':
             return 'Same on main and PR';
         case 'pre_existing':
@@ -911,6 +945,8 @@ export function renderReportComment(
         ));
     }
 
+    lines.push(...intentLines(report));
+
     const blocked = couldNotTest(report, links);
     if (blocked.length) lines.push('', '**Could not test**', '', ...blocked);
 
@@ -953,6 +989,36 @@ export function renderReportComment(
     if (offersPreview(report, links, ran)) lines.push('', previewLine(links.preview));
     lines.push('', '---', footer(report, links));
     return lines.join('\n');
+}
+
+/**
+ * The intent oracle's part of the comment (docs/runtime/intent-oracle.md):
+ * each answer that is not what the PR describes, with the sentence, the
+ * request and what was expected and received; each described change with its
+ * sentence; how many assertions held; and, when the PR states nothing Kody
+ * can check, that only the comparison with main ran. Nothing when the org
+ * turned it off or the author could not run.
+ */
+function intentLines(report: RuntimeRunReport): string[] {
+    const intent = report.intent;
+    if (!intent || intent.state === 'off' || intent.state === 'unavailable') return [];
+    const lines: string[] = [];
+    if (intent.mismatches.length) {
+        lines.push('', '**Not what the PR describes**', '');
+        for (const m of intent.mismatches) {
+            lines.push(`- ${code(m.request)}: ${sourceWords(m.source)} says ${quoteSpan(m.quote)} Expected ${code(m.expected)}, received ${code(m.received)}.`);
+        }
+    }
+    if (intent.described.length) {
+        lines.push('', '**Described changes**', '');
+        for (const d of intent.described) lines.push(`- ${code(d.entryPoint)}: differs from main as ${sourceWords(d.source)} says: ${quoteSpan(d.quote)}`);
+    }
+    if (intent.assertions > 0) {
+        lines.push('', `${intent.held} of ${plural(intent.assertions, 'assertion')} from what the PR describes held.`);
+    } else {
+        lines.push('', "This pull request's description and linked tasks describe no behavior Kody can check, so only the comparison with main ran.");
+    }
+    return lines;
 }
 
 /**

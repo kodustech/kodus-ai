@@ -64,6 +64,50 @@ export type ReportBrowserStep = z.infer<typeof ReportBrowserStepSchema>;
 
 export const INTENDED_BY = ['diff', 'test'] as const;
 
+/** The verdict source of a probe the intent author wrote (ProbeVerdict.source). */
+export const INTENT_PROBE_SOURCE = 'intent' as const;
+
+/**
+ * What the intent oracle did on a Run (docs/runtime/intent-oracle.md):
+ * `checked`, the intent author read the PR's text (its probes, possibly none,
+ * ran); `no_stated_intent`, the PR has no description and links no task, so
+ * only the base comparison ran; `off`, the org turned it off; `unavailable`,
+ * the author's turn failed.
+ */
+export const INTENT_CHECK_STATES = ['checked', 'no_stated_intent', 'off', 'unavailable'] as const;
+export type IntentCheckState = (typeof INTENT_CHECK_STATES)[number];
+
+const intentText = (max: number) => z.string().min(1).max(max);
+const intentSource = z.string().regex(/^(description|task:\S{1,256})$/);
+
+/**
+ * The intent oracle on the PR: each answer that breaks an assertion quoted
+ * from the PR's text (the sentence, the request, what it expected and
+ * received, values cut and redacted), how many assertions held, and each
+ * difference the PR describes. The quote is the PR author's text, validated
+ * as a substring of its source; the product renders every field as untrusted.
+ */
+export const ReportIntentSchema = z.strictObject({
+    state: z.enum(INTENT_CHECK_STATES),
+    assertions: z.number().int().min(0).max(1_000),
+    held: z.number().int().min(0).max(1_000),
+    mismatches: z
+        .array(
+            z.strictObject({
+                probeId: z.string().min(1).max(128),
+                request: intentText(256),
+                quote: intentText(500),
+                source: intentSource,
+                assertion: intentText(200),
+                expected: intentText(200),
+                received: intentText(200),
+            }),
+        )
+        .max(20),
+    described: z.array(z.strictObject({ probeId: z.string().min(1).max(128), entryPoint: label, quote: intentText(500), source: intentSource })).max(20),
+});
+export type ReportIntent = z.infer<typeof ReportIntentSchema>;
+
 /** One tested path: an entry point of the diff, the probe that exercised it and what each side did. */
 export const ReportPathSchema = z.strictObject({
     entryPoint: label,
@@ -86,8 +130,8 @@ export const ReportPathSchema = z.strictObject({
     pixelDiffPercent: z.number().min(0).max(100).optional(),
     /** Product id of the review suggestion this path reproduces; the product resolves its comment. */
     suggestionId: z.string().min(1).max(128).optional(),
-    /** A kept check played this path (docs/runtime/kept-checks.md); absent: the Run's plan. */
-    source: z.literal(KEPT_CHECK_SOURCE).optional(),
+    /** A kept check (docs/runtime/kept-checks.md) or an intent probe (docs/runtime/intent-oracle.md) played this path; absent: the Run's plan. */
+    source: z.enum([KEPT_CHECK_SOURCE, INTENT_PROBE_SOURCE]).optional(),
     keptCheckId: z.uuid().optional(),
 });
 export type ReportPath = z.infer<typeof ReportPathSchema>;
@@ -224,6 +268,8 @@ export const RuntimeRunReportSchema = z.strictObject({
      * whatever the org chose: approve the host, then run again.
      */
     prEgressDenied: z.strictObject({ hosts: z.array(z.string().min(1).max(253)).min(1).max(5) }).optional(),
+    /** The intent oracle (docs/runtime/intent-oracle.md); absent on Runs before it, an external finding's or a simulation's. */
+    intent: ReportIntentSchema.optional(),
 });
 export type RuntimeRunReport = z.infer<typeof RuntimeRunReportSchema>;
 

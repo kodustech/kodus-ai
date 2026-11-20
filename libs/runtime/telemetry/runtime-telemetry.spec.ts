@@ -93,8 +93,10 @@ describe('runtime telemetry', () => {
         const { m, points } = await harness();
         m.recordLlmTokens({ inputTokens: 1200, outputTokens: 300 }, { orgId: 'o1', task: 'runtime.plan' });
         m.recordLlmTokens({ inputTokens: 50, outputTokens: 0 }, { orgId: 'o1', task: 'runtime.intent' });
+        m.recordLlmTokens({ inputTokens: 900, outputTokens: 0 }, { orgId: 'o1', task: 'runtime.intent_author' });
         const byKey = Object.fromEntries((await points(METRIC.llmTokens)).map((p) => [`${p.labels['kodus.llm.task']}/${p.labels['gen_ai.token.type']}`, p.value]));
-        expect(byKey).toEqual({ 'run_agent/input': 1200, 'run_agent/output': 300, 'intent/input': 50 });
+        // The intent author counts with intent: the label's values are a closed set shared with the cell (catalog.ts LLM_TASKS).
+        expect(byKey).toEqual({ 'run_agent/input': 1200, 'run_agent/output': 300, 'intent/input': 950 });
     });
 
     it('counts evidence the worker could not write by kind only', async () => {

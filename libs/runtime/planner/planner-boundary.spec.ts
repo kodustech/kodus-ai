@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 
-const coreFiles = ['index.ts', 'test-planner.agent.ts', 'code-search.ts', 'file-window.ts', 'plan-without-model.ts', 'repo-reader.ts', 'import-graph/reach.ts', 'import-graph/resolve.ts', 'import-graph/routes.ts'];
+const coreFiles = ['index.ts', 'test-planner.agent.ts', 'intent-author.ts', 'code-search.ts', 'file-window.ts', 'plan-without-model.ts', 'repo-reader.ts', 'import-graph/reach.ts', 'import-graph/resolve.ts', 'import-graph/routes.ts'];
 
 describe('planner core dependency boundary', () => {
     it('is available independently of the product API and model credentials', () => {
@@ -23,5 +23,11 @@ describe('planner core dependency boundary', () => {
             const forbidden = imports.filter(path => /(?:^|\/)api(?:\/|$)|recipe-author|git-repo|byok|@libs\/llm|@nestjs|(?:node:)?(?:fs(?:\/promises)?|child_process)$/.test(path));
             expect({ file, forbidden }).toEqual({ file, forbidden: [] });
         }
+    });
+
+    it('the intent author reads no repository, search, file window or diff: its expected values never come from the code', () => {
+        const tree = ts.createSourceFile('intent-author.ts', readFileSync(join(__dirname, 'intent-author.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+        const imports = tree.statements.filter(ts.isImportDeclaration).map((d) => (d.moduleSpecifier as ts.StringLiteral).text);
+        expect(imports.filter((p) => /repo-reader|code-search|file-window|import-graph|entry-points\/extract|test-planner/.test(p))).toEqual([]);
     });
 });

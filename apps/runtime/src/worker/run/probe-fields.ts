@@ -1,4 +1,4 @@
-import type { GateStep } from '@libs/runtime/gate';
+import type { GateStep, StatedIntentCheck } from '@libs/runtime/gate';
 import { expectedHolds, normalizeFields } from '@libs/runtime/gate/probe-fields';
 import type { EnvError, ProbeOutcome } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
@@ -11,6 +11,8 @@ import type { ProbeAssertions } from '@libs/runtime/contracts/probe-assertions';
 export function toGateStep(args: {
     probe: Probe;
     assertions?: ProbeAssertions;
+    /** An intent probe's quoted assertions: its expectation (gate/stated-intent.ts). */
+    intent?: readonly StatedIntentCheck[];
     side: 'base' | 'pr';
     round: number;
     stepId: string;
@@ -48,7 +50,7 @@ export function toGateStep(args: {
         vmHealth: result.vmHealth ?? 'ok',
         timedOut: false,
         fields: normalizeFields(probe, result, { baselineRound: args.baselineRound }),
-        expectedHolds: expectedHolds(probe, result, args.assertions),
+        expectedHolds: expectedHolds(probe, result, args.assertions, args.intent),
         requests: (result.requests ?? []).map((r) => ({ method: r.method, route: r.route })),
         ...(args.readyStatus !== undefined ? { readyStatus: args.readyStatus } : {}),
     };

@@ -49,6 +49,7 @@ Imported by:
 - [`libs/runtime/contracts`](../contracts/AGENTS.md)
 - [`libs/runtime/environment`](../environment/AGENTS.md)
 - [`libs/runtime/gate`](../gate/AGENTS.md)
+- [`libs/runtime/planner`](../planner/AGENTS.md)
 - [`libs/runtime/protocol`](../protocol/AGENTS.md)
 - [`libs/runtime/protocol/scripts`](../protocol/scripts/AGENTS.md)
 - [`libs/runtime/run`](../run/AGENTS.md)

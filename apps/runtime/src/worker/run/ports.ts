@@ -8,6 +8,7 @@ import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { RuntimeAgent } from '../agent/runtime-agent';
 import type { CanaryVault } from '../canary/canary';
+import type { StatedIntentAuthor } from '../intent/intent-author';
 import type { FindingIntentClassifier } from '../intent/intent-classifier';
 import type { EvidenceUploads } from './run-evidence';
 
@@ -144,6 +145,11 @@ export interface RunDeps {
     agent: RuntimeAgent;
     /** Runs apart from the agent, without its exploration context (§4). */
     intent: FindingIntentClassifier;
+    /**
+     * Writes intent probes from the PR's text (docs/runtime/intent-oracle.md), never from its code;
+     * absent: no intent probe, the Run compares with the base only.
+     */
+    intentAuthor?: StatedIntentAuthor;
     /**
      * The Run's canaries (ADR-043): every claim.acquire hands them to the cell, which plants them
      * in the workload (claim.acquire canaries), and every boundary is checked for them.

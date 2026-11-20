@@ -57,7 +57,7 @@ export class HttpLlmGateway implements LlmGateway {
                     runId: req.runId,
                     task: req.task,
                     messages: req.messages,
-                    ...(this.opts.maxOutputTokens ? { maxOutputTokens: this.opts.maxOutputTokens } : {}),
+                    ...((req.maxOutputTokens ?? this.opts.maxOutputTokens) ? { maxOutputTokens: req.maxOutputTokens ?? this.opts.maxOutputTokens } : {}),
                 },
                 { timeoutMs: this.opts.timeoutMs ?? 300_000, connectRetryDelaysMs: this.opts.connectRetryDelaysMs, sleep: this.opts.sleep },
             );
