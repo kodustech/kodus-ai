@@ -26,6 +26,8 @@ export interface StatedIntentCheck {
     probeId: string;
     intent: StatedIntent;
     assertions: IntentAssertion[];
+    /** Written for another request of the route (`statedIntentChecksFor`): it may explain this one, never flag it. */
+    lent?: boolean;
 }
 
 /** What one intent probe's assertions did on the PR side's rounds. */
@@ -264,7 +266,12 @@ export function decideStatedIntent<D extends VerdictLike>(
     const rounds = prRounds(steps, opts.pinnedImageId);
     if (!rounds.length || !checks.length) return { decision, statedIntents: [] };
     const answers = rounds.map((s) => intentAnswerOfFields(s.fields, opts.requestBody));
-    const statedIntents = checks.map((c) => evaluate(c, answers));
+    // A lent rule that does not hold here is about its own example's value ("9 keyboards: total = subtotal",
+    // kr-shop #16): it says nothing of this request, so it neither flags nor explains.
+    const evaluated = checks.map((c) => ({ c, r: evaluate(c, answers) })).filter(({ c, r }) => !c.lent || (r.failures.length === 0 && r.inconclusive === 0));
+    if (!evaluated.length) return { decision, statedIntents: [] };
+    const kept = evaluated.map(({ c }) => c);
+    const statedIntents = evaluated.map(({ r }) => r);
     const pr5xx = rounds.some((s) => Number(s.fields.status) >= 500);
     const { findingKind: _kind, intendedChange: _intended, ...rest } = decision;
     if (statedIntents.some((r) => r.failures.length)) {
@@ -275,9 +282,9 @@ export function decideStatedIntent<D extends VerdictLike>(
     const differing = decision.differingFields ?? [];
     // An assertion no round could evaluate explains nothing.
     const allHeld = statedIntents.every((r) => r.inconclusive === 0);
-    const reordered = reorderedAsStated(differing, steps, rounds, checks);
+    const reordered = reorderedAsStated(differing, steps, rounds, kept);
     const notReordered = differing.filter((f) => !reordered.includes(f));
-    const explains = differing.length > 0 && (notReordered.length === 0 || readsEveryDifference(notReordered, checks));
+    const explains = differing.length > 0 && (notReordered.length === 0 || readsEveryDifference(notReordered, kept));
     if (decision.verdict === 'finding' && decision.findingKind === 'behavior_change' && !pr5xx && allHeld && explains) {
         return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };
     }
@@ -363,6 +370,6 @@ function routeRulesFor(planned: { probe: Probe; entryPoint: string }, intents: r
     const lendStatus = statuses.size === 1;
     return onRoute
         .filter((ip) => !twins.includes(ip))
-        .map((ip) => checkOf(ip, ip.intentAssertions.filter((a) => isRouteInvariant(a) || (lendStatus && a.kind === 'status' && sameShape.includes(ip)))))
+        .map((ip) => ({ ...checkOf(ip, ip.intentAssertions.filter((a) => isRouteInvariant(a) || (lendStatus && a.kind === 'status' && sameShape.includes(ip)))), lent: true }))
         .filter((c) => c.assertions.length > 0);
 }

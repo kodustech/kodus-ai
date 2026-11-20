@@ -274,7 +274,7 @@ describe('statedIntentChecksFor: which intent checks a planned probe gets', () =
 
     it('another request of the same method and route: only the rules over response fields, to explain and never to flag', () => {
         expect(statedIntentChecksFor({ probe: probe('order-2', 'GET', '/orders/2'), entryPoint: 'GET /orders/:id' }, intents)).toEqual({
-            checks: [{ probeId: 'intent-1', intent: intents[0].intent, assertions: [assertion(rule)] }],
+            checks: [{ probeId: 'intent-1', intent: intents[0].intent, assertions: [assertion(rule)], lent: true }],
             explainOnly: true,
         });
     });
@@ -459,5 +459,26 @@ describe('a list the PR reorders as its text says (kr-shop #40 on release v1f)',
         expect(verdictOf([keyboard, monitor], [{ ...monitor, quantity: 9 }, keyboard], check({ kind: 'equals', path: '$[0].id', value: 2 }, { kind: 'equals', path: '$[1].id', value: 1 }))).toBe('finding');
         expect(verdictOf([keyboard, monitor, mouse], [monitor, keyboard, mouse], check({ kind: 'equals', path: '$[0].id', value: 2 }, { kind: 'equals', path: '$[1].id', value: 1 }))).toBe('finding');
         expect(verdictOf([keyboard, monitor, mouse], [monitor, keyboard], byPosition)).toBe('finding');
+    });
+});
+
+describe("a rule lent from another value's example never flags (kr-shop #16 on release v1h)", () => {
+    const own = {
+        probe: probe('intent-2', 'POST', '/orders/bulk-quote', { item: 'keyboard', quantity: 10 }),
+        intent: { quote: '10 keyboards → subtotal 500, discount 25, total 475.', source: 'description' as const },
+        intentAssertions: [assertion({ kind: 'equals', path: '$.total', value: 475 })],
+    };
+    const nine = {
+        probe: probe('intent-3', 'POST', '/orders/bulk-quote', { item: 'keyboard', quantity: 9 }),
+        intent: { quote: '9 keyboards → subtotal 450, no discount, total 450.', source: 'description' as const },
+        intentAssertions: [assertion({ kind: 'sameAs', path: '$.total', other: '$.subtotal' })],
+    };
+
+    it("the 9-keyboard example's total == subtotal fails on 10 keyboards and is no mismatch there", () => {
+        const planned = probe('bulk-discount', 'POST', '/orders/bulk-quote', { item: 'keyboard', quantity: 10 });
+        const { checks } = statedIntentChecksFor({ probe: planned, entryPoint: 'POST /orders/bulk-quote' }, [own, nine]);
+        const { decision, steps } = replay(planned, { status: 404, body: { error: 'not found' } }, { status: 200, body: { item: 'keyboard', quantity: 10, subtotal: 500, discount: 25, total: 475 } }, { added: true });
+        const out = decideStatedIntent(decision, steps, checks, { mismatch: false, pinnedImageId: IMAGE });
+        expect(out.statedIntents.map((r) => [r.probeId, r.failures.length])).toEqual([['intent-2', 0]]);
     });
 });
