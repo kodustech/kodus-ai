@@ -8,6 +8,7 @@ import { ConnectionString } from 'connection-string';
 import mongoose from 'mongoose';
 
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
+import { mongoAppName } from '@libs/core/infrastructure/database/mongo/mongo-app-name';
 
 import { MongooseConnectionFactory } from './mongoose-connection.factory';
 
@@ -87,6 +88,7 @@ export class MongooseFactory implements MongooseOptionsFactory {
             minPoolSize: poolConfig.min,
             maxPoolSize: poolConfig.max,
             maxIdleTimeMS,
+            appName: mongoAppName(),
         };
     }
 }
