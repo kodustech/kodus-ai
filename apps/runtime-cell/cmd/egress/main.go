@@ -194,14 +194,7 @@ func start(ctx context.Context, g *lifecycle.Group, log *slog.Logger, d *dataPla
 		if err != nil {
 			return fmt.Errorf("mirror-public-url: %w", err)
 		}
-		ofClaim := func(r *http.Request) bool {
-			host, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil {
-				return false
-			}
-			_, ok := d.store.ForSource(net.ParseIP(host))
-			return ok
-		}
+		ofClaim := func(r *http.Request) bool { return servesClaim(d.store, r) }
 		if f.npmUpstream != "" {
 			reg, err := url.Parse(f.npmUpstream)
 			if err != nil {
@@ -283,4 +276,16 @@ func mirrorPublicURL(flagValue, listen string) (*url.URL, error) {
 		return nil, err
 	}
 	return url.Parse("http://" + net.JoinHostPort(policy.MirrorHost, port))
+}
+
+// servesClaim reports whether the request comes from a claim of this cell the
+// mirror may read for: not a sealed one, whose egress is closed (the mirror's
+// npm and PyPI read-through would otherwise stay a way out).
+func servesClaim(store *policy.Store, r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	pol, ok := store.ForSource(net.ParseIP(host))
+	return ok && !pol.Sealed
 }

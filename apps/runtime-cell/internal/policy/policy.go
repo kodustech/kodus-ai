@@ -82,11 +82,17 @@ type ClaimPolicy struct {
 	// builder whose RUN steps trust the cell CA is an inspect source too: its
 	// TLS to an inspected host or a secret's goes through the injector. G1:
 	// a Dockerfile RUN npm publish is refused either way (build.go).
-	BuildSources     []string  `json:"buildSources,omitempty"`
-	BuildPassthrough []string  `json:"buildPassthrough,omitempty"`
-	Phase            Phase     `json:"phase"`
-	ExpiresAt        time.Time `json:"expiresAt"`
-	IssuedAt         time.Time `json:"issuedAt"`
+	BuildSources     []string `json:"buildSources,omitempty"`
+	BuildPassthrough []string `json:"buildPassthrough,omitempty"`
+	// Sealed: the claim's egress is closed for good (a sandbox whose checkout
+	// is prepared). The policy only says who the claim is: the resolver
+	// refuses every name, the proxy every connection and the mirror every
+	// request, and validate refuses a sealed policy that still names a host,
+	// a pin, a secret or the app.
+	Sealed    bool      `json:"sealed,omitempty"`
+	Phase     Phase     `json:"phase"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	IssuedAt  time.Time `json:"issuedAt"`
 }
 
 // PinsImage reports whether the claim may pull repo at ref from the mirror:
@@ -187,8 +193,11 @@ type Spec struct {
 	// RUN steps trust the cell CA, so its sources are inspect sources too.
 	BuildSources, BuildPassthrough []string
 	BuildTrusted                   bool
-	ExpiresAt                      time.Time
-	IssuedAt                       time.Time
+	// Sealed closes the claim's egress: every list above is ignored and the
+	// policy keeps only the claim's identity, sources and steering address.
+	Sealed    bool
+	ExpiresAt time.Time
+	IssuedAt  time.Time
 }
 
 // Build is the claim's policy, least privilege: a host Denied refuses never
@@ -197,6 +206,18 @@ type Spec struct {
 // report; the claim runs without them. Denied is the platform's deny list
 // (netguard.DenyList.Denies); nil denies nothing.
 func Build(spec Spec, denied func(host string) bool) (ClaimPolicy, []string, error) {
+	if spec.Sealed {
+		// Nothing a list, an approval, a pin or a secret says reaches a sealed
+		// claim: it is built from who it is alone.
+		p := ClaimPolicy{
+			ClaimID: spec.ClaimID, OrgID: spec.OrgID, EnvironmentID: spec.EnvironmentID, Phase: spec.Phase, Sources: spec.Sources,
+			Allow: []string{}, SteerTo: spec.SteerTo, Sealed: true, ExpiresAt: spec.ExpiresAt, IssuedAt: spec.IssuedAt,
+		}
+		if err := p.validate(); err != nil {
+			return ClaimPolicy{}, nil, err
+		}
+		return p, nil, nil
+	}
 	allow, err := MergeAllow(spec.Base, spec.Extra)
 	if err != nil {
 		return ClaimPolicy{}, nil, err
@@ -271,6 +292,10 @@ func (p ClaimPolicy) validate() error {
 		if ip := net.ParseIP(p.SteerTo); ip == nil || ip.To4() == nil || ip.To4().String() != p.SteerTo {
 			return fmt.Errorf("policy: steer address %q is not a canonical IPv4 address", p.SteerTo)
 		}
+	}
+	if p.Sealed && (len(p.Allow) > 0 || len(p.CredentialHosts) > 0 || len(p.Inspected) > 0 || len(p.InspectSources) > 0 || len(p.BuildSources) > 0 || len(p.BuildPassthrough) > 0 ||
+		len(p.GoPins) > 0 || len(p.ImagePins) > 0 || len(p.Secrets) > 0 || p.AppAddress != "") {
+		return errors.New("policy: a sealed policy names nothing to reach")
 	}
 	for _, h := range p.CredentialHosts {
 		if !p.Allows(h) {

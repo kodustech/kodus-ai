@@ -162,3 +162,22 @@ func TestResolverAnswersTheMirrorWithTheSteerAddress(t *testing.T) {
 		t.Fatalf("%v %v", r, err)
 	}
 }
+
+// A sealed claim's DNS fails for every name, the cell's own included: the
+// mirror and the app are reachable names only for a claim that is not sealed.
+func TestResolverRefusesEveryNameOfASealedClaim(t *testing.T) {
+	store := policy.NewStore(nil)
+	_ = store.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
+		Allow: []string{"github.com"}, AppAddress: "10.0.3.10", SteerTo: "10.213.5.2", Sealed: true, ExpiresAt: time.Now().Add(time.Hour),
+	})
+	addr := start(t, &Server{Policies: store, Upstream: ForwardTo("127.0.0.1:1"), Log: NewQueryLog(10)})
+	for _, name := range []string{"github.com", "mirror.cell.internal", "app.kody.internal", "registry.npmjs.org"} {
+		m := new(dns.Msg)
+		m.SetQuestion(dns.Fqdn(name), dns.TypeA)
+		r, _, err := (&dns.Client{Timeout: 2 * time.Second}).Exchange(m, addr)
+		if err != nil || len(r.Answer) != 0 || r.Rcode == dns.RcodeSuccess {
+			t.Errorf("%s: answered %v %v", name, r, err)
+		}
+	}
+}

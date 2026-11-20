@@ -285,7 +285,7 @@ func (p *Proxy) recheck(c *liveConn) string {
 // source, its host, its route (routesAsBefore), the builder's tier, and for
 // plain HTTP the inspected rule on its one request.
 func (p *Proxy) refuses(pol policy.ClaimPolicy, c *liveConn) bool {
-	if !slices.Contains(pol.Sources, c.source) || pol.FromBuild(c.source) != c.build {
+	if pol.Sealed || !slices.Contains(pol.Sources, c.source) || pol.FromBuild(c.source) != c.build {
 		return true
 	}
 	if !pol.Allows(c.host) || p.Deny.Denies(c.host) || !routesAsBefore(pol, c) || pol.BuildRefuses(c.source, c.host, c.tls) != "" {
@@ -563,10 +563,14 @@ func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode boo
 	forwardOneRequest(req.http, client, upstream)
 }
 
-// checkName decides on the name alone: present, a host name (not an IP),
+// checkName decides on the name alone: not sealed, present, a host name (not an IP),
 // not on the deny list, on the claim's allowlist, and, for a credentialed
 // host, reached over TLS so the injector can take it.
 func (p *Proxy) checkName(pol policy.ClaimPolicy, req request, readErr error, tlsMode bool) (string, string) {
+	if pol.Sealed {
+		// Before the name and the list: a sealed claim's egress is closed.
+		return "", "sealed"
+	}
 	if readErr != nil || req.host == "" {
 		return "", "no_host"
 	}

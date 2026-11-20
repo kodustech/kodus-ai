@@ -312,6 +312,11 @@ func (s *Server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		s.Logger.Warn("resolver.rate_limited", "claim", pol.ClaimID, "source", src.String())
 		return
 	}
+	if pol.Sealed {
+		// A sealed claim resolves nothing, not even the cell's own names.
+		resp.Rcode = dns.RcodeRefused
+		return
+	}
 	if name == policy.AppHost {
 		if q.Qtype == dns.TypeA && pol.AppAddress != "" {
 			if ip := net.ParseIP(pol.AppAddress).To4(); ip != nil {
