@@ -9,6 +9,7 @@ import {
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CustomAgentCliProvisioning,
+    planRuntimeCliInstalls,
     provisionCustomAgentClis,
 } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import {
@@ -175,6 +176,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     checkoutSha: cloneInfo.checkoutSha,
                     unifiedDiff: cliContext?.cliRawDiff,
                     sandboxMetadata: { stage: 'review' },
+                    // Only the Kody Runtime sandbox uses it: it installs these
+                    // before its egress seal (it has no root and no network after).
+                    ...(isCliMode ? {} : this.runtimeCliInstalls(context)),
                     organizationId:
                         context.organizationAndTeamData?.organizationId,
                     teamId: context.organizationAndTeamData?.teamId,
@@ -339,9 +343,25 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         }
     }
 
+    private runtimeCliInstalls(context: CodeReviewPipelineContext) {
+        const cliInstalls = planRuntimeCliInstalls({
+            agents: context.codeReviewConfig?.customAgents,
+            onlyCustomAgent: context.onlyCustomAgent,
+            riskAssessment: context.riskAssessment,
+            changedFiles: (context.changedFiles ?? [])
+                .map((file) => file?.filename)
+                .filter(Boolean),
+            ignoredFiles: (context.ignoredFileChanges ?? [])
+                .filter((file) => file?.status !== 'removed')
+                .map((file) => file?.filename)
+                .filter(Boolean),
+        });
+        return cliInstalls.length ? { cliInstalls } : {};
+    }
+
     /**
      * Install the team CLIs of the custom agents that will run (#2172), before
-     * any agent or secret touches the sandbox. Only E2B installs them; on the
+     * any agent or secret touches the sandbox. E2B installs them as root here, the Kody Runtime before its seal; on the
      * local sandbox the review gets a warning per CLI instead. A failure here
      * never fails the review.
      */

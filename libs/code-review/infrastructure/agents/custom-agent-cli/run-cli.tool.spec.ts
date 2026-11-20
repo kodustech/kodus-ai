@@ -309,3 +309,39 @@ describe('runCli execute', () => {
         expect((opts as { timeoutMs?: number })?.timeoutMs).toBe(45_000);
     });
 });
+
+describe('runCli on the runtime sandbox', () => {
+    it('runs the prefix binary as the sandbox user in the repo, with no root and no secrets', async () => {
+        const home = '/workspace/.kcli/kcliabc';
+        const run = jest.fn(async () => ({
+            stdout: 'ok',
+            stderr: '',
+            exitCode: 0,
+        }));
+        const sb = {
+            type: 'runtime',
+            repoDir: '/workspace/repo',
+            run,
+        } as unknown as SandboxInstance;
+        const entry = {
+            ...installed(cliConfig({ allowedDomains: [], secrets: [] })),
+            home,
+            binaryPath: `${home}/.local/bin/lintkit`,
+        } as InstalledCustomAgentCli;
+        const tools = buildRunCliTool({
+            sandbox: sb,
+            installed: [entry],
+            decrypt,
+        } as any);
+        const out = await tools[RUN_CLI_TOOL_NAME].execute({
+            cli: 'lintkit',
+            args: ['check', '--format', 'json'],
+        });
+        expect(out).toContain('ok');
+        const [command, opts] = run.mock.calls[0] as unknown as [string, any];
+        expect(opts.asRoot).toBeUndefined();
+        expect(command).toContain('/workspace/repo');
+        expect(command).toContain(`${home}/.local/bin/lintkit`);
+        expect(command).not.toContain('sudo');
+    });
+});

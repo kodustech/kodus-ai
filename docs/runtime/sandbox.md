@@ -256,11 +256,27 @@ Left for later:
 - Step 1 on a real cell: the egress allow-list end to end (a host off the list refused), latency under runsc.
 - Reuse of one sandbox across the review's passes (the lease manager's joiner path is E2B-only; a runtime sandbox
   joiner gets no sandbox, as a local one does today).
-- Custom-agent CLIs on the runtime sandbox: a root channel or a per-CLI user made at image build.
+- Custom-agent CLIs that need the network or a secret when they run (see "Custom-agent CLIs" below).
 - The pool's size is not per org.
 - A secret during a build (`RUN npm install` from a private registry): build steps get no secret yet.
 - The review provider does not open its sandbox with `secrets: true`; a custom agent that needs one will.
 - Steps 3–5 of the table above.
+
+### Custom-agent CLIs (`tools.cli`) on the runtime sandbox
+
+- **What runs.** A CLI whose install is a pinned npm, pnpm, pip, pipx or uv command, with no `allowedDomains` and no
+  secrets. It installs as the sandbox user into `/workspace/.kcli/<id>` (npm prefix, pip user base) during
+  `createSandboxWithRepo`, after the checkout and before `seal`. The sandbox is opened with `egressAllow` = git host +
+  the registry hosts of those installers (`registry.npmjs.org`; `pypi.org`, `files.pythonhosted.org`), so those hosts are
+  reachable only until the seal. After it the CLI runs sealed, as the sandbox user, in the repo, with a clean env. No root
+  channel is used, so the E2B-only gates are lifted for type `runtime`.
+- **What does not.** A CLI that calls an API or holds a secret at run time: a sealed sandbox has no network. Such a CLI
+  gets a `CLI_INSTALL_FAILED` warning that says so. Go and cargo installs are refused on this path (no toolchain, more hosts).
+- **Trade-off, option not built.** A sandbox opened per agent with the CLI's API host allowed, unsealed, and the
+  credential as a `secrets: true` placeholder would run API CLIs. It keeps an open channel next to attacker-controlled PR
+  code and model-chosen commands for the whole review, so the conservative path (sealed, offline) is the one built.
+- **Cost.** The prefix lives in `/workspace` (tmpfs), counted in the sandbox's 2 GB.
+- **Failure.** An install that fails never blocks the sandbox: the seal still happens and the review runs without it.
 
 ### The machine trusts the injector (13/11)
 

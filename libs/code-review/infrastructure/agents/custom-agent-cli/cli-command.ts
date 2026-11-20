@@ -20,6 +20,8 @@ import { createHash } from 'node:crypto';
 import { CliToolConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { checkCliInstallCommand } from '@libs/core/infrastructure/config/types/general/cli-install';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { cliPrefixEnv } from '@libs/sandbox/infrastructure/providers/cli-prefix-install';
+import type { PreSealCliInstall } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { ROOT_SAFE_PATH_LINE } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 
 import { CLI_EGRESS_PROXY_SOURCE } from './cli-egress-proxy.source';
@@ -520,4 +522,69 @@ export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {
         ? cli.timeoutSec!
         : CLI_DEFAULT_TIMEOUT_SEC;
     return Math.min(Math.max(1, configured), CLI_MAX_TIMEOUT_SEC);
+}
+
+const RUNTIME_INSTALL_HOSTS: Record<string, string[]> = {
+    npm: ['registry.npmjs.org'],
+    pnpm: ['registry.npmjs.org'],
+    pip: ['pypi.org', 'files.pythonhosted.org'],
+    pip3: ['pypi.org', 'files.pythonhosted.org'],
+    pipx: ['pypi.org', 'files.pythonhosted.org'],
+    uv: ['pypi.org', 'files.pythonhosted.org'],
+};
+
+/**
+ * The runtime sandbox is sealed right after its checkout, so a CLI runs there
+ * with no network: it must install before the seal (user prefix, registry
+ * hosts only for that phase) and may need neither an API host nor a secret
+ * at run time. Anything else keeps the CLI out, with the reason.
+ */
+export function planRuntimeCliInstall(
+    agentId: string,
+    cli: CliToolConfig,
+):
+    | { ok: true; install: PreSealCliInstall }
+    | { ok: false; reason: string } {
+    if (cli.allowedDomains?.length || cli.secrets?.length) {
+        return {
+            ok: false,
+            reason: 'needs the network or a credential when it runs, and the Kody Runtime sandbox has no network once its checkout is done',
+        };
+    }
+    const check = checkCliInstallCommand(cli.install);
+    if (check.ok === false) return { ok: false, reason: check.reason };
+    const hosts = RUNTIME_INSTALL_HOSTS[check.installer];
+    if (!hosts) {
+        return {
+            ok: false,
+            reason: `installer ${check.installer} is not supported on the Kody Runtime sandbox (npm, pnpm, pip, pipx and uv are)`,
+        };
+    }
+    const plan = planCliInstall(cli);
+    if (plan.ok === false) return { ok: false, reason: plan.reason };
+    return {
+        ok: true,
+        install: {
+            id: cliSandboxIdentity(agentId, cli.name).user,
+            argv: plan.argv,
+            binary: cli.binary,
+            egressAllow: hosts,
+        },
+    };
+}
+
+/** Run the prefix-installed binary as the sandbox user, in the repo, with a
+ *  clean environment (no network exists to protect, no secret to pass). */
+export function buildRuntimeRunCommand(params: {
+    home: string;
+    binaryPath: string;
+    args: readonly string[];
+    repoDir: string;
+    timeoutSec: number;
+}): string {
+    const env = cliPrefixEnv(params.home);
+    return [
+        `cd ${shSingleQuote(params.repoDir)} || exit 125`,
+        `exec /usr/bin/env -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${params.timeoutSec} ${shellJoin([params.binaryPath, ...params.args])}`,
+    ].join('\n');
 }

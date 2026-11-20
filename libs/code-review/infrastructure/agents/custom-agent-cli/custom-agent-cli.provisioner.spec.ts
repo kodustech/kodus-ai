@@ -21,6 +21,7 @@ jest.mock('@libs/core/log/logger', () => ({
 import { cliSandboxIdentity } from './cli-command';
 import {
     customAgentMatchesFiles,
+    planRuntimeCliInstalls,
     provisionCustomAgentClis,
 } from './custom-agent-cli.provisioner';
 
@@ -208,7 +209,7 @@ describe('provisionCustomAgentClis', () => {
             expect(result.warnings).toHaveLength(1);
             expect(result.warnings[0].kind).toBe('CLI_INSTALL_FAILED');
             expect(result.warnings[0].detail).toContain(
-                'needs the isolated (E2B) sandbox',
+                'needs an isolated sandbox (E2B or the Kody Runtime)',
             );
         }
     });
@@ -489,5 +490,95 @@ describe('provisionCustomAgentClis', () => {
         });
         expect(result.warnings).toHaveLength(2);
         expect(sb.run).not.toHaveBeenCalled();
+    });
+});
+
+describe('team CLIs on the runtime sandbox', () => {
+    const offline = (o: Partial<CliToolConfig> = {}) =>
+        cli({ allowedDomains: [], secrets: [], ...o });
+    const offlineAgent = (c: CliToolConfig, id = 'agent-1') =>
+        agent({ id, name: `Reviewer ${id}`, tools: { cli: [c] } as any });
+    const id = cliSandboxIdentity('agent-1', 'lintkit').user;
+    const home = `/workspace/.kcli/${id}`;
+    const runtimeSandbox = (installs: SandboxInstance['cliInstalls']) => {
+        const run = jest.fn();
+        return {
+            type: 'runtime',
+            run,
+            privilegesDropped: true,
+            cliInstalls: installs,
+        } as unknown as SandboxInstance & { run: jest.Mock };
+    };
+    const files = ['src/ledger/post.ts'];
+
+    it('plans a pre-seal install per offline CLI, with the registry hosts its installer needs', () => {
+        const plan = planRuntimeCliInstalls({
+            agents: [
+                offlineAgent(offline()),
+                offlineAgent(
+                    offline({
+                        name: 'pyk',
+                        binary: 'pyk',
+                        install: 'pip install pyk==1.2.3',
+                    }),
+                    'agent-2',
+                ),
+            ],
+            changedFiles: files,
+        });
+        expect(plan.map((p) => p.egressAllow)).toEqual([
+            ['registry.npmjs.org'],
+            ['pypi.org', 'files.pythonhosted.org'],
+        ]);
+        expect(plan[0]).toMatchObject({ id, binary: 'lintkit' });
+        expect(plan[0].argv.slice(0, 2)).toEqual(['npm', 'install']);
+    });
+
+    it('plans nothing for a CLI that needs the network or a secret when it runs', () => {
+        expect(
+            planRuntimeCliInstalls({ agents: [agent()], changedFiles: files }),
+        ).toEqual([]);
+    });
+
+    it('offers the CLI installed before the seal, without any root channel', async () => {
+        const sb = runtimeSandbox({
+            [id]: { home, binaryPath: `${home}/.local/bin/lintkit` },
+        });
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [offlineAgent(offline())],
+            changedFiles: files,
+        });
+        expect(result.warnings).toEqual([]);
+        expect(result.byAgentId['agent-1'][0]).toMatchObject({
+            binaryPath: `${home}/.local/bin/lintkit`,
+            home,
+        });
+        expect(sb.run).not.toHaveBeenCalled();
+    });
+
+    it('warns with the install error, not an E2B message, when the pre-seal install failed', async () => {
+        const sb = runtimeSandbox({
+            [id]: { home, error: 'install failed (exit 1): ENOTFOUND' },
+        });
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [offlineAgent(offline())],
+            changedFiles: files,
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings[0].detail).toContain('ENOTFOUND');
+        expect(result.warnings[0].detail).not.toContain('E2B');
+    });
+
+    it('says a CLI that needs the network at run time cannot run in the sealed sandbox', async () => {
+        const result = await provisionCustomAgentClis({
+            sandbox: runtimeSandbox({}),
+            agents: [agent()],
+            changedFiles: files,
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings[0].detail).toContain('network');
+        expect(result.warnings[0].detail).not.toContain('E2B');
     });
 });

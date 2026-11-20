@@ -26,6 +26,7 @@ import type {
 
 import {
     buildRunCommand,
+    buildRuntimeRunCommand,
     matchesAllowedPrefix,
     normalizeCliArgs,
     prefixTokens,
@@ -88,12 +89,19 @@ function formatRun(run: SandboxRunResult, timeoutSec: number): string {
     return parts.filter(Boolean).join('\n');
 }
 
+/** Team CLIs run on the E2B and Kody Runtime sandboxes only. */
+function supportsCli(
+    sandbox: SandboxInstance | undefined,
+): sandbox is SandboxInstance {
+    return sandbox?.type === 'e2b' || sandbox?.type === 'runtime';
+}
+
 export async function executeRunCli(
     deps: RunCliToolDeps & { installed: readonly InstalledCustomAgentCli[] },
     input: { cli?: unknown; args?: unknown },
 ): Promise<string> {
     const { sandbox, installed, decrypt } = deps;
-    if (!sandbox || sandbox.type !== 'e2b') {
+    if (!supportsCli(sandbox)) {
         return 'Error: team CLIs are not available in this review.';
     }
 
@@ -174,7 +182,16 @@ export async function executeRunCli(
     const secretValues = Object.values(envs);
     const timeoutSec = resolveCliTimeoutSec(cli);
 
-    const command = buildRunCommand({
+    const onRuntime = sandbox.type === 'runtime' && !!entry.home;
+    const command = onRuntime
+        ? buildRuntimeRunCommand({
+              home: entry.home!,
+              binaryPath: entry.binaryPath,
+              args,
+              repoDir: sandbox.repoDir,
+              timeoutSec,
+          })
+        : buildRunCommand({
         identity: entry.identity,
         binaryPath: entry.binaryPath,
         args,
@@ -184,11 +201,12 @@ export async function executeRunCli(
 
     let run: SandboxRunResult;
     try {
-        // As root: the review user has no sudo, and the process holding the
-        // secrets must not be one the review user owns.
+        // E2B: as root, since the review user has no sudo and the process
+        // holding the secrets must not be one the review user owns. The
+        // runtime sandbox has no root and its CLIs hold no secret.
         run = await sandbox.run(command, {
             timeoutMs: (timeoutSec + 15) * 1000,
-            asRoot: true,
+            ...(onRuntime ? {} : { asRoot: true }),
             ...(secretValues.length ? { envs } : {}),
         });
     } catch (error) {
@@ -222,7 +240,7 @@ export async function executeRunCli(
  */
 export function buildRunCliTool(deps: RunCliToolDeps): Record<string, any> {
     const { sandbox, installed } = deps;
-    if (!sandbox || sandbox.type !== 'e2b' || !installed?.length) return {};
+    if (!supportsCli(sandbox) || !installed?.length) return {};
     const names = installed.map((item) => item.cli.name);
     return {
         [RUN_CLI_TOOL_NAME]: {
@@ -260,7 +278,7 @@ export function buildRunCliAgentTool(
     deps: RunCliToolDeps,
 ): AgentTool<{ cli?: unknown; args?: unknown }> | undefined {
     const { sandbox, installed } = deps;
-    if (!sandbox || sandbox.type !== 'e2b' || !installed?.length) {
+    if (!supportsCli(sandbox) || !installed?.length) {
         return undefined;
     }
     const names = installed.map((item) => item.cli.name);
