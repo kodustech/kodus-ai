@@ -436,3 +436,28 @@ describe('a status the text gives for one value only (kr-shop #44 on release v1f
         expect(checks.map((c) => [c.probeId, c.assertions])).toEqual([['intent-2', [assertion({ kind: 'status', status: 201 })]]]);
     });
 });
+
+describe('a list the PR reorders as its text says (kr-shop #40 on release v1f)', () => {
+    const quote = 'With the seed, `GET /orders?sort=desc` returns order 2 first, then order 1.';
+    const keyboard = { id: 1, item: 'keyboard', quantity: 2 };
+    const monitor = { id: 2, item: 'monitor', quantity: 1 };
+    const mouse = { id: 3, item: 'mouse', quantity: 5 };
+    const planned = probe('orders-desc', 'GET', '/orders?sort=desc');
+    const check = (...assertions: unknown[]): StatedIntentCheck[] => [{ probeId: 'intent-1', intent: { quote, source: 'description' }, assertions: assertions.map(assertion) }];
+    const byPosition = check({ kind: 'equals', path: '$.length', value: 2 }, { kind: 'equals', path: '$[0].id', value: 2 }, { kind: 'equals', path: '$[1].id', value: 1 });
+    const verdictOf = (base: unknown[], pr: unknown[], checks: StatedIntentCheck[]) => {
+        const { decision, steps } = replay(planned, { status: 200, body: base }, { status: 200, body: pr });
+        expect(decision).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        return decideStatedIntent(decision, steps, checks, { mismatch: false, pinnedImageId: IMAGE }).decision.verdict;
+    };
+
+    it("main's orders in the order every position of the text states: described", () => {
+        expect(verdictOf([keyboard, monitor], [monitor, keyboard], byPosition)).toBe('described_change');
+    });
+
+    it('an element the PR changes, or a position no assertion states, stays a finding', () => {
+        expect(verdictOf([keyboard, monitor], [{ ...monitor, quantity: 9 }, keyboard], check({ kind: 'equals', path: '$[0].id', value: 2 }, { kind: 'equals', path: '$[1].id', value: 1 }))).toBe('finding');
+        expect(verdictOf([keyboard, monitor, mouse], [monitor, keyboard, mouse], check({ kind: 'equals', path: '$[0].id', value: 2 }, { kind: 'equals', path: '$[1].id', value: 1 }))).toBe('finding');
+        expect(verdictOf([keyboard, monitor, mouse], [monitor, keyboard], byPosition)).toBe('finding');
+    });
+});

@@ -205,6 +205,42 @@ function explainedArrays(checks: readonly StatedIntentCheck[]): string[] {
     return out;
 }
 
+/** One field's value, the same on every round given, as canonical JSON elements of an array; else undefined. */
+function arrayOn(field: string, steps: readonly GateStep[]): string[] | undefined {
+    let out: string[] | undefined;
+    for (const s of steps) {
+        const v = parsed(s.fields[field]);
+        if (!v.ok || !Array.isArray(v.value)) return undefined;
+        const elements = v.value.map((x) => JSON.stringify(sortedKeys(x)));
+        if (out && JSON.stringify(out) !== JSON.stringify(elements)) return undefined;
+        out = elements;
+    }
+    return out;
+}
+
+/**
+ * The differing arrays the PR only reorders as its text states (kr-shop #40,
+ * "returns order 2 first, then order 1"): on every round the PR answers main's
+ * very elements in another order, and a passed assertion reads every position.
+ * A changed element, a missing one or a position the text leaves open is not
+ * explained.
+ */
+function reorderedAsStated(differing: string[], steps: readonly GateStep[], prRoundSteps: readonly GateStep[], checks: readonly StatedIntentCheck[]): string[] {
+    const base = steps.filter((s) => s.executor === 'observer' && s.side === 'base');
+    if (!base.length) return [];
+    const reads = checks.flatMap((c) => c.assertions.flatMap((a) => intentAssertionReads(a).paths));
+    return differing.filter((f) => {
+        if (f !== 'json' && !f.startsWith('json.')) return false;
+        const at = f === 'json' ? [] : f.slice('json.'.length).split('.');
+        const pr = arrayOn(f, prRoundSteps);
+        const main = arrayOn(f, base);
+        if (!pr || !main || pr.length < 2 || pr.length !== main.length) return false;
+        if (JSON.stringify([...pr].sort()) !== JSON.stringify([...main].sort())) return false;
+        const positionRead = (i: number) => reads.some((p) => p.length > at.length && at.every((seg, k) => p[k] === seg) && p[at.length] === i);
+        return pr.every((_, i) => positionRead(i));
+    });
+}
+
 /** Verdicts an intent mismatch may stand in for: a comparison that found no failure of its own. */
 const MISMATCH_OVER: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'pre_existing', 'new_endpoint', 'inconclusive']);
 
@@ -239,7 +275,10 @@ export function decideStatedIntent<D extends VerdictLike>(
     const differing = decision.differingFields ?? [];
     // An assertion no round could evaluate explains nothing.
     const allHeld = statedIntents.every((r) => r.inconclusive === 0);
-    if (decision.verdict === 'finding' && decision.findingKind === 'behavior_change' && !pr5xx && allHeld && readsEveryDifference(differing, checks)) {
+    const reordered = reorderedAsStated(differing, steps, rounds, checks);
+    const notReordered = differing.filter((f) => !reordered.includes(f));
+    const explains = differing.length > 0 && (notReordered.length === 0 || readsEveryDifference(notReordered, checks));
+    if (decision.verdict === 'finding' && decision.findingKind === 'behavior_change' && !pr5xx && allHeld && explains) {
         return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };
     }
     return { decision, statedIntents };
