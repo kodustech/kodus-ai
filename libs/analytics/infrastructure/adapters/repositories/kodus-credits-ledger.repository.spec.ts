@@ -13,14 +13,18 @@ describe('KodusCreditsLedgerRepository state writes', () => {
         return { repository, chargeModel };
     };
 
-    it('marks only pending charges debited', async () => {
+    it("marks only the organization's pending charges debited", async () => {
         const { repository, chargeModel } = build();
         const at = new Date('2026-11-20T00:00:00Z');
 
-        await repository.markChargesDebited(['s1', 's2'], at);
+        await repository.markChargesDebited('org-1', ['s1', 's2'], at);
 
         expect(chargeModel.updateMany).toHaveBeenCalledWith(
-            { spanId: { $in: ['s1', 's2'] }, status: 'pending' },
+            {
+                organizationId: 'org-1',
+                spanId: { $in: ['s1', 's2'] },
+                status: 'pending',
+            },
             { $set: { status: 'debited', debitedAt: at } },
         );
     });
@@ -28,10 +32,14 @@ describe('KodusCreditsLedgerRepository state writes', () => {
     it('records a debit error only on charges still pending', async () => {
         const { repository, chargeModel } = build();
 
-        await repository.recordChargeError(['s1'], 'billing down');
+        await repository.recordChargeError('org-1', ['s1'], 'billing down');
 
         expect(chargeModel.updateMany).toHaveBeenCalledWith(
-            { spanId: { $in: ['s1'] }, status: 'pending' },
+            {
+                organizationId: 'org-1',
+                spanId: { $in: ['s1'] },
+                status: 'pending',
+            },
             { $set: { lastError: 'billing down' } },
         );
     });

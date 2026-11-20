@@ -243,16 +243,33 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         // ones only conflicted and retried, and each one sent the whole
         // document back.
         try {
-            await this.kodyRulesModel.bulkWrite(
+            const result = await this.kodyRulesModel.bulkWrite(
                 ops.map(({ ruleId, setFields }) => ({
                     updateOne: {
-                        filter: { '_id': uuid, 'rules.uuid': ruleId },
+                        // `$eq`: an id that arrives as an object must not
+                        // become an operator, as in the other rule writes.
+                        filter: {
+                            '_id': { $eq: uuid },
+                            'rules.uuid': { $eq: ruleId },
+                        },
                         update: { $set: setFields },
                     },
                 })),
                 { ordered: false },
             );
-            return [];
+            if ((result?.matchedCount ?? ops.length) >= ops.length) return [];
+            // A rule removed between the read and this write matched
+            // nothing: report it as not written instead of counting it.
+            const stored = (await this.kodyRulesModel
+                .findOne({ _id: { $eq: uuid } }, { 'rules.uuid': 1 })
+                .lean()
+                .exec()) as { rules?: Array<{ uuid?: string }> } | null;
+            const present = new Set(
+                (stored?.rules ?? []).map((rule) => rule.uuid),
+            );
+            return ops
+                .filter((op) => !present.has(op.ruleId))
+                .map((op) => op.ruleId);
         } catch (error) {
             const failed = new Set<number>(
                 (

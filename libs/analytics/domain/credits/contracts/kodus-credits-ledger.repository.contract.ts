@@ -1,8 +1,33 @@
-import type { KodusCreditChargeModel } from '@libs/analytics/infrastructure/adapters/repositories/schemas/kodusCreditCharge.model';
-
 export const KODUS_CREDITS_LEDGER_REPOSITORY_TOKEN = Symbol.for(
     'KodusCreditsLedgerRepository',
 );
+
+/** A journaled charge, as the ledger hands it back. */
+export type KodusCreditCharge = {
+    spanId: string;
+    organizationId: string;
+    teamId?: string;
+    correlationId?: string;
+    prNumber?: number;
+    modelId: string;
+    area?: string;
+    route?: string;
+    tokens: {
+        input: number;
+        output: number;
+        reasoning: number;
+        cacheRead: number;
+        cacheWrite: number;
+    };
+    amountUsd: number;
+    pricingAsOf?: string;
+    status: 'pending' | 'unpriced' | 'debited' | 'failed';
+    spanAt: Date;
+    debitedAt?: Date;
+    lastError?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+};
 
 /** A Kodus-routed usage span, as the sweep reads it. */
 export type KodusRoutedSpan = {
@@ -70,12 +95,22 @@ export interface IKodusCreditsLedgerRepository {
     findPendingCharges(
         organizationId: string,
         limit: number,
-    ): Promise<Array<KodusCreditChargeModel & { _id: unknown }>>;
-    markChargesDebited(spanIds: string[], debitedAt: Date): Promise<void>;
-    recordChargeError(spanIds: string[], message: string): Promise<void>;
+    ): Promise<KodusCreditCharge[]>;
+    /** Moves the organization's pending charges among `spanIds` to debited. */
+    markChargesDebited(
+        organizationId: string,
+        spanIds: string[],
+        debitedAt: Date,
+    ): Promise<void>;
+    /** Records why debiting the organization's pending charges failed. */
+    recordChargeError(
+        organizationId: string,
+        spanIds: string[],
+        message: string,
+    ): Promise<void>;
     /** Charges newest first, optionally before a date or for one PR. */
     listCharges(
         organizationId: string,
         options: { limit: number; before?: Date; prNumber?: number },
-    ): Promise<KodusCreditChargeModel[]>;
+    ): Promise<KodusCreditCharge[]>;
 }

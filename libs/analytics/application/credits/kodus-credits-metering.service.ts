@@ -38,10 +38,10 @@ import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
-import type { KodusCreditChargeModel } from '@libs/analytics/infrastructure/adapters/repositories/schemas/kodusCreditCharge.model';
 import {
     IKodusCreditsLedgerRepository,
     KODUS_CREDITS_LEDGER_REPOSITORY_TOKEN,
+    KodusCreditCharge,
     KodusCreditChargeEntry,
 } from '@libs/analytics/domain/credits/contracts/kodus-credits-ledger.repository.contract';
 
@@ -309,6 +309,7 @@ export class KodusCreditsMeteringService {
                     );
                     const debitedAt = new Date();
                     await this.ledger.markChargesDebited(
+                        organizationId,
                         batch.map((c) => c.spanId),
                         debitedAt,
                     );
@@ -323,6 +324,7 @@ export class KodusCreditsMeteringService {
                     const message =
                         error instanceof Error ? error.message : String(error);
                     await this.ledger.recordChargeError(
+                        organizationId,
                         batch.map((c) => c.spanId),
                         message,
                     );
@@ -346,7 +348,7 @@ export class KodusCreditsMeteringService {
     async listCharges(
         organizationId: string,
         options: { limit?: number; before?: Date | string; prNumber?: number } = {},
-    ): Promise<KodusCreditChargeModel[]> {
+    ): Promise<KodusCreditCharge[]> {
         return this.ledger.listCharges(organizationId, {
             limit: Math.min(Math.max(options.limit ?? 100, 1), 500),
             before: normalizeBefore(options.before),

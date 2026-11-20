@@ -421,7 +421,10 @@ describe('KodyRulesRepository.updateRulesFields', () => {
         expect(ops).toEqual([
             {
                 updateOne: {
-                    filter: { '_id': 'doc-1', 'rules.uuid': 'r1' },
+                    filter: {
+                        '_id': { $eq: 'doc-1' },
+                        'rules.uuid': { $eq: 'r1' },
+                    },
                     update: {
                         $set: { 'rules.$.status': KodyRulesStatus.PAUSED },
                     },
@@ -429,12 +432,36 @@ describe('KodyRulesRepository.updateRulesFields', () => {
             },
             {
                 updateOne: {
-                    filter: { '_id': 'doc-1', 'rules.uuid': 'r3' },
+                    filter: {
+                        '_id': { $eq: 'doc-1' },
+                        'rules.uuid': { $eq: 'r3' },
+                    },
                     update: { $set: { 'rules.$.lockedByPlan': false } },
                 },
             },
         ]);
         expect(options).toEqual({ ordered: false });
+    });
+
+    it('reports a rule that matched nothing as not written', async () => {
+        const bulkWrite = jest.fn().mockResolvedValue({ matchedCount: 1 });
+        const findOne = jest.fn(() => ({
+            lean: () => ({
+                exec: async () => ({ rules: [{ uuid: 'r1' }] }),
+            }),
+        }));
+        const repository = new KodyRulesRepository(
+            { bulkWrite, findOne } as any,
+            {} as any,
+        );
+
+        const failed = await repository.updateRulesFields('doc-1', [
+            { ruleId: 'r1', patch: { lockedByPlan: true } },
+            // Removed between the read and the write.
+            { ruleId: 'gone', patch: { lockedByPlan: true } },
+        ]);
+
+        expect(failed).toEqual(['gone']);
     });
 
     it('sends nothing when no rule has a field to set', async () => {

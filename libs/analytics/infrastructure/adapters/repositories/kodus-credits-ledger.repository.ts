@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import {
     IKodusCreditsLedgerRepository,
     JournalResult,
+    KodusCreditCharge,
     KodusCreditChargeEntry,
     KodusRoutedSpan,
 } from '@libs/analytics/domain/credits/contracts/kodus-credits-ledger.repository.contract';
@@ -121,30 +122,35 @@ export class KodusCreditsLedgerRepository implements IKodusCreditsLedgerReposito
     async findPendingCharges(
         organizationId: string,
         limit: number,
-    ): Promise<Array<KodusCreditChargeModel & { _id: unknown }>> {
+    ): Promise<KodusCreditCharge[]> {
         return (await this.chargeModel
             .find({ organizationId, status: 'pending' })
             .sort({ spanAt: 1 })
             .limit(limit)
             .lean()
-            .exec()) as Array<KodusCreditChargeModel & { _id: unknown }>;
+            .exec()) as unknown as KodusCreditCharge[];
     }
 
     async markChargesDebited(
+        organizationId: string,
         spanIds: string[],
         debitedAt: Date,
     ): Promise<void> {
-        // Only a pending charge moves to debited: one another pass already
-        // settled keeps its own debitedAt.
+        // Only the organization's pending charges move to debited: one
+        // another pass already settled keeps its own debitedAt.
         await this.chargeModel.updateMany(
-            { spanId: { $in: spanIds }, status: 'pending' },
+            { organizationId, spanId: { $in: spanIds }, status: 'pending' },
             { $set: { status: 'debited', debitedAt } },
         );
     }
 
-    async recordChargeError(spanIds: string[], message: string): Promise<void> {
+    async recordChargeError(
+        organizationId: string,
+        spanIds: string[],
+        message: string,
+    ): Promise<void> {
         await this.chargeModel.updateMany(
-            { spanId: { $in: spanIds }, status: 'pending' },
+            { organizationId, spanId: { $in: spanIds }, status: 'pending' },
             { $set: { lastError: message } },
         );
     }
@@ -152,7 +158,7 @@ export class KodusCreditsLedgerRepository implements IKodusCreditsLedgerReposito
     async listCharges(
         organizationId: string,
         options: { limit: number; before?: Date; prNumber?: number },
-    ): Promise<KodusCreditChargeModel[]> {
+    ): Promise<KodusCreditCharge[]> {
         const filter: Record<string, unknown> = { organizationId };
         if (options.before) filter.spanAt = { $lt: options.before };
         if (typeof options.prNumber === 'number')
@@ -162,6 +168,6 @@ export class KodusCreditsLedgerRepository implements IKodusCreditsLedgerReposito
             .sort({ spanAt: -1 })
             .limit(options.limit)
             .lean()
-            .exec()) as KodusCreditChargeModel[];
+            .exec()) as unknown as KodusCreditCharge[];
     }
 }
