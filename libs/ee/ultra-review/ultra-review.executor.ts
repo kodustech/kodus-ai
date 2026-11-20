@@ -359,7 +359,9 @@ async function mergeAcrossModels(
             status: skipped ? 'skipped' : 'failed',
             inputCount,
             outputCount: inputCount,
-            errorMessage: lastError,
+            // Stored and shown: our own copy. The provider's text stays in
+            // the log above.
+            errorMessage: 'No merge model returned a merge.',
         },
     };
 }
@@ -659,7 +661,9 @@ export async function executeUltraReview(
         label:
             merge.status === 'failed'
                 ? `Cross-model merge — failed, ${merge.inputCount} comments posted unmerged`
-                : `Cross-model merge · ${merge.modelName} — ${merge.inputCount} → ${merge.outputCount} comments`,
+                : merge.status === 'skipped' || merge.inputCount <= 1
+                  ? `Cross-model merge — nothing to merge, ${merge.inputCount} comments`
+                  : `Cross-model merge · ${merge.modelName} — ${merge.inputCount} → ${merge.outputCount} comments`,
         status:
             merge.status === 'failed'
                 ? AutomationStatus.ERROR

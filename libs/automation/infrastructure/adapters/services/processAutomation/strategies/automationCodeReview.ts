@@ -926,8 +926,8 @@ export class AutomationCodeReviewService implements Omit<
                       ? 'heavy'
                       : 'balanced',
                 reviewRoutingReason: result.reviewRoutingReason,
-                // Each Ultra model's outcome and the merge, for the Pull
-                // Requests screen.
+                // Each Ultra model's outcome and the merge, kept with the
+                // execution. Already a record (ultraReviewRecord): no slots.
                 ...(result.ultra && { ultraReview: result.ultra }),
             });
         }

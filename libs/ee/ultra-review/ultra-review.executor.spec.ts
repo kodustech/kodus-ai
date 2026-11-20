@@ -396,6 +396,10 @@ describe('executeUltraReview', () => {
         expect(calls.timeline[0].label).toMatch(
             /failed, 3 comments posted unmerged/,
         );
+        // The provider's text (here "503") is not stored.
+        expect(out.ultra?.merge?.errorMessage).toBe(
+            'No merge model returned a merge.',
+        );
     });
 
     it('no fallback set and a model fails: degraded, its partial findings published', async () => {
@@ -827,6 +831,10 @@ describe('executeUltraReview', () => {
             const out = await executeUltraReview(context, host, LIMITS);
             expect(calls.merges).toEqual([]);
             expect(out.ultra?.merge?.status).toBe('skipped');
+            // No model is named for a merge that never ran.
+            expect(calls.timeline[0].label).toBe(
+                'Cross-model merge — nothing to merge, 2 comments',
+            );
             expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
                 'a1',
                 'a2',
