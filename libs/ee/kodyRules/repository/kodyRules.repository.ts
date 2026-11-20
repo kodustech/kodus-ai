@@ -81,7 +81,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             { $replaceRoot: { newRoot: '$rules' } },
         ];
 
-        const result = await this.kodyRulesModel.aggregate(pipeline).exec();
+        const result = await this.kodyRulesModel
+            .aggregate(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
         return result.length > 0 ? result[0] : null;
     }
 
@@ -169,7 +172,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             });
         }
 
-        const docs = await this.kodyRulesModel.aggregate(pipeline).exec();
+        const docs = await this.kodyRulesModel
+            .aggregate(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
 
         return mapSimpleModelsToEntities(docs, KodyRulesEntity);
     }
@@ -284,6 +290,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
         return this.kodyRulesModel
             .aggregate<IKodyRuleIndexEntry>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
 
@@ -318,6 +325,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         }
         const [result] = await this.kodyRulesModel
             .aggregate<{ total: number }>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
         return result?.total ?? 0;
     }
@@ -366,6 +374,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                 directoryId: string | null;
                 count: number;
             }>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
     //#endregion

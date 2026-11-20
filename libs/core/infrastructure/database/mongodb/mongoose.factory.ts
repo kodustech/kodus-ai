@@ -8,6 +8,7 @@ import { ConnectionString } from 'connection-string';
 import mongoose from 'mongoose';
 
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
+import { mongoAppName } from '@libs/core/infrastructure/database/mongo/mongo-app-name';
 
 import { MongooseConnectionFactory } from './mongoose-connection.factory';
 
@@ -115,6 +116,7 @@ export class MongooseFactory implements MongooseOptionsFactory {
             // does), so before turning it off check every declared index exists
             // in production, and build any new one by hand.
             autoIndex: process.env.MONGO_AUTO_INDEX !== 'false',
+            appName: mongoAppName(),
         };
     }
 }

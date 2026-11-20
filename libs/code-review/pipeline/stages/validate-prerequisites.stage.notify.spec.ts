@@ -150,7 +150,10 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                 },
                 {
                     provide: PULL_REQUESTS_SERVICE_TOKEN,
-                    useValue: { find: jest.fn().mockResolvedValue([]) },
+                    useValue: {
+                        find: jest.fn().mockResolvedValue([]),
+                        countByAuthor: jest.fn().mockResolvedValue(0),
+                    },
                 },
                 {
                     provide: CodeManagementService,

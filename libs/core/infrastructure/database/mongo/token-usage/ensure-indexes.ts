@@ -90,6 +90,29 @@ export async function ensureTokenUsageIndexes(
         },
     );
 
+    // Monthly spend attributes each model to the BYOK credential that paid
+    // for it (getModelCredentialPairs). The covers above do not carry
+    // tu.credentialId, so that grouping fetched every BYOK span of the month
+    // (21.7M examined for 6.9k returned). Only BYOK spans with a credential
+    // enter this one, and it carries both grouped fields.
+    log('[token-usage-indexes] building tu_cred_byok_v1…');
+    await c.createIndex(
+        {
+            'attributes.organizationId': 1,
+            'attributes.tu.isByok': 1,
+            timestamp: 1,
+            'attributes.tu.model': 1,
+            'attributes.tu.credentialId': 1,
+        },
+        {
+            name: 'tu_cred_byok_v1',
+            partialFilterExpression: {
+                'attributes.tu.isByok': true,
+                'attributes.tu.credentialId': { $gt: '' },
+            },
+        },
+    );
+
     for (const name of DEAD_INDEXES) {
         try {
             await c.dropIndex(name);
@@ -106,7 +129,11 @@ export async function dropTokenUsageIndexes(
     log: Logger = () => {},
 ): Promise<void> {
     const c = db.collection(COLLECTION);
-    for (const name of ['tu_cover_byok_v3', 'tu_cover_sys_v3']) {
+    for (const name of [
+        'tu_cover_byok_v3',
+        'tu_cover_sys_v3',
+        'tu_cred_byok_v1',
+    ]) {
         try {
             await c.dropIndex(name);
             log(`[token-usage-indexes] dropped ${name}`);

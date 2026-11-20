@@ -1,3 +1,4 @@
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 import {
     BadRequestException,
     ForbiddenException,
@@ -1564,7 +1565,10 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 count: { $sum: 1 },
             }),
         });
-        expect(aggregate.mock.calls[0][1]).toEqual({ allowDiskUse: true });
+        expect(aggregate.mock.calls[0][1]).toEqual({
+            allowDiskUse: true,
+            maxTimeMS: MONGO_QUERY_MAX_TIME_MS,
+        });
         const [firstMatch] = aggregate.mock.calls[0][0];
         expect(firstMatch.$match).toEqual({
             'organizationId': 'org-1',

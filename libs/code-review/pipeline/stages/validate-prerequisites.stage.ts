@@ -513,19 +513,21 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         if (
             validationResult.errorType === ValidationErrorType.USER_NOT_LICENSED
         ) {
-            const userPrs = await this.pullRequestsService.find({
-                'organizationId': organizationAndTeamData.organizationId,
-                'user.id': isNaN(Number(userGitId))
-                    ? userGitId
-                    : Number(userGitId),
-            } as any);
+            // Auto-assign only tells a first PR (a freebie) from a second, so
+            // counting past 2 buys nothing. `user.id` is a string in the
+            // schema, which is how a numeric provider id was matched before too.
+            const prCount = await this.pullRequestsService.countByAuthor(
+                organizationAndTeamData.organizationId,
+                String(userGitId),
+                2,
+            );
 
             const autoAssignResult =
                 await this.autoAssignLicenseUseCase.execute({
                     organizationAndTeamData,
                     userGitId: userGitId,
                     prNumber: pullRequest?.number,
-                    prCount: userPrs?.length ?? 0,
+                    prCount,
                     repositoryName: repository?.name,
                     provider: platformType,
                 });

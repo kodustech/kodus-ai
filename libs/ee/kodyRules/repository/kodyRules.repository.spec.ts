@@ -2,11 +2,17 @@ import { KodyRulesRepository } from './kodyRules.repository';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRulesSchema } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 
+// An aggregation as the repository chains it: options, then exec.
+const query = (result: unknown) => ({
+    exec: jest.fn().mockResolvedValue(result),
+    option() {
+        return this;
+    },
+});
+
 describe('KodyRulesRepository.findById organization isolation', () => {
     it('restricts the document match to the requested organization', async () => {
-        const aggregate = jest
-            .fn()
-            .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+        const aggregate = jest.fn().mockReturnValue(query([]));
         const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
 
         await expect(
@@ -21,9 +27,7 @@ describe('KodyRulesRepository.findById organization isolation', () => {
     });
 
     it('never drops the organization filter, even for an empty id', async () => {
-        const aggregate = jest
-            .fn()
-            .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+        const aggregate = jest.fn().mockReturnValue(query([]));
         const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
 
         await expect(repo.findById('rule-own', '')).resolves.toBeNull();
@@ -221,7 +225,12 @@ describe('KodyRulesModel schema indexes', () => {
 describe('KodyRulesRepository.countRulesByRepository', () => {
     const buildRepo = (aggregateResult: unknown[]) => {
         const exec = jest.fn().mockResolvedValue(aggregateResult);
-        const aggregate = jest.fn().mockReturnValue({ exec });
+        const aggregate = jest.fn().mockReturnValue({
+            exec,
+            option() {
+                return this;
+            },
+        });
         const modelMock = { aggregate } as any;
         const repo = new KodyRulesRepository(modelMock, {} as any);
         return { repo, aggregate, exec };
