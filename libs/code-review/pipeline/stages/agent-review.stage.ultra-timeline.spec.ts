@@ -45,7 +45,17 @@ describe('AgentReviewStage — the Ultra merge entry on the timeline', () => {
             },
         );
 
-        // The execution is only ever written as in progress here.
+        // The merge entry is created on the execution, in progress, and the
+        // execution is only ever written as in progress here.
+        expect(
+            automationExecutionService.updateCodeReview,
+        ).toHaveBeenCalledWith(
+            { uuid: 'exec-1' },
+            { status: AutomationStatus.IN_PROGRESS },
+            'Cross-model merge · m — 4 → 3 comments',
+            'AgentReview::ultra-merge',
+            expect.anything(),
+        );
         for (const call of automationExecutionService.updateCodeReview.mock
             .calls) {
             expect(call[1]).toEqual({ status: AutomationStatus.IN_PROGRESS });

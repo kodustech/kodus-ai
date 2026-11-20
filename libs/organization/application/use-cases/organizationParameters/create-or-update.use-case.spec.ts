@@ -1264,12 +1264,12 @@ describe('the Ultra trio while a review mode is Ultra', () => {
     });
 
     it('saves a cleared trio when no scope runs Ultra', async () => {
-        const { useCase, createOrUpdateConfig } = buildUseCase(
-            withTrio(['a', 'b', 'c']),
-            { teamConfigs: [{ configs: { reviewMode: 'heavy' } }] },
-        );
+        const { useCase, persisted } = buildUseCase(withTrio(['a', 'b', 'c']), {
+            teamConfigs: [{ configs: { reviewMode: 'heavy' } }],
+        });
         await saveByok(useCase, withTrio());
-        expect(createOrUpdateConfig).toHaveBeenCalled();
+        expect(persisted.value).toBeDefined();
+        expect(persisted.value.routing?.ultraModelIds).toBeUndefined();
     });
 
     it('an edit that keeps the trio reads no team config', async () => {
