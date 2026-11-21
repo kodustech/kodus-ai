@@ -26,7 +26,6 @@ import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
     assertValidPrKey,
-    runPrKey,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -61,7 +60,6 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         completeCleanup: jest.fn().mockResolvedValue(true),
         failCleanup: jest.fn().mockResolvedValue(true),
         resetStaleCleanup: jest.fn().mockResolvedValue(undefined),
-        findRunKeys: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<SandboxLeaseRepository>;
 }
 
@@ -2320,153 +2318,6 @@ describe('SandboxLeaseManager', () => {
             // so exactly one decrement — the IN_PROGRESS undo — is expected.
             expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    describe('a run with a sandbox of its own (Ultra review)', () => {
-        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
-
-        it('keys the run on the PR and validates it like a PR key', () => {
-            expect(runPrKey(prKey, 'ultra-1')).toBe(`${prKey}#ultra-1`);
-            expect(() => assertValidPrKey(`${prKey}#ultra-1`)).not.toThrow();
-            expect(() => assertValidPrKey(`${prKey}#`)).toThrow();
-            expect(() => assertValidPrKey(`${prKey}#a#b`)).toThrow();
-            expect(() => runPrKey(prKey, 'Ultra 1')).toThrow();
-        });
-
-        it("leaves a CLI key's branch alone, '#' included", async () => {
-            const cliKey =
-                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:cli:release#RC1';
-            expect(() => assertValidPrKey(cliKey)).not.toThrow();
-            leaseRepo.findByPrKey.mockResolvedValue(null);
-            // A CLI key has no runs, '#' in its branch or not.
-            await manager.invalidate(cliKey);
-            await manager.invalidate(
-                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:cli:feature',
-            );
-            expect((leaseRepo as any).findRunKeys).not.toHaveBeenCalled();
-        });
-
-        it("invalidating the PR retires its runs' sandboxes too", async () => {
-            const runKeys = [
-                runPrKey(prKey, 'ultra-1'),
-                runPrKey(prKey, 'ultra-fallback'),
-            ];
-            (leaseRepo as any).findRunKeys.mockResolvedValue(runKeys);
-            leaseRepo.findByPrKey.mockImplementation(
-                async (key: string) =>
-                    ({
-                        _id: key,
-                        leaseCount: 1,
-                        state: 'READY',
-                        sandboxId: `e2b-${key.split('#')[1] ?? 'pr'}`,
-                        createdAt: new Date(),
-                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-                    }) as any,
-            );
-
-            await manager.invalidate(prKey);
-
-            expect((leaseRepo as any).findRunKeys).toHaveBeenCalledWith(prKey);
-            const retired = leaseRepo.retire.mock.calls.map((c) => c[0]);
-            expect(retired).toEqual([prKey, ...runKeys]);
-        });
-
-        it('invalidating one run leaves the PR and the other runs alone', async () => {
-            const runKey = runPrKey(prKey, 'ultra-2');
-            leaseRepo.findByPrKey.mockResolvedValue({
-                _id: runKey,
-                leaseCount: 1,
-                state: 'READY',
-                sandboxId: 'e2b-ultra-2',
-                createdAt: new Date(),
-                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-            } as any);
-
-            await manager.invalidate(runKey);
-
-            expect((leaseRepo as any).findRunKeys).not.toHaveBeenCalled();
-            expect(leaseRepo.retire.mock.calls.map((c) => c[0])).toEqual([
-                runKey,
-            ]);
-        });
-
-        it('a replacement started near the PR lease expiry gets a fresh lease, and the PR and the other runs keep theirs', async () => {
-            // The leases as Mongo holds them: an acquire sets `expiresAt` only
-            // when it inserts the doc ($setOnInsert in upsertAcquire).
-            const minute = 60 * 1000;
-            const takenAt = new Date(Date.now() - 29 * minute);
-            const seeded = (key: string) => ({
-                _id: key,
-                leaseCount: 1,
-                state: 'READY',
-                sandboxId: `e2b-${key}`,
-                createdAt: takenAt,
-                expiresAt: new Date(takenAt.getTime() + 30 * minute),
-            });
-            const run1Key = runPrKey(prKey, 'ultra-1-pipe42');
-            const fallbackKey = runPrKey(prKey, 'ultra-fallback-pipe42');
-            const docs = new Map<string, any>([
-                [prKey, seeded(prKey)],
-                [run1Key, seeded(run1Key)],
-            ]);
-            const before = new Map(
-                [...docs].map(([k, d]) => [k, d.expiresAt.getTime()]),
-            );
-            leaseRepo.upsertAcquire.mockImplementation(
-                async (key: string, ttl: number) => {
-                    const doc = docs.get(key) ?? {
-                        _id: key,
-                        leaseCount: 0,
-                        state: 'CREATING',
-                        createdAt: new Date(),
-                        expiresAt: new Date(Date.now() + ttl),
-                    };
-                    doc.leaseCount += 1;
-                    docs.set(key, doc);
-                    return { ...doc } as any;
-                },
-            );
-            leaseRepo.findByPrKey.mockImplementation(
-                async (key: string) => (docs.get(key) ?? null) as any,
-            );
-            const ttl = 80 * minute;
-
-            const result = await manager.acquire(fallbackKey, 'review', ttl, {
-                cloneUrl: 'https://github.com/org/repo.git',
-                branch: 'feature',
-                prNumber: 77,
-                platform: 'GITHUB',
-            } as any);
-
-            expect(result.sandbox).toBeDefined();
-            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
-                1,
-            );
-            // Its own lease, created rather than joined, with the whole TTL.
-            const fresh = docs.get(fallbackKey);
-            expect(fresh.createdAt.getTime()).toBeGreaterThan(
-                takenAt.getTime(),
-            );
-            expect(fresh.expiresAt.getTime() - Date.now()).toBeGreaterThan(
-                ttl - minute,
-            );
-            // The PR's lease and the other run's keep their expiry, and no
-            // write went to them.
-            for (const key of [prKey, run1Key]) {
-                expect(docs.get(key).expiresAt.getTime()).toBe(before.get(key));
-                expect(docs.get(key).leaseCount).toBe(1);
-            }
-            const touched = [
-                ...leaseRepo.updateReady.mock.calls,
-                ...leaseRepo.clearKillAt.mock.calls,
-                ...leaseRepo.retire.mock.calls,
-                ...leaseRepo.decrementLease.mock.calls,
-                ...leaseRepo.markInvalidated.mock.calls,
-            ].map((c) => c[0]);
-            expect(touched).not.toContain(prKey);
-            expect(touched).not.toContain(run1Key);
-            expect(Sandbox.setTimeout).not.toHaveBeenCalled();
         });
     });
 });

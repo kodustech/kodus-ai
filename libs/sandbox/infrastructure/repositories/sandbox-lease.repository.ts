@@ -34,13 +34,12 @@ function decomposePrKey(prKey: string): {
             `decomposePrKey: first segment must be a UUID organizationId or 'trial'`,
         );
     }
-    // PR mode shape: <orgId>:<repoId>:<prNumber>, or <prNumber>#<run> for
-    // a run's own sandbox (runPrKey)
+    // PR mode shape: <orgId>:<repoId>:<prNumber>
     if (parts.length === 3) {
         return {
             organizationId: parts[0],
             repositoryId: parts[1],
-            prNumber: parts[2].split('#')[0],
+            prNumber: parts[2],
         };
     }
     // CLI mode shape: <orgId>:<repoId>:cli:<branch>
@@ -227,19 +226,6 @@ export class SandboxLeaseRepository {
     }
 
     /**
-     * The keys of the runs that hold a sandbox of their own on this PR
-     * (`<prKey>#<run>`, runPrKey).
-     */
-    async findRunKeys(prKey: string): Promise<string[]> {
-        const escaped = prKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const docs = await this.leaseModel
-            .find({ _id: { $regex: `^${escaped}#` } })
-            .select('_id')
-            .lean();
-        return docs.map((d) => String(d._id));
-    }
-
-    /**
      * Delete a lease document by prKey. Called by invalidate() after soft-drain
      * and by the reaper after killing the E2B sandbox.
      */
@@ -276,7 +262,8 @@ export class SandboxLeaseRepository {
             .findOneAndDelete({ _id: prKey, sandboxId })
             .select('leaseCount')
             .lean();
-        const otherHolders = (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const otherHolders =
+            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
         const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
 
         const orgSegment = prKey.split(':')[0];
@@ -354,7 +341,11 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            '_id' | 'sandboxId' | 'killAt' | 'killRetryCount' | 'organizationId'
+            | '_id'
+            | 'sandboxId'
+            | 'killAt'
+            | 'killRetryCount'
+            | 'organizationId'
         >[]
     > {
         return this.leaseModel
