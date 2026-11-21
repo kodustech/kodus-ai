@@ -19,7 +19,11 @@ export class FileRunStreamStore implements RunStreamStore {
     private files(orgId: string, runId: string) {
         streamKeyOf(orgId, runId);
         const dir = path.join(this.root, orgId, 'streams');
-        return { dir, file: path.join(dir, `${runId}.jsonl`) };
+        const file = path.join(dir, `${runId}.jsonl`);
+        // streamKeyOf already allows only [A-Za-z0-9_-]; the file must stay under the root regardless.
+        const root = path.resolve(this.root) + path.sep;
+        if (!path.resolve(file).startsWith(root)) throw new Error('invalid stream key');
+        return { dir, file };
     }
 
     async append(orgId: string, runId: string, event: RunStreamEvent): Promise<void> {

@@ -33,6 +33,12 @@ describe('which repository file an import names', () => {
         expect(resolveSpecifier('@/components/cart', 'apps/web/src/app/page.tsx', ctx(files, { aliases }))).toBe('apps/web/src/components/cart.tsx');
     });
 
+    it('keeps a $ in the part an alias matched literally', async () => {
+        const aliases = [(await aliasesOf('tsconfig.json', readerOf({ 'tsconfig.json': '{"compilerOptions":{"baseUrl":".","paths":{"@/*":["src/*"]}}}' })))!];
+        // With a string replacement, `$&` would have become the alias's own `*`.
+        expect(resolveSpecifier("@/pay$&ment", 'src/app.ts', ctx(['src/pay$&ment.ts'], { aliases }))).toBe('src/pay$&ment.ts');
+    });
+
     it('resolves a paths alias a tsconfig inherits through extends', async () => {
         const read = readerOf({
             'packages/api/tsconfig.json': '{ "extends": "../../tsconfig.base.json" }',
