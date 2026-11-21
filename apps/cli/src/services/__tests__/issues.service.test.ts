@@ -5,6 +5,7 @@ vi.mock('../api/index.js', () => ({
         issues: {
             listIssues: vi.fn(),
             fixPrompt: vi.fn(),
+            fixPromptAvailability: vi.fn(),
         },
     },
 }));
@@ -16,7 +17,11 @@ vi.mock('../user-context.service.js', () => ({
 }));
 
 import { api } from '../api/index.js';
-import { FIX_PROMPT_MAX_ISSUES, issuesService } from '../issues.service.js';
+import {
+    FIX_PROMPT_MAX_ISSUES,
+    FIX_PROMPT_NOT_ENABLED_MESSAGE,
+    issuesService,
+} from '../issues.service.js';
 import { userContextService } from '../user-context.service.js';
 
 const issuesApi = vi.mocked(api.issues);
@@ -37,6 +42,7 @@ describe('issuesService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         userContext.requireUserToken.mockResolvedValue('eyJ.user.token');
+        issuesApi.fixPromptAvailability.mockResolvedValue({ enabled: true });
     });
 
     it('lists open issues, most severe first, by default', async () => {
@@ -97,6 +103,44 @@ describe('issuesService', () => {
     it('needs at least one id', async () => {
         await expect(issuesService.fixPrompt([' '])).rejects.toThrow(
             /at least one issue id/,
+        );
+    });
+
+    it('refuses the fix prompt outside the alpha, and asks the API for none', async () => {
+        issuesApi.fixPromptAvailability.mockResolvedValue({ enabled: false });
+
+        await expect(issuesService.fixPrompt(['a'])).rejects.toThrow(
+            FIX_PROMPT_NOT_ENABLED_MESSAGE,
+        );
+        expect(issuesApi.fixPrompt).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [{ enabled: true }, true],
+        [{ enabled: false }, false],
+    ])(
+        'reads whether the fix prompt is enabled (%j)',
+        async (availability, expected) => {
+            issuesApi.fixPromptAvailability.mockResolvedValue(availability);
+            await expect(issuesService.fixPromptEnabled()).resolves.toBe(
+                expected,
+            );
+        },
+    );
+
+    it('treats an API without the availability endpoint as enabled', async () => {
+        issuesApi.fixPromptAvailability.mockRejectedValue(
+            new Error('Kodus API endpoint not found (/issues/fix-prompt).'),
+        );
+        issuesApi.fixPrompt.mockResolvedValue({
+            prompt: 'Fix it',
+            included: ['a'],
+            skipped: [],
+        });
+
+        await expect(issuesService.fixPromptEnabled()).resolves.toBe(true);
+        await expect(issuesService.fixPrompt(['a'])).resolves.toEqual(
+            expect.objectContaining({ prompt: 'Fix it' }),
         );
     });
 });

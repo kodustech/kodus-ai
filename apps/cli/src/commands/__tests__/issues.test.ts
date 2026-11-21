@@ -5,6 +5,7 @@ vi.mock('../../services/issues.service.js', () => ({
     issuesService: {
         list: vi.fn(),
         fixPrompt: vi.fn(),
+        fixPromptEnabled: vi.fn(),
     },
 }));
 
@@ -98,5 +99,22 @@ describe('issues command actions', () => {
 
         expect(service.fixPrompt).toHaveBeenCalledWith(['a']);
         expect(stdout).toBe('Fix this issue\n');
+    });
+
+    it('points at kodus issues show only where the fix prompt is enabled', async () => {
+        service.list.mockResolvedValue([issue('a')]);
+        const log = vi.mocked(console.log);
+        const printedFor = async (enabled: boolean) => {
+            log.mockClear();
+            service.fixPromptEnabled.mockResolvedValue(enabled);
+            await issuesListAction({});
+            return log.mock.calls.map((c) => c.join(' ')).join('\n');
+        };
+
+        const outside = await printedFor(false);
+        expect(outside).toContain('1 issue.');
+        expect(outside).not.toContain('kodus issues show');
+        // Guard, as before the fix: inside the alpha the hint stays.
+        expect(await printedFor(true)).toContain('kodus issues show');
     });
 });

@@ -1,4 +1,8 @@
-import type { IssueListItem, IssuesFixPrompt } from '../../types/issues.js';
+import type {
+    IssueListItem,
+    IssuesFixPrompt,
+    IssuesFixPromptAvailability,
+} from '../../types/issues.js';
 import { requestWithRetry } from './api-core.js';
 import type { IIssuesApi } from './api.interface.js';
 
@@ -37,5 +41,14 @@ export class RealIssuesApi implements IIssuesApi {
             headers: this.buildAuthHeaders(accessToken),
             body: JSON.stringify({ ids }),
         });
+    }
+
+    async fixPromptAvailability(
+        accessToken: string,
+    ): Promise<IssuesFixPromptAvailability> {
+        return this.requester<IssuesFixPromptAvailability>(
+            '/issues/fix-prompt',
+            { headers: this.buildAuthHeaders(accessToken) },
+        );
     }
 }

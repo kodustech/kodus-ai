@@ -25,3 +25,8 @@ export type IssuesFixPrompt = {
     /** Unknown, or in a repository the user cannot read. */
     skipped: string[];
 };
+
+/** GET /issues/fix-prompt: the fix prompt is part of the deep scan's private alpha. */
+export type IssuesFixPromptAvailability = {
+    enabled: boolean;
+};

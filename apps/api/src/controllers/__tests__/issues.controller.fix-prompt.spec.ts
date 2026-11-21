@@ -48,3 +48,28 @@ describe('IssuesController.buildFixPrompt', () => {
         expect(buildFixPrompt.execute).toHaveBeenCalledWith(['issue-1']);
     });
 });
+
+describe('IssuesController.fixPromptAvailability', () => {
+    it.each([true, false])(
+        'says whether the alpha is enabled for the caller (%s)',
+        async (enabled) => {
+            const deepScanGate = { isEnabledFor: jest.fn(async () => enabled) };
+            const controller = new IssuesController(
+                {
+                    user: { uuid: 'u-1', organization: { uuid: 'org-1' } },
+                } as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                deepScanGate as any,
+            );
+
+            await expect(controller.fixPromptAvailability()).resolves.toEqual({
+                enabled,
+            });
+            expect(deepScanGate.isEnabledFor).toHaveBeenCalledWith('org-1');
+        },
+    );
+});

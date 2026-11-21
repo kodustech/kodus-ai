@@ -36,6 +36,7 @@ import {
 
 import { GetIssuesByFiltersDto } from '../dtos/get-issues-by-filters.dto';
 import {
+    IssuesFixPromptAvailabilityResponseDto,
     IssuesFixPromptRequestDto,
     IssuesFixPromptResponseDto,
 } from '../dtos/issues-fix-prompt.dto';
@@ -102,6 +103,30 @@ export class IssuesController {
     @ApiOkResponse({ type: IssuesCountResponseDto })
     async countIssues(@Query() query: GetIssuesByFiltersDto) {
         return await this.getTotalIssuesUseCase.execute(query);
+    }
+
+    @Get('fix-prompt')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.Issues,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Whether the fix prompt is available',
+        description:
+            "The fix prompt is part of the deep scan's private alpha. Says whether it is enabled for the caller's organization, so a client offers it only there.",
+    })
+    @ApiOkResponse({ type: IssuesFixPromptAvailabilityResponseDto })
+    async fixPromptAvailability() {
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!organizationId) {
+            throw new BadRequestException('Organization not found');
+        }
+        return {
+            enabled: await this.deepScanGate.isEnabledFor(organizationId),
+        };
     }
 
     @Post('fix-prompt')
