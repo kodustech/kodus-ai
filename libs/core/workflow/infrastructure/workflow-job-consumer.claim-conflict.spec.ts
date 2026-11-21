@@ -233,7 +233,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         expect(runChild).toHaveBeenCalled();
     });
 
-    it('requeues an aborted slice without failing the job', async () => {
+    it('delays a slice aborted under a live consumer, without failing the job', async () => {
         jest.useFakeTimers();
         runChild.mockImplementation(
             (_jobId, options) =>
@@ -255,7 +255,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         );
         const assertion = expect(done).rejects.toMatchObject({
             name: 'ClaimConflictError',
-            returnToQueue: true,
+            returnToQueue: false,
         });
         await jest.advanceTimersByTimeAsync(30_000);
         await assertion;
@@ -364,7 +364,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         );
     });
 
-    it('requeues a preempted child exit without failing the job', async () => {
+    it('delays a preempted child exit outside shutdown, without failing the job', async () => {
         runChild.mockRejectedValue(
             childExit(SECURITY_SCAN_SLICE_EXIT_PREEMPTED),
         );
@@ -383,7 +383,7 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
             ),
         ).rejects.toMatchObject({
             name: 'ClaimConflictError',
-            returnToQueue: true,
+            returnToQueue: false,
         });
 
         expect(jobRepository.update).not.toHaveBeenCalled();

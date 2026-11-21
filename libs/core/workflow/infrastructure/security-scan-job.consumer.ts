@@ -34,6 +34,8 @@ import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 @Injectable()
 export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
     private readonly sliceAborts = new Set<AbortController>();
+    /** Set once shutdown aborts the slices; its consumers are already cancelled. */
+    private draining = false;
 
     protected resolveClaimTimeoutMinutes(): number {
         return SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES;
@@ -51,16 +53,19 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
     }
 
     protected abortInFlightWork(): void {
+        this.draining = true;
         for (const abort of this.sliceAborts) {
             abort.abort();
         }
     }
 
     /**
-     * A stopped slice goes back to the queue on the broker, not through
-     * the delayed exchange: the scan stays RUNNING and only this delivery
-     * can continue it. A redelivery to a worker that no longer holds the
-     * claim meets the held claim and waits like any other.
+     * A slice stopped by this worker's shutdown goes back to the queue on
+     * the broker, not through the delayed exchange: the scan stays RUNNING
+     * and only this delivery can continue it, and no consumer here takes it
+     * back. One aborted while the consumer still runs (claim lost, stale
+     * heartbeat) waits through the delayed exchange, so a cause that
+     * persists cannot fork a child per redelivery.
      */
     private sliceAbortedError(abortReason?: string): ClaimConflictError {
         return new ClaimConflictError(
@@ -68,7 +73,7 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                 ? `Security-scan slice aborted: ${abortReason}`
                 : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
             undefined,
-            { returnToQueue: true },
+            { returnToQueue: this.draining },
         );
     }
 

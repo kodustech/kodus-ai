@@ -171,13 +171,13 @@ export class RabbitMQErrorHandler implements OnModuleInit {
     }
 
     /**
-     * Work this worker started was stopped (a deep-scan slice preempted by
-     * a deploy, or by a lost claim). Nack with requeue keeps the delivery
-     * in its queue for the next consumer; this one's consumer is already
-     * cancelled when it is shutting down. A delayed republish acked the
-     * original once the copy was published, and a copy the delayed
-     * exchange never delivered left the scan running with no slice. A nack
-     * the closing channel cannot send is requeued by the broker all the same.
+     * Work this worker started was stopped by its own shutdown (a deep-scan
+     * slice preempted by a deploy). Nack with requeue keeps the delivery in
+     * its queue for the next consumer; this one's consumer is already
+     * cancelled. A delayed republish acked the original once the copy was
+     * published, and a copy the delayed exchange never delivered left the
+     * scan running with no slice. A nack the closing channel cannot send is
+     * requeued by the broker all the same.
      */
     private returnToQueue(
         channel: any,
