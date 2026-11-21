@@ -324,4 +324,14 @@ describe('ultraReviewOutcome', () => {
         expect(ultraReviewOutcome(runs(2), merged)).toBe('degraded');
         expect(ultraReviewOutcome(runs(0), merged)).toBe('failed');
     });
+
+    it('is degraded when Kody Rules and custom agents did not finish', () => {
+        const merged = {
+            status: 'success' as const,
+            inputCount: 3,
+            outputCount: 2,
+        };
+        expect(ultraReviewOutcome(runs(3), merged, true)).toBe('degraded');
+        expect(ultraReviewOutcome(runs(0), merged, true)).toBe('failed');
+    });
 });

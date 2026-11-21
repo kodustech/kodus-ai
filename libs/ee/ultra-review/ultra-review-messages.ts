@@ -162,6 +162,11 @@ export function ultraDegradedNotice(
     ];
     const merge = mergeLine(state);
     if (merge) lines.push(merge);
+    if (state.auxiliaryMissed) {
+        lines.push(
+            '- Kody Rules and custom agents did not finish in time, so their comments are not in this review.',
+        );
+    }
     lines.push(
         '',
         completed > 0
@@ -179,11 +184,12 @@ export function ultraDegradedNotice(
 
 /**
  * The line a successful Ultra review that needed its fallback adds to the
- * final comment.
+ * final comment. Any other outcome posts the notice, which tells it all.
  */
 export function ultraFallbackInfoLine(
     state: UltraReviewState,
 ): string | undefined {
+    if (state.outcome !== 'success') return undefined;
     const replaced = (state.runs ?? []).find(
         (r) => r.position !== 'fallback' && r.replacedBy && !r.reusedRun,
     );

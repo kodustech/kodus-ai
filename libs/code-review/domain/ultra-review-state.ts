@@ -73,10 +73,12 @@ export interface UltraReviewState {
     /** Filled by AgentReviewStage. */
     runs?: UltraRunOutcome[];
     merge?: UltraMergeOutcome;
+    /** Kody Rules and custom agents did not finish within the runs' window. */
+    auxiliaryMissed?: boolean;
     /**
-     * `success`: three distinct models completed and the merge succeeded.
-     * `degraded`: at least one model completed, but not that. `failed`: no
-     * model completed.
+     * `success`: three distinct models completed, the merge succeeded, and
+     * Kody Rules and custom agents finished. `degraded`: at least one model
+     * completed, but not that. `failed`: no model completed.
      */
     outcome?: 'success' | 'degraded' | 'failed';
 }

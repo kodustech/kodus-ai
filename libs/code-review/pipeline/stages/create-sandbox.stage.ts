@@ -92,9 +92,10 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
      * A hold on the PR's own sandbox for one run of an Ultra review: the same
      * key, so the same sandbox and worker slot, and a lease of its own that
      * keeps the sandbox up (and pushes its expiry out to `leaseTtlMs`) until
-     * the caller releases it (`cleanup`) when the run ends. Undefined when it
-     * cannot be had; the run then reviews without a checkout, as a review
-     * does when its sandbox fails.
+     * the caller releases it (`cleanup`) when the run ends. 'superseded' when
+     * the PR was closed or force-pushed meanwhile, undefined when it cannot
+     * be had; the run then reviews without a checkout, as a review does when
+     * its sandbox fails.
      */
     async acquireRunSandbox(
         context: CodeReviewPipelineContext,
@@ -102,7 +103,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         leaseTtlMs?: number,
         /** Stops waiting for a slot; the review job's own signal by default. */
         signal?: AbortSignal,
-    ): Promise<SandboxInstance | undefined> {
+    ): Promise<SandboxInstance | 'superseded' | undefined> {
         const prKey = `${context.organizationAndTeamData?.organizationId}:${context.repository?.id}:${context.pullRequest?.number}`;
         const logMeta = {
             organizationId: context.organizationAndTeamData?.organizationId,
@@ -149,6 +150,14 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             });
             return sandbox;
         } catch (error) {
+            if (error instanceof SandboxInvalidatedError) {
+                this.logger.warn({
+                    message: `Sandbox lease superseded for the ${suffix} run of PR#${context.pullRequest?.number} (PR closed or force-pushed); the run goes on without it`,
+                    context: this.stageName,
+                    metadata: logMeta,
+                });
+                return 'superseded';
+            }
             this.logger.warn({
                 message: `Could not acquire the ${suffix} sandbox of PR#${context.pullRequest?.number}; the run reviews without a checkout`,
                 context: this.stageName,

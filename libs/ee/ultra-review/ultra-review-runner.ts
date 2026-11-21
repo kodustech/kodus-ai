@@ -189,18 +189,21 @@ export async function runUltraModels<T>(input: {
 }
 
 /**
- * Success: three distinct models completed and the merge succeeded (on the
- * merge model or the fallback). Degraded: at least one completed otherwise.
- * Failed: none completed.
+ * Success: three distinct models completed, the merge succeeded (on the
+ * merge model or the fallback), and Kody Rules and custom agents finished.
+ * Degraded: at least one completed otherwise. Failed: none completed.
  */
 export function ultraReviewOutcome(
     runs: UltraRunOutcome[],
     merge: UltraReviewState['merge'],
+    auxiliaryMissed = false,
 ): NonNullable<UltraReviewState['outcome']> {
     const completed = new Set(
         runs.filter((r) => r.status === 'completed').map((r) => r.modelId),
     ).size;
     if (completed === 0) return 'failed';
     const merged = merge?.status === 'success' || merge?.status === 'fallback';
-    return completed >= 3 && merged ? 'success' : 'degraded';
+    return completed >= 3 && merged && !auxiliaryMissed
+        ? 'success'
+        : 'degraded';
 }

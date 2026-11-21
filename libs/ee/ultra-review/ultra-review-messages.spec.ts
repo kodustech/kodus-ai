@@ -2,6 +2,7 @@ import type { UltraReviewState } from '@libs/code-review/domain/ultra-review-sta
 
 import {
     ultraDegradedNotice,
+    ultraFallbackInfoLine,
     ultraSaveRefusalMessage,
 } from './ultra-review-messages';
 
@@ -82,6 +83,69 @@ describe('ultraDegradedNotice', () => {
                 'No model completed, and none left comments to post.',
             );
         });
+    });
+});
+
+const run = (
+    position: 1 | 2 | 3 | 'fallback',
+    modelId: string,
+    status: 'completed' | 'failed',
+    extra: Record<string, unknown> = {},
+) => ({
+    position,
+    modelId,
+    modelName: `openai:${modelId}`,
+    status,
+    ...extra,
+});
+
+describe('ultraDegradedNotice with Kody Rules left behind', () => {
+    it('says their comments are missing, though the three models completed', () => {
+        const notice = ultraDegradedNotice(
+            {
+                models: [model(1, 'a'), model(2, 'b'), model(3, 'c')],
+                mergeModel: model(1, 'a'),
+                runs: [
+                    run(1, 'a', 'completed'),
+                    run(2, 'b', 'completed'),
+                    run(3, 'c', 'completed'),
+                ] as any,
+                merge: { status: 'success', inputCount: 3, outputCount: 3 },
+                auxiliaryMissed: true,
+                outcome: 'degraded',
+            },
+            { prNumber: 7 },
+        );
+        expect(notice).toContain(
+            'Kody Rules and custom agents did not finish in time',
+        );
+        expect(notice).toContain('Automatic approval is held');
+    });
+});
+
+describe('ultraFallbackInfoLine', () => {
+    const replacedBy = (fallback: 'completed' | 'failed', outcome: any) =>
+        ultraFallbackInfoLine({
+            models: [model(1, 'a'), model(2, 'b'), model(3, 'c')],
+            fallback: model('fallback', 'f'),
+            mergeModel: model(1, 'a'),
+            runs: [
+                run(1, 'a', 'completed'),
+                run(2, 'b', 'failed', { replacedBy: 'f' }),
+                run(3, 'c', 'completed'),
+                run('fallback', 'f', fallback),
+            ] as any,
+            outcome,
+        });
+
+    it('says the fallback took the place of a failed model when the review succeeded', () => {
+        expect(replacedBy('completed', 'success')).toContain(
+            'the fallback `openai:f` took its place',
+        );
+    });
+
+    it('says nothing when the fallback failed too: the notice tells it', () => {
+        expect(replacedBy('failed', 'degraded')).toBeUndefined();
     });
 });
 

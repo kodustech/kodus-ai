@@ -122,14 +122,18 @@ export interface UltraReviewHost {
         context: CodeReviewPipelineContext,
         pass: ReviewPass,
     ): Promise<CodeReviewPipelineContext>;
-    /** A hold on the PR's sandbox for the run, or undefined (the run goes without). */
+    /**
+     * A hold on the PR's sandbox for the run; 'superseded' when the PR was
+     * closed or force-pushed (the review is moot), or undefined when it
+     * could not be had. Either way the run goes without one.
+     */
     acquireRunSandbox(
         context: CodeReviewPipelineContext,
         suffix: string,
         leaseTtlMs: number,
         /** Stops waiting for a sandbox slot: the run's deadline. */
         signal: AbortSignal,
-    ): Promise<SandboxInstance | undefined>;
+    ): Promise<SandboxInstance | 'superseded' | undefined>;
     /**
      * The context a model's run reviews in: its sandbox, its model, and the
      * signal that stops its review loop.
@@ -139,6 +143,8 @@ export interface UltraReviewHost {
         model: UltraModel,
         sandbox: SandboxInstance | undefined,
         signal: AbortSignal,
+        /** The run's sandbox was superseded: it is not reported as missing. */
+        superseded?: boolean,
     ): CodeReviewPipelineContext;
     update(
         context: CodeReviewPipelineContext,
@@ -492,14 +498,16 @@ export async function executeUltraReview(
             // that waits past it reviews with what time is left, or none.
             const stop = deadlineSignal(context.parentSignal, window);
             // A review a later push superseded takes no new sandboxes.
-            const sandbox = context.sandboxSuperseded
-                ? undefined
+            const acquired = context.sandboxSuperseded
+                ? 'superseded'
                 : await host.acquireRunSandbox(
                       context,
                       tag,
                       ULTRA_RUN_LEASE_TTL_MS,
                       stop.signal,
                   );
+            const superseded = acquired === 'superseded';
+            const sandbox = superseded ? undefined : acquired;
             const release = () =>
                 sandbox?.cleanup?.().catch(releaseFailed(tag));
             const left = Math.max(0, window - (Date.now() - startedAt));
@@ -526,7 +534,13 @@ export async function executeUltraReview(
             let collected: ReviewPassCollected | undefined;
             const pass = host
                 .reviewPass(
-                    host.runContext(context, model, sandbox, stop.signal),
+                    host.runContext(
+                        context,
+                        model,
+                        sandbox,
+                        stop.signal,
+                        superseded,
+                    ),
                     {
                         scope: 'native',
                         model,
@@ -578,7 +592,8 @@ export async function executeUltraReview(
             const timedOut =
                 loopStopped ??
                 (stop.signal.aborted && !context.parentSignal?.aborted);
-            const withoutCheckout = checkoutExpected && !sandbox;
+            // A moot review's run did not lose its checkout.
+            const withoutCheckout = checkoutExpected && !sandbox && !superseded;
             const completed =
                 collected.completion.completed && !timedOut && !withoutCheckout;
             const failureReason = timedOut
@@ -687,8 +702,14 @@ export async function executeUltraReview(
             otherLocationsToRender(finding),
     );
 
-    const outcome = ultraReviewOutcome(runs, merge);
-    const finalState: UltraReviewState = { ...state, runs, merge, outcome };
+    const outcome = ultraReviewOutcome(runs, merge, auxiliaryMissed);
+    const finalState: UltraReviewState = {
+        ...state,
+        runs,
+        merge,
+        outcome,
+        ...(auxiliaryMissed && { auxiliaryMissed: true }),
+    };
     logger.log({
         message: `[ULTRA] PR#${prNumber}: ${outcome}; ${runs.filter((r) => r.status === 'completed').length} runs completed; merge ${merge.status} (${merge.inputCount} → ${merge.outputCount})`,
         context: 'UltraReview',
@@ -702,23 +723,6 @@ export async function executeUltraReview(
             ...runWarnings,
         ]);
         if (warnings.length) draft.reviewWarnings = warnings;
-        if (auxiliaryMissed) {
-            if (!draft.errors) draft.errors = [];
-            draft.errors.push({
-                pipelineId: context.pipelineMetadata?.pipelineId,
-                stage: 'AgentReviewStage',
-                substage: 'ultra-auxiliary',
-                error: new Error(
-                    'Kody Rules and custom agents did not finish in time',
-                ),
-                severity: 'partial',
-                metadata: {
-                    prNumber,
-                    reason: ULTRA_REVIEW_DEGRADED_REASON,
-                    outcome,
-                },
-            });
-        }
         if (outcome === 'success') return;
         if (!draft.errors) draft.errors = [];
         const failed = runs
@@ -732,7 +736,7 @@ export async function executeUltraReview(
             error: new Error(
                 outcome === 'failed'
                     ? `No Ultra review model completed (${failed})`
-                    : `Ultra review did not run as configured${failed ? ` (${failed})` : ''}${merge.status === 'failed' ? '; the merge failed' : ''}`,
+                    : `Ultra review did not run as configured${failed ? ` (${failed})` : ''}${merge.status === 'failed' ? '; the merge failed' : ''}${auxiliaryMissed ? '; Kody Rules and custom agents did not finish in time' : ''}`,
             ),
             severity: outcome === 'failed' ? 'critical' : 'partial',
             metadata: {

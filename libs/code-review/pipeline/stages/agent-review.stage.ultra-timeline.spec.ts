@@ -69,3 +69,34 @@ describe('AgentReviewStage — the Ultra merge entry on the timeline', () => {
         );
     });
 });
+
+describe('AgentReviewStage — the context of an Ultra run', () => {
+    const runContext = (
+        parentSuperseded: boolean,
+        sandbox?: any,
+        superseded?: boolean,
+    ) =>
+        (makeStage({}) as any).ultraReviewHost().runContext(
+            {
+                sandboxSuperseded: parentSuperseded || undefined,
+                codeReviewConfig: {},
+            },
+            { slot: {} },
+            sandbox,
+            new AbortController().signal,
+            superseded,
+        ).sandboxSuperseded;
+
+    it('keeps a moot review moot for a run with no sandbox', () => {
+        expect(runContext(true)).toBe(true);
+    });
+
+    it('marks the run moot when its own join was superseded', () => {
+        expect(runContext(false, undefined, true)).toBe(true);
+    });
+
+    it('a run that got a sandbox is not moot', () => {
+        expect(runContext(true, { id: 's' })).toBeUndefined();
+        expect(runContext(false)).toBeUndefined();
+    });
+});

@@ -82,6 +82,8 @@ interface Fixture {
     merge?: Record<string, 'ok' | 'fail' | 'throw' | 'hang'>;
     /** Runs whose sandbox could not be created. */
     noSandbox?: string[];
+    /** Runs whose join found the PR closed or force-pushed. */
+    superseded?: string[];
     /** Runs that wait for a sandbox slot until their deadline stops them. */
     waitForSlot?: string[];
     crossDedupHangs?: boolean;
@@ -188,6 +190,7 @@ function setup(fx: Fixture) {
                 return undefined;
             }
             if (fx.noSandbox?.includes(run)) return undefined;
+            if (fx.superseded?.includes(run)) return 'superseded';
             return {
                 id: run,
                 cleanup: async () => {
@@ -195,10 +198,11 @@ function setup(fx: Fixture) {
                 },
             } as any;
         },
-        runContext: (ctx, m, sandbox, signal) =>
+        runContext: (ctx, m, sandbox, signal, superseded) =>
             ({
                 ...ctx,
                 sandboxHandle: sandbox,
+                runSuperseded: superseded,
                 model: m.modelId,
                 parentSignal: signal,
             }) as any,
@@ -675,13 +679,20 @@ describe('executeUltraReview', () => {
                 'a1',
                 'c2',
             ]);
-            expect(out.ultra?.outcome).toBe('success');
+            // The review is incomplete without them: it is degraded, so
+            // the notice says why approval is held.
+            expect(out.ultra?.outcome).toBe('degraded');
+            expect(out.ultra?.auxiliaryMissed).toBe(true);
             expect(calls.released).toContain('base');
-            // The review is incomplete without them: approval is held.
             expect(out.errors).toEqual([
                 expect.objectContaining({
-                    substage: 'ultra-auxiliary',
+                    substage: 'ultra',
                     severity: 'partial',
+                    error: expect.objectContaining({
+                        message: expect.stringContaining(
+                            'Kody Rules and custom agents did not finish in time',
+                        ),
+                    }),
                 }),
             ]);
         });
@@ -707,11 +718,13 @@ describe('executeUltraReview', () => {
                     'No time was left in the job for its review.',
                 );
             }
-            expect(out.errors).toEqual(
-                expect.arrayContaining([
-                    expect.objectContaining({ substage: 'ultra-auxiliary' }),
-                ]),
-            );
+            expect(out.ultra?.auxiliaryMissed).toBe(true);
+            expect(out.errors).toEqual([
+                expect.objectContaining({
+                    substage: 'ultra',
+                    severity: 'critical',
+                }),
+            ]);
         });
     });
 
@@ -766,6 +779,22 @@ describe('executeUltraReview', () => {
             });
             await executeUltraReview(context, host, LIMITS);
             expect(calls.sandboxes).toEqual([]);
+        });
+
+        it('a PR closed or force-pushed while the runs join its sandbox is moot: no run is failed for its checkout', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: collected([]),
+                },
+                superseded: ['ultra-1', 'ultra-2', 'ultra-3'],
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(out.ultra?.outcome).toBe('success');
+            expect(calls.passes.some((p) => p.scope === 'native')).toBe(true);
+            expect(out.errors).toEqual([]);
         });
 
         it('a run whose sandbox could not be created did not complete: the fallback replaces it', async () => {

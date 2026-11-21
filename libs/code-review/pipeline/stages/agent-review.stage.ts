@@ -541,11 +541,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     leaseTtlMs,
                     signal,
                 ),
-            runContext: (context, model, sandbox, signal) =>
+            runContext: (context, model, sandbox, signal, superseded) =>
                 this.updateContext(context, (draft) => {
                     draft.parentSignal = signal;
                     draft.sandboxHandle = sandbox;
-                    draft.sandboxSuperseded = undefined;
+                    // A run with no sandbox on a moot review keeps it moot.
+                    if (sandbox) draft.sandboxSuperseded = undefined;
+                    else if (superseded) draft.sandboxSuperseded = true;
                     // Every later step of the run (dedup, severity,
                     // enrichment, formatter) calls the run's model.
                     draft.codeReviewConfig.byokConfig = model.slot;
