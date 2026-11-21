@@ -307,6 +307,67 @@ describe('RabbitMQErrorHandler', () => {
             );
             expect(amqpConnection.publish.mock.calls[0][0]).not.toMatch(/dlx$/);
         });
+
+        it('returns stopped work as a fresh copy on its own exchange, then acks', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 0 });
+            const channel = { ack: jest.fn(), nack: jest.fn() };
+            const msg = makeMessage({
+                'x-retry-count': 99,
+                'x-delay': 20_000,
+                'x-delivery-count': 3,
+            });
+            msg.fields.exchange = 'workflow.exchange.delayed';
+
+            await handler.handle(
+                channel,
+                msg,
+                new ClaimConflictError('slice aborted', undefined, {
+                    returnToQueue: true,
+                }),
+                { dlqRoutingKey: 'workflow.job.failed' },
+            );
+
+            expect(amqpConnection.publish).toHaveBeenCalledTimes(1);
+            const [exchange, routingKey, content, options] =
+                amqpConnection.publish.mock.calls[0];
+            expect(exchange).toBe('workflow.exchange');
+            expect(routingKey).toBe('workflow.jobs.created.CODE_REVIEW');
+            expect(content).toBe(msg.content);
+            expect(options).toMatchObject({
+                messageId: 'message-1',
+                persistent: true,
+            });
+            expect(options.headers).toEqual({ 'x-retry-count': 99 });
+            expect(channel.ack).toHaveBeenCalledWith(msg);
+            expect(channel.nack).not.toHaveBeenCalled();
+        });
+
+        it('leaves the original unacked when the fresh copy is not confirmed', async () => {
+            const { handler, amqpConnection } = makeHandler({
+                publish: jest
+                    .fn()
+                    .mockRejectedValue(new Error('Channel closed')),
+            });
+            const channel = { ack: jest.fn(), nack: jest.fn() };
+
+            await expect(
+                handler.handle(
+                    channel,
+                    makeMessage(),
+                    new ClaimConflictError('slice aborted', undefined, {
+                        returnToQueue: true,
+                    }),
+                ),
+            ).resolves.toBeUndefined();
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange',
+                'workflow.jobs.created.CODE_REVIEW',
+                expect.anything(),
+                expect.anything(),
+            );
+            expect(channel.ack).not.toHaveBeenCalled();
+            expect(channel.nack).not.toHaveBeenCalled();
+        });
     });
 
     it('nacks without requeue when the singleton handler is unavailable', () => {
