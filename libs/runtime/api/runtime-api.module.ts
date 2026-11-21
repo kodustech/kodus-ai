@@ -205,6 +205,10 @@ import {
     UpdateRuntimeSecretUseCase,
 } from './application/use-cases/secrets.use-cases';
 import { RUNTIME_SECRET_STORE, RUNTIME_SECRET_VAULT } from './domain/secrets';
+import { PurgeRuntimeOrganizationUseCase } from './application/use-cases/purge-organization.use-case';
+import { RUNTIME_ORGANIZATION_PURGE_STORE } from './domain/organization-purge';
+import { OrganizationDeletedPurgeListener } from './infrastructure/organization-deleted-purge.listener';
+import { TypeOrmRuntimeOrganizationPurgeStore } from './infrastructure/typeorm-runtime-organization-purge.store';
 import { loadOpenBaoSecretVaultConfig, OpenBaoSecretVault, UnconfiguredSecretVault } from './infrastructure/openbao-secret-vault.adapter';
 import { TypeOrmRuntimeSecretStore } from './infrastructure/typeorm-runtime-secrets.store';
 
@@ -271,6 +275,7 @@ const useCases = [
     UpdateRuntimeSecretUseCase,
     DeleteRuntimeSecretUseCase,
     ListRuntimeSecretAuditUseCase,
+    PurgeRuntimeOrganizationUseCase,
 ];
 
 /**
@@ -357,6 +362,10 @@ const useCases = [
         // The product-side state below (receipts, call counts, budget, audit, publications): the product Postgres.
         { provide: TypeOrmSql, inject: [DataSource], useFactory: (source: DataSource) => new TypeOrmSql(source) },
         { provide: RUNTIME_SECRET_STORE, inject: [TypeOrmSql], useFactory: (sql: TypeOrmSql) => new TypeOrmRuntimeSecretStore(sql) },
+        // Every product row of an org's Runtime data, for the org's purge (PurgeRuntimeOrganizationUseCase).
+        { provide: RUNTIME_ORGANIZATION_PURGE_STORE, inject: [TypeOrmSql], useFactory: (sql: TypeOrmSql) => new TypeOrmRuntimeOrganizationPurgeStore(sql) },
+        // Deletes the org's Runtime data when the product deletes the organization (libs/organization OrganizationService).
+        OrganizationDeletedPurgeListener,
         {
             // The org secrets' store (docs/runtime/sandbox.md): OpenBao when RUNTIME_OPENBAO_ADDR is set, else none.
             provide: RUNTIME_SECRET_VAULT,

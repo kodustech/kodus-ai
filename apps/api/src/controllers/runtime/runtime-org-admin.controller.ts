@@ -14,10 +14,11 @@ import {
     RevokeCellRegistrationTokenUseCase,
     RevokeRuntimeCellUseCase,
 } from '@libs/runtime/api/application/use-cases/cells.use-cases';
+import { PurgeRuntimeOrganizationUseCase } from '@libs/runtime/api/application/use-cases/purge-organization.use-case';
 import { ClearRuntimeStopUseCase, StopRuntimeUseCase } from '@libs/runtime/api/application/use-cases/stop-runtime.use-case';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
-import { ApproveEgressHostDto, CreateCellRegistrationTokenDto, OrgEgressSettingsDto, OrgRuntimeStopDto, RevokeCellDto, RevokeEgressHostDto } from './runtime.dto';
+import { ApproveEgressHostDto, CreateCellRegistrationTokenDto, OrgEgressSettingsDto, OrgRuntimeStopDto, PurgeOrganizationDataDto, RevokeCellDto, RevokeEgressHostDto } from './runtime.dto';
 import { RuntimeReleaseGuard } from './runtime-release.guard';
 
 /**
@@ -42,6 +43,7 @@ export class RuntimeOrgAdminController {
         private readonly revokeCellUseCase: RevokeRuntimeCellUseCase,
         private readonly listCellTokens: ListCellRegistrationTokensUseCase,
         private readonly revokeCellToken: RevokeCellRegistrationTokenUseCase,
+        private readonly purgeOrganizationData: PurgeRuntimeOrganizationUseCase,
     ) {}
 
     // Owners and repo admins (Update on CodeReviewSettings, as creating an environment); the use case then applies
@@ -135,5 +137,17 @@ export class RuntimeOrgAdminController {
     @ApiOperation({ summary: 'Revoke a cell', description: "A cell of the caller's org; another org's cell is 404." })
     revokeCell(@Req() req: UserRequest, @Param('id') id: string, @Body() body: RevokeCellDto) {
         return this.revokeCellUseCase.execute({ user: req.user, cellId: id, reason: body.reason, scope: 'org' });
+    }
+
+    @Post('organization-data/purge')
+    @HttpCode(202)
+    @CheckPolicies(checkRole({ role: Role.OWNER }))
+    @ApiOperation({
+        summary: "Delete every Runtime datum of the org",
+        description:
+            "Irreversible. The org's Runtime secrets leave the secret store, its product rows are deleted, and the Runtime cancels its live Runs and deletes its Runs, evidence and every other row. The body's confirm must be the org id.",
+    })
+    purgeOrganizationRuntimeData(@Req() req: UserRequest, @Body() body: PurgeOrganizationDataDto) {
+        return this.purgeOrganizationData.executeConfirmed({ user: req.user, confirm: body.confirm });
     }
 }

@@ -55,6 +55,9 @@ import { ReadRuntimeRunStreamUseCase } from '@libs/runtime/api/application/use-c
 import { RunRuntimeAgainUseCase } from '@libs/runtime/api/application/use-cases/run-again.use-case';
 import { SetTeamKeyRepositoriesUseCase } from '@libs/runtime/api/application/use-cases/set-team-key-repositories.use-case';
 import { ClearRuntimeStopUseCase, StopRuntimeUseCase } from '@libs/runtime/api/application/use-cases/stop-runtime.use-case';
+import { PurgeRuntimeOrganizationUseCase } from '@libs/runtime/api/application/use-cases/purge-organization.use-case';
+import { RUNTIME_ORGANIZATION_PURGE_STORE } from '@libs/runtime/api/domain/organization-purge';
+import { RUNTIME_SECRET_VAULT } from '@libs/runtime/api/domain/secrets';
 import {
     CreateRuntimeEnvironmentUseCase,
     GetRuntimeEnvironmentUseCase,
@@ -205,6 +208,10 @@ describe('Runtime controllers over HTTP', () => {
     const keptChecks = new InMemoryKeptChecks();
     const outbox = new FakeOutbox();
     const audit = { emit: jest.fn() };
+    // The org's purge: the vault and the product rows are doubles; the use case has its own spec.
+    const purged: { vault: string[]; rows: string[] } = { vault: [], rows: [] };
+    const purgeStore = { secretIds: async () => ['db_password'], purgeOrganization: async (org: string) => (purged.rows.push(org), { runtime_environments: 2 }) };
+    const purgeVault = { configured: true, delete: async (org: string, id: string) => void purged.vault.push(`${org}/${id}`) };
     const keyUpdates: any[] = [];
     // The recipe author's use case has its own spec; here only what the route hands it.
     const recipeAuthorCalls: Array<{ authorization?: string; body: any; signal?: AbortSignal }> = [];
@@ -303,6 +310,9 @@ describe('Runtime controllers over HTTP', () => {
                 OrgEgressUseCases,
                 RuntimeEgressAccess,
                 StopRuntimeUseCase,
+                PurgeRuntimeOrganizationUseCase,
+                { provide: RUNTIME_ORGANIZATION_PURGE_STORE, useValue: purgeStore },
+                { provide: RUNTIME_SECRET_VAULT, useValue: purgeVault },
                 CreateCellRegistrationTokenUseCase,
                 ListCellRegistrationTokensUseCase,
                 RevokeCellRegistrationTokenUseCase,
@@ -719,6 +729,31 @@ describe('Runtime controllers over HTTP', () => {
         await request(app.getHttpServer()).get(`/runtime/runs/${live.runId}/stream`).expect(401);
         await request(app.getHttpServer()).get(`/runtime/runs/${live.runId}/stream`).set('authorization', bearer('outsider')).expect(404);
         await request(app.getHttpServer()).get(`/runtime/runs/${live.runId}/stream`).set('authorization', bearer('billing_manager')).expect(403);
+    });
+
+    it("POST /runtime/organization-data/purge: the owner of the org who types the org id; the confirmation and the role are checked first", async () => {
+        const before = outbox.events.length;
+        const purge = (who: string, body: unknown) => as(who).post('/runtime/organization-data/purge').send(body as object);
+        // Not the owner: refused before anything is touched.
+        for (const who of ['repo_admin', 'contributor', 'billing_manager']) await purge(who, { confirm: ORG }).expect(403);
+        // The owner, with no confirmation, the wrong one, another org's id, or one that is not a string.
+        await purge('owner', {}).expect(400);
+        await purge('owner', { confirm: '' }).expect(400);
+        await purge('owner', { confirm: 'org-nobody' }).expect(400);
+        await purge('owner', { confirm: OTHER_ORG }).expect(400);
+        await purge('owner', { confirm: [ORG] }).expect(400);
+        await purge('owner', { confirm: ORG, extra: true }).expect(400);
+        expect(purged).toEqual({ vault: [], rows: [] });
+        expect(outbox.events.slice(before)).toEqual([]);
+
+        // The owner's own org id: the secrets leave the vault, the product rows go, the Runtime is told.
+        const res = await purge('owner', { confirm: ORG }).expect(202);
+        expect(res.body).toMatchObject({ organizationId: ORG, secretsDeleted: 1, productRows: 2 });
+        expect(purged).toEqual({ vault: [`${ORG}/db_password`], rows: [ORG] });
+        expect(outbox.events.slice(before)).toEqual(['runtime.organization.purge_requested']);
+        expect(outbox.rows.at(-1)!.payload).toMatchObject({ payload: { organizationId: ORG, reason: 'owner_requested', requestedBy: { userId: expect.any(String) } } });
+        // An owner of another org purges that org, never this one.
+        await as('outsider').post('/runtime/organization-data/purge').send({ confirm: ORG }).expect(400);
     });
 
     it('org-admin routes are owner-only', async () => {

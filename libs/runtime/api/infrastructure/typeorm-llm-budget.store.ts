@@ -37,6 +37,8 @@ const PULL_REQUEST_COUNTER_PREFIX = 'pr/';
 export const pullRequestCounterKey = (u: Pick<RuntimeLlmUsageRecord, 'organizationId' | 'repositoryId' | 'prNumber'>) =>
     `${PULL_REQUEST_COUNTER_PREFIX}${part(u.organizationId)}/${part(u.repositoryId)}/${part(u.prNumber)}`;
 export const orgDayCounterKey = (organizationId: string, dayStart: Date) => `org-day/${part(organizationId)}/${dayStart.toISOString().slice(0, 10)}`;
+/** The key prefixes of an org's per-PR and per-day counters (the purge of the org deletes by them). */
+export const orgCounterPrefixes = (organizationId: string): [pullRequests: string, days: string] => [`${PULL_REQUEST_COUNTER_PREFIX}${part(organizationId)}/`, `org-day/${part(organizationId)}/`];
 
 const whole = (v: unknown) => Number(v ?? 0);
 const nonNegative = (v: number | undefined) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);

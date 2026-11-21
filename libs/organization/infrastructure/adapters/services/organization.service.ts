@@ -1,6 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { v4 as uuidv4 } from 'uuid';
 
+import { ORGANIZATION_DELETED_EVENT, OrganizationDeletedEvent } from '@libs/core/domain/events/organization-deleted.event';
+import { createLogger } from '@libs/core/log/logger';
 import {
     DEFAULT_RELEASE_TRACK,
     type ReleaseTrack,
@@ -18,9 +21,13 @@ import {
 
 @Injectable()
 export class OrganizationService implements IOrganizationService {
+    private readonly logger = createLogger(OrganizationService.name);
+
     constructor(
         @Inject(ORGANIZATION_REPOSITORY_TOKEN)
         private readonly organizationRepository: IOrganizationRepository,
+        // Absent in a process without the event module: nothing listens there, and the delete is the same.
+        @Optional() private readonly events?: EventEmitter2,
     ) {}
 
     public update(
@@ -75,7 +82,18 @@ export class OrganizationService implements IOrganizationService {
     }
 
     public async deleteOne(filter: Partial<IOrganization>): Promise<void> {
+        // The id is known before the row goes: a filter by anything else is resolved first, so the event names the org.
+        const organizationId = filter.uuid ?? (await this.organizationRepository.findOne(filter))?.uuid;
         await this.organizationRepository.deleteOne(filter);
+        // Listeners delete the data the organization left elsewhere (the Kody Runtime's). Best effort: a listener's
+        // failure is its own to log and retry, and the organization stays deleted.
+        if (organizationId) {
+            try {
+                this.events?.emit(ORGANIZATION_DELETED_EVENT, new OrganizationDeletedEvent(organizationId));
+            } catch (error) {
+                this.logger.warn({ message: 'Organization deleted event failed', context: OrganizationService.name, error: error instanceof Error ? error : undefined, metadata: { organizationId } });
+            }
+        }
     }
 
     public async getReleaseTrack(

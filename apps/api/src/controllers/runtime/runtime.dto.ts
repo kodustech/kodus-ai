@@ -100,6 +100,15 @@ export class OrgRuntimeStopDto {
     scope: 'org';
 }
 
+/** The explicit purge of the org's Runtime data: the owner types the org's own id, so a wrong click or a copied body does nothing. */
+export class PurgeOrganizationDataDto {
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(128)
+    @ApiProperty({ description: "The id of the caller's organization, typed to confirm. Anything else is refused." })
+    confirm: string;
+}
+
 export class CreateCellRegistrationTokenDto {
     @IsIn(['hybrid', 'self_hosted'])
     @ApiProperty({ enum: ['hybrid', 'self_hosted'] })

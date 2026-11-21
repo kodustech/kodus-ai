@@ -2134,6 +2134,17 @@
     }
   },
   {
+    "key": "runtime-org-admin.controller.ts#purgeOrganizationRuntimeData",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/organization-data/purge",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "runtime-org-admin.controller.ts#revokeCell",
     "httpMethod": "POST",
     "urlPath": "/runtime/cells/:id/revoke",
