@@ -34,8 +34,13 @@ describe('MongooseFactory connection options', () => {
         }
     });
 
-    it('builds schema indexes on boot unless production turns it off', () => {
-        expect(options().autoIndex).toBe(true);
+    // An explicit `autoIndex: true` makes Mongoose refuse a connection that
+    // reads from secondaries; left out, Mongoose builds the indexes on a
+    // primary-read connection and skips them on a secondary-read one.
+    it('passes autoIndex only to turn it off', () => {
+        expect('autoIndex' in options()).toBe(false);
+        process.env.MONGO_AUTO_INDEX = 'true';
+        expect('autoIndex' in options()).toBe(false);
         process.env.MONGO_AUTO_INDEX = 'false';
         expect(options().autoIndex).toBe(false);
     });

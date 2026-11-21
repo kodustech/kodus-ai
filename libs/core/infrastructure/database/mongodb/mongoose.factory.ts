@@ -109,14 +109,19 @@ export class MongooseFactory implements MongooseOptionsFactory {
                 15_000,
             ),
             waitQueueTimeoutMS: envInt('MG_WAIT_QUEUE_TIMEOUT_MS', 30_000),
-            // Builds every schema index on boot unless turned off
-            // (MONGO_AUTO_INDEX=false): on a large collection a missing index
-            // becomes a build on the primary started by each deploy. Nothing
-            // else builds the schema indexes of Mongoose models (no migration
-            // does), so before turning it off check every declared index exists
-            // in production, and build any new one by hand.
-            autoIndex: process.env.MONGO_AUTO_INDEX !== 'false',
             appName: mongoAppName(),
+            // Schema indexes are built on boot unless turned off
+            // (MONGO_AUTO_INDEX=false): on a large collection a missing index
+            // becomes a build on the primary started by each deploy. Indexes
+            // a release adds are also built by a Mongo migration, so turning
+            // it off leaves none missing. Only the off switch is passed: an
+            // explicit `autoIndex: true` makes Mongoose refuse to connect when
+            // the URI reads from secondaries (readPreference=secondary or
+            // secondaryPreferred), where it otherwise turns index builds off
+            // by itself.
+            ...(process.env.MONGO_AUTO_INDEX === 'false'
+                ? { autoIndex: false }
+                : {}),
         };
     }
 }
