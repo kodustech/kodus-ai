@@ -3,6 +3,8 @@ import { execFileSync } from 'node:child_process';
 import type { CliToolConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import {
+    buildRuntimeRunCommand,
+    planRuntimeCliInstall,
     buildInstallScript,
     buildNetworkScript,
     buildRunCommand,
@@ -339,5 +341,45 @@ describe('resolveCliTimeoutSec', () => {
         expect(resolveCliTimeoutSec({ timeoutSec: NaN })).toBe(120);
         expect(resolveCliTimeoutSec({ timeoutSec: Infinity })).toBe(120);
         expect(resolveCliTimeoutSec({ timeoutSec: '30' as any })).toBe(120);
+    });
+});
+
+describe('runtime sandbox (noexec workspace)', () => {
+    it('runs the CLI through its interpreter with the args safely quoted', () => {
+        const command = buildRuntimeRunCommand({
+            home: '/workspace/.kcli/u1',
+            binaryPath: '/workspace/.kcli/u1/node_modules/cowsay/cli.js',
+            interpreter: 'node',
+            args: ['hi there', "it's; rm -rf /"],
+            repoDir: '/workspace/repo',
+            timeoutSec: 30,
+        });
+        expect(command).toContain(
+            `timeout -k 5 30 'node' '/workspace/.kcli/u1/node_modules/cowsay/cli.js' 'hi there' 'it'\\''s; rm -rf /'`,
+        );
+    });
+
+    it('marks pip-family installers unsupported, with the reason', () => {
+        for (const install of [
+            'pip install lintkit==2.4.1',
+            'pipx install lintkit==2.4.1',
+            'uv tool install lintkit==2.4.1',
+        ]) {
+            const plan = planRuntimeCliInstall(
+                'a1',
+                cli({ install, allowedDomains: [] }),
+            );
+            expect(plan.ok).toBe(false);
+            expect((plan as any).reason).toMatch(/no pip|not supported/);
+        }
+    });
+
+    it('still plans an npm install', () => {
+        expect(
+            planRuntimeCliInstall(
+                'a1',
+                cli({ install: 'npm install -g lintkit@2.4.1', allowedDomains: [] }),
+            ).ok,
+        ).toBe(true);
     });
 });

@@ -6,6 +6,12 @@
  */
 export const CLI_PREFIX_ROOT = '/workspace/.kcli';
 export const CLI_PREFIX_MARKER = 'KODUS_CLI_BINARY=';
+export const CLI_PREFIX_INTERPRETER_MARKER = 'KODUS_CLI_INTERPRETER=';
+/** The runtime sandbox mounts /workspace and /tmp noexec (a defense kept on),
+ *  so the kernel cannot execve anything installed there: a CLI runs as
+ *  `<interpreter> <script>`, the interpreter being a binary of the image. */
+export const CLI_PREFIX_INTERPRETERS = ['node', 'python3', 'bash', 'sh'] as const;
+export type CliPrefixInterpreter = (typeof CLI_PREFIX_INTERPRETERS)[number];
 export const CLI_PREFIX_INSTALL_TIMEOUT_SEC = 300;
 
 const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -48,27 +54,67 @@ export function buildCliPrefixInstallScript(params: {
         `cd ${q(home)}`,
         `/usr/bin/env -i ${env} /usr/bin/timeout -k 5 ${CLI_PREFIX_INSTALL_TIMEOUT_SEC} ${params.argv.map(q).join(' ')} >&2`,
         `for d in ${dirs}; do`,
-        `  if [ -x "$d"/${q(params.binary)} ]; then echo "${CLI_PREFIX_MARKER}$d/"${q(params.binary)}; exit 0; fi`,
+        // -e, not -x: on a noexec mount the exec bit tests false. readlink -f
+        // follows node_modules/.bin/<name> -> ../<pkg>/cli.js to the real file.
+        `  b="$d"/${q(params.binary)}`,
+        '  [ -e "$b" ] || continue',
+        '  r=$(readlink -f "$b") || continue',
+        '  [ -f "$r" ] || continue',
+        `  magic=$(head -c 4 "$r" | od -An -tx1 | tr -d ' \n')`,
+        '  if [ "$magic" = 7f454c46 ]; then',
+        `    echo ${q(`binary ${params.binary} is a native executable; it cannot run in the runtime sandbox (its workspace is noexec). Use a script CLI (node, python or shell).`)} >&2`,
+        '    exit 4',
+        '  fi',
+        `  line=$(head -n 1 "$r" | tr -d '\r')`,
+        '  case "$line" in',
+        "    '#!'*node*) i=node ;;",
+        "    '#!'*python*) i=python3 ;;",
+        "    '#!'*bash*) i=bash ;;",
+        "    '#!'*sh*) i=sh ;;",
+        '    *) i= ;;',
+        '  esac',
+        '  if [ -z "$i" ]; then',
+        `    echo ${q(`binary ${params.binary} has no supported shebang (node, python, bash or sh); it cannot run in the runtime sandbox`)} >&2`,
+        '    exit 5',
+        '  fi',
+        `  echo "${CLI_PREFIX_MARKER}$r"`,
+        `  echo "${CLI_PREFIX_INTERPRETER_MARKER}$i"`,
+        '  exit 0',
         'done',
         `echo ${q(`binary ${params.binary} not found after install`)} >&2`,
         'exit 3',
     ].join('\n');
 }
 
-/** The binary path the install script printed, only if it is inside the
- *  prefix (whatever a package's own output claims). */
-export function parseCliPrefixBinary(
+export interface ParsedCliPrefixInstall {
+    binaryPath: string;
+    interpreter: CliPrefixInterpreter;
+}
+
+/** The resolved script path and interpreter the install script printed, only
+ *  if the path is inside the prefix (whatever a package's own output claims)
+ *  and the interpreter is one we know. */
+export function parseCliPrefixInstall(
     id: string,
     stdout: string,
-): string | undefined {
+): ParsedCliPrefixInstall | undefined {
     const home = cliPrefixHome(id);
-    const path = stdout
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.startsWith(CLI_PREFIX_MARKER))
-        .pop()
-        ?.slice(CLI_PREFIX_MARKER.length);
-    return path && path.startsWith(`${home}/`) && !path.includes('..')
-        ? path
-        : undefined;
+    const last = (marker: string) =>
+        stdout
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.startsWith(marker))
+            .pop()
+            ?.slice(marker.length);
+    const binaryPath = last(CLI_PREFIX_MARKER);
+    const interpreter = last(CLI_PREFIX_INTERPRETER_MARKER);
+    if (
+        !binaryPath ||
+        !binaryPath.startsWith(`${home}/`) ||
+        binaryPath.includes('..') ||
+        !(CLI_PREFIX_INTERPRETERS as readonly string[]).includes(interpreter ?? '')
+    ) {
+        return undefined;
+    }
+    return { binaryPath, interpreter: interpreter as CliPrefixInterpreter };
 }

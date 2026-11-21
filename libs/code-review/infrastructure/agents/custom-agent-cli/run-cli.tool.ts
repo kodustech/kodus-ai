@@ -187,6 +187,7 @@ export async function executeRunCli(
         ? buildRuntimeRunCommand({
               home: entry.home!,
               binaryPath: entry.binaryPath,
+              interpreter: entry.interpreter,
               args,
               repoDir: sandbox.repoDir,
               timeoutSec,

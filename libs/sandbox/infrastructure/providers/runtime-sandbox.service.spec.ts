@@ -432,7 +432,7 @@ describe('team CLIs installed into a runtime sandbox before its seal', () => {
     it('opens the sandbox to the install hosts, installs as the review user into /workspace, then seals', async () => {
         const home = '/workspace/.kcli/kcliabc';
         const { client, order } = make(
-            `KODUS_CLI_BINARY=${home}/node_modules/.bin/left-pad\n`,
+            `KODUS_CLI_BINARY=${home}/node_modules/left-pad/cli.js\nKODUS_CLI_INTERPRETER=node\n`,
         );
         const sandbox = await new RuntimeSandboxService(
             conf({}),
@@ -445,7 +445,11 @@ describe('team CLIs installed into a runtime sandbox before its seal', () => {
         ]);
         expect(order).toEqual(['install', 'seal']);
         expect(sandbox.cliInstalls).toEqual({
-            kcliabc: { home, binaryPath: `${home}/node_modules/.bin/left-pad` },
+            kcliabc: {
+                home,
+                binaryPath: `${home}/node_modules/left-pad/cli.js`,
+                interpreter: 'node',
+            },
         });
     });
 

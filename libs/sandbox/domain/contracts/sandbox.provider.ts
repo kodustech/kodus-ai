@@ -56,6 +56,8 @@ export interface PreSealCliInstall {
 export interface PreSealCliInstallResult {
     /** Absolute path of the installed binary, inside the prefix. */
     binaryPath?: string;
+    /** Runs the binary: the workspace is noexec, so it is `<interpreter> <binaryPath>`. */
+    interpreter?: string;
     /** The prefix the CLI runs with as HOME. */
     home: string;
     error?: string;

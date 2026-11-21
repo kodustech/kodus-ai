@@ -71,6 +71,8 @@ export interface InstalledCustomAgentCli {
     identity: CliSandboxIdentity;
     /** Absolute path the pinned install produced, inside the CLI user's home. */
     binaryPath: string;
+    /** Runtime sandbox only: runs the script (`<interpreter> <binaryPath>`; the workspace is noexec). */
+    interpreter?: string;
     /** Runtime sandbox only: the user prefix the CLI runs with as HOME. */
     home?: string;
 }
@@ -326,6 +328,7 @@ export async function provisionCustomAgentClis(params: {
                     cli,
                     identity: cliSandboxIdentity(agent.id, cli.name),
                     binaryPath: done.binaryPath,
+                    interpreter: done.interpreter,
                     home: done.home,
                 });
             }

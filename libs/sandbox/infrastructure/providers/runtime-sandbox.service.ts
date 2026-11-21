@@ -26,7 +26,7 @@ import {
     buildCliPrefixInstallScript,
     cliPrefixHome,
     CLI_PREFIX_INSTALL_TIMEOUT_SEC,
-    parseCliPrefixBinary,
+    parseCliPrefixInstall,
 } from '@libs/sandbox/infrastructure/providers/cli-prefix-install';
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
 import { sedLineRange } from '@libs/sandbox/infrastructure/providers/read-within-root';
@@ -550,12 +550,12 @@ export class RuntimeSandboxService implements ISandboxProvider {
                             (CLI_PREFIX_INSTALL_TIMEOUT_SEC + 60) * 1000,
                     },
                 );
-                const binaryPath =
+                const parsed =
                     run.exitCode === 0
-                        ? parseCliPrefixBinary(install.id, run.stdout ?? '')
+                        ? parseCliPrefixInstall(install.id, run.stdout ?? '')
                         : undefined;
-                out[install.id] = binaryPath
-                    ? { home, binaryPath }
+                out[install.id] = parsed
+                    ? { home, ...parsed }
                     : {
                           home,
                           error: `install failed (exit ${run.exitCode}): ${(run.stderr ?? '').slice(-500)}`,

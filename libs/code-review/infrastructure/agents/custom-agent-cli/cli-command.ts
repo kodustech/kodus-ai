@@ -527,10 +527,8 @@ export function resolveCliTimeoutSec(cli: Pick<CliToolConfig, 'timeoutSec'>) {
 const RUNTIME_INSTALL_HOSTS: Record<string, string[]> = {
     npm: ['registry.npmjs.org'],
     pnpm: ['registry.npmjs.org'],
-    pip: ['pypi.org', 'files.pythonhosted.org'],
-    pip3: ['pypi.org', 'files.pythonhosted.org'],
-    pipx: ['pypi.org', 'files.pythonhosted.org'],
-    uv: ['pypi.org', 'files.pythonhosted.org'],
+    // pip, pip3, pipx and uv are deliberately absent: the sandbox image ships
+    // python3 but no pip (and no pipx/uv), so those installs cannot run.
 };
 
 /**
@@ -557,7 +555,7 @@ export function planRuntimeCliInstall(
     if (!hosts) {
         return {
             ok: false,
-            reason: `installer ${check.installer} is not supported on the Kody Runtime sandbox (npm, pnpm, pip, pipx and uv are)`,
+            reason: `installer ${check.installer} is not supported on the Kody Runtime sandbox (only npm and pnpm are: its image has python3 but no pip)`,
         };
     }
     const plan = planCliInstall(cli);
@@ -578,6 +576,9 @@ export function planRuntimeCliInstall(
 export function buildRuntimeRunCommand(params: {
     home: string;
     binaryPath: string;
+    /** Set on the runtime sandbox, where the workspace is noexec: the CLI
+     *  runs as `<interpreter> <binaryPath>`. */
+    interpreter?: string;
     args: readonly string[];
     repoDir: string;
     timeoutSec: number;
@@ -585,6 +586,6 @@ export function buildRuntimeRunCommand(params: {
     const env = cliPrefixEnv(params.home);
     return [
         `cd ${shSingleQuote(params.repoDir)} || exit 125`,
-        `exec /usr/bin/env -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${params.timeoutSec} ${shellJoin([params.binaryPath, ...params.args])}`,
+        `exec /usr/bin/env -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${params.timeoutSec} ${shellJoin([...(params.interpreter ? [params.interpreter] : []), params.binaryPath, ...params.args])}`,
     ].join('\n');
 }

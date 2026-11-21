@@ -526,9 +526,9 @@ describe('team CLIs on the runtime sandbox', () => {
             ],
             changedFiles: files,
         });
+        // pip is unsupported on the runtime sandbox (no pip in its image)
         expect(plan.map((p) => p.egressAllow)).toEqual([
             ['registry.npmjs.org'],
-            ['pypi.org', 'files.pythonhosted.org'],
         ]);
         expect(plan[0]).toMatchObject({ id, binary: 'lintkit' });
         expect(plan[0].argv.slice(0, 2)).toEqual(['npm', 'install']);
