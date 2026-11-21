@@ -76,6 +76,29 @@ The hub and its cells may run different releases. At hello the hub accepts a cel
 | OpenBao | API (write-only role) | injector (read-only role) |
 | Evidence object store | runtime-worker's evidence server | API (signed reads) |
 
+## Data lifecycle
+
+Where each datum of an organization lives, how long it stays, and how it leaves.
+
+| Datum | Where | Kept | Leaves by |
+| --- | --- | --- | --- |
+| Runs (`runtime_runs`), their PR generation record, fork approval, preview record | Runtime Postgres | 365 days after the Run ended (`RUNTIME_RUN_RETENTION_DAYS`, 30 to 3650); never a Run that is live, named by a live claim, a kept check result or the stability history | hourly retention (`applyRetention`) |
+| Run stream, steps index, claim blockers, audits, env steps, ended env sessions | Runtime Postgres | 30 days | hourly retention |
+| Stability history, kept check results | Runtime Postgres | 90 and 180 days | hourly retention |
+| Claims, fleet cells | Runtime Postgres | 400 days after they ended (the usage report) | hourly retention |
+| DBOS workflow history (inputs carry the PR diff) | DBOS tables | 30 days after a terminal workflow was created (`RUNTIME_DBOS_RETENTION_DAYS`) | workflow retention |
+| Evidence (`{orgId}/{runId}/{side}/{stepId}/{type}`) | file volume or S3 | 30 days: the file store's sweep, the bucket's lifecycle rule | sweep or lifecycle; the purge |
+| Org secret values | OpenBao `<mount>/data/orgs/<org>/secrets/<id>` | until deleted | the secret's delete; the purge |
+| Secret names, hosts, ids, settings, environments, run targets, PR checks, publications, budgets, feedback, kept checks | product Postgres | until deleted (some tables expire, `runtime-product-retention.cron.ts`) | the purge |
+
+**Purging one organization.** A customer who leaves, or an organization deleted in the product, leaves nothing behind. Two entry points reach `PurgeRuntimeOrganizationUseCase` (`libs/runtime/api/application/use-cases/purge-organization.use-case.ts`): deleting the organization (`OrganizationService.deleteOne` emits `organization.deleted`; `OrganizationDeletedPurgeListener` runs it, best effort, a few tries) and the owner's `POST /runtime/organization-data/purge` with `{ "confirm": "<the org id>" }`, refused unless it matches the caller's org. The use case runs in this order:
+
+1. deletes every OpenBao secret of the org, by the ids in `runtime_secrets`;
+2. deletes the org's product Postgres rows (`TypeOrmRuntimeOrganizationPurgeStore`); a secret OpenBao would not delete keeps its row, so running the purge again finishes it, and the use case answers 503 after the next step;
+3. puts `runtime.organization.purge_requested` on the outbox, which the runtime-worker handles (`worker/commands/organization-purge.handler.ts`): it cancels the org's live Runs (`engine.stop`), releases its live claims through the hub, and only when no Run or claim is live deletes the evidence under `{orgId}/` (`EvidenceStore.deletePrefix`) and every row that names the org in the Runtime Postgres (`PgOrganizationPurgeStore`). While a Run or a claim is still live the handler throws and the control lane retries it with a delay; nothing is deleted while a machine may still run. It logs counts only (`organization_purge.done`).
+
+It is idempotent: a second run finds nothing and ends. What stays after a purge: a fleet host that is not terminated yet (kept with its pool, `hostsKept` in the log, until runtime-fleet ends it; purge again afterwards), DBOS workflow history inside its 30 days, per-Run LLM counters of Runs with no run target, and the product's model-turn and setup receipts (they carry no organization column and expire within days).
+
 ## Patterns, by package
 
 - **`libs/runtime/api`: hexagonal.** `domain/` holds rules and ports (`ports.ts`, every port org-scoped), `application/` the use cases (one per file in `use-cases/`), `infrastructure/` the adapters (Postgres readers, TypeORM stores, Git, LLM). A controller in `apps/api` calls a use case; nothing in `domain/` imports Nest or a driver.
