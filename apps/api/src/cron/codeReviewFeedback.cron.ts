@@ -30,6 +30,7 @@ import {
     TEAM_AUTOMATION_SERVICE_TOKEN,
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { IPullRequestRef } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 const API_CRON_SYNC_CODE_REVIEW_REACTIONS =
     process.env.API_CRON_SYNC_CODE_REVIEW_REACTIONS;
@@ -246,17 +247,10 @@ export class CodeReviewFeedbackCronProvider {
             const publishResults = await Promise.allSettled(
                 teamsToProcess.map(({ team, executions }) =>
                     (async () => {
-                        const automationExecutionsPRs = executions
-                            .map(
-                                (execution) =>
-                                    execution?.dataExecution?.pullRequestNumber,
-                            )
-                            .filter(
-                                (prNumber): prNumber is number =>
-                                    prNumber !== undefined && prNumber !== null,
-                            );
+                        const pullRequestRefs =
+                            this.collectPullRequestRefs(executions);
 
-                        if (!automationExecutionsPRs.length) {
+                        if (!pullRequestRefs.length) {
                             this.logger.warn({
                                 message: `Team has executions but no valid PR numbers`,
                                 context: CodeReviewFeedbackCronProvider.name,
@@ -270,7 +264,7 @@ export class CodeReviewFeedbackCronProvider {
 
                         await this.publishSyncCodeReviewReactionsTasks(
                             team,
-                            automationExecutionsPRs,
+                            pullRequestRefs,
                         );
 
                         return {
@@ -346,9 +340,62 @@ export class CodeReviewFeedbackCronProvider {
         }
     }
 
+    /**
+     * One reference per PR the team reviewed in the window. The repository is
+     * what makes the number mean something: the same number exists in every
+     * repository that reached it, and the sync used to read all of them
+     * (issue #2625 - 604 PRs read for 232 inside the window, then GitLab
+     * answering 429 on every run).
+     *
+     * `repositoryId` and `pullRequestNumber` are columns on the execution; the
+     * copy inside `dataExecution` is the older source and is still read for
+     * rows that predate them.
+     */
+    private collectPullRequestRefs(
+        executions: Array<{
+            repositoryId?: string;
+            pullRequestNumber?: number;
+            dataExecution?: {
+                repositoryId?: string;
+                pullRequestNumber?: number;
+            };
+        }>,
+    ): IPullRequestRef[] {
+        const refs = new Map<string, IPullRequestRef>();
+
+        for (const execution of executions ?? []) {
+            const pullRequestNumber =
+                execution?.pullRequestNumber ??
+                execution?.dataExecution?.pullRequestNumber;
+
+            if (!Number.isInteger(pullRequestNumber)) {
+                continue;
+            }
+
+            const repositoryId =
+                execution?.repositoryId ??
+                execution?.dataExecution?.repositoryId;
+
+            // The map key is the pair, so a PR reviewed five times in the
+            // window is still one entry.
+            const key = repositoryId
+                ? `${repositoryId}:${pullRequestNumber}`
+                : `number:${pullRequestNumber}`;
+
+            refs.set(key, { repositoryId, pullRequestNumber });
+        }
+
+        // A row that lost its repository id keeps its bare reference: it
+        // cannot be attributed to a repository, and dropping it because some
+        // pair shares the number would silently stop that PR's reactions from
+        // syncing. The consumer reads it through the number-only branch, which
+        // is the only read its identity allows.
+        return [...refs.values()];
+    }
+
     private async publishSyncCodeReviewReactionsTasks(
         team: ITeamWithIntegrations,
-        automationExecutionsPRs: number[],
+        pullRequestRefs: IPullRequestRef[],
     ) {
         if (!team.isCodeManagementConfigured) {
             this.logger.debug({
@@ -362,7 +409,13 @@ export class CodeReviewFeedbackCronProvider {
         const task = {
             teamId: team.uuid,
             organizationId: team.organization.uuid,
-            automationExecutionsPRs,
+            // A consumer still on the previous code reads the numbers alone;
+            // the new one prefers the refs. Both travel until the old shape is
+            // dropped, so a message published mid-deploy cannot lose its sync.
+            automationExecutionsPRs: [
+                ...new Set(pullRequestRefs.map((ref) => ref.pullRequestNumber)),
+            ],
+            pullRequestRefs,
         };
 
         const runCodeReviewReactionsPayload =

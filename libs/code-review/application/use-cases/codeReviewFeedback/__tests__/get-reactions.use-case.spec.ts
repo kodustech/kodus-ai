@@ -29,6 +29,16 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
+/**
+ * A PR is addressed by the pair that identifies it: its number is only unique
+ * inside a repository, and one organization holds several (#2625).
+ */
+const pullRequestRefs = (...numbers: number[]) =>
+    numbers.map((pullRequestNumber) => ({
+        repositoryId: 'repo-1',
+        pullRequestNumber,
+    }));
+
 describe('GetReactionsUseCase', () => {
     let useCase: GetReactionsUseCase;
     let codeManagementService: {
@@ -59,7 +69,7 @@ describe('GetReactionsUseCase', () => {
     });
 
     it('should return [] when automationExecutionsPRs is empty', async () => {
-        const result = await useCase.execute(orgAndTeam, []);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs());
         expect(result).toEqual([]);
         expect(
             pullRequestService.findPullRequestsWithDeliveredSuggestions,
@@ -71,16 +81,36 @@ describe('GetReactionsUseCase', () => {
             [],
         );
 
-        const result = await useCase.execute(orgAndTeam, [1, 2]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(1, 2));
 
         expect(
             pullRequestService.findPullRequestsWithDeliveredSuggestions,
         ).toHaveBeenCalledWith(
             orgAndTeam.organizationId,
-            [1, 2],
+            pullRequestRefs(1, 2),
             [PullRequestState.MERGED, PullRequestState.CLOSED],
         );
         expect(result).toEqual([]);
+    });
+
+    it('asks for each PR in its own repository', async () => {
+        await useCase.execute(orgAndTeam, [
+            { repositoryId: 'repo-a', pullRequestNumber: 7 },
+            { repositoryId: 'repo-b', pullRequestNumber: 7 },
+        ]);
+
+        // Two repositories, one number: the read must keep both pairs apart,
+        // otherwise the sync fetches comments for a PR it never reviewed.
+        expect(
+            pullRequestService.findPullRequestsWithDeliveredSuggestions,
+        ).toHaveBeenCalledWith(
+            orgAndTeam.organizationId,
+            [
+                { repositoryId: 'repo-a', pullRequestNumber: 7 },
+                { repositoryId: 'repo-b', pullRequestNumber: 7 },
+            ],
+            [PullRequestState.MERGED, PullRequestState.CLOSED],
+        );
     });
 
     it('should return [] when PR has no suggestions', async () => {
@@ -91,7 +121,7 @@ describe('GetReactionsUseCase', () => {
             [pr],
         );
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         expect(
             codeManagementService.getPullRequestReviewComment,
@@ -106,17 +136,24 @@ describe('GetReactionsUseCase', () => {
         const pr = createSamplePullRequestWithSuggestions({
             provider: PlatformType.FORGEJO,
         });
-        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue([pr]);
+        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [pr],
+        );
 
-        const comment = createSampleComment({ id: 100, threadId: 'review-999' });
-        codeManagementService.getPullRequestReviewComment.mockResolvedValue([comment]);
+        const comment = createSampleComment({
+            id: 100,
+            threadId: 'review-999',
+        });
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            comment,
+        ]);
 
         const reaction = createSampleReactionResult({
             comment: { id: 100, pull_request_review_id: 'pr-review-999' },
         });
         codeManagementService.countReactions.mockResolvedValue([reaction]);
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         expect(codeManagementService.countReactions).toHaveBeenCalledWith(
             expect.objectContaining({ comments: [comment] }),
@@ -141,14 +178,17 @@ describe('GetReactionsUseCase', () => {
             pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
                 [pr],
             );
-            codeManagementService.getPullRequestReviewComment.mockResolvedValue([
-                comment,
-            ]);
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [comment],
+            );
             codeManagementService.countReactions.mockResolvedValue([
                 createSampleReactionResult({ comment: { id: 9999 } }),
             ]);
 
-            const result = await useCase.execute(orgAndTeam, [42]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(42),
+            );
 
             expect(result).toEqual([]);
             expect(codeManagementService.countReactions).not.toHaveBeenCalled();
@@ -200,7 +240,10 @@ describe('GetReactionsUseCase', () => {
                 azure.countReactions(input),
             );
 
-            const result = await useCase.execute(orgAndTeam, [42]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(42),
+            );
 
             expect(
                 result
@@ -232,7 +275,7 @@ describe('GetReactionsUseCase', () => {
                 pullRequest: { id: 'provider-pr', number: 42 },
             }),
         ]);
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
         expect(result).toHaveLength(1);
         expect(result[0].pullRequest.repository).toEqual({
             id: pr.repository.id,
@@ -256,7 +299,7 @@ describe('GetReactionsUseCase', () => {
         });
         codeManagementService.countReactions.mockResolvedValue([reaction]);
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         expect(
             codeManagementService.getPullRequestReviewComment,
@@ -281,7 +324,7 @@ describe('GetReactionsUseCase', () => {
             null,
         );
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         expect(result).toEqual([]);
         expect(codeManagementService.countReactions).not.toHaveBeenCalled();
@@ -319,7 +362,7 @@ describe('GetReactionsUseCase', () => {
         });
         codeManagementService.countReactions.mockResolvedValue([reaction]);
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         expect(codeManagementService.countReactions).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -361,7 +404,7 @@ describe('GetReactionsUseCase', () => {
         });
         codeManagementService.countReactions.mockResolvedValue([reaction]);
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         expect(codeManagementService.countReactions).toHaveBeenCalled();
         expect(result).toHaveLength(1);
@@ -380,7 +423,7 @@ describe('GetReactionsUseCase', () => {
             unrelatedComment,
         ]);
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         // No comments linked → countReactions not called
         expect(codeManagementService.countReactions).not.toHaveBeenCalled();
@@ -415,7 +458,10 @@ describe('GetReactionsUseCase', () => {
             createSampleReactionResult(),
         ]);
 
-        const result = await useCase.execute(orgAndTeam, [10, 20]);
+        const result = await useCase.execute(
+            orgAndTeam,
+            pullRequestRefs(10, 20),
+        );
 
         // Called once per PR
         expect(
@@ -448,7 +494,10 @@ describe('GetReactionsUseCase', () => {
             createSampleReactionResult(),
         ]);
 
-        const result = await useCase.execute(orgAndTeam, [10, 20]);
+        const result = await useCase.execute(
+            orgAndTeam,
+            pullRequestRefs(10, 20),
+        );
 
         // PR 10 error is isolated — PR 20 reactions still returned
         expect(result).toHaveLength(1);
@@ -469,7 +518,7 @@ describe('GetReactionsUseCase', () => {
             }),
         ]);
 
-        const result = await useCase.execute(orgAndTeam, [42]);
+        const result = await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
         // Nothing here filters on prior state — the current count always wins
         expect(codeManagementService.countReactions).toHaveBeenCalled();
@@ -503,7 +552,10 @@ describe('GetReactionsUseCase', () => {
 
             await useCase.execute(
                 orgAndTeam,
-                prs.map((pr) => pr.number),
+                prs.map((pr) => ({
+                    repositoryId: 'repo-1',
+                    pullRequestNumber: pr.number,
+                })),
             );
 
             expect(
@@ -542,7 +594,10 @@ describe('GetReactionsUseCase', () => {
                 createSampleReactionResult(),
             ]);
 
-            const result = await useCase.execute(orgAndTeam, [1, 2, 3]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(1, 2, 3),
+            );
 
             expect(result).toHaveLength(1);
         });
@@ -558,7 +613,7 @@ describe('GetReactionsUseCase', () => {
             );
 
             await expect(
-                useCase.execute(orgAndTeam, [1, 2, 3]),
+                useCase.execute(orgAndTeam, pullRequestRefs(1, 2, 3)),
             ).rejects.toBeInstanceOf(ReactionSyncAbortedError);
         });
 
@@ -577,7 +632,10 @@ describe('GetReactionsUseCase', () => {
             await expect(
                 useCase.execute(
                     orgAndTeam,
-                    prs.map((pr) => pr.number),
+                    prs.map((pr) => ({
+                        repositoryId: 'repo-1',
+                        pullRequestNumber: pr.number,
+                    })),
                 ),
             ).rejects.toBeInstanceOf(ReactionSyncAbortedError);
 
@@ -604,7 +662,7 @@ describe('GetReactionsUseCase', () => {
             ]);
 
             const error = await useCase
-                .execute(orgAndTeam, [1, 2, 3, 4])
+                .execute(orgAndTeam, pullRequestRefs(1, 2, 3, 4))
                 .catch((e) => e);
 
             expect(error).toBeInstanceOf(ReactionSyncAbortedError);
@@ -624,7 +682,7 @@ describe('GetReactionsUseCase', () => {
             );
 
             const error = await useCase
-                .execute(orgAndTeam, [1, 2, 3])
+                .execute(orgAndTeam, pullRequestRefs(1, 2, 3))
                 .catch((e) => e);
 
             expect(isRateLimitError(error)).toBe(true);
@@ -642,7 +700,10 @@ describe('GetReactionsUseCase', () => {
 
             const result = await useCase.execute(
                 orgAndTeam,
-                prs.map((pr) => pr.number),
+                prs.map((pr) => ({
+                    repositoryId: 'repo-1',
+                    pullRequestNumber: pr.number,
+                })),
             );
 
             expect(result).toEqual([]);
@@ -684,7 +745,10 @@ describe('GetReactionsUseCase', () => {
                 createSampleReactionResult({ comment: { id: 500 } }),
             ]);
 
-            const result = await useCase.execute(orgAndTeam, [42]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(42),
+            );
 
             expect(result).toHaveLength(1);
             expect(result[0].suggestionId).toBe('suggestion-001');
@@ -702,7 +766,10 @@ describe('GetReactionsUseCase', () => {
                 createSampleReactionResult({ comment: { id: 100 } }),
             ]);
 
-            const result = await useCase.execute(orgAndTeam, [42]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(42),
+            );
 
             expect(result).toHaveLength(1);
             expect(result[0].suggestionId).toBe('suggestion-001');
@@ -719,7 +786,10 @@ describe('GetReactionsUseCase', () => {
                 createSampleReactionResult({ comment: { id: 701 } }),
             ]);
 
-            const result = await useCase.execute(orgAndTeam, [42]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(42),
+            );
 
             expect(result).toHaveLength(1);
             expect(result[0].suggestionId).toBe('suggestion-001');
@@ -757,7 +827,10 @@ describe('GetReactionsUseCase', () => {
                 createSampleReactionResult({ comment: { id: 20 } }),
             ]);
 
-            const result = await useCase.execute(orgAndTeam, [42]);
+            const result = await useCase.execute(
+                orgAndTeam,
+                pullRequestRefs(42),
+            );
 
             expect(result.map((r) => r.suggestionId).sort()).toEqual([
                 'suggestion-A',
@@ -776,7 +849,7 @@ describe('GetReactionsUseCase', () => {
     describe('why a run found nothing', () => {
         const runAndReadSummary = async () => {
             const logger = (useCase as any).logger;
-            await useCase.execute(orgAndTeam, [42]);
+            await useCase.execute(orgAndTeam, pullRequestRefs(42));
 
             const summary = logger.log.mock.calls
                 .map(([entry]: [any]) => entry)
@@ -888,7 +961,10 @@ describe('GetReactionsUseCase', () => {
 
             const result = await useCase.execute(
                 orgAndTeam,
-                prs.map((pr) => pr.number),
+                prs.map((pr) => ({
+                    repositoryId: 'repo-1',
+                    pullRequestNumber: pr.number,
+                })),
             );
 
             expect(

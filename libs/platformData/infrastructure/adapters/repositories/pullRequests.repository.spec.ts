@@ -420,6 +420,24 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     });
 
     describe('findPullRequestsWithDeliveredSuggestions', () => {
+        /** Runs the method against a stubbed pipeline and returns its match. */
+        const matchFor = async (
+            refs: Array<{ repositoryId?: string; pullRequestNumber: number }>,
+            status: string | string[] = 'open',
+        ) => {
+            const option = jest.fn().mockReturnValue({ exec });
+            aggregate.mockReturnValue({ option });
+            exec.mockResolvedValue([]);
+
+            await repo.findPullRequestsWithDeliveredSuggestions(
+                'org-A',
+                refs,
+                status,
+            );
+
+            return aggregate.mock.calls[0][0][0].$match;
+        };
+
         it('projects the read fields before unwinding files/suggestions', async () => {
             const option = jest.fn().mockReturnValue({ exec });
             aggregate.mockReturnValue({ option });
@@ -427,7 +445,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
             await repo.findPullRequestsWithDeliveredSuggestions(
                 'org-A',
-                [1, 2],
+                [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
                 'open',
             );
 
@@ -459,6 +477,82 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(pipeline.at(-1).$project.url).toBe(1);
             expect(pipeline[2]).toEqual({ $unwind: '$files' });
             expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+        });
+
+        /**
+         * The reported failure (#2625): one organization, one PR number 84 in
+         * six repositories, and the sync read all six - 604 PRs for 232 inside
+         * the window, until GitLab answered 429 on every run.
+         */
+        it('matches a pair, so another repository cannot answer for it', async () => {
+            const match = await matchFor([
+                { repositoryId: 'repo-a', pullRequestNumber: 84 },
+                { repositoryId: 'repo-b', pullRequestNumber: 84 },
+            ]);
+
+            expect(match.organizationId).toBe('org-A');
+            expect(match.status).toBe('open');
+            expect(match.number).toBeUndefined();
+            expect(match.$or).toEqual([
+                { 'repository.id': 'repo-a', 'number': 84 },
+                { 'repository.id': 'repo-b', 'number': 84 },
+                // A document persisted without a repository id is reachable
+                // only by number; it cannot be confused with repo-a or repo-b.
+                { 'repository.id': { $in: ['', null] }, 'number': 84 },
+            ]);
+        });
+
+        it('queries one pair once, however many times it was reviewed', async () => {
+            const match = await matchFor([
+                { repositoryId: 'repo-a', pullRequestNumber: 7 },
+                { repositoryId: 'repo-a', pullRequestNumber: 7 },
+            ]);
+
+            expect(match.$or).toEqual([
+                { 'repository.id': 'repo-a', 'number': 7 },
+                { 'repository.id': { $in: ['', null] }, 'number': 7 },
+            ]);
+        });
+
+        it('keeps the number-only match for a reference without a repository', async () => {
+            const match = await matchFor([
+                { repositoryId: 'repo-a', pullRequestNumber: 7 },
+                { pullRequestNumber: 8 },
+                { pullRequestNumber: 8 },
+            ]);
+
+            expect(match.$or).toEqual([
+                { 'repository.id': 'repo-a', 'number': 7 },
+                { 'repository.id': { $in: ['', null] }, 'number': 7 },
+                { number: { $in: [8] } },
+            ]);
+        });
+
+        it('reads a legacy document that carries no repository id', async () => {
+            // Documents written before the id was captured store `''`, and the
+            // pair clause alone would make them unreachable - the sync would
+            // silently stop collecting their reactions.
+            const match = await matchFor([
+                { repositoryId: 'repo-a', pullRequestNumber: 12 },
+            ]);
+
+            expect(match.organizationId).toBe('org-A');
+            expect(match.status).toBe('open');
+            expect(match.$or).toEqual([
+                { 'repository.id': 'repo-a', 'number': 12 },
+                { 'repository.id': { $in: ['', null] }, 'number': 12 },
+            ]);
+        });
+
+        it('does not query when it has nothing to match', async () => {
+            const result = await repo.findPullRequestsWithDeliveredSuggestions(
+                'org-A',
+                [],
+                'open',
+            );
+
+            expect(result).toEqual([]);
+            expect(aggregate).not.toHaveBeenCalled();
         });
     });
 

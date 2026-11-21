@@ -7,6 +7,7 @@ import { ICollectedReaction } from '@libs/code-review/domain/codeReviewFeedback/
 import { CodeReviewFeedbackService } from '@libs/code-review/infrastructure/adapters/services/codeReviewFeedback.service';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { IPullRequestRef } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 import { GetReactionsUseCase } from './get-reactions.use-case';
 
@@ -27,9 +28,12 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
     async execute(payload: {
         organizationId: string;
         teamId: string;
+        /** Kept for the consumers still reading the number list alone. */
         automationExecutionsPRs: number[];
+        pullRequestRefs?: IPullRequestRef[];
     }): Promise<ICollectedReaction[]> {
         try {
+            const pullRequestRefs = this.resolvePullRequestRefs(payload);
             // Contagens já gravadas, para escrever só o que mudou
             const existingFeedbacks =
                 await this.codeReviewFeedbackService.getByOrganizationId(
@@ -52,7 +56,7 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
                         organizationId: payload.organizationId,
                         teamId: payload.teamId,
                     },
-                    payload.automationExecutionsPRs,
+                    pullRequestRefs,
                 );
             } catch (error) {
                 if (!(error instanceof ReactionSyncAbortedError)) {
@@ -154,12 +158,43 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
 
     private async getReactions(
         organizationAndTeamData: OrganizationAndTeamData,
-        automationExecutionsPRs: number[],
+        pullRequestRefs: IPullRequestRef[],
     ): Promise<ICollectedReaction[]> {
         return this.getReactionsUseCase.execute(
             organizationAndTeamData,
-            automationExecutionsPRs,
+            pullRequestRefs,
         );
+    }
+
+    /**
+     * A delayed message can have been published before `pullRequestRefs`
+     * existed: it then carries the PR numbers alone. Reading both shapes keeps
+     * such a message from being dropped, at the cost of the number-only match
+     * it was published with.
+     */
+    private resolvePullRequestRefs(payload: {
+        organizationId?: string;
+        teamId?: string;
+        automationExecutionsPRs?: number[];
+        pullRequestRefs?: IPullRequestRef[];
+    }): IPullRequestRef[] {
+        if (payload.pullRequestRefs?.length) {
+            return payload.pullRequestRefs;
+        }
+
+        this.logger.debug({
+            message: 'Reaction sync read a message without pull request refs',
+            context: SaveCodeReviewFeedbackUseCase.name,
+            metadata: {
+                organizationId: payload.organizationId,
+                teamId: payload.teamId,
+                prNumbers: payload.automationExecutionsPRs?.length ?? 0,
+            },
+        });
+
+        return (payload.automationExecutionsPRs ?? [])
+            .filter((prNumber) => Number.isInteger(prNumber))
+            .map((pullRequestNumber) => ({ pullRequestNumber }));
     }
 
     private hasChanged(

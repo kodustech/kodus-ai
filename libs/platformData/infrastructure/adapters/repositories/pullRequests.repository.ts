@@ -32,6 +32,7 @@ import {
     ApprovalReasonDeliveryGuard,
     IFile,
     IPullRequests,
+    IPullRequestRef,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
     IPullRequestWithKodyChangeRequest,
@@ -1760,9 +1761,15 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     async findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
-        prNumbers: number[],
+        prRefs: IPullRequestRef[],
         status: string | string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        const refMatch = this.buildPullRequestRefMatch(prRefs);
+
+        if (!refMatch) {
+            return [];
+        }
+
         const statusFilter = Array.isArray(status) ? { $in: status } : status;
 
         const result = await this.pullRequestsModel
@@ -1770,7 +1777,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 {
                     $match: {
                         organizationId: organizationId,
-                        number: { $in: prNumbers },
+                        ...refMatch,
                         status: statusFilter,
                     },
                 },
@@ -1854,6 +1861,66 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             .exec();
 
         return result;
+    }
+
+    /**
+     * A PR number is unique inside a repository, not inside an organization.
+     * Matching on the number alone read every repository that ever used it
+     * (issue #2625: 604 PRs read for 232 inside the window, on a GitLab
+     * organization that then answered 429 on every run). The match is therefore
+     * built from `repository.id` + `number` pairs whenever the caller knows the
+     * repository.
+     *
+     * A reference without a repository id keeps the number-only match it had
+     * before: it comes from a caller that cannot know the repository, and
+     * widening it here would be a guess. The reaction sync, which does know it,
+     * passes the pair and gets the exact read.
+     */
+    private buildPullRequestRefMatch(
+        prRefs: IPullRequestRef[],
+    ): Record<string, any> | null {
+        const pairs = new Map<
+            string,
+            { 'repository.id': string; 'number': number }
+        >();
+        const pairedNumbers = new Set<number>();
+        const numbersWithoutRepository = new Set<number>();
+
+        for (const ref of prRefs ?? []) {
+            if (!Number.isInteger(ref?.pullRequestNumber)) {
+                continue;
+            }
+
+            if (ref.repositoryId) {
+                pairedNumbers.add(ref.pullRequestNumber);
+                pairs.set(`${ref.repositoryId}:${ref.pullRequestNumber}`, {
+                    'repository.id': ref.repositoryId,
+                    'number': ref.pullRequestNumber,
+                });
+            } else {
+                numbersWithoutRepository.add(ref.pullRequestNumber);
+            }
+        }
+
+        const clauses: Record<string, any>[] = [...pairs.values()];
+
+        // Documents written before the repository id was captured carry an
+        // empty (or absent) `repository.id`: the pair clause cannot reach
+        // them, and the sync used to read them by number. They keep that read,
+        // bounded by the unique (organizationId, repository.id, number) index,
+        // which allows at most one such document per number.
+        for (const number of pairedNumbers) {
+            clauses.push({
+                'repository.id': { $in: ['', null] },
+                'number': number,
+            });
+        }
+
+        if (numbersWithoutRepository.size) {
+            clauses.push({ number: { $in: [...numbersWithoutRepository] } });
+        }
+
+        return clauses.length ? { $or: clauses } : null;
     }
 
     async findPullRequestsWithoutDeliveredSuggestionsForApproval(

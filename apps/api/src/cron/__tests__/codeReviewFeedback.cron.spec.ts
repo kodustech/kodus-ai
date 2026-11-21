@@ -13,7 +13,14 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('CodeReviewFeedbackCronProvider', () => {
     const makeCron = (
-        executions: Array<{ dataExecution: { pullRequestNumber: number } }>,
+        executions: Array<{
+            dataExecution: {
+                pullRequestNumber?: number;
+                repositoryId?: string;
+            };
+            pullRequestNumber?: number;
+            repositoryId?: string;
+        }>,
     ) => {
         const automationExecutionService = {
             findByPeriodAndTeamAutomationId: jest
@@ -47,11 +54,9 @@ describe('CodeReviewFeedbackCronProvider', () => {
         } as any;
 
         const distributedLockService = {
-            acquire: jest
-                .fn()
-                .mockResolvedValue({
-                    release: jest.fn().mockResolvedValue(undefined),
-                }),
+            acquire: jest.fn().mockResolvedValue({
+                release: jest.fn().mockResolvedValue(undefined),
+            }),
         } as any;
 
         const cron = new CodeReviewFeedbackCronProvider(
@@ -122,6 +127,128 @@ describe('CodeReviewFeedbackCronProvider', () => {
             expect.objectContaining({
                 message: expect.objectContaining({
                     automationExecutionsPRs: [42, 43],
+                }),
+            }),
+        );
+    });
+
+    /**
+     * The number alone is only unique inside a repository, and one organization
+     * holds many that number their PRs independently: publishing the number
+     * made the sync read every repository that ever used it (issue #2625).
+     */
+    it('publishes each PR with the repository the review ran in', async () => {
+        const { cron, messageBroker } = makeCron([
+            {
+                pullRequestNumber: 84,
+                repositoryId: 'repo-a',
+                dataExecution: {},
+            },
+            {
+                pullRequestNumber: 84,
+                repositoryId: 'repo-b',
+                dataExecution: {},
+            },
+        ]);
+
+        await cron.handleCron();
+
+        expect(
+            messageBroker.transformMessageToMessageBroker,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.objectContaining({
+                    // One entry per pair, and the number list kept for the
+                    // consumers still on the previous shape.
+                    pullRequestRefs: [
+                        { repositoryId: 'repo-a', pullRequestNumber: 84 },
+                        { repositoryId: 'repo-b', pullRequestNumber: 84 },
+                    ],
+                    automationExecutionsPRs: [84],
+                }),
+            }),
+        );
+    });
+
+    it('publishes one ref per PR when a team reviewed it more than once', async () => {
+        const { cron, messageBroker } = makeCron([
+            {
+                pullRequestNumber: 7,
+                repositoryId: 'repo-a',
+                dataExecution: {},
+            },
+            {
+                pullRequestNumber: 7,
+                repositoryId: 'repo-a',
+                dataExecution: {},
+            },
+        ]);
+
+        await cron.handleCron();
+
+        expect(
+            messageBroker.transformMessageToMessageBroker,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.objectContaining({
+                    pullRequestRefs: [
+                        { repositoryId: 'repo-a', pullRequestNumber: 7 },
+                    ],
+                }),
+            }),
+        );
+    });
+
+    it('falls back to the execution payload for rows that predate the columns', async () => {
+        const { cron, messageBroker } = makeCron([
+            {
+                dataExecution: {
+                    pullRequestNumber: 12,
+                    repositoryId: 'repo-c',
+                },
+            },
+        ]);
+
+        await cron.handleCron();
+
+        expect(
+            messageBroker.transformMessageToMessageBroker,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.objectContaining({
+                    pullRequestRefs: [
+                        { repositoryId: 'repo-c', pullRequestNumber: 12 },
+                    ],
+                }),
+            }),
+        );
+    });
+
+    it('keeps a bare number beside a pair when a row lost its repository', async () => {
+        // The bare row cannot be attributed: dropping it because repo-a has
+        // the same number would silently stop the other PR's reactions.
+        const { cron, messageBroker } = makeCron([
+            {
+                pullRequestNumber: 12,
+                repositoryId: 'repo-a',
+                dataExecution: {},
+            },
+            {
+                dataExecution: { pullRequestNumber: 12 },
+            },
+        ]);
+
+        await cron.handleCron();
+
+        expect(
+            messageBroker.transformMessageToMessageBroker,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.objectContaining({
+                    pullRequestRefs: [
+                        { repositoryId: 'repo-a', pullRequestNumber: 12 },
+                        { pullRequestNumber: 12 },
+                    ],
                 }),
             }),
         );
