@@ -30,7 +30,7 @@ The guest agent: the one process inside a sandbox machine that runs its commands
 
 ## Module map
 
-Files (5, tests apart): `exec.go`, `fs.go`, `server.go`, `stream.go`, `trust.go`
+Files (7, tests apart): `exec.go`, `fs.go`, `server.go`, `stream.go`, `trust.go`, `undumpable_linux.go`, `undumpable_other.go`
 
 Imports these Runtime modules:
 
