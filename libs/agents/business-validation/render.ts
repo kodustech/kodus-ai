@@ -77,6 +77,35 @@ export function renderComment(
     ].join('\n');
 }
 
+/** Stands in for the hour each run read the task: it must not move the hash. */
+const SIGNATURE_CLOCK = '1970-01-01T00:00:00.000Z';
+
+/**
+ * What a re-check compares: the comment as `commentFor` would write it, before
+ * translation, with the read clock pinned so that a run saying the same thing
+ * at a later time hashes the same. The translation stays out on purpose - a
+ * model can reword two identical bodies, and a reworded comment is not a
+ * changed verdict.
+ */
+export function signatureText(
+    outcome: BusinessValidationOutcome,
+    context: RenderContext = {},
+): string {
+    if (outcome.kind !== 'validated') {
+        return `${BUSINESS_LOGIC_COMMENT_MARKER}\n${outcome.message}`;
+    }
+    return `${BUSINESS_LOGIC_COMMENT_MARKER}\n${renderComment(
+        {
+            ...outcome,
+            checks: outcome.checks.map((check) => ({
+                ...check,
+                readAt: SIGNATURE_CLOCK,
+            })),
+        },
+        context,
+    )}`;
+}
+
 function historyLine(history: CheckedCommit[] | undefined): string[] {
     const shown = (history ?? []).slice(-MAX_HISTORY);
     if (!shown.length) {

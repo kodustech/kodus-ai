@@ -2,7 +2,12 @@ import type { BusinessValidationOutcome } from '@libs/agents/business-validation
 import { DEFAULT_BUSINESS_LOGIC_SETTINGS } from '@libs/agents/business-validation/settings';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { BusinessLogicPublisher } from './business-logic-publisher.service';
+import { signatureText } from '@libs/agents/business-validation/render';
+
+import {
+    BusinessLogicPublisher,
+    commentSignature,
+} from './business-logic-publisher.service';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
 
@@ -118,7 +123,7 @@ describe('BusinessLogicPublisher', () => {
             expect.objectContaining({
                 outcome: 'validated',
                 passed: false,
-                comment: { id: 501 },
+                comment: expect.objectContaining({ id: 501 }),
             }),
         );
     });
@@ -140,10 +145,20 @@ describe('BusinessLogicPublisher', () => {
                 expect.objectContaining({
                     label: 'business_logic',
                     deliveryStatus: 'sent',
-                    comment: { id: 501 },
+                    comment: expect.objectContaining({ id: 501 }),
                 }),
             ],
             request.organizationAndTeamData,
+        );
+
+        // The run carries the verdict it wrote, which the next re-check reads.
+        expect(first.runs.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                comment: expect.objectContaining({
+                    id: 501,
+                    signature: expect.stringMatching(/^[0-9a-f]{64}$/),
+                }),
+            }),
         );
 
         const edit = build({ comment: { comment: { id: 501 } } });
@@ -220,6 +235,87 @@ describe('BusinessLogicPublisher', () => {
         expect(code.updateIssueComment).toHaveBeenCalled();
         expect(code.createIssueComment).toHaveBeenCalled();
         expect(result.comment).toBe('created');
+    });
+
+    it('says whether a re-check changed the verdict it wrote', async () => {
+        const result = {
+            outcome: validated('missing'),
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        };
+
+        const same = build({
+            comment: {
+                comment: {
+                    id: 77,
+                    signature: commentSignature(
+                        signatureText(validated('missing')),
+                    ),
+                },
+            },
+        });
+        const unchanged = await same.publisher.publish({ request, result });
+        expect(unchanged.comment).toBe('updated');
+        expect(unchanged.changed).toBe(false);
+        expect(same.code.getAllCommentsInPullRequest).not.toHaveBeenCalled();
+
+        const other = build({
+            comment: {
+                comment: {
+                    id: 77,
+                    signature: commentSignature(
+                        signatureText(validated('met')),
+                    ),
+                },
+            },
+        });
+        const changed = await other.publisher.publish({ request, result });
+        expect(changed.changed).toBe(true);
+    });
+
+    it('compares the comment text, not the clock it was written at', () => {
+        const first = validated('missing');
+        first.checks[0].readAt = '2026-11-11T10:00:00.000Z';
+        const second = validated('missing');
+        second.checks[0].readAt = '2026-11-11T12:00:00.000Z';
+
+        expect(commentSignature(signatureText(first))).toBe(
+            commentSignature(signatureText(second)),
+        );
+
+        second.checks[0].verdict.requirements![0].state = 'met';
+        expect(commentSignature(signatureText(first))).not.toBe(
+            commentSignature(signatureText(second)),
+        );
+
+        // The comment names the commit it read: a new head is a new comment.
+        expect(
+            commentSignature(
+                signatureText(validated('missing'), { headSha: 'aaa1111' }),
+            ),
+        ).not.toBe(
+            commentSignature(
+                signatureText(validated('missing'), { headSha: 'bbb2222' }),
+            ),
+        );
+
+        // A field the comment does not show is not a change the reader can see:
+        // with the requirements listed as rows, the prose summary never reaches
+        // it, which is why the comparison is the text and not the outcome.
+        const reworded = validated('missing');
+        reworded.checks[0].verdict.summary = 'different words';
+        expect(commentSignature(signatureText(reworded))).toBe(
+            commentSignature(signatureText(validated('missing'))),
+        );
+
+        // A field it does show is.
+        const renamed = validated('missing');
+        renamed.checks[0].verdict.requirements![0].requirement =
+            'Order survives a restart';
+        expect(commentSignature(signatureText(renamed))).not.toBe(
+            commentSignature(signatureText(validated('missing'))),
+        );
     });
 
     it('previews the comment without writing anything', async () => {
