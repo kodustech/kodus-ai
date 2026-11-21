@@ -146,6 +146,7 @@ import {
     repoEditPullRequest,
     repoGet,
     repoGetAllCommits,
+    repoGetBranch,
     repoGetContents,
     repoGetLanguages,
     repoGetPullRequest,
@@ -707,6 +708,7 @@ export class ForgejoService implements Omit<
                       }
                     : undefined;
 
+            const attemptUpload = async (): Promise<boolean> => {
             const branchAlreadyExists =
                 resolvedBranchName === resolvedBaseBranch
                     ? true
@@ -722,23 +724,25 @@ export class ForgejoService implements Omit<
 
             const fileExistsEntries = await Promise.all(
                 files.map(async (file) => {
-                    const exists = await this.checkForgejoFileExists(
+                    const info = await this.checkForgejoFileExists(
                         client,
                         repoInfo,
                         fileExistsReferenceBranch,
                         file.path,
                     );
 
-                    return [file.path, exists] as const;
+                    return [file.path, info] as const;
                 }),
             );
 
-            const fileExistsByPath = new Map(fileExistsEntries);
+            const fileInfoByPath = new Map(fileExistsEntries);
 
             const changes = files
                 .map((file) => {
                     const operation = file.operation || 'upsert';
-                    const fileExists = fileExistsByPath.get(file.path) === true;
+                    const fileInfo = fileInfoByPath.get(file.path);
+                    const fileExists = fileInfo?.exists === true;
+                    const shaField = fileInfo?.sha ? { sha: fileInfo.sha } : {};
 
                     if (operation === 'delete') {
                         if (!fileExists) {
@@ -748,6 +752,7 @@ export class ForgejoService implements Omit<
                         return {
                             operation: 'delete' as const,
                             path: file.path,
+                            ...shaField,
                         } as any;
                     }
 
@@ -764,6 +769,7 @@ export class ForgejoService implements Omit<
                         path: file.path,
                         // Forgejo's change-files API requires base64 content.
                         content: Buffer.from(file.content).toString('base64'),
+                        ...(fileExists ? shaField : {}),
                     } as any;
                 })
                 .filter((change): change is NonNullable<typeof change> =>
@@ -774,7 +780,7 @@ export class ForgejoService implements Omit<
                 return true;
             }
 
-            const res = await repoChangeFiles({
+            await repoChangeFiles({
                 client,
                 path: repoInfo,
                 body: {
@@ -796,13 +802,30 @@ export class ForgejoService implements Omit<
                           }
                         : {}),
                 },
+                throwOnError: true,
             });
 
-            if (!res || res.status >= 300) {
-                throw new Error(`Failed to upload files: ${res.status}`);
-            }
-
             return true;
+            };
+
+            try {
+                return await attemptUpload();
+            } catch (error) {
+                if (!this.isForgejoConflictError(error)) {
+                    throw error;
+                }
+
+                // The branch moved between the existence checks and the write.
+                this.logger.warn({
+                    message:
+                        'Forgejo write conflict while uploading files, retrying once',
+                    context: ForgejoService.name,
+                    error,
+                    metadata: { params },
+                });
+
+                return await attemptUpload();
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error uploading files to Forgejo',
@@ -820,17 +843,15 @@ export class ForgejoService implements Omit<
         branchName: string,
     ): Promise<boolean> {
         try {
-            await getTree({
+            await repoGetBranch({
                 client,
                 path: {
                     owner: repoInfo.owner,
                     repo: repoInfo.repo,
-                    sha: branchName,
+                    branch: branchName,
                 },
-                query: {
-                    recursive: false,
-                },
-            });
+                throwOnError: true,
+            })
 
             return true;
         } catch (error) {
@@ -868,30 +889,40 @@ export class ForgejoService implements Omit<
               }
             : undefined;
 
-        const res = await repoChangeFiles({
-            client,
-            path: repoInfo,
-            body: {
-                files: [
-                    {
-                        operation: 'create',
-                        path: EMPTY_REPO_SEED_PATH,
-                        // Forgejo's change-files API requires base64 content.
-                        content: Buffer.from(EMPTY_REPO_SEED_CONTENT).toString(
-                            'base64',
-                        ),
-                    },
-                ] as any,
-                message: EMPTY_REPO_SEED_COMMIT_MESSAGE,
-                branch: baseBranch,
-                ...(identity ? { author: identity, committer: identity } : {}),
-            },
-        });
+        try {
+            await repoChangeFiles({
+                client,
+                path: repoInfo,
+                body: {
+                    files: [
+                        {
+                            operation: 'create',
+                            path: EMPTY_REPO_SEED_PATH,
+                            // Forgejo's change-files API requires base64 content.
+                            content: Buffer.from(EMPTY_REPO_SEED_CONTENT).toString('base64'),
+                        },
+                    ] as any,
+                    message: EMPTY_REPO_SEED_COMMIT_MESSAGE,
+                    branch: baseBranch,
+                    ...(identity
+                        ? { author: identity, committer: identity }
+                        : {}),
+                },
+                throwOnError: true,
+            });
+        } catch (error) {
+            // A concurrent run may have seeded the repo first; that's fine.
+            const nowExists = await this.checkForgejoBranchExists(
+                client,
+                repoInfo,
+                baseBranch,
+            ).catch(() => false);
 
-        if (!res || res.status >= 300) {
-            throw new Error(
-                `Failed to initialize empty repository: ${res?.status}`,
-            );
+            if (!nowExists) {
+                throw error;
+            }
+
+            return;
         }
 
         this.logger.log({
@@ -907,9 +938,9 @@ export class ForgejoService implements Omit<
         repoInfo: { owner: string; repo: string },
         branchName: string,
         filePath: string,
-    ): Promise<boolean> {
+    ): Promise<{ exists: boolean; sha?: string }> {
         try {
-            await repoGetContents({
+            const { data } = await repoGetContents({
                 client,
                 path: {
                     owner: repoInfo.owner,
@@ -919,16 +950,36 @@ export class ForgejoService implements Omit<
                 query: {
                     ref: branchName,
                 },
+                throwOnError: true,
             });
 
-            return true;
+            const sha = Array.isArray(data)
+                ? undefined
+                : (data as { sha?: string } | undefined)?.sha;
+
+            return { exists: true, sha };
         } catch (error) {
             if (this.isForgejoNotFoundError(error)) {
-                return false;
+                return { exists: false };
             }
 
             throw error;
         }
+    }
+
+    private isForgejoConflictError(error: unknown): boolean {
+        const candidate = error as
+            | {
+                  status?: number;
+                  code?: number;
+                  response?: { status?: number };
+              }
+            | undefined;
+
+        const status =
+            candidate?.status || candidate?.code || candidate?.response?.status;
+
+        return status === 409 || status === 422;
     }
 
     private isForgejoNotFoundError(error: unknown): boolean {
