@@ -409,7 +409,11 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
             if (repositoryName) {
                 queryBuilder.andWhere(
-                    "automation_execution.dataExecution->'repository'->>'name' = :repositoryName",
+                    // Quoted: TypeORM only rewrites `alias.property` followed
+                    // by a space, `=`, `)` or `,`. Before `->` it passed the
+                    // bare name through and Postgres folded it to
+                    // `dataexecution`, a column that does not exist.
+                    `"automation_execution"."dataExecution"->'repository'->>'name' = :repositoryName`,
                     { repositoryName },
                 );
             }

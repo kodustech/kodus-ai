@@ -101,7 +101,11 @@ type Seeded = { uuid: string; createdAt: string };
                     uuid,
                     row.createdAt,
                     row.status ?? 'success',
-                    JSON.stringify({ repository: { name: 'api' } }),
+                    JSON.stringify({
+                        repository: {
+                            name: row.repositoryId === REPO_WEB ? 'web' : 'api',
+                        },
+                    }),
                     row.pullRequestNumber === undefined
                         ? 1
                         : row.pullRequestNumber,
@@ -452,6 +456,23 @@ type Seeded = { uuid: string; createdAt: string };
                     }),
                 ),
             ).toEqual([rows.webPr3Success.uuid, rows.apiPr2Old.uuid]);
+        });
+
+        it('filters by repository name, alone and with the pull request number', async () => {
+            if (!canRun) return;
+
+            expect(uuids(await list({ repositoryName: 'web' }))).toEqual([
+                rows.webPr3Success.uuid,
+            ]);
+
+            // The pull request page asks for both: the call that failed in
+            // production with "column automation_execution.dataexecution does
+            // not exist".
+            expect(
+                uuids(
+                    await list({ repositoryName: 'api', pullRequestNumber: 7 }),
+                ),
+            ).toEqual([rows.apiPr7Error.uuid, rows.apiPr7Success.uuid]);
         });
 
         it('reads pull request keys as a set: order, repeats and strangers do not matter', async () => {
