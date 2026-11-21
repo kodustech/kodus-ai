@@ -11,6 +11,7 @@ import {
     PR_INGESTION_SOURCE,
     PullRequestIngestionService,
 } from './pull-request-ingestion.service';
+import { ANALYTICS_QUERY_READ } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 function clampPositiveInt(
     value: number | undefined,
@@ -300,7 +301,7 @@ export class BackfillOrchestratorService {
     private async findOldestCreatedAt(): Promise<Date | null> {
         const doc = (await this.pullRequestsModel
             .findOne({}, { createdAt: 1, _id: 0 })
-            .read('secondaryPreferred')
+            .read(ANALYTICS_QUERY_READ)
             .sort({ createdAt: 1 })
             .lean()
             .exec()) as { createdAt?: unknown } | null;

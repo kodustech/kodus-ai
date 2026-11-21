@@ -39,6 +39,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { createLogger } from '@libs/core/log/logger';
 
+import type { CustomAgentFindingsScope } from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 @Injectable()
 export class PullRequestsService implements IPullRequestsService {
     private readonly logger = createLogger(PullRequestsService.name);
@@ -128,8 +129,14 @@ export class PullRequestsService implements IPullRequestsService {
         });
     }
 
-    getNativeCollection() {
-        throw new Error('Method not implemented.');
+    findCustomAgentSuggestionRows(scope: CustomAgentFindingsScope) {
+        return this.pullRequestsRepository.findCustomAgentSuggestionRows(scope);
+    }
+
+    findUnfollowedCustomAgentCitations(scope: CustomAgentFindingsScope) {
+        return this.pullRequestsRepository.findUnfollowedCustomAgentCitations(
+            scope,
+        );
     }
 
     setApprovalReasonDeliveryFailure(
@@ -213,8 +220,9 @@ export class PullRequestsService implements IPullRequestsService {
 
     async findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
-        return this.pullRequestsRepository.findOne(filter);
+        return this.pullRequestsRepository.findOne(filter, projection);
     }
 
     async find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]> {
@@ -517,12 +525,14 @@ export class PullRequestsService implements IPullRequestsService {
     async findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],
-        status: string,
+        status: string | string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
             prNumbers,
             status,
+            pullRequestRefs,
         );
     }
 

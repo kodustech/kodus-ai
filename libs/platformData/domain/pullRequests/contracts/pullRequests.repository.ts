@@ -21,6 +21,11 @@ import {
     SuggestionCountsBySeverity,
 } from '../interfaces/pullRequests.interface';
 
+import type {
+    CustomAgentFindingsScope,
+    CustomAgentSuggestionRow,
+    UnfollowedCitationRow,
+} from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 export const PULL_REQUESTS_REPOSITORY_TOKEN = Symbol.for(
     'PullRequestsRepository',
 );
@@ -67,7 +72,18 @@ export interface BulkApplyResult {
 }
 
 export interface IPullRequestsRepository {
-    getNativeCollection(): any;
+    /**
+     * Each custom agent's stored findings (file and PR level) in one
+     * repository, one row per agent, pull request and statuses. Analytics
+     * read: off the primary, bounded.
+     */
+    findCustomAgentSuggestionRows(
+        scope: CustomAgentFindingsScope,
+    ): Promise<CustomAgentSuggestionRow[]>;
+    /** Dropped custom-agent findings that cited a file the agent does not follow. */
+    findUnfollowedCustomAgentCitations(
+        scope: CustomAgentFindingsScope,
+    ): Promise<UnfollowedCitationRow[]>;
 
     setApprovalReasonDeliveryFailure(
         organizationId: string,
@@ -84,6 +100,7 @@ export interface IPullRequestsRepository {
     findById(uuid: string): Promise<PullRequestsEntity | null>;
     findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]>;
     findPRNumbersByTitleAndOrganization(
@@ -312,6 +329,11 @@ export interface IPullRequestsRepository {
         organizationId: string,
         prNumbers: number[],
         status: string | string[],
+        /**
+         * The (repository, number) pairs, when the caller knows them: read in
+         * their place, one repository at a time.
+         */
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]>;
     findPullRequestsWithoutDeliveredSuggestionsForApproval(
         organizationId: string,

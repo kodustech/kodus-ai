@@ -79,6 +79,7 @@ describe('GetReactionsUseCase', () => {
             orgAndTeam.organizationId,
             [1, 2],
             [PullRequestState.MERGED, PullRequestState.CLOSED],
+            undefined,
         );
         expect(result).toEqual([]);
     });

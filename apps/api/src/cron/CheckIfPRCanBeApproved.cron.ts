@@ -495,6 +495,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 organizationId,
                                 automationExecutionsPRs,
                                 PullRequestState.OPENED,
+                                // Every ref names its repository: the refs read
+                                // drops those without one.
+                                eligiblePullRequestRefs.map((ref) => ({
+                                    repositoryId: ref.repositoryId,
+                                    number: ref.pullRequestNumber,
+                                })),
                             );
                         // Conditional policies can finish with no suggestions,
                         // including a sensitive-path hold. Only executions
