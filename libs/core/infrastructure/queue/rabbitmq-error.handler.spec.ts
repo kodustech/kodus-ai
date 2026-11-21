@@ -343,7 +343,7 @@ describe('RabbitMQErrorHandler', () => {
         });
 
         it('leaves the original unacked when the fresh copy is not confirmed', async () => {
-            const { handler } = makeHandler({
+            const { handler, amqpConnection } = makeHandler({
                 publish: jest
                     .fn()
                     .mockRejectedValue(new Error('Channel closed')),
@@ -359,6 +359,12 @@ describe('RabbitMQErrorHandler', () => {
                     }),
                 ),
             ).resolves.toBeUndefined();
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange',
+                'workflow.jobs.created.CODE_REVIEW',
+                expect.anything(),
+                expect.anything(),
+            );
             expect(channel.ack).not.toHaveBeenCalled();
             expect(channel.nack).not.toHaveBeenCalled();
         });
