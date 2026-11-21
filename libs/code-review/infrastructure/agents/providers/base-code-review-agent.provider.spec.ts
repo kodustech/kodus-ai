@@ -842,6 +842,24 @@ describe('losses the run records (#2066)', () => {
         expect(dropped?.detail).toContain('1 files dropped');
     });
 
+    it('splits a tiered PR whose full diffs exceed the budget (#2205)', async () => {
+        resolveModelMock.mockResolvedValue(
+            makeModel({ main: { maxInputTokens: 200_000 } }),
+        );
+        const changedFiles = Array.from({ length: 10 }, (_, i) => {
+            const diff = '@@ -1,1 +1,1 @@\n' + 'x'.repeat(60_000);
+            return {
+                filename: `src/f${i}.ts`,
+                patch: diff,
+                patchWithLinesStr: diff,
+            } as any;
+        });
+
+        await newAgent().execute(makeInput({ changedFiles }));
+
+        expect(runChunkedMock).toHaveBeenCalled();
+    });
+
     it('records nothing for a PR that fits', async () => {
         const out = await newAgent().execute(makeInput());
 

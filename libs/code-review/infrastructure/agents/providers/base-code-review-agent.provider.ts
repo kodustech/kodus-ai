@@ -526,6 +526,7 @@ export abstract class BaseCodeReviewAgentProvider {
                         reviewMode: input.reviewMode,
                     },
                 });
+                estimatedPromptTokens = filteredTokens;
 
                 if (adaptiveProfile.lowSignalFilterUnconditional) {
                     emitWarning(
@@ -596,10 +597,6 @@ export abstract class BaseCodeReviewAgentProvider {
             // Stash so buildUserPrompt and formatDiffs can render tiered
             // output without recomputing scores.
             input = { ...input, fileTiers };
-            // Re-estimate prompt tokens now that optional files will be
-            // rendered as hunk headers only — this often brings a large
-            // PR back under the single-batch budget.
-            estimatedPromptTokens = estimatePromptTokens(input);
         }
 
         if (
