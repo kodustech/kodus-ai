@@ -67,15 +67,25 @@ const config = {
 function rotatingTokenEndpoint() {
     let live = 'r1';
     let issued = 1;
-    const state = { calls: 0, refuseAll: false };
+    // sameAccess: the endpoint hands back the access token it already issued
+    // and rotates only the refresh token.
+    const state = {
+        calls: 0,
+        refuseAll: false,
+        sameAccess: false,
+        // Runs while the endpoint is answering, before it replies.
+        duringRefresh: undefined as undefined | (() => Promise<unknown>),
+    };
     const server = http.createServer((req, res) => {
         let body = '';
         req.on('data', (chunk) => (body += chunk));
         req.on('end', () => {
             state.calls++;
             const presented = new URLSearchParams(body).get('refresh_token');
+            const during = state.duringRefresh?.() ?? Promise.resolve();
             // Slow enough that two concurrent refreshes overlap.
-            setTimeout(() => {
+            setTimeout(async () => {
+                await during;
                 res.setHeader('Content-Type', 'application/json');
                 if (state.refuseAll || presented !== live) {
                     res.statusCode = 400;
@@ -86,7 +96,7 @@ function rotatingTokenEndpoint() {
                 live = `r${issued}`;
                 res.end(
                     JSON.stringify({
-                        access_token: `a${issued}`,
+                        access_token: state.sameAccess ? 'a1' : `a${issued}`,
                         refresh_token: live,
                         expires_in: 3600,
                     }),
@@ -298,6 +308,62 @@ const skip = process.env.SKIP_INTEGRATION === 'true';
             expect(await a.oauth.getOAuthStatus(ORG, INT)).toBe(
                 MCPIntegrationOAuthStatus.ACTIVE,
             );
+        });
+
+        it('a refresh that rotates only the refresh token is not taken for a lost grant by the pod that waited', async () => {
+            if (!admin) return;
+            const a = await pod();
+            const b = await pod();
+            await seed(a, { expiresAt: Date.now() + 60_000 });
+            endpoint.state.sameAccess = true;
+
+            const headers = await Promise.all([
+                a.oauth.resolveManagedAuthHeaders(ORG, INT),
+                b.oauth.resolveManagedAuthHeaders(ORG, INT),
+            ]);
+
+            expect(headers).toEqual([
+                { Authorization: 'Bearer a1' },
+                { Authorization: 'Bearer a1' },
+            ]);
+            expect(endpoint.state.calls).toBe(1);
+            expect(await a.oauth.getOAuthStatus(ORG, INT)).toBe(
+                MCPIntegrationOAuthStatus.ACTIVE,
+            );
+            expect(
+                ((await a.oauth.getOAuthState(ORG, INT))?.tokens as any)
+                    .refreshToken,
+            ).toBe('r2');
+        });
+
+        it('a reconnect saved while a refresh is in flight is kept', async () => {
+            if (!admin) return;
+            const a = await pod();
+            await seed(a, { expiresAt: Date.now() + 60_000 });
+            endpoint.state.duringRefresh = () =>
+                a.oauth.saveOAuthState(
+                    ORG,
+                    INT,
+                    MCPIntegrationOAuthStatus.ACTIVE,
+                    {
+                        clientId: 'client-it',
+                        redirectUri: 'https://app.example.test/callback',
+                        asMetadata: { token_endpoint: tokenUrl },
+                        tokens: {
+                            accessToken: 'reconnected',
+                            refreshToken: 'reconnected-refresh',
+                            expiresIn: 3600,
+                            expiresAt: Date.now() + 3_600_000,
+                        },
+                    } as any,
+                );
+
+            expect(await a.oauth.resolveManagedAuthHeaders(ORG, INT)).toEqual({
+                Authorization: 'Bearer reconnected',
+            });
+            expect(await a.oauth.resolveManagedAuthHeaders(ORG, INT)).toEqual({
+                Authorization: 'Bearer reconnected',
+            });
         });
 
         it('a grant the token endpoint refuses expires its connection', async () => {

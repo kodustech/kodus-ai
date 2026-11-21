@@ -20,7 +20,7 @@ class FakeRepo {
     // The refresh lock is a Postgres advisory lock; one process needs none.
     manager = {
         transaction: async (work: (m: any) => Promise<unknown>) =>
-            work({ query: async () => [] }),
+            work({ query: async () => [{ locked: true }] }),
     };
     async findOne({ where }: { where: any }) {
         return (

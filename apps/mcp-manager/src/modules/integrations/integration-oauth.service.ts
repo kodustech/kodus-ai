@@ -57,7 +57,17 @@ type RefreshResult = {
  * How long a refresh waits for another refresh of the same grant. Longer
  * than OAUTH_REFRESH_TIMEOUT_MS, so a waiter outlasts one slow refresh.
  */
-const REFRESH_LOCK_WAIT = '20s';
+const REFRESH_LOCK_WAIT_MS = 20_000;
+/** Between two tries for the lock; a waiter holds no connection meanwhile. */
+const REFRESH_LOCK_POLL_MS = 200;
+
+/**
+ * Whether two token sets are the same grant state. Both tokens count: a
+ * provider may hand back the same access token while it rotates the refresh
+ * token, and then only the refresh token tells that another refresh won.
+ */
+const sameTokens = (a?: TokenData, b?: TokenData) =>
+    a?.accessToken === b?.accessToken && a?.refreshToken === b?.refreshToken;
 
 const bearerFingerprint = (accessToken: string) =>
     credentialFingerprint({ Authorization: `Bearer ${accessToken}` });
@@ -270,33 +280,47 @@ export class IntegrationOAuthService {
      * saved a new one. A caller that waited re-reads the grant inside `work`
      * and finds the new token.
      *
-     * Transaction-scoped, so the lock is released however `work` ends; the
-     * reads and writes inside go through the repository as usual.
+     * The lock is tried, not waited on: each try is its own short transaction,
+     * so a waiter holds no pooled connection between tries, and only the
+     * holder keeps one for its refresh. Transaction-scoped, so the lock is
+     * released however `work` ends. Past REFRESH_LOCK_WAIT_MS it throws.
      */
-    private withRefreshLock<T>(
+    private async withRefreshLock<T>(
         organizationId: string,
         integrationId: string,
         work: () => Promise<T>,
     ): Promise<T> {
-        return this.integrationOAuthRepository.manager.transaction(
-            async (manager) => {
-                await manager.query(
-                    `SET LOCAL lock_timeout = '${REFRESH_LOCK_WAIT}'`,
+        const key = `mcp-oauth-refresh:${organizationId}:${integrationId}`;
+        const deadline = Date.now() + REFRESH_LOCK_WAIT_MS;
+        for (;;) {
+            const attempt =
+                await this.integrationOAuthRepository.manager.transaction(
+                    async (manager) => {
+                        const [row] = await manager.query(
+                            'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS locked',
+                            [key],
+                        );
+                        if (!row?.locked) return { locked: false as const };
+                        return { locked: true as const, value: await work() };
+                    },
                 );
-                await manager.query(
-                    'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-                    [`mcp-oauth-refresh:${organizationId}:${integrationId}`],
+            if (attempt.locked) return attempt.value;
+            if (Date.now() >= deadline) {
+                throw new Error(
+                    `the OAuth refresh lock was held for more than ${REFRESH_LOCK_WAIT_MS} ms`,
                 );
-                return work();
-            },
-        );
+            }
+            await new Promise((resolve) =>
+                setTimeout(resolve, REFRESH_LOCK_POLL_MS),
+            );
+        }
     }
 
     /**
      * Refresh the grant `oauthState` holds. Call only under the grant's
      * refresh lock: it first re-reads what is stored, and when another refresh
-     * or a reconnect already stored a different access token it returns that
-     * one without calling the token endpoint.
+     * or a reconnect already stored different tokens (a rotated refresh token
+     * counts) it returns those without calling the token endpoint.
      */
     private async refreshLocked(
         organizationId: string,
@@ -305,9 +329,14 @@ export class IntegrationOAuthService {
         force?: boolean,
     ): Promise<RefreshResult> {
         const current = oauthState.tokens as TokenData;
-        const stored = await this.getOAuthState(organizationId, integrationId);
-        const storedTokens = stored?.tokens as TokenData | undefined;
-        if (storedTokens?.accessToken !== current.accessToken) {
+        const row = await this.integrationOAuthRepository.findOne({
+            where: { integrationId, organizationId },
+        });
+        const storedTokens = this.decryptAndParse<IntegrationOAuthState>(
+            row?.auth,
+            {} as IntegrationOAuthState,
+        ).tokens as TokenData | undefined;
+        if (!row || !sameTokens(storedTokens, current)) {
             return {
                 outcome: 'superseded',
                 state: { ...oauthState, tokens: storedTokens },
@@ -330,12 +359,25 @@ export class IntegrationOAuthService {
             }
 
             const next = { ...oauthState, tokens: newTokens };
-            await this.saveOAuthState(
-                organizationId,
-                integrationId,
-                MCPIntegrationOAuthStatus.ACTIVE,
-                next,
+            // Only over the row read above: a reconnect saved while the token
+            // endpoint answered (it does not take this lock) is kept.
+            const written = await this.integrationOAuthRepository.update(
+                { id: row.id, auth: row.auth },
+                {
+                    status: MCPIntegrationOAuthStatus.ACTIVE,
+                    auth: this.encryptionUtils.encrypt(JSON.stringify(next)),
+                },
             );
+            if (!written.affected) {
+                const now = await this.getOAuthState(
+                    organizationId,
+                    integrationId,
+                );
+                return {
+                    outcome: 'superseded',
+                    state: { ...oauthState, tokens: now?.tokens },
+                };
+            }
             return { outcome: 'refreshed', state: next };
         } catch (error) {
             if (error instanceof OAuthGrantRejectedError) {
@@ -505,9 +547,10 @@ export class IntegrationOAuthService {
      * the user to connect again) and stop handing out its token. Connecting
      * again saves a fresh ACTIVE grant.
      *
-     * Only while the stored access token is still the one in `oauthState`, in
-     * the same statement: a refresh or a reconnect that stored another token
-     * in between keeps it, and that state is returned with `lost: false`.
+     * Only while the stored tokens are still the ones in `oauthState`, in the
+     * same statement: a refresh or a reconnect that stored others in between
+     * (a rotated refresh token counts) keeps them, and that state is returned
+     * with `lost: false`.
      */
     private async markGrantLost(
         organizationId: string,
@@ -522,9 +565,13 @@ export class IntegrationOAuthService {
             row?.auth,
             {} as IntegrationOAuthState,
         ).tokens as TokenData | undefined;
-        const refusedToken = (oauthState.tokens as TokenData | undefined)
-            ?.accessToken;
-        if (!row || storedTokens?.accessToken !== refusedToken) {
+        if (
+            !row ||
+            !sameTokens(
+                storedTokens,
+                oauthState.tokens as TokenData | undefined,
+            )
+        ) {
             return {
                 lost: false,
                 state: { ...oauthState, tokens: storedTokens },
