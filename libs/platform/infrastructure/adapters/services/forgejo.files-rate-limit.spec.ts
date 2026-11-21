@@ -23,6 +23,14 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
             response: { status },
             error: {},
         });
+    // What the client hands back when the connection drops: the axios error
+    // itself, with no response and `error: {}` (its client catches it).
+    const connectionDropped = (code: string, message: string) =>
+        Object.assign(new Error(message), {
+            code,
+            error: {},
+            config: { headers: { Authorization: 'token secret-token' } },
+        });
     const DIFF = [
         'diff --git a/src/a.ts b/src/a.ts',
         '--- a/src/a.ts',
@@ -187,6 +195,48 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         const { service } = makeService();
 
         await expect(list(service)).rejects.toThrow('socket hang up');
+    });
+
+    it.each([
+        ['ECONNRESET', 'read ECONNRESET'],
+        ['ERR_NETWORK', 'Network Error'],
+        ['ECONNRESET', 'socket hang up'],
+    ])(
+        'lets a connection the client answered as dropped (%s) through on the listing, not as no files',
+        async (code, message) => {
+            repoGetPullRequestFiles.mockResolvedValue(
+                connectionDropped(code, message),
+            );
+            const { service } = makeService();
+
+            await expect(list(service)).rejects.toMatchObject({
+                code,
+                message,
+            });
+        },
+    );
+
+    it('lets a connection the client answered as dropped through on the diff, not as empty patches', async () => {
+        repoDownloadPullDiffOrPatch.mockResolvedValue(
+            connectionDropped('ECONNRESET', 'read ECONNRESET'),
+        );
+        const { service } = makeService();
+
+        await expect(list(service)).rejects.toMatchObject({
+            code: 'ECONNRESET',
+        });
+    });
+
+    it('never carries the request config, which holds the token, in what it throws', async () => {
+        repoGetPullRequestFiles.mockResolvedValue(
+            connectionDropped('ECONNRESET', 'read ECONNRESET'),
+        );
+        const { service } = makeService();
+
+        const thrown = await list(service).catch((error) => error);
+
+        expect(thrown).not.toHaveProperty('config');
+        expect(JSON.stringify(thrown)).not.toContain('secret-token');
     });
 
     it('answers null when the listing fails for another reason', async () => {
