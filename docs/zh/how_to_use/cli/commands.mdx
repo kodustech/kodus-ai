@@ -20,7 +20,7 @@ description: "Kodus CLI 所有命令、标志和选项的完整参考。"
 
 使用 `--fail-on` 时,触发门禁的 `kodus review --agent` 会在第一个信封之后再打印第二个信封,其中 `ok: false` 且 `error.code` 为 `INTERNAL_ERROR`。请读取退出码,或只读取第一个信封。
 
-结果写入 stdout。进度指示、进度信息和错误写入 stderr。使用 `--fail-on` 时,触发门禁的审查还会在结果之后向 stdout 打印一行,因此 `kodus review --format json --fail-on error > review.json` 不是有效的 JSON。请使用 `--output review.json`,它能保持文件干净。
+结果和提示信息写入 stdout。进度指示、警告和错误写入 stderr。要在自动化中保存 JSON 审查结果，请使用 `kodus review --format json --output review.json`。使用 `--fail-on` 时，请单独读取退出码。触发门禁的审查会在 stdout 中额外输出一行。
 
 ---
 
@@ -225,9 +225,9 @@ kodus auth login --legacy -e user@mail.com
 | 标志                    | 简写  | 描述                                                                 |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | 即使有可用的浏览器也使用代码流程                                     |
-| `--legacy`              | —     | 使用邮箱和密码登录。已弃用;为脚本保留                               |
+| `--legacy` | — | 已弃用的邮箱和密码登录方式。脚本和 CI 请使用 `KODUS_TEAM_KEY` 密钥。 |
 | `--email <email>`       | `-e`  | 账号邮箱(隐含 `--legacy`)                                          |
-| `--password <password>` | `-p` | 已弃用的密码标志（隐含 `--legacy`）。其他进程可能读取命令参数，请避免在命令行中传入凭据。 |
+| `--password <password>` | `-p` | 已弃用的密码标志（隐含 `--legacy`）。请通过提示输入密码。将密码作为参数传入可能会向其他进程或 shell 历史记录暴露密码。 |
 
 ### `auth logout`
 

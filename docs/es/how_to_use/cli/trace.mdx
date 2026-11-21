@@ -27,11 +27,13 @@ Comprueba lo que hizo con `kodus trace status`: sesiones y turnos capturados, de
 
 ## Qué se captura
 
-Cada turno de una sesión de agente: el prompt y la respuesta, un resumen de una línea de cada herramienta que usó el agente, los archivos que leyó y modificó, sus comandos y el uso de tokens. Los registros viven en `~/.kodus/sessions`, fuera del repositorio, y se eliminan a los 90 días. Los secretos se redactan antes de almacenar nada: claves de API, tokens, claves privadas y contraseñas en URLs o asignaciones.
+Cada turno de una sesión de agente: el prompt y la respuesta, un resumen de una línea de cada herramienta que usó el agente, los archivos que leyó y modificó, sus comandos y el uso de tokens. Los registros viven en `~/.kodus/sessions`, fuera del repositorio, y se eliminan a los 90 días.
+
+Antes de guardar o enviar eventos, el CLI enmascara los patrones de secretos que reconoce. El contenido capturado aún puede contener datos confidenciales. Mantén las credenciales fuera de las sesiones que capturas. Para dejar de capturar sesiones nuevas, ejecuta `kodus trace disable`.
 
 La captura funciona sin cuenta.
 
-Cuando has iniciado sesión con un login o una clave de equipo, el CLI también envía a Kodus los eventos redactados de cada sesión: los prompts y las respuestas, las herramientas que el agente llamó con sus entradas y salidas, los archivos leídos y modificados, los comandos, el uso de tokens, la rama, la URL del remoto de git y los ids de commit. Kodus los almacena para tu organización. Cuando una sesión termina, un modelo los lee para extraer decisiones, con el modelo BYOK de tu organización si lo tiene y con un modelo gestionado por Kodus en caso contrario. Estos eventos cuentan para las 1000 solicitudes por hora del equipo.
+Cuando has iniciado sesión con un login o una clave de equipo, el CLI también envía a Kodus los eventos con los secretos reconocidos enmascarados de cada sesión: los prompts y las respuestas, las herramientas que el agente llamó con sus entradas y salidas, los archivos leídos y modificados, los comandos, el uso de tokens, la rama, la URL del remoto de git y los ids de commit. Kodus los almacena para tu organización. Cuando una sesión termina, un modelo los lee para extraer decisiones, con el modelo BYOK de tu organización si lo tiene y con un modelo gestionado por Kodus en caso contrario. Estos eventos cuentan para las 1000 solicitudes por hora del equipo.
 
 ## Cómo se generan las decisiones
 

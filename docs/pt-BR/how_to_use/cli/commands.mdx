@@ -20,7 +20,7 @@ Essas flags estão disponíveis em todos os comandos:
 
 Com `--fail-on`, um `kodus review --agent` que dispara o gate imprime um segundo envelope depois do primeiro, com `ok: false` e `error.code` `INTERNAL_ERROR`. Leia o código de saída, ou leia apenas o primeiro envelope.
 
-Os resultados vão para o stdout. Spinners, progresso e erros vão para o stderr. Com `--fail-on`, uma revisão que dispara o gate também imprime uma linha no stdout depois do resultado, então `kodus review --format json --fail-on error > review.json` não é um JSON válido. Use `--output review.json`, que mantém o arquivo limpo.
+Os resultados e as mensagens informativas vão para o stdout. Indicadores de progresso, avisos e erros vão para o stderr. Para salvar a revisão em JSON em uma automação, use `kodus review --format json --output review.json`. Com `--fail-on`, leia o código de saída separadamente. Uma revisão que aciona o bloqueio imprime uma linha extra no stdout.
 
 ---
 
@@ -225,9 +225,9 @@ Para usar o login legado, execute o exemplo acima e digite a senha quando o CLI 
 | Flag                    | Curto | Descrição                                                            |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | Usar o fluxo de código mesmo quando há um navegador disponível       |
-| `--legacy`              | —     | Entrar com e-mail e senha. Obsoleto; mantido para scripts            |
+| `--legacy` | — | Login obsoleto por e-mail e senha. Em scripts e CI, use o segredo `KODUS_TEAM_KEY`. |
 | `--email <email>`       | `-e`  | E-mail da conta (implica `--legacy`)                                 |
-| `--password <password>` | `-p` | Flag de senha obsoleta (implica `--legacy`). Evite passar credenciais na linha de comando, onde outros processos podem ler os argumentos. |
+| `--password <password>` | `-p` | Flag de senha obsoleta (implica `--legacy`). Digite a senha no prompt. Passá-la como argumento pode expô-la a outros processos ou ao histórico do shell. |
 
 ### `auth logout`
 

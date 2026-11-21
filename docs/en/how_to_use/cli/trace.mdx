@@ -27,11 +27,13 @@ Check what it did with `kodus trace status`: sessions and turns captured, decisi
 
 ## What is captured
 
-Each turn of an agent session: the prompt and response, a one-line summary of each tool the agent used, the files it read and changed, its commands, and token usage. Records live under `~/.kodus/sessions`, outside the repository, and are deleted after 90 days. Secrets are redacted before anything is stored: API keys, tokens, private keys, and passwords in URLs or assignments.
+Each turn of an agent session: the prompt and response, a one-line summary of each tool the agent used, the files it read and changed, its commands, and token usage. Records live under `~/.kodus/sessions`, outside the repository, and are deleted after 90 days.
+
+Before saving or sending events, the CLI masks secret patterns it recognizes. Captured content can still contain sensitive data. Keep credentials out of sessions you capture. To stop capturing new sessions, run `kodus trace disable`.
 
 Capture works with no account.
 
-When you are signed in with a login or a team key, the CLI also sends each session's redacted events to Kodus: the prompts and responses, the tools the agent called with their inputs and outputs, the files read and changed, the commands, token usage, the branch, the git remote URL, and commit ids. Kodus stores them for your organization. When a session ends, a model reads them to extract decisions, on your organization's BYOK model when it has one and on a Kodus-managed model otherwise. These events count toward the team's 1,000 requests per hour.
+When you are signed in with a login or a team key, the CLI also sends each session's events after masking recognized secrets to Kodus: the prompts and responses, the tools the agent called with their inputs and outputs, the files read and changed, the commands, token usage, the branch, the git remote URL, and commit ids. Kodus stores them for your organization. When a session ends, a model reads them to extract decisions, on your organization's BYOK model when it has one and on a Kodus-managed model otherwise. These events count toward the team's 1,000 requests per hour.
 
 ## How decisions are made
 

@@ -20,7 +20,7 @@ Estos flags están disponibles en todos los comandos:
 
 Con `--fail-on`, un `kodus review --agent` que activa el control imprime un segundo sobre después del primero, con `ok: false` y `error.code` `INTERNAL_ERROR`. Lee el código de salida, o lee solo el primer sobre.
 
-Los resultados van a stdout. Los spinners, el progreso y los errores van a stderr. Con `--fail-on`, una revisión que activa el control también imprime una línea en stdout después del resultado, por lo que `kodus review --format json --fail-on error > review.json` no es JSON válido. Usa `--output review.json`, que mantiene el archivo limpio.
+Los resultados y los mensajes informativos van a stdout. Los indicadores de progreso, las advertencias y los errores van a stderr. Para guardar una revisión en JSON en una automatización, usa `kodus review --format json --output review.json`. Con `--fail-on`, lee el código de salida por separado. Una revisión que activa el control imprime una línea adicional en stdout.
 
 ---
 
@@ -225,9 +225,9 @@ Para usar el inicio de sesión antiguo, ejecuta el ejemplo anterior y escribe la
 | Flag                    | Corto | Descripción                                                          |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | Usar el flujo de código incluso cuando hay un navegador disponible   |
-| `--legacy`              | —     | Iniciar sesión con correo y contraseña. Obsoleto; se conserva para scripts |
+| `--legacy` | — | Inicio de sesión obsoleto con correo y contraseña. En scripts y CI, usa el secreto `KODUS_TEAM_KEY`. |
 | `--email <email>`       | `-e`  | Correo de la cuenta (implica `--legacy`)                             |
-| `--password <password>` | `-p` | Flag de contraseña obsoleto (implica `--legacy`). Evita pasar credenciales por la línea de comandos, donde otros procesos pueden leer los argumentos. |
+| `--password <password>` | `-p` | Flag de contraseña obsoleto (implica `--legacy`). Introduce la contraseña cuando se solicite. Si la pasas como argumento, otros procesos o el historial del shell podrían exponerla. |
 
 ### `auth logout`
 

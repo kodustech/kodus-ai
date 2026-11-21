@@ -20,7 +20,7 @@ These flags are available on all commands:
 
 With `--fail-on`, a `kodus review --agent` that trips the gate prints a second envelope after the first, with `ok: false` and `error.code` `INTERNAL_ERROR`. Read the exit code, or read the first envelope only.
 
-Results go to stdout. Spinners, progress, and errors go to stderr. With `--fail-on`, a review that trips the gate also prints a line to stdout after the result, so `kodus review --format json --fail-on error > review.json` is not valid JSON. Use `--output review.json`, which keeps the file clean.
+Results and informational messages go to stdout. Spinners, warnings and errors go to stderr. To save a JSON review for automation, use `kodus review --format json --output review.json`. With `--fail-on`, read the exit code separately. A review that trips the gate prints an extra line to stdout.
 
 ---
 
@@ -225,9 +225,9 @@ For legacy sign-in, run the example above and enter your password when prompted.
 | Flag                    | Short | Description                                                          |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | Use the code flow even when a browser is available                   |
-| `--legacy`              | —     | Sign in with email and password. Deprecated; kept for scripts        |
+| `--legacy` | — | Deprecated email and password sign-in. For scripts and CI, use the `KODUS_TEAM_KEY` secret. |
 | `--email <email>`       | `-e`  | Account email (implies `--legacy`)                                   |
-| `--password <password>` | `-p` | Deprecated password flag (implies `--legacy`). Avoid passing credentials in the command line because other processes may see the arguments. |
+| `--password <password>` | `-p` | Deprecated password flag (implies `--legacy`). Enter your password at the prompt. Passing it as an argument can expose it to other processes or shell history. |
 
 ### `auth logout`
 
