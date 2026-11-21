@@ -3,44 +3,28 @@
 import { useMemo } from "react";
 import NextLink from "next/link";
 import { BootFailurePanel } from "@components/runtime/boot-failure";
-import {
-    openDisclosure,
-    RuntimeDisclosure,
-} from "@components/runtime/disclosure";
+import { ConnectedFindings } from "@components/runtime/connected-findings";
+import { RuntimeDisclosure } from "@components/runtime/disclosure";
 import {
     RuntimeEmptyState,
     RuntimeErrorState,
 } from "@components/runtime/empty-state";
 import { RecipeChangedNotice } from "@components/runtime/recipe-changed-notice";
-import { RelativeTime } from "@components/runtime/relative-time";
-import { RichTextView } from "@components/runtime/rich-text";
 import { ApproveRunButton, RerunButton } from "@components/runtime/run-actions";
 import { RunCostBreakdown } from "@components/runtime/run-cost";
 import {
     ExercisedFilesList,
     RunCoverageList,
 } from "@components/runtime/run-coverage";
-import {
-    findingAnchorId,
-    RunFindingsView,
-} from "@components/runtime/run-findings";
 import { RunLogView } from "@components/runtime/run-log";
 import { RunPreviewCard } from "@components/runtime/run-preview";
 import { RunTimingView } from "@components/runtime/run-timing";
-import {
-    PRIMARY_ACTION_CLASS,
-    RunVerdictSummary,
-} from "@components/runtime/run-verdict-summary";
 import { RunWorkspaceSection } from "@components/runtime/run-workspace";
 import { Fact, RuntimeSection } from "@components/runtime/section";
 import { StuckNotice } from "@components/runtime/stuck-notice";
-import { Button } from "@components/ui/button";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
-import { toast } from "@components/ui/toaster/use-toast";
-import { usePermissionOnEvery } from "@services/permissions/hooks";
-import { Action, ResourceType } from "@services/permissions/types";
 import { useInfinitePullRequestExecutions } from "@services/pull-requests/hooks";
 import type { RuntimeRun } from "@services/runtime/contracts";
 import {
@@ -48,11 +32,7 @@ import {
     formatEstimatedUsd,
     shortSha,
 } from "@services/runtime/format";
-import {
-    cellOwnerLabel,
-    isCheckFinal,
-    isTerminalRunState,
-} from "@services/runtime/labels";
+import { cellOwnerLabel, isTerminalRunState } from "@services/runtime/labels";
 import { baseVersionLabel } from "@services/runtime/model/base-version";
 import { bootFailureOf } from "@services/runtime/model/boot-failure";
 import { coverageRows } from "@services/runtime/model/coverage";
@@ -62,20 +42,18 @@ import {
 } from "@services/runtime/model/environment";
 import {
     pullRequestBranchOf,
-    repositoryIdsOfRun,
     repositoryLabel,
     workspaceSideRows,
 } from "@services/runtime/model/environment-repositories";
-import { runtimeErrorMessage } from "@services/runtime/model/errors";
 import { buildFindings } from "@services/runtime/model/findings";
-import { runFacts } from "@services/runtime/model/run-facts";
 import { buildRunLog } from "@services/runtime/model/run-log";
 import { buildRunPaths } from "@services/runtime/model/run-paths";
-import { runStats, runSummary } from "@services/runtime/model/run-summary";
-import { runTiming, timingTakeaway } from "@services/runtime/model/run-timing";
 import {
-    useFindingFeedback,
-    useFindingIntent,
+    publicationWarnings,
+    runStatusLine,
+} from "@services/runtime/model/run-status-line";
+import { runTiming } from "@services/runtime/model/run-timing";
+import {
     useRunBeingRecorded,
     useRunStream,
     useRuntimeEnvironment,
@@ -100,15 +78,6 @@ const PLATFORM: Record<string, string> = {
     BITBUCKET: "Bitbucket",
     AZURE_REPOS: "Azure Repos",
 };
-
-/** States whose recorded reason says why there is no verdict. */
-const REASON_STATES = new Set<RuntimeRun["state"]>([
-    "skipped",
-    "could_not_boot",
-    "errored",
-    "cancelled",
-    "timed_out",
-]);
 
 /**
  * The PR's title, link and platform, from Kodus's own record of the pull
@@ -157,14 +126,6 @@ const whatWasRunningLine = (
         .filter(Boolean)
         .join(" · ");
 
-/** What started the Run, in the header's words. */
-const TRIGGER_LABEL: Record<NonNullable<RuntimeRun["trigger"]>, string> = {
-    pull_request: "Started by a pull request event",
-    comment: "Asked with @kody runtime",
-    run_again: "Run again",
-    simulate: "Simulation · nothing is posted",
-};
-
 export const RunDetailPage = ({ runId }: { runId: string }) => {
     const runQuery = useRuntimeRun(runId);
     const run = runQuery.data ?? undefined;
@@ -179,14 +140,6 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
     );
     const pr = usePullRequestMeta(run);
     const prTitle = pr?.title || run?.prTitle;
-    const vote = useFindingFeedback();
-    const intent = useFindingIntent();
-    // Marking a finding intended is gated like "Run again": write on Runs of this repository.
-    const canMarkIntended = usePermissionOnEvery(
-        Action.Create,
-        ResourceType.RuntimeRun,
-        run ? repositoryIdsOfRun(run) : [],
-    );
 
     // A multi-repository Run names its repositories by id and folder: the
     // environment, read once, gives their names (a removed one keeps its folder).
@@ -220,14 +173,9 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
             runPaths,
             findings,
             timing,
-            summary: runSummary(run, runPaths, findings, runFacts(run, view)),
-            stats: runStats(runPaths, timing.totalMs),
             coverage: coverageRows(runPaths, run),
             log: buildRunLog(run, view, runPaths, timing),
             bootFailure: bootFailureOf(run),
-            timingLine: timingTakeaway(timing, {
-                live: !isTerminalRunState(run.state),
-            }),
         };
     }, [run, view]);
 
@@ -275,20 +223,7 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
 
     const baseLabel = baseVersionLabel(run);
     const live = !isTerminalRunState(run.state);
-    const check =
-        view.verdict?.check ??
-        (isCheckFinal(run.state) ? run.check : undefined);
-    const {
-        runPaths,
-        findings,
-        timing,
-        summary,
-        stats,
-        coverage,
-        log,
-        bootFailure,
-        timingLine,
-    } = derived;
+    const { runPaths, findings, timing, coverage, log, bootFailure } = derived;
     const logNote =
         status === "failed"
             ? "The live view could not be opened for this Run: the log shows what the Run record kept."
@@ -298,53 +233,6 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
     const openPrClass =
         "bg-card-lv2 text-text-primary focus-visible:ring-ring inline-flex min-h-12 items-center gap-2 rounded-xl px-6 text-sm font-semibold hover:brightness-120 focus-visible:ring-3 focus-visible:outline-none";
 
-    const markIntended = (probeId: string, intended: boolean) =>
-        intent.mutate(
-            { runId: run.runId, probeId, intended },
-            {
-                onError: (error) =>
-                    toast({
-                        variant: "danger",
-                        title: "Couldn't save the mark",
-                        description: runtimeErrorMessage(error, {
-                            fallback: "Try again in a moment.",
-                        }),
-                    }),
-            },
-        );
-
-    // The verdict card's one action, by state (run-summary's `todo.action`).
-    const action = summary.todo?.action;
-    const openFinding = (probeId: string) => (
-        <a
-            href={`#${findingAnchorId(probeId)}`}
-            onClick={() => openDisclosure(findingAnchorId(probeId))}
-            className={PRIMARY_ACTION_CLASS}>
-            Open the finding
-        </a>
-    );
-    const primaryAction =
-        action?.kind === "run_again" ? (
-            <RerunButton run={run} size="md" />
-        ) : action?.kind === "mark_intended" ? (
-            canMarkIntended ? (
-                <Button
-                    size="md"
-                    variant="primary"
-                    loading={
-                        intent.isPending &&
-                        intent.variables?.probeId === action.probeId
-                    }
-                    title="Kody keeps it to learn from. The check and the PR comment keep what Kody measured."
-                    onClick={() => markIntended(action.probeId, true)}>
-                    This change is intended
-                </Button>
-            ) : (
-                openFinding(action.probeId)
-            )
-        ) : action?.kind === "open_finding" ? (
-            openFinding(action.probeId)
-        ) : undefined;
     const elapsed =
         timing.totalMs !== undefined
             ? formatDurationMs(timing.totalMs)
@@ -370,32 +258,16 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                             </span>
                         )}
                     </div>
-                    <p className="text-text-secondary text-sm">
-                        {pr?.author && (
-                            <>
-                                PR by{" "}
-                                <span className="text-text-primary">
-                                    @{pr.author}
-                                </span>{" "}
-                                ·{" "}
-                            </>
+                    <p
+                        className="text-text-secondary text-sm"
+                        role={live ? "status" : undefined}
+                        aria-live={live ? "polite" : undefined}>
+                        {runStatusLine(
+                            run,
+                            findings.filter((f) => !f.intended).length,
+                            timing.totalMs,
                         )}
-                        {run.trigger && `${TRIGGER_LABEL[run.trigger]} · `}
-                        Requested <RelativeTime at={run.requestedAt} />
-                        {run.attempt > 1 && ` · run ${run.attempt}`} · this PR{" "}
-                        <code className="text-text-primary font-mono">
-                            {shortSha(run.headSha)}
-                        </code>{" "}
-                        vs {baseLabel}{" "}
-                        <code className="text-text-primary font-mono">
-                            {shortSha(run.baseSha)}
-                        </code>
-                        {live && (
-                            <span role="status" aria-live="polite">
-                                {" "}
-                                · {STREAM_STATUS_LABEL[status]}
-                            </span>
-                        )}
+                        {live && ` · ${STREAM_STATUS_LABEL[status]}`}
                     </p>
                 </div>
                 <Page.HeaderActions>
@@ -420,26 +292,28 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                     )}
                     <ApproveRunButton run={run} size="lg" />
                     {/* The verdict card carries "Run again" when it is the thing to do: one amber button, not two. */}
-                    {action?.kind !== "run_again" && (
-                        <RerunButton run={run} size="lg" variant="helper" />
-                    )}
+                    <RerunButton run={run} size="lg" variant="helper" />
                 </Page.HeaderActions>
             </Page.Header>
 
             <Page.Content>
-                <RunVerdictSummary
-                    state={run.state}
-                    check={check}
-                    checkPlatform={pr?.platform}
-                    summary={summary}
-                    stats={stats}
-                    costUsd={run.cost?.totalUsd}
-                    publication={run.publication}
-                    reason={
-                        REASON_STATES.has(run.state) ? run.reason : undefined
-                    }
-                    primaryAction={primaryAction}
-                />
+                {publicationWarnings(run.publication).map((w) => (
+                    <p
+                        key={w.title}
+                        role="note"
+                        className="text-warning text-sm">
+                        <span aria-hidden>⚠ </span>
+                        {w.title}
+                        {w.fix && (
+                            <details className="text-text-secondary mt-1">
+                                <summary className="cursor-pointer">
+                                    How to fix ›
+                                </summary>
+                                <span>{w.fix}</span>
+                            </details>
+                        )}
+                    </p>
+                ))}
 
                 <StuckNotice what="Run" stuck={run.stuck} />
 
@@ -471,62 +345,21 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                     </RuntimeSection>
                 )}
 
-                <RuntimeSection
-                    title="Findings"
-                    description="What behaves differently on this PR, with the proof.">
-                    <RunFindingsView
-                        runId={run.runId}
+                <section aria-label="Findings">
+                    <ConnectedFindings
+                        run={run}
                         findings={findings}
-                        baseLabel={baseLabel}
+                        runPaths={runPaths}
+                        live={live}
                         pullRequestUrl={pr?.url}
                         bootFailure={bootFailure}
-                        live={live}
-                        compared={runPaths.testedCount > 0}
-                        newEndpoints={
-                            runPaths.paths.filter(
-                                (p) => p.outcome === "new_endpoint",
-                            ).length
-                        }
-                        missing={
-                            run.state === "regression" && findings.length === 0
-                        }
-                        feedback={run.feedback}
-                        votePendingFor={
-                            vote.isPending ? vote.variables?.probeId : undefined
-                        }
-                        intentPendingFor={
-                            intent.isPending
-                                ? intent.variables?.probeId
-                                : undefined
-                        }
-                        onMarkIntended={
-                            canMarkIntended ? markIntended : undefined
-                        }
-                        onVote={(probeId, value) =>
-                            vote.mutate(
-                                { runId: run.runId, probeId, value },
-                                {
-                                    onError: (error) =>
-                                        toast({
-                                            variant: "danger",
-                                            title: "Couldn't save your feedback",
-                                            description: runtimeErrorMessage(
-                                                error,
-                                                {
-                                                    fallback:
-                                                        "Try again in a moment.",
-                                                },
-                                            ),
-                                        }),
-                                },
-                            )
-                        }
                     />
-                </RuntimeSection>
+                </section>
 
-                <RuntimeSection
-                    title="What Kody tested"
-                    description={
+                <RuntimeDisclosure
+                    id="paths-tested"
+                    title="Paths tested"
+                    summary={
                         runPaths.totalCount === 0
                             ? `The same request sent to ${baseLabel} and to this PR`
                             : `${runPaths.testedCount} of ${runPaths.totalCount} ${runPaths.totalCount === 1 ? "path" : "paths"} of this PR · the same request sent to ${baseLabel} and to this PR`
@@ -541,26 +374,6 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                             files={run.exercised?.files ?? []}
                         />
                     </div>
-                </RuntimeSection>
-
-                <RuntimeDisclosure
-                    id="run-timing"
-                    title={
-                        elapsed === undefined
-                            ? "Where the time went"
-                            : live
-                              ? `Time so far: ${elapsed}`
-                              : `Why it took ${elapsed}`
-                    }
-                    summary={
-                        timingLine ? (
-                            <RichTextView text={timingLine} />
-                        ) : (
-                            "The phases appear once a machine takes the Run."
-                        )
-                    }
-                    defaultOpen={live}>
-                    <RunTimingView timing={timing} />
                 </RuntimeDisclosure>
 
                 <RuntimeDisclosure
@@ -607,9 +420,7 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                             {cellOwnerLabel(run.cellOwner)}
                         </Fact>
                     </dl>
-                    {!summary.saysSetupFileChange && (
-                        <RecipeChangedNotice run={run} />
-                    )}
+                    <RecipeChangedNotice run={run} />
                     <RunWorkspaceSection
                         embedded
                         rows={workspaceRows}
@@ -620,9 +431,12 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
 
                 <RuntimeDisclosure
                     id="run-log"
-                    title="Run log"
-                    summary="Everything the machines ran, in order · secrets and tokens redacted."
+                    title="Logs"
+                    summary={
+                        elapsed ? `${elapsed} in total` : "Not started yet"
+                    }
                     defaultOpen={live}>
+                    <RunTimingView timing={timing} />
                     <RunLogView runId={run.runId} groups={log} note={logNote} />
                 </RuntimeDisclosure>
 

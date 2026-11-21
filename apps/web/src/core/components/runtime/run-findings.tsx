@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@components/ui/button";
 import type {
@@ -16,15 +15,18 @@ import {
 import type { BootFailureView } from "@services/runtime/model/boot-failure";
 import { hasBrowserEvidence } from "@services/runtime/model/browser-evidence";
 import { codeRefOf } from "@services/runtime/model/code-ref";
+import { hunkAround, type HunkLine } from "@services/runtime/model/diff-hunk";
+import {
+    findingHeadline,
+    findingProof,
+} from "@services/runtime/model/finding-headline";
 import type { Finding, FindingSide } from "@services/runtime/model/findings";
 import { hasLaneEvents } from "@services/runtime/model/replay-lanes";
-import { checkLabel } from "@services/runtime/model/run-paths";
 import { whatHappened } from "@services/runtime/model/what-happened";
 import { ChevronRightIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { BrowserEvidence } from "./browser-evidence";
-import { InlineDisclosure } from "./disclosure";
 import { EvidenceLink } from "./evidence-link";
 import { IntendedNote } from "./intended-note";
 import { ReplayLanesView } from "./replay-lanes";
@@ -169,6 +171,71 @@ const chipOf = (finding: Finding) =>
         ? { tone: "alert" as const, label: "New behavior · confirm it" }
         : RUN_PATH_OUTCOME_META[finding.intended ? "intended" : "regression"];
 
+/** The changed line a finding hit, with the patch lines around it when the page has them. */
+const WhereChanged = ({
+    codeRef,
+    hunk,
+}: {
+    codeRef: { label: string; href?: string };
+    hunk?: HunkLine[];
+}) => (
+    <section aria-label="Where" className="flex flex-col gap-2">
+        <span className="text-text-secondary text-xs">
+            Changed in{" "}
+            {codeRef.href ? (
+                <a
+                    href={codeRef.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-primary-light font-mono underline-offset-2 hover:underline">
+                    {codeRef.label}
+                </a>
+            ) : (
+                <span className="text-text-primary font-mono">
+                    {codeRef.label}
+                </span>
+            )}
+        </span>
+        {hunk && (
+            <pre className="bg-card-lv2 overflow-x-auto rounded-lg py-2 font-mono text-xs">
+                {hunk.map((row, i) => (
+                    <div
+                        key={i}
+                        data-hit={row.hit || undefined}
+                        className={cn(
+                            "flex gap-3 px-3",
+                            row.kind === "add" && "text-success",
+                            row.kind === "del" && "text-danger",
+                            row.hit && "bg-card-lv3 font-semibold",
+                        )}>
+                        <span
+                            aria-hidden
+                            className="text-text-tertiary w-8 shrink-0 text-right">
+                            {row.line ?? ""}
+                        </span>
+                        <span aria-hidden>
+                            {row.kind === "add"
+                                ? "+"
+                                : row.kind === "del"
+                                  ? "-"
+                                  : " "}
+                        </span>
+                        <span className="sr-only">
+                            {row.kind === "add"
+                                ? "Added"
+                                : row.kind === "del"
+                                  ? "Removed"
+                                  : "Unchanged"}
+                            {row.hit ? ", the line Kody hit" : ""}:
+                        </span>
+                        <span className="whitespace-pre">{row.text}</span>
+                    </div>
+                ))}
+            </pre>
+        )}
+    </section>
+);
+
 export const FindingCard = ({
     runId,
     finding,
@@ -179,7 +246,7 @@ export const FindingCard = ({
     intentPending,
     pullRequestUrl,
     bootFailure,
-    defaultOpen = true,
+    patchOf,
 }: {
     runId: string;
     finding: Finding;
@@ -193,161 +260,171 @@ export const FindingCard = ({
     /** Absent when the viewer may not mark findings (write on Runs of this repository). */
     onMarkIntended?: (intended: boolean) => void;
     intentPending?: boolean;
-    /** Open on arrival; the others are one row each until the reader opens them. */
-    defaultOpen?: boolean;
+    /** The PR's patch of a file, from what the Files view already loaded. */
+    patchOf?: (file: string) => string | undefined;
 }) => {
-    const [initialOpen] = useState(defaultOpen);
     const chip = chipOf(finding);
     const titleId = `finding-title-${finding.probeId}`;
     const baseLabel = finding.baseLabel ?? baseVersionLabel();
     // A regression is a state, so it earns the one stroke; new behavior the PR announced does not.
     const real = !finding.intended && !finding.matchesExpectation;
-    const [lead, ...story] = whatHappened(finding, {
-        codeRef: codeRefOf(finding.diffRef, {
-            url: pullRequestUrl,
-            headSha: finding.pr.sha,
-        }),
-        bootFailure,
+    const codeRef = codeRefOf(finding.diffRef, {
+        url: pullRequestUrl,
+        headSha: finding.pr.sha,
     });
+    const [, ...story] = whatHappened(finding, { codeRef, bootFailure });
+    const proof = findingProof(finding);
+    const hunk =
+        finding.diffRef && patchOf
+            ? hunkAround(patchOf(finding.diffRef.file), finding.diffRef.line)
+            : undefined;
     return (
         <article
+            id={findingAnchorId(finding.probeId)}
             aria-labelledby={titleId}
             className={cn(
-                "bg-card-lv2/40 rounded-xl",
+                "bg-card-lv2/40 flex scroll-mt-24 flex-col gap-4 rounded-xl p-5",
                 real && "ring-danger/40 ring-1",
             )}>
-            <details
-                id={findingAnchorId(finding.probeId)}
-                open={initialOpen}
-                className="group/finding scroll-mt-24">
-                <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-start gap-3 rounded-xl p-5 hover:brightness-120 focus-visible:ring-3 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+            <header className="flex flex-col gap-1">
+                <h3
+                    id={titleId}
+                    className="text-text-primary flex flex-wrap items-center gap-x-3 gap-y-1 text-base font-semibold">
+                    <span aria-hidden className="text-danger">
+                        {real ? "✕" : ""}
+                    </span>
+                    <span>{findingHeadline(finding)}</span>
+                    <StatusChip tone={chip.tone}>{chip.label}</StatusChip>
+                    {finding.via && <ViaNote via={finding.via} />}
+                </h3>
+                {finding.purpose?.trim() && (
+                    <p className="text-text-tertiary truncate text-xs">
+                        {finding.purpose.trim()}
+                    </p>
+                )}
+            </header>
+
+            {finding.boot ? (
+                <p className="text-text-secondary text-sm">
+                    {bootFailure?.side === "pr"
+                        ? bootFailure.title
+                        : "No request was sent: this PR never got ready."}
+                </p>
+            ) : (
+                <section aria-label="Proof">
+                    <pre className="bg-card-lv2 overflow-x-auto rounded-lg px-3 py-2 font-mono text-xs leading-5">
+                        <div className="text-text-primary">{proof.request}</div>
+                        <div className="text-text-secondary">
+                            {baseLabel.padEnd(4)} {proof.base}
+                        </div>
+                        <div
+                            className={
+                                real ? "text-danger" : "text-text-primary"
+                            }>
+                            {"PR".padEnd(Math.max(4, baseLabel.length))}{" "}
+                            {proof.pr}
+                        </div>
+                    </pre>
+                </section>
+            )}
+
+            {codeRef && <WhereChanged codeRef={codeRef} hunk={hunk} />}
+
+            <div className="flex flex-wrap items-center gap-3">
+                {finding.reproducible && (
+                    <ReproduceFinding
+                        runId={runId}
+                        probeId={finding.probeId}
+                        entryPoint={finding.entryPoint}
+                    />
+                )}
+                {!finding.intended && onMarkIntended && (
+                    <Button
+                        size="xs"
+                        variant={
+                            finding.matchesExpectation &&
+                            !finding.markedIntended
+                                ? "primary-dark"
+                                : "helper"
+                        }
+                        loading={intentPending}
+                        aria-describedby={titleId}
+                        onClick={() => onMarkIntended(!finding.markedIntended)}>
+                        {finding.markedIntended
+                            ? "Undo intended"
+                            : "Mark as intended"}
+                    </Button>
+                )}
+                {onVote && (
+                    <span className="ml-auto flex items-center gap-2">
+                        <span className="text-text-secondary text-xs">
+                            Was this useful?
+                        </span>
+                        <PathFeedback
+                            feedback={feedback}
+                            onVote={onVote}
+                            pending={votePending}
+                            entryPoint={finding.entryPoint}
+                        />
+                    </span>
+                )}
+            </div>
+
+            <details className="group/details">
+                <summary className="text-text-secondary focus-visible:ring-ring flex cursor-pointer list-none items-center gap-1 rounded text-sm focus-visible:ring-3 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
                     <ChevronRightIcon
                         aria-hidden
-                        className="text-text-secondary mt-1 size-4 shrink-0 transition-transform duration-200 group-open/finding:rotate-90"
+                        className="size-4 transition-transform group-open/details:rotate-90"
                     />
-                    <span className="flex min-w-0 flex-col gap-2">
-                        <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                            <StatusChip tone={chip.tone}>
-                                {chip.label}
-                            </StatusChip>
-                            <code
-                                id={titleId}
-                                className="text-text-primary font-mono text-base font-semibold break-all">
-                                {finding.route}
-                            </code>
-                            {checkLabel(finding.probeId, finding.purpose) && (
-                                <span className="text-text-secondary text-sm">
-                                    {checkLabel(
-                                        finding.probeId,
-                                        finding.purpose,
-                                    )}
-                                </span>
-                            )}
-                            {finding.via && <ViaNote via={finding.via} />}
-                        </span>
-                        <span className="text-text-primary text-sm leading-6">
-                            {lead ? (
-                                <RichTextView text={lead} />
-                            ) : (
-                                finding.change
-                            )}
-                        </span>
-                    </span>
+                    Details
                 </summary>
-
-                <div className="flex flex-col gap-4 px-5 pb-5">
+                <div className="mt-3 flex flex-col gap-4">
                     {finding.matchesExpectation && (
                         <p
                             role="note"
                             className="bg-card-lv2 text-text-secondary rounded-xl px-4 py-3 text-sm">
-                            <span className="text-text-primary font-medium">
-                                New behavior that matches what this PR says it
-                                does: confirm it is intended.
-                            </span>{" "}
+                            New behavior that matches what this PR says it does.
                             Kody expected{" "}
                             <code className="text-text-primary font-mono">
                                 {finding.expected?.trim()}
                             </code>{" "}
-                            before running and this PR answered it; {baseLabel}{" "}
-                            answered{" "}
+                            and this PR answered it; {baseLabel} answered{" "}
                             <code className="text-text-primary font-mono">
                                 {finding.base.answer}
-                            </code>{" "}
-                            because it has no such route. The check counts it as
-                            a regression until Kody learns otherwise.
+                            </code>
+                            . Confirm it is intended.
                         </p>
                     )}
-
                     {story.length > 0 && (
-                        <section
-                            aria-label="What happened"
-                            className="flex flex-col gap-1">
-                            <p className="text-text-secondary text-sm leading-6">
-                                {story.map((sentence, i) => (
-                                    <span key={i}>
-                                        {i > 0 && " "}
-                                        <RichTextView text={sentence} />
-                                    </span>
-                                ))}
-                            </p>
-                        </section>
-                    )}
-
-                    {finding.boot ? (
-                        <p className="text-text-secondary text-sm">
-                            No request was sent: this PR never got ready, so
-                            there was nothing to compare.
-                            {bootFailure?.side === "pr" &&
-                                " Its boot log is above, under “Why this PR did not boot”."}
+                        <p className="text-text-secondary text-sm leading-6">
+                            {story.map((sentence, i) => (
+                                <span key={i}>
+                                    {i > 0 && " "}
+                                    <RichTextView text={sentence} />
+                                </span>
+                            ))}
                         </p>
-                    ) : (
+                    )}
+                    {!finding.boot && (
                         <>
                             <ResponseDiffTable
                                 diff={finding.responseDiff}
                                 baseLabel={finding.baseLabel}
                             />
-                            <InlineDisclosure
-                                label="Evidence"
-                                summary={`${finding.proof}.`}>
-                                <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
-                                    <dt className="text-text-tertiary">
-                                        Request sent to both
-                                    </dt>
-                                    <dd className="min-w-0">
-                                        <code className="text-text-primary font-mono text-sm break-all">
-                                            {finding.request ?? finding.route}
-                                        </code>
-                                        <span className="text-text-tertiary text-xs">
-                                            {" "}
-                                            · check{" "}
-                                            <span className="font-mono">
-                                                {finding.probeId}
-                                            </span>
-                                        </span>
-                                    </dd>
-                                    {finding.expected && (
-                                        <>
-                                            <dt className="text-text-tertiary">
-                                                Expected, before running
-                                            </dt>
-                                            <dd className="text-text-secondary min-w-0">
-                                                {finding.expected}
-                                            </dd>
-                                        </>
-                                    )}
-                                    <dt className="text-text-tertiary">
-                                        What differs
-                                    </dt>
-                                    <dd className="text-text-secondary min-w-0">
-                                        {finding.change}
-                                    </dd>
-                                </dl>
-                                <FindingEvidence
-                                    runId={runId}
-                                    finding={finding}
-                                    highlight={real}
-                                />
-                            </InlineDisclosure>
+                            <p className="text-text-tertiary text-xs">
+                                {finding.proof}. Check{" "}
+                                <span className="font-mono">
+                                    {finding.probeId}
+                                </span>
+                                {finding.expected && (
+                                    <> · expected {finding.expected}</>
+                                )}
+                            </p>
+                            <FindingEvidence
+                                runId={runId}
+                                finding={finding}
+                                highlight={real}
+                            />
                             {finding.lanes && hasLaneEvents(finding.lanes) && (
                                 <ReplayLanesView
                                     runId={runId}
@@ -358,7 +435,6 @@ export const FindingCard = ({
                             )}
                         </>
                     )}
-
                     {finding.destabilizes && !finding.boot && (
                         <p className="text-text-secondary text-sm">
                             The machine itself fails on this PR and stays up on{" "}
@@ -371,66 +447,20 @@ export const FindingCard = ({
                             pullRequestUrl={pullRequestUrl}
                         />
                     )}
-
                     {!finding.intended && finding.markedIntended && (
                         <p className="text-text-secondary text-sm" role="note">
                             {finding.markedIntended.mine ? "You" : "A teammate"}{" "}
-                            marked this as an intended change. Kody keeps it to
-                            learn from; the check and the PR comment still show
-                            what Kody measured.
+                            marked this as intended. Kody keeps it to learn
+                            from.
                         </p>
                     )}
-
-                    <div className="flex flex-wrap items-center gap-3">
-                        {!finding.intended && onMarkIntended && (
-                            <Button
-                                // New behavior the PR announced: marking it is the thing to do here.
-                                size={finding.matchesExpectation ? "sm" : "xs"}
-                                variant={
-                                    finding.matchesExpectation &&
-                                    !finding.markedIntended
-                                        ? "primary-dark"
-                                        : "helper"
-                                }
-                                loading={intentPending}
-                                aria-describedby={titleId}
-                                title="Kody keeps it to learn from. The check and the PR comment keep what Kody measured."
-                                onClick={() =>
-                                    onMarkIntended(!finding.markedIntended)
-                                }>
-                                {finding.markedIntended
-                                    ? "Undo intended"
-                                    : "This change is intended"}
-                            </Button>
-                        )}
-                        {finding.reproducible && (
-                            <ReproduceFinding
-                                runId={runId}
-                                probeId={finding.probeId}
-                                entryPoint={finding.entryPoint}
-                            />
-                        )}
-                        {finding.reviewHref && (
-                            <Link
-                                href={finding.reviewHref}
-                                className="text-primary-light inline-flex min-h-8 items-center text-sm underline-offset-2 hover:underline">
-                                Kody&apos;s review comment
-                            </Link>
-                        )}
-                        {onVote && (
-                            <span className="ml-auto flex items-center gap-2">
-                                <span className="text-text-secondary text-xs">
-                                    Was this useful?
-                                </span>
-                                <PathFeedback
-                                    feedback={feedback}
-                                    onVote={onVote}
-                                    pending={votePending}
-                                    entryPoint={finding.entryPoint}
-                                />
-                            </span>
-                        )}
-                    </div>
+                    {finding.reviewHref && (
+                        <Link
+                            href={finding.reviewHref}
+                            className="text-primary-light inline-flex min-h-8 items-center text-sm underline-offset-2 hover:underline">
+                            Kody&apos;s review comment
+                        </Link>
+                    )}
                 </div>
             </details>
         </article>
@@ -453,8 +483,10 @@ export const RunFindingsView = ({
     missing = false,
     pullRequestUrl,
     bootFailure,
+    patchOf,
 }: {
     runId: string;
+    patchOf?: (file: string) => string | undefined;
     findings: Finding[];
     baseLabel?: string;
     pullRequestUrl?: string;
@@ -507,12 +539,12 @@ export const RunFindingsView = ({
     }
     return (
         <div className="flex flex-col gap-4">
-            {findings.map((f, i) => (
+            {findings.map((f) => (
                 <FindingCard
                     key={`${f.probeId}::${f.entryPoint}`}
                     runId={runId}
                     finding={f}
-                    defaultOpen={i === 0}
+                    patchOf={patchOf}
                     pullRequestUrl={pullRequestUrl}
                     bootFailure={bootFailure}
                     feedback={feedback?.[f.probeId]}

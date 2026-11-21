@@ -3,10 +3,8 @@
 import { useState } from "react";
 import NextLink from "next/link";
 import { OutboundAccessSection } from "@components/runtime/egress-access";
-import { RuntimeErrorState } from "@components/runtime/empty-state";
 import { ExercisedLinesThreshold } from "@components/runtime/exercised-lines-threshold";
 import { MachineHostPrice } from "@components/runtime/machine-host-price";
-import { MachineMinuteLimit } from "@components/runtime/machine-minute-limit";
 import { RuntimePreviewSettingsSection } from "@components/runtime/preview-settings";
 import { RuntimeHeader } from "@components/runtime/runtime-header";
 import { RuntimeSecretsSection } from "@components/runtime/runtime-secrets";
@@ -16,55 +14,26 @@ import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
 import { Input } from "@components/ui/input";
 import { Page } from "@components/ui/page";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@components/ui/select";
 import { Skeleton } from "@components/ui/skeleton";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@components/ui/table";
 import { toast } from "@components/ui/toaster/use-toast";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import type {
-    RuntimeMode,
-    RuntimeRepositorySettings,
-    RuntimeWhoCanAsk,
-} from "@services/runtime/contracts";
-import {
-    RUNTIME_MODE_OPTIONS,
-    WHO_CAN_ASK_OPTIONS,
-} from "@services/runtime/labels";
-import {
-    membershipsByRepository,
-    ownModeNote,
-} from "@services/runtime/model/environment-repositories";
+
+import type {} from "@services/runtime/contracts";
+
 import { runtimeErrorMessage } from "@services/runtime/model/errors";
-import { machineMinutesSummary } from "@services/runtime/model/machine-minutes";
-import { modeOf } from "@services/runtime/model/rules";
+import { settingsStatusLine } from "@services/runtime/model/health";
 import { RUNTIME_USAGE_HREF } from "@services/runtime/model/usage-report";
 import {
     useResumeRuntime,
     useRuntimeEnvironments,
-    useRuntimeMachineMinutes,
+    useRuntimeHealth,
     useRuntimeSettings,
     useStopRuntime,
     useUpdateRuntimeOrgSettings,
-    useUpdateRuntimeRepositorySettings,
 } from "@services/runtime/queries";
 import {
-    ActivityIcon,
-    BarChart3Icon,
+    ChevronRightIcon,
     OctagonXIcon,
     PlayIcon,
     ServerIcon,
@@ -217,6 +186,7 @@ const StopAndResume = () => {
 
 export const RuntimeOrgSettingsPage = () => {
     const settings = useRuntimeSettings();
+    const environments = useRuntimeEnvironments();
     // The token budget, the exercised-lines threshold and the host price are organization-wide.
     const canEditOrg = usePermission(
         Action.Update,
@@ -233,6 +203,8 @@ export const RuntimeOrgSettingsPage = () => {
         Action.Read,
         ResourceType.RuntimeEnvironment,
     );
+    const health = useRuntimeHealth(canStop);
+    const status = health.data ? settingsStatusLine(health.data) : undefined;
     // Absent from an API older than the setting: the field is not offered.
     const thresholdDefault =
         settings.data?.exercisedLinesThresholdDefaultPercent;
@@ -243,166 +215,171 @@ export const RuntimeOrgSettingsPage = () => {
         <Page.Root>
             <RuntimeHeader />
             <Page.Content>
+                <p
+                    className="text-sm font-medium"
+                    role="status"
+                    aria-live="polite">
+                    {health.data ? (
+                        <span
+                            className={
+                                status?.ok ? "text-success" : "text-danger"
+                            }>
+                            <span aria-hidden>{status?.ok ? "● " : "▲ "}</span>
+                            {status?.text}
+                        </span>
+                    ) : (
+                        <span className="text-text-secondary">
+                            {canStop && health.isLoading
+                                ? "Checking…"
+                                : "Status unavailable"}
+                        </span>
+                    )}
+                    {canStop && (
+                        <>
+                            {" · "}
+                            <NextLink
+                                href="/runtime/settings/health"
+                                className="text-primary-light font-normal underline-offset-2 hover:underline">
+                                Health
+                            </NextLink>
+                        </>
+                    )}
+                </p>
                 <p className="text-text-secondary text-sm">
-                    When Kody Runtime runs on each repository, and who may ask
-                    for it, is set in{" "}
+                    <NextLink
+                        href="/runtime/environments"
+                        className="text-primary-light underline-offset-2 hover:underline">
+                        {environments.data
+                            ? `${environments.data.length} ${environments.data.length === 1 ? "environment" : "environments"}`
+                            : "Environments"}
+                    </NextLink>
+                </p>
+                {canStop && (
+                    <RuntimeSection
+                        title="Pause or resume"
+                        description="Stops every Run and machine at once, for an incident.">
+                        <StopAndResume />
+                    </RuntimeSection>
+                )}
+                <p className="text-text-secondary text-sm">
+                    When it runs and who may ask:{" "}
                     <NextLink
                         href="/settings/code-review/global/routing"
                         className="underline">
                         Code Review &gt; Routing
                     </NextLink>
-                    . Today&apos;s machine time and its daily limit are in{" "}
+                    . Machine time and cost:{" "}
                     <NextLink href={RUNTIME_USAGE_HREF} className="underline">
                         Usage
                     </NextLink>
                     .
                 </p>
-
-                <RuntimeSection
-                    title="Token budget"
-                    description="Enforced by the LLM gateway for every Run of the organization. When the day's budget runs out, new Runs are skipped and the check says why.">
-                    {settings.isLoading ? (
-                        <Skeleton className="h-10 w-80" />
-                    ) : settings.data ? (
-                        <TokenBudget
-                            key={String(settings.data.tokenBudgetPerDay ?? "")}
-                            value={settings.data.tokenBudgetPerDay}
-                            canEdit={canEditOrg}
+                <details className="group/advanced">
+                    <summary className="text-text-primary focus-visible:ring-ring flex cursor-pointer list-none items-center gap-1 rounded text-sm font-medium focus-visible:ring-3 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                        <ChevronRightIcon
+                            aria-hidden
+                            className="size-4 transition-transform group-open/advanced:rotate-90"
                         />
-                    ) : (
-                        <p className="text-text-secondary text-sm">
-                            Available once the settings load.
-                        </p>
-                    )}
-                </RuntimeSection>
+                        Advanced settings
+                    </summary>
+                    <div className="mt-4 flex flex-col gap-6">
+                        <RuntimeSection
+                            title="Token budget"
+                            description="Daily LLM limit for all Runs. When it runs out, new Runs are skipped.">
+                            {settings.isLoading ? (
+                                <Skeleton className="h-10 w-80" />
+                            ) : settings.data ? (
+                                <TokenBudget
+                                    key={String(
+                                        settings.data.tokenBudgetPerDay ?? "",
+                                    )}
+                                    value={settings.data.tokenBudgetPerDay}
+                                    canEdit={canEditOrg}
+                                />
+                            ) : (
+                                <p className="text-text-secondary text-sm">
+                                    Available once the settings load.
+                                </p>
+                            )}
+                        </RuntimeSection>
 
-                {/* PATCH /runtime/settings: Update on OrganizationSettings, as the token budget. */}
-                <RuntimeSection
-                    title="Changed lines exercised"
-                    description="How much of a pull request's changed code must run during a Run's checks for the Run to say No regressions. It applies to every repository of the organization.">
-                    {settings.isLoading ? (
-                        <Skeleton className="h-10 w-80" />
-                    ) : thresholdDefault !== undefined ? (
-                        <ExercisedLinesThreshold
-                            key={String(threshold ?? "")}
-                            value={threshold}
-                            defaultPercent={thresholdDefault}
-                            canEdit={canEditOrg}
-                        />
-                    ) : (
-                        <p className="text-text-secondary text-sm">
-                            Available once the settings load.
-                        </p>
-                    )}
-                </RuntimeSection>
+                        {/* PATCH /runtime/settings: Update on OrganizationSettings, as the token budget. */}
+                        <RuntimeSection
+                            title="Changed lines exercised"
+                            description="Share of a PR's changed lines the checks must run to say No regressions.">
+                            {settings.isLoading ? (
+                                <Skeleton className="h-10 w-80" />
+                            ) : thresholdDefault !== undefined ? (
+                                <ExercisedLinesThreshold
+                                    key={String(threshold ?? "")}
+                                    value={threshold}
+                                    defaultPercent={thresholdDefault}
+                                    canEdit={canEditOrg}
+                                />
+                            ) : (
+                                <p className="text-text-secondary text-sm">
+                                    Available once the settings load.
+                                </p>
+                            )}
+                        </RuntimeSection>
 
-                {/* PATCH /runtime/settings: Update on OrganizationSettings, as the token budget. */}
-                <RuntimeSection
-                    title="Price of your own hosts"
-                    description="What one hour of one of your own hosts costs, so a Run's machine time on them gets a price. It applies to every host the organization registered.">
-                    {settings.isLoading ? (
-                        <Skeleton className="h-10 w-80" />
-                    ) : hostPrice !== undefined ? (
-                        <MachineHostPrice
-                            key={String(hostPrice ?? "")}
-                            value={hostPrice}
-                            canEdit={canEditOrg}
-                        />
-                    ) : (
-                        <p className="text-text-secondary text-sm">
-                            Available once the settings load.
-                        </p>
-                    )}
-                </RuntimeSection>
+                        {/* PATCH /runtime/settings: Update on OrganizationSettings, as the token budget. */}
+                        <RuntimeSection
+                            title="Price of your own hosts"
+                            description="Cost of one hour on your own hosts, to price machine time.">
+                            {settings.isLoading ? (
+                                <Skeleton className="h-10 w-80" />
+                            ) : hostPrice !== undefined ? (
+                                <MachineHostPrice
+                                    key={String(hostPrice ?? "")}
+                                    value={hostPrice}
+                                    canEdit={canEditOrg}
+                                />
+                            ) : (
+                                <p className="text-text-secondary text-sm">
+                                    Available once the settings load.
+                                </p>
+                            )}
+                        </RuntimeSection>
 
-                {/* /runtime/settings/health is the org owner's (checkRole OWNER), the same people as canStop. */}
-                {canStop && (
-                    <RuntimeSection
-                        title="Health"
-                        description="How Kody Runtime is doing for your organization: setups and Runs, boot times, anything stuck, what stopped setups and Runs, your own hosts, and today's cost."
-                        aside={
-                            <NextLink href="/runtime/settings/health">
-                                <Button
-                                    size="md"
-                                    variant="secondary"
-                                    decorative
-                                    leftIcon={<ActivityIcon />}>
-                                    Open health
-                                </Button>
-                            </NextLink>
-                        }>
-                        <p className="text-text-tertiary text-xs">
-                            Read from what Kody Runtime records; a figure it
-                            cannot read says Not measured.
-                        </p>
-                    </RuntimeSection>
-                )}
+                        {/* /runtime/cells/registration-tokens is the org owner's (checkRole OWNER), the same people as canStop. */}
+                        {canStop && (
+                            <RuntimeSection
+                                title="Hosts"
+                                description="Run Kody's machines on a Linux host of your own."
+                                aside={
+                                    <NextLink href="/runtime/settings/cells">
+                                        <Button
+                                            size="md"
+                                            variant="secondary"
+                                            decorative
+                                            leftIcon={<ServerIcon />}>
+                                            Open hosts
+                                        </Button>
+                                    </NextLink>
+                                }>
+                                <p className="text-text-tertiary text-xs">
+                                    Registration tokens work once, for 15
+                                    minutes.
+                                </p>
+                            </RuntimeSection>
+                        )}
 
-                {/* The Runtime tab of Usage is the org owner's (checkRole OWNER), the same people as canStop. */}
-                {canStop && (
-                    <RuntimeSection
-                        title="Usage"
-                        description="What your Runs, setups and sandbox sessions used each month: machine time, LLM tokens and their estimated cost, Run by Run, with a CSV export."
-                        aside={
-                            <NextLink href={RUNTIME_USAGE_HREF}>
-                                <Button
-                                    size="md"
-                                    variant="secondary"
-                                    decorative
-                                    leftIcon={<BarChart3Icon />}>
-                                    Open usage
-                                </Button>
-                            </NextLink>
-                        }>
-                        <p className="text-text-tertiary text-xs">
-                            Estimates from list prices and the time machines
-                            were held, not a bill.
-                        </p>
-                    </RuntimeSection>
-                )}
+                        {/* GET /runtime/egress is every environment reader's; changes are the owner's (canStop). */}
+                        {canReadEgress && (
+                            <OutboundAccessSection canChange={canStop} />
+                        )}
 
-                {/* /runtime/cells/registration-tokens is the org owner's (checkRole OWNER), the same people as canStop. */}
-                {canStop && (
-                    <RuntimeSection
-                        title="Hosts"
-                        description="Run Kody's machines on a Linux host of your own: make a single-use registration token, run the installer on the host, and revoke tokens you no longer need."
-                        aside={
-                            <NextLink href="/runtime/settings/cells">
-                                <Button
-                                    size="md"
-                                    variant="secondary"
-                                    decorative
-                                    leftIcon={<ServerIcon />}>
-                                    Open hosts
-                                </Button>
-                            </NextLink>
-                        }>
-                        <p className="text-text-tertiary text-xs">
-                            Each token works once, for 15 minutes; it is shown
-                            only when it is made.
-                        </p>
-                    </RuntimeSection>
-                )}
+                        {/* /runtime/secrets is the org owner's (checkRole OWNER), the same people as canStop. */}
+                        {canStop && <RuntimeSecretsSection />}
 
-                {/* GET /runtime/egress is every environment reader's; changes are the owner's (canStop). */}
-                {canReadEgress && <OutboundAccessSection canChange={canStop} />}
+                        {/* /runtime/settings/preview and the preview activity are the org owner's (checkRole OWNER). */}
+                        {canStop && <RuntimePreviewSettingsSection />}
 
-                {/* /runtime/secrets is the org owner's (checkRole OWNER), the same people as canStop. */}
-                {canStop && <RuntimeSecretsSection />}
-
-                {/* /runtime/settings/preview and the preview activity are the org owner's (checkRole OWNER). */}
-                {canStop && <RuntimePreviewSettingsSection />}
-
-                {/* /sandbox-capacity is the org owner's and self-hosted only (404 on Kodus Cloud). */}
-                {canStop && isSelfHosted && <SandboxCapacitySection />}
-
-                {canStop && (
-                    <RuntimeSection
-                        title="Stop"
-                        description="For an incident: stops every Run and machine of this organization at once. Resume reopens it.">
-                        <StopAndResume />
-                    </RuntimeSection>
-                )}
+                        {/* /sandbox-capacity is the org owner's and self-hosted only (404 on Kodus Cloud). */}
+                        {canStop && isSelfHosted && <SandboxCapacitySection />}
+                    </div>
+                </details>
             </Page.Content>
         </Page.Root>
     );

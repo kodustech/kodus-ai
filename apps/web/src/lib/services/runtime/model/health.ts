@@ -178,3 +178,30 @@ export function costTodayLine(
     ];
     return { value: HEALTH_NOT_MEASURED, hint: parts.join(" · ") };
 }
+
+/** The settings page's one status line: working, or the problem in a few words. */
+export function settingsStatusLine(h: RuntimeHealth): {
+    ok: boolean;
+    text: string;
+} {
+    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+    const problems: string[] = [];
+    if (h.stuck.measured && h.stuck.items.length > 0)
+        problems.push(`${plural(h.stuck.items.length, "item")} stuck`);
+    if (h.summary.setups.measured && h.summary.setups.blocked > 0)
+        problems.push(
+            `${plural(h.summary.setups.blocked, "environment")} blocked`,
+        );
+    const cells = h.cells.measured ? h.cells.items : [];
+    const down = cells.filter((c) => !c.connected).length;
+    if (down > 0) problems.push(`${plural(down, "host")} disconnected`);
+    if (problems.length > 0) return { ok: false, text: problems.join(" · ") };
+    const connected = cells.length - down;
+    return {
+        ok: true,
+        text:
+            connected > 0
+                ? `Working · ${plural(connected, "cell")} connected`
+                : "Working",
+    };
+}

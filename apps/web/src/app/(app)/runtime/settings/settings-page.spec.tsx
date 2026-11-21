@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom";
 
 import { usePermission } from "@services/permissions/hooks";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 
 import { RuntimeOrgSettingsPage } from "./_page-component";
 
@@ -18,6 +18,17 @@ jest.mock("@services/runtime/queries", () => ({
         },
         isLoading: false,
         isError: false,
+    }),
+    useRuntimeEnvironments: () => ({ data: [{}, {}] }),
+    useRuntimeHealth: () => ({
+        data: {
+            stuck: { measured: true, items: [], notChecked: [] },
+            summary: {
+                setups: { measured: true, active: 1, blocked: 0, settingUp: 0 },
+            },
+            cells: { measured: true, items: [{ connected: true }], pool: {} },
+        },
+        isLoading: false,
     }),
     useUpdateRuntimeOrgSettings: () => ({ mutate: jest.fn() }),
     useStopRuntime: () => ({ mutate: jest.fn() }),
@@ -76,11 +87,25 @@ describe("the Runtime settings page", () => {
         );
     });
 
-    it("opens the usage card on the Runtime tab of Usage", () => {
+    it("shows one status line and the environments count", () => {
         render(<RuntimeOrgSettingsPage />);
-
+        expect(screen.getByRole("status")).toHaveTextContent(
+            "Working · 1 cell connected",
+        );
         expect(
-            screen.getByRole("link", { name: "Open usage" }),
-        ).toHaveAttribute("href", "/token-usage?tab=runtime");
+            screen.getByRole("link", { name: "2 environments" }),
+        ).toHaveAttribute("href", "/runtime/environments");
+    });
+
+    it("keeps the advanced settings collapsed by default, controls inside", () => {
+        const { container } = render(<RuntimeOrgSettingsPage />);
+        const advanced = container.querySelector("details")!;
+        expect(advanced).not.toHaveAttribute("open");
+        expect(
+            within(advanced).getByRole("region", { name: "Token budget" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Stop Kody Runtime" }),
+        ).toBeInTheDocument();
     });
 });

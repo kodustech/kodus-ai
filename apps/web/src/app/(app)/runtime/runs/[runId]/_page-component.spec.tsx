@@ -92,12 +92,55 @@ describe("RunDetailPage", () => {
         mockExecutions.items = [];
     });
 
-    it("keeps the header to who, what started it, when and the two commits", () => {
+    it("shows one status line instead of the stat tiles and the generated headline", () => {
         show(regressionRun(), regressionView());
-        const meta = screen.getByText(/^Requested/).closest("p")!;
-        expect(meta).toHaveTextContent(/this PR 5d49b8a vs main ee53311$/);
-        expect(within(meta).queryByRole("link")).toBeNull();
-        expect(meta).not.toHaveTextContent(/Recipe|Environment|Kodus cloud/);
+        expect(screen.getByText(/^✕ \d+ regression/)).toHaveTextContent(
+            /5d49b8a vs main$/,
+        );
+        expect(screen.queryByText(/How sure/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Open the finding/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Why it took/)).not.toBeInTheDocument();
+    });
+
+    it("renders the same finding card with Details closed", () => {
+        show(regressionRun(), regressionView());
+        const [card] = screen.getAllByRole("article");
+        expect(
+            within(card).getByRole("region", { name: "Proof" }),
+        ).toBeInTheDocument();
+        expect(
+            within(card).getByText("Details").closest("details"),
+        ).not.toHaveAttribute("open");
+    });
+
+    it("keeps the logs in one closed section", () => {
+        show(regressionRun(), regressionView());
+        expect(section("Logs")).not.toHaveAttribute("open");
+    });
+
+    it("says nothing about the PR when everything posted", () => {
+        show(regressionRun(), regressionView());
+        expect(screen.queryByText(/not posted/i)).not.toBeInTheDocument();
+    });
+
+    it("warns when the check could not be posted, with the fix on demand", () => {
+        const run = regressionRun({
+            publication: {
+                postsToPullRequest: true,
+                check: {
+                    status: "skipped",
+                    reason: "status_permission_missing",
+                },
+                comment: { status: "published" },
+            },
+        } as Partial<RuntimeRun>);
+        show(run, regressionView());
+        expect(
+            screen.getByText(
+                /Check not posted: the GitHub token can't write commit statuses/,
+            ),
+        ).toBeInTheDocument();
+        expect(screen.getByText("How to fix ›")).toBeInTheDocument();
     });
 
     it("names the PR by the title the Run recorded when Kodus has no review of it", () => {
@@ -137,112 +180,5 @@ describe("RunDetailPage", () => {
             `${run.repositoryName} #${run.prNumber}`,
         );
         expect(heading.parentElement?.childElementCount).toBe(1);
-    });
-
-    it("puts the deep data in closed sections whose summary still informs", () => {
-        show(regressionRun(), regressionView());
-        const timing = section("Why it took 9 min 51 s");
-        expect(timing.open).toBe(false);
-        expect(timing.querySelector("summary")).toHaveTextContent(
-            /^Why it took 9 min 51 sMost of it was building this PR \(7 min 51 s\)/,
-        );
-        const running = section("What was running");
-        expect(running.open).toBe(false);
-        expect(running.querySelector("summary")).toHaveTextContent(
-            "On Kodus cloud · the environment's setup file",
-        );
-        expect(
-            within(running).getByRole("link", { name: "Open the environment" }),
-        ).toHaveAttribute("href", "/runtime/environments/env-1");
-        expect(section("Run log").open).toBe(false);
-        const cost = section("Cost");
-        expect(cost.open).toBe(false);
-        expect(cost.querySelector("summary")).toHaveTextContent("$0.14");
-        // Findings and what Kody tested stay in view.
-        expect(
-            screen.getByRole("region", { name: "Findings" }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("region", { name: "What Kody tested" }),
-        ).toBeInTheDocument();
-    });
-
-    it("a real regression's one action opens its finding", () => {
-        show(regressionRun(), regressionView());
-        const open = screen.getByRole("link", { name: "Open the finding" });
-        expect(open).toHaveAttribute("href", "#finding-orders-coupon");
-        expect(document.getElementById("finding-orders-coupon")).toBeTruthy();
-    });
-
-    it("keeps the timing and the log open while the Run is live", () => {
-        const run = regressionRun({
-            state: "testing",
-            finishedAt: undefined,
-        });
-        const view = partlyTestedView();
-        show(run, {
-            ...view,
-            states: view.states.slice(0, 3),
-            verdict: undefined,
-            published: [],
-        });
-        expect(section(/^Time so far: /).open).toBe(true);
-        expect(section("Run log").open).toBe(true);
-    });
-
-    it("a boot that failed on Kodus's side offers Run again once, and never sends the reader to fix their environment", () => {
-        show(
-            bootFailureRun({
-                state: "could_not_boot",
-                reason: "platform:repo_fetch",
-                probes: [],
-                uncoveredEntryPoints: [],
-                uncovered: [],
-                bootFailure: {
-                    ...sumdbBootFailure(),
-                    signature: "repo_fetch",
-                    title: "Kodus failed while downloading the repository",
-                },
-            }),
-            partlyTestedView(),
-        );
-        expect(
-            screen.getByRole("heading", {
-                name: "Kodus could not start this Run",
-            }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getAllByRole("button", { name: "Run again" }),
-        ).toHaveLength(1);
-        expect(
-            screen.getByRole("region", { name: "What failed on Kodus's side" }),
-        ).toBeInTheDocument();
-        // The only environment links left are inside "What was running".
-        const running = section("What was running");
-        for (const link of screen.queryAllByRole("link", {
-            name: /environment|setup file/i,
-        }))
-            expect(running).toContainElement(link);
-    });
-
-    it("new behavior that matches what the PR expected makes 'This change is intended' the card's action", () => {
-        show(newRouteRun(), newRouteView());
-        const marks = screen.getAllByRole("button", {
-            name: "This change is intended",
-        });
-        // The card's (primary) and the finding's own (amber on deep, not a second lamp).
-        expect(marks[0].className).toContain("var(--color-primary-light)");
-        expect(marks[1].className).toContain(
-            "[--button-background:var(--color-primary-dark)]",
-        );
-        fireEvent.click(marks[0]);
-        expect(mockIntent).toHaveBeenCalledWith(
-            {
-                runId: "run-new-route",
-                probeId: "orders-export",
-                intended: true,
-            },
-            expect.anything(),
-        );
     });
 });

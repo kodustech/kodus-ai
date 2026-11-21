@@ -2,22 +2,20 @@
 
 import { useMemo } from "react";
 import NextLink from "next/link";
+import { ConnectedFindings } from "@components/runtime/connected-findings";
 import { RuntimeErrorState } from "@components/runtime/empty-state";
 import { RecipeChangedNotice } from "@components/runtime/recipe-changed-notice";
-import { RunCostTotal } from "@components/runtime/run-cost";
 import { ApproveRunButton, RerunButton } from "@components/runtime/run-actions";
-import { StatusChip } from "@components/runtime/status-chip";
+import { RunCostTotal } from "@components/runtime/run-cost";
 import { TestedPaths, testedSummary } from "@components/runtime/tested-paths";
 import { Skeleton } from "@components/ui/skeleton";
 import { shortSha } from "@services/runtime/format";
 import {
     cellOwnerLabel,
-    checkConclusionLabel,
-    checkConclusionTone,
-    isCheckFinal,
+    isTerminalRunState,
     runStateLabel,
-    runStateTone,
 } from "@services/runtime/labels";
+import { buildFindings } from "@services/runtime/model/findings";
 import { buildRunPaths } from "@services/runtime/model/run-paths";
 import {
     useRunStream,
@@ -35,10 +33,15 @@ import {
 export function PrRuntimeTab({
     repositoryId,
     prNumber,
+    patchFiles,
 }: {
     repositoryId: string;
     prNumber: number;
+    /** The files the Files view already loaded: the finding's diff hunk is cut from them. */
+    patchFiles?: { filename: string; patch?: string }[];
 }) {
+    const patchOf = (file: string) =>
+        patchFiles?.find((f) => f.filename === file)?.patch;
     const runs = useRuntimeRuns({ repositoryId, prNumber, limit: 1 });
     const latest = runs.data?.[0];
     const runQuery = useRuntimeRun(latest?.runId);
@@ -49,6 +52,10 @@ export function PrRuntimeTab({
     const run = runQuery.data ?? undefined;
     const runPaths = useMemo(
         () => (run ? buildRunPaths(run, view.steps) : undefined),
+        [run, view.steps],
+    );
+    const findings = useMemo(
+        () => (run ? buildFindings(run, view.steps) : []),
         [run, view.steps],
     );
 
@@ -94,44 +101,47 @@ export function PrRuntimeTab({
         );
     }
 
-    const check = isCheckFinal(run.state) ? run.check : undefined;
+    const regressions = findings.filter((f) => !f.intended).length;
     return (
         <div className="mt-4 flex flex-col gap-4">
             <div className="text-text-secondary flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-                {check ? (
-                    <StatusChip tone={checkConclusionTone(check.conclusion)}>
-                        {checkConclusionLabel(check.conclusion)}
-                    </StatusChip>
-                ) : (
-                    <StatusChip tone={runStateTone(run.state)}>
-                        {runStateLabel(run.state)}
-                    </StatusChip>
-                )}
-                {check && (
-                    <span className="text-text-primary font-medium">
-                        {check.title}
-                    </span>
-                )}
-                <span>
-                    {testedSummary(runPaths)} · on{" "}
-                    <span className="font-mono">{shortSha(run.headSha)}</span>
-                </span>
-                <span>{cellOwnerLabel(run.cellOwner)}</span>
-                <span className="flex items-center gap-1">
-                    Cost <RunCostTotal cost={run.cost} />
-                </span>
+                <h2 className="text-text-primary text-sm font-medium">
+                    {regressions > 0
+                        ? `✕ ${regressions} ${regressions === 1 ? "regression" : "regressions"}`
+                        : runStateLabel(run.state)}{" "}
+                    · <span className="font-mono">{shortSha(run.headSha)}</span>
+                </h2>
                 <span className="ml-auto flex items-center gap-3">
                     <NextLink
                         href={`/runtime/runs/${encodeURIComponent(run.runId)}`}
-                        className="text-primary-light hover:underline">
-                        Full run log
+                        className="text-text-tertiary text-xs hover:underline">
+                        Full log
                     </NextLink>
                     <ApproveRunButton run={run} size="sm" />
                     <RerunButton run={run} size="sm" variant="secondary" />
                 </span>
             </div>
             <RecipeChangedNotice run={run} />
-            <TestedPaths run={run} runPaths={runPaths} />
+            <ConnectedFindings
+                run={run}
+                findings={findings}
+                runPaths={runPaths}
+                live={!isTerminalRunState(run.state)}
+                patchOf={patchOf}
+            />
+            <details className="text-sm">
+                <summary className="text-text-secondary cursor-pointer">
+                    Details
+                </summary>
+                <div className="mt-3 flex flex-col gap-3">
+                    <p className="text-text-secondary">
+                        {testedSummary(runPaths)} ·{" "}
+                        {cellOwnerLabel(run.cellOwner)} · Cost{" "}
+                        <RunCostTotal cost={run.cost} />
+                    </p>
+                    <TestedPaths run={run} runPaths={runPaths} />
+                </div>
+            </details>
         </div>
     );
 }

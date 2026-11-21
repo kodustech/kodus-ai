@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import NextLink from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@components/ui/skeleton";
+import { usePermission } from "@services/permissions/hooks";
+import { Action, ResourceType } from "@services/permissions/types";
 import {
     useInfinitePullRequestExecutions,
     usePullRequestFiles,
@@ -12,8 +14,6 @@ import {
     type PullRequestExecution,
     type PullRequestFile,
 } from "@services/pull-requests";
-import { usePermission } from "@services/permissions/hooks";
-import { Action, ResourceType } from "@services/permissions/types";
 import { mainRunOf } from "@services/runtime/model/pull-request-runs";
 import { ArrowLeftIcon } from "lucide-react";
 // Review screen — ported from the `try` app: a max-w page that scrolls as a
@@ -392,7 +392,9 @@ function ReviewLayout({
     // the tab badge and the right rail's card.
     const prRuntime = usePrRuntime(repositoryId, prNumber, canReadRuntime);
     const runtimeCard =
-        canReadRuntime && prRuntime && (prRuntime.latest || prRuntime.environment) ? (
+        canReadRuntime &&
+        prRuntime &&
+        (prRuntime.latest || prRuntime.environment) ? (
             <ErrorBoundary FallbackComponent={PanelError}>
                 <PrRuntimeCard
                     runtime={prRuntime}
@@ -700,6 +702,7 @@ function ReviewLayout({
                                     <PrRuntimeTab
                                         repositoryId={repositoryId}
                                         prNumber={prNumber}
+                                        patchFiles={patchFiles}
                                     />
                                 </ErrorBoundary>
                             )}

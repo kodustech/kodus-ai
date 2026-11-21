@@ -166,10 +166,44 @@ describe("the Health screen's words", () => {
             maxClaimCpus: null,
         };
         const unpriced = health({
-            cells: { measured: true, items: [cell], pool: { measured: false, reason: "r" } },
+            cells: {
+                measured: true,
+                items: [cell],
+                pool: { measured: false, reason: "r" },
+            },
         });
         expect(costTodayLine(unpriced, usd).hint).toBe(
             "US$ 0.50 LLM · 30 GB·min of machines, not priced: set a price per host-hour in Runtime settings",
         );
+    });
+});
+
+describe("settingsStatusLine", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { settingsStatusLine } = require("./health");
+    const health = (over: Record<string, unknown> = {}) =>
+        ({
+            stuck: { measured: true, items: [], notChecked: [] },
+            summary: {
+                setups: { measured: true, active: 1, blocked: 0, settingUp: 0 },
+            },
+            cells: { measured: true, items: [{ connected: true }], pool: {} },
+            ...over,
+        }) as never;
+
+    it("says it works and counts connected cells", () => {
+        expect(settingsStatusLine(health())).toEqual({
+            ok: true,
+            text: "Working · 1 cell connected",
+        });
+    });
+    it("names the problem in one line", () => {
+        expect(
+            settingsStatusLine(
+                health({
+                    stuck: { measured: true, items: [{}, {}], notChecked: [] },
+                }),
+            ),
+        ).toEqual({ ok: false, text: "2 items stuck" });
     });
 });
