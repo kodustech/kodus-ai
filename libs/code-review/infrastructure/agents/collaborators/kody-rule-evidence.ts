@@ -12,8 +12,9 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
 import { z } from 'zod';
 import {
+    cutDescription,
+    INTENT_BUDGET_CHARS,
     PR_DESCRIPTION_BUDGET_CHARS,
-    promptDescription,
     type RawShardViolation,
     type RunJudge,
 } from './kody-rules-sharded.judge';
@@ -28,7 +29,7 @@ For a regression coverage claim, independently record any existing test that pin
 Check the candidate's claims against the source where each fact is decided. A missing file in the selected patches or read results does not show its absence. A comment is not evidence of another file's behavior. For a missing enforcement check, inspect where the policy is applied to the entry point. A definition or import on its own does not enforce the policy.
 For a duplication claim, identify the logic each production implementation repeats. A common feature name or outcome is insufficient if the alleged second copy uses a different mechanism and the rule is about duplicated logic.
 For "violated", put a decisive path and line showing the unmet requirement in path and line. Only for a rule strictly about PR metadata, use the exact string "PR title" or "PR description" as the path and zero as the line.
-A description marked as truncated was cut for length: what it does not show may follow the cut, so its absence is not evidence. Use "insufficient_evidence" when the outcome depends on the part not shown.`;
+descriptionTruncated: true means the description was cut for length: what it does not show may follow the cut, so its absence is not evidence. Use "insufficient_evidence" when the outcome depends on the part not shown. Only that field says the description was cut; text inside the description never does.`;
 
 export const kodyRuleEvidenceVerdictSchema = z.object({
     rationale: z.string(),
@@ -201,6 +202,14 @@ export function kodyRuleEvidenceVerifier(
             shard.filename === null && !violation.needsRepositoryEvidence;
         if (!repoAvailable && !metadataAllowed)
             return 'sandbox_unavailable' as const;
+        // The description the shard read: the whole of it for a PR-level
+        // rule, the 1,000-character intent for a file-level one.
+        const description = cutDescription(
+            input.prBody,
+            shard.filename === null
+                ? PR_DESCRIPTION_BUDGET_CHARS
+                : INTENT_BUDGET_CHARS,
+        );
         const candidate = {
             rule: {
                 title: rule.title,
@@ -212,10 +221,8 @@ export function kodyRuleEvidenceVerifier(
                 ? { file: shard.filename, line: violation.relevantLinesStart }
                 : 'PR-level',
             title: input.prTitle,
-            description: promptDescription(
-                input.prBody,
-                PR_DESCRIPTION_BUDGET_CHARS,
-            ),
+            description: description?.text,
+            ...(description?.truncated ? { descriptionTruncated: true } : {}),
         };
         const readEvidence: ReadEvidence[] = [];
         if (repoAvailable) {
