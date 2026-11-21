@@ -673,7 +673,17 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             async (location) => {
                 answerAll(ImplementationStatus.IMPLEMENTED);
 
-                await check([grouped({ alsoFoundIn: [location] })], [fileA]);
+                // No list in the text either: the point is that an unparsable
+                // entry does not turn the comment into a group of two.
+                await check(
+                    [
+                        grouped({
+                            alsoFoundIn: [location],
+                            suggestionContent: 'Escape the query.',
+                        }),
+                    ],
+                    [fileA],
+                );
 
                 expect(statusWritten()).toEqual([
                     ImplementationStatus.IMPLEMENTED,
@@ -692,6 +702,30 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
                 aiAnalysisService.checkSuggestionImplementation,
             ).not.toHaveBeenCalled();
         });
+
+        it.each([
+            { name: 'no line', start: undefined, end: undefined },
+            { name: 'line 0', start: 0, end: 0 },
+        ])(
+            'does not measure a line-less Kody Rule against a file diff ($name, #2420)',
+            async ({ start, end }) => {
+                const result = await check(
+                    [
+                        grouped({
+                            label: 'kody_rules',
+                            relevantLinesStart: start,
+                            relevantLinesEnd: end,
+                        }),
+                    ],
+                    [fileA, fileB],
+                );
+
+                expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+                expect(
+                    aiAnalysisService.checkSuggestionImplementation,
+                ).not.toHaveBeenCalled();
+            },
+        );
 
         // A push that deletes a file deletes the problem in it: the file is
         // not in the changed files the check reads, which leave removed ones out.
