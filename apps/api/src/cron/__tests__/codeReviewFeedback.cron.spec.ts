@@ -224,10 +224,9 @@ describe('CodeReviewFeedbackCronProvider', () => {
         );
     });
 
-    it('drops a bare number once a pair covers it', async () => {
-        // One row kept its repository, the other did not. Publishing both would
-        // send `{ pullRequestNumber: 12 }`, which matches every repository of
-        // the organization - the amplification this change exists to stop.
+    it('keeps a bare number beside a pair when a row lost its repository', async () => {
+        // The bare row cannot be attributed: dropping it because repo-a has
+        // the same number would silently stop the other PR's reactions.
         const { cron, messageBroker } = makeCron([
             {
                 pullRequestNumber: 12,
@@ -248,6 +247,7 @@ describe('CodeReviewFeedbackCronProvider', () => {
                 message: expect.objectContaining({
                     pullRequestRefs: [
                         { repositoryId: 'repo-a', pullRequestNumber: 12 },
+                        { pullRequestNumber: 12 },
                     ],
                 }),
             }),

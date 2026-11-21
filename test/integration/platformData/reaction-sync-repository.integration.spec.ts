@@ -114,6 +114,10 @@ describeMongo('delivered suggestions are read per repository', () => {
     });
 
     it('keeps a document stored before the repository id was captured', async () => {
+        // The same number lives in another repository: the pre-fix number-only
+        // match returns that row too, so this case fails without the fix.
+        await model.collection.insertOne(delivered(55, 'repo-b') as any);
+
         // Such a row stores `repository.id: ''`, and the pair clause alone
         // would make it unreachable: its reactions would stop being synced.
         const found = await read([

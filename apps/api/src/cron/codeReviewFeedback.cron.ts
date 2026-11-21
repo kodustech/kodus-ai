@@ -385,21 +385,12 @@ export class CodeReviewFeedbackCronProvider {
             refs.set(key, { repositoryId, pullRequestNumber });
         }
 
-        // A row that lost its repository id keys as `number:7`, next to a row
-        // that kept it (`repo-a:7`). Publishing both would send a bare number
-        // that matches every repository in the organization - the very
-        // amplification this pair is meant to stop. The pair is the better
-        // evidence, so the bare entry is dropped when a pair covers it.
-        const pairedNumbers = new Set(
-            [...refs.values()]
-                .filter((ref) => ref.repositoryId)
-                .map((ref) => ref.pullRequestNumber),
-        );
-
-        return [...refs.values()].filter(
-            (ref) =>
-                ref.repositoryId || !pairedNumbers.has(ref.pullRequestNumber),
-        );
+        // A row that lost its repository id keeps its bare reference: it
+        // cannot be attributed to a repository, and dropping it because some
+        // pair shares the number would silently stop that PR's reactions from
+        // syncing. The consumer reads it through the number-only branch, which
+        // is the only read its identity allows.
+        return [...refs.values()];
     }
 
     private async publishSyncCodeReviewReactionsTasks(

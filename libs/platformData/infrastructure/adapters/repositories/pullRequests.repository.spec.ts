@@ -536,10 +536,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 { repositoryId: 'repo-a', pullRequestNumber: 12 },
             ]);
 
-            expect(match.$or).toContainEqual({
-                'repository.id': { $in: ['', null] },
-                'number': 12,
-            });
+            expect(match.organizationId).toBe('org-A');
+            expect(match.status).toBe('open');
+            expect(match.$or).toEqual([
+                { 'repository.id': 'repo-a', 'number': 12 },
+                { 'repository.id': { $in: ['', null] }, 'number': 12 },
+            ]);
         });
 
         it('does not query when it has nothing to match', async () => {
