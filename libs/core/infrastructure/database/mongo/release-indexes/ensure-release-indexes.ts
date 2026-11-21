@@ -48,7 +48,10 @@ export async function ensureReleaseIndexes(
             log(`[release-indexes] ${index} ok`);
         } catch (error) {
             const code = (error as { code?: number }).code;
-            const reason = code === undefined ? undefined : REFUSALS[code];
+            const reason =
+                code !== undefined && Object.hasOwn(REFUSALS, code)
+                    ? REFUSALS[code]
+                    : undefined;
             if (!reason) throw error;
             result.failed.push({ index, reason });
             log(

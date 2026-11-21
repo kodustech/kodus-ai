@@ -20,7 +20,52 @@ const SCHEMAS: Schema[] = [
     SecurityScanSchema,
 ];
 
+// The rules each index exists to enforce, written out: the schemas and the
+// migration read one definition, so only a literal here catches an edit to it.
+const DAY = 24 * 60 * 60;
+const EXPECTED_RULES: Record<string, Record<string, unknown>> = {
+    ttl_updatedAt: { expireAfterSeconds: 30 * DAY },
+    idx_org_pr_spanAt: {
+        partialFilterExpression: { prNumber: { $exists: true } },
+    },
+    organization_updated: {},
+    organization_repository_fingerprint_unique: {
+        unique: true,
+        partialFilterExpression: { fingerprint: { $exists: true } },
+    },
+    idx_org_user_id_createdAt_for_seat_labels: {},
+    organization_repository_recent: {},
+    one_active_scan_per_repository: {
+        unique: true,
+        partialFilterExpression: { activeKey: { $exists: true } },
+    },
+};
+
 describe('RELEASE_INDEXES', () => {
+    it('holds exactly the indexes this release added', () => {
+        expect(
+            RELEASE_INDEXES.map((index) => index.options.name).sort(),
+        ).toEqual(Object.keys(EXPECTED_RULES).sort());
+    });
+
+    it.each(Object.entries(EXPECTED_RULES))(
+        '%s enforces its rules',
+        (name, rules) => {
+            const { options } = RELEASE_INDEXES.find(
+                (index) => index.options.name === name,
+            )!;
+            for (const rule of [
+                'unique',
+                'partialFilterExpression',
+                'expireAfterSeconds',
+            ]) {
+                expect((options as Record<string, unknown>)[rule]).toEqual(
+                    rules[rule],
+                );
+            }
+        },
+    );
+
     it.each(RELEASE_INDEXES.map((index) => [index.options.name, index]))(
         '%s is the index its schema declares, on its collection',
         (name, index) => {

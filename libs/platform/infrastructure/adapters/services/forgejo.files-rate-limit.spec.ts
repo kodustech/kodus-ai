@@ -235,8 +235,17 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
 
         const thrown = await list(service).catch((error) => error);
 
+        // It did throw: a resolved listing would pass the checks below.
+        expect(thrown).toMatchObject({ code: 'ECONNRESET' });
         expect(thrown).not.toHaveProperty('config');
-        expect(JSON.stringify(thrown)).not.toContain('secret-token');
+        // message and stack are not enumerable, so JSON.stringify misses them.
+        for (const channel of [
+            thrown.message,
+            thrown.stack ?? '',
+            JSON.stringify(thrown),
+        ]) {
+            expect(channel).not.toContain('secret-token');
+        }
     });
 
     it('answers null when the listing fails for another reason', async () => {
