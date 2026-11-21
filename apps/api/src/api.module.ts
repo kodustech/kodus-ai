@@ -19,7 +19,6 @@ import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequest
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { HealthModule } from '@libs/core/health/health.module';
 import { IncidentModule } from '@libs/core/infrastructure/incident/incident.module';
-import { MetricsController } from './controllers/metrics.controller';
 import { MetricsModule } from '@libs/core/infrastructure/metrics/metrics.module';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
@@ -213,7 +212,6 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         CliKodyRulesController,
         SSOConfigController,
         LicenseController,
-        MetricsController,
         CockpitController,
         CockpitCodeHealthController,
         CockpitProductivityController,

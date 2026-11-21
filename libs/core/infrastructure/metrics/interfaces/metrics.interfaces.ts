@@ -11,10 +11,3 @@ export interface MetricEvent {
     labels: Record<string, string>;
     recordedAt: Date;
 }
-
-export type {
-    ErrorRateResult,
-    MetricsSummary,
-    PipelinePerformanceResult,
-    ResponseTimeResult,
-} from '@libs/core/metrics/domain/metrics.types';

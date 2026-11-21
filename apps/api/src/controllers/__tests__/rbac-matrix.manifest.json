@@ -1254,50 +1254,6 @@
     }
   },
   {
-    "key": "metrics.controller.ts#getErrorRates",
-    "httpMethod": "GET",
-    "urlPath": "/internal/metrics/error-rates",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
-    "key": "metrics.controller.ts#getPipelinePerformance",
-    "httpMethod": "GET",
-    "urlPath": "/internal/metrics/pipeline-performance",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
-    "key": "metrics.controller.ts#getReviewResponseTimes",
-    "httpMethod": "GET",
-    "urlPath": "/internal/metrics/review-response-times",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
-    "key": "metrics.controller.ts#getSummary",
-    "httpMethod": "GET",
-    "urlPath": "/internal/metrics/summary",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
     "key": "notification.controller.ts#getRoutingRules",
     "httpMethod": "GET",
     "urlPath": "/notifications/routing-rules",
