@@ -102,7 +102,8 @@ export class MongoCapacityStore implements SandboxCapacityStore {
                             },
                         },
                     ],
-                    { upsert: true, new: true },
+                    // Mongoose 9 rejects an aggregation-pipeline update unless told it is one
+                    { upsert: true, new: true, updatePipeline: true },
                 )
                 .lean<{ slots: { ticketId: string }[] }>();
         let doc;

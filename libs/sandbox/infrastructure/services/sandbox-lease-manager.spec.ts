@@ -943,6 +943,25 @@ describe('SandboxLeaseManager', () => {
                 ).rejects.toBeInstanceOf(SandboxCapacityTimeoutError);
             });
 
+            it('surfaces a failing capacity store as an error instead of hanging the review', async () => {
+                const store = sharedStore();
+                store.tryAdmit = async () => {
+                    throw new Error('store exploded');
+                };
+                const manager = gatedManager(store, {
+                    maxConcurrent: 1,
+                    maxWaitMs: 60_000,
+                });
+                await expect(
+                    manager.acquire(
+                        prKeyFor(36),
+                        'review',
+                        undefined,
+                        cloneParamsFor(36),
+                    ),
+                ).rejects.toThrow('store exploded');
+            });
+
             it('invalidate() cancels the queued review as a supersede', async () => {
                 const store = sharedStore();
                 const env = { maxConcurrent: 1, maxWaitMs: 60_000 };

@@ -445,7 +445,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     ): Promise<void> {
         const gate = this.capacityGate;
         if (!gate?.enabled) return;
-        slot.deployment ??= gate.acquire(slot.slotId, prKey);
+        // A store failure becomes an 'error' grant: a bare rejection would leave
+        // waitFor pending forever (the review hung) and be unhandled elsewhere.
+        slot.deployment ??= gate.acquire(slot.slotId, prKey).catch(
+            (error): CapacityGrant => ({ outcome: 'error', waitedMs: 0, error }),
+        );
         const startedAt = Date.now();
         let grant: Awaited<NonNullable<WorkerSlot['deployment']>> | null = null;
         const outcome = await waitFor(
@@ -481,6 +485,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 `the deployment cap of ${gate.maxConcurrent} sandboxes`,
             );
         }
+        if (failed?.outcome === 'error') throw (failed as { error: unknown }).error;
         if (failed?.outcome === 'cancelled') throw new SandboxInvalidatedError(prKey);
         throw new SandboxWaitAbortedError(prKey, waitedMs, 'a deployment capacity slot');
     }

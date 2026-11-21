@@ -78,7 +78,9 @@ export const SANDBOX_CAPACITY_GATE_TOKEN = Symbol('SANDBOX_CAPACITY_GATE_TOKEN')
 export type CapacityGrant =
     | { outcome: 'granted'; waitedMs: number; release: () => Promise<void> }
     | { outcome: 'timeout'; waitedMs: number }
-    | { outcome: 'cancelled'; waitedMs: number };
+    | { outcome: 'cancelled'; waitedMs: number }
+    /** The store failed (Mongo down, a rejected update): surfaced, never a hang. */
+    | { outcome: 'error'; waitedMs: number; error: unknown };
 
 export interface SandboxCapacityNumbers {
     /** Slots held right now across every worker (null when no cap is set). */
