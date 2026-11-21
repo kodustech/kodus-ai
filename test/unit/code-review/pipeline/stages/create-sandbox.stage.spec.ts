@@ -247,6 +247,40 @@ describe('CreateSandboxStage', () => {
             );
         });
 
+        // AgentReviewStage releases after its last read (#2628) and the
+        // observer calls cleanup again at pipeline end.
+        it('releases the lease once when cleanup runs twice', async () => {
+            const result = await (stage as any).executeStage(
+                createBaseContext({
+                    changedFiles: [{ filename: 'test.ts' } as any],
+                }),
+            );
+
+            await result.sandboxHandle.cleanup();
+            await result.sandboxHandle.cleanup();
+
+            expect(mockLeaseManager.release).toHaveBeenCalledTimes(1);
+        });
+
+        it('releases again at the next cleanup when the first release failed', async () => {
+            mockLeaseManager.release.mockRejectedValueOnce(
+                new Error('mongo down'),
+            );
+            const result = await (stage as any).executeStage(
+                createBaseContext({
+                    changedFiles: [{ filename: 'test.ts' } as any],
+                }),
+            );
+
+            await expect(result.sandboxHandle.cleanup()).rejects.toThrow(
+                'mongo down',
+            );
+            await result.sandboxHandle.cleanup();
+            await result.sandboxHandle.cleanup();
+
+            expect(mockLeaseManager.release).toHaveBeenCalledTimes(2);
+        });
+
         it('logs an invalidation as a supersede (warn, not error) and continues', async () => {
             // A PR closed / force-pushed mid-acquire surfaces as
             // SandboxInvalidatedError — a supersede, not a failure. The stage

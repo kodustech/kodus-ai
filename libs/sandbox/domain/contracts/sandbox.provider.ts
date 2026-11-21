@@ -48,6 +48,22 @@ export interface SandboxRunResult {
     exitCode: number;
 }
 
+/**
+ * How one lease used its sandbox: when it was handed out, when its holder
+ * started its first command and finished its last one, and when the lease
+ * went back. `stopAt` is set only when that release left the sandbox with no
+ * holder: the time the provider stops it (E2B pauses and the idle-kill cron
+ * kills it; a local checkout is deleted at once).
+ */
+export interface SandboxUsage {
+    consumer: string;
+    acquiredAt: Date;
+    firstUsedAt?: Date;
+    lastUsedAt?: Date;
+    releasedAt?: Date;
+    stopAt?: Date;
+}
+
 export interface SandboxInstance {
     remoteCommands: RemoteCommands;
     cleanup: () => Promise<void>;
@@ -89,6 +105,11 @@ export interface SandboxInstance {
         content: string,
         opts?: { timeoutMs?: number },
     ): Promise<void>;
+    /**
+     * This lease's use of the sandbox so far. Set by the lease manager on the
+     * instances it hands out; absent on the null sandbox.
+     */
+    usage?(): SandboxUsage;
 }
 
 export interface ISandboxProvider {

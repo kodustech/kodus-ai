@@ -357,6 +357,84 @@ describe('AgentReviewStage', () => {
         });
     });
 
+    // The orchestrator is the review's last reader of the checkout (#2628).
+    describe('sandbox release', () => {
+        const contextWithSandbox = (cleanup: jest.Mock) =>
+            createBaseContext({
+                changedFiles: [
+                    { filename: 'src/auth.ts' } as any,
+                    { filename: 'src/api.ts' } as any,
+                ],
+                sandboxHandle: {
+                    remoteCommands: {
+                        grep: jest.fn(),
+                        read: jest.fn(),
+                        listDir: jest.fn(),
+                    },
+                    cleanup,
+                    type: 'e2b' as const,
+                    sandboxId: 'mock-sandbox-id',
+                    repoDir: '/home/user/repo',
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
+                    readFile: jest.fn().mockResolvedValue(''),
+                    writeFile: jest.fn().mockResolvedValue(undefined),
+                },
+            });
+
+        it('releases the sandbox once the orchestrator returns', async () => {
+            const steps: string[] = [];
+            const cleanup = jest.fn(async () => {
+                steps.push('release');
+            });
+            const execute = mockOrchestrator.execute.getMockImplementation()!;
+            mockOrchestrator.execute.mockImplementationOnce(async (input) => {
+                steps.push('orchestrator');
+                return execute(input);
+            });
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(steps).toEqual(['orchestrator', 'release']);
+            expect(result.fileAnalysisResults).toHaveLength(2);
+        });
+
+        it('releases the sandbox when the orchestrator fails', async () => {
+            const cleanup = jest.fn().mockResolvedValue(undefined);
+            mockOrchestrator.execute.mockRejectedValueOnce(
+                new Error('model not found'),
+            );
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(cleanup).toHaveBeenCalledTimes(1);
+            expect(result.errors).toEqual([
+                expect.objectContaining({ stage: 'AgentReviewStage' }),
+            ]);
+        });
+
+        it('keeps the review when the release fails', async () => {
+            const cleanup = jest
+                .fn()
+                .mockRejectedValue(new Error('mongo down'));
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(cleanup).toHaveBeenCalledTimes(1);
+            expect(result.fileAnalysisResults).toHaveLength(2);
+            expect(result.errors ?? []).toEqual([]);
+        });
+    });
+
     describe('kody rules severity', () => {
         it('should use severity from the Kody Rule, not from the LLM or classifier', async () => {
             // Orchestrator returns a finding with ruleUuid and a LOW severity
