@@ -1,46 +1,46 @@
 ---
-title: "Kodus + スプリントワークフロー"
-description: "ビジネスロジックの検証をスプリントサイクルに統合して、すべてのPRがマージ前にタスク要件に対して検証されるようにする方法。"
+title: "Kodus とスプリントワークフロー"
+description: "最初のレビューからマージまで、すべてのプルリクエストを、それが参照するタスクに照らして確認します。"
 icon: "arrows-spin"
 ---
 
-## ほとんどのスプリントワークフローにあるギャップ
+## 多くのスプリントワークフローにあるギャップ
 
-チームはJira、Linear、またはNotionで要件を追跡します。開発者はPRでそれらを実装します。しかし、PRが実際にすべての受け入れ基準をカバーしているかどうかを体系的に確認する人は誰もいません — QAがステージングでギャップを見つけるまでは。
+チームは要件を Jira、Linear、Notion で管理し、開発者はそれを PR で実装します。しかし、PR が受け入れ基準をすべて満たしているかを体系的に確認する人はおらず、QA がステージングでギャップを見つけて初めて気づきます。
 
-このクックブックは、タスク要件に対してPRを自動的に検証することで、そのループを閉じます。
+このクックブックでは、[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)でこのループを閉じます。Kody が各 PR を、それが参照するタスクに照らして確認します。
 
 ## ワークフロー
 
 ```
-タスク作成（Jira/Linear/Notion）
+Task created (Jira, Linear, Notion)
     ↓
-開発者が実装 → PRを開く
+Developer implements → Opens PR that references the task
     ↓
-Kodusが自動的に：
-  1. リンクされたツールからタスクコンテキストを取得する
-  2. PR差分を受け入れ基準と比較する
-  3. 欠落/部分的な実装を報告する
+Kodus, on the PR's first review:
+  1. Finds the task in the PR title, branch or description
+  2. Reads it from the connected tracker
+  3. Lists every requirement and where it stands in the code
     ↓
-開発者が結果に対処 → 再検証
+Developer addresses the gaps → Re-checks with @kody -v business-logic
     ↓
-自信を持ってマージ
+Merge with confidence
 ```
 
-## ステップ1 — タスク管理ツールに接続する
+## ステップ1 — タスクトラッカーを接続する
 
-サイドバーから **Plugins** を開き、ツールを接続します：
+サイドバーで **Plugins** を開き、使用しているツールを接続します。
 
-- **Jira** — Atlassianを使用するチーム向け
-- **Linear** — Linearを使用するチーム向け
-- **Notion** — タスクトラッカーとしてNotionを使用するチーム向け
-- **ClickUp** — ClickUpを使用するチーム向け
+- **Atlassian Rovo** — Jira 用
+- **Linear**
+- **Notion**
+- **Git Issues** — リポジトリ自身のトラッカーにある issue 用
 
-接続すると、Kodusはレビュー中に自動的にタスクコンテキストを取得できます。
+その他のトラッカーは[カスタムプラグイン](/ja/cookbook/custom-plugin-install)で利用できます。Kody はタスクを ID で読み取るだけで、トラッカーに書き込むことはありません。
 
-## ステップ2 — ビジネスロジック検証を有効にする
+## ステップ2 — Business Logic がオンになっていることを確認する
 
-デフォルトで有効になっていますが、確認してください：
+デフォルトでオンです。オン／オフは **Code review → What to review** の **Business Logic** 行、または `kodus-config.yml` で切り替えます（リポジトリで **Prefer kodus-config.yml settings** がオンの場合にのみ読み込まれます）。
 
 ```yaml
 reviewOptions:
@@ -49,77 +49,72 @@ reviewOptions:
 
 ## ステップ3 — 良い受け入れ基準を書く
 
-検証の品質はタスクの説明の品質にすべて依存します。Kodusはタスクコンテキストを以下のように分類します：
+Kody がどこまで確認できるかは、タスクの内容によって決まります。
 
-| 品質 | 意味 | 対処法 |
-|---------|--------------|------------|
-| **完全** | タイトル + 説明 + 受け入れ基準 | 最良の結果 — 基準ごとの検証 |
-| **部分的** | タイトル + 説明、基準なし | 適切な結果 — 動作ベースの分析 |
-| **最小限** | タイトルのみ | 不十分な結果 — 明らかなギャップのみフラグ |
+| タスク | Kody の動作 |
+|------|----------------|
+| 受け入れ基準：基準フィールド、チェックリスト、または説明内のリスト | 各要件を確認し、ファイルと行を引用する |
+| 説明のみで、リストなし | 説明に書かれた動作を確認する |
+| タイトルのみ | 確認しない。受け入れ基準を求めるコメントを投稿する |
 
-**Jira/Linearタスクのテンプレート：**
-
-```
-## 説明
-何を変更する必要があるか、なぜかについての簡単なコンテキスト。
-
-## 受け入れ基準
-1. 「admin」ロールを持つユーザーは任意のコメントを削除できる
-2. ユーザーは24時間以内に自分のコメントのみ編集できる
-3. 削除されたコメントには「[削除済み]」プレースホルダーが表示される
-4. 監査ログに誰が何を削除したかと日時が記録される
-5. APIは認証されていない削除試行に403を返す
-```
-
-## ステップ4 — 開発中にオンデマンド検証を使用する
-
-PRをレディとしてマークする前に、開発者は自己チェックできます：
+**Jira/Linear タスクのテンプレート：**
 
 ```
-@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+## Description
+Brief context about what needs to change and why.
+
+## Acceptance Criteria
+1. Users with role "admin" can delete any comment
+2. Users can only edit their own comments within 24 hours
+3. Deleted comments show "[removed]" placeholder
+4. Audit log records who deleted what and when
+5. API returns 403 for unauthorized delete attempts
 ```
 
-これによりギャップを早期に検出できます。レビュアーがPRを見る前に。
+基準が見出しの下やカスタムフィールドにある場合は、Business Logic の設定で **Where acceptance criteria live** を設定します。
 
-## ステップ5 — スプリント規約をMemoriesとして教える
+## ステップ4 — PR にタスクを明記させる
 
-```
-@kody remember: すべてのPRはJiraチケットにリンクされている必要がある。
-リンクされたチケットのないPRにはフラグを立てる。
-```
+Kody は、PR のタイトル、ブランチ名、説明の順にタスクを探します。`KC-1292`、`#123`、`AB#123` のようなキー、またはタスクへのリンクが対象です。「Closes KC-1292」はタスク全体に対して PR を確認します。「Part of KC-1292」は一部分を確認し、不足しているものをブロッカー扱いせずに一覧にします。
 
-```
-@kody remember: チケットで「スコープ外」とマークされた受け入れ基準は
-欠落としてフラグを立てるべきではない。
-```
+必須にするには、**Code review → What to review → Business Logic** を開き、**Ask for a task when the PR references none** をオンにします。すると Kody は、その PR がどのタスクのものかを尋ねるコメントを投稿します。Dependabot などのボット PR は対象外です。
 
-## ステップ6 — PR要件ルールを作成する
+## ステップ5 — PR の変更に合わせて再確認する
+
+Kody は PR の最初のレビューで確認します。その後は、次のようにコメントします。
 
 ```
-Name: PRはタスクを参照する必要がある
-Execution mode: Per PR
-Severity: Medium
-Instructions:
-  pr_descriptionとpr_titleでタスク参照を確認する
-  （例：KC-1234、TEAM-456、またはJira/Linear/NotionへのURL）。
-  タスク参照が見つからない場合はフラグを立て、
-  ビジネスロジック検証のために開発者に関連タスクをリンクするよう求める。
+@kody -v business-logic
 ```
+
+Kody は新しいコメントを投稿せず、自分の 1 件のコメントを編集します。特定のタスクに対して確認するには、そのリンクまたは ID を追加します：`@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292`
+
+依頼せずに再確認させるには、**Re-check after a push** を **While something is missing** に設定します。プッシュのたびに、すべての要件が満たされるまで再確認します。
+
+## ステップ6 — チームの規約を教える
+
+Business Logic の設定にある **Team guidance** には、Kody が判断するときに従うメモを記述します。
+
+```
+Requirements the ticket marks as out of scope are not missing.
+Feature flags count as implemented when the flag exists and defaults to off.
+```
+
+PR の作成者ではなくレビュアーが、Kody のコメントに Kody をメンションして返信することで、ギャップを承認することもできます。たとえば「@kody Out of scope, moved to SAA-102」のようにします。Kody はそのタスクが存在することを確認し、要件を承認済みとしてマークします。承認できる人については [コメントへの返信](/ja/how_to_use/code_review/business_logic_validation#コメントへの返信) を参照してください。
 
 ## 結果
 
-セットアップ後、スプリントのすべてのPRで以下が得られます：
+セットアップ後は、スプリント内のすべての PR に次の 2 つが付きます。
 
-1. **コード品質レビュー** — セキュリティ、パフォーマンス、スタイル（標準のKodus）
-2. **ビジネスロジック検証** — すべての受け入れ基準が実装されているか？
-3. **スコープミスマッチ検出** — このPRは正しいタスクに取り組んでいるか？
+1. **コード品質レビュー** — セキュリティ、パフォーマンス、スタイル（標準の Kodus）
+2. **ビジネスロジック検証** — 各要件を、満たしている・一部・不足・手動で確認、のいずれかで表示し、タスクが求めていない変更も示します
 
-QAが見つけるギャップが減り、スプリントデモがスムーズに進み、「それは完了したと思っていた」というケースが少なくなります。
+QA が見つけるギャップが減り、スプリントデモはより順調に進み、「それは終わっていると思っていた」ということはまれになります。
 
 ## ヒント
 
-- 番号付きの受け入れ基準を書くようにチームを促す — 最良の検証結果が得られる
-- レビュー時だけでなく、開発中にオンデマンド検証を使用する
-- PRが意図的にすべての基準をカバーしていない場合（段階的なデリバリー）、Kodyが考慮できるようPRの説明に注記する
+- チームに番号付きの受け入れ基準を書くよう促します。最も良い検証が得られます
+- `@kody -v business-logic` は、レビュー時だけでなく開発中にも実行します
+- 段階的に提供する場合は、PR の説明に「Part of KC-1292」と書いて、Kody が残りをブロッカーとして扱わないようにします
 
-詳細については、[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation) を参照してください。
+詳細は [ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation) を参照してください。

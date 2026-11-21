@@ -1,18 +1,18 @@
 ---
 title: "Revisão de PR para conformidade (SOC2, HIPAA)"
-description: "Configure Kody Rules e Memories para aplicar trilha de auditoria, tratamento de dados e requisitos de controle de acesso."
+description: "Configure Kody Rules e Memories para aplicar requisitos de trilha de auditoria, tratamento de dados e controle de acesso."
 icon: "file-shield"
 ---
 
 ## Por que a conformidade precisa de revisão automatizada
 
-Frameworks de conformidade como SOC2, HIPAA e GDPR exigem práticas de codificação específicas em relação a tratamento de dados, controle de acesso e registro de auditoria. Revisões manuais capturam algumas violações, mas são inconsistentes — especialmente quando o revisor não é um especialista em segurança.
+Frameworks de conformidade como SOC2, HIPAA e GDPR exigem práticas de código específicas para tratamento de dados, controle de acesso e registro de auditoria. Revisões manuais pegam algumas violações, mas são inconsistentes, principalmente quando quem revisa não é especialista em segurança.
 
-Este cookbook configura regras que aplicam requisitos de conformidade em cada PR.
+Este cookbook configura regras que aplicam os requisitos de conformidade em todo PR.
 
 ## Passo 1 — Defina suas Memories de conformidade
 
-Comece ensinando ao Kody os princípios gerais de conformidade:
+Comece ensinando à Kody os princípios gerais de conformidade:
 
 ```
 @kody remember: we are SOC2 compliant. All data access must be logged
@@ -37,10 +37,12 @@ New endpoints default to authenticated + authorized, never public.
 
 ## Passo 2 — Crie regras de trilha de auditoria
 
+Crie cada regra em **Code review → Kody Rules**: na aba **Review Rules**, clique em **New rule** e preencha os campos como mostrado abaixo.
+
 ### Regra de registro de auditoria
 
 ```
-Name: Data mutations must have audit logging
+Rule name: Data mutations must have audit logging
 Execution mode: Per file
 Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
@@ -56,7 +58,7 @@ Instructions:
 ### Regra de retenção de dados
 
 ```
-Name: Soft delete required for user data
+Rule name: Soft delete required for user data
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -72,7 +74,7 @@ Instructions:
 ### Prevenção de exposição de PII
 
 ```
-Name: No PII in logs or error responses
+Rule name: No PII in logs or error responses
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -86,7 +88,7 @@ Instructions:
 ### Requisito de criptografia
 
 ```
-Name: PII fields must use encryption helpers
+Rule name: PII fields must use encryption helpers
 Execution mode: Per file
 Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
@@ -100,7 +102,7 @@ Instructions:
 ## Passo 4 — Crie regras de controle de acesso
 
 ```
-Name: New endpoints must have auth guards
+Rule name: New endpoints must have auth guards
 Execution mode: Per PR
 Severity: Critical
 Instructions:
@@ -117,7 +119,7 @@ Instructions:
 ## Passo 5 — Adicione uma verificação de conformidade em nível de PR
 
 ```
-Name: Compliance impact assessment
+Rule name: Compliance impact assessment
 Execution mode: Per PR
 Severity: High
 Instructions:
@@ -132,19 +134,21 @@ Instructions:
 
 ## Passo 6 — Configure para aplicação
 
-1. Em **Code review → General**, ative **Enable changing status of Review to 'Request Changes'** para que violações de conformidade bloqueiem o merge
-2. Defina todas as regras de conformidade com severidade **Crítica**
-3. Use herança de regras para aplicar regras de conformidade em todos os repositórios da organização — crie-as com **Global** selecionado no seletor de escopo
+1. Em **Code review → General → Review feedback**, ative **Request changes on critical issues** (não disponível quando todos os provedores conectados são GitLab). A Kody define o review como Request Changes quando posta um comentário inline Critical, e retira o pedido assim que esses apontamentos são resolvidos
+2. Defina todas as regras de conformidade com severidade **Critical**
+3. Use herança de regras para aplicar as regras de conformidade em todos os repositórios da organização — crie-as com **Global** selecionado no seletor de escopo
+
+O Request changes segue os comentários inline, então ele é definido por regras **Per file**. Uma regra **Per PR** posta um único comentário no pull request e não o define.
 
 ## Checklist
 
-- [ ] Memories de conformidade ensinam os princípios gerais
-- [ ] Regra de registro de auditoria cobre todos os caminhos de mutação de dados
-- [ ] Regra de exposição de PII cobre logs e respostas de erro
-- [ ] Regra de criptografia cobre definições de entidade/model
-- [ ] Regra de controle de acesso cobre todos os novos endpoints
-- [ ] Solicitar Alterações habilitado para descobertas críticas
-- [ ] Regras definidas no escopo **Global** (toda a organização) para consistência
-- [ ] Um PR de teste verificou que as regras disparam corretamente
+- [ ] As Memories de conformidade ensinam os princípios gerais
+- [ ] A regra de registro de auditoria cobre todos os caminhos de mutação de dados
+- [ ] A regra de exposição de PII cobre logs e respostas de erro
+- [ ] A regra de criptografia cobre as definições de entidade/model
+- [ ] A regra de controle de acesso cobre todos os novos endpoints
+- [ ] **Request changes on critical issues** está ativado
+- [ ] As regras estão no escopo **Global** (toda a organização) para manter a consistência
+- [ ] Um PR de teste confirmou que as regras disparam corretamente
 
-Para mais informações sobre configuração de regras, consulte [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).
+Para saber mais sobre a configuração de regras, veja [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).

@@ -1,57 +1,56 @@
 ---
-title: "プロジェクト固有のコンテキストでPRをレビューする方法"
-description: "Kodyにプロジェクトドキュメント、ハンドブック、アーキテクチャガイドへのアクセスを提供して、より関連性の高いコードレビューを行います。"
+title: "プロジェクト固有のコンテキストで PR をレビューする方法"
+description: "Kody にプロジェクトのドキュメント、ハンドブック、アーキテクチャガイドへのアクセスを与え、より的確なコードレビューを実現します。"
 ---
 
-汎用のコードレビューは汎用的な問題を検出します。プロジェクトに実際に関連するフィードバックを得るには、Kodyがあなたの特定のコンテキスト — アーキテクチャの決定、規約、ビジネスルール — を理解する必要があります。
+汎用的なコードレビューでは、汎用的な問題しか見つかりません。プロジェクトに本当に関連するフィードバックを得るには、Kody があなたのプロジェクト固有のコンテキスト、つまりアーキテクチャの決定、規約、ビジネスルールを理解している必要があります。
 
 ## コンテキストを提供する方法
 
 ### メモリ
 
-会話を通じてKodyに規約を教えます：
+会話を通じて Kody に規約を教えます。
 
 ```
-@kody remember: このプロジェクトは六角形アーキテクチャを使用します。
-ドメイン層はインフラストラクチャに依存してはいけません。
+@kody remember: this project uses hexagonal architecture.
+Domain layer must never depend on infrastructure.
 ```
 
-メモリは永続化され、将来のすべてのレビューに適用されます。
+メモリは保持され、今後のすべてのレビューに適用されます。
 
-### ルールにおけるファイル参照
+### ルール内のファイル参照
 
-ルール内で直接ドキュメントを参照します：
+ルール内で、自分たちのドキュメントを直接参照します。
 
 ```
-指示: 新しいエンドポイントが@file:docs/api-conventions.mdのパターンに従い、
-@file:src/shared/base-controller.tsで定義されたベースクラスを
-使用していることを検証します。
+Instructions: Validate that new endpoints follow the patterns
+in @file:docs/api-conventions.md and use the base classes
+defined in @file:src/shared/base-controller.ts.
 ```
 
-### カテゴリの指示（旧カスタムプロンプト）
+### カテゴリの指示
 
-Kodyがすべてのレビューに含めるプロジェクト固有の指示を追加します：
+Kody がすべてのレビューに含める、プロジェクト固有の指示を追加します。
 
-1. サイドバーから **Code review → What to review** を開きます
-2. **Bug**、**Performance**、または **Security** カテゴリの **Instructions** を編集し、アーキテクチャの説明、チームガイドライン、ドメイン知識などのコンテキストを追加します
-3. Kodyはすべてのコードレビュー分析にこれを含めます
+1. サイドバーで **Code review → What to review** を開きます
+2. **Bug**、**Performance**、**Security** カテゴリの **Instructions** を、アーキテクチャの説明、チームのガイドライン、ドメイン知識などのコンテキストで編集します
+3. Kody はこれをすべてのコードレビュー分析に含めます
 
-Kodyの提案の書き方（トーン、長さ）を変更するには、**Code review → What Kody writes** の **Kody's personality** を使用します。
+Kody の提案の書き方（トーン、長さ）を変更するには、**Code review → What Kody writes** の **Kody's personality** を使用します。
 
-### MCPプラグイン
+### タスクトラッカー
 
-Kodyにリッチなコンテキストへのアクセスを提供するために外部ツールを接続します：
+**Plugins** で Linear、Jira（**Atlassian Rovo**）、Notion、Git Issues を接続します。PR がタスクを参照している場合、Kody はその PR をタスクの要件と受け入れ基準に照らしてチェックします。[Business Logic Validation](/ja/how_to_use/code_review/business_logic_validation)を参照してください。
 
-- **Jira/Linear** — タスク要件と受け入れ基準
-- **Slack** — チームの議論と決定
-- **Google Docs** — 仕様と設計ドキュメント
-- **カスタムMCPサーバー** — チームが使用するあらゆるツール
+### プラグイン
 
-## ワークフロー例
+インストールしたプラグインは、PR コメントで Kody にメンションしたときに Kody が使えるツールであり、[カスタムエージェント](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp)でオンにできるツールでもあります。独自の MCP サーバーをカスタムプラグインとして追加すると、他のツールも取り込めます。
 
-1. **メモリ**でアーキテクチャルールを定義します：`@kody remember: このサービスでCQRSパターンに従います`
-2. ドキュメントを参照する**レビュールール**を作成します：`@file:docs/architecture.md`
-3. **Jira**を接続してKodyがPRをタスク要件に対して検証するようにします
-4. ドメイン固有の知識のために **What to review** でカテゴリの **Instructions** を追加します
+## ワークフローの例
 
-詳細については、[カテゴリの指示（旧カスタムプロンプト）](/ja/how_to_use/code_review/configs/custom_prompts)と[プラグイン](/ja/how_to_use/code_review/plugins)を参照してください。
+1. **Memories** でアーキテクチャのルールを定義します：`@kody remember: we follow CQRS pattern in this service`
+2. ドキュメントを参照する **Review Rules** を作成します：`@file:docs/architecture.md`
+3. タスクトラッカーを接続して、Kody が PR をタスクの要件に照らして検証するようにします
+4. ドメイン固有の知識のために、**What to review** でカテゴリの **Instructions** を追加します
+
+詳細については、[カテゴリの指示](/ja/how_to_use/code_review/configs/custom_prompts)と[プラグイン](/ja/how_to_use/code_review/plugins)を参照してください。

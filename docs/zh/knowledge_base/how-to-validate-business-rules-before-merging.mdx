@@ -1,28 +1,33 @@
 ---
 title: "如何在合并前验证业务规则"
-description: "在代码到达生产环境之前捕获拉取请求中缺失的需求、遗忘的边缘情况和逻辑差距。"
+description: "在代码进入生产环境之前，发现拉取请求中遗漏的需求、边界情况和逻辑缺口。"
 ---
 
-代码审查通常关注代码质量 — 安全性、性能、风格。但它们经常遗漏一个问题：**这段代码是否真的做了业务要求的事情？** 业务逻辑验证弥补了这个差距。
+代码审查通常关注安全、性能和代码风格。业务逻辑验证则检查代码是否实现了业务需求。
 
 ## 检查内容
 
-Kodus 将您的 PR 差异与任务需求进行比较，识别：
+Kody 会找到 PR 引用的任务，从任务跟踪工具读取内容，并在一条持续更新的 PR 评论中列出每项需求的实现状态：
 
-- **缺失的实现** — 代码中未涵盖的验收标准
-- **部分实现** — 仅部分解决的需求
-- **范围不匹配** — 当 PR 在与任务描述不同的区域工作时
-- **边缘情况** — 任务中提到但未处理的业务场景
+| 状态 | 含义 |
+|---|---|
+| **MET** | PR 的改动已实现该需求。 |
+| **PARTIAL** | 仅实现了部分需求。 |
+| **MISSING** | PR 的改动中找不到实现依据，或 PR 依赖的代码未实现该需求。 |
+| **CHECK MANUALLY** | 涉及视觉效果或操作流程，或者仅凭代码无法判断。 |
+| **NOT IN TASK** | 任务未要求此项改动。 |
 
-## 如何使用
+每行都会引用作为依据的文件和行号，并给出修改建议。
 
-### 自动（默认）
+## 使用方法
 
-在 **Code review → What to review** 中开启 **Business Logic** 类别（即审查选项中的 `business_logic: true`，默认启用）后，当连接了任务管理插件时，Kodus 在每次 PR 审查期间自动验证业务规则。
+### 自动验证（默认）
 
-### 按需
+连接任务跟踪工具，并在 **Code review → What to review** 中开启 **Business Logic**（默认开启）。如果 PR 标题、分支名或描述引用了任务，Kody 会在第一次审查时验证。可使用 `PROJ-123` 或任务链接。引用 Git Issue 时，可在标题或分支名中使用 `#123`，或在描述中写 `Closes #123`。之后，你可以要求 Kody 重新检查。开启 **Re-check after a push** 后，每次推送都会重新检查。
 
-在任何 PR 上使用链接或内联规范评论：
+### 按需验证
+
+在 PR 的常规评论区留言：
 
 ```
 @kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
@@ -35,34 +40,26 @@ Discount codes cannot be combined with loyalty rewards.
 Free shipping applies only to domestic orders.
 ```
 
+如果命令后没有指定任务，Kody 会重新检查 PR 引用的任务。如果提供至少 40 个字符的需求说明，Kody 会按说明检查 PR，无需连接任务跟踪工具。
+
 ## 支持的任务来源
 
-通过[插件](/zh/how_to_use/code_review/plugins)连接以自动获取任务上下文：
+在[插件](/zh/how_to_use/code_review/plugins)中连接任务跟踪工具。Kody 只按 ID 读取任务。
 
-| 来源 | 如何引用 |
-|------|----------|
-| **Jira** | 粘贴 Jira 问题 URL |
-| **Linear** | 粘贴 Linear 问题 URL |
-| **Notion** | 粘贴 Notion 页面 URL |
-| **ClickUp** | 粘贴 ClickUp 任务 URL |
-| **Google Docs** | 粘贴文档 URL |
-| **Slack** | 粘贴 Slack 消息永久链接 |
-| **内联** | 直接在 PR 评论中编写需求 |
-
-## 理解输出
-
-每个发现都有严重性：
-
-- **MUST_FIX** — 必需的业务规则缺失或矛盾
-- **SUGGESTION** — 未涵盖的边缘情况或健壮性要点
-- **INFO** — 不阻碍合规性的观察
-
-每个发现都包含建立该需求的**确切引用**，确保没有虚构内容。
+| 来源 | 引用方式 |
+|--------|-----------------|
+| **Linear** | Issue 编号（`TEAM-123`）或链接 |
+| **Jira**（Atlassian Rovo） | 工单编号（`PROJ-123`）或链接 |
+| **Notion** | 页面链接 |
+| **Git Issues** | GitHub、GitLab、Bitbucket 或 Forgejo 上的 `#123`、`owner/repo#123` 或 Issue 链接 |
+| **其他跟踪工具**（如 ClickUp） | 使用自定义插件。如果插件名称无法表明它是任务跟踪工具，请将它设为 **Task source**。 |
+| **内联需求** | 在 PR 评论中写明需求 |
 
 ## 提示
 
-- 具有明确验收标准的任务获得最全面的验证
-- 修复问题后，重新运行命令以确认合规
-- 如果 PR 范围与任务不匹配，Kody 会标记范围不匹配而不是推测
+- 在任务中写清验收标准，验证结果会更全面。
+- 修复缺口后，再次评论 `@kody -v business-logic`。Kody 会更新原有评论。
+- PR 实现整个任务时，写 **Closes PROJ-1**。只实现其中一部分时，写 **Part of PROJ-1**。
+- 如果任务只有标题，Kody 会请你补充验收标准。
 
-更多详情，请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。
+详见[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。

@@ -3,26 +3,31 @@ title: "How to validate business rules before merging"
 description: "Catch missing requirements, forgotten edge cases, and logic gaps in your pull request before code reaches production."
 ---
 
-Code reviews typically focus on code quality — security, performance, style. But they often miss the question: **does this code actually do what the business asked for?** Business Logic Validation bridges that gap.
+Code reviews typically focus on code quality: security, performance, style. But they often miss the question: **does this code actually do what the business asked for?** Business Logic Validation bridges that gap.
 
 ## What it checks
 
-Kodus compares your PR diff against the task requirements and identifies:
+Kody finds the task a PR references, reads it from your task tracker, and lists every requirement with where it stands in the code. The result is one comment on the PR, kept up to date. Each requirement gets a state:
 
-- **Missing implementations** — acceptance criteria not covered in the code
-- **Partial implementations** — requirements only partially addressed
-- **Scope mismatches** — when the PR is working in a different area than the task describes
-- **Edge cases** — business scenarios mentioned in the task but not handled
+| State | Meaning |
+|---|---|
+| **MET** | The diff implements it. |
+| **PARTIAL** | Part of what the requirement says is implemented. |
+| **MISSING** | No evidence in the PR diff, or the code the PR relies on doesn't do it. |
+| **CHECK MANUALLY** | A visual or flow requirement, or one Kody can't settle from the code. |
+| **NOT IN TASK** | A change the task doesn't ask for. |
+
+Every row cites the file and line it is based on and says what to change.
 
 ## How to use it
 
 ### Automatic (default)
 
-With the **Business Logic** category on in **Code review → What to review** (`business_logic: true` in your review options, enabled by default), Kodus automatically validates business rules during every PR review when a task management plugin is connected.
+With the **Business Logic** category on in **Code review → What to review** (on by default) and a task tracker connected, Kody checks the PR on its first review when the PR title, branch name or description names a task: `PROJ-123` or a task link, or `#123` in the title or branch (`Closes #123` in the description). After that it re-checks when someone asks, or on each push if you set **Re-check after a push**.
 
 ### On-demand
 
-Comment on any PR with a link or inline spec:
+Comment on the PR (not on a line of code):
 
 ```
 @kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
@@ -35,34 +40,26 @@ Discount codes cannot be combined with loyalty rewards.
 Free shipping applies only to domestic orders.
 ```
 
+With no task after the command, Kody re-checks the tasks the PR references. With text of at least 40 characters, it checks the PR against what you wrote, and no tracker is needed.
+
 ## Supported task sources
 
-Connect via [Plugins](/en/how_to_use/code_review/plugins) to fetch task context automatically:
+Connect a tracker in [Plugins](/en/how_to_use/code_review/plugins). Kody only reads tasks by their id.
 
 | Source | How to reference |
 |--------|-----------------|
-| **Jira** | Paste the Jira issue URL |
-| **Linear** | Paste the Linear issue URL |
-| **Notion** | Paste the Notion page URL |
-| **ClickUp** | Paste the ClickUp task URL |
-| **Google Docs** | Paste the document URL |
-| **Slack** | Paste a Slack message permalink |
-| **Inline** | Write requirements directly in the PR comment |
-
-## Understanding the output
-
-Each finding has a severity:
-
-- **MUST_FIX** — a required business rule is missing or contradicted
-- **SUGGESTION** — an edge case or robustness point is not covered
-- **INFO** — observation that doesn't block compliance
-
-Every finding includes the **exact quote** from the task that establishes the requirement, ensuring nothing is invented.
+| **Linear** | Issue key (`TEAM-123`) or issue URL |
+| **Jira** (Atlassian Rovo) | Issue key (`PROJ-123`) or issue URL |
+| **Notion** | Page URL |
+| **Git Issues** | `#123`, `owner/repo#123` or the issue URL, on GitHub, GitLab, Bitbucket or Forgejo |
+| **Other trackers** (for example ClickUp) | Through a custom plugin. Pick it as the **Task source** if its name doesn't say it is a tracker. |
+| **Inline** | Write the requirements in the PR comment |
 
 ## Tips
 
-- Tasks with explicit acceptance criteria get the most thorough validation
-- After fixing issues, rerun the command to confirm compliance
-- If the PR scope doesn't match the task, Kody flags a scope mismatch instead of speculating
+- Tasks with explicit acceptance criteria get the most thorough validation.
+- After fixing a gap, comment `@kody -v business-logic` again. The same comment is updated.
+- Use **Closes PROJ-1** when the PR delivers the whole task and **Part of PROJ-1** when it delivers a slice.
+- If the task has only a title, Kody asks for acceptance criteria instead of guessing.
 
 For details, see [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).

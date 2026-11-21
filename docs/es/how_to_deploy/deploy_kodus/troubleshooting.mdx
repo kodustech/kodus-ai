@@ -8,92 +8,107 @@ icon: "headset"
 
 ### "Ejecutar diagnósticos"
 
-El instalador incluye un script de diagnóstico que verifica el stack y las configuraciones incorrectas más comunes.
+El instalador incluye un script de diagnóstico (doctor). Ejecútalo desde el directorio `kodus-installer`:
 
 ```bash
-cd kodus-installer
 ./scripts/doctor.sh
 ```
+
+Su primera línea indica si las revisiones están en ejecución: `Reviews: NOT RUNNING`, `RUNNING, DEGRADED` u `OK`. Cada problema que aparece después enumera lo que pierdes y lo único que debes hacer. El script no cambia nada y no imprime ningún secreto, así que puedes pegar su salida en un hilo de soporte. Agrega `--verbose` para ver todas las verificaciones que pasan.
+
+Para verificar `.env` por separado, ejecuta `./scripts/validate-env.sh`. Comprueba cada variable contra el schema y, cuando hay contenedores en ejecución, muestra qué valores cargaron los contenedores de forma distinta a `.env`. Así detectas un cambio que hiciste sin recrear los contenedores.
+
+En Kubernetes, usa `./scripts/doctor-k8s.sh -n <namespace>` en su lugar. Consulta [Kubernetes y OpenShift](/es/how_to_deploy/deploy_kodus/kubernetes#verificación).
+
+### "Las revisiones nunca se inician"
+
+Revisa estos puntos en orden:
+
+1. **Hay un modelo conectado.** Abre **AI providers**, o define el modelo en `.env`. Sin uno, no se ejecuta ninguna revisión.
+2. **La URL del webhook llega al servicio de webhooks.** Al conectar un repositorio se registra un webhook con la URL `*_CODE_MANAGEMENT_WEBHOOK` del proveedor, como `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`. Si la variable está vacía, el repositorio se conecta y nada se dispara. La URL debe ser `https://` y llegar al puerto `3332`.
+3. **El worker está en ejecución.** `docker compose ps worker` debe mostrarlo activo, y `WORKER_ROLE=code-review` debe estar definido.
 
 ### "No puedo acceder a la interfaz web"
 
 1. Verifica si los contenedores están en ejecución:
 
 ```bash
-docker-compose ps kodus-web
+docker compose ps kodus-web
 ```
 
-2. Verifica que los puertos estén correctamente mapeados:
+2. Verifica que el puerto esté correctamente mapeado:
 
 ```bash
-docker-compose port kodus-web 3000
+docker compose port kodus-web 3000
 ```
 
 3. Revisa los logs del contenedor web:
 
 ```bash
-docker-compose logs kodus-web
+docker compose logs kodus-web
 ```
-
-### "Errores de Edge Runtime en los logs de `kodus-web`"
-
-Si ves errores como `A Node.js API is used ... not supported in the Edge Runtime` (generalmente con un rastro de importación de `axios`), parte de la aplicación web se está ejecutando en el Edge Runtime, que no es compatible con las APIs de Node.js.
-
-1. Actualiza a la imagen más reciente de `kodus-web` (vuelve a ejecutar el instalador o ejecuta `docker-compose pull kodus-web` y `docker-compose up -d`).
-2. Si estás compilando desde el código fuente, asegúrate de que las rutas auth/server se ejecuten en el entorno de ejecución de Node.js (establece `export const runtime = "nodejs"` y evita `runtime = "edge"` en esas rutas).
-3. Reconstruye y reinicia el contenedor.
 
 ### "Los webhooks de Git no funcionan"
 
-1. Verifica la configuración de tu dominio:
+1. Verifica que el servicio de webhooks responda:
 
 ```bash
-curl -I https://your-domain.com
+curl -i http://localhost:3332/health/live
 ```
 
 2. Revisa los logs de webhooks para ver los intentos de webhook:
 
 ```bash
-docker-compose logs webhooks | grep webhook
+docker compose logs webhooks | grep webhook
 ```
 
-3. Verifica la configuración de tu proxy inverso:
+3. Si usas un dominio dedicado para webhooks, verifica que llegue al servicio a través de tu proxy inverso:
 
 ```bash
+curl -i https://your-webhooks-domain.com/health/live
 sudo nginx -t
 ```
 
+Si el dominio de la API sirve los webhooks, el proxy debe enrutar `/github/webhook`, `/gitlab/webhook` y las demás rutas de proveedores al puerto `3332`. Consulta [Proxy inverso](/es/how_to_deploy/deploy_kodus/reverse_proxy).
+
 ### "Problemas de conexión a la base de datos"
 
-1. Verifica el estado del contenedor de base de datos:
+1. Verifica el estado de los contenedores de base de datos:
 
 ```bash
-docker-compose ps db_kodus_postgres
-docker-compose ps db_kodus_mongodb
+docker compose ps db_kodus_postgres db_kodus_mongodb
 ```
 
 2. Revisa los logs de la base de datos:
 
 ```bash
-docker-compose logs db_kodus_postgres
-docker-compose logs db_kodus_mongodb
+docker compose logs db_kodus_postgres
+docker compose logs db_kodus_mongodb
 ```
 
-3. Prueba las conexiones a la base de datos:
+3. Prueba las conexiones a la base de datos desde dentro de los contenedores:
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
-docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin'
 ```
+
+Introduce la contraseña root de MongoDB cuando se te solicite.
+
+### MongoDB termina con SERVER-121912
+
+Algunas combinaciones de MongoDB 8.3 y kernels recientes de Linux fallan al arrancar con `SERVER-121912`. Con un kernel de Docker 6.19 o posterior, `install.sh` guarda `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11` si no has elegido otra imagen. En una instalación nueva con Compose directamente, define ese valor en `.env`. Para instalar con Helm desde cero, define `mongodb.bundled.image=mongo:8.2.11`.
+
+Si el volumen ya contiene datos de la versión 8.3, sigue el [procedimiento de downgrade de MongoDB](https://www.mongodb.com/docs/manual/release-notes/8.3-downgrade/) antes de cambiar la imagen.
 
 ### "La migración falló debido a un tipo vector faltante"
 
-Si encuentras el error "type vector does not exist" durante las migraciones, se debe a que la extensión pgvector no está habilitada en tu base de datos PostgreSQL. Así es como se soluciona:
+Si encuentras el error "type vector does not exist" durante las migraciones, la extensión pgvector no está habilitada en tu base de datos PostgreSQL. La imagen de PostgreSQL incluida la habilita la primera vez que se crea su volumen. Una base de datos externa, o un volumen que existía antes de que se agregara la extensión, requiere habilitarla manualmente:
 
 1. Conéctate a tu base de datos PostgreSQL:
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 2. Habilita la extensión pgvector:
@@ -102,13 +117,13 @@ docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-3. Después de habilitar la extensión, intenta ejecutar tus migraciones de nuevo:
+3. Reinicia la api. Ejecuta las migraciones cuando inicia:
 
 ```bash
-docker-compose exec api npm run migration:run
+docker compose restart api
 ```
 
-Si sigues teniendo problemas, puedes verificar que la extensión esté correctamente instalada:
+Para verificar que la extensión esté instalada:
 
 ```sql
 SELECT * FROM pg_extension WHERE extname = 'vector';
@@ -123,16 +138,24 @@ Si ves errores en la cola de mensajes:
 1. Verifica el estado de RabbitMQ:
 
 ```bash
-docker-compose logs rabbitmq
+docker compose logs rabbitmq
 ```
 
-2. Accede a la consola de administración en `http://localhost:15672` para verificar colas y conexiones
+2. Abre la consola de administración para verificar colas y conexiones. El instalador la publica en un puerto aleatorio del host; encuéntralo con:
+
+```bash
+docker compose port rabbitmq 15672
+```
 
 3. Reinicia el servicio si es necesario:
 
 ```bash
-docker-compose restart rabbitmq
+docker compose restart rabbitmq
 ```
+
+- `QueueBind 404` en los logs de la api o de webhooks significa que el worker nunca creó las colas `workflow.jobs.*`. Verifica que el worker esté en ejecución y que `WORKER_ROLE` esté definido.
+- Los errores de conexión suelen significar que `API_RABBITMQ_URI` no coincide con `RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS` o el virtual host `kodus-ai`.
+- `PRECONDITION_FAILED` en una revisión larga significa que el `consumer_timeout` del broker es inferior a 2 horas. La imagen de RabbitMQ de Kodus lo define; define `consumer_timeout = 7200000` en tu propio broker.
 
 ### Problemas de recursos
 
@@ -147,18 +170,19 @@ docker stats
 2. Verifica los límites del contenedor:
 
 ```bash
-docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+docker inspect $(docker compose ps -q api) | grep -A 5 "Resources"
 ```
 
-3. Ajusta los límites de recursos en docker-compose.yml si es necesario
+3. Ajusta los límites de recursos en `docker-compose.yml` si es necesario. El análisis del repositorio se ejecuta dentro del worker, por lo que es el que más memoria necesita; consulta [Sandbox & AST Graph](/es/how_to_deploy/deploy_kodus/sandbox#dimensionamiento-de-recursos).
 
 ## Obtener ayuda
 
 ### Qué incluir en las solicitudes de soporte
 
 - El mensaje de error exacto
+- La salida de `./scripts/doctor.sh` (en Kubernetes, `./scripts/collect-diagnostics.sh -n <namespace>`)
 - Logs relevantes de los servicios afectados
-- Tu método de despliegue (CLI, VM, etc.)
+- Tu método de despliegue (Docker Compose, Kubernetes, OpenShift) y la versión de Kodus
 - Pasos para reproducir el problema
 
 ### Dónde obtener ayuda

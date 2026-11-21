@@ -1,60 +1,75 @@
 ---
 title: "目录级设置"
-description: "为代码库中的特定文件夹设置自定义代码审查设置。非常适合单体代码库。"
+description: "为代码库中的特定文件夹设置各自的代码审查设置。非常适合单体代码库。"
 ---
 
 ## 概述
 
-为代码库中的特定文件夹应用自定义代码审查设置。非常适合不同区域有不同标准或所有权的单体代码库。
+目录作用域会把它自己的代码审查设置应用到代码库中的一个或多个文件夹。适用于单体代码库，其中各区域有不同的标准或所有者。
 
-Kody 为每个 PR 选择单个配置:**目录** → **代码库** → **全局**
+Kody 为每个 PR 使用单个配置：**目录** → **代码库** → **全局**。
 
 <Note>
-  了解设置如何在级别之间流动,请参阅<a href="/zh/how_to_use/code_review/configs/inheritance_overrides">配置继承与覆盖</a>。
+  了解设置如何在各级别之间流动，请参阅<a href="/zh/how_to_use/code_review/configs/inheritance_overrides">配置继承与覆盖</a>。
 </Note>
 
 ## 工作原理
 
-- 在任何深度配置任何文件夹(例如 `api/src/services`)
-- 根据需要配置任意多个文件夹
-- **不重叠**:如果配置 `api/src/services`,则不能同时配置 `api/src/services/users`
+- 一个目录作用域可以包含一个或多个文件夹。其所有文件夹共享相同的设置。
+- 文件夹可以位于任何深度，例如 `api/src/services`。
+- 您可以根据需要添加任意多个目录作用域。
+- 一个文件夹只能属于一个目录作用域。已经有作用域的文件夹内部的文件夹无法选择。
 
 ### 选择规则
 
-- **触及一个已配置目录**:使用该目录的配置
-- **未触及已配置目录**:使用代码库配置(如果没有代码库配置则使用全局配置)
-- **触及两个或更多已配置目录**:升级到代码库配置(如果没有代码库配置则使用全局配置)
+Kody 会检查 PR 触及了哪些目录作用域：
+
+- **触及一个作用域：** 使用该作用域的设置。位于任何作用域之外的文件不会改变这一点。
+- **未触及任何作用域：** 使用代码库设置，如果代码库没有设置则使用全局设置。
+- **触及两个或更多作用域：** 使用代码库设置，如果代码库没有设置则使用全局设置。
 
 <Note>
-  Kody 对每个 PR 使用一个配置以保持审查可预测。混合配置会导致冲突。
+  Kody 对每个 PR 使用一个配置，以保持审查可预测。混合配置会导致冲突。
 </Note>
 
 ## 示例
 
 <Tabs>
   <Tab title="单个已配置目录">
-    您配置了 `src/microservice-alpha`。PR 更改了 `src/microservice-alpha` 和未配置文件夹中的文件。
+    您为 `src/microservice-alpha` 添加了作用域。PR 更改了 `src/microservice-alpha` 和未配置文件夹中的文件。
 
-    使用 **microservice-alpha** 配置。
+    使用 **microservice-alpha** 设置。
   </Tab>
   <Tab title="无已配置目录">
-    PR 仅触及没有特定配置的目录。
+    PR 仅触及没有作用域的文件夹。
 
-    使用**代码库**配置(如果没有代码库配置则使用**全局**配置)。
+    使用**代码库**设置（如果代码库没有设置则使用**全局**设置）。
   </Tab>
   <Tab title="多个已配置目录">
-    您配置了 `src/microservice-alpha` 和 `src/microservice-beta`。PR 触及两者。
+    您为 `src/microservice-alpha` 和 `src/microservice-beta` 添加了作用域。PR 触及两者。
 
-    升级到**代码库**配置(如果没有代码库配置则使用**全局**配置)。
+    使用**代码库**设置（如果代码库没有设置则使用**全局**设置）。
   </Tab>
 </Tabs>
 
 ## 设置
 
-1. 在侧边栏中,打开 **Code review** 分组顶部的作用域选择器,然后选择 **Add repository configuration**
-2. 在 **Create repository settings** 中,**Select the target repository**,然后 **Select the target directories**(一个或多个文件夹),并点击 **Create settings**
-3. 选择新的目录作用域 —— 它会缩进显示在作用域选择器中所属代码库的下方 —— 然后在任意页面(General、What to review、Kody Rules、What Kody writes)中更改设置;设置页面通过 **Save settings** 保存
+1. 在侧边栏中，在 **Code review** 分组顶部的作用域选择器中选择代码库。
+2. 再次打开选择器，选择底部的 **Add directory scope**。
+3. 在 **Add directory scope** 对话框中，勾选 **Select directories** 下的文件夹。它们会列在 **Selected directories** 下。点击 **Add directory scope**。
+4. 选择新的作用域。它会缩进显示在选择器中所属代码库的下方。在任意页面更改设置，然后点击 **Save settings**。
 
-之后如需更改文件夹,请使用作用域选择器旁边的 **⋯** 菜单 → **Edit directories**;**Delete configuration** 会删除该目录配置。
+之后如需更改文件夹，请打开作用域选择器旁边的 **⋯** 菜单，选择 **Edit directories**，然后点击 **Save directories**。**Delete configuration** 会删除该作用域；这些文件夹将重新使用代码库的设置。
 
-如果您还使用 `kodus-config.yml`,它会覆盖网页设置(请参阅通用设置中的配置优先级)。
+## kodus-config.yml 与目录作用域
+
+- Kody 只从代码库默认分支的根目录读取 `kodus-config.yml`。它从不读取放在文件夹内的 `kodus-config.yml`。
+- 只有在**代码库**作用域开启 **Prefer kodus-config.yml settings** 时，它才会读取根目录的文件。该开关也会出现在目录作用域，但它不会改变审查：在那里开启它不会让 Kody 为该目录读取文件，关闭它也不会阻止代码库的文件生效。
+- 在目录作用域上覆盖的设置，优先于代码库文件中的同一设置。
+- 如需把目录作用域的设置保存在文件中，请使用[集中式配置](/zh/how_to_use/code_review/configs/centralized_config)仓库，其中位于该作用域文件夹内的 `kodus-config.yml` 会同步到该目录作用域的设置中。
+
+文件本身请参见[通用设置](/zh/how_to_use/code_review/configs/general#config-priority)，优先顺序请参见[配置继承与覆盖](/zh/how_to_use/code_review/configs/inheritance_overrides#kodus-config-yml)。
+
+## 目录作用域中的 Kody Rules
+
+PR 审查时使用的目录作用域 Kody Rules，与上述设置的选择方式相同。当没有选定单一作用域时，该代码库所有目录作用域的规则都会生效。参见[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。

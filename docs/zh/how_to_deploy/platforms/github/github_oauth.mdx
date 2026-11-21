@@ -1,10 +1,10 @@
 ---
-title: 创建 GitHub OAuth App（GitHub 登录）
-description: "创建为 Kodus 用户启用「Sign in with GitHub」的 GitHub OAuth App —— 与用于代码审查的 GitHub App 相互独立。"
+title: GitHub OAuth App（GitHub 登录）
+description: "创建为 Kodus 用户启用 \"Sign in with GitHub\" 的 GitHub OAuth App — 与用于代码审查的 GitHub App 相互独立。"
 icon: github
 ---
 
-如果您希望用户通过 GitHub 登录 Kodus，请使用此方式。这与用于代码审查自动化和 Webhook 的 GitHub App 集成是分开的。
+如果您希望用户通过 GitHub 登录 Kodus，请使用此方式。这与用于代码审查自动化和 webhook 的 GitHub App 集成是分开的。
 
 ## 先决条件
 
@@ -12,11 +12,9 @@ icon: github
 
 ## 步骤 1：创建 OAuth App
 
-1. 在 GitHub 上，转到 **设置** > **开发者设置** > **OAuth Apps**
+1. 在 GitHub 上，转到 **Settings** > **Developer Settings** > **OAuth Apps**
 2. 点击 **New OAuth App**
 3. 填写基本信息（Application name、Homepage URL）
-
-<img src="https://www.oauth.com/wp-content/uploads/2018/07/github_create_new_application-1024x717.png" alt="GitHub OAuth Apps 页面中的新建应用表单" />
 
 ## 步骤 2：配置回调 URL
 
@@ -26,11 +24,11 @@ icon: github
 WEB_DOMAIN/api/auth/callback/github
 ```
 
-确保 URL 与您的实际域名和协议（http/https）一致。
+确保 URL 与您的实际 Web 域名和协议（http/https）一致。
 
-## 步骤 3：将凭据写入 .env
+## 步骤 3：将凭据添加到 .env
 
-创建完成后，从 GitHub 复制凭据并写入 Kodus 环境变量：
+创建完成后，从 GitHub 复制凭据并添加到您的 Kodus 环境中：
 
 ```
 WEB_OAUTH_GITHUB_CLIENT_ID="your_client_id_here"

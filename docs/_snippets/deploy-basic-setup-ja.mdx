@@ -2,130 +2,142 @@
 
 <AccordionGroup>
   <Accordion title="推奨ハードウェア">
-    デフォルトの `local` サンドボックスモード（kodus-graph + cross-file
-    コンテキストが worker コンテナ内で実行される）を想定したサイジング。
+    デフォルトの `local` サンドボックスモード（kodus-graph と cross-file
+    コンテキストが worker コンテナ内で実行される）を想定したサイジングです。
 
-    - **CPU**: 2 コア以上（~100k LOC を超えるリポジトリでは 4 コア以上を推奨）
-    - **RAM**: 8GB 以上（大規模リポジトリで `local` サンドボックスを使う場合は 16GB を推奨）
-    - **ストレージ**: 60GB 以上の空き容量（Postgres が AST グラフのキャッシュを保持。
-      リポジトリ数と PR 量に応じて増加）
+    - **CPU**: 2 コア以上（約 100k LOC を超えるリポジトリでは 4 コア以上を推奨）
+    - **RAM**: 8GB 以上（大規模リポジトリで `local` サンドボックスを実行する場合は 16GB を推奨）
+    - **ストレージ**: 60GB 以上の空き容量（Postgres が AST グラフのキャッシュを保持するため、
+      リポジトリ数と PR の量に応じて増加します）
   </Accordion>
   <Accordion title="必要なソフトウェア">
     - **Docker**（最新の安定版）と Compose プラグイン
-    - **ドメイン名または固定 IP** — クラウド Git プロバイダー
-      （GitHub.com、GitLab.com など）から webhook を受信したい場合
+    - **ドメイン名または固定 IP** — クラウドの Git プロバイダー
+      （GitHub.com、GitLab.com など）から Git の webhook を受信したい場合
   </Accordion>
   <Accordion title="必要なポート">
-    デフォルトのホストポートマッピング — 競合する場合は `.env` で調整。
+    インストーラーの Compose ファイルによって、ホスト上に公開されます。
 
-    - **3000** — Kodus Web App
+    - **3000** — Kodus Web App（`WEB_PORT`）
     - **3001** — API
-    - **3332** — Webhooks
-    - **5432** — PostgreSQL
-    - **27017** — MongoDB
-    - **5672, 15672, 15692** — RabbitMQ（AMQP、管理 UI、メトリクス）
-    - **3101** — MCP Manager _（`API_MCP_SERVER_ENABLED=true` の場合のみ）_
+    - **3332** — Webhooks（`API_WEBHOOKS_PORT`）
+    - **3101** — MCP Manager（`API_MCP_MANAGER_PORT`）、_`API_MCP_SERVER_ENABLED=true` の場合のみ_
+    - **15692** — RabbitMQ の Prometheus メトリクス
+
+    PostgreSQL（5432）、MongoDB（27017）、RabbitMQ（5672 AMQP、15672
+    管理 UI）は、ホストのランダムなポートで公開されます。コンテナは
+    Docker ネットワーク経由でそれらに接続します。ホストのポートを確認するには
+    `docker compose port <service> <port>` を実行してください。
   </Accordion>
   <Accordion title="サービス">
-    `./scripts/install.sh` が `.env` に基づいて起動するサービス。
+    `./scripts/install.sh` が `.env` に基づいて起動するサービスです。
 
-    **コア（常時起動）:**
-    - `api` — メインバックエンド
-    - `worker` — code review ジョブ
-    - `webhooks` — Git プロバイダー webhook レシーバー
+    **コア（常に起動）：**
+    - `api` — メインのバックエンド
+    - `worker` — コードレビューのジョブ
+    - `webhooks` — Git プロバイダーの webhook 受信
     - `kodus-web` — Next.js フロントエンド
-    - `db_kodus_postgres`、`db_kodus_mongodb`、`rabbitmq` —
-      ローカルインフラ。マネージドインスタンスを指す場合は
-      `USE_LOCAL_DB=false` / `USE_LOCAL_RABBITMQ=false` でスキップ。
+    - `db_kodus_postgres`、`db_kodus_mongodb`、`rabbitmq` — ローカルの
+      インフラ。マネージドインスタンスを使うには
+      `USE_LOCAL_DB=false` / `USE_LOCAL_RABBITMQ=false` を設定します。
+      コンテナは依存関係として引き続き起動しますが、Kodus はそれらを使用しません。
 
-    **オプション:**
+    **オプション：**
     - `kodus-mcp-manager` — Model Context Protocol ブローカー。
-      `API_MCP_SERVER_ENABLED=true` で有効化。
-      [MCP Manager](/ja/how_to_deploy/deploy_kodus/mcp_manager) を参照。
-    - `worker-analytics` — Cockpit 取り込み（DORA メトリクス、PR
-      classifier）。**セルフホスト Enterprise 専用**、デフォルトでは
-      組み込まれません。
-      [Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker) を参照。
+      `API_MCP_SERVER_ENABLED=true` で有効にします。[MCP Manager](/ja/how_to_deploy/deploy_kodus/mcp_manager) を参照してください。
+    - `worker-analytics` — Cockpit の取り込み（DORA メトリクス、PR
+      分類器）。**セルフホスト Enterprise 専用**です。`analytics`
+      Compose プロファイルの背後にあるため、インストーラーは起動しません。
+      [Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker) を参照してください。
   </Accordion>
 </AccordionGroup>
 
 <Note>
-  Code review はサンドボックス内で実行される AST グラフ + cross-file
-  コンテキストを使用します — `local`（デフォルト、worker 内で実行）または
-  `e2b`（有料リモートサンドボックス）。モード、キャッシュの動作、各モードの
-  選択基準については [Sandbox & AST Graph](/ja/how_to_deploy/deploy_kodus/sandbox)
+  コードレビューは、サンドボックス内で実行される AST グラフと cross-file
+  コンテキストを使用します。サンドボックスは `local`（デフォルト、worker 内で実行）または `e2b`（有料のリモート
+  サンドボックス）です。モード、キャッシュの動作、それぞれを選ぶ場面については、[Sandbox & AST Graph](/ja/how_to_deploy/deploy_kodus/sandbox)
   を参照してください。
 </Note>
 
 <Note>
-  **クラウドベースのGitサービス（GitHub、GitLab、Bitbucket）やクラウドLLMプロバイダー（OpenAI、Anthropicなど）に接続する場合は、インターネットアクセスが必要です。** ネットワーク内の自己ホスト型GitツールやオンプレミスLLMを使用する場合、外部インターネットアクセスはオプションです。
+  インストールに必要なイメージは、レジストリやミラーから取得できる状態にするか、ホストに事前に読み込んでおきます。内部環境で運用する場合は、ネットワーク内から到達できる Git とモデルのエンドポイントを使います。オプションの外部サービスには、そのサービスへのアクセスが必要です。
 </Note>
 
-## ドメイン名の設定（オプション）
+## ドメイン名の設定（任意）
 
-クラウドベースのGitプロバイダー（GitHub、GitLab、Bitbucket）とKodusを統合する予定がある場合は、Kodus WebアプリとそのAPI両方に公開URLが必要です。これにより、サーバーがコードレビュー機能に必要なwebhookを受信できるようになり、アプリケーションが正しく動作します。
+Git プロバイダーは HTTPS で Webhook URL に接続できる必要があります。Kodus と Git がプライベートネットワークにある場合も、インストーラーには HTTPS Webhook URL を 1 つ以上設定してください。サインイン後や Git プロバイダーからのリダイレクト時も、ユーザーのブラウザーは Web アプリに接続できる必要があります。
 
-2つのサブドメインを設定することをお勧めします：
-- Webアプリケーション用（例：`kodus-web.yourdomain.com`）
-- API用（例：`kodus-api.yourdomain.com`）
+2 つのサブドメインを設定することをお勧めします。
+- Web アプリケーション用。例：`kodus-web.yourdomain.com`
+- API 用。例：`kodus-api.yourdomain.com`
 
-Webhookは別サービス（ポート3332）で処理されます。以下のいずれかを選択できます：
-- 専用のwebhookサブドメインを使用する（例：`kodus-webhooks.yourdomain.com`）
-- APIドメインを引き続き使用し、リバースプロキシで`/github/webhook`、`/gitlab/webhook`などをwebhookサービスにルーティングする
+Webhook は別のサービス（ポート 3332）が処理します。次のいずれかを選べます。
+- 専用の webhooks サブドメインを使う。例：`kodus-webhooks.yourdomain.com`
+- API のドメインを引き続き使い、リバースプロキシで `/github/webhook`、`/gitlab/webhook` などを webhooks サービスにルーティングする。
 
-両方のサブドメインのDNS Aレコードをサーバーのipアドレスに向ける必要があります。このガイドの後半で、これらのサブドメインへのリクエストを正しい内部サービスにルーティングするリバースプロキシ（Nginx）を設定します。この設定はwebhookや認証を含む完全な機能に不可欠です。
+どちらのサブドメインも、DNS の A レコードでサーバーの IP アドレスを指すようにします。[リバースプロキシ](/ja/how_to_deploy/deploy_kodus/reverse_proxy)が、各サブドメインを適切な内部サービスにルーティングします。
 
-> **注意**: ネットワーク内の自己ホスト型Gitツールのみに接続し、公開アクセスやwebhookが不要な場合は、よりシンプルな設定が可能ですが、このガイドは公開デプロイに焦点を当てています。
 
 ## セットアップ
 
 <Steps>
-  <Step title="インストーラーリポジトリをクローン">
+  <Step title="インストーラーのリポジトリをクローンする">
     ```bash
     git clone https://github.com/kodustech/kodus-installer.git
     cd kodus-installer
     ```
   </Step>
-  <Step title="環境変数ファイルのサンプルをコピー">
+  <Step title="環境ファイルの例をコピーする">
     ```bash
     cp .env.example .env
     ```
   </Step>
-  <Step title="必要な環境変数のセキュアキーを生成">
+  <Step title="必須の環境変数用に安全なキーを生成する">
     ```bash
-    ./generate-keys.sh
+    ./scripts/generate-secrets.sh
     ```
+
+    <Warning>
+      最初のインストールの前に、1 回だけ実行してください。もう一度実行すると、データベースのパスワードや `API_CRYPTO_KEY` を含め、`.env` 内のすべてのシークレットが置き換えられ、既存のデータが使えなくなります。
+    </Warning>
   </Step>
-  <Step title="環境変数ファイルを編集">
-    お好みのテキストエディタで`.env`に値を設定します。
+  <Step title="環境ファイルを編集する">
+    好みのテキストエディターで、`.env` に値を入力します。
     ```bash
     nano .env
     ```
 
-    詳細な手順については、[環境変数の設定](/ja/how_to_deploy/deploy_kodus/generic_vm#環境変数の設定)を参照してください。
+    `IMAGE_TAG=<version>` を追加して、インストールするリリースを固定します。例：`IMAGE_TAG=2.2.11`。指定しない場合、インストーラーは `latest` を使用します。リリースのバージョンは、[kodus-ai のリリースページ](https://github.com/kodustech/kodus-ai/releases)に _Self-Hosted Release_ として掲載されています。
+
+    詳しい手順は [環境変数の設定](/ja/how_to_deploy/deploy_kodus/generic_vm#環境変数の設定) を参照してください。
   </Step>
 
-  <Step title="インストーラーを実行">
+  <Step title="インストーラーを実行する">
     ```bash
+    ./scripts/validate-env.sh
     ./scripts/install.sh
     ```
+
+    `validate-env.sh` は、`.env` をスキーマに照らして検査します。`install.sh` は、必須の変数が設定され、有効な Git の webhook URL が少なくとも 1 つ設定されるまで起動を拒否します。`api` コンテナは、起動時にデータベースのマイグレーションとシードを実行します。
   </Step>
-  <Step title="完了 🎉">
-  完了すると、Kodusサービスがマシン上で実行されます。
-  以下のスクリプトでインストールを確認できます：
+  <Step title="インストールを確認する">
+  インストーラーが終了すると、サービスが実行されています。次のコマンドで確認します。
   ```bash
   ./scripts/doctor.sh
   ```
-  </Step>
-  <Step title="Webインターフェースにアクセス">
-    Webインターフェースに初めてアクセスする際は、以下の設定が必要です：
 
-1. **管理者アカウントの作成** - システムへのフルアクセス権を持つ最初のユーザーになります
-2. **Gitプロバイダーの設定** - 画面の指示に従ってGitHub、GitLab、またはBitbucketを接続します
-3. **リポジトリの選択** - Kodyがレビューするコードリポジトリを選択します
+  最初の行に、レビューが実行されているかどうかが表示されます。その後の各問題には、何が使えなくなるかと、その修正方法が表示されます。`--verbose` を追加すると、すべてのチェックが表示されます。
+  </Step>
+  <Step title="Web インターフェースにアクセスする">
+    初めて Web インターフェースにアクセスしたら、次の操作が必要です。
+
+1. **管理者アカウントを作成する** - システムへのフルアクセス権を持つ、最初のユーザーになります
+2. **LLM プロバイダーを接続する** - Kodus は bring-your-own-key 方式で、モデルがなければレビューは実行されません。サイドバーで **AI providers** を開くか、`.env` でモデルを設定します（[LLM プロバイダーの設定](/ja/how_to_deploy/deploy_kodus/generic_vm#llm-プロバイダーの設定)を参照）
+3. **Git プロバイダーを設定する** - 画面の指示に従って、GitHub、GitLab、Bitbucket、Azure DevOps、Forgejo を接続します
+4. 分析する**リポジトリを選択する** - Kody がレビューするコードリポジトリを選びます
 
 <Info>
-  初期設定プロセスの詳細な手順については、[クイックスタートガイド](/ja/how_to_use/quickstart)を参照してください。
+  初期設定の詳しい手順は、[はじめにガイド](/ja/how_to_use/quickstart)を参照してください。
 </Info>
   </Step>
 </Steps>

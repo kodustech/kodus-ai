@@ -10,6 +10,8 @@ Some conventions are structural: "never call this function here", "always pass t
 
 The example is a checkout service with one convention: **amounts are integer cents handled by the `Money` helper, never floats.**
 
+Custom agents are in beta, on Teams and Enterprise plans and during the trial. Self-hosted Kodus also needs `BETA_FEATURES=true`.
+
 ## Step 1 — Write the rules in the repository
 
 Commit a rule file on your default branch. Kodus reads it from each pull request's target branch, so a pull request can't loosen the rules it is checked against.
@@ -83,7 +85,7 @@ The hint lists the rules it found: `2 rules in rules/money.yml: no-parsefloat-am
 | **Minimum severity** | Team minimum |
 | **Suggested fix** | When confident |
 
-Click **Save**.
+Click **Save settings**.
 
 ## Step 5 — Try it
 
@@ -95,6 +97,8 @@ Run **Try it** on a pull request that adds a `parseFloat` on a price. The findin
 ```
 
 A finding the agent raised from `docs/money.md` quotes the doc instead, and is dropped if the quote isn't in the doc on the target branch.
+
+If **Warnings** says ast-grep is not installed in the sandbox, the agent ran without the rules.
 
 ## Checklist
 

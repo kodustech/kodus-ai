@@ -1,0 +1,35 @@
+---
+title: "Sugerencias"
+description: "Lista las sugerencias que envió Kody, fíltralas y consulta cuáles implementó el equipo."
+---
+
+**Cockpit › Suggestions** lista las sugerencias detrás de un número de [Kodus Review](/es/how_to_use/cockpit/kodus_review). No tiene entrada en la barra lateral: se llega a ella haciendo clic en una barra de categoría (implementación o feedback negativo) o en una fila de Kody Rule en la pestaña Kodus Review. Requiere el mismo plan que el Cockpit.
+
+## Qué lista
+
+Todas las sugerencias que Kody entregó como comentario de PR y que se crearon dentro del rango de fechas del Cockpit, mostrado en la parte superior de la página, 20 por página. A diferencia de los gráficos de Kodus Review, que cuentan los PRs por la fecha en que se cerraron, esta lista se rige por la fecha en que se creó la sugerencia, por lo que también aparecen las sugerencias en pull requests que siguen abiertos. No sigue el selector de repositorio del Cockpit.
+
+La parte superior de la lista muestra cuántas sugerencias coinciden y cuántas de las de la página actual se implementaron.
+
+## Filtros
+
+- **Category**
+- **Severity**: critical, high, medium o low
+- **Status**: **Implemented**, **Partially implemented**, **Not implemented** o **Not measured**
+- **Search**: presiona Enter para buscar coincidencias en el resumen de la sugerencia o en la ruta de su archivo
+- **Rule**: cuando abres la página desde una Kody Rule, un chip con el nombre de la regla limita la lista a esa regla. Haz clic en él para quitar la regla
+
+**Clear all** restablece todos los filtros.
+
+### Status
+
+| Status | Significado |
+| --- | --- |
+| **Implemented** | Un cambio posterior hizo lo que pedía la sugerencia |
+| **Partially implemented** | Un cambio posterior hizo una parte. Cuenta como implementada en las tasas del Cockpit |
+| **Not implemented** | No hay una implementación registrada. Incluye las sugerencias pendientes de verificación, por ejemplo las de pull requests abiertos. |
+| **Not measured** | La verificación se ejecutó y no pudo determinar el resultado. Estas sugerencias se excluyen de las tasas de implementación del Cockpit. |
+
+## Detalles de la sugerencia
+
+Cada fila muestra severidad, resumen, categoría, estado, archivo y número de PR. Haz clic en una fila para abrir un panel lateral con el código existente y el código sugerido. **Open in PR review** abre la [pantalla de revisión](/es/how_to_use/reviews/pull_requests) del pull request en esa sugerencia.

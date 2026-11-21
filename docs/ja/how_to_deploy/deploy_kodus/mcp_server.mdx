@@ -1,0 +1,100 @@
+---
+title: "Kodus MCP サーバー"
+description: "CLI キーで MCP クライアントをセルフホスト版 Kodus に接続し、リポジトリや Pull Request の読み取りと Kody Issues、Kody Rules、メモリの管理を行います。"
+---
+
+MCP サーバーはセルフホスト版の Kodus でのみ利用できます。ワークスペースのリポジトリ、Pull Request、[Kody Issues](/ja/how_to_use/issues/overview)、[Kody Rules](/ja/how_to_use/code_review/configs/kody_rules)、メモリを、MCP クライアント向けのツールとして公開します。
+
+**Plugins** から Kody に外部ツールを接続するには、[MCP Manager](/ja/how_to_deploy/deploy_kodus/mcp_manager) を設定してください。
+
+## オンにする
+
+Docker Compose インストーラーでは、このエンドポイントはデフォルトでオフです。`kodus-installer` ディレクトリの `.env` に次を追加します。
+
+```bash
+API_MCP_SERVER_ENABLED=true
+```
+
+同じディレクトリで `docker compose up -d --no-deps api` を実行して環境変数を反映します。
+
+Helm チャートではこのエンドポイントはデフォルトでオンです。オフにするには values ファイルで `global.config.API_MCP_SERVER_ENABLED` を `"false"` に設定し、`helm upgrade` を実行します。
+
+オフの間、API は `/mcp` を提供しません。ルートは API ホストの `POST /mcp` なので、リバースプロキシで転送する必要があります。[リバースプロキシ](/ja/how_to_deploy/deploy_kodus/reverse_proxy)を参照してください。
+
+## クライアントの接続
+
+自分のインスタンスの API にある `https://<your-api-host>/mcp` に接続します。通信には Streamable HTTP を使用します。
+
+1. **Organization → CLI keys** を開き、キーを生成してコピーします。キーを生成できるのは組織のオーナーのみです。[CLI キー](/ja/how_to_use/organization/organization_settings#cli-キー)を参照してください。
+2. ツールを呼び出すときに、次のいずれかのヘッダーでキーを送信するようクライアントを設定します。
+
+```
+x-team-key: kodus_xxxxx
+Authorization: Bearer kodus_xxxxx
+```
+
+接続を確認するには、`kodus-api.example.com` をお使いの API のホスト名に置き換え、ツールを一覧表示します。この検出リクエストにキーは不要です。
+
+```bash
+curl -X POST https://kodus-api.example.com/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+- キーは 1 つのチームに属します。別のチームの `teamId` 引数は拒否され、`teamId` を省略するとキーから補完されます。
+- ほとんどのツールは `organizationId` 引数を取ります。これは自分の組織の ID である必要があります。それ以外の値は拒否されます。
+- `initialize`、`tools/list`、`ping` はキーなしで動作します。それ以外の呼び出しには有効なキーが必要で、キーがない、無効、または失効している場合は `401` が返されます。
+
+## ツール
+
+### リポジトリと Pull Request
+
+| ツール | 機能 |
+| --- | --- |
+| `KODUS_LIST_REPOSITORIES` | チームのリポジトリを一覧表示します。 |
+| `KODUS_LIST_PULL_REQUESTS` | 状態、リポジトリ、作成者、日付範囲で絞り込んで Pull Request を一覧表示します。メタデータのみを返します。 |
+| `KODUS_LIST_COMMITS` | 作成者、日付範囲、ブランチで絞り込んでコミットを一覧表示します。 |
+| `KODUS_GET_PULL_REQUEST` | 1 件の Pull Request を、説明、コミット、レビュー、変更されたファイルとともに返します。 |
+| `KODUS_GET_REPOSITORY_FILES` | ブランチのファイルパスを、パターンで絞り込んで一覧表示します。 |
+| `KODUS_GET_REPOSITORY_CONTENT` | ブランチ上の 1 つのファイルの内容を返します。 |
+| `KODUS_GET_PULL_REQUEST_FILE_CONTENT` | Pull Request の変更適用後のファイルを返します。 |
+| `KODUS_GET_DIFF_FOR_FILE` | Pull Request 内の 1 つのファイルの diff を返します。 |
+| `KODUS_GET_PULL_REQUEST_DIFF` | Pull Request 全体の diff を返します。 |
+
+### Kody Issues
+
+| ツール | 機能 |
+| --- | --- |
+| `KODUS_CREATE_KODY_ISSUE` | Pull Request の Issue を、その元になった Kody のコメントにリンクして作成します。 |
+| `KODUS_LIST_KODY_ISSUES` | リポジトリ名、重要度、ラベルで絞り込んで Issue を一覧表示します。 |
+| `KODUS_GET_KODY_ISSUE_DETAILS` | 1 件の Issue を返します。 |
+| `KODUS_UPDATE_KODY_ISSUE_STATUS` | ステータスを `open`、`resolved`、`dismissed` のいずれかに設定します。 |
+| `KODUS_UPDATE_KODY_ISSUE_CATEGORY` | Issue のラベルを変更します。 |
+| `KODUS_DELETE_KODY_ISSUE` | Issue を却下します。削除はしません。 |
+
+### Kody Rules とメモリ
+
+| ツール | 機能 |
+| --- | --- |
+| `KODUS_GET_KODY_RULES` | 組織の有効なルールと保留中のルールを一覧表示します。 |
+| `KODUS_GET_KODY_RULES_REPOSITORY` | 1 つのリポジトリの有効なルールと保留中のルールを一覧表示します。 |
+| `KODUS_CREATE_KODY_RULE` | スコープ（**Per file** または **Per PR**）、重要度、任意の例を指定してルールを作成します。 |
+| `KODUS_UPDATE_KODY_RULE` | 既存のルールのうち、送信したフィールドを変更します。 |
+| `KODUS_DELETE_KODY_RULE` | ルールを完全に削除します。 |
+| `KODUS_CREATE_MEMORY` | メモリを保存します。類似のメモリがある場合、Kody はスキップするか、そのメモリを更新します。 |
+| `KODUS_FIND_MEMORIES` | リポジトリ、ディレクトリ、パスの glob、キーワードでメモリを検索します。新しい順に最大 20 件を返します。 |
+
+## ルールとメモリの管理
+
+`KODUS_CREATE_KODY_RULE`、`KODUS_UPDATE_KODY_RULE`、`KODUS_DELETE_KODY_RULE`、`KODUS_CREATE_MEMORY` には、キーの `kodyRules:manage` ケイパビリティが必要です。**Organization → CLI keys** で、キーの **Configure** をクリックし、**Allow Kody Rules management via CLI** をオンにします。オンにしていない場合、これらのツールは、キーに Kody Rules を管理する権限がないというエラー結果（`isError: true`）を返します。その他のツールにはケイパビリティは不要です。
+
+- サーバー経由で作成されたルールには **MCP/Agent** のオリジンが表示され、誰かが承認するまで **Pending review** で待機します。
+- メモリが待機するのは、**Kody knowledge approval** がオンの場合のみです。
+- [集中管理設定](/ja/how_to_use/code_review/configs/centralized_config)が有効な場合、ルールやメモリの作成、変更、削除は、代わりに設定リポジトリに Pull Request を作成します。
+
+## 制限事項
+
+- サポートされるのは `POST` のみです。
+- ステートレスです。サーバーはリクエスト間でセッションを保持せず、`Mcp-Session-Id` も返しません。
+- `POST` へのレスポンス以外で、クライアントに何も送信しません。

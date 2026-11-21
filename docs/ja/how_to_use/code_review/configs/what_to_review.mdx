@@ -1,0 +1,69 @@
+---
+title: "What to review"
+description: "レビューするカテゴリを選択し、カテゴリごとの指示を書き、Kody が他に何をチェックするかを決めます。"
+---
+
+**Code review → What to review** を開きます。このページの設定は、Global、Repository、Directory の各スコープで設定できます。[設定の継承とオーバーライド](/ja/how_to_use/code_review/configs/inheritance_overrides) を参照してください。
+
+## カテゴリ
+
+各カテゴリにはスイッチがあります。4 つすべてがデフォルトでオンです。
+
+| カテゴリ | 対象 |
+| --- | --- |
+| **Bug** | コード内の実際のバグや不具合。 |
+| **Performance** | コードのパフォーマンスと効率。 |
+| **Security** | 脆弱性とコードのセキュリティ。 |
+| **Business Logic** | 実装が、プルリクエストにリンクされたビジネスルール、要件、受け入れ基準を満たしているか。 |
+
+オフにしたカテゴリの検出結果は投稿されません。Kody Rules とカスタムエージェントはカテゴリではないため、スイッチの設定にかかわらず実行されます。
+
+Business Logic には、接続済みのタスクトラッカーが必要です。その行をクリックすると設定が開きます。[Business Logic Validation](/ja/how_to_use/code_review/business_logic_validation) を参照してください。
+
+```yaml
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+```
+
+## カテゴリごとの指示
+
+Bug、Performance、Security の行で **Instructions** をクリックすると、そのカテゴリで Kody が確認する内容を示すエディターが開きます。コードベースに合わせて編集してください。[Instructions & Personality](/ja/how_to_use/code_review/configs/custom_prompts) を参照してください。
+
+## コーディングエージェント向け指示
+
+**Coding-agent instructions**（デフォルトはオフ）をオンにすると、Kody は `CLAUDE.md`、`AGENTS.md`、`.cursor/rules` などのファイルを読み、それらに反する変更を指摘します。[コーディングエージェント向け指示](/ja/how_to_use/code_review/configs/rules_file_detection) を参照してください。
+
+Kody はこれらのファイルを Bug、Security、Performance のレビューを通じて読み込むため、この設定にはそのうち少なくとも 1 つがオンである必要があります。
+
+## Minimum severity to post
+
+Kody は、このレベル以上の検出結果だけを投稿します。**Apply the threshold to Kody Rules** をオンにすると、ルールにも適用されます。[重大度しきい値](/ja/how_to_use/code_review/configs/suggestion_control) を参照してください。
+
+## カスタムエージェント
+
+ワークスペースでカスタムエージェントが有効になっている場合、カテゴリの下に一覧表示されます。[カスタムエージェント](/ja/how_to_use/code_review/custom_agents) を参照してください。
+
+## 決定論的チェック
+
+決定論的チェックは、変更されたファイルに脆弱な依存関係や公開された認証情報がないか確認します。CI の結果も証拠にできます。
+
+<Badge color="yellow" size="sm">ベータ版</Badge>
+
+Cloud では、決定論的チェックへのアクセスがあるワークスペースに表示されます。セルフホスト環境では `BETA_FEATURES=true` を設定してください。各チェックの初期設定はオフです。
+
+- **Vulnerable dependencies** — プルリクエストが追加または更新するパッケージを公開アドバイザリデータベースと照合し、その変更によって導入される脆弱性だけを報告します。ロックファイルは、無視するファイルのリストに含まれていても読み込みます。
+- **Committed credentials** — 変更されたファイルをスキャンし、トークン、キー、秘密鍵を検出します。
+- **Use your CI's results as evidence** — コミットにすでにあるチェックを読み取ります。再実行はしません。GitHub では Kodus アプリが必要です。パーソナルアクセストークンではチェックランを読み取れません。
+
+CI の設定がオンの場合、スキャナーがチェックする内容を CI がすでにカバーしているときは、スキャナーは実行を見送ります。検出結果には **Deterministic** のラベルが付き、プルリクエストが追加した行のみが対象で、重大度しきい値にかかわらず投稿されます。
+
+```yaml
+deterministicEvidence:
+    ciChecks: false
+    tools:
+        secrets: false
+        dependencies: false
+```

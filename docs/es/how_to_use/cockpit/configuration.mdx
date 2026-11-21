@@ -4,33 +4,37 @@ description: "Oculta las pestañas y las métricas individuales de Cockpit que t
 ---
 
 No todos los equipos quieren todas las métricas visibles. Cockpit permite que un Owner desactive
-pestañas enteras o gráficos individuales para **toda la organización** — útil cuando una métrica
+pestañas enteras o gráficos individuales para **toda la organización**, útil cuando una métrica
 es ruidosa para tu flujo, o cuando no quieres números por desarrollador a la vista.
 
-En la barra lateral, abre **Organization → Cockpit visibility** (`/organization/cockpit`). La página se titula
+Solo los Owners pueden cambiar la visibilidad de toda la organización en **Organization → Cockpit visibility**. Consulta los [requisitos de Cockpit](/es/how_to_use/cockpit/overview) para planes y autoalojamiento.
+
+En la barra lateral, abre **Organization → Cockpit visibility**. La página se titula
 **Cockpit Configuration**; haz clic en **Save settings** para aplicar tus cambios.
 
 <Info>
   Este es un ajuste **de la organización**, no una preferencia por usuario. Desactivar una
-  métrica la oculta para todos.
+  métrica la oculta para todos. Solo los Owners pueden cambiarlo.
 </Info>
 
 ## Pestañas
 
-Cockpit tiene dos pestañas de métricas, y cada una puede ocultarse (la pestaña **Issues** junto a ellas
-no se controla aquí):
+Cada una de las tres pestañas de métricas puede ocultarse (las pestañas **Code hotspots** e **Issues**
+junto a ellas no se controlan aquí):
 
 | Pestaña | Qué contiene |
 | --- | --- |
-| **Kodus Review** | Qué tan efectivas son las revisiones de Kodus — tasa de implementación, calibración de severidad, feedback negativo, salud de las Kody Rules. |
-| **Productivity** | Métricas de entrega — frecuencia de despliegue, cycle time, tamaño de PR, actividad del equipo. |
+| **Kodus Review** | Qué tan efectivas son las revisiones de Kodus: tasa de implementación, calibración de severidad, feedback negativo, salud de las Kody Rules. Esta pestaña no tiene toggles por métrica. |
+| **Delivered as asked** | Pull requests verificados contra su tarea: proporción que la cumplió, cambios que no estaban en la tarea y el desglose por autor y equipo. |
+| **Productivity** | Métricas de entrega: frecuencia de despliegue, cycle time, tamaño de PR, actividad del equipo. |
 
 <Warning>
-  **Al menos una pestaña debe permanecer activa.** El formulario rechaza desactivar ambas.
+  **Al menos una pestaña debe permanecer activa.** El formulario rechaza desactivarlas todas.
 </Warning>
 
 Ocultar la pestaña Productivity también oculta todo lo que hay dentro, así que los toggles
-individuales de abajo solo importan mientras esa pestaña esté activa.
+individuales de abajo solo importan mientras esa pestaña esté activa. Cuando **Kodus Review** también
+está oculta, el Cockpit sigue mostrando la pestaña Productivity.
 
 ## Tarjetas de resumen
 
@@ -38,10 +42,10 @@ Las tarjetas en la parte superior de la pestaña Productivity:
 
 | Métrica | Qué muestra |
 | --- | --- |
-| **Deploy Frequency** | Con qué frecuencia el equipo despliega a producción |
-| **PR Cycle Time** | Tiempo desde la creación del PR hasta el merge (percentil 75) |
-| **Bug Ratio** | Porcentaje de PRs que son correcciones de bugs |
-| **PR Size** | Tamaño medio de los pull requests |
+| **Deploy Frequency** | Pull requests cerrados por semana. Consulta [Frecuencia de Despliegue](/es/how_to_use/cockpit/metrics/deploy_frequency) |
+| **PR Cycle Time** | Tiempo desde que se abre el PR hasta que se cierra (percentil 75). Consulta [Tiempo de Ciclo del PR](/es/how_to_use/cockpit/metrics/lead_time_for_changes) |
+| **Bug Ratio** | Porcentaje de PRs cerrados clasificados como correcciones de bugs. Consulta [Proporción de Bugs](/es/how_to_use/cockpit/metrics/change_failure_rate) |
+| **PR Size** | Promedio de líneas modificadas por pull request. Consulta [Tamaño del PR](/es/how_to_use/cockpit/metrics/pr_size) |
 
 ## Gráficos de detalle
 
@@ -49,16 +53,15 @@ Los gráficos debajo de las tarjetas de resumen:
 
 | Gráfico | Qué muestra |
 | --- | --- |
-| **Lead Time Breakdown** | Lead time desglosado por etapa |
-| **PR Cycle Time Chart** | Cycle time a lo largo del período |
-| **PRs Opened vs Closed** | Conteo semanal de abiertos vs cerrados — consulta [PRs Abiertos vs Cerrados](/es/how_to_use/cockpit/metrics/prs_opened_vs_closed) |
-| **PRs Merged by Developer** | PRs mergeados por miembro del equipo |
-| **Team Activity** | Actividad y contribuciones generales del equipo |
+| **Lead Time Breakdown** | Tiempo de codificación, de toma y de revisión por semana. Consulta [Desglose del Lead Time](/es/how_to_use/cockpit/metrics/lead_time_breakdown) |
+| **PR Cycle Time Chart** | Cycle time graficado por semana |
+| **PRs Opened vs Closed** | Conteo semanal de abiertos vs cerrados. Consulta [PRs Abiertos vs Cerrados](/es/how_to_use/cockpit/metrics/prs_opened_vs_closed) |
+| **PRs Merged by Developer** | PRs cerrados por autor por semana. Consulta [PRs por Desarrollador](/es/how_to_use/cockpit/metrics/prs_by_developer) |
+| **Team Activity** | PRs abiertos por desarrollador. Consulta [Actividad del Desarrollador](/es/how_to_use/cockpit/metrics/developer_activity) |
 
 ## Notas
 
-- Las métricas nuevas llegan **visibles por defecto**. Si Kodus añade un gráfico, aparece para
-  todos hasta que alguien lo desactive — tu configuración guardada se fusiona sobre los valores
-  por defecto actuales en lugar de reemplazarlos, así que una config antigua nunca oculta algo nuevo.
+- Una métrica que no has configurado es visible. Tu configuración guardada se fusiona sobre los
+  valores por defecto actuales, así que una config antigua nunca oculta un gráfico que se añadió después.
 - Ocultar una métrica solo afecta a la visualización. Kodus sigue ingiriendo los datos
   subyacentes, así que reactivarla muestra el historial completo, no solo los datos desde ese momento.

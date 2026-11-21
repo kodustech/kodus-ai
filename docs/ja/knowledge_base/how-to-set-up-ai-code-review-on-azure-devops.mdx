@@ -1,31 +1,26 @@
 ---
-title: "Azure DevOpsでAIコードレビューをセットアップする方法"
-description: "Azure DevOpsリポジトリにKodusをインストールして設定し、すべてのプルリクエストで自動AIコードレビューを受けます。"
+title: "Azure DevOps で AI コードレビューをセットアップする方法"
+description: "Azure DevOps を Kodus に接続し、自動レビューの対象となるリポジトリを選びます。"
 ---
 
-KodusはWebhookを通じてAzure DevOpsと統合します。設定されると、すべてのプルリクエストが自動的にレビューされます。
+Kodus は、Personal Access Token で Azure DevOps Services（`dev.azure.com`）に接続し、サービスフックを通じて Pull Request のイベントを受信します。
 
 ## 手順
 
-1. [kodus.io](https://kodus.io)で**アカウントを作成**するか、[Kodusをセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
-2. **Azure DevOpsに接続** — オンボーディングの **Connect your Git tool** ステップで **Azure Repos** タブを開き、**Connect via token** をクリックして、Azure Reposの組織名と個人アクセストークンを入力します（後からサイドバーの **Repositories** から接続することもできます）
-3. **リポジトリを選択** — Kodusがレビューすべきリポジトリを選択します
-4. **Webhook** — 選択を保存すると、Kodusがプルリクエストのサービスフックを自動的に作成します。作成されなかった場合（主にセルフホスト環境）は、[Azure DevOps Webhook](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook) ガイドに従って手動で登録してください
-5. **プルリクエストをオープン** — Kodusが自動的にレビューします
+1. [kodus.io](https://kodus.io) で**アカウントを作成**するか、[Kodus をセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
+2. **Azure DevOps に接続** — オンボーディングの **Connect your Git tool** ステップで **Azure Repos** タブを開き、**Connect via token** をクリックして、Azure Repos の組織名と Personal Access Token を入力します（後からサイドバーの **Repositories** で、**Connect a provider** の下の **Azure Repos** をクリックして接続することもできます）
+3. **リポジトリを選択** — Kodus がレビューする Azure DevOps リポジトリを選択するか、**Repositories** で [Review every repository](/ja/how_to_use/code_review/configs/review_all_repositories) をオンにします
+4. **Webhook** — 選択を保存すると、Kodus が Pull Request のサービスフックを自動的に作成します。そのためには、プロジェクトに対する **Edit subscriptions** 権限が必要です（Project Administrators は持っています）。**Project settings** → **Service hooks** で確認してください。フックの作成に失敗したリポジトリが理由とともに **Repositories** に一覧表示されるのは、**Review every repository** がオンの場合のみです。フックがない場合は、[Azure DevOps の Webhook](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook) ガイドに従って手動で登録します
+5. 選択したリポジトリでプルリクエストを開きます。[Kody が投稿する内容とステータスの確認方法](/ja/how_to_use/code_review/flow)を参照してください。
 
-## 得られるもの
-
-- すべてのPRでの自動レビュー
-- プルリクエスト内に直接投稿されるコメント
-- カスタマイズ可能なルール、レビューカテゴリ、最小重要度のしきい値
-- リンクされた作業項目に対するビジネスロジック検証
+Azure Boards の作業項目を使って PR を検証するには、カスタムプラグインを **Task source** に選びます。[検証設定](/ja/how_to_use/code_review/business_logic_validation)を参照してください。
 
 ## カスタム設定
 
-リポジトリごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。そのリポジトリで **kodus Config File Overrides Web Preferences** がオンになっている場合（**Code review → General**）、ファイルはウェブ設定をオーバーライドします。
+リポジトリごとのレビュー設定は [kodus-config.yml](/ja/how_to_use/code_review/configs/general#kodus-config-yml) でカスタマイズできます。
 
-## 個人アクセストークンの使用
+## Personal Access Token の使用
 
-Azure DevOpsでは、KodusがリポジトリにアクセスしてPRレビューコメントを投稿するためにPATが必要です。トークンにコード読み取りとPRコメントアクセスの適切なスコープがあることを確認してください。
+Kodus がリポジトリにアクセスしてレビューコメントを投稿するには、Azure DevOps の PAT が必要です。[Azure DevOps PAT](/ja/how_to_use/code_review/general_config/azure_devops_pat) ガイドに記載されたスコープで作成してください。**Code: Read & Write** がないと、Kodus はリポジトリを読み取れますが、コメントはできません。
 
-完全なセットアップガイドについては、[Azure DevOps Webhook](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook)と[Azure DevOps PAT](/ja/how_to_use/code_review/general_config/azure_devops_pat)を参照してください。
+完全なセットアップガイドについては、[Azure DevOps の Webhook](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook) と [Azure DevOps PAT](/ja/how_to_use/code_review/general_config/azure_devops_pat) を参照してください。

@@ -1,0 +1,56 @@
+---
+title: "Code hotspots"
+description: "Veja quais diretórios de um repositório mudam com mais frequência e contêm funções longas ou complexas."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="providers" detail="Code hotspots analisa repositórios conectados pelo GitHub ou GitLab.">
+    <Badge icon="code-branch" stroke>GitHub e GitLab</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="cloud" detail="Disponível na Kodus Cloud, incluindo o trial.">
+    <Badge icon="cloud" stroke>Teams e Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requer uma licença Enterprise e BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="O workspace na Kodus Cloud precisa ter acesso a este beta.">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+A aba **Code hotspots** mapeia os diretórios de um repositório pela frequência com que mudam e por haver ou não funções longas ou complexas nos arquivos JavaScript e TypeScript amostrados deles. Correções de bugs vinculadas acrescentam contexto.
+
+Owners e Repo Admins podem abrir a aba com [acesso ao Cockpit](/pt-BR/how_to_use/cockpit/overview).
+
+A aba tem o seu próprio seletor de **Repository**, que começa no repositório selecionado no topo do Cockpit (ou no primeiro repositório quando **All repositories** está selecionado). Os seletores de repositório e de intervalo de datas do topo do Cockpit ficam ocultos aqui, porque a janela de histórico é fixa (veja [Como é calculado](#como-é-calculado)). **Organization → Cockpit visibility** não controla esta aba.
+
+## O mapa
+
+Cada card é um diretório. As colunas dividem os diretórios em **Occasional changes** e **Frequent changes**, onde frequente significa o quarto superior dos diretórios por pull requests alterados. As linhas os dividem conforme uma função amostrada tenha sido sinalizada ou não.
+
+| Grupo | Significado |
+| --- | --- |
+| **Investigate first** | Mudanças frequentes, com funções sinalizadas |
+| **Monitor** | Mudanças ocasionais, com funções sinalizadas |
+| **Watch changes** | Mudanças frequentes, sem funções sinalizadas na amostra |
+| **Less active** | Mudanças ocasionais, sem funções sinalizadas na amostra |
+
+Cada card mostra seus **changed PRs** e, quando houver, seus **linked fixes**. Dentro de um grupo, os diretórios com mais correções vinculadas vêm primeiro. Diretórios com histórico, mas sem amostra de JavaScript ou TypeScript, aparecem em **Structure not measured**, fora do mapa; **Find a directory** filtra essa lista. Quando nenhum arquivo do repositório pôde ser amostrado, o mapa mostra **Function analysis is not available yet**.
+
+Selecione um card para abrir **Area detail**: **Changed PRs**, **JS/TS files checked**, **Linked fix PRs**, por que o diretório aparece, os **Files sampled** com suas funções sinalizadas e **PR and issue evidence**. Cada PR na lista de evidências é marcado como **Linked to a bug issue**, **Bug-fix wording in the title** ou **Changed this area**.
+
+## Como é calculado
+
+- **Histórico:** pull requests mergeados. A primeira varredura cobre os 30 dias anteriores, e novos pull requests mergeados a estendem, até um ano. Quando uma semana tem 100 ou mais pull requests, ou alguns não puderam ser lidos por completo, a aba mostra **Sampled history (up to 100 PRs per week)**.
+- **Atualização:** um job em segundo plano roda a cada duas horas. Até a primeira varredura de um repositório terminar, a aba mostra **History scan in progress**.
+- **Funções:** a Kodus lê até 60 arquivos JavaScript e TypeScript da branch padrão, no máximo três por diretório, os mais alterados primeiro. Ele ignora arquivos com mais de 150.000 caracteres e arquivos com erros de sintaxe. Uma função é sinalizada com 80 ou mais linhas, 12 ou mais ramificações, ou aninhamento de 4 ou mais níveis.
+- **Correções vinculadas:** pull requests que alteraram o diretório e cuja descrição fecha uma issue do mesmo repositório (por exemplo `fixes #123`) com label bug, defect ou regression. Elas acrescentam histórico. Não mostram onde um defeito começou nem preveem bugs futuros.
+
+**How this view is calculated**, na parte inferior da aba, mostra as contagens do repositório selecionado.
+
+## Linha de comando
+
+`kodus cockpit code-areas --repo org/repo` mostra esta aba no terminal. Veja [Comandos da CLI](/pt-BR/how_to_use/cli/commands).

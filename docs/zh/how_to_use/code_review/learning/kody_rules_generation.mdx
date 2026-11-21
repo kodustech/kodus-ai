@@ -1,73 +1,47 @@
 ---
 title: "自动规则生成"
-description: "Kody 可以通过分析团队的代码审查历史自动生成自定义规则。让她从您过去的审查中学习以创建个性化的编码标准。"
+description: "Kody 根据审查者在拉取请求上留下的评论起草 Kody Rules,并每周持续学习。"
 ---
 
-<Warning>
-  **需要代码库上至少 3 个月的 Kody 审查历史。**此功能从 Kody 对您 PR 的过往审查中派生规则,因此刚接入的代码库不会产生有用的建议。如果您刚开始使用 Kody,请在积累几个月真实审查后再回来。
-</Warning>
+Kody 会读取您的团队在代码库拉取请求(无论打开还是已关闭)上撰写的审查评论,找出审查者反复强调的标准,并将其起草为 [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules)。它会考虑您现有的规则,避免重复。
 
-## 快速概述
+- 它从审查者超过 100 个字符的评论中学习。机器人和 Kody 自己的评论会被排除在外。
+- 它按代码库运行。
+- 生成的规则显示 **Kody-generated** 来源,并在您设置路径之前应用于所有文件。
+- 生成的规则立即生效;开启 **Kody knowledge approval** 时,则在 **Pending review** 中等待批准。
 
-- **自动生成**:Kody 分析您的审查历史以创建新规则
-- **数据驱动**:使用 3 个月的审查数据获取智能见解
-- **智能建议**:基于实际团队模式生成规则
-- **可选审批**:生成的规则默认处于激活状态;开启 **Kody knowledge approval** 可在每条规则生效前先进行审查
-- **持续学习**:随着团队发展每周更新规则
+## 开启
 
-<Frame caption="Kody Rules 的 Configuration 面板中的 Generate from past reviews 和 Kody knowledge approval">
-  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
-</Frame>
+1. 在侧边栏中,通过 **Code review** 分组顶部的范围选择器选择 **Global** 或某个代码库,然后打开 **Kody Rules**。
+2. 点击 **Configuration** 打开侧边面板。
+3. 开启 **Generate from past reviews**。
+4. 可选:使用开关下方的审查者选择器(默认为 **Learning from all reviewers**)排除 Kody 不应从其审查评论中学习的开发者。它会列出当前成员和最近的拉取请求作者,应用选择后会显示 **Excluding N reviewers**。
 
-## 工作原理
+该设置遵循通常的层级:**Global** 是所有代码库的默认值,单个代码库可以设置自己的值。它不按目录生效。
 
-### 1. 开启规则生成
+新工作区会在入门引导的 **Kody learns from your past reviews** 步骤中被询问。除非您开启,否则默认关闭,并且该选择保存在 Global 级别。
 
-规则生成按代码库设置:
+## 何时运行
 
-1. 在侧边栏中,通过 **Code review** 分组顶部的范围选择器选择代码库,然后打开 **Kody Rules**
-2. 点击 **Configuration** 打开侧边面板
-3. 开启 **Generate from past reviews**
-4. 可选:使用开关下方的审查者选择器(默认为 **Learning from all reviewers**)排除 Kody 不应从其审查评论中学习的开发者
+- **代码库首次运行:** Kody 读取最近 **3 个月**的审查评论。在代码库级别开启开关会立即开始,可能需要几分钟。在 Global 级别开启时,此刻不会启动任何任务:遵循它的代码库会在下一次每周运行时被处理。只有当代码库还没有生成的规则时,才会进行这次首轮处理。
+- **之后:** 每周一次,Kody 读取最近一周的评论。默认计划为圣保罗时间(`America/Sao_Paulo`)周六 00:00;自托管实例可以通过 `API_CRON_KODY_LEARNING` 更改。
 
-### 2. 分析过程
+没有最低历史数据量要求。如果代码库在该时间窗口内没有审查者评论,则不会生成规则。
 
-当您首次为某个代码库开启 **Generate from past reviews** 时,Kody 将:
+创建新规则时,Kody 会通知您的团队并附上规则标题。
 
-- **扫描审查历史**:分析代码库中最近 3 个月已关闭的 PR
-- **识别模式**:发现常见的反馈主题和编码偏好
-- **提取标准**:将审查模式转换为可操作的规则
-- **生成规则**:创建针对团队风格定制的自定义规则
+## 模型要求
 
-这可能需要几分钟。生成的规则随后会出现在该代码库的 **Kody Rules** 页面上。
+在云端,试用期之外,生成使用您自己的模型密钥,因此必须配置 **BYOK**;没有它则不会生成任何内容。试用期间由 Kodus 提供模型。自托管实例使用为该部署配置的模型。参见 [BYOK](/zh/how_to_use/byok)。
 
-### 3. 审查生成的规则
+## 审查 Kody 生成的内容
 
-生成的规则以 **Kody-generated** 来源列出(使用 **Filters → Origin → Kody-generated** 仅查看这些规则)。打开其中任意一条,即可像其他规则一样编辑、暂停或删除它。
+生成的规则以 **Kody-generated** 来源列出。使用 **Filters → Origin → Kody-generated** 仅查看这些规则。打开其中任意一条,即可像其他规则一样编辑、暂停或删除它。
 
-### 4. 在规则生效前进行审批
+要在规则生效前进行审批,请在同一个 **Configuration** 面板中开启 **Kody knowledge approval**。新生成的规则随后会进入页面顶部的 **Pending review**,您可以对符合团队需求的规则点击 **Approve**,其余的点击 **Discard**。只有已批准的规则才会被执行。参见[审批](/zh/how_to_use/code_review/configs/kody_rules#批准)。
 
 <Warning>
-  默认情况下,生成的规则**一经创建即处于激活状态**,并会在下一次代码审查中执行。
+  没有审批时,生成的规则一经创建即处于激活状态,并会在下一次代码审查中执行。
 </Warning>
 
-要在生成的规则生效前对其进行审查,请在同一个 **Configuration** 面板中开启 **Kody knowledge approval**。开启审批后:
-
-- **待审查**:新生成的规则会进入 Kody Rules 页面顶部的 **Pending review** 区域,而不会被执行
-- **选择性选择**:对符合团队需求的规则点击 **Approve**,其余的点击 **Discard**
-- **激活**:只有已批准的规则才会在代码审查期间执行
-
-## 持续学习
-
-初始设置后,Kody 维护持续的学习循环:
-
-- **每周更新**:Kody 每周生成新的规则建议
-- **演变标准**:规则建议随着团队的编码风格演变而调整
-- **精确度提高**:建议随着时间的推移变得更加精确
-- **定期审查**:每周出现新规则(开启审批时出现在 **Pending review** 中)
-
-## 要求
-
-- **最少数据**:代码库中至少 3 个月的审查历史
-- **活跃审查**:定期代码审查活动以更好地检测模式
-- **代码库访问**:修改代码库规则的适当权限
+如果某条规则被开发者持续忽略或点踩,它可以被自动暂停;参见 [Pause ignored and noisy rules](/zh/how_to_use/code_review/configs/kody_rules#pause-ignored-and-noisy-rules)。

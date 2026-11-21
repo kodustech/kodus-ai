@@ -1,0 +1,56 @@
+---
+title: "Code hotspots"
+description: "リポジトリ内で変更が最も頻繁で、長い関数や複雑な関数を含むディレクトリを確認します。"
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="providers" detail="Code hotspots は GitHub または GitLab で接続したリポジトリを分析します。">
+    <Badge icon="code-branch" stroke>GitHub・GitLab</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="cloud" detail="Kodus Cloud で利用できます。トライアルも対象です。">
+    <Badge icon="cloud" stroke>Teams・Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Enterprise ライセンスと BETA_FEATURES=true が必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="Kodus Cloud のワークスペースでは、このベータ機能へのアクセスが必要です。">
+    <Badge icon="flask" color="orange" stroke>ベータ版</Badge>
+  </FeatureBadge>
+</div>
+
+**Code hotspots** タブは、1 つのリポジトリのディレクトリを、変更の頻度と、そこからサンプリングした JavaScript / TypeScript ファイルに長い関数や複雑な関数が含まれているかどうかで整理して表示します。リンクされたバグ修正が文脈を補足します。
+
+[Cockpit にアクセスできる](/ja/how_to_use/cockpit/overview) Owner と Repo Admin が、このタブを開けます。
+
+このタブには専用の **Repository** ピッカーがあり、Cockpit 上部で選択されているリポジトリ（**All repositories** が選択されている場合は最初のリポジトリ）から始まります。履歴の期間が固定されているため、Cockpit 上部のリポジトリピッカーと日付範囲ピッカーはここでは非表示になります（[計算方法](#計算方法)を参照）。**Organization → Cockpit visibility** では、このタブの表示は制御されません。
+
+## マップ
+
+各カードは 1 つのディレクトリです。列はディレクトリを **Occasional changes** と **Frequent changes** に分けます。frequent は、変更されたプルリクエスト数が上位 4 分の 1 に入るディレクトリを指します。行は、サンプリングした関数にフラグが立っているかどうかで分けます。
+
+| グループ | 意味 |
+| --- | --- |
+| **Investigate first** | 変更が頻繁で、フラグが立った関数がある |
+| **Monitor** | 変更が時々で、フラグが立った関数がある |
+| **Watch changes** | 変更が頻繁で、サンプル内にフラグが立った関数がない |
+| **Less active** | 変更が時々で、サンプル内にフラグが立った関数がない |
+
+各カードには **changed PRs** と、ある場合は **linked fixes** が表示されます。グループ内では、リンクされた修正が多いディレクトリが先に表示されます。履歴はあるものの JavaScript / TypeScript のサンプルがないディレクトリは、マップの外にある **Structure not measured** に一覧表示されます。**Find a directory** でこの一覧を絞り込めます。リポジトリ内にサンプリングできるファイルがない場合は、マップの代わりに **Function analysis is not available yet** が表示されます。
+
+カードを選択すると **Area detail** が開き、**Changed PRs**、**JS/TS files checked**、**Linked fix PRs**、そのディレクトリが表示されている理由、フラグが立った関数を含む **Files sampled**、**PR and issue evidence** が表示されます。evidence の一覧にある各 PR には、**Linked to a bug issue**、**Bug-fix wording in the title**、**Changed this area** のいずれかが付きます。
+
+## 計算方法
+
+- **履歴：** マージされたプルリクエスト。最初のスキャンは直近 30 日間が対象で、新しくマージされたプルリクエストによって最大 1 年まで延長されます。1 週間のプルリクエストが 100 件以上ある場合、または一部を完全には読み取れなかった場合、このタブには **Sampled history (up to 100 PRs per week)** と表示されます。
+- **更新：** バックグラウンドジョブが 2 時間ごとに実行されます。リポジトリの最初のスキャンが完了するまで、このタブには **History scan in progress** と表示されます。
+- **関数：** Kodus はデフォルトブランチから最大 60 個の JavaScript / TypeScript ファイルを読み取ります。ディレクトリごとに最大 3 個で、変更が多いものが優先されます。150,000 文字を超えるファイルと、構文エラーのあるファイルはスキップします。関数は、80 行以上、分岐 12 個以上、またはネスト 4 以上のいずれかでフラグが立ちます。
+- **リンクされた修正：** そのディレクトリを変更し、説明文が同じリポジトリの issue（例：`fixes #123`）をクローズするプルリクエストのうち、その issue に bug、defect、regression のラベルが付いているもの。履歴を補足するものであり、不具合がどこで始まったかを示したり、将来のバグを予測したりするものではありません。
+
+タブ下部の **How this view is calculated** には、選択したリポジトリの件数が表示されます。
+
+## コマンドライン
+
+`kodus cockpit code-areas --repo org/repo` で、このタブの内容をターミナルに表示できます。[CLI コマンド](/ja/how_to_use/cli/commands)を参照してください。

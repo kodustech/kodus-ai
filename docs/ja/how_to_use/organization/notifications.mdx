@@ -1,0 +1,48 @@
+---
+title: "通知"
+description: "ロールごとに、どのイベントを組織に通知するか、メールまたはアプリ内で選択します。"
+---
+
+Kodus は、レビューの失敗、支払いの問題、新しい Kody Rules のバッチなどのイベントについて、メールとアプリ内で通知します。**Organization → Notifications** では、ロールごとに、どのイベントがどのチャネルを使うかを設定します。開けるのはオーナーだけです。
+
+## 通知センター
+
+サイドバー下部のベルには、未読の件数が表示され、クリックすると通知センターが開きます。**Mark all as read** はすべてのエントリを既読にし、参照先のページがあるエントリはそのページにリンクします。
+
+重大なイベントは、通知が未読の間、アプリ上部のバナーとしても表示されます。
+
+## 通知設定
+
+ページのタイトルは **Notification settings** です。対象ごとに 1 つのタブがあります。**All Roles**、**Owner**、**Billing Manager**、**Repo Admin**、**Contributor** です。各タブにはイベントがカテゴリ別に一覧表示され、チャネルごとに **Email** と **In-App** のスイッチと、イベントの種類を示すバッジ（**Critical**、**Transactional**、**Informational**）があります。**Save settings** で保存します。
+
+- **All Roles** は、すべてのロールが従うベースラインです。
+- ロールのタブでスイッチを変更すると、そのロールに限りベースラインが上書きされます。イベントには **Overridden** と表示され、元に戻すアイコン（**Revert to All Roles config**）でベースラインに戻せます。
+- 各イベントには、組み込みの受信者があります（表を参照）。ルールを保存するまでは、特定のロールに送られるイベントでは、他のロールのチャネルはオフと表示されます。
+
+メール確認、パスワードのリセット、招待、SSO ドメイン検証など、アカウントを機能させるためのイベントは常に送信され、このページには表示されません。
+
+### イベント
+
+| カテゴリ | イベント | 種類 | 初期状態 | 組み込みの受信者 |
+| --- | --- | --- | --- | --- |
+| **Team** | Member Removed | Transactional | Email、In-App | 削除された本人（メール）、オーナー（アプリ内） |
+| | Role Changed | Informational | Email、In-App | オーナー |
+| **Kody Rules** | Kody Rules Generated | Informational | Email、In-App | すべてのアクティブなメンバー |
+| | IDE Rules Synced | Informational | Email、In-App | 同期を開始した人 |
+| | IDE Rule Sync Failed | Transactional | Email、In-App | 同期を開始した人、オーナー |
+| | Rule File References Invalid | Transactional | Email、In-App | IDE 同期の後は同期を開始した人、それ以外はルールを作成した人。どちらも不明な場合はオーナー |
+| | Kody Rules Paused Automatically | Informational | In-App | オーナー |
+| | Weekly Digest of Paused Kody Rules | Informational | Email | オーナー |
+| **Cockpit** | Repo Report | Informational | Email | Repo Admin |
+| | Org Report | Informational | Email | オーナー |
+| **Billing** | Payment Failed | Critical | Email、In-App | オーナーと Billing Manager |
+| | Trial Expiring | Transactional | Email、In-App | オーナーと Billing Manager |
+| **Code Review** | Pull Request Auto-Approved | Informational | Email、In-App | PR の作成者（Kodus のメンバーである場合） |
+| | Code Review Failed | Transactional | Email、In-App | PR の作成者（Kodus のメンバーである場合）、オーナー |
+| | Review Skipped (No License) | Informational | Email、In-App | PR の作成者。作成者が Kodus のメンバーでない場合はオーナー |
+| | Business Logic Task Source Unavailable | Transactional | In-App | オーナー |
+| **BYOK** | BYOK LLM Errors Exceeded Threshold | Critical | Email、In-App | オーナー |
+| **Spend Limit** | Monthly Spend Limit Threshold Reached | Informational | Email、In-App | オーナー |
+| | Monthly Spend Limit Exceeded | Critical | Email、In-App | オーナー |
+
+Billing イベントと Cockpit のレポートはクラウドに適用されます。レポートについては、[メールレポート](/ja/how_to_use/cockpit/overview#メールレポート) を参照してください。

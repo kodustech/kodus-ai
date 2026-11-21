@@ -1,0 +1,69 @@
+---
+title: "审查内容"
+description: "选择审查类别,为每个类别编写说明,并决定 Kody 还需要检查什么。"
+---
+
+打开 **Code review → What to review**。此页面上的设置可以在全局、代码库和目录范围设置。请参阅[配置继承与覆盖](/zh/how_to_use/code_review/configs/inheritance_overrides)。
+
+## 类别
+
+每个类别都有一个开关。四个类别默认全部开启。
+
+| 类别 | 涵盖内容 |
+| --- | --- |
+| **Bug** | 代码中实际存在的 bug 和缺陷。 |
+| **Performance** | 代码性能和效率。 |
+| **Security** | 漏洞和代码安全。 |
+| **Business Logic** | 实现是否满足拉取请求中关联的业务规则、需求和验收标准。 |
+
+已关闭类别中的发现不会被发布。Kody Rules 和自定义智能体不是类别;无论开关如何设置,它们都会运行。
+
+Business Logic 需要已连接的任务跟踪器。点击其所在行即可打开其设置。请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。
+
+```yaml
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+```
+
+## 每个类别的说明
+
+在 Bug、Performance 和 Security 所在行,**Instructions** 会打开一个编辑器,显示 Kody 在该类别中查找的内容。请根据你的代码库进行编辑。请参阅[说明与个性](/zh/how_to_use/code_review/configs/custom_prompts)。
+
+## 编码代理指令
+
+**Coding-agent instructions**(默认关闭)让 Kody 读取 `CLAUDE.md`、`AGENTS.md` 和 `.cursor/rules` 等文件,并指出违反这些文件的更改。请参阅[编码代理指令](/zh/how_to_use/code_review/configs/rules_file_detection)。
+
+Kody 通过 Bug、Security 和 Performance 审查读取这些文件,因此该设置需要至少开启其中一项。
+
+## Minimum severity to post
+
+Kody 只会发布达到或高于此级别的发现。**Apply the threshold to Kody Rules** 会将其扩展到你的规则。请参阅[严重性阈值](/zh/how_to_use/code_review/configs/suggestion_control)。
+
+## 自定义智能体
+
+当你的工作区启用了自定义智能体时,它们会列在各类别之下。请参阅[自定义智能体](/zh/how_to_use/code_review/custom_agents)。
+
+## 确定性检查
+
+确定性检查会扫描变更的文件，查找存在漏洞的依赖项和暴露的凭据，也可以使用 CI 结果作为证据。
+
+<Badge color="yellow" size="sm">Beta</Badge>
+
+Cloud 工作区开通确定性检查后会显示此部分。自托管需设置 `BETA_FEATURES=true`。各项检查默认关闭。
+
+- **Vulnerable dependencies** —— 对照公开的漏洞公告数据库,检查拉取请求新增或升级的软件包,并且只报告该更改引入的漏洞。即使锁文件在忽略文件列表中,它也会读取锁文件。
+- **Committed credentials** —— 扫描已更改的文件中的令牌、密钥和私钥。
+- **Use your CI's results as evidence** —— 读取提交上已有的检查。不会重新运行任何内容。在 GitHub 上,这需要 Kodus 应用:个人访问令牌无法读取 check run。
+
+开启 CI 设置后,当你的 CI 已经覆盖了某个扫描器所检查的内容时,该扫描器会退让。发现会标记为 **Deterministic**,只覆盖拉取请求新增的行,并且无论严重性阈值如何都会发布。
+
+```yaml
+deterministicEvidence:
+    ciChecks: false
+    tools:
+        secrets: false
+        dependencies: false
+```

@@ -1,158 +1,127 @@
 ---
 title: "Flujo de Revisión de Código"
-description: "Cómo se ejecuta una revisión de Kody de principio a fin: cuándo se dispara, cuándo se omite, qué recibes y qué significa cada emoji de estado."
+description: "Cómo se ejecuta una revisión de Kody de principio a fin: qué la inicia, cuándo se omite, qué recibes y qué significa cada estado."
 ---
 
-## Descripción General
+Para revisar ahora un PR en un repositorio conectado, empieza un comentario en el PR con `@kody review`. Si la revisión no apareció, [comprueba el motivo](#cuándo-omite-kody).
 
-Kody revisa tus PRs automáticamente o bajo demanda, agrega sugerencias claras y ayuda a tu equipo a decidir cuándo hacer el merge. A continuación se muestra la vista simple orientada al usuario sobre cómo funciona.
+## Qué recibes
 
-Referencia: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Code-Review-Flow?node-id=4-274" target="_blank">Tablero en Figma</a>
+- Comentarios en línea con una sugerencia concreta.
+- Un resumen del PR, si está activado.
+- Opcionalmente, una aprobación o una solicitud de cambios. Consulta [Política de Revisión](/es/how_to_use/code_review/policy).
+- En GitHub (instalado como GitHub App) y Forgejo, un check **Kody Code Review** en el commit head del PR: completo, completado con advertencias, fallido u omitido. Informa si la revisión se ejecutó, no si el PR tiene hallazgos.
+- Una reacción en el PR que muestra el estado de la revisión.
 
-## Cuándo Ejecuta Kody
+## Qué inicia una revisión
 
-- PR abierto
-- Nuevo commit subido al PR (dependiendo de la cadencia)
-- Activación manual vía comentario: `@kody start-review`
+**Automáticamente**, cuando se abre un pull request, cuando se envían nuevos commits o cuando un borrador se marca como listo para revisión (en todos los proveedores excepto Forgejo). Kody revisa los borradores a menos que **Review draft pull requests** esté desactivado.
 
-## Cuándo Omite Kody
+### Comandos en comentarios del PR
 
-- Sin nuevos commits desde la última ejecución
-- Solo commits de merge sin cambios efectivos
-- Todos los archivos modificados son ignorados por los patrones configurados
-- El PR supera el límite de archivos configurado
-- Configuración inválida o faltante
+**Bajo demanda**, con un comentario en el PR. El comando debe iniciar el comentario:
 
-<Note>
-  Para anular una omisión y forzar un nuevo análisis — por ejemplo tras "sin nuevos commits" — comenta `@kody review --force`.
-</Note>
+| Comando | Qué hace |
+| --- | --- |
+| `@kody start-review` o `@kody review` | Revisa los commits desde la última revisión (todo el PR en una primera revisión). Reanuda un PR en pausa. |
+| `@kody review --force` | Vuelve a revisar todo el PR, incluso sin nuevos commits. |
+| `@kody review --heavy` o `--balanced` | Elige el modo de revisión para esta ejecución. Consulta [Routing](/es/how_to_use/code_review/configs/routing). |
+| `@kody review focus on the auth logic` | Dirige la revisión. Consulta [Dirigir una Revisión](/es/how_to_use/code_review/review_directive). |
+| `@kody -v <agent>` | Ejecuta un [agente personalizado](/es/how_to_use/code_review/custom_agents) sobre todo el PR. |
+| `@kody -v business-logic` | Comprueba el PR contra su tarea. Consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation). |
+| `@kody <question>` | Inicia una conversación sobre el PR o una sugerencia. |
 
-## Qué Hace Kody
+Un comando de revisión ignora **Automated code review**, **Review Cadence**, **Ignore title keywords**, **Base Branches** y **Review draft pull requests**. Las licencias, los autores ignorados y los archivos ignorados siguen aplicándose.
 
-- Resuelve qué configuración aplica (global → repo → directorio) y la valida
-- Recopila los diffs y el contexto relevantes para este PR
-- Ejecuta verificaciones a nivel de PR (p. ej., reglas personalizadas y análisis entre archivos cuando está habilitado)
-- Revisa los archivos modificados con foco en el diff
-- Filtra y prioriza sugerencias para reducir el ruido (relevancia, severidad, deduplicación, salvaguardas)
-- Publica comentarios en línea y, cuando corresponda, un resumen a nivel de PR
-- Opcionalmente aprueba o solicita cambios si esas políticas están habilitadas
-- Recuerda el último commit analizado para mantener los seguimientos incrementales
+Si ya hay una revisión en curso en el PR, un comando espera y se ejecuta cuando termina la revisión actual. Un push que llega mientras tanto no inicia una segunda revisión: comenta `@kody review` para revisarlo.
 
-## Qué Recibes
+En GitHub, cuando Kody revisa como una cuenta de usuario (un personal access token), **Re-request review** sobre Kody funciona como `@kody start-review` en un PR que ya revisó.
 
-- Comentarios en línea con sugerencias concretas
-- Resumen opcional a nivel de PR con aspectos destacados
-- Estado opcional: aprobado o cambios solicitados (si está habilitado)
+## Reacciones de estado
 
-## Reacciones de Estado
-
-Kody usa reacciones con emojis para mostrar el estado en vivo de tu revisión de código directamente en tu proveedor de Git. Sin necesidad de adivinar si está trabajando, terminó o tuvo un problema. Siempre reemplaza el emoji anterior con el estado más reciente (por ejemplo: 🚀 → 🎉, 👀, 👎 o 😕).
+Kody muestra el estado de una revisión como una reacción en tu proveedor de Git y reemplaza la anterior por la más reciente (por ejemplo 🚀 y luego 🎉).
 
 <Note>
-  **Las reacciones nativas** funcionan en GitHub, GitLab y Forgejo.
+  Las **reacciones nativas** funcionan en GitHub, GitLab y Forgejo.
 
-  Azure DevOps y Bitbucket no tienen API de reacciones, así que Kody publica el emoji de estado
-  como **comentario** — ahí verás 👀 (omitido), 😕 (error) y 👎 (sin licencia), pero no el par
-  de progreso 🚀 / 🎉.
+  Azure DevOps y Bitbucket no tienen API de reacciones, así que Kody publica el emoji de estado como **comentario**: 👀 (omitido), 😕 (error) y 👎 (sin licencia), pero no el par 🚀 y 🎉.
 </Note>
 
 ### Qué significa cada emoji
 
-- 🚀 Procesando — Kody está trabajando en tu código:
-  - Analizando archivos
-  - Verificando reglas y políticas
-  - Generando sugerencias
-- 🎉 Completado — Revisión finalizada:
-  - Todos los comentarios publicados
-  - Análisis completo
-  - Puedes revisar las sugerencias
-- 👀 Omitido — La revisión fue omitida. Razones comunes incluyen:
-  - Sin nuevos commits desde la última ejecución
-  - Solo commits de merge detectados
-  - El PR/MR supera el límite de archivos configurado
-  - Sin archivos relevantes para revisar (patrones ignorados)
-  - Rama no configurada para revisión
-  - PR/MR en modo borrador (si está configurado para omitir borradores)
-- 👎 Sin licencia — El usuario no tiene licencia:
-  - Kody no puede ejecutarse sin una licencia válida
-  - Asegúrate de que el usuario que abrió el PR/MR tenga una licencia asignada
-  - Opcionalmente, habilita [Asignación Automática de Licencia](/es/how_to_use/auto_license_assignment) para asignar licencias automáticamente
-- 😕 Error — Algo salió mal:
-  - Problema técnico temporal durante la revisión
-  - Inténtalo de nuevo; únete a nuestra [comunidad de Discord](https://discord.gg/TFZBRk9fT6) si persiste
+- 🚀 Procesando: Kody está trabajando en la revisión.
+- 🎉 Completado: la revisión terminó y los comentarios están publicados.
+- 👀 Omitido: la revisión no se ejecutó. Consulta [Cuándo omite Kody](#cuándo-omite-kody).
+- 👎 Sin licencia: el autor del PR no tiene licencia. GitLab muestra un candado (🔒) en su lugar.
+- 😕 Error: la revisión falló. Vuelve a ejecutarla con `@kody start-review`. Si sigue fallando, consulta [Solución de Problemas](/es/how_to_use/code_review/troubleshooting) o pregunta en [Discord](https://discord.gg/TFZBRk9fT6).
 
 ### Dónde aparecen las reacciones
 
-- Revisión automática (PR abierto o nuevo commit): reacción en la descripción del PR/MR (parte superior del hilo)
-- Revisión manual (comentario `@kody start-review`): reacción en tu comentario donde invocaste a Kody
+- Revisión automática: en la descripción del PR.
+- Comando de revisión: en tu comentario.
 
-### Escenarios de ejemplo
+### Desactivar el feedback de omisión y de bloqueo
 
-- Nuevo PR (automático): 🚀 mientras ejecuta → 🎉 cuando termina
-- Comando manual: 🚀 en tu comentario → 🎉 cuando termina
-- Sin cambios desde la última ejecución: reacción 👀
-- Usuario sin licencia: reacción 👎
-- Problema temporal: reacción 😕
+**Code review → General → Review feedback → Show status feedback** controla las reacciones 👀 y 👎 y los comentarios de suscripción. Con él desactivado, Kody sigue mostrando 🚀, 🎉 y 😕. Con **Automated code review** desactivado, Kody no reacciona a los PRs que omite.
 
-### Preguntas Frecuentes
+## Cuándo omite Kody
 
-**No veo reacciones**
+A menos que el feedback de estado esté desactivado, Kody muestra 👀 en una revisión omitida. En cualquier caso registra el motivo. El motivo aparece en el check **Kody Code Review** (GitHub App y Forgejo). Los PRs bloqueados por la configuración (licencia, cadencia manual o en pausa, autor ignorado) aparecen en la página **Pull Requests** bajo **Kody skipped**.
 
-- GitHub / GitLab / Forgejo: ✅ reacciones nativas
-- Azure DevOps / Bitbucket: ❌ sin API de reacciones — busca el emoji de estado publicado como comentario
+| Motivo | Por qué | Qué hacer |
+| --- | --- | --- |
+| Automated Review is disabled | **Automated code review** está desactivado. | Actívalo, o comenta `@kody start-review`. |
+| Title Ignored | El título contiene una entrada de **Ignore title keywords**. | Quita la palabra clave, o comenta `@kody start-review`. |
+| Draft PR Skipped | **Review draft pull requests** está desactivado. | Marca el PR como listo, o activa el ajuste. |
+| Branch Mismatch | La rama de destino no es la rama por defecto ni está en **Base Branches**. | Agrega la rama a **Base Branches**. |
+| PR is Closed, PR is Locked | Las revisiones automáticas omiten los PRs cerrados y fusionados, y `@kody review --force` también. Un `@kody review` simple revisa un PR cerrado o fusionado. Los PRs bloqueados no se revisan. | Reabre o desbloquea el PR, o comenta `@kody review` en uno cerrado. |
+| No New Commits | Los últimos commits ya se revisaron. | Comenta `@kody review --force`. |
+| Only Merge Commits | Los nuevos commits solo fusionan otra rama. | Envía un cambio de código, o comenta `@kody review --force`. |
+| Rebase Without Changes | Un rebase no cambió nada en el código ya revisado. | Comenta `@kody review --force`. |
+| No Files Changed, No changed files in this pull request, All Files Ignored | Ningún archivo modificado puede revisarse en esta ejecución. Los archivos eliminados quedan excluidos. Los archivos ignorados solo entran cuando un agente personalizado de esta ejecución los incluye explícitamente. Una revisión solicitada en un PR sin commits desde la última revisión también puede terminar aquí. | Revisa **Ignored files**, o comenta `@kody review --force` para revisar todo el PR. |
+| Too Many Files | Hay más de 2.000 archivos revisables entre la revisión principal y los agentes personalizados. | Divide el PR. |
+| Changes Unreadable, Provider Rate Limited | El proveedor de Git no devolvió el diff completo, o limitó la solicitud. | Vuelve a ejecutar la revisión más tarde. |
+| User is ignored by configuration | El autor del PR está excluido por **Repositories → PR author filters**. | Consulta [Asignación Automática de Licencia](/es/how_to_use/auto_license_assignment#filtros-de-autor-de-pr). |
+| Code reviews are disabled for the centralized config repository, or for the global Kody Rules source repository | Kody no revisa el repositorio que contiene tus ajustes o reglas compartidos. | Revisa un repositorio distinto. |
+| User Not Licensed | El autor del PR no tiene licencia. | Asigna una licencia o activa la [Asignación Automática de Licencia](/es/how_to_use/auto_license_assignment). |
+| No Active Subscription, Plan Limit Exceeded, Trial Reviews Used Up, BYOK Configuration Required, Subscription Check Unavailable | La organización no puede ejecutar revisiones en este momento. Kody también comenta en el PR, a menos que **Show status feedback** esté desactivado. | Sigue el comentario. Consulta [Límites y Precios](/es/how_to_use/pricing). |
+| PR is paused, Manual mode requires @kody start-review | **Review Cadence** es Auto-pause o Manual. | Comenta `@kody start-review`. |
 
-**¿Por qué cambió el emoji?**
+<Note>
+  `--force` vuelve a ejecutar una revisión que se omitió por estar ya revisada. No anula una omisión por licencia, plan o límite de archivos, ni un PR cerrado o fusionado.
+</Note>
 
-- Normal — Kody reemplaza el estado anterior (🚀 → 🎉/👀/😕)
+## Ajustes relevantes
 
-**Vi 👀 pero quería una revisión**
+- [Cambia cuándo revisa Kody](/es/how_to_use/code_review/configs/general). Configura la revisión automática, la cadencia, los borradores, las ramas base y los archivos ignorados.
+- [Cambia qué reporta Kody](/es/how_to_use/code_review/configs/what_to_review). Elige las categorías y la gravedad mínima.
+- [Elige la profundidad y los modelos](/es/how_to_use/code_review/configs/routing). Selecciona Balanced o Heavy y consulta los modelos en uso.
+- [Controla las aprobaciones](/es/how_to_use/code_review/policy). Decide cuándo Kody solicita cambios o aprueba un PR con una revisión limpia.
+- [Soluciona problemas de revisión](/es/how_to_use/code_review/troubleshooting). Descubre por qué no se ejecutó una revisión o por qué el resultado fue distinto.
 
-- Probablemente omitido: sin nuevos commits, solo merge, archivos ignorados o límite de archivos
-- Solución: comenta `@kody review --force` — un `start-review` simple volverá a omitirse si no hay commits nuevos
+## Cadencia de revisión
 
-**Vi 👎**
+**Code review → General → Automated code review** activa o desactiva las revisiones automáticas. **Review Cadence** decide qué ocurre con los pushes posteriores a la primera revisión:
 
-- El usuario que abrió el PR/MR no tiene licencia
-- Solución: asigna una licencia o habilita [Asignación Automática de Licencia](/es/how_to_use/auto_license_assignment)
+- **Automatic:** se revisa cada push.
+- **Auto-pause:** Kody cuenta las revisiones que terminó en el PR dentro de la **Time window (minutes)**. Cuando el conteo llega a **Pushes to trigger pause** (por defecto 3 en 15 minutos), el siguiente push pausa el PR y Kody comenta "Auto-paused – comment @kody start-review when you're ready." Los pushes se omiten hasta que alguien comente `@kody start-review`.
+- **Manual:** la primera revisión se ejecuta al abrir el PR. Los pushes posteriores se omiten hasta que alguien comente `@kody start-review`.
 
-**Vi 😕**
+## Qué hace Kody
 
-- Reintenta con `@kody start-review`. Si persiste, consulta [Solución de Problemas](/es/how_to_use/code_review/troubleshooting) o [Discord](https://discord.gg/TFZBRk9fT6)
+1. Comprueba que el PR se pueda revisar: licencia, filtros, cadencia y nuevos commits.
+2. Resuelve los ajustes que aplican (global, repositorio, directorio) y los valida.
+3. Cuando la [evaluación de riesgo](/es/how_to_use/code_review/configs/risk) está activada, evalúa el PR y elige el modo de revisión.
+4. Carga los archivos modificados y el contexto, omitiendo los archivos ignorados.
+5. Publica el comentario de apertura, si está activado en **What Kody writes**.
+6. Comprueba el PR contra su tarea, si el PR referencia una y **Business Logic** está activado.
+7. Revisa los cambios: encuentra problemas, aplica las Kody Rules y los agentes personalizados, verifica cada hallazgo, elimina duplicados y aplica el **Minimum severity to post**.
+8. Publica los comentarios en línea, los comentarios a nivel de PR y el resumen.
+9. Aprueba el PR o solicita cambios, si está activado.
 
-## Configuraciones Relevantes
-
-- Revisiones automatizadas vs manuales y cadencia de seguimiento (**Code review → General**)
-- Archivos ignorados y ramas base en el alcance (**Code review → General**)
-- Reglas personalizadas y análisis entre archivos
-- Umbral de severidad (antes filtros de revisión): **Minimum severity to post** y si se aplica a las Kody Rules (**Code review → What to review**)
-- Límites de archivos y tiempos de espera
-
-<CardGroup cols={2}>
-  <Card
-    title="Configuración General"
-    icon="sliders"
-    href="/es/how_to_use/code_review/configs/general"
-  >
-    Configura modos, cadencia, ramas y opciones de sugerencias
-  </Card>
-  <Card
-    title="Política de Revisión"
-    icon="shield-check"
-    href="/es/how_to_use/code_review/policy"
-  >
-    Entiende las sugerencias vs el bloqueo y cuándo habilitar cada uno
-  </Card>
-  <Card
-    title="Solución de Problemas"
-    icon="triangle-exclamation"
-    href="/es/how_to_use/code_review/troubleshooting"
-  >
-    Soluciona problemas comunes y aprende sobre los límites
-  </Card>
-</CardGroup>
+Kody guarda el último commit revisado, así que la siguiente revisión cubre solo lo que cambió desde entonces. Después de un rebase o un force-push, Kody revisa solo lo que cambió donde puede comparar el nuevo diff con el que revisó, y todo el PR en caso contrario.
 
 ## Consejos
 
-- Mantén los PRs pequeños — los diffs grandes reducen la calidad de la revisión
-- Vincula especificaciones/tickets en la descripción del PR
-- Vuelve a ejecutar con `@kody start-review` después de abordar el feedback
+- Mantén los PRs pequeños. Los diffs grandes reducen la calidad de la revisión.
+- Enlaza la tarea en el título, la rama o la descripción del PR para que Kody pueda comprobar el PR contra ella.

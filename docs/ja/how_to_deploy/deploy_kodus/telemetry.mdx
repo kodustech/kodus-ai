@@ -1,21 +1,22 @@
 ---
 title: "匿名テレメトリ"
-description: "セルフホストのハートビートが送信する内容、収集する理由、無効化する方法。"
+description: "セルフホスト版のハートビートが何を送信するか、なぜ収集するか、そして無効にする方法。"
 icon: "satellite-dish"
 ---
 
-各セルフホストの Kodus インスタンスは、`https://telemetry.kodus.io` に
-**1日1回、匿名のハートビート**を送信します。ペイロードには集計された
-カウンタとランタイムメタデータのみが含まれ、コード、識別情報、または
-あなたやユーザーを追跡できる情報は一切含まれません。
+セルフホストの Kodus インスタンスは、それぞれ **1 日に 1 回、匿名のハートビート**を
+`https://telemetry.kodus.io` に送信します。ペイロードに含まれるのは、集計されたカウンターと
+ランタイムのメタデータだけです。コード、個人の識別情報、お客様やユーザーに
+たどり着けるようなものは含まれません。送信するのはコードレビューの `worker` で、UTC の 03:17 に送信します。
+worker は起動時に、テレメトリが有効かどうかをログに出力します。
 
-このページでは、何が送信されるか、なぜ送信するか、どこに保管されるか、
-どのように無効化するかを正確に文書化します。
+このページでは、何が送信されるか、なぜか、どこに送られるか、そして
+どうやってオフにするかを、正確に説明します。
 
 ## 送信する内容
 
-UTC で1日1回の `POST /v1/heartbeat`、約700バイト。ペイロードの例
-（明確化のために UUID を編集）：
+UTC の 1 日に 1 回、約 700 バイトの `POST /v1/heartbeat` を 1 つ送信します。ペイロードの例
+（UUID は分かりやすいように伏せています）：
 
 ```json
 {
@@ -23,17 +24,17 @@ UTC で1日1回の `POST /v1/heartbeat`、約700バイト。ペイロードの�
   "instance_id": "0188f5c5-5b8f-4f45-92d4-b20c25df0b5a",
   "sent_at": "2026-05-04T03:17:00.000Z",
   "kodus": {
-    "version": "0.4.15",
+    "version": "2.2.11",
     "deployment": "docker",
     "uptime_hours": 124
   },
   "runtime": {
-    "node_version": "v20.11.1",
+    "node_version": "v22.23.4",
     "os": "linux",
     "arch": "x64",
     "cpu_count": 8,
     "db_type": "postgres",
-    "db_version": "PostgreSQL 15.4"
+    "db_version": "PostgreSQL 16.4"
   },
   "usage_7d": {
     "active_users": 12,
@@ -52,102 +53,96 @@ UTC で1日1回の `POST /v1/heartbeat`、約700バイト。ペイロードの�
 }
 ```
 
-完全なスキーマは [kodus-beacon リポジトリ](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md) にあります — 不明なフィールドを `400` で拒否する厳格なバリデーター
-によりサーバー側で強制されます。
+`suggestions_generated`、`suggestions_applied`、`agent_review_repos_pct` は、常に `0` として送信されます。`deployment` は、Kubernetes では `k8s`、コンテナでは `docker`、それ以外では `unknown` です。`integrations` には、`github` や `slack` のような、固定のリストにある連携タイプだけが含まれます。
 
-## 決して送信しないもの
+完全なスキーマは [kodus-beacon リポジトリ](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md)にあります。サーバー側で
+厳格なバリデーターによって強制され、未知のフィールドはすべて `400` で拒否されます。
 
-設計上、スキーマには以下を含めることができません：
+## 送信しないもの
+
+設計上、スキーマには次のものを含められません。
 
 - ユーザーのメールアドレス、名前、OAuth トークン、API キー
 - リポジトリ名、ブランチ名、PR のタイトル、コミットメッセージ、コードの内容
-- 顧客を識別する文字列（組織のスラッグ、ワークスペース名、カスタム
-  ドメイン）
-- IP アドレス（receiver は不正検知のためだけに、毎日ローテーションする
-  salt で送信元 IP をハッシュ化し、生の IP は決して保持しません）
-- 自由記述のテキストフィールド
+- お客様を特定できる文字列（組織のスラッグ、ワークスペース名、カスタムドメイン）
+- IP アドレス（受信側は、送信元 IP を毎日ローテーションするソルトでハッシュ化し、
+  不正利用の検出にのみ使用します。生の IP を保存することはありません）
+- 自由形式のテキストフィールド
 
-receiver はボディに 5 KB の制限を設けており、文書化されたスキーマ外の
-フィールドはすべて拒否します。そのため、誤って設定されたクライアントが
-データを漏洩することはありません。
+受信側は 5 KB の本文サイズ制限を適用し、文書化されたスキーマ外のフィールドをすべて拒否するため、
+設定ミスのあるクライアントが誤ってデータを漏えいすることはありません。
 
-## なぜこれを収集するか
+## 収集する理由
 
-匿名のハートビートにより、セルフホストユーザーについて他の方法では
-答えられない質問に答えることができます：
+匿名のハートビートにより、セルフホストのユーザーについて、他の方法では答えられない
+次のような問いに答えられます。
 
-- どのバージョンの Kodus がまだ使用されているか、新しいリリースが
-  どれだけ早く採用されているか
-- オペレーターがどのようにデプロイしているか（Docker / Kubernetes /
-  bare metal）— 実際に使われているプラットフォームを優先するため
-- Kody Rules のような機能がセルフホストユーザーに届いているか
-- ボリュームシグナル（フリート全体でレビューされた PR、接続された
-  リポジトリ）— キャパシティ判断のサイジング用
+- Kodus のどのバージョンがまだ使われているか、新しいリリースがどれだけ速く
+  採用されるか
+- 運用者がどのようにデプロイしているか（Docker / Kubernetes / ベアメタル）。人々が実際に運用している
+  プラットフォームを優先できます
+- Kody Rules のような機能が、そもそもセルフホストのユーザーに届いているか
+- 規模のシグナル（フリートあたりの PR レビュー数、接続されたリポジトリ数）。キャパシティの
+  判断の規模を見積もれます
 
-これにより、特定のインスタンス、顧客、ユーザーを識別することは
-**できません**。テレメトリに基づいて連絡することもありません。データを
-共有または販売することもありません。
+これにより、特定のインスタンス、お客様、ユーザーを**特定することはできません**。
+テレメトリに基づいてお客様に連絡することはありません。データを共有したり販売したりすることもありません。
 
 ## インスタンスが送信する内容を確認する
 
-ハートビートがインスタンスから出る前に、毎日の cron が構築する正確な
-ペイロードを出力できます：
+毎日の cron が構築するペイロードを、送信せずに、そのまま出力できます。これは、
+[kodus-ai](https://github.com/kodustech/kodus-ai) リポジトリのチェックアウトから、
+PostgreSQL と MongoDB を指す `.env` がある状態で実行します。
 
 ```bash
 pnpm run telemetry:preview
 ```
 
-このコマンドは最小限の Kodus コンテキストを起動し、cron が使用するのと
-同じコレクターを実行し、JSON を stdout に出力します — 送信は
-しません。`jq` にパイプして探索できます：
+これは最小限の Kodus コンテキストを起動し、cron が使うのと同じコレクターを実行して、
+JSON を標準出力に出力します。`jq` にパイプすると、内容を調べられます。
 
 ```bash
 pnpm run telemetry:preview | jq '.usage_7d'
 ```
 
-## テレメトリを無効化する
+## テレメトリを無効にする
 
-環境で `KODUS_TELEMETRY_DISABLED=true` を設定します。cron は静かに
-スキップされ、元に戻すまでハートビートは送信されません。
+`KODUS_TELEMETRY_DISABLED=true` を worker の環境に設定します。Docker Compose では `.env` を編集し、`docker compose up -d worker` で適用します。Helm では `global.config` に設定し、リリースをアップグレードして worker に反映します。
 
 ```bash
 # .env
 KODUS_TELEMETRY_DISABLED=true
 ```
 
-許容される真の値（大文字小文字を区別しない）：`1`、`true`、`yes`、
-`on`。それ以外の値（空を含む）はテレメトリを有効のままにします。
+有効と見なされる値（大文字小文字を区別しません）：`1`、`true`、`yes`、`on`。それ以外の
+値（空を含む）では、テレメトリは有効のままです。
 
-## データの保管場所
+## データの保存場所
 
-- **Receiver:** `telemetry.kodus.io` にデプロイされた小さな Node.js
-  サービス（Fastify）。ソースコードは公開されています：
+- **受信側：** `telemetry.kodus.io` にデプロイされた小さな Node.js サービス（Fastify）です。
+  ソースコードは公開されています：
   [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon)。
-- **ストレージ:** Neon Postgres、US リージョン、保存時に暗号化、TLS
-  のみ。2つのテーブル — `telemetry_instances`（インスタンスごとに
-  1行、last seen + version）と `telemetry_heartbeats`（インスタンス
-  ごと、UTC 日ごとに 1 行、ペイロードは JSONB）。
-- **保持期間:** 個別のハートビート行は **12ヶ月** 保持されます。その後、
-  カウンタを履歴統計に集約し（例：「2026年1月の活動インスタンス数 X」）、
-  日ごとの行を削除します。インスタンス行は残ります — 時系列データは
-  持たず、最新バージョンと last seen のタイムスタンプのみです。
-- **アクセス:** 製品エンジニアリングチームのみ、監査付きの Neon の個別
-  認証情報経由。データは第三者と共有されることはなく、AI モデルの
-  トレーニングに使用されることもありません。
+- **ストレージ：** AWS `us-east-1` の Neon Postgres で、TLS 経由で接続します。
+  テーブルは 2 つあります。`telemetry_instances`（インスタンスごとに 1 行、最終確認時刻と
+  最終バージョンを保持）と `telemetry_heartbeats`（インスタンスごと、UTC の
+  日ごとに 1 行、ペイロードは JSONB で保存）です。同じ UTC の日に 2 回目のハートビートが届くと、
+  その日の行が上書きされます。
+- **データベースロール：** 受信側は、ハートビートの書き込みに必要な権限だけを持つロールで書き込みます。
 
-## 監査可能なソースコード
+## 監査できるソースコード
 
-両端ともオープンで、最初から最後まで読むのに十分小さいです：
+両端とも公開されており、最初から最後まで読める小ささです。
 
-- **クライアント**（インスタンスで実行されるもの）：cron、コレクター、
-  HTTP トランスポートは [`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
+- **クライアント**（お客様のインスタンスで実行されるもの）：cron、コレクター、HTTP
+  トランスポートは、[`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
   と [`apps/worker/src/cron/self-hosted-beacon.cron.ts`](https://github.com/kodustech/kodus-ai/blob/main/apps/worker/src/cron/self-hosted-beacon.cron.ts) にあります。
-- **サーバー**（`telemetry.kodus.io` で実行されるもの）：receiver 全体は
-  Fastify ルート + Postgres upsert で約 80 行です。
+- **サーバー**（`telemetry.kodus.io` で実行されるもの）：ペイロードを検証し、
+  Postgres に upsert する小さな Fastify サービスです。
   [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon) を参照してください。
 
 ## ご質問
 
-ここで不明な点がある場合や、フィールドの追加、削除、より詳細な文書化を
-希望する場合は、[kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon/issues)
-に issue を開くか、[Discord](https://discord.gg/TFZBRk9fT6) でご連絡ください。
+ここで不明な点がある場合や、フィールドの追加、削除、
+追加の文書化をご希望の場合は、
+[kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon/issues) で issue を作成するか、
+[Discord](https://discord.gg/TFZBRk9fT6) でご連絡ください。

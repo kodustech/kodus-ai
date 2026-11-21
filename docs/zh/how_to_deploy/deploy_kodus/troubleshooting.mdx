@@ -8,92 +8,107 @@ icon: "headset"
 
 ### "运行诊断"
 
-安装器附带了检查堆栈和常见错误配置的医生脚本。
+安装器附带了一个医生脚本。在 `kodus-installer` 目录下运行：
 
 ```bash
-cd kodus-installer
 ./scripts/doctor.sh
 ```
+
+输出的第一行会说明审查是否在运行：`Reviews: NOT RUNNING`、`RUNNING, DEGRADED` 或 `OK`。之后的每个问题都会列出您会失去什么，以及唯一需要做的一件事。该脚本不会更改任何内容，也不会打印任何密钥，因此您可以把它的输出直接粘贴到支持工单中。添加 `--verbose` 可以查看所有通过的检查项。
+
+要单独检查 `.env`，请运行 `./scripts/validate-env.sh`。它会根据 schema 检查每个变量，并且在容器正在运行时，显示哪些值与 `.env` 不一致、被容器以不同方式加载。这样可以发现您修改后没有重新创建容器的情况。
+
+在 Kubernetes 上，请改用 `./scripts/doctor-k8s.sh -n <namespace>`。参阅 [Kubernetes & OpenShift](/zh/how_to_deploy/deploy_kodus/kubernetes#验证)。
+
+### "审查一直不启动"
+
+请按顺序逐项排查：
+
+1. **已连接模型。** 打开 **AI providers**，或在 `.env` 中设置模型。没有模型，任何审查都不会运行。
+2. **webhook URL 能够访问 webhooks 服务。** 连接仓库时，会使用提供商的 `*_CODE_MANAGEMENT_WEBHOOK` URL（例如 `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`）注册 webhook。如果该变量为空，仓库虽然能连接成功，但不会触发任何审查。URL 必须是 `https://`，并且能够访问端口 `3332`。
+3. **worker 正在运行。** `docker compose ps worker` 应显示其处于运行状态，并且必须设置 `WORKER_ROLE=code-review`。
 
 ### "我无法访问 Web 界面"
 
 1. 检查容器是否正在运行：
 
 ```bash
-docker-compose ps kodus-web
+docker compose ps kodus-web
 ```
 
 2. 验证端口是否正确映射：
 
 ```bash
-docker-compose port kodus-web 3000
+docker compose port kodus-web 3000
 ```
 
 3. 检查 Web 容器日志：
 
 ```bash
-docker-compose logs kodus-web
+docker compose logs kodus-web
 ```
-
-### "Web 日志出现 Edge Runtime 错误"
-
-如果您看到错误，如 `A Node.js API is used ... not supported in the Edge Runtime`（通常带有 `axios` 导入跟踪），则 Web 应用程序的一部分在 Edge Runtime 中运行，该运行时不支持 Node.js API。
-
-1. 更新到最新的 `kodus-web` 镜像（重新运行安装器或运行 `docker-compose pull kodus-web` 和 `docker-compose up -d`）。
-2. 如果您是从源代码构建，请确保 auth/server 路由在 Node.js 运行时上运行（设置 `export const runtime = "nodejs"` 并在这些路由上避免 `runtime = "edge"`）。
-3. 重新构建并重启容器。
 
 ### "Git webhook 不工作"
 
-1. 验证您的域名设置：
+1. 验证 webhooks 服务是否有响应：
 
 ```bash
-curl -I https://your-domain.com
+curl -i http://localhost:3332/health/live
 ```
 
-2. 检查 webhook 日志中的 webhook 尝试：
+2. 检查 webhooks 日志中的 webhook 尝试：
 
 ```bash
-docker-compose logs webhooks | grep webhook
+docker compose logs webhooks | grep webhook
 ```
 
-3. 验证您的反向代理配置：
+3. 如果使用了专用的 webhooks 域名，请检查它是否通过您的反向代理访问到该服务：
 
 ```bash
+curl -i https://your-webhooks-domain.com/health/live
 sudo nginx -t
 ```
+
+如果是由 API 域名提供 webhook 服务，则代理必须把 `/github/webhook`、`/gitlab/webhook` 以及其他提供商的路径路由到端口 `3332`。参阅[反向代理](/zh/how_to_deploy/deploy_kodus/reverse_proxy)。
 
 ### "数据库连接问题"
 
 1. 检查数据库容器状态：
 
 ```bash
-docker-compose ps db_kodus_postgres
-docker-compose ps db_kodus_mongodb
+docker compose ps db_kodus_postgres db_kodus_mongodb
 ```
 
 2. 验证数据库日志：
 
 ```bash
-docker-compose logs db_kodus_postgres
-docker-compose logs db_kodus_mongodb
+docker compose logs db_kodus_postgres
+docker compose logs db_kodus_mongodb
 ```
 
-3. 测试数据库连接：
+3. 从容器内部测试数据库连接：
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
-docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin'
 ```
+
+出现提示时，输入 MongoDB 的 root 密码。
+
+### MongoDB 因 SERVER-121912 退出
+
+MongoDB 8.3 与部分较新的 Linux 内核组合使用时，会在启动时报出 `SERVER-121912`。Docker 内核为 6.19 或更高版本且未指定其他镜像时，`install.sh` 会保存 `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11`。直接通过 Compose 全新安装时，请在 `.env` 中设置该值。通过 Helm 全新安装时，请设置 `mongodb.bundled.image=mongo:8.2.11`。
+
+如果数据卷已有 8.3 版本写入的数据，请先遵循 [MongoDB 降级步骤](https://www.mongodb.com/docs/manual/release-notes/8.3-downgrade/)，再切换镜像。
 
 ### "由于缺少向量类型导致迁移失败"
 
-如果您在迁移期间遇到错误 "type vector does not exist"，这是因为您的 PostgreSQL 数据库中未启用 pgvector 扩展。以下是修复方法：
+如果您在迁移期间遇到错误 "type vector does not exist"，这是因为您的 PostgreSQL 数据库中未启用 pgvector 扩展。内置的 PostgreSQL 镜像会在其卷首次创建时启用该扩展。外部数据库，或在添加该扩展之前就已存在的卷，需要手动启用：
 
 1. 连接到您的 PostgreSQL 数据库：
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 2. 启用 pgvector 扩展：
@@ -102,13 +117,13 @@ docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-3. 启用扩展后，再次尝试运行迁移：
+3. 重启 api。它在启动时会运行迁移：
 
 ```bash
-docker-compose exec api npm run migration:run
+docker compose restart api
 ```
 
-如果您仍然遇到问题，可以验证扩展是否已正确安装：
+要验证扩展是否已安装：
 
 ```sql
 SELECT * FROM pg_extension WHERE extname = 'vector';
@@ -123,16 +138,24 @@ SELECT * FROM pg_extension WHERE extname = 'vector';
 1. 检查 RabbitMQ 状态：
 
 ```bash
-docker-compose logs rabbitmq
+docker compose logs rabbitmq
 ```
 
-2. 访问位于 `http://localhost:15672` 的管理控制台以验证队列和连接
+2. 打开管理控制台以验证队列和连接。安装器会把它发布在一个随机的主机端口上，可通过以下命令找到：
+
+```bash
+docker compose port rabbitmq 15672
+```
 
 3. 如果需要，重启服务：
 
 ```bash
-docker-compose restart rabbitmq
+docker compose restart rabbitmq
 ```
+
+- api 或 webhooks 日志中出现 `QueueBind 404`，表示 worker 从未创建 `workflow.jobs.*` 队列。请检查 worker 是否正在运行，以及是否设置了 `WORKER_ROLE`。
+- 连接错误通常意味着 `API_RABBITMQ_URI` 与 `RABBITMQ_DEFAULT_USER`、`RABBITMQ_DEFAULT_PASS` 或 `kodus-ai` 虚拟主机不匹配。
+- 长时间审查时出现 `PRECONDITION_FAILED`，表示 broker 的 `consumer_timeout` 低于 2 小时。Kodus 的 RabbitMQ 镜像已设置该值；如果使用自己的 broker，请设置 `consumer_timeout = 7200000`。
 
 ### 资源问题
 
@@ -147,18 +170,19 @@ docker stats
 2. 验证容器限制：
 
 ```bash
-docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+docker inspect $(docker compose ps -q api) | grep -A 5 "Resources"
 ```
 
-3. 如果需要，在 docker-compose.yml 中调整资源限制
+3. 如果需要，在 `docker-compose.yml` 中调整资源限制。仓库解析在 worker 内部运行，因此它需要最多的内存；参阅 [Sandbox & AST Graph](/zh/how_to_deploy/deploy_kodus/sandbox#资源规划)。
 
 ## 获取帮助
 
 ### 支持请求中应包含的内容
 
 - 确切的错误消息
+- `./scripts/doctor.sh` 的输出（在 Kubernetes 上为 `./scripts/collect-diagnostics.sh -n <namespace>`）
 - 受影响服务的相关日志
-- 您的部署方法（CLI、VM 等）
+- 您的部署方法（Docker Compose、Kubernetes、OpenShift）和 Kodus 版本
 - 重现问题的步骤
 
 ### 在哪里获取帮助

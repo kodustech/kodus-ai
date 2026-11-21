@@ -10,29 +10,29 @@ plan**, which means the model — and the provider relationship behind it — is
 not ours.
 
 <Info>
-  We deliberately don't pin model names in this page. The catalog moves fast; for the current
-  recommended models see [BYOK](/en/how_to_use/byok), which is generated from what the product
-  actually offers today.
+  This page doesn't pin model names, because the choice is yours. See [BYOK](/en/how_to_use/byok)
+  for the providers you can connect and how routing picks a model per task.
 </Info>
 
-There are three paths, and which one applies changes who your data agreement is with:
+There are four paths, and which one applies changes who your data agreement is with:
 
-| Path | Who owns the provider account | Which class of model |
+| Path | Who owns the provider account | Which models |
 | --- | --- | --- |
-| **BYOK** (default, every plan) | **You.** Your key, your billing, your contract with the provider. | Whatever you configure — a frontier general-purpose model, a coding-specialized model, or a self-hosted/compatible endpoint. |
-| **Trial / no key connected** | Kodus, for a limited number of reviews. | A coding-specialized model we pick, with a smaller open-weights model as fallback. |
-| **Enterprise with a Kodus-managed key** | Kodus, under your Enterprise agreement. | Frontier general-purpose models, selected by us. |
+| **BYOK** (default, every plan) | **You.** Your key, your billing, your contract with the provider. | Whatever you configure: a frontier model, a coding-specialized model, or a self-hosted or compatible endpoint. |
+| **Self-hosted with LLM environment variables** | **You.** The instance owner sets the provider and key in the server environment. | The model named in the environment. The **AI providers** page shows it, without the key. |
+| **Trial, no key connected** | Kodus, for the trial's included reviews. | Models Kodus provides for the trial. |
+| **Enterprise with a Kodus-managed key** | Kodus, under your Enterprise agreement. | Models selected by Kodus. |
 
 ### Supported provider classes
 
 Under BYOK you can point Kodus at:
 
-- **First-party frontier providers** — the major commercial labs, via their own APIs.
-- **Cloud-hosted enterprise gateways** — the same frontier models billed through your existing
-  cloud account, with that cloud's IAM, region pinning, and data-residency guarantees.
-- **Aggregators** — a single billing relationship in front of many models.
-- **Any OpenAI-compatible or Anthropic-compatible endpoint** — including specialized coding
-  providers and models you host yourself, which never leaves your network.
+- **First-party providers**: OpenAI, Anthropic, and Google (Gemini), via their own APIs.
+- **Cloud-hosted gateways**: Google Vertex AI, Amazon Bedrock, and Azure OpenAI, billed through your
+  existing cloud account, with that cloud's IAM, region, and data-residency terms.
+- **Aggregators and model hosts**: OpenRouter, Novita, Moonshot, and Z.ai.
+- **Any OpenAI-compatible or Anthropic-compatible endpoint**: including models you host yourself.
+  The **AI providers** page needs an `https://` URL that resolves to a public address.
 
 The full, current list with setup instructions lives in [BYOK](/en/how_to_use/byok).
 
@@ -70,8 +70,7 @@ contract with Kodus — it's governed by yours with the provider.**
 
 ## Security measures on the Kodus side
 
-- **Key handling**: your provider key is encrypted at rest and never shown back in plain text.
-- **Encryption**: data encrypted in transit and at rest.
+- **Key handling**: your provider keys and Git tokens are stored encrypted, and your provider key is never shown back in plain text.
 - **Controlled access**: role-based access to the workspace — see
   [Workspace Roles](/en/how_to_use/workspace_roles).
 - **Self-hosting**: run the whole stack in your own infrastructure if you don't want code

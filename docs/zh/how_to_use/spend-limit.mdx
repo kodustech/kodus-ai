@@ -3,7 +3,7 @@ title: "月度支出上限"
 description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅提醒 —— 审查照常运行。"
 ---
 
-月度支出上限会监控你在 **BYOK 模型**上的花费,并在该支出接近你设定的上限时通知组织的 Owner。它是一个提前预警信号,而不是硬性阻断。
+月度支出上限会监控你在 **BYOK 模型**上的花费,并在该支出接近你设定的上限时通知组织的所有者。它是一个提前预警信号,而不是硬性阻断。
 
 <Warning>
   **这是通知,不是上限。Kodus 在达到限额时绝不会阻断或暂停审查。** 超过 100% 之后,支出仍会在你的提供商账户上继续累积。要真正停止支出,请在**模型提供商**的控制台(OpenAI、Anthropic、Google 等)中设置硬性限额 —— 只有它能强制执行。请把 Kodus 的限额当作提前预警,好让提供商侧的上限不会突然袭击你。
@@ -21,7 +21,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
 
 ## 如何配置
 
-该限额位于 **AI providers** 页面的 **Budget** 标签页中(**Budget & alerts** 区块)。
+Owner 可在 **AI providers → Budget** 的 **Budget & alerts** 中配置提醒。启用前至少连接一个 BYOK 模型，并确保所有 BYOK 模型都有价格。
 
 <Steps>
   <Step title="打开 Budget 标签页">
@@ -37,7 +37,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
   </Step>
 
   <Step title="设置月度限额并启用">
-    在 **Monthly limit (US$)** 中填入金额,打开 **Enable spend alerts**,然后点击 **Save budget & alerts**。该标签页还会显示 **Projected this month**,而 **Open Costs** 会带你前往 **Organization → Token usage** 查看完整明细。
+    在 **Monthly limit (US$)** 中填入金额,打开 **Enable spend alerts**,然后点击 **Save budget & alerts**。该标签页还会显示 **Projected this month** 和一个 **Break down by** 开关(**Total**、**Per-model**、**Per-credential**),它只改变该标签页的显示内容,绝不会改变触发哪些提醒。**Open Costs** 会带你前往 [**Organization → Token usage**](/zh/how_to_use/organization/token_usage) 查看完整明细,该页面也会显示当月至今的支出与你的限额的对比。
   </Step>
 </Steps>
 
@@ -59,15 +59,15 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
 
 ## 提醒
 
-启用后,Kodus 大约**每小时一次**检查你当月至今的支出,并在你跨过每个阈值时,通过**邮件和应用内通知中心**通知组织的 **Owner**:
+启用后,Kodus 大约**每小时一次**检查你当月至今的支出,并在你跨过每个阈值时,通过**邮件和应用内通知中心**通知组织的**所有者**:
 
 | 阈值 | 你会收到什么 |
 | --- | --- |
 | **50%** | 预警提醒 |
 | **75%** | 预警提醒 |
 | **90%** | 预警提醒 |
-| **100%** | "已达到限额"提醒 |
-| **超过 100%** | 一条最终提示"你已超出限额 —— 本月不会再通知",随后本月保持静默 |
+| **100%** | "Limit reached" 提醒 |
+| **Over 100%** | 在 100% 提醒之后的下一次每小时检查时,发出一条最终提示 "you're over your limit — we won't notify again this month",随后本月保持静默 |
 
 每个阈值**每月最多触发一次**,因此你不会为同一级别收到重复提醒。进入新的月份后会自动重置。
 
@@ -75,7 +75,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
   在整个过程中审查都照常运行 —— 50% 时、100% 时,以及超出之后。唯一发生的事情就是这些提醒。
 </Note>
 
-你可以在[通知设置](https://app.kodus.io/organization/notifications)的 **Spend Limit** 中管理它们的送达位置(以及哪些角色会收到)。
+你可以在[通知设置](/zh/how_to_use/organization/notifications)的 **Spend Limit** 中管理它们的送达位置(以及哪些角色会收到)。
 
 ## 准确性
 
@@ -120,6 +120,6 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
   </Accordion>
 
   <Accordion title="谁会收到提醒?">
-    你组织的 Owner,在应用内的通知中心收到。可在通知设置的 **Spend Limit** 中调整路由。
+    你组织的所有者,通过邮件和应用内通知中心收到。可在[通知设置](/zh/how_to_use/organization/notifications)的 **Spend Limit** 中调整谁会收到。
   </Accordion>
 </AccordionGroup>

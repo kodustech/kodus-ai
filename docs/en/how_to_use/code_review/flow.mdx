@@ -1,158 +1,127 @@
 ---
 title: "Code Review Flow"
-description: "How a Kody review runs end to end: when it triggers, when it skips, what you get back, and what each status emoji means."
+description: "How a Kody review runs end to end: what starts it, when it skips, what you get back, and what each status means."
 ---
 
-## Overview
+To review a PR in a connected repository now, start a PR comment with `@kody review`. If a review did not appear, [check the skip reason](#when-kody-skips).
 
-Kody reviews your PRs automatically or on demand, adds clear suggestions, and helps your team decide when to merge. Below is the simple, user-facing view of how it works.
+## What you get
 
-Reference: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Code-Review-Flow?node-id=4-274" target="_blank">Figma board</a>
+- Inline comments with a concrete suggestion.
+- A PR summary, if enabled.
+- Optionally, an approval or a request for changes. See [Review Policy](/en/how_to_use/code_review/policy).
+- On GitHub (installed as a GitHub App) and Forgejo, a **Kody Code Review** check on the PR's head commit: complete, completed with warnings, failed or skipped. It reports whether the review ran, not whether the PR has findings.
+- A reaction on the PR showing the review status.
 
-## When Kody Runs
+## What starts a review
 
-- PR opened
-- New commit pushed to the PR (depending on cadence)
-- Manual trigger via comment: `@kody start-review`
+**Automatically**, when a pull request is opened, when new commits are pushed to it, or when a draft is marked ready for review (every provider except Forgejo). Kody reviews drafts unless **Review draft pull requests** is off.
 
-## When Kody Skips
+### PR comment commands
 
-- No new commits since the last run
-- Only merge commits with no effective changes
-- All changed files ignored by configured patterns
-- PR exceeds the configured file limit
-- Invalid or missing configuration
+**On demand**, with a comment on the PR. The command must start the comment:
 
-<Note>
-  To override a skip and force a fresh pass — for example after "no new commits" — comment `@kody review --force`.
-</Note>
+| Command | What it does |
+| --- | --- |
+| `@kody start-review` or `@kody review` | Reviews the commits since the last review (the whole PR on a first review). Resumes a paused PR. |
+| `@kody review --force` | Reviews the whole PR again, even with no new commits. |
+| `@kody review --heavy` or `--balanced` | Picks the review mode for this run. See [Routing](/en/how_to_use/code_review/configs/routing). |
+| `@kody review focus on the auth logic` | Steers the review. See [Steer a Review](/en/how_to_use/code_review/review_directive). |
+| `@kody -v <agent>` | Runs one [custom agent](/en/how_to_use/code_review/custom_agents) on the whole PR. |
+| `@kody -v business-logic` | Checks the PR against its task. See [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation). |
+| `@kody <question>` | Starts a conversation about the PR or a suggestion. |
 
-## What Kody Does
+A review command ignores **Automated code review**, **Review Cadence**, **Ignore title keywords**, **Base Branches** and **Review draft pull requests**. Licenses, ignored authors and ignored files still apply.
 
-- Resolves which settings apply (global → repo → directory) and validates them
-- Collects the relevant diffs and context for this PR
-- Runs PR-level checks (e.g., custom rules and cross-file analysis when enabled)
-- Reviews changed files with focus on the diff
-- Filters and prioritizes suggestions to reduce noise (relevance, severity, dedupe, safeguards)
-- Posts inline comments and, when applicable, a PR-level summary
-- Optionally approves or requests changes if those policies are enabled
-- Remembers the last analyzed commit to keep follow-ups incremental
+If a review is already running on the PR, a command waits and runs when the current review finishes. A push that arrives in the meantime does not start a second review: comment `@kody review` to review it.
 
-## What You Get
+On GitHub, when Kody reviews as a user account (a personal access token), **Re-request review** on Kody works like `@kody start-review` on a PR it already reviewed.
 
-- Inline comments with concrete suggestions
-- Optional PR-level summary with highlights
-- Optional status: approved or changes requested (if enabled)
+## Status reactions
 
-## Status Reactions
-
-Kody uses emoji reactions to show the live status of your code review directly in your Git provider. No guessing whether she’s working, done, or ran into a problem. She always replaces the previous emoji with the latest status (for example: 🚀 → 🎉, 👀, 👎 or 😕).
+Kody shows the status of a review as a reaction in your Git provider and replaces the previous one with the latest (for example 🚀 then 🎉).
 
 <Note>
   **Native reactions** work on GitHub, GitLab, and Forgejo.
 
-  Azure DevOps and Bitbucket have no reaction API, so Kody falls back to posting the status
-  emoji as a **comment** instead — you'll see 👀 (skipped), 😕 (error), and 👎 (no license)
-  there, but not the 🚀 / 🎉 progress pair.
+  Azure DevOps and Bitbucket have no reaction API, so Kody posts the status emoji as a **comment** instead: 👀 (skipped), 😕 (error) and 👎 (no license), but not the 🚀 and 🎉 pair.
 </Note>
 
 ### What each emoji means
 
-- 🚀 Processing — Kody is working on your code:
-  - Analyzing files
-  - Checking rules and policies
-  - Generating suggestions
-- 🎉 Completed — Review finished:
-  - All comments posted
-  - Analysis complete
-  - You can review the suggestions
-- 👀 Skipped — Review was skipped. Common reasons include:
-  - No new commits since the last run
-  - Only merge commits detected
-  - PR/MR exceeds the configured file limit
-  - No relevant files to review (ignored patterns)
-  - Branch not configured for review
-  - PR/MR in draft mode (if configured to skip drafts)
-- 👎 No license — The user is not licensed:
-  - Kody cannot run without a valid license
-  - Ensure the user that opened the PR/MR has a license assigned
-  - Optionally, enable [Auto License Assignment](/en/how_to_use/auto_license_assignment) to assign licenses automatically
-- 😕 Error — Something went wrong:
-  - Temporary technical issue during the review
-  - Try again; join our [Discord community](https://discord.gg/TFZBRk9fT6) if it persists
+- 🚀 Processing: Kody is working on the review.
+- 🎉 Completed: the review finished and the comments are posted.
+- 👀 Skipped: the review did not run. See [When Kody skips](#when-kody-skips).
+- 👎 No license: the PR author has no license. GitLab shows a lock (🔒) instead.
+- 😕 Error: the review failed. Run it again with `@kody start-review`. If it keeps failing, check [Troubleshooting](/en/how_to_use/code_review/troubleshooting) or ask on [Discord](https://discord.gg/TFZBRk9fT6).
 
 ### Where reactions appear
 
-- Automatic review (PR opened or new commit): reaction on the PR/MR description (top of the thread)
-- Manual review (comment `@kody start-review`): reaction on your comment where you invoked Kody
+- Automatic review: on the PR description.
+- Review command: on your comment.
 
-### Example scenarios
+### Turn off skip and block feedback
 
-- New PR (automatic): 🚀 while running → 🎉 when finished
-- Manual command: 🚀 on your comment → 🎉 when finished
-- No changes since last run: 👀 reaction
-- Unlicensed user: 👎 reaction
-- Temporary issue: 😕 reaction
+**Code review → General → Review feedback → Show status feedback** controls the 👀 and 👎 reactions and the subscription comments. With it off, Kody still shows 🚀, 🎉 and 😕. With **Automated code review** off, Kody does not react to the PRs it skips.
 
-### FAQs
+## When Kody skips
 
-**I don't see reactions**
+Unless status feedback is off, Kody shows 👀 on a skipped review. It records the reason either way. The reason appears in the **Kody Code Review** check (GitHub App and Forgejo). PRs blocked by configuration (license, manual or paused cadence, ignored author) are listed on the **Pull Requests** page under **Kody skipped**.
 
-- GitHub / GitLab / Forgejo: ✅ native reactions
-- Azure DevOps / Bitbucket: ❌ no reaction API — look for the status emoji posted as a comment instead
+| Reason | Why | What to do |
+| --- | --- | --- |
+| Automated Review is disabled | **Automated code review** is off. | Turn it on, or comment `@kody start-review`. |
+| Title Ignored | The title contains an **Ignore title keywords** entry. | Remove the keyword, or comment `@kody start-review`. |
+| Draft PR Skipped | **Review draft pull requests** is off. | Mark the PR ready, or turn the setting on. |
+| Branch Mismatch | The target branch is not the default branch or in **Base Branches**. | Add the branch to **Base Branches**. |
+| PR is Closed, PR is Locked | Automatic reviews skip closed and merged PRs, and so does `@kody review --force`. A plain `@kody review` reviews a closed or merged PR. Locked PRs are not reviewed. | Reopen or unlock the PR, or comment `@kody review` on a closed one. |
+| No New Commits | The latest commits were already reviewed. | Comment `@kody review --force`. |
+| Only Merge Commits | The new commits only merge another branch. | Push a code change, or comment `@kody review --force`. |
+| Rebase Without Changes | A rebase changed nothing in the code already reviewed. | Comment `@kody review --force`. |
+| No Files Changed, No changed files in this pull request, All Files Ignored | No changed files are eligible for this review. Deleted files are excluded. Ignored files are eligible only when a custom agent in this run explicitly includes them. A review command on a PR with no commits since the last review can also end here. | Check **Ignored files**, or comment `@kody review --force` to review the whole PR. |
+| Too Many Files | More than 2,000 files are eligible for the main review and custom agents combined. | Split the PR. |
+| Changes Unreadable, Provider Rate Limited | The Git provider did not return the diff in full, or throttled the request. | Run the review again later. |
+| User is ignored by configuration | The PR author is excluded by **Repositories → PR author filters**. | See [Auto License Assignment](/en/how_to_use/auto_license_assignment#pr-author-filters). |
+| Code reviews are disabled for the centralized config repository, or for the global Kody Rules source repository | Kody does not review the repository that holds your shared settings or rules. | Review a different repository. |
+| User Not Licensed | The PR author has no license. | Assign a license or turn on [Auto License Assignment](/en/how_to_use/auto_license_assignment). |
+| No Active Subscription, Plan Limit Exceeded, Trial Reviews Used Up, BYOK Configuration Required, Subscription Check Unavailable | The organization cannot run reviews right now. Kody also comments on the PR, unless **Show status feedback** is off. | Follow the comment. See [Limits & Pricing](/en/how_to_use/pricing). |
+| PR is paused, Manual mode requires @kody start-review | **Review Cadence** is Auto-pause or Manual. | Comment `@kody start-review`. |
 
-**Why did the emoji change?**
+<Note>
+  `--force` re-runs a review that was skipped as already reviewed. It does not override a license, plan or file-limit skip, or a closed or merged PR.
+</Note>
 
-- Normal—Kody replaces previous status (🚀 → 🎉/👀/😕)
+## Settings that matter
 
-**I saw 👀 but wanted a review**
+- [Change when Kody reviews](/en/how_to_use/code_review/configs/general). Set automatic reviews, cadence, drafts, base branches and ignored paths.
+- [Change what Kody reports](/en/how_to_use/code_review/configs/what_to_review). Choose review categories and the minimum severity.
+- [Choose review depth and models](/en/how_to_use/code_review/configs/routing). Set Balanced or Heavy and see which models apply.
+- [Control review approvals](/en/how_to_use/code_review/policy). Decide when Kody requests changes or approves a clean PR.
+- [Troubleshoot reviews](/en/how_to_use/code_review/troubleshooting). Find out why a review did not run or why the output looks different.
 
-- Likely skipped: no new commits, merge-only, ignored files, or file limit
-- Fix: comment `@kody review --force` — a plain `start-review` will skip again if there are no new commits
+## Review cadence
 
-**I saw 👎**
+**Code review → General → Automated code review** turns automatic reviews on or off. **Review Cadence** decides what happens on pushes after the first review:
 
-- The user that opened the PR/MR is not licensed
-- Fix: assign a license or enable [Auto License Assignment](/en/how_to_use/auto_license_assignment)
+- **Automatic:** every push is reviewed.
+- **Auto-pause:** Kody counts the reviews it finished on the PR inside the **Time window (minutes)**. When the count reaches **Pushes to trigger pause** (default 3 in 15 minutes), the next push pauses the PR and Kody comments "Auto-paused – comment @kody start-review when you're ready." Pushes are skipped until someone comments `@kody start-review`.
+- **Manual:** the first review runs when the PR is opened. Later pushes are skipped until someone comments `@kody start-review`.
 
-**I saw 😕**
+## What Kody does
 
-- Retry with `@kody start-review`. If persists, check [Troubleshooting](/en/how_to_use/code_review/troubleshooting) or [Discord](https://discord.gg/TFZBRk9fT6)
+1. Checks that the PR can be reviewed: license, filters, cadence and new commits.
+2. Resolves the settings that apply (global, repository, directory) and validates them.
+3. When [risk assessment](/en/how_to_use/code_review/configs/risk) is on, assesses the PR and picks the review mode.
+4. Loads the changed files and context, skipping ignored files.
+5. Posts the opening comment, if enabled in **What Kody writes**.
+6. Checks the PR against its task, if the PR references one and **Business Logic** is on.
+7. Reviews the changes: finds issues, applies Kody Rules and custom agents, verifies each finding, removes duplicates and applies the **Minimum severity to post**.
+8. Posts inline comments, PR-level comments and the summary.
+9. Approves the PR or requests changes, if enabled.
 
-## Settings That Matter
-
-- Automated vs manual reviews and follow-up cadence (**Code review → General**)
-- Ignored files and base branches in scope (**Code review → General**)
-- Custom rules and cross-file analysis
-- Severity threshold (formerly review filters): **Minimum severity to post** and whether it applies to Kody Rules (**Code review → What to review**)
-- File limits and timeouts
-
-<CardGroup cols={2}>
-  <Card
-    title="General Config"
-    icon="sliders"
-    href="/en/how_to_use/code_review/configs/general"
-  >
-    Configure modes, cadence, branches, and suggestion options
-  </Card>
-  <Card
-    title="Review Policy"
-    icon="shield-check"
-    href="/en/how_to_use/code_review/policy"
-  >
-    Understand suggestions vs blocking and when to enable each
-  </Card>
-  <Card
-    title="Troubleshooting"
-    icon="triangle-exclamation"
-    href="/en/how_to_use/code_review/troubleshooting"
-  >
-    Fix common issues and learn about limits
-  </Card>
-</CardGroup>
+Kody keeps the last reviewed commit, so the next review covers only what changed since. After a rebase or force-push, Kody reviews only what changed where it can compare the new diff with the one it reviewed, and the whole PR otherwise.
 
 ## Tips
 
-- Keep PRs small—large diffs reduce review quality
-- Link specs/tickets in PR description
-- Re-run with `@kody start-review` after addressing feedback
+- Keep PRs small. Large diffs reduce review quality.
+- Link the task in the PR title, branch or description so Kody can check the PR against it.

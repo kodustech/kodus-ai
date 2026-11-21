@@ -6,9 +6,11 @@ icon: "shield-halved"
 
 ## Por qué una skill
 
-Puede que tu equipo ya mantenga sus reglas de seguridad como una skill de agente, para los asistentes de código. Un agente personalizado puede seguir la misma skill en el code review: la abre cuando el cambio la necesita, lee sus archivos de referencia y cita la regla que aplica cada hallazgo. Cuando la skill cambia en la rama principal, el agente sigue la nueva versión sin tocar la configuración.
+Puede que tu equipo ya mantenga sus reglas de seguridad como una skill de agente, para los asistentes de código. Un agente personalizado puede seguir la misma skill en el code review: la abre cuando el cambio la necesita, lee sus archivos de referencia y cita la regla que aplica cada hallazgo. Cuando la skill cambia en la rama a la que apunta un pull request, el agente sigue la nueva versión sin tocar la configuración.
 
 El ejemplo es una API de agendamiento multi-tenant en la que toda consulta debe limitarse al workspace de quien llama.
+
+Los agentes personalizados están en beta, en los planes Teams y Enterprise y durante el trial. Kodus self-hosted también necesita `BETA_FEATURES=true`.
 
 ## Paso 1 — La skill en el repositorio
 
@@ -34,7 +36,7 @@ For the list of tenant tables, see references/tenant-tables.md.
 bookings, calendars, invoices, members, resources
 ```
 
-El nombre de la carpeta y `name` deben coincidir, y `description` es obligatoria.
+`name` usa letras minúsculas, dígitos y guiones (un `name` distinto de la carpeta se lee como el nombre de la carpeta), y `description` es obligatoria.
 
 ## Paso 2 — Impórtala como agente
 
@@ -83,7 +85,7 @@ Si tu gestor de tareas está instalado como plugin, actívalo en **Tools → Plu
 | **Minimum severity** | High | Solo fugas entre tenants y autorización faltante, no ideas de hardening. |
 | **Suggested fix** | When confident | |
 
-Haz clic en **Save**.
+Haz clic en **Save settings**.
 
 ## Paso 6 — Try it
 
@@ -101,12 +103,12 @@ Ejecuta **Try it** en un pull request que agregue un endpoint. Revisa:
 
 Activa el agente. Para pedir una segunda opinión sobre un pull request abierto más adelante, comenta `@kody -v tenant-isolation-reviewer`.
 
-## Checklist
+## Lista de verificación
 
-- [ ] `SKILL.md` tiene `name` igual a su carpeta y una `description`
-- [ ] Los archivos de referencia están como mucho una carpeta debajo de la skill
+- [ ] `SKILL.md` tiene un `name` y una `description`
+- [ ] Los archivos de referencia están dentro de la carpeta de la skill
 - [ ] Las instrucciones dicen qué prueba necesita un hallazgo
 - [ ] La severidad mínima corresponde a cuánto debe hablar el agente
 - [ ] Probado en un pull request con una brecha conocida
 
-Consulta [Skills & docs](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs) para la detección y los presupuestos.
+Consulta [Skills & docs](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#skills-&-docs) para la detección y los presupuestos.

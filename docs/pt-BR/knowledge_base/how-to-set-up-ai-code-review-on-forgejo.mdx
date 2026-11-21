@@ -1,0 +1,18 @@
+---
+title: "Como configurar revisão de código com IA no Forgejo"
+description: "Conecte o Forgejo à Kodus e selecione os repositórios para revisão automática."
+---
+
+A Kodus se conecta a uma instância do Forgejo com um access token e recebe os eventos de pull request por meio de webhooks do repositório. O suporte ao Forgejo é mantido pela comunidade.
+
+## Passos
+
+1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede a Kodus por conta própria](/pt-BR/how_to_deploy/deploy_kodus/generic_vm)
+2. **Conecte o Forgejo** — na etapa **Connect your Git tool** do onboarding, abra a aba **Forgejo**, clique em **Connect via token** e informe a **Forgejo Instance URL** e o **Personal Access Token** (você também pode conectar depois em **Repositories** na barra lateral: clique em **Forgejo** em **Connect a provider**)
+3. **Selecione os repositórios** — escolha quais repositórios do Forgejo a Kodus deve revisar, ou ative [Review every repository](/pt-BR/how_to_use/code_review/configs/review_all_repositories) em **Repositories**
+4. **Webhooks** — a Kodus cria o webhook de pull request automaticamente quando você salva a seleção. Isso exige acesso de admin ao repositório e o escopo `write:repository` no token. Se isso não aconteceu, **Repositories** lista o repositório com o motivo; adicione o webhook manualmente com o guia [Forgejo Webhooks](/pt-BR/how_to_deploy/platforms/forgejo/forgejo_webhook)
+5. Abra um pull request em um repositório selecionado. Veja [o que a Kody publica e como conferir o status](/pt-BR/how_to_use/code_review/flow).
+
+## Configuração personalizada
+
+Use o [kodus-config.yml](/pt-BR/how_to_use/code_review/configs/general#kodus-config-yml) para personalizar a revisão por repositório.

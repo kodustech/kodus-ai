@@ -4,11 +4,13 @@ description: "Manually create the Bitbucket webhook when automatic registration 
 icon: webhook
 ---
 
-Kodus usually creates the webhook automatically. If that didn't happen, follow these steps to set it up manually:
+Kodus usually creates the webhook automatically when you save the repository selection. That needs admin access to the repository: on Bitbucket Cloud, the `read:webhook:bitbucket` and `write:webhook:bitbucket` scopes on the API token too; on Bitbucket Data Center, the **Repository admin** permission. If it didn't happen, **Repositories** lists the repository with the reason, and you can set the webhook up manually:
 
 <Note>
   Webhook URLs must reach the Webhooks service (port 3332). Using the API domain only works if your reverse proxy routes `/.../webhook` paths to the webhooks service.
 </Note>
+
+## Bitbucket Cloud
 
 1. Navigate to your Bitbucket repository
 2. Click on "Repository settings" in the left sidebar
@@ -17,7 +19,7 @@ Kodus usually creates the webhook automatically. If that didn't happen, follow t
 5. Time to configure your webhook:
 
    - **Title**: Kodus Code Review
-   - **URL**: Drop in the URL where you want to receive notifications, the URL you put under `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` in the `.env` file
+   - **URL**: The URL you put under `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` in the `.env` file (it ends with `/bitbucket/webhook`)
    - **Status**: Active
    - **SSL/TLS**: Check Enable SSL verification
    - **Triggers**: Select these events:
@@ -30,13 +32,19 @@ Kodus usually creates the webhook automatically. If that didn't happen, follow t
 
 6. Click "Save"
 
-And that's it! You've successfully set up a webhook to do code reviews in your Bitbucket repository.
+## Bitbucket Data Center
+
+Bitbucket Data Center support is in alpha. Open the repository, go to **Repository settings** > **Webhooks** and create a webhook with:
+
+- **URL**: the same `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` value
+- **Events**: the pull request events `pr:opened`, `pr:modified`, `pr:comment:added`, `pr:merged` and `pr:declined`
 
 <Note>
-  Kodus only consumes Pull Request events — `created`, `updated`, `merged`, `declined`, and
-  `comment created`. Repository, Issue, and build-status triggers are discarded on arrival, so
-  leaving them unchecked keeps the webhook traffic down.
-
-  On Bitbucket Data Center the equivalent events are `pr:opened`, `pr:modified`,
-  `pr:reviewer:updated`, `pr:comment:added`, `pr:merged`, and `pr:declined`.
+  Kodus only consumes pull request events: on Cloud `created`, `updated`, `merged`, `declined` and `comment created`, on Data Center the five listed above. Repository, Issue, and build-status triggers are discarded on arrival, so leaving them unchecked keeps the webhook traffic down. Automatic registration on Data Center also subscribes to `pr:reviewer:updated`, which Kodus receives and ignores.
 </Note>
+
+### Pushes to an open pull request
+
+On Data Center, a push of new commits to an open pull request arrives as `pr:from_ref_updated`. Kodus does not subscribe to it and discards it, so a push does not start a review. `pr:modified` fires when the title, description, target branch or draft state changes. Kodus ignores it unless the latest commit is new to Kodus or the pull request leaves draft. To review new commits, comment `@kody start-review` on the pull request.
+
+On Cloud, Kodus handles `pullrequest:updated` the same way: it starts a review only when the latest commit is new to Kodus or the pull request leaves draft.

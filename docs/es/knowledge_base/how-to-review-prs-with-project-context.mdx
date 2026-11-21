@@ -12,8 +12,8 @@ La revisión de código genérica detecta problemas genéricos. Para obtener fee
 Enseña a Kody tus convenciones a través de la conversación:
 
 ```
-@kody remember: este proyecto usa arquitectura hexagonal.
-La capa de dominio nunca debe depender de la infraestructura.
+@kody remember: this project uses hexagonal architecture.
+Domain layer must never depend on infrastructure.
 ```
 
 Las Memorias persisten y se aplican en todas las revisiones futuras.
@@ -23,12 +23,12 @@ Las Memorias persisten y se aplican en todas las revisiones futuras.
 Referencia tu propia documentación directamente en las reglas:
 
 ```
-Instrucciones: Validar que los nuevos endpoints sigan los patrones
-en @file:docs/api-conventions.md y usen las clases base
-definidas en @file:src/shared/base-controller.ts.
+Instructions: Validate that new endpoints follow the patterns
+in @file:docs/api-conventions.md and use the base classes
+defined in @file:src/shared/base-controller.ts.
 ```
 
-### Instrucciones de categoría (antes Custom Prompts)
+### Instrucciones de categoría
 
 Agrega instrucciones específicas del proyecto que Kody incluye en cada revisión:
 
@@ -38,20 +38,19 @@ Agrega instrucciones específicas del proyecto que Kody incluye en cada revisió
 
 Para cambiar cómo Kody redacta sus sugerencias (tono, extensión), usa **Kody's personality** en **Code review → What Kody writes**.
 
-### Plugins MCP
+### Trackers de tareas
 
-Conecta herramientas externas para darle a Kody acceso a un contexto más enriquecido:
+Conecta Linear, Jira (**Atlassian Rovo**), Notion o Git Issues en **Plugins**. Cuando un PR referencia una tarea, Kody verifica el PR contra los requisitos y criterios de aceptación de la tarea. Consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation).
 
-- **Jira/Linear** — requisitos de tareas y criterios de aceptación
-- **Slack** — discusiones y decisiones del equipo
-- **Google Docs** — especificaciones y documentos de diseño
-- **Servidores MCP personalizados** — cualquier herramienta que use tu equipo
+### Plugins
+
+Los plugins que instalas también son herramientas que Kody puede usar cuando lo mencionas en un comentario de PR, y herramientas que puedes activar para un [agente personalizado](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp). Agrega tu propio servidor MCP como plugin personalizado para incorporar otras herramientas.
 
 ## Flujo de trabajo de ejemplo
 
-1. Define reglas de arquitectura mediante **Memorias**: `@kody remember: seguimos el patrón CQRS en este servicio`
-2. Crea **Reglas de Revisión** que referencien tus documentos: `@file:docs/architecture.md`
-3. Conecta **Jira** para que Kody valide los PRs contra los requisitos de las tareas
+1. Define reglas de arquitectura mediante **Memories**: `@kody remember: we follow CQRS pattern in this service`
+2. Crea **Review Rules** que referencien tus documentos: `@file:docs/architecture.md`
+3. Conecta tu tracker de tareas para que Kody valide los PRs contra los requisitos de las tareas
 4. Agrega **Instructions** de categoría en **What to review** para conocimiento específico del dominio
 
-Para más detalles, consulta [Instrucciones de categoría (antes Custom Prompts)](/es/how_to_use/code_review/configs/custom_prompts) y [Plugins](/es/how_to_use/code_review/plugins).
+Para más detalles, consulta [Instrucciones de categoría](/es/how_to_use/code_review/configs/custom_prompts) y [Plugins](/es/how_to_use/code_review/plugins).

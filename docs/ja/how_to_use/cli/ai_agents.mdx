@@ -3,61 +3,89 @@ title: "AIエージェント"
 description: "Kodus CLI を AI コーディングエージェントと統合して、自律的なレビュー・修正ループを実現します。"
 ---
 
-CLI には、AIコーディングエージェントが解析して行動するために設計された最小限の構造化出力モード（`--prompt-only`）が搭載されています。チームキーと組み合わせることで、エージェントがレビューし、修正を適用し、再レビューし、コミットする—重要なパスに人間が介在しない—自律的なレビュー・修正ループが実現します。
+CLI には、AI コーディングエージェントが解析して行動するための、最小限の構造化出力モード（`--prompt-only`）が用意されています。チームキーと組み合わせると、エージェントは人間が介在することなく、自分の変更をレビューし、指摘された点を修正して、再度レビューできます。また CLI は、お使いのマシン上のエージェントに Kodus のスキルをインストールするため、エージェントはどのコマンドを実行すべきかを把握できます。
 
 ## 対応エージェント
 
-- **Claude Code** — スキルインストーラー経由のネイティブスキル。
-- **Cursor** — ネイティブスキル。
-- **Codex** — ネイティブスキル。
-- **Windsurf** — `--prompt-only` 出力経由。
+`kodus skills install` は、カレントディレクトリとホームフォルダにあるエージェントの設定フォルダを手がかりにエージェントを検出し、そこに Kodus のスキルを書き込みます。検出対象は次のとおりです。
 
-シェルコマンドを実行して構造化テキストを解析できる他のエージェントでも、`kodus review --prompt-only` はそのまま動作します。
+| エージェント         | 設定フォルダ                                      |
+| ------------- | -------------------------------------------------- |
+| Claude Code   | `.claude`, `~/.claude`, `~/.config/claude`         |
+| Cursor        | `.cursor`, `~/.cursor`                             |
+| Codex         | `.codex`, `~/.codex`                               |
+| Windsurf      | `.windsurf`, `~/.codeium/windsurf`                 |
+| Gemini        | `.gemini`                                          |
+| Antigravity   | `.agent`, `~/.gemini/antigravity`                  |
+| OpenCode      | `.opencode`, `~/.config/opencode`                  |
+| Kiro          | `.kiro`, `~/.kiro`                                 |
+| Goose         | `.goose`, `~/.config/goose`                        |
+| Roo Code      | `.roo`, `~/.roo`                                   |
+| Kilo Code     | `.kilocode`, `~/.kilocode`                         |
+| Droid         | `.factory`, `~/.factory`                           |
+| AiderDesk     | `.aider-desk`, `~/.aider-desk`                     |
+| その他のエージェント  | `.agents`, `~/.agents`, `~/.config/agents`         |
+
+シェルコマンドを実行してテキストを読み取れるその他のエージェントでは、スキルなしでも `kodus review --prompt-only` が動作します。
 
 ## 最速のセットアップ
 
-CLI と全エージェントスキルを一度にインストール:
+CLI とスキルを一度にインストールします。
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-これにより:
+インストーラーは CLI をインストールし、検出したエージェントに同梱のスキルを追加します。エージェントを実行する環境で `KODUS_TEAM_KEY` を設定します。セルフホストの場合は、`KODUS_API_URL` も設定します。スキルを後から追加・更新するには、`kodus skills install` または `kodus skills resync` を実行します。
 
-1. `@kodus/cli` バイナリをグローバルにインストール。
-2. `~/.kodus/config.json` にチームキーを設定。
-3. 検出された全エージェント（Claude Code、Cursor、Codex、Windsurf）に Kodus スキルをデプロイ。
+## スキル
 
-個別ログインなし。インタラクティブなプロンプトなし。すぐにエージェントループに対応。
+| スキル                             | エージェントがスキルでできること                                                      |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `kodus-review`                    | `kodus review --prompt-only` でローカルの変更をレビューし、指摘された点を修正する       |
+| `kodus-pr-suggestions-resolver`   | プルリクエストの提案を取得し、妥当なものを適用して、そのレビュー履歴を読む |
+| `kodus-business-rules-validation` | ローカルの変更をタスクの受け入れ基準に照らして確認する                           |
+| `kodus-kody-rules`                | Kody Rules を表示、作成、更新、一時停止、再開、削除する                         |
+| `kodus-review-settings`           | コードレビューの設定とレビューモデルを表示、変更する                          |
+| `kodus-custom-agents`             | カスタムエージェントを一覧表示、作成、編集、オン/オフの切り替え、削除、試行する                  |
+| `kodus-cockpit-usage`             | Cockpit のメトリクスとトークン使用量を読む                                               |
+| `kodus-centralized-config`        | 集中設定を確認、有効化、同期、ダウンロードする                           |
+| `kodus-trace`                     | 変更しようとしているコードについて記録された判断を読む                     |
+
+ルール、設定、エージェントを変更するスキルには、ログイン、またはそれを許可するチームキーが必要です。[認証モード](/ja/how_to_use/cli/concepts#認証モード)を参照してください。
 
 ## レビュー・修正ループ
 
 <Steps>
-  <Step title="エージェントがレビューを実行">
+  <Step title="エージェントがレビューを実行する">
     ```bash
     kodus review --prompt-only
     ```
 
-    CLI はファイルパス、行番号、重要度、提案された修正を含む構造化された問題を、LLM が消費するために設計されたコンパクトなテキスト形式で返します。
+    CLI は、ファイルパス、行番号、重要度、提案された修正を含む構造化された問題を、LLM 向けのコンパクトなテキスト形式で返します。出力は `REVIEW_ANALYSIS_COMPLETE` で始まり、`END_REVIEW` で終わります。
   </Step>
-  <Step title="エージェントが修正を適用">
-    エージェントは出力を読み取り、どの修正を適用するか決定し（または `--fix` で全て受け入れ）、ファイルを編集します。
+  <Step title="エージェントが修正を適用する">
+    エージェントは出力を読み取り、どの修正を適用するかを判断して、ファイルを編集します。誤検知をスキップしても問題ありません。その場合、エージェントは理由を説明する必要があります。
   </Step>
-  <Step title="エージェントが再レビューを実行">
+  <Step title="エージェントが再度レビューを実行する">
     ```bash
     kodus review --prompt-only --fail-on error
     ```
 
-    `--fail-on error` により、エラーレベル以上の問題が残っている間はループがゼロ以外で終了します。エージェントはループを継続し、レビューがクリーンになるとプロセスは0で終了し、エージェントは次に進みます。
+    `--fail-on error` を指定すると、エラーレベル以上の問題が残っている間、コマンドは終了コード 1 で終了します。レビューがクリーンになると `NO_ISSUES_FOUND` が出力されて終了コード 0 で終了し、エージェントは次に進みます。
   </Step>
-  <Step title="エージェントがコミットとプッシュ">
-    レビューがクリーンになったら、エージェントはコミットしてプッシュします。オプションで、手動プッシュ時の追加セーフティネットとして pre-push フックをインストール（`kodus hook install`）できます。
+  <Step title="エージェントがコミットしてプッシュする">
+    レビューがクリーンになったら、エージェントはコミットしてプッシュします。オプションで、手動でプッシュする場合のセーフティネットとして、pre-push フックをインストールできます（`kodus hook install`）。
   </Step>
 </Steps>
 
-## エージェント用チームキー認証
+<Note>
+  `--fix` はターミナルで確認を求めるため、無人で動作するエージェントは、代わりに自分で修正を適用する必要があります。
+</Note>
 
-チームキーはエージェントに強く推奨されます — 個別のサインアップなし、インタラクティブなログインなし、簡単なローテーション、デバイスごとの追跡。
+## エージェント用のチームキー認証
+
+エージェントにはチームキーを強く推奨します。個別のサインアップもインタラクティブなログインも不要で、ローテーションが簡単で、デバイスごとに追跡できます。
 
 ```bash
 export KODUS_TEAM_KEY=kodus_xxxxx
@@ -66,40 +94,49 @@ kodus review --prompt-only
 
 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）でキーを生成し、新しいキーとともに表示されるインストールコマンドをチームに配布してください。
 
-<Warning>キーが表示されたときに保存してください — 再表示されません。</Warning>
+<Warning>キーは表示されたときに保存してください。再表示されません。</Warning>
 
 ## 重要な出力フラグ
 
-| フラグ           | 用途                                                                |
+| フラグ             | 用途                                                                 |
 | ---------------- | ------------------------------------------------------------------- |
-| `--prompt-only`  | 解析用コンパクト構造化出力。レビューループで使用。                  |
-| `--agent`        | すべてのコマンドで決定論的な機械可読出力を強制。                    |
-| `--format json`  | 完全な JSON ペイロード。厳密なパーサーには `--agent` と組み合わせて。|
-| `--fail-on`      | 終了コードゲート。ゼロ以外の間、ループは継続。                      |
-| `--fields <csv>` | JSON/エージェントペイロードを絞り込む（例: `summary,issues.file,issues.severity`）。エージェントのコンテキストウィンドウを小さく保つのに便利。 |
+| `--prompt-only`  | 解析用のコンパクトな構造化出力。レビューループで使用します。`kodus review` のみ |
+| `--agent`        | 1 つの JSON エンベロープ（`ok`、`command`、`data`、`error`、`meta`）。すべてのコマンドが対応しているわけではありません。[グローバルフラグ](/ja/how_to_use/cli/commands#グローバルフラグ)を参照してください |
+| `--format json`  | `review` と `pr` の完全な JSON ペイロード                             |
+| `--fail-on`      | 終了コードのゲート。指定した重要度に該当する問題がある場合に 1 を返します                  |
+| `--fields <csv>` | JSON ペイロードを絞り込みます（例：`summary,issues.file,issues.severity`）。エージェントのコンテキストを小さく保てます。`--format json` または `--agent` が必要です |
 
-## 例: ビジネス検証を含む Claude Code ループ
+その他のコマンドは `--json` を受け付けます。`kodus schema` は、すべてのコマンドとフラグを JSON で出力します。何が存在するかを確認する必要があるエージェント向けです。
+
+## 例：ビジネス検証を含む Claude Code のループ
 
 ```bash
-# Claude Code セッションで、エージェントは以下を実行できます:
-kodus review --prompt-only --fail-on error    # 一般的なレビュー
-kodus pr business-validation --task-id KC-1441 --dry-run   # タスクに対して確認
-kodus review --prompt-only --fix               # 修正可能な問題を自動適用
+# In a Claude Code session, the agent can run:
+kodus review --prompt-only --fail-on error                      # general review
+kodus pr business-validation --task-id KC-1441 --format json    # check against the task
+kodus review --prompt-only --fail-on error                      # re-run after fixes
 git commit -am "fix: KC-1441 address review findings"
 ```
 
-スキルインストーラーを使用すると、Claude Code の Kodus スキルはこれらをいつ実行するかを認識します — あなた側でプロンプトエンジニアリングは不要です。
+スキルをインストールしておけば、エージェントはこれらをいつ実行すべきかを把握しています。
 
-## 関連
+## エージェントの判断を記録する
+
+`kodus trace enable` は、Claude Code、Cursor、Codex 向けに各セッションを記録するフックを追加します。これにより、エージェントが変更を加えた理由が保持され、パスを指定して読み返せます。[Kodus Trace](/ja/how_to_use/cli/trace) を参照してください。
+
+## 関連リンク
 
 <CardGroup cols={2}>
-  <Card title="コンセプト" icon="book-open" href="concepts">
+  <Card title="コンセプト" icon="book-open" href="/ja/how_to_use/cli/concepts">
     レビューモード、差分モード、エージェント出力フラグ。
   </Card>
-  <Card title="コマンドリファレンス" icon="book" href="commands">
+  <Card title="コマンドリファレンス" icon="book" href="/ja/how_to_use/cli/commands">
     完全なフラグ一覧。
   </Card>
-  <Card title="トラブルシューティング" icon="life-ring" href="troubleshooting">
+  <Card title="Kodus Trace" icon="timeline" href="/ja/how_to_use/cli/trace">
+    エージェントが書いた変更の背景にある判断を記録し、読み返します。
+  </Card>
+  <Card title="トラブルシューティング" icon="life-ring" href="/ja/how_to_use/cli/troubleshooting">
     エージェントループの問題、フックの問題、タイムアウト。
   </Card>
 </CardGroup>

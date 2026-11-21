@@ -6,27 +6,29 @@ icon: "shield-halved"
 
 ## Por que um pipeline focado em segurança
 
-A revisão de código genérica captura estilo e bugs. Mas vulnerabilidades de segurança — injeção SQL, segredos hardcoded, padrões de autenticação inseguros — precisam de regras dedicadas que tratem as descobertas como bloqueadores críticos.
+O code review genérico pega estilo e bugs. Mas vulnerabilidades de segurança — injeção SQL, segredos hardcoded, padrões de autenticação inseguros — precisam de regras dedicadas que tratem os apontamentos como bloqueios críticos.
 
-Este cookbook configura uma camada de segurança prioritária em cima da sua revisão existente.
+Este cookbook configura uma camada de segurança em primeiro lugar por cima do seu review existente.
 
 ## Passo 1 — Habilite a análise de segurança
 
-Certifique-se de que a análise de segurança está habilitada:
+Confirme que a categoria **Security** está ativada em **Code review → What to review**, ou no `kodus-config.yml` (lido só quando **Prefer kodus-config.yml settings** está ativado para o repositório):
 
 ```yaml
 reviewOptions:
   security: true
 ```
 
-Isso fornece as verificações de segurança integradas do Kodus. As regras abaixo adicionam as políticas de segurança específicas do seu time por cima.
+Isso dá a você as verificações de segurança nativas da Kodus. As regras abaixo acrescentam por cima as políticas de segurança específicas do seu time.
 
 ## Passo 2 — Crie regras focadas no OWASP
+
+Crie cada regra em **Code review → Kody Rules**: na aba **Review Rules**, clique em **New rule** e preencha os campos como mostrado abaixo.
 
 ### Prevenção de injeção SQL
 
 ```
-Name: No raw SQL queries
+Rule name: No raw SQL queries
 Execution mode: Per file
 Path: **/*.ts, **/*.js, **/*.py
 Severity: Critical
@@ -42,7 +44,7 @@ Instructions:
 ### Detecção de segredos hardcoded
 
 ```
-Name: No hardcoded secrets or credentials
+Rule name: No hardcoded secrets or credentials
 Execution mode: Per file
 Path: **/*
 Severity: Critical
@@ -60,7 +62,7 @@ Instructions:
 ### Bypass de autenticação
 
 ```
-Name: Auth middleware must not be skipped
+Rule name: Auth middleware must not be skipped
 Execution mode: Per PR
 Severity: Critical
 Instructions:
@@ -70,14 +72,14 @@ Instructions:
     or equivalent decorators
   - Middleware bypass patterns like skipAuth: true
   - Public endpoints that access user-specific data
-  Reference @file:src/shared/auth/guards/ for the
+  Reference @file:src/shared/auth/guards/auth.guard.ts for the
   approved auth patterns.
 ```
 
 ### Prevenção de XSS
 
 ```
-Name: No dangerouslySetInnerHTML without sanitization
+Rule name: No dangerouslySetInnerHTML without sanitization
 Execution mode: Per file
 Path: **/*.tsx, **/*.jsx
 Severity: Critical
@@ -90,7 +92,7 @@ Instructions:
 
 ## Passo 3 — Ensine Memories de segurança
 
-Crie convenções persistentes que se aplicam em todo lugar:
+Crie convenções persistentes que valem para tudo:
 
 ```
 @kody remember: all user input must be validated and sanitized
@@ -109,36 +111,23 @@ internal paths, or database details to the client.
 
 ## Passo 4 — Configure para tolerância zero
 
-Para regras de segurança, você quer que descobertas críticas bloqueiem:
+Para regras de segurança, você quer que os apontamentos críticos bloqueiem e nunca sejam filtrados:
 
-1. Em **Code review → General**, ative **Enable changing status of Review to 'Request Changes'** para que o Kody solicite mudanças quando problemas críticos forem encontrados
-2. Defina as regras de segurança com severidade **Crítica** para que sempre apareçam acima de qualquer filtro de severidade
-3. NÃO defina um limite baixo em `maxSuggestions` — descobertas de segurança nunca devem ser suprimidas
+1. Em **Code review → General → Review feedback**, ative **Request changes on critical issues** (não disponível quando todos os provedores conectados são GitLab). A Kody define o review como Request Changes quando posta um comentário inline Critical
+2. Defina as regras de segurança com severidade **Critical**
+3. Em **Code review → What to review**, deixe **Apply the threshold to Kody Rules** desativado, que é o padrão. As regras então postam em qualquer severidade, seja qual for o **Minimum severity to post**
 
-## Passo 5 — Adicione uma regra de auditoria de dependências (opcional)
-
-Se você usar plugins MCP, pode verificar dependências:
-
-```
-Name: No known vulnerable dependencies
-Execution mode: Per PR
-Severity: Critical
-Instructions:
-  If pr_files_diff modifies package.json, requirements.txt,
-  or any dependency file, use @MCP to check for known
-  vulnerabilities in the added or updated packages.
-  Flag any dependency with known critical CVEs.
-```
+O Request changes segue os comentários inline, então ele é definido por regras **Per file**. Uma regra **Per PR**, como a do middleware de autenticação, posta um único comentário no pull request e não o define.
 
 ## Checklist
 
-- [ ] Análise de segurança habilitada em reviewOptions
-- [ ] Regra de injeção SQL cobre todo o código que interage com banco de dados
-- [ ] Regra de detecção de segredos cobre todos os tipos de arquivo
-- [ ] Regra de bypass de autenticação referencia seus padrões de autenticação reais
-- [ ] Regra de XSS cobre todos os arquivos de componentes frontend
-- [ ] Memories de segurança ensinam princípios gerais de codificação segura
-- [ ] Solicitar Alterações habilitado para descobertas críticas
+- [ ] Categoria **Security** ativada
+- [ ] A regra de injeção SQL cobre todo o código que interage com o banco de dados
+- [ ] A regra de detecção de segredos cobre todos os tipos de arquivo
+- [ ] A regra de bypass de autenticação referencia seus padrões de autenticação reais
+- [ ] A regra de XSS cobre todos os arquivos de componentes frontend
+- [ ] As Memories de segurança ensinam princípios gerais de codificação segura
+- [ ] **Request changes on critical issues** está ativado, e **Apply the threshold to Kody Rules** está desativado
 - [ ] Um PR de teste confirmou que as regras disparam corretamente
 
-Para mais informações sobre configuração de regras, consulte [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).
+Para saber mais sobre a configuração de regras, veja [Kody Rules](/pt-BR/how_to_use/code_review/configs/kody_rules).

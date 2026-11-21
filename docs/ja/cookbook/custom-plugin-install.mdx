@@ -1,84 +1,91 @@
 ---
-title: "カスタムMCPプラグインのインストール"
-description: "任意のカスタムModel Context ProtocolプラグインをKodusに接続するためのステップバイステップの手順。"
+title: "カスタム MCP プラグインのインストール"
+description: "独自の Model Context Protocol サーバーを Kodus に接続するための手順。"
 icon: "plug"
 ---
 
-## カスタムプラグインが重要な理由
+## なぜカスタムプラグインか
 
-カスタムMCPプラグインを使用すると、チームはKodyを社内システム（ナレッジベース、インシデントダッシュボード、ポリシーエンジンなど）に接続できます。インストール後、Kodyのすべてのインタラクションがライブデータを使用してそれらのツールを呼び出せるようになるため、レビュアーはスクリーンショットや古いスニペットをプルリクエストにコピーする必要がなくなります。
-
-このガイドでは、シンプルな読み取り専用エンドポイント（Kodus Docs MCPなど）から認証を伴うより高度なパイプラインまで、任意のカスタムプラグインに推奨するフローを紹介します。
+カスタムプラグインを使うと、Kody はプルリクエストに回答する際に、ナレッジベース、インシデントダッシュボード、ポリシーエンジンなどの社内システムを読み取れます。レビュアーがスクリーンショットや古いスニペットをコメントに貼り付ける必要がなくなります。
 
 <Callout icon="globe">
-  Kodusは**リモートMCPサーバーのみ**をサポートしています。つまり、プラグインはKodusのインフラストラクチャからアクセス可能である必要があります。
+  Kodus がサポートするのは**リモート MCP サーバーのみ**です。サーバーは Kodus のインフラから到達可能でなければなりません。`localhost` やデスクトップの MCP エンドポイントは使えません。
 </Callout>
 
----
+## プラグイン情報を準備する
 
-## プラグイン情報の準備
-
-Pluginsカタログを開く前に、以下の情報を収集してください：
+Plugins ページを開く前に、次の情報を集めておきます。
 
 | フィールド | 重要な理由 |
 | ----- | -------------- |
-| **パブリックURL** | MCPマニフェストがホストされているエンドポイント（例：`https://acme-internal-tools.com/mcp`）。 |
-| **プロトコル** | MCPの実装タイプ（HTTPまたはSSE）。 |
-| **ホスティング** | Kodusからアクセス可能なリモートサーバーである必要があります（localhostやデスクトップMCPエンドポイントは不可）。 |
-| **認証** | プラグインがAPIキー、OAuth、またはワークスペースIPへのオープンアクセスを必要とするかどうか。 |
-| **説明 / ロゴ** | カタログを閲覧する他のエンジニアがプラグインの機能を理解するのに役立ちます。 |
+| **URL** | MCP エンドポイント。例：`https://acme-internal-tools.com/mcp` |
+| **Protocol** | **HTTP** または **SSE**。 |
+| **Authorization** | **None**、**Bearer Token**、**Basic Auth**、**API Key**（および設定先のヘッダー）、または **OAuth 2.0**（クライアント ID、または動的クライアント登録）。 |
+| **Description and logo** | 任意。チームメンバーがプラグインを見分けやすくなります。 |
 
-試してみるリモートMCPサーバーをお探しですか？
+試せるリモート MCP サーバーをお探しですか？
 
-- [Smithery.ai](https://smithery.ai/) はデプロイ可能なMCPサービスと、独自のインフラに向けることができる簡単なランチャーをキュレーションしています。
-- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) は、ドキュメント検索、セキュリティスキャナー、ワークフローボットにわたるコミュニティが管理するエンドポイントをリスト化しています。
+- [Smithery.ai](https://smithery.ai/) は、デプロイ可能な MCP サービスをキュレーションしています。
+- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) は、コミュニティが管理するエンドポイントを一覧にしています。
 
-## Kodusへのプラグインのインストール
+## Kodus にプラグインをインストールする
 
-<Frame caption="Plugins で Add Custom Plugin カードの Add Plugin を押すと、このフォームが開きます">
+<Frame caption="Plugins → Add Custom Plugin カード → Add Plugin でこのフォームが開きます">
   <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
 </Frame>
 
-1. Kodusワークスペース内で、サイドバーから **Plugins**（Beta）を開きます。
-2. **Add Custom Plugin** カードで **Add Plugin** をクリックします。
-3. フォームに入力します：
+<Steps>
+  <Step title="フォームを開く">
+    サイドバーで **Plugins** を開きます。**Add Custom Plugin** カードで **Add Plugin** をクリックします。
+  </Step>
+  <Step title="入力する">
+    ```text
+    Plugin Name: Descriptive label (for example "Security Runbooks MCP")
+    Description: What data it exposes (optional)
+    Logo URL: Optional
+    URL: https://your-domain.com/mcp
+    Protocol: HTTP or SSE
+    Authorization: None, Bearer Token, Basic Auth, API Key or OAuth 2.0
+    Custom Headers: Any extra header your server needs (optional)
+    ```
 
-   ```text
-   Plugin Name: 説明的なラベル（例："Security Runbooks MCP"）
-   Description: 公開するデータ/アクション
-   Logo URL: オプションですが、識別に役立ちます
-   URL: https://your-domain.com/mcp
-   Protocol: HTTP または SSE
-   Authorization / Headers: MCPホストが必要とする場合に追加（例：APIキー、OAuthなど）（オプション）
-   ```
+    **Create Plugin** をクリックします。
+  </Step>
+  <Step title="ツールを選んでインストールする">
+    プラグインが開きます。OAuth 2.0 の場合は、まず **Authenticate with** プラグインをクリックします。**Selected tools** で、Kody に必要なツールだけを残し、**Install plugin** をクリックします。インストール済みのプラグインは、カードに **Installed** と表示されます。
+  </Step>
+</Steps>
 
-4. **プラグインを作成** をクリックします。リストに表示されると、ワークスペース全体で即座に利用可能になります。
+**Selected tools** が 0 of 0 と表示される場合、Kodus はサーバーのツールを一覧取得できていません。プラグインを開いて **Edit Plugin** をクリックし、URL、プロトコル、認可を確認してください。
 
 <Warning>
-  カスタムプラグインはワークスペースと同じ権限で実行されます。組織が信頼し、監視しているエンドポイントのみをインストールしてください。
+  Kody は、選択したどのツールでも呼び出せます。組織が信頼するエンドポイントだけをインストールし、Kody に必要なツールだけを選択してください。
 </Warning>
 
-## 接続の確認
+## 接続を確認する
 
-1. Kodyが有効になっているプルリクエストを開きます。
-2. `@kody` をメンションし、プラグインが応答するような質問を含めます。
+1. Kody が有効なリポジトリで、プルリクエストを開きます。
+2. `@kody` に続けて、そのプラグインにしか答えられない質問をコメントします。
 
    ```
-   @kody MCPからデプロイチェックリストを取得して、フィーチャーフラグが必要かどうか確認してもらえますか？
+   @kody can you fetch the deployment checklist from our MCP and confirm whether feature flags are required?
    ```
 
-3. Kodyの返信を確認します。新しいプラグインから返されたデータが含まれているはずです。含まれていない場合は、**Plugins** ページでプラグインのURL、プロトコル、認証設定を確認してください。
+3. Kody の返信を確認します。プラグインが返したデータが含まれているはずです。含まれていない場合は、**Plugins** ページでそのプラグインを開き、URL、プロトコル、認可を確認してください。
 
 <Info>
-  Kodus Docs MCP（`https://docs.kodus.io/mcp`）は簡単なサニティテストです。まずインストールして、ワークスペースが外部ホストに到達できることを確認できます。
+  サーバーを構築せずに流れを試すには、`https://docs.kodus.io/mcp` をカスタムプラグインとして追加します。プロトコルは **HTTP**、認可は **None** です。
 </Info>
 
----
+## カスタムエージェントで使う
+
+カスタムエージェントは、エージェントのページの **Tools → Plugins** でオンにすると、インストール済みのプラグインから読み取れるようになります。提供されるのは読み取りツールだけです。[Skills, docs and tools](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp) を参照してください。
 
 ## クイックチェックリスト
 
-- [ ] プラグインマニフェストがホストされ、アクセス可能である。
-- [ ] 認証モデル（ある場合）が文書化され、テストされている。
-- [ ] プラグインが正しいURL + ヘッダーで **カスタムプラグインを追加** からインストールされている。
-- [ ] サンプルPRでKodyがプラグインを呼び出せることが確認されている。
-- [ ] オーナーがインテグレーションの監視と更新方法を把握している。
+- [ ] サーバーが HTTP または SSE で Kodus から到達できる。
+- [ ] 選んだ方式で認可が機能する。
+- [ ] **Selected tools** にツールが一覧表示され、Kody に必要なものだけが選択されている。
+- [ ] プラグインに **Installed** と表示されている。
+- [ ] プルリクエストでのテストコメントに、プラグインのデータが返ってきた。
+- [ ] 連携の監視と更新を担当する人がいる。

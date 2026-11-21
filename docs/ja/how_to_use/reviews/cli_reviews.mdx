@@ -1,0 +1,31 @@
+---
+title: "CLI レビュー"
+description: "チームが Kodus CLI で実行したレビュー、実行した人、見つかった内容を確認します。"
+---
+
+**Reviews → CLI** には、チームが [Kodus CLI](/ja/how_to_use/cli/introduction) でターミナルから実行したレビューが一覧表示されます。[プルリクエスト](/ja/how_to_use/reviews/pull_requests) タブの隣にあり、オーナー、Repo Admin、Contributor が利用できます。誰かが CLI レビューを実行するまでは、*No CLI reviews yet* と表示されます。
+
+## 一覧
+
+| 列 | 表示される内容 |
+| --- | --- |
+| **When** | レビューがどれくらい前に実行されたか |
+| **User** | 実行した Kodus アカウント。ない場合は git のメールアドレス、それもない場合は *Anonymous*。その下の行には、**Team** キー（キーの名前付き）と **Personal** ログインのどちらを使ったかが表示され、アカウントと異なる場合は、ローカルの git メールアドレスが `git:` として表示されます |
+| **Repo** | レビューされたリポジトリ |
+| **Branch** | レビューされたブランチ |
+| **Commit** | 短いコミットハッシュ |
+| **Status** | **Success**、**Error**、**In Progress**、**Skipped**、**Partial Error**、**Pending** |
+| **Issues** | レビューが見つけた問題の数 |
+| **Duration** | レビューにかかった時間 |
+
+Branch、Commit、Duration は、狭い画面では非表示になります。
+
+行をクリックすると展開されます。各ステージのステータス、所要時間、開始時刻を含むレビューのタイムライン、エラーメッセージ、Kodus CLI のバージョン、レビューが生成したサジェスト（それぞれ重大度、カテゴリ、ファイルと行、説明、提案された変更付き）が表示されます。レビューが実行中の間は、サジェストが最終版ではないプレビューとして表示されることがあります。
+
+## フィルター
+
+- **Search by user email**
+- **Repository**
+- **Date**：**Today**、**Last 7 days**、**Last 30 days**
+
+右上の **Reviewed today** カウンターには、チームが今日実行した CLI レビューの数が表示され、クリックすると一覧がそれらに絞り込まれます。アクティブなフィルターはチップとして表示され、**Clear all** でリセットでき、URL にも保持されるため、絞り込んだ表示を共有できます。

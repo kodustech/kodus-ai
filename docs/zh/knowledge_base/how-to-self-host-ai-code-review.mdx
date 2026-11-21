@@ -1,39 +1,52 @@
 ---
 title: "如何自托管 AI 代码审查工具"
-description: "在您自己的基础设施上部署 Kodus，完全控制数据、模型和配置。"
+description: "在您自己的基础设施上部署 Kodus,完全控制数据、模型和配置。"
 ---
 
-Kodus 是开源的，可以在您自己的基础设施上自托管。这使您完全控制数据、网络访问和 LLM 提供商。
+Kodus 是开源的,可以在您自己的基础设施上自托管。这使您可以控制审查数据的存放位置、审查使用哪个 LLM 提供商,以及您的 Git 提供商如何访问 Kodus。
 
 ## 部署选项
 
-### Docker（推荐）
+### Docker(推荐)
 
-使用 Docker Compose 在任何 VM 上部署 Kodus：
+使用 Docker Compose 在任何 VM 上部署 Kodus:
 
-1. 克隆 Kodus 代码库
-2. 配置环境变量
-3. 运行 `docker compose up`
-4. 访问 Web UI 并连接您的 Git 提供商
+1. 克隆 `kodus-installer` 代码库
+2. 将 `.env.example` 复制为 `.env`,生成密钥并填入您的值
+3. 运行 `./scripts/install.sh`
+4. 运行 `./scripts/doctor.sh` 检查整个栈
+5. 打开 Web UI,创建您的管理员账户,连接 LLM 提供商(没有模型就不会运行任何审查)并连接您的 Git 提供商
+
+安装程序会启动 web 应用、API、webhooks 服务、worker、PostgreSQL、MongoDB 和 RabbitMQ。分步说明请参见[使用 Docker 部署](/zh/how_to_deploy/deploy_kodus/generic_vm)。
 
 ### 本地开发
 
-用于测试或贡献：
+用于测试或贡献,请使用[本地快速开始](/zh/how_to_deploy/local_quickstart/orchestrator)。它会在您的机器上运行整个栈。
 
-1. 使用编排器进行快速本地设置
-2. 包含单个命令中的所有服务
+## 连接您的 Git 提供商
+
+| 提供商 | 连接方式 |
+| --- | --- |
+| GitHub | 您创建的 GitHub App,或令牌。[GitHub App](/zh/how_to_deploy/platforms/github/github_app) |
+| GitLab | 您创建的 OAuth 应用,或令牌。[GitLab OAuth](/zh/how_to_deploy/platforms/gitlab/gitlab_oauth) |
+| Bitbucket | Cloud 使用 API 令牌;Data Center 使用用户名和密码(alpha)。[Bitbucket webhooks](/zh/how_to_deploy/platforms/bitbucket/bitbucket_webhook) |
+| Azure Repos | 令牌。[Azure DevOps webhooks](/zh/how_to_deploy/platforms/azure_devops/azdevops_webhook) |
+| Forgejo | 令牌。支持由社区维护。[Forgejo webhooks](/zh/how_to_deploy/platforms/forgejo/forgejo_webhook) |
 
 ## 您控制的内容
 
-- **数据** — 所有代码和审查数据保留在您的基础设施上
-- **LLM 提供商** — 使用任何提供商或自托管模型
-- **网络** — 在防火墙后运行，不需要外部访问
-- **配置** — 完全控制所有设置
+- **数据** — 拉取请求、建议和设置数据存储在您自己的 PostgreSQL 和 MongoDB 中
+- **LLM 提供商** — 使用任何提供商,或通过兼容 OpenAI 的端点使用自托管模型
+- **网络** — 您的 Git 提供商必须能访问 webhooks 服务(端口 3332),Kodus 必须能访问您的 Git 提供商和 LLM 提供商
+- **配置** — 设置位于您的 `.env` 和 web 应用中
+
+每个实例每天发送一次匿名心跳;请参阅[匿名遥测](/zh/how_to_deploy/deploy_kodus/telemetry)以查看或关闭它。
 
 ## 要求
 
 - Docker 和 Docker Compose
 - 足够的计算资源用于 API 和 worker 服务
-- 到 Git 提供商（GitHub、GitLab、Bitbucket）的网络访问
+- 如果您的 Git 提供商是 GitHub.com 或 GitLab.com 等云提供商,则需要一个它可以访问的域名或固定 IP
+- 到您的 Git 提供商(GitHub、GitLab、Bitbucket、Azure Repos 或 Forgejo)的网络访问
 
-完整部署指南，请参阅[使用 Docker 部署](/zh/how_to_deploy/deploy_kodus/generic_vm)。
+完整部署指南,请参阅[使用 Docker 部署](/zh/how_to_deploy/deploy_kodus/generic_vm)。

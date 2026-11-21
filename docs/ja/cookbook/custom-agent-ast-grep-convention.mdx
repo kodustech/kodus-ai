@@ -6,13 +6,15 @@ icon: "code"
 
 ## なぜ ast-grep か
 
-「ここでこの関数を呼ばない」「このオプションを必ず渡す」のように、構造的な規約があります。モデルはそれを見つけられますが、見落としたり、存在しない違反を想像したりもします。[ast-grep](https://ast-grep.github.io) のルールは構文木に対してマッチするので、マッチは証拠になります。実行でマッチしたルールを引用する指摘は、モデルのチェックをスキップして投稿されます。
+「ここでこの関数を呼ばない」「このオプションを必ず渡す」のように、構造的な規約があります。モデルはそれを見つけられますが、見落としたり、存在しない違反を想像したりすることもあります。[ast-grep](https://ast-grep.github.io) のルールは構文木に対してマッチするので、マッチは証拠になります。実行でマッチしたルールを引用する指摘は、モデルによるチェックを省略して投稿されます。
 
-例はチェックアウトサービスで、規約は 1 つです：**金額は `Money` ヘルパーで扱う整数のセントであり、浮動小数点数にはしない。**
+例はチェックアウトサービスで、規約は 1 つです。**金額は `Money` ヘルパーで扱う整数のセントとし、浮動小数点数にはしない。**
+
+カスタムエージェントはベータ版で、Teams プランと Enterprise プラン、およびトライアル期間中に利用できます。セルフホストの Kodus では `BETA_FEATURES=true` も必要です。
 
 ## ステップ1 — リポジトリにルールを書く
 
-ルールファイルをデフォルトブランチにコミットします。Kodus は各プルリクエストのターゲットブランチからこれを読むため、プルリクエストが自分をチェックするルールを緩めることはできません。
+ルールファイルをデフォルトブランチにコミットします。Kodus は各プルリクエストのターゲットブランチからこれを読み込むため、プルリクエストが自分をチェックするルールを緩めることはできません。
 
 ```yaml rules/money.yml
 id: no-parsefloat-amount
@@ -32,7 +34,7 @@ rule:
 
 各ルールの `message` が、コメントでルールとして引用されます。プルリクエストを読む人に向けて書いてください。
 
-パターンでは捉えられないケースのために、理由を doc にも書いておきます。
+パターンでは捉えられないケースのために、理由を doc にも一度書いておきます。
 
 ```markdown docs/money.md
 # Money
@@ -43,7 +45,7 @@ Convert at the edges only: `Money.parse` on input, `Money.format` on output.
 
 ## ステップ2 — エージェントを作成する
 
-**New agent → Templates → Blank** の後：
+**New agent → Templates → Blank** を選択し、次のように設定します。
 
 ```text Name
 Money handling
@@ -73,7 +75,7 @@ Ignore tests and amounts that are not money (percentages, durations, counts).
 rules/money.yml
 ```
 
-ヒントに見つかったルールが表示されます：`2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`。パスの代わりに YAML をインラインで貼り付けることもできます。その場合、ルールはリポジトリではなくエージェントに保存されます。
+ヒントには、見つかったルールが表示されます。`2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`。パスの代わりに YAML をインラインで貼り付けることもできます。その場合、ルールはリポジトリではなくエージェントに保存されます。
 
 ## ステップ4 — コメント
 
@@ -83,9 +85,9 @@ rules/money.yml
 | **Minimum severity** | Team minimum |
 | **Suggested fix** | When confident |
 
-**Save** をクリックします。
+**Save settings** をクリックします。
 
-## ステップ5 — Try it
+## ステップ5 — 試してみる
 
 価格に `parseFloat` を追加するプルリクエストで **Try it** を実行します。指摘は **kept** になり、コメントはルールを引用します。
 
@@ -94,7 +96,9 @@ rules/money.yml
 > Parse amounts with Money.parse; parseFloat turns cents into a float.
 ```
 
-エージェントが `docs/money.md` から出した指摘は doc を引用し、ターゲットブランチの doc にその引用がなければ破棄されます。
+エージェントが `docs/money.md` をもとに挙げた指摘は、代わりに doc を引用します。その引用がターゲットブランチの doc にない場合は破棄されます。
+
+**Warnings** に ast-grep がサンドボックスにインストールされていないと表示された場合、エージェントはルールなしで実行されています。
 
 ## チェックリスト
 

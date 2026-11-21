@@ -21,7 +21,7 @@ The monthly spend limit watches how much you're spending on your **BYOK models**
 
 ## Configure it
 
-The limit lives on the **AI providers** page, in the **Budget** tab (section **Budget & alerts**).
+Owners configure alerts under **Budget & alerts** in **AI providers → Budget**. Connect at least one BYOK model and make sure every BYOK model has a price before enabling alerts.
 
 <Steps>
   <Step title="Open the Budget tab">
@@ -37,7 +37,7 @@ The limit lives on the **AI providers** page, in the **Budget** tab (section **B
   </Step>
 
   <Step title="Set the monthly limit and enable">
-    Enter the amount in **Monthly limit (US$)**, turn on **Enable spend alerts**, and click **Save budget & alerts**. The tab also shows **Projected this month**, and **Open Costs** takes you to the full breakdown on **Organization → Token usage**.
+    Enter the amount in **Monthly limit (US$)**, turn on **Enable spend alerts**, and click **Save budget & alerts**. The tab also shows **Projected this month** and a **Break down by** switch (**Total**, **Per-model**, **Per-credential**) that only changes what the tab displays, never which alerts fire. **Open Costs** takes you to the full breakdown on [**Organization → Token usage**](/en/how_to_use/organization/token_usage), which also shows month-to-date spend against your limit.
   </Step>
 </Steps>
 
@@ -67,7 +67,7 @@ Once enabled, Kodus checks your month-to-date spend roughly **once an hour** and
 | **75%** | Heads-up alert |
 | **90%** | Heads-up alert |
 | **100%** | "Limit reached" alert |
-| **Over 100%** | One final "you're over your limit — we won't notify again this month" notice, then silence for the rest of the month |
+| **Over 100%** | One final "you're over your limit — we won't notify again this month" notice at the next hourly check after the 100% alert, then silence for the rest of the month |
 
 Each threshold fires **at most once per month**, so you won't get repeat pings for the same level. The slate clears automatically when the new month starts.
 
@@ -75,7 +75,7 @@ Each threshold fires **at most once per month**, so you won't get repeat pings f
   Reviews continue running normally the entire time — at 50%, at 100%, and beyond. The alerts are the only thing that happens.
 </Note>
 
-You can manage where these land (and which roles receive them) under **Spend Limit** in [Notification settings](https://app.kodus.io/organization/notifications).
+You can manage where these land (and which roles receive them) under **Spend Limit** in [Notification settings](/en/how_to_use/organization/notifications).
 
 ## Accuracy
 
@@ -120,6 +120,6 @@ Spend is an **estimate**. It's derived from the tokens your reviews used and the
   </Accordion>
 
   <Accordion title="Who gets the alerts?">
-    Your organization's Owners, in the in-app notification center. Adjust routing under **Spend Limit** in Notification settings.
+    Your organization's Owners, by email and in the in-app notification center. Adjust who receives them under **Spend Limit** in [Notification settings](/en/how_to_use/organization/notifications).
   </Accordion>
 </AccordionGroup>

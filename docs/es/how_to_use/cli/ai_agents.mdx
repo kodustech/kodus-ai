@@ -3,34 +3,58 @@ title: "Agentes de IA"
 description: "Integra el CLI de Kodus con agentes de programación de IA para bucles autónomos de revisión y corrección."
 ---
 
-El CLI incluye un modo de salida mínimo y estructurado (`--prompt-only`) diseñado para que los agentes de programación de IA lo analicen y actúen sobre él. Combinado con una clave de equipo, permite bucles autónomos de revisión y corrección: el agente revisa, aplica correcciones, vuelve a revisar y confirma los cambios, todo sin intervención humana en el flujo crítico.
+El CLI incluye un modo de salida mínimo y estructurado (`--prompt-only`) para que los agentes de programación de IA lo analicen y actúen sobre él. Combinado con una clave de equipo, permite que un agente revise sus propios cambios, corrija lo que la revisión encuentra y vuelva a revisar, sin ninguna persona en el bucle. El CLI también instala skills de Kodus en los agentes de tu máquina, para que un agente sepa qué comando ejecutar.
 
 ## Agentes compatibles
 
-- **Claude Code** — skill nativo mediante el instalador de skills.
-- **Cursor** — skill nativo.
-- **Codex** — skill nativo.
-- **Windsurf** — mediante salida `--prompt-only`.
+`kodus skills install` encuentra un agente por su carpeta de configuración, en el directorio actual y en tu carpeta personal, y escribe allí los skills de Kodus. Detecta:
 
-Para cualquier otro agente que pueda ejecutar comandos de shell y analizar texto estructurado, `kodus review --prompt-only` funciona de inmediato.
+| Agente        | Carpeta de configuración                           |
+| ------------- | -------------------------------------------------- |
+| Claude Code   | `.claude`, `~/.claude`, `~/.config/claude`         |
+| Cursor        | `.cursor`, `~/.cursor`                             |
+| Codex         | `.codex`, `~/.codex`                               |
+| Windsurf      | `.windsurf`, `~/.codeium/windsurf`                 |
+| Gemini        | `.gemini`                                          |
+| Antigravity   | `.agent`, `~/.gemini/antigravity`                  |
+| OpenCode      | `.opencode`, `~/.config/opencode`                  |
+| Kiro          | `.kiro`, `~/.kiro`                                 |
+| Goose         | `.goose`, `~/.config/goose`                        |
+| Roo Code      | `.roo`, `~/.roo`                                   |
+| Kilo Code     | `.kilocode`, `~/.kilocode`                         |
+| Droid         | `.factory`, `~/.factory`                           |
+| AiderDesk     | `.aider-desk`, `~/.aider-desk`                     |
+| Otros agentes | `.agents`, `~/.agents`, `~/.config/agents`         |
+
+Para cualquier otro agente que pueda ejecutar comandos de shell y leer texto, `kodus review --prompt-only` funciona sin un skill.
 
 ## Configuración más rápida
 
-Instala el CLI junto con todos los skills de agentes de una sola vez:
+Instala el CLI junto con los skills de una sola vez:
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-Esto:
+El instalador agrega el CLI e instala los skills incluidos en cada agente que detecta. Define `KODUS_TEAM_KEY` en el entorno donde se ejecuta tu agente. En una instancia autohospedada, define también `KODUS_API_URL`. Para agregar o actualizar los skills más tarde, ejecuta `kodus skills install` o `kodus skills resync`.
 
-1. Instala el binario `@kodus/cli` globalmente.
-2. Configura la clave de equipo en `~/.kodus/config.json`.
-3. Despliega los skills de Kodus en todos los agentes detectados (Claude Code, Cursor, Codex, Windsurf).
+## Los skills
 
-Sin inicios de sesión individuales. Sin indicaciones interactivas. Listo para bucles de agentes de inmediato.
+| Skill                             | Qué puede hacer el agente con él                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `kodus-review`                    | Revisar los cambios locales con `kodus review --prompt-only` y corregir lo que encuentra |
+| `kodus-pr-suggestions-resolver`   | Obtener las sugerencias de un pull request, aplicar las que tengan sentido y leer su historial de revisión |
+| `kodus-business-rules-validation` | Verificar los cambios locales contra los criterios de aceptación de una tarea      |
+| `kodus-kody-rules`                | Ver, crear, actualizar, pausar, reanudar y eliminar Kody Rules                     |
+| `kodus-review-settings`           | Mostrar y cambiar la configuración de revisión de código y el modelo de revisión   |
+| `kodus-custom-agents`             | Listar, crear, editar, activar o desactivar, eliminar y probar agentes personalizados |
+| `kodus-cockpit-usage`             | Leer las métricas de Cockpit y el uso de tokens                                    |
+| `kodus-centralized-config`        | Verificar, habilitar, sincronizar y descargar la configuración centralizada        |
+| `kodus-trace`                     | Leer las decisiones registradas para el código que está por cambiar                |
 
-## El Bucle de Revisión y Corrección
+Los skills que cambian reglas, configuraciones o agentes necesitan un inicio de sesión, o una clave de equipo que lo permita. Consulta [Modos de autenticación](/es/how_to_use/cli/concepts#modos-de-autenticación).
+
+## El bucle de revisión y corrección
 
 <Steps>
   <Step title="El agente ejecuta la revisión">
@@ -38,22 +62,26 @@ Sin inicios de sesión individuales. Sin indicaciones interactivas. Listo para b
     kodus review --prompt-only
     ```
 
-    El CLI devuelve problemas estructurados con rutas de archivos, números de línea, severidades y correcciones sugeridas, en un formato de texto compacto diseñado para que un LLM lo consuma.
+    El CLI devuelve problemas estructurados con rutas de archivos, números de línea, severidades y correcciones sugeridas, en un formato de texto compacto para un LLM. La salida empieza con `REVIEW_ANALYSIS_COMPLETE` y termina con `END_REVIEW`.
   </Step>
   <Step title="El agente aplica correcciones">
-    El agente lee la salida, decide qué correcciones aplicar (o las acepta todas mediante `--fix`) y edita los archivos en consecuencia.
+    El agente lee la salida, decide qué correcciones aplicar y edita los archivos. Un falso positivo omitido está bien; el agente debe decir por qué.
   </Step>
   <Step title="El agente vuelve a ejecutar la revisión">
     ```bash
     kodus review --prompt-only --fail-on error
     ```
 
-    Con `--fail-on error`, el bucle termina con código distinto de cero mientras haya problemas de nivel error o superior. El agente continúa en bucle; cuando la revisión sale limpia, el proceso termina con código 0 y el agente avanza.
+    Con `--fail-on error`, el comando termina con código 1 mientras quede un problema de nivel error o superior. Cuando la revisión sale limpia, imprime `NO_ISSUES_FOUND`, termina con código 0 y el agente avanza.
   </Step>
   <Step title="El agente confirma y envía los cambios">
-    Una vez que la revisión está limpia, el agente confirma y envía los cambios. Opcionalmente, instala el hook pre-push (`kodus hook install`) como red de seguridad adicional para envíos manuales.
+    Una vez que la revisión está limpia, el agente confirma y envía los cambios. Opcionalmente, instala el hook pre-push (`kodus hook install`) como red de seguridad en los envíos manuales.
   </Step>
 </Steps>
+
+<Note>
+  `--fix` pide una confirmación en la terminal, así que un agente sin supervisión debe aplicar las correcciones por sí mismo.
+</Note>
 
 ## Autenticación con clave de equipo para agentes
 
@@ -66,40 +94,49 @@ kodus review --prompt-only
 
 Genera una clave en **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>) y distribuye a tu equipo el comando de instalación que se muestra junto con la nueva clave.
 
-<Warning>Guarda la clave cuando se muestre — no se volverá a mostrar.</Warning>
+<Warning>Guarda la clave cuando se muestre: no se volverá a mostrar.</Warning>
 
-## Flags de salida relevantes
+## Flags de salida que importan
 
 | Flag             | Uso                                                                 |
 | ---------------- | ------------------------------------------------------------------- |
-| `--prompt-only`  | Salida estructurada compacta para análisis. Úsala en el bucle de revisión.     |
-| `--agent`        | Aplica salida determinista legible por máquina en cualquier comando.     |
-| `--format json`  | Payload JSON completo. Combina con `--agent` para parsers estrictos.          |
-| `--fail-on`      | Umbral de código de salida. El bucle continúa mientras esto sea distinto de cero.        |
-| `--fields <csv>` | Limita el payload JSON/agent (p. ej. `summary,issues.file,issues.severity`). Útil para mantener pequeñas las ventanas de contexto del agente. |
+| `--prompt-only`  | Salida estructurada compacta para analizar. Úsalo en el bucle de revisión. Solo `kodus review` |
+| `--agent`        | Un solo sobre JSON (`ok`, `command`, `data`, `error`, `meta`). No todos los comandos lo admiten: consulta [Global Flags](/es/how_to_use/cli/commands#flags-globales) |
+| `--format json`  | Carga útil JSON completa para `review` y `pr`                       |
+| `--fail-on`      | Control del código de salida: 1 cuando un problema alcanza la severidad |
+| `--fields <csv>` | Reduce la carga útil JSON (p. ej., `summary,issues.file,issues.severity`) para mantener pequeño el contexto de un agente. Requiere `--format json` o `--agent` |
 
-## Ejemplo: Bucle de Claude Code con validación de negocio
+Otros comandos aceptan `--json`. `kodus schema` imprime cada comando y flag como JSON, para un agente que necesite comprobar qué existe.
+
+## Ejemplo: bucle de Claude Code con validación de negocio
 
 ```bash
-# En una sesión de Claude Code, el agente puede ejecutar:
-kodus review --prompt-only --fail-on error    # revisión general
-kodus pr business-validation --task-id KC-1441 --dry-run   # verificar contra la tarea
-kodus review --prompt-only --fix               # aplicar automáticamente los problemas corregibles
+# In a Claude Code session, the agent can run:
+kodus review --prompt-only --fail-on error                      # general review
+kodus pr business-validation --task-id KC-1441 --format json    # check against the task
+kodus review --prompt-only --fail-on error                      # re-run after fixes
 git commit -am "fix: KC-1441 address review findings"
 ```
 
-Con el instalador de skills, el skill de Kodus de Claude Code sabe cuándo invocar cada uno de estos comandos, sin necesidad de ingeniería de prompts de tu parte.
+Con los skills instalados, el agente sabe cuándo ejecutar cada uno de estos.
+
+## Capturar lo que decide el agente
+
+`kodus trace enable` agrega hooks para Claude Code, Cursor y Codex que registran cada sesión, de modo que las razones detrás de los cambios de un agente se conservan y pueden leerse de vuelta por ruta. Consulta [Kodus Trace](/es/how_to_use/cli/trace).
 
 ## Relacionado
 
 <CardGroup cols={2}>
-  <Card title="Conceptos" icon="book-open" href="concepts">
+  <Card title="Conceptos" icon="book-open" href="/es/how_to_use/cli/concepts">
     Modos de revisión, modos de diff y flags de salida para agentes.
   </Card>
-  <Card title="Referencia de Comandos" icon="book" href="commands">
+  <Card title="Referencia de comandos" icon="book" href="/es/how_to_use/cli/commands">
     Listado completo de flags.
   </Card>
-  <Card title="Solución de Problemas" icon="life-ring" href="troubleshooting">
-    Problemas en bucles de agente, problemas con hooks, tiempos de espera.
+  <Card title="Kodus Trace" icon="timeline" href="/es/how_to_use/cli/trace">
+    Registra y lee de vuelta las decisiones detrás de los cambios escritos por agentes.
+  </Card>
+  <Card title="Solución de problemas" icon="life-ring" href="/es/how_to_use/cli/troubleshooting">
+    Problemas del bucle de agentes, problemas de hooks, timeouts.
   </Card>
 </CardGroup>

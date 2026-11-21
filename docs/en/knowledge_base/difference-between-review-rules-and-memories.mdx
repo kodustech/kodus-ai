@@ -12,23 +12,24 @@ A useful rule of thumb:
 
 ## Review Rules
 
-Review Rules are **traditional code review checks** that run during the dedicated code review stage. They analyze file diffs or the entire PR against your defined criteria.
+Review Rules are **checks** that run during code review. Each rule is applied to a file's diff or to the whole PR, and Kody reports a suggestion when the change breaks it.
 
 **Best for:**
 - Architecture boundaries ("domain layer must not import infrastructure")
 - Code patterns ("avoid `==` in loop conditions")
 - PR requirements ("every service file must have a test")
-- Structural validation using variables like `fileDiff`, `pr_files_diff`
+- Requirements about the PR itself, such as its description or size
 
 **How they work:**
 - Run per file or per PR (the rule's **Execution mode**)
 - Run only during code review
-- Support file references (`@file`, `@repo`) and MCP functions
+- Can point to a file in the repository with `@file:path/to/file`
 - Produce suggestions with severity levels
+- Can be limited to paths and be added from the Rules Library
 
 ## Memories
 
-Memories are **persistent contextual instructions** injected across all interactions — code reviews, conversations, and AI suggestions. They represent the background knowledge Kody should carry about your codebase, conventions, and preferences.
+Memories are **persistent contextual instructions** that Kody uses in code reviews and in conversations with Kody. They represent the background knowledge Kody should carry about your codebase, conventions, and preferences.
 
 **Best for:**
 - Codebase context ("this repo mirrors a third-party API, so some external payload fields intentionally stay snake_case")
@@ -37,11 +38,11 @@ Memories are **persistent contextual instructions** injected across all interact
 - Architectural context ("this service follows hexagonal architecture and keeps adapters at the edge")
 
 **How they work:**
-- Injected as high-priority context in all prompts
+- Added as high-priority context to code reviews and conversations
 - Improve future suggestions by grounding Kody in repo-specific context
 - Created via conversation (`@kody remember: ...`) or manually with **New memory** on the **Memories** tab of **Code review → Kody Rules**
 - Scoped to directory, repository, or organization level
-- Kody auto-deduplicates and resolves conflicts between memories
+- Kody checks existing memories before saving a new one, and skips duplicates or updates the existing memory
 
 ## When to use which
 

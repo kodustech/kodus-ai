@@ -1,0 +1,100 @@
+---
+title: "Kodus MCP server"
+description: "Connect an MCP client to self-hosted Kodus with a CLI key to read repositories and pull requests and manage Kody Issues, Kody Rules and memories."
+---
+
+The MCP server is available exclusively on self-hosted Kodus. It exposes a workspace's repositories, pull requests, [Kody Issues](/en/how_to_use/issues/overview), [Kody Rules](/en/how_to_use/code_review/configs/kody_rules) and memories as tools for an MCP client.
+
+To connect external tools to Kody through **Plugins**, set up [MCP Manager](/en/how_to_deploy/deploy_kodus/mcp_manager).
+
+## Turn it on
+
+The Docker Compose installer leaves the endpoint off by default. Add the following to `.env` in the `kodus-installer` directory:
+
+```bash
+API_MCP_SERVER_ENABLED=true
+```
+
+Run `docker compose up -d --no-deps api` from that directory to apply the new environment.
+
+The Helm chart enables the endpoint by default. Set `global.config.API_MCP_SERVER_ENABLED` to `"false"` in your values file and run `helm upgrade` if you want to disable it.
+
+While it is off, the API does not serve `/mcp`. The route is `POST /mcp` on the API host, so a reverse proxy must forward it. See [Reverse Proxy](/en/how_to_deploy/deploy_kodus/reverse_proxy).
+
+## Connect a client
+
+Connect to `https://<your-api-host>/mcp` on your self-hosted API. The server uses Streamable HTTP.
+
+1. Open **Organization → CLI keys**, generate a key and copy it. Only organization owners can generate keys. See [CLI keys](/en/how_to_use/organization/organization_settings#cli-keys).
+2. Configure your client to send the key in one of these headers when it calls a tool.
+
+```
+x-team-key: kodus_xxxxx
+Authorization: Bearer kodus_xxxxx
+```
+
+To check the connection, replace `kodus-api.example.com` with your API hostname and list the tools. This discovery request runs without a key.
+
+```bash
+curl -X POST https://kodus-api.example.com/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+- A key belongs to one team. A `teamId` argument for another team is rejected, and an omitted `teamId` is filled in from the key.
+- Most tools take an `organizationId` argument. It must be your organization's ID. Another value is rejected.
+- `initialize`, `tools/list` and `ping` work without a key. Any other call needs a valid key, and a missing, invalid or revoked key returns `401`.
+
+## Tools
+
+### Repositories and pull requests
+
+| Tool | What it does |
+| --- | --- |
+| `KODUS_LIST_REPOSITORIES` | Lists the team's repositories. |
+| `KODUS_LIST_PULL_REQUESTS` | Lists pull requests, filtered by state, repository, author or date range. Returns metadata only. |
+| `KODUS_LIST_COMMITS` | Lists commits, filtered by author, date range or branch. |
+| `KODUS_GET_PULL_REQUEST` | Returns one pull request with its description, commits, reviews and modified files. |
+| `KODUS_GET_REPOSITORY_FILES` | Lists the file paths of a branch, filtered by pattern. |
+| `KODUS_GET_REPOSITORY_CONTENT` | Returns the content of one file on a branch. |
+| `KODUS_GET_PULL_REQUEST_FILE_CONTENT` | Returns a file as it is after the pull request's changes. |
+| `KODUS_GET_DIFF_FOR_FILE` | Returns the diff of one file in a pull request. |
+| `KODUS_GET_PULL_REQUEST_DIFF` | Returns the diff of a whole pull request. |
+
+### Kody Issues
+
+| Tool | What it does |
+| --- | --- |
+| `KODUS_CREATE_KODY_ISSUE` | Creates an issue for a pull request, linked to the Kody comment it came from. |
+| `KODUS_LIST_KODY_ISSUES` | Lists issues, filtered by repository name, severity or label. |
+| `KODUS_GET_KODY_ISSUE_DETAILS` | Returns one issue. |
+| `KODUS_UPDATE_KODY_ISSUE_STATUS` | Sets the status to `open`, `resolved` or `dismissed`. |
+| `KODUS_UPDATE_KODY_ISSUE_CATEGORY` | Changes the issue's label. |
+| `KODUS_DELETE_KODY_ISSUE` | Dismisses the issue. It does not delete it. |
+
+### Kody Rules and memories
+
+| Tool | What it does |
+| --- | --- |
+| `KODUS_GET_KODY_RULES` | Lists the organization's active and pending rules. |
+| `KODUS_GET_KODY_RULES_REPOSITORY` | Lists the active and pending rules of one repository. |
+| `KODUS_CREATE_KODY_RULE` | Creates a rule with a scope (**Per file** or **Per PR**), severity and optional examples. |
+| `KODUS_UPDATE_KODY_RULE` | Changes the fields you send on an existing rule. |
+| `KODUS_DELETE_KODY_RULE` | Deletes a rule permanently. |
+| `KODUS_CREATE_MEMORY` | Saves a memory. If a similar one exists, Kody skips it or updates that one. |
+| `KODUS_FIND_MEMORIES` | Searches memories by repository, directory, path glob or keywords. Returns up to 20, newest first. |
+
+## Managing rules and memories
+
+`KODUS_CREATE_KODY_RULE`, `KODUS_UPDATE_KODY_RULE`, `KODUS_DELETE_KODY_RULE` and `KODUS_CREATE_MEMORY` need the `kodyRules:manage` capability on the key. In **Organization → CLI keys**, click **Configure** on the key and turn on **Allow Kody Rules management via CLI**. Without it these tools return an error result (`isError: true`) saying the key does not have permission to manage Kody Rules. The other tools need no capability.
+
+- A rule created through the server shows the **MCP/Agent** origin and waits in **Pending review** until someone approves it.
+- A memory waits there only when **Kody knowledge approval** is on.
+- With a [centralized config](/en/how_to_use/code_review/configs/centralized_config) enabled, creating, changing or deleting a rule or memory opens a pull request on the config repository instead.
+
+## Limits
+
+- Only `POST` is supported.
+- Stateless. The server keeps no session between requests and returns no `Mcp-Session-Id`.
+- It sends nothing to the client outside the response to a `POST`.

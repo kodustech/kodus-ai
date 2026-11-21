@@ -1,78 +1,60 @@
 ---
 title: "规则继承"
-description: "全局 → 代码库 → 目录规则如何继承,以及如何在特定级别停止或排除继承。"
+description: "审查会应用哪些全局、代码库和目录规则,以及 Inheritable 和 Override and disable 控件会改变什么。"
 ---
 
-## 概述
+## 审查会应用哪些规则
 
-默认情况下,Kody 规则沿层次结构继承:
+每次审查都会应用三个范围内的启用规则:**Global → Repository → Directory**。
 
-**全局 → 代码库 → 目录**
+- **Global** 规则适用于每个代码库。
+- **Repository** 规则适用于该代码库中的每个拉取请求。
+- **Directory** 规则在拉取请求使用该目录范围的设置进行审查时适用,而这发生在拉取请求恰好涉及一个目录范围时。该代码库其他目录范围的规则不适用。
+- 不涉及任何目录范围,或涉及两个及以上目录范围的拉取请求,会使用该代码库的设置进行审查。此时,该代码库**所有**目录范围的规则也会适用于拉取请求中的每个文件。
 
-每个级别的有效规则集是:
-- 在该级别定义的规则,加上
-- 从父级继承的规则,
-- 减去在该级别明确排除的任何规则。
+在父级范围编写的规则始终会被其下级范围继承。在两个范围中以相同指令出现的规则只会运行一次。
 
-## 默认行为
+<Warning>
+  即使 **Kody Rules** 页面将继承的规则显示为禁用，审查仍会应用上级范围的有效规则。要停止应用规则，请在创建它的范围内暂停规则，或在支持该字段的范围内缩小 **Path**。
+</Warning>
 
-- 全局规则默认应用于所有代码库和目录。
-- 代码库规则继承所有全局规则,加上为该代码库专门定义的任何规则。
-- 目录规则从其代码库继承所有规则,加上为该目录专门定义的任何规则。
+## 在应用中
 
-启用继承无需任何操作——它是自动的。
+在 **Kody Rules** 页面上,从更高范围继承的规则会与该范围自身的规则一起列出,并标注其来源范围。它们在此处为只读:打开规则并使用 **View**,或前往创建它的范围进行编辑。**Filters → View** 会显示或隐藏 **Inherited from Global**、**Inherited from Repository** 和 **Disabled Rules**。
 
-## 中断继承
+### Inheritable
 
-有两种方法可以阻止规则被继承:
+对任意范围的规则,在规则对话框中打开 **Advanced settings** 并关闭 **Inheritable**(默认开启)。
 
-### 1) 将规则标记为不可继承(在创建时)
+- 该规则不再作为继承规则列在其下级范围中。
+- 审查仍然会如上所述在每个范围中应用它。
 
-在任何级别(全局、代码库或目录)创建规则时,您可以将其标记为"不可继承":在规则对话框中打开 **Advanced settings** 并关闭 **Inheritable**(默认开启)。
+### Override and disable for this scope
 
-效果:
-- 规则仅应用于创建它的级别。
-- 它不会出现在子级。
+在代码库或目录范围,打开一条继承的规则(**View**)并开启 **Override and disable for this scope**。
 
-当规则有意特定于特定范围且不应沿层次结构向下流动时使用此选项。
+- 该规则在此范围中显示为 **Disabled**,并且在 **Filters → View** 中取消勾选 **Disabled Rules** 时会被隐藏。
+- 它在下级范围中不会显示为已禁用,下级范围保留各自的设置。
+- 审查仍然会应用该规则。
 
-### 2) 从子级排除父规则
+要阻止某条规则生效,请在创建它的范围中暂停或删除它。
 
-从子配置(代码库或目录),您可以明确排除否则会从父级继承的规则:在该范围下的 **Code review → Kody Rules** 中打开该继承规则,并开启 **Override and disable for this scope**。该规则随后会在该级别显示为 **Disabled**。
+## 集中式配置
 
-效果:
-- 规则不会在该确切的子级应用。
-- 排除不会进一步级联——除非它们也排除它(或规则被创建为不可继承),否则孙子级仍然会看到父级的规则。
+[集中式配置](/zh/how_to_use/code_review/configs/centralized_config)代码库中的规则文件可以携带相同的设置:
 
-使用此选项可以为特定代码库或目录微调行为,而不影响其他子级。
+```yaml
+inheritance:
+  inheritable: true
+  exclude: []   # repository or directory IDs
+  include: []   # repository or directory IDs
+```
 
-## 示例
-
-### 在代码库级别排除
-
-假设存在全局规则"新端点需要测试"。在代码库"shop"中,您在代码库级别排除此规则。
-
-结果:
-- 在代码库级别,规则不再适用。
-- 如果您在同一代码库内有已配置的目录(例如 `apps/api`),该目录仍然继承全局规则并将应用它——除非您也在目录级别排除它,或者原始全局规则被创建为不可继承。
-
-### 创建不可继承的全局规则
-
-您创建了一个全局规则并将其标记为不可继承。
-
-结果:
-- 规则仅应用于全局级别。
-- 代码库和目录不会继承它。
-
-## 实用技巧
-
-- 将基础规则保持在全局级别,以便所有代码库默认受益。
-- 对不应影响子级的高度特定上下文使用不可继承规则。
-- 使用子级排除来进行有针对性的例外,而不影响其他代码库或目录。
+`inheritable` 和 `exclude` 的行为如上所述。`include` 在应用中没有对应的控件,对审查也没有影响;`include` 列表非空的规则不会显示在继承列表中。
 
 ## 相关
 
-- <a href="/zh/how_to_use/code_review/configs/kody_rules">Kody 规则概述</a>
+- <a href="/zh/how_to_use/code_review/configs/kody_rules">Kody Rules 概述</a>
 - <a href="/zh/how_to_use/code_review/configs/directory_level">目录级设置</a>
 - <a href="/zh/how_to_use/code_review/configs/inheritance_overrides">配置继承与覆盖</a>
-- <a href="/zh/how_to_use/code_review/configs/centralized_config">集中式配置</a> — 在单个代码库中以 `.kody-rules/` 下的 YAML 文件管理规则。
+- <a href="/zh/how_to_use/code_review/configs/centralized_config">集中式配置</a>

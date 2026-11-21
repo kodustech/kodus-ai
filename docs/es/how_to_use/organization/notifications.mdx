@@ -1,0 +1,48 @@
+---
+title: "Notificaciones"
+description: "Elige qué eventos notifican a tu organización, por email o en la app, para cada rol."
+---
+
+Kodus notifica a las personas sobre eventos como una revisión fallida, un problema de pago o un nuevo lote de Kody Rules, por email y en la app. **Organization → Notifications** define qué eventos usan qué canal, por rol. Solo los Owners pueden abrirla.
+
+## Centro de notificaciones
+
+La campana al final de la barra lateral muestra tu conteo de no leídas y abre el centro de notificaciones. **Mark all as read** marca todas las entradas como leídas, y las entradas enlazan a la página a la que se refieren cuando existe.
+
+Los eventos críticos también se muestran como un banner en la parte superior de la app mientras la notificación no se lea.
+
+## Ajustes de notificaciones
+
+La página se titula **Notification settings**. Tiene una pestaña por audiencia: **All Roles**, **Owner**, **Billing Manager**, **Repo Admin** y **Contributor**. Cada pestaña lista los eventos por categoría, con un interruptor por canal, **Email** e **In-App**, y una insignia con el tipo del evento: **Critical**, **Transactional** o **Informational**. Guarda con **Save settings**.
+
+- **All Roles** es la base que sigue cada rol.
+- Cambiar un interruptor en la pestaña de un rol anula la base solo para ese rol. El evento se marca como **Overridden**, y el icono de deshacer (**Revert to All Roles config**) restaura la base.
+- Cada evento tiene destinatarios integrados (consulta la tabla). Hasta que guardes una regla, un evento que va a roles específicos muestra sus canales desactivados para los demás roles.
+
+Los eventos que mantienen una cuenta funcionando, como la confirmación de email, el restablecimiento de contraseña, las invitaciones y la verificación de dominio de SSO, siempre se envían y no aparecen en la página.
+
+### Eventos
+
+| Categoría | Evento | Tipo | Activo en | Destinatarios integrados |
+| --- | --- | --- | --- | --- |
+| **Team** | Member Removed | Transactional | Email, In-App | La persona eliminada por email, y los Owners en la app |
+| | Role Changed | Informational | Email, In-App | Owners |
+| **Kody Rules** | Kody Rules Generated | Informational | Email, In-App | Todos los miembros activos |
+| | IDE Rules Synced | Informational | Email, In-App | Quien inició la sincronización |
+| | IDE Rule Sync Failed | Transactional | Email, In-App | Quien inició la sincronización, y los Owners |
+| | Rule File References Invalid | Transactional | Email, In-App | Tras una sincronización de IDE, quien la inició; en otro caso, las personas que crearon las reglas. Los Owners cuando no se conoce ninguno de los dos |
+| | Kody Rules Paused Automatically | Informational | In-App | Owners |
+| | Weekly Digest of Paused Kody Rules | Informational | Email | Owners |
+| **Cockpit** | Repo Report | Informational | Email | Repo Admins |
+| | Org Report | Informational | Email | Owners |
+| **Billing** | Payment Failed | Critical | Email, In-App | Owners y Billing Managers |
+| | Trial Expiring | Transactional | Email, In-App | Owners y Billing Managers |
+| **Code Review** | Pull Request Auto-Approved | Informational | Email, In-App | El autor del PR, cuando es miembro de Kodus |
+| | Code Review Failed | Transactional | Email, In-App | El autor del PR, cuando es miembro de Kodus, y los Owners |
+| | Review Skipped (No License) | Informational | Email, In-App | El autor del PR, o los Owners cuando el autor no es miembro de Kodus |
+| | Business Logic Task Source Unavailable | Transactional | In-App | Owners |
+| **BYOK** | BYOK LLM Errors Exceeded Threshold | Critical | Email, In-App | Owners |
+| **Spend Limit** | Monthly Spend Limit Threshold Reached | Informational | Email, In-App | Owners |
+| | Monthly Spend Limit Exceeded | Critical | Email, In-App | Owners |
+
+Los eventos de facturación y los reportes de Cockpit aplican a cloud. Para los reportes, consulta [Reportes por email](/es/how_to_use/cockpit/overview#reportes-por-email).

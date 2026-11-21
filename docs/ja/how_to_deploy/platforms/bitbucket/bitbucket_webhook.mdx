@@ -1,14 +1,16 @@
 ---
 title: Webhookの作成
-description: "自動登録が行われなかった場合に Bitbucket の Webhook を手動で作成し、Kodus が実際に利用するプルリクエストのトリガーだけを選ぶ手順。"
+description: "自動登録が行われなかった場合にBitbucketのWebhookを手動で作成し、Kodusが実際に利用するプルリクエストのトリガーを選ぶ手順。"
 icon: webhook
 ---
 
-Kodusは通常、Webhookを自動的に作成します。それが行われなかった場合は、以下の手順に従って手動で設定してください：
+Kodusは通常、リポジトリの選択を保存する際にWebhookを自動的に作成します。これにはリポジトリへの管理者アクセスが必要です。Bitbucket Cloudでは、APIトークンに`read:webhook:bitbucket`と`write:webhook:bitbucket`スコープも必要で、Bitbucket Data Centerでは**Repository admin**権限が必要です。自動作成が行われなかった場合は、**Repositories**にそのリポジトリが理由とともに表示されるので、Webhookを手動で設定できます：
 
 <Note>
   WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
 </Note>
+
+## Bitbucket Cloud
 
 1. Bitbucketリポジトリに移動
 2. 左サイドバーの「Repository settings」をクリック
@@ -17,7 +19,7 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
 5. Webhookを設定します：
 
    - **Title**: Kodus Code Review
-   - **URL**: 通知を受け取りたいURL、`.env`ファイルの`GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK`に設定したURLを入力
+   - **URL**: `.env`ファイルの`GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK`に設定したURL（末尾は`/bitbucket/webhook`）
    - **Status**: Active
    - **SSL/TLS**: SSL検証を有効にするにチェック
    - **Triggers**: 以下のイベントを選択：
@@ -30,13 +32,19 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
 
 6. 「Save」をクリック
 
-以上です！Bitbucketリポジトリでコードレビューを行うためのWebhookのセットアップが完了しました。
+## Bitbucket Data Center
+
+Bitbucket Data Centerのサポートはアルファ版です。リポジトリを開き、**Repository settings** > **Webhooks**に進み、次の内容でWebhookを作成します：
+
+- **URL**: 同じ`GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK`の値
+- **Events**: プルリクエストイベントの`pr:opened`、`pr:modified`、`pr:comment:added`、`pr:merged`、`pr:declined`
 
 <Note>
-  Kodus が利用するのは Pull Request イベントだけです — `created`、`updated`、`merged`、
-  `declined`、`comment created`。Repository・Issue・ビルドステータスのトリガーは届いた時点で
-  破棄されるため、チェックを外しておくと Webhook のトラフィックを抑えられます。
-
-  Bitbucket Data Center では、対応するイベントは `pr:opened`、`pr:modified`、
-  `pr:reviewer:updated`、`pr:comment:added`、`pr:merged`、`pr:declined` です。
+  Kodusが利用するのはプルリクエストのイベントだけです。Cloudでは`created`、`updated`、`merged`、`declined`、`comment created`、Data Centerでは上記の5つです。Repository、Issue、ビルドステータスのトリガーは届いた時点で破棄されるため、チェックを外しておくとWebhookのトラフィックを抑えられます。Data Centerでの自動登録では`pr:reviewer:updated`も購読しますが、Kodusはこれを受信しても無視します。
 </Note>
+
+### オープン中のプルリクエストへのプッシュ
+
+Data Centerでは、オープン中のプルリクエストに新しいコミットをプッシュすると、`pr:from_ref_updated`として届きます。Kodusはこれを購読せず破棄するため、プッシュしてもレビューは開始されません。`pr:modified`は、タイトル、説明、ターゲットブランチ、またはドラフトの状態が変更されたときに発火します。Kodusは、最新のコミットがKodusにとって新しいものである場合、またはプルリクエストがドラフトから外れる場合を除き、これを無視します。新しいコミットをレビューするには、プルリクエストに`@kody start-review`とコメントしてください。
+
+Cloudでは、Kodusは`pullrequest:updated`を同じように扱います。最新のコミットがKodusにとって新しいものである場合、またはプルリクエストがドラフトから外れる場合にのみ、レビューを開始します。

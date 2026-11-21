@@ -1,27 +1,27 @@
 ---
 title: "Límite Mensual de Gasto"
-description: "Recibe alertas a medida que tu gasto en modelos BYOK se acerca a un tope mensual. Solo alertas — las revisiones siguen ejecutándose."
+description: "Recibe alertas a medida que tu gasto en modelos BYOK se acerca a un tope mensual. Solo alertas: las revisiones siguen ejecutándose."
 ---
 
 El límite mensual de gasto vigila cuánto estás gastando en tus **modelos BYOK** y notifica a los Owners de tu organización a medida que ese gasto se acerca a un tope que tú defines. Es una señal de aviso temprano, no un freno.
 
 <Warning>
-  **Esto es una notificación, no un tope. Kodus nunca bloquea ni pausa las revisiones cuando se alcanza el límite.** El gasto sigue acumulándose en la cuenta de tu proveedor más allá del 100%. Para detener el gasto de verdad, configura un límite duro en el panel de **tu proveedor de modelos** (OpenAI, Anthropic, Google, etc.) — es lo único que puede imponerlo. Trata el límite de Kodus como un aviso para que el tope del proveedor nunca sea una sorpresa.
+  **Esto es una notificación, no un tope. Kodus nunca bloquea ni pausa las revisiones cuando se alcanza el límite.** El gasto sigue acumulándose en la cuenta de tu proveedor más allá del 100%. Para detener el gasto de verdad, define un límite duro en el panel de **tu proveedor de modelos** (OpenAI, Anthropic, Google, etc.): es lo único que puede imponerlo. Trata el límite de Kodus como un aviso para que el tope del proveedor nunca sea una sorpresa.
 </Warning>
 
 ## Qué mide
 
-- **Solo modelos BYOK.** El gasto se mide sobre los modelos que configuraste en [Bring Your Own Key](/es/how_to_use/byok) — las claves que pagas directamente a tu proveedor. Los modelos que Kodus ejecuta por su cuenta no cuentan.
-- **Valorado a las tarifas actuales, por modelo.** Los tokens de cada modelo se valoran a la tarifa actual de ese modelo. No hay snapshot — si el precio de un modelo cambia (actualización del catálogo o edición manual), el uso de ese modelo en lo que va de mes se recalcula con la nueva tarifa. Cambiar de modelo no revalora el modelo que usabas antes.
-- **Por mes natural (UTC).** La ventana va del día 1 del mes al día 1 del siguiente. El uso se reinicia a $0 automáticamente al comenzar cada mes — no hay nada que reiniciar a mano.
+- **Solo modelos BYOK.** El gasto se mide sobre los modelos que configuraste en [Bring Your Own Key](/es/how_to_use/byok): las claves que pagas directamente a tu proveedor. Los modelos que Kodus ejecuta por su cuenta no cuentan.
+- **Valorado a las tarifas actuales, por modelo.** Los tokens de cada modelo se valoran a la tarifa actual de ese modelo. No hay un snapshot: si el precio de un modelo cambia (actualización del catálogo o edición manual), el uso de ese modelo en lo que va de mes se recalcula con la nueva tarifa. Cambiar a otro modelo no revalora el modelo que usabas antes.
+- **Por mes natural (UTC).** La ventana va del día 1 del mes al día 1 del siguiente. El uso se reinicia a $0 automáticamente al comenzar cada mes: no hay nada que reiniciar a mano.
 
 <Info>
-  Para que la cifra refleje solo a Kodus, recomendamos que la **clave de API que le das a Kodus se use exclusivamente con Kodus**. Si esa misma clave también alimenta otras herramientas, el uso en tu proveedor — y cualquier estimación basada en él — mezcla ambos.
+  Para que la cifra refleje solo a Kodus, recomendamos que la **clave de API que le das a Kodus se use exclusivamente con Kodus**. Si esa misma clave también alimenta otras herramientas, el uso en tu proveedor, y cualquier estimación basada en él, mezcla ambos.
 </Info>
 
 ## Cómo configurarlo
 
-El límite está en la página **AI providers**, en la pestaña **Budget** (sección **Budget & alerts**).
+Los Owners configuran las alertas en **Budget & alerts**, dentro de **AI providers → Budget**. Conecta al menos un modelo BYOK y comprueba que todos los modelos BYOK tengan un precio antes de activar las alertas.
 
 <Steps>
   <Step title="Abre la pestaña Budget">
@@ -29,37 +29,37 @@ El límite está en la página **AI providers**, en la pestaña **Budget** (secc
   </Step>
 
   <Step title="Revisa los precios de los modelos">
-    Expande **Adjust model prices**. Cada modelo configurado muestra su precio por token — **Input, Output, Cache read, Cache write** — como **$ / 1M tokens**. Una etiqueta **Catalog** significa que Kodus encontró el precio automáticamente; una etiqueta **Manual** significa que lo introdujiste tú.
+    Expande **Adjust model prices**. Cada modelo configurado muestra su precio por token (**Input, Output, Cache read, Cache write**) como **$ / 1M tokens**. Una insignia **Catalog** significa que Kodus encontró el precio automáticamente; una insignia **Manual** significa que lo ingresaste tú.
   </Step>
 
   <Step title="Corrige cualquier modelo sin precio">
-    Un modelo con la etiqueta **No price** no pudo valorarse automáticamente (modelo personalizado o no catalogado). Introduce sus precios por token desde la página de precios de tu proveedor. No puedes habilitar el límite hasta que todos los modelos tengan precio — no se puede medir el gasto de un modelo que Kodus no sabe valorar.
+    Un modelo con la insignia **No price** no pudo valorarse automáticamente (un modelo personalizado o no catalogado). Escribe sus precios por token desde la página de precios de tu proveedor. No puedes habilitar el límite hasta que todos los modelos tengan precio: no se puede medir el gasto de un modelo que Kodus no puede valorar.
   </Step>
 
-  <Step title="Fija el límite mensual y habilítalo">
-    Introduce el importe en **Monthly limit (US$)**, activa **Enable spend alerts** y haz clic en **Save budget & alerts**. La pestaña también muestra **Projected this month**, y **Open Costs** te lleva al desglose completo en **Organization → Token usage**.
+  <Step title="Define el límite mensual y habilítalo">
+    Ingresa el importe en **Monthly limit (US$)**, activa **Enable spend alerts** y haz clic en **Save budget & alerts**. La pestaña también muestra **Projected this month** y un interruptor **Break down by** (**Total**, **Per-model**, **Per-credential**) que solo cambia lo que muestra la pestaña, nunca qué alertas se disparan. **Open Costs** te lleva al desglose completo en [**Organization → Token usage**](/es/how_to_use/organization/token_usage), que también muestra el gasto del mes frente a tu límite.
   </Step>
 </Steps>
 
-### Precios de modelo
+### Precios de los modelos
 
 <AccordionGroup>
-  <Accordion title="Precio de catálogo vs. manual">
-    Kodus busca cada modelo en un catálogo público de precios y rellena lo que encuentra (**Catalog**). Si el catálogo está mal o no tiene el modelo, introduce las tarifas por token correctas — la etiqueta cambia a **Manual** y se usan tus valores.
+  <Accordion title="Precios de catálogo vs. manuales">
+    Kodus busca cada modelo en un catálogo público de precios y rellena lo que encuentra (**Catalog**). Si el catálogo está equivocado o no tiene un modelo, escribe las tarifas por token correctas: la insignia cambia a **Manual** y se usan tus valores.
   </Accordion>
 
   <Accordion title="Volver de un precio manual al de catálogo">
-    En un modelo que hayas sobrescrito, haz clic en **Revert to catalog price**. Los campos vuelven a los valores del catálogo y la etiqueta vuelve a **Catalog**. A partir de ahí, ese modelo vuelve a seguir el precio vivo del catálogo (sin snapshot congelado).
+    En un modelo que hayas sobrescrito, haz clic en **Revert to catalog price**. Los campos vuelven a los valores del catálogo y la insignia vuelve a **Catalog**. A partir de entonces, ese modelo vuelve a seguir el precio vivo del catálogo (sin un snapshot congelado).
   </Accordion>
 
   <Accordion title="Por qué un modelo puede mostrar 'No price'">
-    Los endpoints personalizados, los modelos self-hosted o los modelos que el catálogo no ha indexado no tienen precio automático. Introduce las tarifas manualmente para poder medirlos. Hasta entonces, el límite no puede habilitarse.
+    Los endpoints personalizados, los modelos self-hosted o los modelos que el catálogo no ha indexado no tienen un precio automático. Ingresa las tarifas manualmente para que se puedan medir. Hasta entonces, el límite no se puede habilitar.
   </Accordion>
 </AccordionGroup>
 
 ## Alertas
 
-Una vez habilitado, Kodus revisa tu gasto acumulado del mes aproximadamente **una vez por hora** y notifica a los **Owners** de tu organización por **email y en el centro de notificaciones de la app** a medida que cruzas cada umbral:
+Una vez habilitado, Kodus comprueba tu gasto del mes hasta la fecha aproximadamente **una vez por hora** y notifica a los **Owners** de tu organización por **email y en el centro de notificaciones de la app** a medida que cruzas cada umbral:
 
 | Umbral | Qué recibes |
 | --- | --- |
@@ -67,42 +67,42 @@ Una vez habilitado, Kodus revisa tu gasto acumulado del mes aproximadamente **un
 | **75%** | Alerta de aviso |
 | **90%** | Alerta de aviso |
 | **100%** | Alerta de "límite alcanzado" |
-| **Más del 100%** | Un aviso final de "has superado tu límite — no volveremos a notificar este mes", y luego silencio el resto del mes |
+| **Más del 100%** | Un último aviso de "has superado tu límite: no volveremos a notificar este mes" en la siguiente comprobación horaria después de la alerta del 100%, y luego silencio el resto del mes |
 
-Cada umbral se dispara **como máximo una vez al mes**, así que no recibirás avisos repetidos del mismo nivel. El contador se limpia automáticamente al empezar el nuevo mes.
+Cada umbral se dispara **como máximo una vez al mes**, así que no recibirás avisos repetidos del mismo nivel. El contador se limpia automáticamente cuando empieza el nuevo mes.
 
 <Note>
-  Las revisiones siguen ejecutándose con normalidad todo el tiempo — al 50%, al 100% y más allá. Las alertas son lo único que ocurre.
+  Las revisiones siguen ejecutándose con normalidad todo el tiempo: al 50%, al 100% y más allá. Las alertas son lo único que ocurre.
 </Note>
 
-Puedes gestionar dónde llegan (y qué roles las reciben) en **Spend Limit** dentro de los [ajustes de notificaciones](https://app.kodus.io/organization/notifications).
+Puedes gestionar dónde llegan (y qué roles las reciben) en **Spend Limit** dentro de los [ajustes de notificaciones](/es/how_to_use/organization/notifications).
 
 ## Precisión
 
-El gasto es una **estimación**. Se deriva de los tokens que usaron tus revisiones y de los precios por token mostrados en la pestaña **Budget** — no cuadrará al céntimo con la factura de tu proveedor.
+El gasto es una **estimación**. Se deriva de los tokens que usaron tus revisiones y de los precios por token que se muestran en la pestaña **Budget**: no coincidirá al centavo con la factura de tu proveedor.
 
 <CardGroup cols={2}>
   <Card title="Mantén los precios exactos" icon="tags">
-    Contrasta los precios del catálogo con la página de precios de tu proveedor y corrige los que estén desviados. Los planes de suscripción o tarifa plana especialmente no cuadran con el precio por token del catálogo.
+    Contrasta los precios del catálogo con la página de precios de tu proveedor y corrige los que estén desviados. Los planes de suscripción o de tarifa plana en especial no coincidirán con el precio por token del catálogo.
   </Card>
   <Card title="Usa la clave solo con Kodus" icon="key">
-    Una clave dedicada significa que el uso que Kodus ve es el uso que Kodus causó — nada más infla la cifra.
+    Una clave dedicada significa que el uso que ve Kodus es el uso que Kodus causó: nada más infla la cifra.
   </Card>
 </CardGroup>
 
 <Warning>
-  **Las revisiones concurrentes pueden superar el tope brevemente.** Muchos PRs revisados a la vez cerca del límite pueden empujar el gasto del mes algo más allá del 100% antes de que la siguiente comprobación horaria lo detecte. Es lo esperado — otra razón para que el tope real esté en tu proveedor.
+  **Las revisiones concurrentes pueden superar el tope brevemente.** Muchos PRs revisados a la vez cerca del límite pueden empujar el gasto del mes un poco más allá del 100% antes de que la siguiente comprobación horaria lo detecte. Es lo esperado, y otra razón por la que el tope real debe estar en tu proveedor.
 </Warning>
 
 ## Preguntas frecuentes
 
 <AccordionGroup>
   <Accordion title="¿Alcanzar el límite detiene mis revisiones?">
-    No. Es solo notificación. Para detener el gasto, configura un límite duro en el panel de facturación de tu proveedor de modelos.
+    No. Es solo una notificación. Para detener el gasto, define un límite duro en el panel de facturación de tu proveedor de modelos.
   </Accordion>
 
   <Accordion title="¿Qué cuenta para el gasto?">
-    Solo el uso de tokens en tus modelos **BYOK**, valorado a las tarifas actuales mostradas en la pestaña **Budget**. Los modelos alojados por Kodus no cuentan.
+    Solo el uso de tokens en tus modelos **BYOK**, valorado a las tarifas actuales que se muestran en la pestaña **Budget**. Los modelos alojados por Kodus no cuentan.
   </Accordion>
 
   <Accordion title="¿Cuándo se reinicia el gasto?">
@@ -110,16 +110,16 @@ El gasto es una **estimación**. Se deriva de los tokens que usaron tus revision
   </Accordion>
 
   <Accordion title="Cambié de modelo a mitad de mes, ¿mi gasto da un salto?">
-    No. El gasto se mide **por modelo**: los tokens de cada modelo se valoran a la tarifa de *ese* modelo. Si gastaste \$50 en el modelo A y luego cambias al modelo B, el uso del modelo A se queda en \$50 — cambiar a B nunca revalora los tokens de A a la tarifa de B. Tu total simplemente crece con lo que el modelo B consuma a partir de entonces.
+    No. El gasto se mide **por modelo**: los tokens de cada modelo se valoran a la tarifa de *ese* modelo. Si gastaste \$50 en el modelo A y luego cambias al modelo B, el uso del modelo A se queda en \$50: cambiar a B nunca revalora los tokens de A a la tarifa de B. Tu total simplemente crece con lo que consuma el modelo B a partir de entonces.
 
-    Lo único que revalora el uso ya incurrido es un cambio en el precio de **ese mismo modelo** — cuando el catálogo de precios actualiza la tarifa de un modelo, o editas su precio manual en **Adjust model prices**, el uso de ese modelo en lo que va de mes se recalcula con la nueva tarifa (no hay snapshot congelado).
+    Lo único que revalora el uso ya incurrido es un cambio en el precio de **ese mismo modelo**: cuando el catálogo de precios actualiza la tarifa de un modelo, o editas su precio manual en **Adjust model prices**, el uso de ese modelo en lo que va de mes se recalcula con la nueva tarifa (no hay un snapshot congelado).
   </Accordion>
 
   <Accordion title="¿Por qué no puedo habilitar el límite?">
-    Todos los modelos configurados deben tener precio (de catálogo o manual) y el límite mensual debe ser mayor que $0. Corrige cualquier modelo con **No price**, fija una cantidad positiva y guarda.
+    Todos los modelos configurados deben tener un precio (de catálogo o manual) y el límite mensual debe ser mayor que $0. Corrige cualquier modelo con **No price** y define un importe positivo, luego guarda.
   </Accordion>
 
   <Accordion title="¿Quién recibe las alertas?">
-    Los Owners de tu organización, en el centro de notificaciones de la app. Ajusta el enrutamiento en **Spend Limit** dentro de los ajustes de notificaciones.
+    Los Owners de tu organización, por email y en el centro de notificaciones de la app. Ajusta quién las recibe en **Spend Limit** dentro de los [ajustes de notificaciones](/es/how_to_use/organization/notifications).
   </Accordion>
 </AccordionGroup>
