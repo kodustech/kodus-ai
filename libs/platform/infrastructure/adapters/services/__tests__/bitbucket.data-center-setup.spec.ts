@@ -324,6 +324,9 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
             }),
         ).resolves.toMatchObject({ success: true });
 
+        // The pre-fix probe called /projects?limit=1: the URL is what pins
+        // the fix, the empty page alone is accepted by both revisions.
+        expect(get).toHaveBeenCalledWith('/repos?limit=1');
         expect(svc.addAccessToken).toHaveBeenCalled();
     });
 
