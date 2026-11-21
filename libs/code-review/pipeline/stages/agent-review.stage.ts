@@ -1123,7 +1123,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Emit profile-driven warnings up here at the stage so they
             // surface even when the agent's overhead preflight throws
-            // before its own emission points. These four are decided
+            // before its own emission points. These are decided
             // purely by the resolved profile — no PR-specific condition
             // needed. The agent will re-emit some of them when it runs;
             // dedupReviewWarnings folds the duplicates so the user sees
@@ -1142,9 +1142,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
             if (adaptiveProfile.compactPrompt) {
                 emitStageWarning('PROMPT_COMPACTED');
-            }
-            if (adaptiveProfile.allOptional) {
-                emitStageWarning('HUNK_HEADERS_ONLY');
             }
 
             const durationMs = Date.now() - startTime;
