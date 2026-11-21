@@ -3,6 +3,7 @@ import type {
     ReviewRoutingReason,
 } from '@libs/code-review/domain/review-mode';
 import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
+import type { UltraReviewState } from '@libs/code-review/domain/ultra-review-state';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
     ContextEvidence,
@@ -93,7 +94,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     reviewDirective?: string;
 
     /** The mode the review command asked for (`@kody review --heavy` /
-     *  `--balanced`), over the review mode set in settings. */
+     *  `--balanced` / `--ultra`), over the review mode set in settings. */
     requestedReviewMode?: RequestedReviewMode;
     reviewRoutingReason?: ReviewRoutingReason;
 
@@ -104,6 +105,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * short lens runs.
      */
     heavy?: boolean;
+
+    /**
+     * The Ultra review this run is (libs/ee/ultra-review): set by
+     * ValidateConfigStage when the review runs Ultra, then filled with each
+     * model's outcome and the merge by AgentReviewStage. Read by the final
+     * comment (the degraded notice) and the execution record.
+     */
+    ultra?: UltraReviewState;
 
     codeReviewConfig?: CodeReviewConfig;
     automaticReviewStatus?: AutomaticReviewStatus;
@@ -375,6 +384,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Dedup telemetry captured by AgentReviewStage and exported by benchmark tooling. */
     dedupTrace?: DedupTraceSummary;
+
+    /** When the review job's pipeline started (ms): budgets count from it. */
+    pipelineStartedAt?: number;
 
     /** Parent (job-level) AbortSignal. Forwarded from runCodeReview use-case
      *  via the strategy payload, then plumbed into AgentReviewStage so the

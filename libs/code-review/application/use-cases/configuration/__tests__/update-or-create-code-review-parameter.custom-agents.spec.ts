@@ -46,6 +46,7 @@ const buildUseCase = (
         otherRepositoryConfigs?: Record<string, unknown>;
         directoryConfigs?: Record<string, unknown>;
         license?: Record<string, unknown>;
+        byok?: unknown;
     } = {},
 ) => {
     const createOrUpdateParametersUseCase = {
@@ -116,7 +117,10 @@ const buildUseCase = (
                 .mockResolvedValue({ mode: 'direct' }),
         } as any,
         { find: jest.fn().mockResolvedValue([]) } as any,
-        { getBYOKConfig: jest.fn(), getSubscriptionStatus: jest.fn() } as any,
+        {
+            getBYOKConfig: jest.fn().mockResolvedValue(stored.byok ?? null),
+            getSubscriptionStatus: jest.fn(),
+        } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         {
             validateOrganizationLicense: jest.fn().mockResolvedValue(
@@ -655,5 +659,133 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () =>
 
         // Balanced is the default, so the save stores it as no override.
         expect(configs.reviewMode ?? 'balanced').toBe('balanced');
+    });
+});
+
+describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () => {
+    const FREE = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'free_byok',
+    };
+    const TRIAL = {
+        valid: true,
+        subscriptionStatus: 'trial',
+        planType: 'teams_managed',
+    };
+    const trioConfig = (ultraModelIds?: string[]) => ({
+        version: 2,
+        credentials: [
+            { id: 'c1', provider: 'openai', apiKey: 'cipher' },
+            { id: 'c2', provider: 'anthropic', apiKey: 'cipher' },
+        ],
+        models: [
+            { id: 'm1', credentialId: 'c1', model: 'gpt-6.1-sol' },
+            { id: 'm2', credentialId: 'c2', model: 'claude-opus-5-5' },
+            { id: 'm3', credentialId: 'c2', model: 'claude-sonnet-5-5' },
+        ],
+        routing: { defaultModelId: 'm1', ultraModelIds },
+    });
+
+    it('saves Ultra on Teams with three models set for it', async () => {
+        const configs = await buildUseCase(
+            {},
+            { byok: trioConfig(['m1', 'm2', 'm3']) },
+        ).save({ reviewMode: 'ultra' }, { source: 'web' });
+        expect(configs.reviewMode).toBe('ultra');
+    });
+
+    it("saves Ultra on a trial with three of the team's own models", async () => {
+        const configs = await buildUseCase(
+            {},
+            { license: TRIAL, byok: trioConfig(['m1', 'm2', 'm3']) },
+        ).save(
+            { riskReviewRouting: { riskFound: 'ultra' } },
+            { source: 'web' },
+        );
+        expect(configs.riskReviewRouting?.riskFound).toBe('ultra');
+    });
+
+    it('refuses Ultra on free, from the mode or a risk route', async () => {
+        for (const configValue of [
+            { reviewMode: 'ultra' },
+            { riskReviewRouting: { noRisk: 'ultra' } },
+        ]) {
+            await expect(
+                buildUseCase(
+                    {},
+                    { license: FREE, byok: trioConfig(['m1', 'm2', 'm3']) },
+                ).save(configValue, { source: 'web' }),
+            ).rejects.toThrow(
+                'Ultra review is available on the Teams and Enterprise plans',
+            );
+        }
+    });
+
+    it('refuses Ultra with no three models set for it, saying why', async () => {
+        await expect(
+            buildUseCase({}, { byok: trioConfig(['m1', 'm2']) }).save(
+                { reviewMode: 'ultra' },
+                { source: 'web' },
+            ),
+        ).rejects.toThrow('three different models set under Ultra models');
+        await expect(
+            buildUseCase({}, { byok: null }).save(
+                { reviewMode: 'ultra' },
+                { source: 'web' },
+            ),
+        ).rejects.toThrow(
+            'needs three of your own models, and this organization has 0',
+        );
+    });
+
+    it('a scope already on Ultra saves its other settings while a model of the three is unavailable', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'ultra' },
+            { byok: trioConfig(['m1', 'm2']) },
+        ).save(
+            { reviewMode: 'ultra', summary: { generatePRSummary: false } },
+            { source: 'web' },
+        );
+        expect(configs.reviewMode).toBe('ultra');
+        expect(configs.summary).toEqual({ generatePRSummary: false });
+    });
+
+    it('a risk route changed to Ultra is still refused while a model of the three is unavailable', async () => {
+        await expect(
+            buildUseCase(
+                { reviewMode: 'ultra' },
+                { byok: trioConfig(['m1', 'm2']) },
+            ).save(
+                {
+                    reviewMode: 'ultra',
+                    riskReviewRouting: { riskFound: 'ultra' },
+                },
+                { source: 'web' },
+            ),
+        ).rejects.toThrow('three different models set under Ultra models');
+    });
+
+    it('refuses heavy on free when it comes through a risk route too', async () => {
+        await expect(
+            buildUseCase({}, { license: FREE }).save(
+                { riskReviewRouting: { riskFound: 'heavy' } },
+                { source: 'web' },
+            ),
+        ).rejects.toThrow(
+            'Heavy mode is available on the Teams and Enterprise plans',
+        );
+    });
+
+    it('a kodus-config.yml sync on free leaves the locked routes out and keeps the rest', async () => {
+        const configs = await buildUseCase({}, { license: FREE }).save(
+            {
+                riskReviewRouting: { noRisk: 'balanced', riskFound: 'ultra' },
+                summary: { generatePRSummary: false },
+            },
+            { source: 'sync' },
+        );
+        expect(configs.riskReviewRouting?.riskFound).toBeUndefined();
+        expect(configs.summary).toEqual({ generatePRSummary: false });
     });
 });

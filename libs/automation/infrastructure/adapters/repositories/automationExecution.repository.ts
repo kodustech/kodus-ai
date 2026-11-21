@@ -851,6 +851,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
     async findLatestExecutionByFilters(
         filters?: Partial<any>,
+        options?: { rethrow?: boolean },
     ): Promise<AutomationExecutionEntity | null> {
         try {
             const queryBuilder =
@@ -888,6 +889,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { filters },
             });
+            if (options?.rethrow) throw error;
         }
     }
 

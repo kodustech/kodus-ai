@@ -25,6 +25,7 @@ import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
+    assertValidPrKey,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -1462,7 +1463,9 @@ describe('SandboxLeaseManager', () => {
                 "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
             ),
             expect.objectContaining({
-                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+                envs: expect.objectContaining({
+                    GIT_AUTH_HEADER: expect.any(String),
+                }),
             }),
         );
     });

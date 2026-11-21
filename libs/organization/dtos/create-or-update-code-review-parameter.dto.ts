@@ -956,7 +956,8 @@ class CodeReviewConfigWithoutLLMProviderDto {
         validator: {
             validate: (value: unknown) =>
                 riskReviewRoutingSchema.safeParse(value).success,
-            defaultMessage: () => 'Risk routing must select Balanced or Heavy.',
+            defaultMessage: () =>
+                'Risk routing must select Balanced, Heavy or Ultra.',
         },
     })
     riskReviewRouting?: RiskReviewRouting;

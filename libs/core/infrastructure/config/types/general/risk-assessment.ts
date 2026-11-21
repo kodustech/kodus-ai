@@ -34,8 +34,8 @@ export const riskCriteriaSchema = z
     );
 
 export const riskReviewRoutingSchema = z.object({
-    noRisk: z.enum(['balanced', 'heavy']).optional(),
-    riskFound: z.enum(['balanced', 'heavy']).optional(),
+    noRisk: z.enum(['balanced', 'heavy', 'ultra']).optional(),
+    riskFound: z.enum(['balanced', 'heavy', 'ultra']).optional(),
 });
 
 export type RiskReviewRouting = z.infer<typeof riskReviewRoutingSchema>;

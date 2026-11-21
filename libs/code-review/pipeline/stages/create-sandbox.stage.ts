@@ -27,6 +27,7 @@ import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
+import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
 
 /**
  * After review finishes, only keep the sandbox warm for 30 seconds. Either
@@ -70,6 +71,101 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         private readonly organizationService?: IOrganizationService,
     ) {
         super();
+    }
+
+    /**
+     * A cleanup that releases the lease the first time it is called; later
+     * calls share that release's outcome. Not retried: the release frees the worker slot first and then decrements
+     * the lease, which is not idempotent, so a retry after a failure whose
+     * write may have landed could drop the count under a consumer still
+     * using the sandbox. A lease left held is reaped at its expiry.
+     */
+    private releaseOnce(leaseId: string): () => Promise<void> {
+        let release: Promise<void> | undefined;
+        return () =>
+            (release ??= this.leaseManager.release(leaseId, {
+                idleMs: REVIEW_IDLE_TIMEOUT_MS,
+            }));
+    }
+
+    /**
+     * A hold on the PR's own sandbox for one run of an Ultra review: the same
+     * key, so the same sandbox and worker slot, and a lease of its own that
+     * keeps the sandbox up (and pushes its expiry out to `leaseTtlMs`) until
+     * the caller releases it (`cleanup`) when the run ends. 'superseded' when
+     * the PR was closed or force-pushed meanwhile, undefined when it cannot
+     * be had; the run then reviews without a checkout, as a review does when
+     * its sandbox fails.
+     */
+    async acquireRunSandbox(
+        context: CodeReviewPipelineContext,
+        suffix: string,
+        leaseTtlMs?: number,
+        /** Stops waiting for a slot; the review job's own signal by default. */
+        signal?: AbortSignal,
+    ): Promise<SandboxInstance | 'superseded' | undefined> {
+        const prKey = `${context.organizationAndTeamData?.organizationId}:${context.repository?.id}:${context.pullRequest?.number}`;
+        const logMeta = {
+            organizationId: context.organizationAndTeamData?.organizationId,
+            teamId: context.organizationAndTeamData?.teamId,
+            prNumber: context.pullRequest?.number,
+            prKey,
+        };
+        try {
+            const cloneInfo = await this.cloneParamsResolver.resolve(context);
+            if (!cloneInfo) {
+                this.logger.warn({
+                    message: `No clone params for the ${suffix} sandbox of PR#${context.pullRequest?.number}`,
+                    context: this.stageName,
+                    metadata: logMeta,
+                });
+                return undefined;
+            }
+            const { sandbox, leaseId } = await this.leaseManager.acquire(
+                prKey,
+                'review',
+                // Zero or less is no TTL: the manager's default applies.
+                leaseTtlMs && leaseTtlMs > 0 ? leaseTtlMs : undefined,
+                {
+                    cloneUrl: cloneInfo.url,
+                    authToken: cloneInfo.authToken,
+                    authUsername: cloneInfo.authUsername,
+                    branch: cloneInfo.branch,
+                    baseBranch: cloneInfo.baseBranch,
+                    prNumber: cloneInfo.prNumber,
+                    platform: cloneInfo.platform,
+                    checkoutSha: cloneInfo.checkoutSha,
+                    sandboxMetadata: { stage: `review-${suffix}` },
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                },
+                { signal: signal ?? context.parentSignal },
+            );
+            sandbox.cleanup = this.releaseOnce(leaseId);
+            this.logger.log({
+                message: `Sandbox lease acquired for the ${suffix} run of PR#${context.pullRequest?.number}`,
+                context: this.stageName,
+                metadata: { ...logMeta, leaseId, sandboxType: sandbox.type },
+            });
+            return sandbox;
+        } catch (error) {
+            if (error instanceof SandboxInvalidatedError) {
+                this.logger.warn({
+                    message: `Sandbox lease superseded for the ${suffix} run of PR#${context.pullRequest?.number} (PR closed or force-pushed); the run goes on without it`,
+                    context: this.stageName,
+                    metadata: logMeta,
+                });
+                return 'superseded';
+            }
+            this.logger.warn({
+                message: `Could not acquire the ${suffix} sandbox of PR#${context.pullRequest?.number}; the run reviews without a checkout`,
+                context: this.stageName,
+                error,
+                metadata: logMeta,
+            });
+            return undefined;
+        }
     }
 
     protected async executeStage(
@@ -159,10 +255,11 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // call (one retry, none on timeouts) and a circuit breaker that
             // fails fast while sandbox infra is degraded. If acquire() throws
             // here the review continues self-contained.
+            // An Ultra review's Kody Rules run as long as its models do.
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
-                undefined,
+                context.ultra ? ULTRA_RUN_LEASE_TTL_MS : undefined,
                 {
                     cloneUrl: cloneInfo.url,
                     authToken: cloneInfo.authToken,
@@ -184,12 +281,10 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
 
             // Override cleanup so the observer's context.sandboxHandle.cleanup()
             // releases the lease (pause) rather than killing the sandbox.
-            // 30s idle window — see REVIEW_IDLE_TIMEOUT_MS rationale.
-            sandbox.cleanup = async () => {
-                await this.leaseManager.release(leaseId, {
-                    idleMs: REVIEW_IDLE_TIMEOUT_MS,
-                });
-            };
+            // 30s idle window — see REVIEW_IDLE_TIMEOUT_MS rationale. Once:
+            // an Ultra review releases it as soon as its last user is done,
+            // before the observer's call at the end of the pipeline.
+            sandbox.cleanup = this.releaseOnce(leaseId);
 
             this.logger.log({
                 message: `Sandbox lease acquired for ${label} (type=${sandbox.type}, baseBranch=${sandbox.baseBranch || 'none'})`,

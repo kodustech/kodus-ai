@@ -312,6 +312,12 @@ export interface ModelConfig {
      * legacy `byokModel` NAME. Empty/undefined means "inherit".
      */
     byokModelId?: string;
+    /**
+     * The slot this run calls, over every routing: one model of an Ultra
+     * review. It carries no runtime fallback, so a failing model fails the
+     * run instead of moving it to the org fallback call by call.
+     */
+    forcedModel?: NormalizedModel;
     /** Optional per-agent step budget for the main investigation loop. */
     maxSteps?: number;
 }
