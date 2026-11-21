@@ -34,6 +34,8 @@ import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 @Injectable()
 export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
     private readonly sliceAborts = new Set<AbortController>();
+    /** Shutdown aborted the slices; its consumers are already cancelled. */
+    private draining = false;
 
     protected resolveClaimTimeoutMinutes(): number {
         return SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES;
@@ -51,17 +53,19 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
     }
 
     protected abortInFlightWork(): void {
+        this.draining = true;
         for (const abort of this.sliceAborts) {
             abort.abort();
         }
     }
 
     /**
-     * A stopped slice goes back to the queue on the broker, not through
-     * the delayed exchange: the scan stays RUNNING and only this delivery
-     * can continue it. Its cause paces the next try (a stale heartbeat
-     * takes SECURITY_SCAN_HEARTBEAT_STALE_MS; a lost claim meets the held
-     * claim and waits), and the quorum queue's delivery limit bounds it.
+     * A slice this worker's shutdown stopped goes back to its queue as a
+     * fresh copy, not through the delayed exchange: the scan stays RUNNING
+     * and only this message can continue it, and no consumer here takes it
+     * back. One stopped while the consumer still runs (lost claim, stale
+     * heartbeat, child preempted on its own) waits the held-claim delay,
+     * so this parent does not fork a second child straight away.
      */
     private sliceAbortedError(abortReason?: string): ClaimConflictError {
         return new ClaimConflictError(
@@ -69,7 +73,7 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
                 ? `Security-scan slice aborted: ${abortReason}`
                 : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
             undefined,
-            { returnToQueue: true },
+            { returnToQueue: this.draining },
         );
     }
 

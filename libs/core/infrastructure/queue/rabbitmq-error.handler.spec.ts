@@ -308,10 +308,15 @@ describe('RabbitMQErrorHandler', () => {
             expect(amqpConnection.publish.mock.calls[0][0]).not.toMatch(/dlx$/);
         });
 
-        it('gives stopped work back to the broker instead of a delayed copy', async () => {
+        it('returns stopped work as a fresh copy on its own exchange, then acks', async () => {
             const { handler, amqpConnection } = makeHandler({ maxRetries: 0 });
             const channel = { ack: jest.fn(), nack: jest.fn() };
-            const msg = makeMessage({ 'x-retry-count': 99 });
+            const msg = makeMessage({
+                'x-retry-count': 99,
+                'x-delay': 20_000,
+                'x-delivery-count': 3,
+            });
+            msg.fields.exchange = 'workflow.exchange.delayed';
 
             await handler.handle(
                 channel,
@@ -322,19 +327,28 @@ describe('RabbitMQErrorHandler', () => {
                 { dlqRoutingKey: 'workflow.job.failed' },
             );
 
-            expect(channel.nack).toHaveBeenCalledWith(msg, false, true);
-            expect(channel.ack).not.toHaveBeenCalled();
-            expect(amqpConnection.publish).not.toHaveBeenCalled();
+            expect(amqpConnection.publish).toHaveBeenCalledTimes(1);
+            const [exchange, routingKey, content, options] =
+                amqpConnection.publish.mock.calls[0];
+            expect(exchange).toBe('workflow.exchange');
+            expect(routingKey).toBe('workflow.jobs.created.CODE_REVIEW');
+            expect(content).toBe(msg.content);
+            expect(options).toMatchObject({
+                messageId: 'message-1',
+                persistent: true,
+            });
+            expect(options.headers).toEqual({ 'x-retry-count': 99 });
+            expect(channel.ack).toHaveBeenCalledWith(msg);
+            expect(channel.nack).not.toHaveBeenCalled();
         });
 
-        it('finishes without raising when the channel is gone before the nack', async () => {
-            const { handler } = makeHandler();
-            const channel = {
-                ack: jest.fn(),
-                nack: jest.fn(() => {
-                    throw new Error('Channel closed');
-                }),
-            };
+        it('leaves the original unacked when the fresh copy is not confirmed', async () => {
+            const { handler } = makeHandler({
+                publish: jest
+                    .fn()
+                    .mockRejectedValue(new Error('Channel closed')),
+            });
+            const channel = { ack: jest.fn(), nack: jest.fn() };
 
             await expect(
                 handler.handle(
@@ -346,6 +360,7 @@ describe('RabbitMQErrorHandler', () => {
                 ),
             ).resolves.toBeUndefined();
             expect(channel.ack).not.toHaveBeenCalled();
+            expect(channel.nack).not.toHaveBeenCalled();
         });
     });
 

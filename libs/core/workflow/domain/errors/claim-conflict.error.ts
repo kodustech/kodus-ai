@@ -14,10 +14,9 @@ export class ClaimConflictError extends Error {
     readonly errorClassification = CLAIM_CONFLICT_CLASSIFICATION;
     readonly requeueDelayMs: number;
     /**
-     * Give the delivery back to the broker (nack with requeue) instead of
-     * republishing a delayed copy: for work this worker started and was
-     * stopped, so nothing but the broker's own requeue stands between the
-     * message and the next worker.
+     * Publish a fresh copy to the queue's own exchange instead of a delayed
+     * one: for work this worker's shutdown stopped, whose consumer is
+     * already cancelled, so the copy goes to the next worker.
      */
     readonly returnToQueue: boolean;
 

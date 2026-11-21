@@ -110,11 +110,8 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         // owns redelivery of any delivery left unacked.
         try {
             if (isClaimConflictError(error) && error.returnToQueue) {
-                this.returnToQueue(channel, msg, error);
-                return;
-            }
-
-            if (isClaimConflictError(error)) {
+                await this.returnToQueue(msg, headers, error, baseExchange);
+            } else if (isClaimConflictError(error)) {
                 await this.requeueHeldClaim(
                     msg,
                     headers,
@@ -123,9 +120,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                 );
                 channel.ack(msg);
                 return;
-            }
-
-            if (retryCount < this.maxRetriesConsumer) {
+            } else if (retryCount < this.maxRetriesConsumer) {
                 await this.retryWithDelay(
                     msg,
                     headers,
@@ -171,32 +166,47 @@ export class RabbitMQErrorHandler implements OnModuleInit {
     }
 
     /**
-     * Work this worker started was stopped (a deep-scan slice preempted by
-     * a deploy, a lost claim or a stale heartbeat). Nack with requeue keeps
-     * the delivery in its queue for the next consumer; on shutdown this
-     * one's consumer is already cancelled. A delayed republish acked the
-     * original once the copy was published, and a copy the delayed exchange
-     * never delivered left the scan running with no slice. A nack the
-     * closing channel cannot send is requeued by the broker all the same.
+     * Work this worker's shutdown stopped (a deep-scan slice preempted by a
+     * deploy; its consumer is already cancelled). A fresh copy goes to the
+     * queue's own exchange, not the delayed one, whose copies were never
+     * delivered (#2654), and starts a new delivery count, so deploys do not
+     * add up toward the quorum queue's delivery limit. x-retry-count is
+     * left alone, as for a held claim. If the publish is not confirmed the
+     * original stays unacked and the broker redelivers it.
      */
-    private returnToQueue(
-        channel: any,
+    private async returnToQueue(
         msg: ConsumeMessage,
+        headers: Record<string, any>,
         error: { message?: string },
-    ): void {
+        baseExchange: string,
+    ): Promise<void> {
+        delete headers['x-delay'];
+        delete headers['x-delivery-count'];
+
         this.logger.warn({
             message: 'Stopped work returned to its queue',
             context: RabbitMQErrorHandler.name,
             metadata: {
                 messageId: msg.properties.messageId,
                 routingKey: msg.fields.routingKey,
-                retryCount:
-                    msg.properties.headers?.[this.RETRY_COUNT_HEADER] || 0,
+                retryCount: headers[this.RETRY_COUNT_HEADER] || 0,
                 error: error?.message,
             },
         });
 
-        channel.nack(msg, false, true);
+        await this.amqpConnection.publish(
+            baseExchange,
+            msg.fields.routingKey,
+            msg.content,
+            {
+                messageId: msg.properties.messageId,
+                correlationId: msg.properties.correlationId,
+                contentType: msg.properties.contentType,
+                contentEncoding: msg.properties.contentEncoding,
+                persistent: true,
+                headers,
+            },
+        );
     }
 
     /**
