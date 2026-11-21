@@ -423,3 +423,5 @@
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
 | `WEB_RULE_FILES_DOCS` | – | url | ⚙️ Both | Documentation URL for the rule-files detection feature, shown in the web UI when a user is configuring code review rules. |
+| `SANDBOX_MAX_CONCURRENT` | – | number | 🏠 Self-hosted | Most code sandboxes open at once across the install (FIFO queue past it); 0 = no limit. The Sandboxes screen overrides it. |
+| `SANDBOX_QUEUE_MAX_WAIT_MS` | – | number | 🏠 Self-hosted | How long a review waits in that queue before it runs without a sandbox (ms). |
