@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import mongoose, { Connection, Model } from 'mongoose';
 
-import { resolveMongoTestGate } from '../../../../../test/integration/mongo-test-uri';
-import { PullRequestsRepository } from './pullRequests.repository';
+import { resolveMongoTestGate } from '../mongo-test-uri';
+import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapters/repositories/pullRequests.repository';
 import {
     PullRequestsModel,
     PullRequestsSchema,
-} from './schemas/pullRequests.model';
+} from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 
-const gate = resolveMongoTestGate();
+const gate = resolveMongoTestGate('kodus_test_reaction_refs');
 const describeMongo = gate.shouldSkip ? describe.skip : describe;
 
 /**
