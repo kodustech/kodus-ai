@@ -85,6 +85,23 @@ describe("byokFailureCopy", () => {
         );
     });
 
+    // Vercel AI Gateway with Region Pinning on: the model has no provider in
+    // the pinned region. Notifications sent before the classifier knew this
+    // wording carry only the sentence, so the copy reads it too.
+    it("points at the region pin when the gateway can route the model nowhere", () => {
+        const { title, body } = byokFailureCopy(
+            "Vercel AI Gateway",
+            "MODEL_NOT_FOUND",
+            {
+                providerMessage:
+                    "No provider for openai/gpt-5-mini can serve any of the team's pinned inference regions (eu).",
+            },
+        );
+        expect(title).toMatch(/no allowed provider/i);
+        expect(body).toMatch(/region/i);
+        expect(`${title} ${body}`).not.toMatch(/check the model id/i);
+    });
+
     it("blames the key only when the provider rejected it", () => {
         expect(byokFailureCopy("OpenAI", "AUTH_INVALID").title).toMatch(/key/i);
     });

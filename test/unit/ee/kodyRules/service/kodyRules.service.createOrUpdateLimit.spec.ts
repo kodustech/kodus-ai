@@ -421,7 +421,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
                 currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
                 return Promise.resolve(currentEntity);
             }),
-            updateRulesFields: jest.fn().mockImplementation((_uuid, changes) => {
+            updateRulesFields: jest.fn().mockImplementation((_organizationId, _uuid, changes) => {
                 const rules = currentEntity.toObject().rules.map((r) => {
                     const change = changes.find((c) => c.ruleId === r.uuid);
                     return change ? { ...r, ...change.patch } : r;
@@ -490,7 +490,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             findByOrganizationId: jest
                 .fn()
                 .mockImplementation(() => Promise.resolve(currentEntity)),
-            updateRulesFields: jest.fn().mockImplementation((_uuid, changes) => {
+            updateRulesFields: jest.fn().mockImplementation((_organizationId, _uuid, changes) => {
                 const rules = currentEntity.toObject().rules.map((r) => {
                     const change = changes.find((c) => c.ruleId === r.uuid);
                     return change ? { ...r, ...change.patch } : r;

@@ -611,6 +611,141 @@ describe('classifyLLMError', () => {
         });
     });
 
+    // Read off production 2026-11-20, the provider's own words. Each was
+    // worded to the customer as the wrong fix: a monthly key cap as "the key
+    // appears invalid", a weekly plan cap as "try again in a few minutes", a
+    // proxy whose organization forbids OAuth as a transient blip.
+    describe('production wording 2026-11-20', () => {
+        function apiError(statusCode: number, message: string) {
+            return new APICallError({
+                message,
+                url: 'https://llm.example.test/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode,
+            });
+        }
+        const exhausted = (lastError: APICallError) =>
+            new RetryError({
+                message: `Failed after 4 attempts. Last error: ${lastError.message}`,
+                reason: 'maxRetriesExceeded',
+                errors: [lastError, lastError, lastError, lastError],
+            });
+
+        it('reads an OpenRouter monthly key cap (403) as a spent quota, not a bad key', () => {
+            const info = classifyLLMError(
+                apiError(
+                    403,
+                    'Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/workspaces/default/keys/<key> $10.02 of $10.00 used; resets 2026-12-01T00:00:00.000Z.',
+                ),
+            );
+            expect(info.category).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
+            expect(info.friendlyMessage).not.toMatch(/invalid/i);
+        });
+
+        it('keeps a 403 that says nothing about limits on AUTH_INVALID', () => {
+            expect(
+                classifyLLMError(apiError(403, 'Forbidden: key revoked'))
+                    .category,
+            ).toBe(LlmErrorCategory.AUTH_INVALID);
+        });
+
+        // The 429 vocabulary is wider than a 403 can bear: an auth refusal
+        // that echoes the request may carry "billing" or "credit" for an
+        // unrelated reason, and QUOTA_EXCEEDED would drop the key fix.
+        it.each([
+            'Forbidden: this key cannot access the billing endpoint',
+            'permission_error: the credit report scope is not granted to this key',
+        ])(
+            'keeps a 403 auth refusal that only mentions billing words on AUTH_INVALID (%s)',
+            (message) => {
+                expect(classifyLLMError(apiError(403, message)).category).toBe(
+                    LlmErrorCategory.AUTH_INVALID,
+                );
+            },
+        );
+
+        it.each([
+            [
+                'OpenCode Go weekly cap',
+                'OpenCode Go usage limit reached (weekly, resets in 1d 22h). To keep going now, turn on Extra Usage at https://opencode.ai/console/<org>/go.',
+            ],
+            [
+                'OpenCode free tier',
+                'Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go',
+            ],
+        ])(
+            'reads the %s (429) as a spent quota and fails over',
+            (_label, message) => {
+                const err = apiError(429, message);
+                expect(classifyLLMError(err).category).toBe(
+                    LlmErrorCategory.QUOTA_EXCEEDED,
+                );
+                expect(shouldFailoverToNextModel(err)).toBe(true);
+                expect(classifyLLMError(exhausted(err)).category).toBe(
+                    LlmErrorCategory.QUOTA_EXCEEDED,
+                );
+            },
+        );
+
+        it('keeps the MiniMax token-plan window (429) on RATE_LIMIT: it reopens within hours', () => {
+            expect(
+                classifyLLMError(
+                    apiError(
+                        429,
+                        'Token Plan rate limit reached: Upgrade your Token Plan or switch to pay-as-you-go API usage. (2062)',
+                    ),
+                ).category,
+            ).toBe(LlmErrorCategory.RATE_LIMIT);
+        });
+
+        it('reads a proxy with no usable auth whose upstream refused permission (503) as AUTH_INVALID', () => {
+            const err = apiError(
+                503,
+                'auth_unavailable: no auth available (providers=claude, model=claude-sonnet-5-5; last upstream error: permission_error: OAuth authentication is currently not allowed for this organization.); check Claude auth/key session and cooldown state via /v0/management/auth-files',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.AUTH_INVALID,
+            );
+            expect(classifyLLMError(exhausted(err)).category).toBe(
+                LlmErrorCategory.AUTH_INVALID,
+            );
+        });
+
+        // 73 failed summaries for one organization: the team pinned Vercel AI Gateway to
+        // the EU and the model has no EU provider. Read as REQUEST_REJECTED it
+        // was worded "a parameter it does not accept" and never failed over.
+        it('reads a gateway region pin that leaves the model no provider (400) as a routing refusal', () => {
+            const err = apiError(
+                400,
+                "No provider for openai/gpt-5-mini can serve any of the team's pinned inference regions (eu). Providers considered: openai, azure. Choose a model or provider that serves a pinned region.",
+            );
+            const info = classifyLLMError(err);
+            expect(info.category).toBe(LlmErrorCategory.MODEL_NOT_FOUND);
+            expect(info.routingRefusal).toBe(true);
+            expect(info.friendlyMessage).toMatch(/nowhere to route/);
+            expect(shouldFailoverToNextModel(err)).toBe(true);
+        });
+
+        it('keeps a 400 that names a parameter on REQUEST_REJECTED', () => {
+            expect(
+                classifyLLMError(
+                    apiError(400, "Unsupported parameter: 'temperature'"),
+                ).category,
+            ).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        });
+
+        it('keeps a proxy with no auth because its upstream is overloaded (503) on TRANSIENT', () => {
+            expect(
+                classifyLLMError(
+                    apiError(
+                        503,
+                        'auth_unavailable: no auth available (providers=codex, model=gpt-6.1-sol; last upstream error: server_is_overloaded: Our servers are currently overloaded. Please try again later.)',
+                    ),
+                ).category,
+            ).toBe(LlmErrorCategory.TRANSIENT);
+        });
+    });
+
     describe('classification metadata', () => {
         it('echoes the provider when supplied', () => {
             const out = classifyLLMError(new Error('boom'), 'openai');

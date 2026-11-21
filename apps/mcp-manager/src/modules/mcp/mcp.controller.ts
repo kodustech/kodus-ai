@@ -3,6 +3,7 @@ import {
     Controller,
     Delete,
     Get,
+    HttpCode,
     Param,
     Patch,
     Post,
@@ -32,6 +33,7 @@ import {
 import { ErrorResponseDto } from '../../common/dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { ConnectTokenDto } from './dto/connect-token.dto';
+import { CredentialRejectedDto } from './dto/credential-rejected.dto';
 import { CreateIntegrationDto } from './dto/create-integration.dto';
 import { FinishOAuthDto } from './dto/finish-oauth.dto';
 import { InitiateConnectionDto } from './dto/initiate-connection.dto';
@@ -463,6 +465,35 @@ export class McpController {
         return this.mcpService.getKodusMCPConnectionConfig(
             request.organizationId,
             integrationId,
+        );
+    }
+
+    @Post('integration/kodusmcp/:integrationId/credential-rejected')
+    @HttpCode(200)
+    @ApiOperation({
+        summary: 'Report a refused Kodus MCP credential',
+        description:
+            'The MCP server refused the credential from connection-config (HTTP 401). The manager refreshes it, or expires the connection when it is gone for good. Internal use only.',
+    })
+    @ApiParam({
+        name: 'integrationId',
+        type: String,
+        example: 'linear-default',
+    })
+    @ApiBody({ type: CredentialRejectedDto })
+    @ApiBadRequestResponse({ type: ErrorResponseDto })
+    @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+    @ApiForbiddenResponse({ type: ErrorResponseDto })
+    @ApiInternalServerErrorResponse({ type: ErrorResponseDto })
+    reportRejectedKodusMcpCredential(
+        @Param('integrationId') integrationId: string,
+        @Body() body: CredentialRejectedDto,
+        @Req() request: FastifyRequest,
+    ) {
+        return this.mcpService.handleRejectedKodusMcpCredential(
+            request.organizationId,
+            integrationId,
+            body.fingerprint,
         );
     }
 

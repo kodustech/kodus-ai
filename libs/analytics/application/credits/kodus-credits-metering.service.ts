@@ -22,8 +22,6 @@
  * costs a retry on the next tick, never a lost charge.
  */
 import { Inject, Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -40,12 +38,12 @@ import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
-import { ObservabilityTelemetryModel } from '@libs/analytics/infrastructure/adapters/repositories/schemas/observabilityTelemetry.model';
 import {
-    KodusCreditChargeModel,
-    KodusCreditSweepStateModel,
-} from '@libs/analytics/infrastructure/adapters/repositories/schemas/kodusCreditCharge.model';
-import { MONGO_LONG_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
+    IKodusCreditsLedgerRepository,
+    KODUS_CREDITS_LEDGER_REPOSITORY_TOKEN,
+    KodusCreditCharge,
+    KodusCreditChargeEntry,
+} from '@libs/analytics/domain/credits/contracts/kodus-credits-ledger.repository.contract';
 
 /** A span is considered settled this long after its timestamp (flush lag). */
 export const SWEEP_SETTLE_MS = 2 * 60 * 1000;
@@ -64,18 +62,6 @@ export const DEBIT_BATCH_SIZE = 500;
  * and matches nothing), so the filter reads it with `$getField` under `$expr`.
  * Verified live on 2026-09-09: the dot path matched 0 of 10 Kodus spans.
  */
-const KODUS_ROUTED_SPAN_EXPR = {
-    $regexMatch: {
-        input: {
-            $ifNull: [
-                { $getField: { field: 'gen_ai.response.model', input: '$attributes' } },
-                '',
-            ],
-        },
-        regex: '^kodus:',
-    },
-};
-
 export interface SweepSummary {
     organizationId: string;
     spansSeen: number;
@@ -86,13 +72,6 @@ export interface SweepSummary {
     failed: number;
     balanceUsd?: number;
 }
-
-type TelemetrySpan = {
-    _id: unknown;
-    correlationId?: string;
-    timestamp?: Date;
-    attributes?: Record<string, any>;
-};
 
 /** `before` arrives as the validated ISO string from the query DTO (or a
  *  Date from internal callers); the controller stays a transport adapter. */
@@ -112,12 +91,8 @@ export class KodusCreditsMeteringService {
     private readonly logger = createLogger(KodusCreditsMeteringService.name);
 
     constructor(
-        @InjectModel(ObservabilityTelemetryModel.name)
-        private readonly telemetryModel: Model<ObservabilityTelemetryModel>,
-        @InjectModel(KodusCreditChargeModel.name)
-        private readonly chargeModel: Model<KodusCreditChargeModel>,
-        @InjectModel(KodusCreditSweepStateModel.name)
-        private readonly sweepStateModel: Model<KodusCreditSweepStateModel>,
+        @Inject(KODUS_CREDITS_LEDGER_REPOSITORY_TOKEN)
+        private readonly ledger: IKodusCreditsLedgerRepository,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
         @Inject(LICENSE_SERVICE_TOKEN)
@@ -158,12 +133,9 @@ export class KodusCreditsMeteringService {
         };
 
         const upper = new Date(now.getTime() - SWEEP_SETTLE_MS);
-        const state = await this.sweepStateModel
-            .findOne({ organizationId })
-            .lean<{ cursor?: Date }>()
-            .exec();
-        const cursor = state?.cursor
-            ? new Date(new Date(state.cursor).getTime() - SWEEP_OVERLAP_MS)
+        const stoppedAt = await this.ledger.getSweepCursor(organizationId);
+        const cursor = stoppedAt
+            ? new Date(stoppedAt.getTime() - SWEEP_OVERLAP_MS)
             : new Date(now.getTime() - SWEEP_INITIAL_LOOKBACK_MS);
 
         if (cursor >= upper) {
@@ -171,35 +143,12 @@ export class KodusCreditsMeteringService {
             return summary;
         }
 
-        // An aggregation, not `find()`: the pipeline is handed to the driver
-        // untouched (no schema casting of `$expr` / the undeclared `timestamp`
-        // path), which is also how every other telemetry read in libs/analytics
-        // is written.
-        const spans = (await this.telemetryModel
-            .aggregate([
-                {
-                    $match: {
-                        'attributes.organizationId': organizationId,
-                        'timestamp': { $gt: cursor, $lte: upper },
-                        'attributes.tu.total': { $gt: 0 },
-                        '$expr': KODUS_ROUTED_SPAN_EXPR,
-                    },
-                },
-                { $sort: { timestamp: 1 } },
-                { $limit: SWEEP_SPAN_CAP },
-                {
-                    $project: {
-                        '_id': 1,
-                        'correlationId': 1,
-                        'timestamp': 1,
-                        'attributes.teamId': 1,
-                        'attributes.prNumber': 1,
-                        'attributes.tu': 1,
-                    },
-                },
-            ])
-            .option({ maxTimeMS: MONGO_LONG_QUERY_MAX_TIME_MS })
-            .exec()) as TelemetrySpan[];
+        const spans = await this.ledger.findKodusRoutedSpans({
+            organizationId,
+            after: cursor,
+            upTo: upper,
+            limit: SWEEP_SPAN_CAP,
+        });
 
         summary.spansSeen = spans.length;
         if (spans.length > 0) {
@@ -211,13 +160,12 @@ export class KodusCreditsMeteringService {
         }
         let maxTimestamp = cursor;
 
-        // One bulkWrite per org per tick (unordered, upsert per span) instead
-        // of a round-trip per span: the journal is idempotent on spanId, so
-        // a re-read of the overlap window inserts nothing and costs one call.
+        // One journal write per org per tick instead of a round-trip per
+        // span: it is idempotent on spanId, so a re-read of the overlap
+        // window inserts nothing and costs one call.
         const ops: Array<{
-            spanId: string;
             unpriced: boolean;
-            op: Record<string, unknown>;
+            entry: KodusCreditChargeEntry;
         }> = [];
         for (const span of spans) {
             const tu = span.attributes?.tu;
@@ -236,48 +184,33 @@ export class KodusCreditsMeteringService {
             const amountUsd = kodusModelUsageCostUsd(model, tokens);
             const spanId = String(span._id);
             ops.push({
-                spanId,
                 unpriced: amountUsd === null,
-                op: {
-                    updateOne: {
-                        filter: { spanId },
-                        update: {
-                            $setOnInsert: {
-                                spanId,
-                                organizationId,
-                                teamId: span.attributes?.teamId ?? undefined,
-                                correlationId: span.correlationId,
-                                prNumber:
-                                    typeof span.attributes?.prNumber === 'number'
-                                        ? span.attributes.prNumber
-                                        : undefined,
-                                modelId: model,
-                                area: tu.area,
-                                route: tu.route,
-                                tokens,
-                                amountUsd: amountUsd ?? 0,
-                                pricingAsOf: KODUS_CATALOG_PRICES_AS_OF,
-                                status: amountUsd === null ? 'unpriced' : 'pending',
-                                spanAt: ts,
-                            },
-                        },
-                        upsert: true,
-                    },
+                entry: {
+                    spanId,
+                    organizationId,
+                    teamId: span.attributes?.teamId ?? undefined,
+                    correlationId: span.correlationId,
+                    prNumber:
+                        typeof span.attributes?.prNumber === 'number'
+                            ? span.attributes.prNumber
+                            : undefined,
+                    modelId: model,
+                    area: tu.area,
+                    route: tu.route,
+                    tokens,
+                    amountUsd: amountUsd ?? 0,
+                    pricingAsOf: KODUS_CATALOG_PRICES_AS_OF,
+                    status: amountUsd === null ? 'unpriced' : 'pending',
+                    spanAt: ts,
                 },
             });
         }
 
         if (ops.length > 0) {
             try {
-                const res = (await this.chargeModel.bulkWrite(
-                    ops.map((o) => o.op) as Parameters<
-                        typeof this.chargeModel.bulkWrite
-                    >[0],
-                    { ordered: false },
-                )) as {
-                    upsertedCount?: number;
-                    upsertedIds?: Record<string, unknown>;
-                };
+                const res = await this.ledger.journalCharges(
+                    ops.map((o) => o.entry),
+                );
                 // `upsertedIds` is keyed by the op index, so the unpriced
                 // count covers only rows this tick actually inserted.
                 const inserted = new Set(
@@ -325,11 +258,7 @@ export class KodusCreditsMeteringService {
         // stops at the last span seen so the next tick resumes from there.
         const nextCursor =
             spans.length >= SWEEP_SPAN_CAP ? maxTimestamp : upper;
-        await this.sweepStateModel.updateOne(
-            { organizationId },
-            { $set: { cursor: nextCursor, lastSweepAt: now } },
-            { upsert: true },
-        );
+        await this.ledger.saveSweepCursor(organizationId, nextCursor, now);
 
         await this.debitPending(organizationId, summary);
         return summary;
@@ -341,12 +270,10 @@ export class KodusCreditsMeteringService {
         organizationId: string,
         summary: SweepSummary,
     ): Promise<void> {
-        const pending = (await this.chargeModel
-            .find({ organizationId, status: 'pending' })
-            .sort({ spanAt: 1 })
-            .limit(DEBIT_BATCH_SIZE * 4)
-            .lean()
-            .exec()) as Array<KodusCreditChargeModel & { _id: unknown }>;
+        const pending = await this.ledger.findPendingCharges(
+            organizationId,
+            DEBIT_BATCH_SIZE * 4,
+        );
         if (pending.length === 0) return;
 
         const byTeam = new Map<string, typeof pending>();
@@ -381,9 +308,10 @@ export class KodusCreditsMeteringService {
                         entries,
                     );
                     const debitedAt = new Date();
-                    await this.chargeModel.updateMany(
-                        { spanId: { $in: batch.map((c) => c.spanId) } },
-                        { $set: { status: 'debited', debitedAt } },
+                    await this.ledger.markChargesDebited(
+                        organizationId,
+                        batch.map((c) => c.spanId),
+                        debitedAt,
                     );
                     summary.debited += batch.length;
                     summary.debitedUsd += batch.reduce(
@@ -395,9 +323,10 @@ export class KodusCreditsMeteringService {
                     summary.failed += batch.length;
                     const message =
                         error instanceof Error ? error.message : String(error);
-                    await this.chargeModel.updateMany(
-                        { spanId: { $in: batch.map((c) => c.spanId) } },
-                        { $set: { lastError: message } },
+                    await this.ledger.recordChargeError(
+                        organizationId,
+                        batch.map((c) => c.spanId),
+                        message,
                     );
                     this.logger.error({
                         message:
@@ -419,17 +348,14 @@ export class KodusCreditsMeteringService {
     async listCharges(
         organizationId: string,
         options: { limit?: number; before?: Date | string; prNumber?: number } = {},
-    ): Promise<KodusCreditChargeModel[]> {
-        const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
-        const filter: Record<string, unknown> = { organizationId };
-        if (normalizeBefore(options.before)) filter.spanAt = { $lt: normalizeBefore(options.before) };
-        if (typeof options.prNumber === 'number')
-            filter.prNumber = options.prNumber;
-        return (await this.chargeModel
-            .find(filter)
-            .sort({ spanAt: -1 })
-            .limit(limit)
-            .lean()
-            .exec()) as KodusCreditChargeModel[];
+    ): Promise<KodusCreditCharge[]> {
+        return this.ledger.listCharges(organizationId, {
+            limit: Math.min(Math.max(options.limit ?? 100, 1), 500),
+            before: normalizeBefore(options.before),
+            prNumber:
+                typeof options.prNumber === 'number'
+                    ? options.prNumber
+                    : undefined,
+        });
     }
 }

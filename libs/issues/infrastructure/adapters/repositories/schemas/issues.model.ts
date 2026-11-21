@@ -13,6 +13,7 @@ import {
     IIssueOwner,
     IssueSource,
 } from '@libs/issues/domain/interfaces/issues.interface';
+import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 @Schema({
     collection: 'issues',
@@ -105,9 +106,10 @@ export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);
 
 // 1. Main - organization + status open
 // Whether a cached list is still current (changedSince): the latest write.
+// Defined in release-index-definitions.ts, which the index migration builds too.
 IssuesSchema.index(
-    { organizationId: 1, updatedAt: -1 },
-    { name: 'organization_updated', background: true },
+    RELEASE_INDEX.issuesByLatestWrite.key,
+    RELEASE_INDEX.issuesByLatestWrite.options,
 );
 
 IssuesSchema.index(
@@ -160,11 +162,6 @@ IssuesSchema.index(
 // code-review issue (no fingerprint) out of the uniqueness rule, so the index
 // builds on existing data and a concurrent re-scan cannot write a duplicate.
 IssuesSchema.index(
-    { 'organizationId': 1, 'repository.id': 1, 'fingerprint': 1 },
-    {
-        unique: true,
-        partialFilterExpression: { fingerprint: { $exists: true } },
-        name: 'organization_repository_fingerprint_unique',
-        background: true,
-    },
+    RELEASE_INDEX.oneIssuePerFinding.key,
+    RELEASE_INDEX.oneIssuePerFinding.options,
 );

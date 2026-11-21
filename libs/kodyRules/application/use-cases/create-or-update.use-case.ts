@@ -644,17 +644,6 @@ export class CreateOrUpdateKodyRulesUseCase {
         return Boolean(centralizedRepository);
     }
 
-    /**
-     * Whether the rule's last reference detection recorded an error, which
-     * the next write of the rule retries.
-     */
-    referenceDetectionFailed(ruleId: string): Promise<boolean> {
-        return this.contextReferenceDetectionService.lastDetectionFailed(
-            'kodyRule',
-            ruleId,
-        );
-    }
-
     private async detectAndSaveReferencesAsync(
         ruleId: string,
         ruleText: string,

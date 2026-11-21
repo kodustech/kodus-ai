@@ -7,7 +7,7 @@ import {
     MCPResourceWithServer,
     MCPTool,
 } from './types';
-import { MCPRegistry } from './registry';
+import { isCredentialRejection, MCPRegistry } from './registry';
 import { mcpToolsToEngineTools } from './tools';
 /**
  * Create an MCP adapter for Kodus Flow
@@ -117,13 +117,19 @@ export function createMCPAdapter(config: MCPAdapterConfig): MCPAdapter {
                     context: 'createMCPAdapter',
                 });
 
-                for (const result of rejected) {
-                    logger.error({
+                results.forEach((result, index) => {
+                    if (result.status !== 'rejected') return;
+                    // Already reported to whoever issued the credential.
+                    const handled =
+                        isCredentialRejection(result.reason) &&
+                        !!config.servers[index]?.onCredentialRejected;
+                    logger[handled ? 'warn' : 'error']({
                         message: 'MCP connection error:',
                         context: 'createMCPAdapter',
                         error: result.reason,
+                        metadata: { serverName: config.servers[index]?.name },
                     });
-                }
+                });
             }
 
             if (successful.length === 0) {

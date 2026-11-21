@@ -38,6 +38,7 @@ export interface IKodyRulesRepository {
      * the ids whose patch could not be written.
      */
     updateRulesFields(
+        organizationId: string,
         uuid: string,
         changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
     ): Promise<string[]>;

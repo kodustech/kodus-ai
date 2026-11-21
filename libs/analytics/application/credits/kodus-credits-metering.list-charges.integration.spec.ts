@@ -5,6 +5,7 @@
  * Runs the real listCharges against a REAL MongoDB (the schema's indexes,
  * built as on boot).
  */
+import { KodusCreditsLedgerRepository } from '@libs/analytics/infrastructure/adapters/repositories/kodus-credits-ledger.repository';
 import mongoose, { Connection } from 'mongoose';
 
 import {
@@ -66,9 +67,11 @@ let available = false;
                 })),
             );
             service = new KodusCreditsMeteringService(
-                {} as any,
-                model as any,
-                {} as any,
+                new KodusCreditsLedgerRepository(
+                    {} as any,
+                    model as any,
+                    {} as any,
+                ),
                 {} as any,
                 {} as any,
             );

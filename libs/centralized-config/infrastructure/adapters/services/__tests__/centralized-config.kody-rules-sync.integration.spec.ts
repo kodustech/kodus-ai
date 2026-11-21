@@ -186,11 +186,6 @@ let available = false;
                 createOrUpdate as any,
                 'detectAndSaveReferencesAsync',
             ).mockResolvedValue(undefined);
-            // Every rule's last detection reads as clean.
-            jest.spyOn(
-                createOrUpdate,
-                'referenceDetectionFailed',
-            ).mockResolvedValue(false);
 
             const deleteRule = new DeleteRuleInOrganizationByIdKodyRulesUseCase(
                 kodyRulesService as any,
@@ -217,6 +212,10 @@ let available = false;
                 createOrUpdate,
                 deleteRule,
                 kodyRulesService as any,
+                // Every rule's last detection reads as clean.
+                {
+                    lastDetectionFailed: jest.fn().mockResolvedValue(false),
+                } as any,
             );
             jest.spyOn(
                 service,
