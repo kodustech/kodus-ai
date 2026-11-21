@@ -56,6 +56,7 @@ describe('ValidatePrerequisitesStage', () => {
     };
     let mockPullRequestsService: {
         find: jest.Mock;
+        countByAuthor: jest.Mock;
     };
     let mockCodeBaseConfigService: { getConfig: jest.Mock };
     let mockPullRequestManagerService: { getChangedFilesMetadata: jest.Mock };
@@ -134,6 +135,7 @@ describe('ValidatePrerequisitesStage', () => {
 
         mockPullRequestsService = {
             find: jest.fn().mockResolvedValue([]),
+            countByAuthor: jest.fn().mockResolvedValue(0),
         };
 
         mockCodeManagementService = {
@@ -899,6 +901,30 @@ describe('ValidatePrerequisitesStage', () => {
                 expect(
                     mockCodeManagementService.createIssueComment,
                 ).not.toHaveBeenCalled();
+            });
+
+            it("hands auto-assign the author's PR count, counted no further than 2", async () => {
+                unlicensed();
+                mockPullRequestsService.countByAuthor.mockResolvedValue(2);
+                mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                    shouldProceed: true,
+                    reason: 'ASSIGNED',
+                });
+                const context = makeContext();
+
+                await stage.execute(context);
+
+                expect(
+                    mockPullRequestsService.countByAuthor,
+                ).toHaveBeenCalledWith(
+                    context.organizationAndTeamData.organizationId,
+                    String(context.userGitId),
+                    2,
+                );
+                expect(mockPullRequestsService.find).not.toHaveBeenCalled();
+                expect(mockAutoAssignLicenseUseCase.execute).toHaveBeenCalledWith(
+                    expect.objectContaining({ prCount: 2 }),
+                );
             });
 
             it('assigns the seat as before when the effective setting is on', async () => {

@@ -40,13 +40,51 @@ describe('startStallWatchdog (real worker thread)', () => {
      * it began after that moment (minus a tick or two of slack: its start is
      * the last tick before the gap).
      */
-    const arm = async () => {
+    /** Every report of the current watchdog, ours or not, with when it came. */
+    let seen: Array<{ r: StallReport; at: number }> = [];
+    /**
+     * Also waits for the watchdog to be idle: a stall of the test process
+     * before arming (a starved CI runner, the worker thread starting) can
+     * hold the capture slot, and a stall provoked while the slot is busy is
+     * reported `not-captured` instead of being captured. Idle: every stall
+     * seen has its recovery, and nothing was reported for a while.
+     */
+    const arm = async ({ quietMs = 1_500, maxWaitMs = 10_000 } = {}) => {
+        const armStart = Date.now();
+        const deadline = armStart + maxWaitMs;
+        while (Date.now() < deadline) {
+            const open = seen.some(
+                ({ r }) =>
+                    r.kind === 'stall' &&
+                    !seen.some(
+                        (o) =>
+                            o.r.kind === 'recovered' &&
+                            o.r.startedAt === r.startedAt,
+                    ),
+            );
+            // Silence counts from the start of arm(): a capture still in
+            // flight has not reported anything yet.
+            const last = Math.max(
+                armStart,
+                seen.length ? seen[seen.length - 1].at : 0,
+            );
+            if (!open && Date.now() - last >= quietMs) break;
+            await settle(100);
+        }
         await settle(200);
         armedAt = Date.now();
     };
     const ours = (startedAt?: number) => (startedAt ?? 0) >= armedAt - 50;
-    const keep = (reports: StallReport[]) => (r: StallReport) => {
-        if (ours(r.startedAt)) reports.push(r);
+    // Each watchdog gets its own `seen`: a test that starts several in turn
+    // must not wait on a stall of one already stopped (its recovery never
+    // comes).
+    const keep = (reports: StallReport[]) => {
+        const mine: Array<{ r: StallReport; at: number }> = [];
+        seen = mine;
+        return (r: StallReport) => {
+            mine.push({ r, at: Date.now() });
+            if (ours(r.startedAt)) reports.push(r);
+        };
     };
     const ourFail = (h: { path: string; body: string }) =>
         h.path.endsWith('/fail') && ours(JSON.parse(h.body).context?.startedAt);
@@ -57,6 +95,7 @@ describe('startStallWatchdog (real worker thread)', () => {
 
     afterEach(() => {
         armedAt = Number.POSITIVE_INFINITY;
+        seen = [];
         stop?.();
         stop = undefined;
         jest.clearAllMocks();
@@ -237,26 +276,70 @@ describe('startStallWatchdog (real worker thread)', () => {
         await settle(200);
 
         // The inspector cannot interrupt a synchronous native call: the
-        // main thread answers only after it returns.
-        await arm();
+        // main thread answers only after it returns. This needs the capture
+        // slot free: a capture still in flight for an earlier stall (up to
+        // the 5s inspector bound plus the profile) would leave this stall
+        // `not-captured`, so wait out a full capture of silence first.
+        await arm({ quietMs: 6_000, maxWaitMs: 20_000 });
+        const provokedAt = Date.now();
         execSync('sleep 2');
 
-        const fail = await waitFor(() => hits.find(ourFail), 15_000);
+        // The stall this test provoked is the one that began with execSync.
+        // On a slow runner a second stall can follow it (the main thread
+        // catching up), and its report or alert can arrive first; the
+        // provoked one's report waits for the inspector, which answers only
+        // after execSync returns. So both are picked by start, not by order.
+        const provoked = (startedAt?: number) =>
+            startedAt !== undefined &&
+            startedAt >= provokedAt - 100 &&
+            startedAt <= provokedAt + 400;
+        const stall = await waitFor(
+            () =>
+                reports.find(
+                    (r) => r.kind === 'stall' && provoked(r.startedAt),
+                ),
+            20_000,
+        );
+        const fail = await waitFor(
+            () =>
+                hits.find(
+                    (h) =>
+                        ourFail(h) &&
+                        JSON.parse(h.body).context?.startedAt ===
+                            stall.startedAt,
+                ),
+            15_000,
+        );
         server.close();
 
-        const stall = reports.find((r) => r.kind === 'stall');
         expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
         // The inspector only got an answer after execSync returned: neither
         // the stack nor the profile it would carry is the stall, so neither
         // is used, and the alert says why instead of naming this file.
         const message = JSON.parse(fail.body).message as string;
+        if (stall?.stackUnavailable !== 'answered-late') {
+            // What held the capture slot, for the next CI failure.
+            console.log(
+                'stall-watchdog spec: reports of this watchdog',
+                JSON.stringify(
+                    seen.map(({ r, at }) => ({
+                        at,
+                        kind: r.kind,
+                        startedAt: r.startedAt,
+                        stalledMs: r.stalledMs,
+                        stackUnavailable: r.stackUnavailable,
+                    })),
+                ),
+                { armedAt, provokedAt },
+            );
+        }
         expect(stall?.stack).toBeNull();
         expect(stall?.hottest).toBeUndefined();
         expect(stall?.stackUnavailable).toBe('answered-late');
         expect(message).toContain('could not interrupt');
         expect(message).not.toContain('stall-watchdog.spec');
         expect(message).toContain('stalled');
-    });
+    }, 60_000);
     it('closes a stall that recovers during its capture, so the next stall gets its own report', async () => {
         const reports: StallReport[] = [];
         stop = startStallWatchdog(

@@ -284,11 +284,29 @@ describe('agent tools — secret files of the repository', () => {
         expect(Date.now() - started).toBeLessThan(1_000);
     });
 
+    it.each([['/..-1-'], ['/../-1-']])(
+        'answers fast on lines with a `..` boundary after every slash (%s)',
+        (segment) => {
+            // A `..` before each boundary: what it names is known from the
+            // segments read so far, not from the glob on the whole prefix
+            // (6.1s and 1.3s for these 200 lines before).
+            const line = `src/a.txt:1:${segment.repeat(666)}`;
+            const out = Array.from({ length: 200 }, () => line).join('\n');
+            const started = Date.now();
+            expect(withoutSecretFileLines(out)).toBe(out);
+            expect(Date.now() - started).toBeLessThan(500);
+        },
+    );
+
     it.each([
         ['certs/.env/-1-x'],
         ['certs/./.env-1-x'],
         ['a/b/../.env:2:x'],
         ['keys/id_rsa/.-1-x'],
+        ['certs/k.pem/x/..-1-x'],
+        ['certs/k.pem/x/../-1-x'],
+        ['/k.pem/a/b/../..:3:x'],
+        ['keys/x\\id_rsa/y/..:1:x'],
     ])('still drops %s, spelled with a trailing slash, `.` or `..`', (line) => {
         expect(withoutSecretFileLines(`${line}\nsrc/a.ts:1:ok`)).toBe(
             'src/a.ts:1:ok',

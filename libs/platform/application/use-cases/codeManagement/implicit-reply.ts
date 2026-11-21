@@ -36,6 +36,7 @@ export type ImplicitReplySilence =
     | 'bot_cap'
     | 'thread_cap'
     | 'plan_blocked'
+    | 'license_unavailable'
     | 'classified_no'
     | 'classifier_error';
 

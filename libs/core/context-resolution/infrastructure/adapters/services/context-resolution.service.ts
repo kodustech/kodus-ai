@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IContextResolutionService } from '@libs/core/context-resolution/domain/contracts/context-resolution.service.contract';
+import { RepositoryNotConfiguredError } from '@libs/core/context-resolution/domain/errors/repository-not-configured.error';
 import { RepositoryNotIntegratedError } from '@libs/core/context-resolution/domain/errors/repository-not-integrated.error';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
@@ -101,7 +102,7 @@ export class ContextResolutionService implements IContextResolutionService {
         );
 
         if (!targetRepository) {
-            throw new Error(
+            throw new RepositoryNotConfiguredError(
                 `Repository with id ${repositoryId} not found in code review config`,
             );
         }
@@ -164,7 +165,7 @@ export class ContextResolutionService implements IContextResolutionService {
         );
 
         if (!targetRepository) {
-            throw new Error(
+            throw new RepositoryNotConfiguredError(
                 `Repository with id ${repositoryId} not found in code review config`,
             );
         }

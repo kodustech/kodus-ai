@@ -11,6 +11,7 @@ import {
     type RunReference,
     type RunTask,
 } from './validation-run.model';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 export interface ValidationRunRecord {
     id: string;
@@ -232,6 +233,7 @@ export class ValidationRunRepository {
                 { $limit: MAX_PULL_REQUESTS },
             ])
             .allowDiskUse(true)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
         return docs.map(toRecord);
     }

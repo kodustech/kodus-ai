@@ -22,6 +22,7 @@ import {
     MetricsResponseTimeResponseDto,
     MetricsSummaryResponseDto,
 } from './metrics-response.dto';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 @ApiTags('Internal Metrics')
 @ApiBearerAuth('jwt')
@@ -80,7 +81,9 @@ export class MetricsController {
                 },
             ];
 
-            const results = await this.metricsModel.aggregate(pipeline);
+            const results = await this.metricsModel
+                .aggregate(pipeline)
+                .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS });
 
             const componentMap = new Map<
                 string,
@@ -237,7 +240,9 @@ export class MetricsController {
                 },
             ];
 
-            const results = await this.metricsModel.aggregate(pipeline);
+            const results = await this.metricsModel
+                .aggregate(pipeline)
+                .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS });
 
             return results.map((r) => ({
                 pipeline: r._id.pipeline ?? 'unknown',

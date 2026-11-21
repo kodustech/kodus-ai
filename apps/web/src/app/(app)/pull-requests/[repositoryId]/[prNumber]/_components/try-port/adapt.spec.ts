@@ -150,7 +150,7 @@ describe("adaptForTryDiffViewer", () => {
         });
     });
 
-    it("falls back message→summary, suggestion→existingCode, severity→info, line→0", () => {
+    it("falls back message→summary, severity→info, line→0", () => {
         const { issues } = adaptForTryDiffViewer({
             patchFiles: [],
             suggestions: [
@@ -158,17 +158,32 @@ describe("adaptForTryDiffViewer", () => {
                     id: "s",
                     filePath: "x.ts",
                     oneSentenceSummary: "summary",
-                    existingCode: "old()",
                 } as PullRequestSuggestion,
             ],
         });
 
         expect(issues[0]).toMatchObject({
             message: "summary",
-            suggestion: "old()",
             severity: "info",
             line: 0,
         });
+    });
+
+    it("never offers the flagged code as the suggested fix", () => {
+        const { issues } = adaptForTryDiffViewer({
+            patchFiles: [],
+            suggestions: [
+                {
+                    id: "downgraded",
+                    filePath: "x.ts",
+                    suggestionContent: "Use === for the check.",
+                    existingCode: "if (order.status = 'paid') {",
+                    improvedCode: "",
+                } as PullRequestSuggestion,
+            ],
+        });
+
+        expect(issues[0].suggestion).toBeUndefined();
     });
 });
 

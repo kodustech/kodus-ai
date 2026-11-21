@@ -6,7 +6,6 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 @Schema({
     collection: 'pullRequestMessages',
     timestamps: true,
-    autoIndex: true,
 })
 export class PullRequestMessagesModel extends CoreDocument {
     @Prop({ type: String, required: true })
