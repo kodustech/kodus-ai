@@ -44,6 +44,51 @@ x-app-service-template: &app-service-defaults
         - shared-network
     logging: *default-logging
 
+x-runtime-env: &runtime-env
+    TS_NODE_PROJECT: apps/runtime/tsconfig.json
+    TS_NODE_TRANSPILE_ONLY: 'true'
+    # The Runtime's own least-privilege users (scripts/runtime/dev-runtime-users.sh
+    # writes them to .runtime-certs/runtime-users.env; pass it as a second
+    # --env-file). Without it the product admin credentials are the fallback.
+    RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:-postgres://${API_PG_DB_USERNAME}:${API_PG_DB_PASSWORD}@db_postgres:5432/kodus_runtime}
+    RUNTIME_RABBITMQ_URL: ${RUNTIME_RABBITMQ_URL:-${API_RABBITMQ_URI}}
+    # The Run stream: the hub writes it to the Runtime Postgres (runtime_run_events), which any
+    # hub replica appends to and the API reads read-only. `file` keeps the shared volume below.
+    RUNTIME_STREAM_STORE: ${RUNTIME_STREAM_STORE:-postgres}
+    RUNTIME_STREAM_DIR: /data/runtime-streams
+    # Evidence: `file` (the worker's volume and evidence server, one replica) or `s3` (a bucket;
+    # `--profile evidence-s3` starts a MinIO for it). The keys default to the dev MinIO's (local only).
+    RUNTIME_EVIDENCE_STORE: ${RUNTIME_EVIDENCE_STORE:-file}
+    RUNTIME_EVIDENCE_S3_BUCKET: ${RUNTIME_EVIDENCE_S3_BUCKET:-kody-runtime-evidence}
+    RUNTIME_EVIDENCE_S3_ENDPOINT: ${RUNTIME_EVIDENCE_S3_ENDPOINT:-http://runtime-minio:9000}
+    RUNTIME_EVIDENCE_S3_PUBLIC_ENDPOINT: ${RUNTIME_EVIDENCE_S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+    RUNTIME_EVIDENCE_S3_FORCE_PATH_STYLE: ${RUNTIME_EVIDENCE_S3_FORCE_PATH_STYLE:-true}
+    RUNTIME_EVIDENCE_S3_ACCESS_KEY_ID: ${RUNTIME_EVIDENCE_S3_ACCESS_KEY_ID:-kody-runtime-dev}
+    RUNTIME_EVIDENCE_S3_SECRET_ACCESS_KEY: ${RUNTIME_EVIDENCE_S3_SECRET_ACCESS_KEY:-dev-only-runtime-minio-secret-0000}
+    # The hub's internal listener (worker → hub, private network only; never published).
+    RUNTIME_HUB_INTERNAL_PORT: '3411'
+    RUNTIME_HUB_URL: https://runtime-hub:3411
+    DBOS_LOG_LEVEL: warn
+
+x-runtime-service-template: &runtime-service-defaults
+    image: node:22.23.4-slim
+    working_dir: /usr/src/app
+    volumes:
+        - .:/usr/src/app:delegated
+        - ${RUNTIME_NODE_MODULES:-./node_modules}:/usr/src/app/node_modules:ro
+        - ${RUNTIME_CERTS_DIR:-./.runtime-certs}:/certs:ro
+        - runtime_streams:/data/runtime-streams
+    restart: unless-stopped
+    # The hub and the worker create the kodus_runtime database on boot when it
+    # is missing (apps/runtime/src/shared/persistence/runtime-schema.ts ensureDatabase).
+    depends_on:
+        db_postgres:
+            condition: service_healthy
+    networks:
+        - kodus-backend-services
+        - shared-network
+    logging: *default-logging
+
 services:
     #----------------------------------------------------------------
     # Application Services
@@ -51,6 +96,8 @@ services:
     kodus-api:
         <<: *app-service-defaults
         container_name: kodus_api
+        # An init reaps zombies: a restart never leaves one the daemon cannot kill.
+        init: true
         depends_on:
             rabbitmq:
                 condition: service_healthy
@@ -118,10 +165,54 @@ services:
             - RUN_SEEDS=${RUN_SEEDS:-true}
             - PYROSCOPE_SERVER_ADDRESS=${PYROSCOPE_SERVER_ADDRESS:-http://pyroscope:4040}
             - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
+            # Kody Runtime reads (runs stream, cells, egress) and the LLM
+            # gateway's Run token. The dev secret is for local stacks only.
+            - RUNTIME_DATABASE_URL=postgres://${API_PG_DB_USERNAME}:${API_PG_DB_PASSWORD}@db_postgres:5432/kodus_runtime
+            # The API reads the Runtime database with this URL only (there is no
+            # fallback to the read-write one). scripts/runtime/dev-runtime-users.sh
+            # makes a read-only role; a dev stack without it reads as the owner.
+            - RUNTIME_DATABASE_READ_URL=${RUNTIME_DATABASE_READ_URL:-postgres://${API_PG_DB_USERNAME}:${API_PG_DB_PASSWORD}@db_postgres:5432/kodus_runtime}
+            # The Run stream from the Runtime Postgres with RUNTIME_DATABASE_READ_URL. The volume is
+            # read only for a Run that has no row there (written before the switch to postgres).
+            - RUNTIME_STREAM_STORE=${RUNTIME_STREAM_STORE:-postgres}
+            - RUNTIME_STREAM_DIR=/data/runtime-streams
+            # The Run cost prices a shared cell's held memory by its host (libs/runtime/api/domain/run-cost.ts):
+            # cellId → instanceType (list price from CELL_HOST_LIST_PRICES) or usdPerHour. cell-dev-1 is a t4g.xlarge.
+            - 'RUNTIME_CELL_PRICES=${RUNTIME_CELL_PRICES:-{"cell-dev-1":{"instanceType":"t4g.xlarge","region":"us-east-2"}}}'
+            - RUNTIME_RUN_TOKEN_SECRET=${RUNTIME_RUN_TOKEN_SECRET:-dev-only-runtime-run-token-secret-0000}
+            # The product seals the repo and Run tokens it hands the Runtime; the
+            # runtime-worker opens them with the same key (dev-only value).
+            - RUNTIME_SECRET_SEAL_KEY=${RUNTIME_SECRET_SEAL_KEY:-de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de70}
+            - RUNTIME_ENABLED=${RUNTIME_ENABLED:-true}
+            # /mcp/env (env_* tools): the runtime-worker's env-session listener, on
+            # the compose network only (its HMAC signature is its only auth).
+            - RUNTIME_ENV_SESSION_URL=${RUNTIME_ENV_SESSION_URL:-http://kodus_runtime_worker:3430}
+            # Dev and e2e only: the product's Git calls for the Runtime answered from this file (refused in production).
+            - RUNTIME_DEV_GIT_STUB_FILE=${RUNTIME_DEV_GIT_STUB_FILE:-}
+            # GET /runtime/runs/:id/evidence/:stepId signs a 5-minute URL for the
+            # evidence server of runtime-worker (its own origin, port 3420).
+            - RUNTIME_EVIDENCE_BASE_URL=${RUNTIME_EVIDENCE_BASE_URL:-http://127.0.0.1:3420}
+            - RUNTIME_EVIDENCE_SIGNING_SECRET=${RUNTIME_EVIDENCE_SIGNING_SECRET:-dev-only-runtime-evidence-signing-secret-000000}
+            - RUNTIME_EVIDENCE_URL_TTL_SECONDS=300
+            # RUNTIME_EVIDENCE_STORE=s3: presigned GETs of the bucket instead (a GetObject-only key is enough).
+            - RUNTIME_EVIDENCE_STORE=${RUNTIME_EVIDENCE_STORE:-file}
+            - RUNTIME_EVIDENCE_S3_BUCKET=${RUNTIME_EVIDENCE_S3_BUCKET:-kody-runtime-evidence}
+            - RUNTIME_EVIDENCE_S3_ENDPOINT=${RUNTIME_EVIDENCE_S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+            - RUNTIME_EVIDENCE_S3_FORCE_PATH_STYLE=${RUNTIME_EVIDENCE_S3_FORCE_PATH_STYLE:-true}
+            - RUNTIME_EVIDENCE_S3_ACCESS_KEY_ID=${RUNTIME_EVIDENCE_S3_READ_ACCESS_KEY_ID:-${RUNTIME_EVIDENCE_S3_ACCESS_KEY_ID:-kody-runtime-dev}}
+            - RUNTIME_EVIDENCE_S3_SECRET_ACCESS_KEY=${RUNTIME_EVIDENCE_S3_READ_SECRET_ACCESS_KEY:-${RUNTIME_EVIDENCE_S3_SECRET_ACCESS_KEY:-dev-only-runtime-minio-secret-0000}}
+        volumes:
+            - .:/usr/src/app:delegated
+            - node_modules_cache:/usr/src/app/node_modules
+            - pnpm_store:/usr/src/app/.pnpm-store
+            - logs_data:/usr/src/app/logs
+            - runtime_streams:/data/runtime-streams:ro
 
     worker:
         <<: *app-service-defaults
         container_name: kodus_worker
+        # An init reaps zombies: a restart never leaves one the daemon cannot kill.
+        init: true
         depends_on:
             rabbitmq:
                 condition: service_healthy
@@ -156,17 +247,23 @@ services:
                 reservations:
                     memory: 512M
         healthcheck:
-            # `node -e 'process.exit(0)'` always passed regardless of app
-            # state — combined with the silent OOM bug fixed above, the
-            # container could be in a restart loop and still report
-            # healthy. pgrep matches the actual nest watch process so a
-            # crashed dev server is detected. procps is installed in the
-            # dev image (see Dockerfile.dev).
-            test: ['CMD-SHELL', 'pgrep -f "nest start worker" >/dev/null']
+            # Asks the worker's own health probe (apps/worker/src/
+            # health-probe.ts, WORKER_HEALTH_PORT, 3334 by default): 503
+            # while RabbitMQ is disconnected, a consumer is missing or the
+            # outbox relay is dead, connection refused while the app is not
+            # running. A process check cannot tell any of that: the command
+            # here is `nest build worker --watch`, and that watcher (with
+            # RunScriptWebpackPlugin autoRestart: false) outlives an app
+            # that exited at boot. start_period covers a cold webpack build.
+            test:
+                [
+                    'CMD-SHELL',
+                    'node -e "const http=require(''http''); const port=process.env.WORKER_HEALTH_PORT||3334; const req=http.get({host:''127.0.0.1'', port, path:''/health'', timeout:2000}, (res)=>process.exit(res.statusCode===200?0:1)); req.on(''error'', ()=>process.exit(1)); req.on(''timeout'', ()=>{ req.destroy(); process.exit(1); });"',
+                ]
             interval: 30s
             timeout: 10s
             retries: 3
-            start_period: 60s
+            start_period: 180s
         environment:
             # pnpm 11 aborts a non-interactive node_modules purge (branch
             # switch → manifest drift) without CI=true. Per-service blocks
@@ -185,6 +282,14 @@ services:
             - PYROSCOPE_SERVER_ADDRESS=${PYROSCOPE_SERVER_ADDRESS:-http://pyroscope:4040}
             - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
             - WORKER_ROLE=code-review
+            # Kody Runtime: the PR trigger signs the Run token and seals it and the
+            # repo token for the runtime-worker (dev-only values, as on kodus-api).
+            - RUNTIME_ENABLED=${RUNTIME_ENABLED:-true}
+            - RUNTIME_RUN_TOKEN_SECRET=${RUNTIME_RUN_TOKEN_SECRET:-dev-only-runtime-run-token-secret-0000}
+            - RUNTIME_SECRET_SEAL_KEY=${RUNTIME_SECRET_SEAL_KEY:-de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de70}
+            # The PR trigger and the external-findings maintenance read the Run projection
+            # (runtime.runtime_runs) read-only, as kodus-api does.
+            - RUNTIME_DATABASE_READ_URL=${RUNTIME_DATABASE_READ_URL:-postgres://${API_PG_DB_USERNAME}:${API_PG_DB_PASSWORD}@db_postgres:5432/kodus_runtime}
 
     # Deep scan worker (#2451) — only the security-scan queue, so a scan's
     # long model loops never share a process with reviews. Cloud-only
@@ -294,9 +399,14 @@ services:
                 reservations:
                     memory: 256M
         healthcheck:
-            # See worker service for rationale — pgrep replaces the
-            # always-passing trivial check.
-            test: ['CMD-SHELL', 'pgrep -f "nest start worker" >/dev/null']
+            # Same probe as the worker service (see there). The analytics
+            # role answers 200 while the app runs: it has no consumers and
+            # no outbox relay to check.
+            test:
+                [
+                    'CMD-SHELL',
+                    'node -e "const http=require(''http''); const port=process.env.WORKER_HEALTH_PORT||3334; const req=http.get({host:''127.0.0.1'', port, path:''/health'', timeout:2000}, (res)=>process.exit(res.statusCode===200?0:1)); req.on(''error'', ()=>process.exit(1)); req.on(''timeout'', ()=>{ req.destroy(); process.exit(1); });"',
+                ]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -324,6 +434,8 @@ services:
     webhooks:
         <<: *app-service-defaults
         container_name: kodus_webhooks
+        # An init reaps zombies: a restart never leaves one the daemon cannot kill.
+        init: true
         depends_on:
             rabbitmq:
                 condition: service_healthy
@@ -363,13 +475,25 @@ services:
                 reservations:
                     memory: 256M
         healthcheck:
-            # See worker service for rationale — pgrep replaces the
-            # always-passing trivial check.
-            test: ['CMD-SHELL', 'pgrep -f "nest start webhooks" >/dev/null']
+            # Asks the app's own readiness route (apps/webhooks/src/
+            # controllers/webhook-health.controller.ts): 503 while Postgres,
+            # where every webhook is persisted to the outbox, does not answer;
+            # 200 "degraded" while only RabbitMQ is down, since the worker's
+            # relay publishes once it is back; connection refused while the
+            # app is not running. The process check it replaces could not
+            # tell any of that: its pattern ("nest start webhooks") is not the
+            # command here (`nest build webhooks --watch`), and `pgrep -f`
+            # matches its own `sh -c` parent. start_period covers a cold
+            # webpack build, as for the worker.
+            test:
+                [
+                    'CMD-SHELL',
+                    'node -e "const http=require(''http''); const port=process.env.API_WEBHOOKS_PORT||3332; const req=http.get({host:''127.0.0.1'', port, path:''/health'', timeout:5000}, (res)=>process.exit(res.statusCode===200?0:1)); req.on(''error'', ()=>process.exit(1)); req.on(''timeout'', ()=>{ req.destroy(); process.exit(1); });"',
+                ]
             interval: 30s
             timeout: 10s
             retries: 3
-            start_period: 60s
+            start_period: 180s
         environment:
             # pnpm 11 aborts a non-interactive node_modules purge (branch
             # switch → manifest drift) without CI=true. Per-service blocks
@@ -382,6 +506,11 @@ services:
             - NODE_OPTIONS=--max-old-space-size=768 --max-semi-space-size=64
             - DEBUG_PORT=9232
             - API_LOG_PRETTY=true
+            # Webhooks never publish (the outbox relay in the worker does), so
+            # they boot without the broker (rabbitmq-connection-init.policy).
+            # Pinned here because the .env template sets API_RABBITMQ_WAIT=true,
+            # which would bring back the 5 s fail-fast.
+            - API_RABBITMQ_WAIT=false
             - PYROSCOPE_SERVER_ADDRESS=${PYROSCOPE_SERVER_ADDRESS:-http://pyroscope:4040}
             - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
 
@@ -457,6 +586,8 @@ services:
             context: ./apps/web
             dockerfile: ../../docker/Dockerfile.web.dev
         container_name: kodus_web
+        # An init reaps zombies: a restart never leaves one the daemon cannot kill.
+        init: true
         depends_on:
             kodus-api:
                 condition: service_healthy
@@ -499,6 +630,14 @@ services:
             - CHOKIDAR_USEPOLLING=false
             - NODE_ENV=development
             - NEXT_TELEMETRY_DISABLED=1
+            # `next dev` answers 403 on /_next/* to an origin it was not told
+            # about (apps/web/next.config.js allowedDevOrigins). A stack opened
+            # by its IP or a public host, as the self-hosted Runo recipe does
+            # (.kodus/workspace.selfhosted.yaml), never hydrates without it:
+            # the sign-up form renders and does nothing. Read from the shell
+            # or the compose environment (the recipe's services.compose.env);
+            # unset, the container has none.
+            - ALLOWED_DEV_ORIGINS
         deploy:
             resources:
                 limits:
@@ -593,6 +732,286 @@ services:
         logging: *default-logging
 
     #----------------------------------------------------------------
+    # Kody Runtime control plane (apps/runtime). Same broker and Postgres
+    # server as the product; the Runtime keeps everything in its own
+    # database (kodus_runtime, ADR-025) and uses no Mongo. mTLS with the dev CA:
+    #   scripts/runtime/dev-ca.sh .runtime-certs cell-dev-1
+    # The Go cell runs on the host (apps/runtime-cell, local-docker driver)
+    # and dials wss://127.0.0.1:${RUNTIME_HUB_PORT:-3410}/cells.
+    # Plain node image + the host's node_modules read-only (pure-JS deps),
+    # so these services never run pnpm install on the shared volume.
+    # docker-compose.runtime.yml stays the isolated stack for tests.
+    # Off unless the `runtime` profile is on, since they need the certificates
+    # above: `KODUS_DEV_EXTRAS=runtime pnpm run docker:start`, or
+    # `docker compose -f docker-compose.dev.yml --profile runtime up -d`.
+    # A down without the profile leaves them running: add `--profile runtime`.
+    #----------------------------------------------------------------
+    runtime-hub:
+        <<: *runtime-service-defaults
+        container_name: kodus_runtime_hub
+        profiles: ['runtime']
+        # An init reaps zombies: a restart never leaves one the daemon cannot kill.
+        init: true
+        command: sh -c 'set -a && . /certs/container.env && set +a && exec node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/hub/main.ts'
+        environment:
+            <<: *runtime-env
+            RUNTIME_REPLICA_ID: hub-dev-1
+            # What the worker dials for this replica: its internal listener.
+            RUNTIME_REPLICA_URL: https://runtime-hub:3411
+            RUNTIME_METRICS_PORT: '9464'
+            # local-docker cells run with isolation none (dev only).
+            RUNTIME_DEV_ALLOW_INSECURE_CELLS: '1'
+            # The org secrets' references (id, name, hosts) from the product database, as the
+            # role that may read only those (dev-runtime-users.sh). Unset: claims get no secrets.
+            RUNTIME_PRODUCT_SECRETS_READ_URL: ${RUNTIME_PRODUCT_SECRETS_READ_URL:-}
+            # The preview edge's tunnel endpoint (profile preview); empty: no preview is routed.
+            RUNTIME_PREVIEW_TUNNEL_URL: ${RUNTIME_PREVIEW_TUNNEL_URL:-}
+            # The only client CN the fleet routes (/internal/fleet/*) admit: runtime-fleet's (dev-ca.sh fleet.pem).
+            RUNTIME_FLEET_ALLOWED_CNS: ${RUNTIME_FLEET_ALLOWED_CNS:-runtime-fleet}
+        ports:
+            - '127.0.0.1:${RUNTIME_HUB_PORT:-3410}:3410'
+            - '127.0.0.1:${RUNTIME_HUB_METRICS_PORT:-9464}:9464'
+
+    # Preview URLs (docs/runtime/preview-urls.md), off unless started with
+    # `docker compose --profile preview`. scripts/runtime/dev-ca.sh writes its
+    # certificates and preview.env (domain kodus-preview.localhost: Chrome
+    # resolves *.localhost to the loopback). For a preview to open, the hub
+    # needs RUNTIME_PREVIEW_TUNNEL_URL=wss://runtime-preview-edge:3431/v1/cells/tunnel,
+    # the worker RUNTIME_PREVIEW_DOMAIN, the API RUNTIME_PREVIEW_GRANT_PRIVATE_KEY
+    # (`openssl pkey -in preview-grant.key -outform DER | base64`; RUNTIME_PREVIEW_PUBLIC_PORT=3430
+    # for the local port) and the cell -preview.
+    runtime-preview-edge:
+        <<: *runtime-service-defaults
+        container_name: kodus_runtime_preview_edge
+        profiles: ['preview']
+        init: true
+        command: sh -c 'set -a && . /certs/container.env && . /certs/preview.env && set +a && exec node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/edge/main.ts'
+        environment:
+            <<: *runtime-env
+            RUNTIME_REPLICA_ID: edge-dev-1
+            RUNTIME_PREVIEW_APP_URL: ${WEB_HOSTNAME_URL:-http://localhost:3000}
+            RUNTIME_PREVIEW_EDGE_PORT: '3430'
+            RUNTIME_PREVIEW_TUNNEL_PORT: '3431'
+        ports:
+            - '127.0.0.1:${RUNTIME_PREVIEW_EDGE_PORT:-3430}:3430'
+            - '127.0.0.1:${RUNTIME_PREVIEW_TUNNEL_PORT:-3431}:3431'
+
+    runtime-worker:
+        <<: *runtime-service-defaults
+        container_name: kodus_runtime_worker
+        profiles: ['runtime']
+        # An init reaps zombies: a restart never leaves one the daemon cannot kill.
+        init: true
+        command: sh -c 'set -a && . /certs/container.env && set +a && exec node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/worker/main.ts'
+        environment:
+            <<: *runtime-env
+            RUNTIME_RELEASE_VERSION: ${RUNTIME_RELEASE_VERSION-development}
+            RUNTIME_ENV_DRIVER: hub
+            RUNTIME_METRICS_PORT: '9465'
+            # Previews are off until the preview domain is set (decision 1).
+            RUNTIME_PREVIEW_DOMAIN: ${RUNTIME_PREVIEW_DOMAIN:-}
+            # Opens the repo and Run tokens the product sends sealed (AES-256-GCM, bound to the Run
+            # or the setup key). The dev-only key is for local stacks only; the product must seal with
+            # the same one (RUNTIME_SECRET_SEAL_KEY on kodus-api and worker).
+            RUNTIME_SECRET_SEAL_KEY: ${RUNTIME_SECRET_SEAL_KEY:-de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de70}
+            RUNTIME_ORG_CONCURRENCY: '2'
+            # Environment setups of one org that run at once (1..8); the rest wait their turn.
+            RUNTIME_SETUP_PER_ORG: ${RUNTIME_SETUP_PER_ORG:-2}
+            # 1 (default): each Run side is kept as a round snapshot at its first ready and resets
+            # restore it, on cells that keep snapshots (firecracker); others reset compose volumes. 0: off.
+            RUNTIME_ROUND_SNAPSHOTS: ${RUNTIME_ROUND_SNAPSHOTS:-1}
+            # Share (0..100) of the measured changed lines the PR side must run for a green Run to stay green.
+            RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT: ${RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT:-50}
+            # The product LLM gateway (POST /internal/runtime/llm, org BYOK).
+            # Unset = the dev API. Set it empty for recorded responses
+            # (RUNTIME_LLM_FIXTURE or the shop fixture), as run-e2e.sh does.
+            RUNTIME_LLM_GATEWAY_URL: ${RUNTIME_LLM_GATEWAY_URL-http://kodus_api:3001}
+            RUNTIME_LLM_FIXTURE: ${RUNTIME_LLM_FIXTURE:-}
+            # The Git API the cell downloads tarballs from; must equal the cell's -git-api.
+            RUNTIME_GIT_API_BASE: ${RUNTIME_GIT_API_BASE:-https://api.github.com}
+            # Setup (runtime.environment.setup_requested): the API sends the
+            # default-branch head, the recipe at that commit and a download token.
+            # Explicit dev overrides only (the worker warns at boot): a commit to
+            # boot instead of the product's, an expose list over the recipe's,
+            # and the ready path when the recipe has no services.compose.health.
+            RUNTIME_SETUP_DEV_SHA: ${RUNTIME_SETUP_DEV_SHA:-}
+            RUNTIME_SETUP_EXPOSE: ${RUNTIME_SETUP_EXPOSE:-}
+            RUNTIME_SETUP_HEALTH_PATH: ${RUNTIME_SETUP_HEALTH_PATH:-}
+            # How many times one setup sends a failed boot of Kody's recipe back
+            # to Kody and boots the rewrite (default 2, 0 turns it off).
+            RUNTIME_SETUP_AUTHOR_REPAIRS: ${RUNTIME_SETUP_AUTHOR_REPAIRS:-2}
+            # Evidence (§8): the observer output of every replay round on a local
+            # volume, 30 days, served on its own port only for URLs the API signed.
+            RUNTIME_EVIDENCE_DIR: /data/runtime-evidence
+            RUNTIME_EVIDENCE_PORT: '3420'
+            RUNTIME_EVIDENCE_SIGNING_SECRET: ${RUNTIME_EVIDENCE_SIGNING_SECRET:-dev-only-runtime-evidence-signing-secret-000000}
+            # Where a cell PUTs a round's screenshots, videos and logs with the
+            # worker's grants: this evidence server as the cell reaches it. A
+            # cell on this machine reaches the published port; a remote cell
+            # needs `ssh -R 127.0.0.1:3420:localhost:3420`. Empty: "not captured".
+            RUNTIME_EVIDENCE_UPLOAD_URL: ${RUNTIME_EVIDENCE_UPLOAD_URL:-http://localhost:3420}
+            # The env-session listener the API's /mcp/env tools call; not published on the host.
+            RUNTIME_ENV_SESSION_PORT: '3430'
+        volumes:
+            - .:/usr/src/app:delegated
+            - ${RUNTIME_NODE_MODULES:-./node_modules}:/usr/src/app/node_modules:ro
+            - ${RUNTIME_CERTS_DIR:-./.runtime-certs}:/certs:ro
+            # No runtime_streams: the worker hands Run events to the hub, which writes the stream.
+            - runtime_evidence:/data/runtime-evidence
+        ports:
+            - '127.0.0.1:${RUNTIME_WORKER_METRICS_PORT:-9465}:9465'
+            - '127.0.0.1:${RUNTIME_EVIDENCE_PORT:-3420}:3420'
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+                required: false
+            runtime-hub:
+                condition: service_started
+
+    # runtime-fleet (docs/runtime/host-providers.md §4.1): makes and removes the hosts of perRun
+    # pools. Off unless `--profile runtime-fleet` is on, next to `--profile runtime` (the hub it
+    # mints tokens at). It needs fleet.pem and fleet.env from scripts/runtime/dev-ca.sh. Without
+    # RUNTIME_BOAT_API_KEY no boat pool is scalable; RUNTIME_FLEET_FAKE_PROVIDER=1 drives `fake`
+    # pools in-process. Pools come from files (§5.2):
+    #   docker compose -f docker-compose.dev.yml --profile runtime-fleet run --rm runtime-fleet \
+    #     node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/fleet/main.ts apply -f <dir>
+    runtime-fleet:
+        <<: *runtime-service-defaults
+        container_name: kodus_runtime_fleet
+        profiles: ['runtime-fleet']
+        init: true
+        command: sh -c 'set -a && . /certs/container.env && . /certs/fleet.env && set +a && exec node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/fleet/main.ts'
+        environment:
+            <<: *runtime-env
+            RUNTIME_RELEASE_VERSION: ${RUNTIME_RELEASE_VERSION-development}
+            # Seals the fleet token inside the host workflow's step outputs (dev-only key, as the worker's).
+            RUNTIME_SECRET_SEAL_KEY: ${RUNTIME_SECRET_SEAL_KEY:-de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de70}
+            # The tag every host of this install carries; the orphan pass lists the provider by it.
+            RUNTIME_FLEET_INSTALLATION: ${RUNTIME_FLEET_INSTALLATION:-dev}
+            # Where new hosts register: reachable from the host, so a boat host needs a public hub URL.
+            RUNTIME_FLEET_HUB_PUBLIC_URL: ${RUNTIME_FLEET_HUB_PUBLIC_URL:-https://localhost:3410}
+            RUNTIME_FLEET_FAKE_PROVIDER: ${RUNTIME_FLEET_FAKE_PROVIDER:-0}
+            RUNTIME_BOAT_API_KEY: ${RUNTIME_BOAT_API_KEY:-}
+            RUNTIME_METRICS_PORT: '9466'
+        ports:
+            - '127.0.0.1:${RUNTIME_FLEET_METRICS_PORT:-9466}:9466'
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+            runtime-hub:
+                condition: service_started
+                required: false
+
+    # Optional S3-compatible evidence store (RUNTIME_EVIDENCE_STORE=s3), off by default:
+    #   docker compose -f docker-compose.dev.yml --profile evidence-s3 up -d runtime-minio runtime-minio-init
+    # then RUNTIME_EVIDENCE_STORE=s3 for runtime-worker and kodus-api. Dev-only keys, bound to 127.0.0.1.
+    # The init creates the bucket and its lifecycle rule (30 days; 1 day for the staging prefix).
+    # The upstream minio/minio image is no longer on Docker Hub; this is Bitnami's last build.
+    runtime-minio:
+        image: bitnamilegacy/minio:2025.7.23
+        container_name: kodus_runtime_minio
+        profiles:
+            - evidence-s3
+        environment:
+            MINIO_ROOT_USER: ${RUNTIME_EVIDENCE_S3_ACCESS_KEY_ID:-kody-runtime-dev}
+            MINIO_ROOT_PASSWORD: ${RUNTIME_EVIDENCE_S3_SECRET_ACCESS_KEY:-dev-only-runtime-minio-secret-0000}
+        ports:
+            # Cells on this machine and the browser reach it here (RUNTIME_EVIDENCE_S3_PUBLIC_ENDPOINT).
+            - '127.0.0.1:${RUNTIME_MINIO_PORT:-9000}:9000'
+        volumes:
+            - runtime_minio:/bitnami/minio/data
+        healthcheck:
+            test: ['CMD', 'curl', '-sf', 'http://localhost:9000/minio/health/live']
+            interval: 3s
+            retries: 30
+        networks:
+            - kodus-backend-services
+
+    runtime-minio-init:
+        <<: *runtime-service-defaults
+        container_name: kodus_runtime_minio_init
+        profiles:
+            - evidence-s3
+        restart: 'no'
+        command: node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/e2e/evidence-bucket.ts
+        environment:
+            <<: *runtime-env
+        depends_on:
+            runtime-minio:
+                condition: service_healthy
+
+    # The Runtime's secret store (docs/runtime/sandbox.md "Secrets: OpenBao"), off by default:
+    #   scripts/runtime/dev-openbao.sh   (once: TLS, unseal key, AppRole ids, Postgres password)
+    #   RUNTIME_OPENBAO_UID=$(id -u) docker compose -f docker-compose.dev.yml --profile runtime-secrets up -d runtime-openbao
+    # then add .runtime-certs/openbao/api.env to the API's env. Storage is the dev Postgres, database
+    # kodus_openbao with its own role; static-key auto-unseal; self-initialized on the first start (KV v2
+    # at runtime-kv, the API and injector policies and AppRoles). No root token survives the init.
+    # Unmodified upstream image (MPL-2.0), pinned by digest.
+    runtime-openbao-db:
+        image: docker.io/pgvector/pgvector:pg16
+        container_name: kodus_runtime_openbao_db
+        profiles:
+            - runtime-secrets
+        restart: 'no'
+        environment:
+            PGPASSWORD: ${API_PG_DB_PASSWORD}
+            API_PG_DB_USERNAME: ${API_PG_DB_USERNAME}
+            API_PG_DB_DATABASE: ${API_PG_DB_DATABASE}
+        volumes:
+            - ${RUNTIME_CERTS_DIR:-./.runtime-certs}/openbao:/openbao/secrets:ro
+            - ./docker/openbao/create-database.sql:/openbao/create-database.sql:ro
+        command:
+            - sh
+            - -ec
+            - psql -h db_postgres -U "$$API_PG_DB_USERNAME" -d "$$API_PG_DB_DATABASE" -v ON_ERROR_STOP=1 -v pw="$$(cat /openbao/secrets/pg-password)" -f /openbao/create-database.sql
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+        networks:
+            - kodus-backend-services
+
+    runtime-openbao:
+        image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+        container_name: kodus_runtime_openbao
+        profiles:
+            - runtime-secrets
+        # The host user, so it reads the 0600 files dev-openbao.sh wrote.
+        user: '${RUNTIME_OPENBAO_UID:-1000}:${RUNTIME_OPENBAO_GID:-0}'
+        entrypoint: ['bao']
+        command: ['server', '-config=/openbao/config']
+        cap_add:
+            - IPC_LOCK
+        environment:
+            PGHOST: db_postgres
+            PGPORT: '5432'
+            PGDATABASE: kodus_openbao
+            PGUSER: openbao
+            PGSSLMODE: disable
+            PGPASSFILE: /openbao/secrets/pgpass
+        volumes:
+            - ./docker/openbao/config:/openbao/config:ro
+            - ./docker/openbao/policies:/openbao/policies:ro
+            - ${RUNTIME_CERTS_DIR:-./.runtime-certs}/openbao:/openbao/secrets:ro
+        ports:
+            # Cells on this machine reach it here (the injector's -openbao-addr).
+            - '127.0.0.1:${RUNTIME_OPENBAO_PORT:-8200}:8200'
+        restart: unless-stopped
+        healthcheck:
+            # 200 only when active and unsealed.
+            test: ['CMD', 'wget', '-q', '-O', '/dev/null', '--no-check-certificate', 'https://127.0.0.1:8200/v1/sys/health']
+            interval: 5s
+            timeout: 3s
+            retries: 24
+        depends_on:
+            runtime-openbao-db:
+                condition: service_completed_successfully
+        networks:
+            - kodus-backend-services
+        logging: *default-logging
+
+    #----------------------------------------------------------------
     # Databases & Infrastructure
     #----------------------------------------------------------------
     rabbitmq:
@@ -651,10 +1070,14 @@ services:
             - kodus-backend-services
         restart: unless-stopped
         healthcheck:
+            # Over TCP: during initdb the image runs a temporary server on the
+            # socket only and then restarts, so a socket check passes while
+            # services connecting by host (the Runtime services, the API) are
+            # refused, and the first boot of an empty volume races.
             test:
                 [
                     'CMD-SHELL',
-                    'pg_isready -U ${API_PG_DB_USERNAME} -d ${API_PG_DB_DATABASE}',
+                    'pg_isready -h 127.0.0.1 -U ${API_PG_DB_USERNAME} -d ${API_PG_DB_DATABASE}',
                 ]
             interval: 5s
             timeout: 3s
@@ -700,6 +1123,9 @@ volumes:
     mongodbdata:
     pyroscope-data:
     rabbitmq-data:
+    runtime_streams:
+    runtime_evidence:
+    runtime_minio:
 
 networks:
     kodus-backend-services:

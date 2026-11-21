@@ -6,4 +6,5 @@ export enum GlobalParametersKey {
     TELEMETRY_STATE = 'telemetry_state',
     SANDBOX_CONCURRENCY = 'sandbox_concurrency',
     SANDBOX_EGRESS = 'sandbox_egress',
+    SANDBOX_CAPACITY = 'sandbox_capacity',
 }

@@ -86,6 +86,8 @@ const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     customAgent: TOOL_CALLING_REQUIREMENT,
     // The deep scan's lenses read the repository with tools.
     securityScan: TOOL_CALLING_REQUIREMENT,
+    // The Kody Runtime agent answers in JSON the worker parses (plan / intent).
+    runtime: STRUCTURED_OUTPUT_REQUIREMENT,
 };
 
 /** One candidate the precedence chain will try, in order. */

@@ -1,0 +1,119 @@
+{
+  "$comment": "Shared vectors of the multi-repository keys: libs/runtime/contracts/workspace.ts (workspace.spec.ts) and the Go cell (recipe/needs_test.go) compute the same values; the cell takes refsDigest from the hub and only checks its shape (bakecatalog.IsRefsDigest). refsDigest is the same for any order of refs. A name that leaves no alias gets \"repo\".",
+  "refsDigest": [
+    {
+      "refs": [
+        {
+          "repositoryId": "42",
+          "sha": "1111111111111111111111111111111111111111"
+        }
+      ],
+      "recipeDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "want": "sha256:c283c1a65a330b39cffed08f14ba24aa8629ac03f64fc26f9cbfd4dcb807e116"
+    },
+    {
+      "refs": [
+        {
+          "repositoryId": "42",
+          "sha": "1111111111111111111111111111111111111111"
+        },
+        {
+          "repositoryId": "7",
+          "sha": "2222222222222222222222222222222222222222"
+        },
+        {
+          "repositoryId": "gid://gitlab/Project/9",
+          "sha": "abcdef0123456789abcdef0123456789abcdef01"
+        }
+      ],
+      "recipeDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "want": "sha256:8c243dc4950537297cfc85185e3a9412b257e61a0b1cd5bb317e7a774ee0737e"
+    },
+    {
+      "refs": [
+        {
+          "repositoryId": "42",
+          "sha": "2222222222222222222222222222222222222222"
+        },
+        {
+          "repositoryId": "7",
+          "sha": "1111111111111111111111111111111111111111"
+        }
+      ],
+      "recipeDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "want": "sha256:5d6dcbf567159988b524dcf32d220b4ba753ec69fafab8ffb1fd2bcce98b3a22"
+    },
+    {
+      "refs": [
+        {
+          "repositoryId": "42",
+          "sha": "1111111111111111111111111111111111111111"
+        },
+        {
+          "repositoryId": "7",
+          "sha": "2222222222222222222222222222222222222222"
+        }
+      ],
+      "recipeDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "want": "sha256:a45bbdacc3cff66dc224c044c45d001cc70928caeca753c594e51be70a5fcaf9"
+    }
+  ],
+  "memberImageKey": [
+    {
+      "repositoryId": "42",
+      "sha": "1111111111111111111111111111111111111111",
+      "contextDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "want": "b8f1c87277e0083d22c771bf6074387e7c8456f7f06f1a0946eb976007c3f4cb"
+    },
+    {
+      "repositoryId": "7",
+      "sha": "1111111111111111111111111111111111111111",
+      "contextDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "want": "68adaa24e42e0011fcd168118ab2da4e56238b0d8709cae23efbabce266ec8e4"
+    },
+    {
+      "repositoryId": "42",
+      "sha": "2222222222222222222222222222222222222222",
+      "contextDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "want": "d2a4eb892a359e7973befc2fd0328b67be36ecfb5ab144fd4f1b74c2699bf9f9"
+    }
+  ],
+  "aliases": [
+    {
+      "name": "acme/shop",
+      "alias": "shop"
+    },
+    {
+      "name": "acme/Kodus-Service_Billing",
+      "alias": "kodus-service_billing"
+    },
+    {
+      "name": "group/sub/My Repo!!",
+      "alias": "my-repo-"
+    },
+    {
+      "name": "billing",
+      "alias": "billing"
+    },
+    {
+      "name": "acme/--.Edge",
+      "alias": "edge"
+    },
+    {
+      "name": "acme/___",
+      "alias": "repo"
+    },
+    {
+      "name": "acme/Caf\u00e9-API",
+      "alias": "caf--api"
+    },
+    {
+      "name": "acme/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "alias": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "acme/...",
+      "alias": "repo"
+    }
+  ]
+}

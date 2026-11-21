@@ -1,0 +1,12 @@
+# The settings the tests run with (runtime-settings.rules.yml ships them at 0).
+groups:
+  - name: kody-runtime-settings
+    rules:
+      - record: kodus_runtime:daily_cost_threshold_usd
+        expr: vector(10)
+      - record: kodus_runtime:price_usd_per_gb_minute
+        expr: vector(0.001)
+      - record: kodus_runtime:price_usd_per_vcpu_minute
+        expr: vector(0.002)
+      - record: kodus_runtime:price_usd_per_llm_token
+        expr: vector(0.000002)

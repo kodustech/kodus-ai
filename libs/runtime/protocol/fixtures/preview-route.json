@@ -1,0 +1,22 @@
+{
+  "name": "preview-route",
+  "message": {
+    "v": 1,
+    "id": "8a1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "preview.route",
+    "body": {
+      "previewId": "prv_abcdefghijklmnopqrstuvwxyz",
+      "target": {
+        "service": "web",
+        "port": 3000
+      },
+      "until": "2026-11-12T12:15:00Z"
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "preview.route"
+  }
+}

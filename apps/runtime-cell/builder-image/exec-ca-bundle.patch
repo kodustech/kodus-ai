@@ -1,0 +1,263 @@
+diff --git a/cmd/buildkitd/config/config.go b/cmd/buildkitd/config/config.go
+index e363b3e..bc45116 100644
+--- a/cmd/buildkitd/config/config.go
++++ b/cmd/buildkitd/config/config.go
+@@ -206,6 +206,11 @@ type OCIConfig struct {
+ 
+ 	// MaxParallelism is the maximum number of parallel build steps that can be run at the same time.
+ 	MaxParallelism int `toml:"max-parallelism"`
++
++	// ExecCABundle is a PEM file of the CAs every exec trusts (the public roots
++	// and any of the operator's own): mounted read-only into each exec, with the
++	// usual TLS variables pointed at it unless the exec set them.
++	ExecCABundle string `toml:"execCABundle"`
+ }
+ 
+ type ContainerdConfig struct {
+diff --git a/cmd/buildkitd/main_oci_worker.go b/cmd/buildkitd/main_oci_worker.go
+index 620e6d2..dd81bba 100644
+--- a/cmd/buildkitd/main_oci_worker.go
++++ b/cmd/buildkitd/main_oci_worker.go
+@@ -329,7 +329,7 @@ func ociWorkerInitializer(c *cli.Command, common workerInitializerOpt) ([]worker
+ 		parallelismSem = semaphore.NewWeighted(int64(cfg.MaxParallelism))
+ 	}
+ 
+-	opt, err := runc.NewWorkerOpt(common.config.Root, snFactory, cfg.Rootless, processMode, cfg.Labels, idmapping, nc, dns, cfg.Binary, cfg.ApparmorProfile, cfg.SELinux, parallelismSem, common.traceSocket, cfg.DefaultCgroupParent, cdiManager, common.compaction...)
++	opt, err := runc.NewWorkerOpt(common.config.Root, snFactory, cfg.Rootless, processMode, cfg.Labels, idmapping, nc, dns, cfg.Binary, cfg.ApparmorProfile, cfg.SELinux, parallelismSem, common.traceSocket, cfg.DefaultCgroupParent, cdiManager, cfg.ExecCABundle, common.compaction...)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+diff --git a/executor/oci/execca.go b/executor/oci/execca.go
+new file mode 100644
+index 0000000..c175bfb
+--- /dev/null
++++ b/executor/oci/execca.go
+@@ -0,0 +1,66 @@
++package oci
++
++import (
++	"context"
++	"os"
++
++	"github.com/containerd/containerd/v2/core/containers"
++	"github.com/containerd/containerd/v2/pkg/oci"
++	specs "github.com/opencontainers/runtime-spec/specs-go"
++	"github.com/pkg/errors"
++)
++
++// ExecCABundleTarget is where an exec sees the worker's CA bundle
++// (worker.oci execCABundle): next to the SSH agent sockets BuildKit already
++// mounts under /run/buildkit, and removed from the rootfs with the other
++// mount stubs, so it never reaches a layer.
++const ExecCABundleTarget = "/run/buildkit/ca-bundle.pem"
++
++// ExecCABundleEnv are the variables the usual TLS stacks read a CA bundle
++// from: OpenSSL, Go, Python's ssl, Ruby and curl (SSL_CERT_FILE), Node (adds
++// NODE_EXTRA_CA_CERTS to its own roots), requests (REQUESTS_CA_BUNDLE), pip
++// (PIP_CERT), curl (CURL_CA_BUNDLE) and git (GIT_SSL_CAINFO).
++var ExecCABundleEnv = []string{"SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "PIP_CERT", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO"}
++
++// CheckExecCABundle reports whether bundle is a regular file the worker can
++// read, so a misconfigured worker fails when it starts, not on every exec.
++func CheckExecCABundle(bundle string) error {
++	st, err := os.Stat(bundle)
++	if err != nil {
++		return errors.Wrap(err, "execCABundle")
++	}
++	if !st.Mode().IsRegular() {
++		return errors.Errorf("execCABundle %s is not a regular file", bundle)
++	}
++	return nil
++}
++
++// WithExecCABundle mounts bundle read-only at ExecCABundleTarget.
++func WithExecCABundle(bundle string) oci.SpecOpts {
++	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *specs.Spec) error {
++		s.Mounts = append(s.Mounts, specs.Mount{
++			Destination: ExecCABundleTarget,
++			Type:        "bind",
++			Source:      bundle,
++			Options:     []string{"rbind", "ro"},
++		})
++		return nil
++	}
++}
++
++// AppendExecCABundleEnv points the ExecCABundleEnv variables the exec has not
++// set at ExecCABundleTarget. A value the image or the build set (an ENV, a
++// build arg) wins, as for the tracing variables: that exec keeps the trust it
++// asked for.
++func AppendExecCABundleEnv(env []string) []string {
++	set := make(map[string]struct{}, len(env))
++	for _, e := range env {
++		set[envName(e)] = struct{}{}
++	}
++	for _, name := range ExecCABundleEnv {
++		if _, ok := set[name]; !ok {
++			env = append(env, name+"="+ExecCABundleTarget)
++		}
++	}
++	return env
++}
+diff --git a/executor/oci/execca_test.go b/executor/oci/execca_test.go
+new file mode 100644
+index 0000000..90380bd
+--- /dev/null
++++ b/executor/oci/execca_test.go
+@@ -0,0 +1,46 @@
++package oci
++
++import (
++	"context"
++	"os"
++	"path/filepath"
++	"testing"
++
++	specs "github.com/opencontainers/runtime-spec/specs-go"
++	"github.com/stretchr/testify/require"
++)
++
++// An exec that set none of the variables gets each pointed at the bundle;
++// one the image or the build set keeps its value.
++func TestExecCABundleEnv(t *testing.T) {
++	got := AppendExecCABundleEnv([]string{"PATH=/usr/bin"})
++	require.Equal(t, "PATH=/usr/bin", got[0])
++	for _, name := range ExecCABundleEnv {
++		require.Contains(t, got, name+"="+ExecCABundleTarget)
++	}
++	require.Len(t, got, 1+len(ExecCABundleEnv))
++
++	got = AppendExecCABundleEnv([]string{"NODE_EXTRA_CA_CERTS=/corp/ca.pem", "SSL_CERT_FILE="})
++	require.Contains(t, got, "NODE_EXTRA_CA_CERTS=/corp/ca.pem")
++	require.NotContains(t, got, "NODE_EXTRA_CA_CERTS="+ExecCABundleTarget)
++	require.Contains(t, got, "SSL_CERT_FILE=")
++	require.NotContains(t, got, "SSL_CERT_FILE="+ExecCABundleTarget)
++	require.Contains(t, got, "PIP_CERT="+ExecCABundleTarget)
++}
++
++// The bundle reaches the exec read-only, at the target the variables name.
++func TestExecCABundleMount(t *testing.T) {
++	s := &specs.Spec{}
++	require.NoError(t, WithExecCABundle("/etc/kodus/ca-bundle.pem")(context.Background(), nil, nil, s))
++	require.Equal(t, []specs.Mount{{Destination: ExecCABundleTarget, Type: "bind", Source: "/etc/kodus/ca-bundle.pem", Options: []string{"rbind", "ro"}}}, s.Mounts)
++}
++
++// A worker configured with a bundle it cannot read does not start.
++func TestExecCABundleCheck(t *testing.T) {
++	dir := t.TempDir()
++	f := filepath.Join(dir, "ca.pem")
++	require.NoError(t, os.WriteFile(f, []byte("-----BEGIN CERTIFICATE-----\n"), 0o644))
++	require.NoError(t, CheckExecCABundle(f))
++	require.Error(t, CheckExecCABundle(filepath.Join(dir, "missing.pem")))
++	require.Error(t, CheckExecCABundle(dir))
++}
+diff --git a/executor/runcexecutor/executor.go b/executor/runcexecutor/executor.go
+index c7fbf58..ddbb91b 100644
+--- a/executor/runcexecutor/executor.go
++++ b/executor/runcexecutor/executor.go
+@@ -61,6 +61,9 @@ type Opt struct {
+ 	ResourceMonitor *resources.Monitor
+ 	CDIManager      *cdidevices.Manager
+ 	ProxyProvider   network.ProxyProvider
++	// ExecCABundle, when set, is a CA bundle every exec trusts
++	// (oci.WithExecCABundle, oci.AppendExecCABundleEnv).
++	ExecCABundle string
+ }
+ 
+ var defaultCommandCandidates = []string{"buildkit-runc", "runc"}
+@@ -84,6 +87,7 @@ type runcExecutor struct {
+ 	tracingSocket    string
+ 	resmon           *resources.Monitor
+ 	cdiManager       *cdidevices.Manager
++	execCABundle     string
+ }
+ 
+ func New(opt Opt, networkProviders map[pb.NetMode]network.Provider) (executor.Executor, error) {
+@@ -104,6 +108,12 @@ func New(opt Opt, networkProviders map[pb.NetMode]network.Provider) (executor.Ex
+ 		return nil, errors.Errorf("failed to find %s binary", cmd)
+ 	}
+ 
++	if opt.ExecCABundle != "" {
++		if err := oci.CheckExecCABundle(opt.ExecCABundle); err != nil {
++			return nil, err
++		}
++	}
++
+ 	root := opt.Root
+ 
+ 	if err := os.MkdirAll(root, 0o711); err != nil {
+@@ -152,6 +162,7 @@ func New(opt Opt, networkProviders map[pb.NetMode]network.Provider) (executor.Ex
+ 		tracingSocket:    opt.TracingSocket,
+ 		resmon:           opt.ResourceMonitor,
+ 		cdiManager:       opt.CDIManager,
++		execCABundle:     opt.ExecCABundle,
+ 	}
+ 	return w, nil
+ }
+@@ -279,6 +290,11 @@ func (w *runcExecutor) Run(ctx context.Context, id string, root executor.Mount,
+ 	defer mount.Unmount(rootFSPath, 0)
+ 
+ 	defer executor.MountStubsCleaner(context.WithoutCancel(ctx), rootFSPath, mounts, meta.RemoveMountStubsRecursive)()
++	if w.execCABundle != "" {
++		// The bundle's mount point (and /run/buildkit, when the image has
++		// none) is a stub runc makes in the rootfs: it never reaches a layer.
++		defer executor.MountStubsCleaner(context.WithoutCancel(ctx), rootFSPath, []executor.Mount{{Dest: oci.ExecCABundleTarget}}, true)()
++	}
+ 	if proxyNS, ok := namespace.(network.ProxyNamespace); ok {
+ 		cleanProxyCA, injectErr := executor.InjectProxyCA(rootFSPath, proxyNS.ProxyCACert())
+ 		if injectErr != nil {
+@@ -306,6 +322,10 @@ func (w *runcExecutor) Run(ctx context.Context, id string, root executor.Mount,
+ 	defer f.Close()
+ 
+ 	opts := []containerdoci.SpecOpts{oci.WithUIDGID(uid, gid, sgids)}
++	if w.execCABundle != "" {
++		opts = append(opts, oci.WithExecCABundle(w.execCABundle))
++		meta.Env = oci.AppendExecCABundleEnv(meta.Env)
++	}
+ 
+ 	if meta.ReadonlyRootFS {
+ 		opts = append(opts, containerdoci.WithRootFSReadonly())
+@@ -527,6 +547,9 @@ func (w *runcExecutor) Exec(ctx context.Context, id string, process executor.Pro
+ 	}
+ 
+ 	if len(meta.Env) > 0 {
++		if w.execCABundle != "" {
++			meta.Env = oci.AppendExecCABundleEnv(meta.Env)
++		}
+ 		spec.Process.Env = meta.Env
+ 	}
+ 
+diff --git a/worker/runc/runc.go b/worker/runc/runc.go
+index 527f9fa..602e44b 100644
+--- a/worker/runc/runc.go
++++ b/worker/runc/runc.go
+@@ -41,7 +41,7 @@ type SnapshotterFactory struct {
+ }
+ 
+ // NewWorkerOpt creates a WorkerOpt.
+-func NewWorkerOpt(root string, snFactory SnapshotterFactory, rootless bool, processMode oci.ProcessMode, labels map[string]string, idmap *user.IdentityMapping, nopt netproviders.Opt, dns *oci.DNSConfig, binary, apparmorProfile string, selinux bool, parallelismSem *semaphore.Weighted, traceSocket, defaultCgroupParent string, cdiManager *cdidevices.Manager, policies ...compaction.Config) (base.WorkerOpt, error) {
++func NewWorkerOpt(root string, snFactory SnapshotterFactory, rootless bool, processMode oci.ProcessMode, labels map[string]string, idmap *user.IdentityMapping, nopt netproviders.Opt, dns *oci.DNSConfig, binary, apparmorProfile string, selinux bool, parallelismSem *semaphore.Weighted, traceSocket, defaultCgroupParent string, cdiManager *cdidevices.Manager, execCABundle string, policies ...compaction.Config) (base.WorkerOpt, error) {
+ 	var opt base.WorkerOpt
+ 	name := "runc-" + snFactory.Name
+ 	root = filepath.Join(root, name)
+@@ -83,6 +83,7 @@ func NewWorkerOpt(root string, snFactory SnapshotterFactory, rootless bool, proc
+ 		ResourceMonitor:     rm,
+ 		CDIManager:          cdiManager,
+ 		ProxyProvider:       proxyProvider,
++		ExecCABundle:        execCABundle,
+ 	}, np)
+ 	if err != nil {
+ 		return opt, err
+diff --git a/worker/runc/runc_test.go b/worker/runc/runc_test.go
+index 721b828..bc76ec6 100644
+--- a/worker/runc/runc_test.go
++++ b/worker/runc/runc_test.go
+@@ -42,7 +42,7 @@ func newWorkerOpt(t *testing.T, processMode oci.ProcessMode) base.WorkerOpt {
+ 		},
+ 	}
+ 	rootless := false
+-	workerOpt, err := NewWorkerOpt(tmpdir, snFactory, rootless, processMode, nil, nil, netproviders.Opt{Mode: "host"}, nil, "", "", false, nil, "", "", nil)
++	workerOpt, err := NewWorkerOpt(tmpdir, snFactory, rootless, processMode, nil, nil, netproviders.Opt{Mode: "host"}, nil, "", "", false, nil, "", "", nil, "")
+ 	require.NoError(t, err)
+ 
+ 	return workerOpt

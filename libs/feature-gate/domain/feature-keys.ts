@@ -12,6 +12,7 @@ export const FEATURE_KEYS = {
     deterministicEvidence: 'deterministic-evidence',
     customAgents: 'custom-agents',
     conditionalPrApproval: 'conditional-pr-approval',
+    kodyRuntime: 'kody-runtime',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

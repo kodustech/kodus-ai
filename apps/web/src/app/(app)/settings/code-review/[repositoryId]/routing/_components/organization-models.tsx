@@ -15,6 +15,7 @@ import {
 import type { LlmTask } from "src/features/ee/byok/_types";
 
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { isReleasedTo } from "src/core/config/feature-flags";
 
 import type { OrganizationRoutingController } from "./use-organization-routing";
 
@@ -33,6 +34,7 @@ const otherTasks: LlmTask[] = [
     "businessValidation",
     "customAgent",
     "securityScan",
+    "runtime",
 ];
 
 export function OrganizationModels({
@@ -286,11 +288,14 @@ export function OtherTaskModels({
     canEdit: boolean;
 }) {
     const { pool, routing } = controller;
-    // The deep scan is a private alpha: its card shows only where it runs.
-    const { deepScan } = useFeatureFlags();
-    const tasks = deepScan
-        ? otherTasks
-        : otherTasks.filter((task) => task !== "securityScan");
+    // The deep scan is a private alpha and Kody Runtime goes by the org's
+    // release track: each card shows only where its feature runs.
+    const flags = useFeatureFlags();
+    const hidden = new Set<LlmTask>([
+        ...(isReleasedTo("deepScan", flags) ? [] : ["securityScan" as const]),
+        ...(isReleasedTo("kodyRuntime", flags) ? [] : ["runtime" as const]),
+    ]);
+    const tasks = otherTasks.filter((task) => !hidden.has(task));
     const single = pool.length === 1;
     const editable = canEdit && controller.canEdit;
     return (

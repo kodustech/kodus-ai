@@ -87,6 +87,34 @@ describe('authorization matrix (effective policy × role)', () => {
 
         // SSO config — Owner-only.
         expectController(matrix, 'ssoConfig.controller.ts#', ALLOW_OWNER);
+
+        // Kody Runtime outbound access. Reading the org's egress is every
+        // environment reader's (the settings screen shows it to them);
+        // billing has no Runtime access.
+        expect(matrix['runtime-org-admin.controller.ts#getOrgEgress']).toEqual({
+            owner: 'allow',
+            billing_manager: 'deny',
+            repo_admin: 'allow',
+            contributor: 'allow',
+        });
+        // Approving or revoking a host, and a blocker fix: owners, and repo
+        // admins (the use case then applies the org's who-may-add setting).
+        const OWNER_OR_REPO_ADMIN = {
+            owner: 'allow',
+            billing_manager: 'deny',
+            repo_admin: 'allow',
+            contributor: 'deny',
+        };
+        for (const key of [
+            'runtime-org-admin.controller.ts#approveEgressHost',
+            'runtime-org-admin.controller.ts#revokeEgressHost',
+            'runtime-environments.controller.ts#applyBlockerFix',
+        ]) {
+            expect(matrix[key]).toEqual(OWNER_OR_REPO_ADMIN);
+        }
+        expect(
+            matrix['runtime-org-admin.controller.ts#updateOrgEgressSettings'],
+        ).toEqual(ALLOW_OWNER);
     });
 
     it('every gated endpoint resolved to a known handler shape', () => {

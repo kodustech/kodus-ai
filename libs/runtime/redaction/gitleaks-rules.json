@@ -1,0 +1,312 @@
+{
+  "_comment": "Curated subset of the gitleaks default rules (config/gitleaks.toml), used by the Kody Runtime redaction (S-51) in the cell (Go) and in the LLM gateway (TS). Regexes are RE2 and ECMAScript compatible: no inline flags (caseInsensitive instead), no lookarounds. generic-bearer is adapted from curl-auth-header; generic-api-key is left out on purpose (it matches ordinary key: value output). Keep this file and apps/runtime-cell/internal/redact/rules/gitleaks-rules.json byte-identical; both test suites check it. Each example escapes one character (\\uXXXX) so the file holds no literal token shape; parsing the JSON gives the token back.",
+  "source": {
+    "repository": "https://github.com/gitleaks/gitleaks",
+    "path": "config/gitleaks.toml",
+    "commit": "5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c",
+    "url": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml",
+    "license": "MIT"
+  },
+  "license": "MIT License\n\nCopyright (c) 2019 Zachary Rice\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+  "rules": [
+    {
+      "id": "aws-access-token",
+      "regex": "\\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\\b",
+      "secretGroup": 1,
+      "keywords": [
+        "a3t",
+        "akia",
+        "asia",
+        "abia",
+        "acca"
+      ],
+      "examples": [
+        "aws_access_key_id = AKIAIOSFODNN7EXAMPLE"
+      ],
+      "caseInsensitive": false,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "aws-presigned-url",
+      "regex": "[?&](?:X-Amz-Security-Token|X-Amz-Signature|X-Amz-Credential)=([^&\\s\"'<>]+)",
+      "secretGroup": 1,
+      "keywords": [
+        "x-amz-"
+      ],
+      "examples": [
+        "https://bucket.s3.amazonaws.com/blob?X-Amz-Credential=ASIAX%2F20261105%2Fus-east-1&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPz%2F&X-Amz-Signature=966730341b927cda"
+      ],
+      "caseInsensitive": true,
+      "source": "Kodus: the credentials of an S3 presigned URL (a build error carried Docker Hub's, 2026-11-05); not a gitleaks rule"
+    },
+    {
+      "id": "github-pat",
+      "regex": "ghp_[0-9a-zA-Z]{36}",
+      "keywords": [
+        "ghp_"
+      ],
+      "examples": [
+        "token ghp\u005fEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAM"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "github-app-token",
+      "regex": "(?:ghu|ghs)_[0-9a-zA-Z]{36}",
+      "keywords": [
+        "ghu_",
+        "ghs_"
+      ],
+      "examples": [
+        "x-access-token:ghs\u005fEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAM@github.com"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "github-oauth",
+      "regex": "gho_[0-9a-zA-Z]{36}",
+      "keywords": [
+        "gho_"
+      ],
+      "examples": [
+        "gho\u005fEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAM"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "github-refresh-token",
+      "regex": "ghr_[0-9a-zA-Z]{36}",
+      "keywords": [
+        "ghr_"
+      ],
+      "examples": [
+        "ghr\u005fEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAM"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "github-fine-grained-pat",
+      "regex": "github_pat_\\w{82}",
+      "keywords": [
+        "github_pat_"
+      ],
+      "examples": [
+        "github\u005fpat_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EX"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "gitlab-pat",
+      "regex": "glpat-[\\w-]{20}",
+      "keywords": [
+        "glpat-"
+      ],
+      "examples": [
+        "PRIVATE-TOKEN: glpat\u002dEXAMPLE0EXAMPLE0EXAM"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "gitlab-deploy-token",
+      "regex": "gldt-[0-9a-zA-Z_\\-]{20}",
+      "keywords": [
+        "gldt-"
+      ],
+      "examples": [
+        "gldt\u002dEXAMPLE0EXAMPLE0EXAM"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "gitlab-runner-authentication-token",
+      "regex": "glrt-[0-9a-zA-Z_\\-]{20}",
+      "keywords": [
+        "glrt-"
+      ],
+      "examples": [
+        "glrt\u002dEXAMPLE0EXAMPLE0EXAM"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "gitlab-ptt",
+      "regex": "glptt-[0-9a-f]{40}",
+      "keywords": [
+        "glptt-"
+      ],
+      "examples": [
+        "glptt\u002d0123456789abcdef0123456789abcdef01234567"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "slack-bot-token",
+      "regex": "xoxb-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*",
+      "keywords": [
+        "xoxb"
+      ],
+      "examples": [
+        "xoxb\u002d0000000000-0000000000-EXAMPLE0EXAMPLE0EXAMPLE0"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "slack-user-token",
+      "regex": "xox[pe](?:-[0-9]{10,13}){3}-[a-zA-Z0-9-]{28,34}",
+      "keywords": [
+        "xoxp-",
+        "xoxe-"
+      ],
+      "examples": [
+        "xoxp\u002d0000000000-0000000000-0000000000-EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "slack-app-token",
+      "regex": "xapp-\\d-[A-Z0-9]+-\\d+-[a-z0-9]+",
+      "caseInsensitive": true,
+      "keywords": [
+        "xapp"
+      ],
+      "examples": [
+        "xapp\u002d1-A0000000000-0000000000-example0example0exam"
+      ],
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "slack-webhook-url",
+      "regex": "(?:https?://)?hooks.slack.com/(?:services|workflows|triggers)/[A-Za-z0-9+/]{43,56}",
+      "keywords": [
+        "hooks.slack.com"
+      ],
+      "examples": [
+        "https://hooks.slack.com\/services\/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+      ],
+      "caseInsensitive": false,
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "stripe-access-token",
+      "regex": "\\b((?:sk|rk)_(?:test|live|prod)_[a-zA-Z0-9]{10,99})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "secretGroup": 1,
+      "keywords": [
+        "sk_test",
+        "sk_live",
+        "sk_prod",
+        "rk_test",
+        "rk_live",
+        "rk_prod"
+      ],
+      "examples": [
+        "STRIPE_KEY=sk\u005ftest_EXAMPLE0EXAMPLE0EXAMPLE0\n"
+      ],
+      "caseInsensitive": false,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "private-key",
+      "regex": "-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----[\\s\\S-]{64,}?KEY(?: BLOCK)?-----",
+      "caseInsensitive": true,
+      "keywords": [
+        "-----begin"
+      ],
+      "examples": [
+        "-----BEGIN OPENSSH PRIVATE\u0020KEY-----\nEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPL\nEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPL\n-----END OPENSSH PRIVATE KEY-----"
+      ],
+      "secretGroup": 0,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "jwt",
+      "regex": "\\b(ey[a-zA-Z0-9]{17,}\\.ey[a-zA-Z0-9\\/\\\\_-]{17,}\\.(?:[a-zA-Z0-9\\/\\\\_-]{10,}={0,2})?)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "secretGroup": 1,
+      "keywords": [
+        "ey"
+      ],
+      "examples": [
+        "session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c "
+      ],
+      "caseInsensitive": false,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "openai-api-key",
+      "regex": "\\b(sk-(?:proj|svcacct|admin)-(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})T3BlbkFJ(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})\\b|sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "secretGroup": 1,
+      "keywords": [
+        "t3blbkfj"
+      ],
+      "examples": [
+        "OPENAI_API_KEY=sk\u002dproj-EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXT3BlbkFJEXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EX\n"
+      ],
+      "caseInsensitive": false,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "anthropic-api-key",
+      "regex": "\\b(sk-ant-api03-[a-zA-Z0-9_\\-]{93}AA)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "secretGroup": 1,
+      "keywords": [
+        "sk-ant-api03"
+      ],
+      "examples": [
+        "x-api-key: sk\u002dant-api03-EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPAA\n"
+      ],
+      "caseInsensitive": false,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "anthropic-admin-api-key",
+      "regex": "\\b(sk-ant-admin01-[a-zA-Z0-9_\\-]{93}AA)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "secretGroup": 1,
+      "keywords": [
+        "sk-ant-admin01"
+      ],
+      "examples": [
+        "sk\u002dant-admin01-EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMPAA"
+      ],
+      "caseInsensitive": false,
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml"
+    },
+    {
+      "id": "generic-bearer",
+      "regex": "(?:\\bBearer|Authorization:[ \\t]{0,5}(?:Token|Basic))[ \\t]+([\\w=~@.+/-]{8,})",
+      "caseInsensitive": true,
+      "secretGroup": 1,
+      "keywords": [
+        "bearer",
+        "authorization"
+      ],
+      "examples": [
+        "Authorization: Bearer example0example0example0example0",
+        "authorization: Token example0example0exam"
+      ],
+      "source": "https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml#curl-auth-header"
+    }
+  ]
+}

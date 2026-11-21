@@ -88,6 +88,19 @@ export type ExecutionPermissionValidationOptions = {
      * single review costs one round trip to billing, not two.
      */
     usersWithLicense?: UserWithLicense[];
+    /**
+     * The task whose slot the gate resolves, credit-gates and probes for a
+     * broken credential; codeReview by default. A caller that runs its own
+     * task on the same rules (the Kody Runtime) names it, and the probe then
+     * runs whatever the contextName.
+     */
+    task?: LlmTask;
+    /**
+     * Whether a plan with seats needs `userGitId` licensed; true by default.
+     * A caller with no PR author to check (the Kody Runtime's model calls)
+     * passes false: the license, plan, BYOK and credit rules still apply.
+     */
+    requireUserSeat?: boolean;
 };
 
 /**
@@ -258,6 +271,7 @@ export class PermissionValidationService {
         contextName?: string,
         options: ExecutionPermissionValidationOptions = {},
     ): Promise<ValidationResult> {
+        const gatedTask = options.task ?? LLM_TASK.codeReview;
         try {
             // BYOK integrity — enforced UNIFORMLY (no dev/prod split): if the org
             // configured a codeReview model but its credential is broken, the review
@@ -281,13 +295,16 @@ export class PermissionValidationService {
                 // by name to avoid a code-review → ee/shared import cycle.
                 const isCodeReviewFlow =
                     contextName === CODE_REVIEW_PERMISSION_CONTEXT;
-                const storedByok = isCodeReviewFlow
+                const probeTask =
+                    options.task ??
+                    (isCodeReviewFlow ? LLM_TASK.codeReview : undefined);
+                const storedByok = probeTask
                     ? await this.getBYOKConfig(organizationAndTeamData)
                     : undefined;
-                if (storedByok) {
+                if (storedByok && probeTask) {
                     const { slot, verdict } = resolveTaskSlotFromConfig(
                         storedByok,
-                        LLM_TASK.codeReview,
+                        probeTask,
                     );
                     // A NAMED model that produced no slot = incomplete credential
                     // (the exact "configured but broken" case). An unnamed/absent
@@ -299,8 +316,7 @@ export class PermissionValidationService {
                         );
                         if (status !== 'trial') {
                             this.logger.warn({
-                                message:
-                                    'BYOK codeReview model configured but its credential is incomplete — blocking (never falls to the managed default outside trial)',
+                                message: `BYOK ${probeTask} model configured but its credential is incomplete — blocking (never falls to the managed default outside trial)`,
                                 context:
                                     contextName ||
                                     PermissionValidationService.name,
@@ -393,7 +409,7 @@ export class PermissionValidationService {
                 try {
                     trialByokConfig = await this.resolveTaskSlot(
                         organizationAndTeamData,
-                        LLM_TASK.codeReview,
+                        gatedTask,
                     );
                 } catch (error) {
                     byokLookupFailed = true;
@@ -584,7 +600,7 @@ export class PermissionValidationService {
 
             const byokConfig = await this.resolveTaskSlot(
                 organizationAndTeamData,
-                LLM_TASK.codeReview,
+                gatedTask,
             );
 
             // 3b. Kodus-routed slot: prepaid credits must cover the review.
@@ -632,7 +648,11 @@ export class PermissionValidationService {
                 }
             }
 
-            if (this.requiresUserLicense(identifiedPlanType) && !userGitId) {
+            const seatRequired =
+                options.requireUserSeat !== false &&
+                this.requiresUserLicense(identifiedPlanType);
+
+            if (seatRequired && !userGitId) {
                 this.logger.warn({
                     message: 'Plan requires licensed user, NOT_ERROR',
                     context: contextName || PermissionValidationService.name,
@@ -649,7 +669,7 @@ export class PermissionValidationService {
             }
 
             // 6. Validate specific user (ALWAYS validates if userGitId provided, except trial and free)
-            if (this.requiresUserLicense(identifiedPlanType) && userGitId) {
+            if (seatRequired && userGitId) {
                 const users =
                     options.usersWithLicense ??
                     (await this.licenseService.getAllUsersWithLicense(

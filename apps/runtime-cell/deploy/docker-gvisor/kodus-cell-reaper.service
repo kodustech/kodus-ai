@@ -1,0 +1,21 @@
+# The docker-gvisor cell's independent reaper (S-08): one pass destroys every
+# machine of the cell past kodus:hard-expires (holder, compose project,
+# volumes, built images, build directories, claim network), whatever the
+# hub or the cell agent renew. It reads only Docker labels and the cell's
+# work directory, so it runs when the agent is dead. Install with the timer:
+#   systemctl enable --now kodus-cell-reaper.timer
+# Set CELL_ID, WORKDIR and EGRESS to the cell's -cell-id, -workdir and
+# -gvisor-egress-container in /etc/kodus/cell-reaper.env.
+[Unit]
+Description=Kody Runtime docker-gvisor reaper (one pass)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/kodus/cell-reaper.env
+ExecStart=/usr/local/bin/kodus-reaper -once -driver docker-gvisor -cell-id ${CELL_ID} -workdir ${WORKDIR} -gvisor-egress-container ${EGRESS}
+# A pass is a docker ps and inspect of the cell's containers; it never
+# should take long, and a stuck one must not hold the next.
+TimeoutStartSec=5min
+Nice=10

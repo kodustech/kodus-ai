@@ -7,6 +7,7 @@ import { getPermissions } from "@services/permissions/fetch";
 import { getTeams } from "@services/teams/fetch";
 import { auth } from "src/core/config/auth";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
+import { isKodyRuntimeReleased } from "src/core/feature-gate/kody-runtime";
 import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import {
     getUsersWithLicense,
@@ -32,6 +33,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         kodusProviderFeatureFlag,
         deterministicEvidenceFeatureFlag,
         conditionalPrApprovalFeatureFlag,
+        kodyRuntimeFeatureFlag,
         deepScanFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
@@ -76,6 +78,7 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        isKodyRuntimeReleased(releaseTrackPromise),
         isDeepScanEnabled().catch(() => false),
     ]);
 
@@ -90,6 +93,7 @@ export const getLayoutData = cache(async (teamId: string) => {
             kodusProvider: kodusProviderFeatureFlag,
             deterministicEvidence: deterministicEvidenceFeatureFlag,
             conditionalPrApproval: conditionalPrApprovalFeatureFlag,
+            kodyRuntime: kodyRuntimeFeatureFlag,
             deepScan: deepScanFeatureFlag,
         },
     };

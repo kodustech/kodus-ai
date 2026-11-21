@@ -1,0 +1,27 @@
+{
+  "name": "claim-exercised-line-zero",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-pr-1",
+    "type": "claim.exercised",
+    "body": {
+      "stepId": "0b6f2c1e-8d3a-4f5b-9c7e-1a2b3c4d5e6f",
+      "exercised": {
+        "files": [
+          {
+            "path": "src/x.js",
+            "lines": [
+              0
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

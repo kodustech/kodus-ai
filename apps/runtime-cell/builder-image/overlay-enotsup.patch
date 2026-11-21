@@ -1,0 +1,105 @@
+diff --git a/util/overlay/overlay_linux.go b/util/overlay/overlay_linux.go
+index d45ce41..fbd3579 100644
+--- a/util/overlay/overlay_linux.go
++++ b/util/overlay/overlay_linux.go
+@@ -303,7 +303,7 @@ func checkOpaque(upperdir string, path string, base string, f os.FileInfo) (isOp
+ 	if f.IsDir() {
+ 		for _, oKey := range []string{"trusted.overlay.opaque", "user.overlay.opaque"} {
+ 			opaque, err := sysx.LGetxattr(filepath.Join(upperdir, path), oKey)
+-			if err != nil && !errors.Is(err, unix.ENODATA) {
++			if err != nil && !xattrAbsent(err) {
+ 				return false, errors.Wrapf(err, "failed to retrieve %s attr", oKey)
+ 			} else if len(opaque) == 1 && opaque[0] == 'y' {
+ 				// This is an opaque whiteout directory.
+@@ -326,7 +326,7 @@ func checkRedirect(upperdir string, path string, f os.FileInfo) (bool, error) {
+ 	if f.IsDir() {
+ 		rKey := "trusted.overlay.redirect"
+ 		redirect, err := sysx.LGetxattr(filepath.Join(upperdir, path), rKey)
+-		if err != nil && !errors.Is(err, unix.ENODATA) {
++		if err != nil && !xattrAbsent(err) {
+ 			return false, errors.Wrapf(err, "failed to retrieve %s attr", rKey)
+ 		}
+ 		return len(redirect) > 0, nil
+@@ -493,3 +493,10 @@ func compareFileContent(p1, p2 string) (bool, error) {
+ 		}
+ 	}
+ }
++
++// xattrAbsent reports whether a getxattr error means the attribute is not
++// set: ENODATA, or ENOTSUP from a filesystem that does not support the
++// namespace at all (gVisor's gofer refuses trusted.*), where it cannot be set.
++func xattrAbsent(err error) bool {
++	return errors.Is(err, unix.ENODATA) || errors.Is(err, unix.ENOTSUP)
++}
+diff --git a/util/overlay/overlay_xattr_linux_test.go b/util/overlay/overlay_xattr_linux_test.go
+new file mode 100644
+index 0000000..d7a09f7
+--- /dev/null
++++ b/util/overlay/overlay_xattr_linux_test.go
+@@ -0,0 +1,66 @@
++//go:build linux
++
++package overlay
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/containerd/continuity/sysx"
++	"github.com/pkg/errors"
++	"golang.org/x/sys/unix"
++)
++
++// A getxattr that fails with ENOTSUP means the filesystem cannot hold the
++// attribute at all (gVisor's gofer refuses trusted.*, so does procfs for
++// root): the attribute is absent, as with ENODATA. Any other error is still
++// an error.
++func TestXattrAbsent(t *testing.T) {
++	for _, tc := range []struct {
++		err    error
++		absent bool
++	}{
++		{unix.ENODATA, true},
++		{unix.ENOTSUP, true},
++		{unix.EOPNOTSUPP, true},
++		{errors.Wrap(unix.ENOTSUP, "lgetxattr"), true},
++		{unix.EACCES, false},
++		{unix.EIO, false},
++		{unix.ERANGE, false},
++	} {
++		if got := xattrAbsent(tc.err); got != tc.absent {
++			t.Errorf("xattrAbsent(%v) = %v, want %v", tc.err, got, tc.absent)
++		}
++	}
++}
++
++// A directory on a filesystem that refuses trusted.* xattrs is neither a
++// redirect nor an opaque directory, and the differ does not fail on it.
++// It needs such a directory: the test's temporary directory under gVisor
++// (a gofer mount), or procfs when run as root; it is skipped elsewhere.
++func TestCheckDirectoryWithoutTrustedXattrs(t *testing.T) {
++	var dir string
++	for _, d := range []string{t.TempDir(), "/proc/sys"} {
++		if _, err := sysx.LGetxattr(d, "trusted.overlay.redirect"); errors.Is(err, unix.ENOTSUP) {
++			dir = d
++			break
++		}
++	}
++	if dir == "" {
++		t.Skip("no directory here answers getxattr(trusted.*) with ENOTSUP")
++	}
++	fi, err := os.Lstat(dir)
++	if err != nil {
++		t.Fatal(err)
++	}
++	upper, path := filepath.Dir(dir), filepath.Base(dir)
++	redirect, err := checkRedirect(upper, path, fi)
++	if err != nil || redirect {
++		t.Fatalf("checkRedirect(%s) = %v, %v; want false, nil", dir, redirect, err)
++	}
++	opaque, err := checkOpaque(upper, path, t.TempDir(), fi)
++	if err != nil || opaque {
++		t.Fatalf("checkOpaque(%s) = %v, %v; want false, nil", dir, opaque, err)
++	}
++}

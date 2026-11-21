@@ -15,7 +15,7 @@
  * loop stays thin, stable, and unit-testable via composable policies.
  */
 import { jsonSchema, tool as aiTool, type ModelMessage } from 'ai';
-import { LLM, type AgentLoopResult } from '@libs/llm/llm';
+import type { AgentLoopResult } from '@libs/llm/llm';
 import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
@@ -39,6 +39,7 @@ import type {
 } from '../../domain/contracts/run-state.contract';
 import type { ToolContext } from '../../domain/contracts/tool.contract';
 import { isAiSdkToolSource } from './ai-sdk-tool-registry';
+import type { AgentLoopInvoker } from './agent-loop-invoker';
 
 export class AiSdkAgentRunner implements AgentRunner {
     /**
@@ -57,7 +58,21 @@ export class AiSdkAgentRunner implements AgentRunner {
             }) => void;
             queueTimeoutMs?: number;
             provider?: string;
+            /**
+             * Extra attributes for the usage span of every model call of this
+             * runner (e.g. the Kody Runtime's runId and route), so a consumer
+             * whose ids do not ride `runtimeContext` can still attribute its
+             * spend. The harness's own attributes win over these.
+             */
+            spanAttrs?: Readonly<Record<string, string | number>>;
         } = {},
+        private readonly modelInvoker: AgentLoopInvoker = async (request) => {
+            // Workers inject their own credential-free loop. Loading the
+            // product model layer here would otherwise require its crypto key
+            // before an injected boundary ever runs.
+            const { LLM } = await import('@libs/llm/llm');
+            return LLM.run(request);
+        },
     ) {}
 
     async run(
@@ -154,7 +169,11 @@ export class AiSdkAgentRunner implements AgentRunner {
         }: any) => {
             const active = [...allToolNames];
             const view = buildView(stepNumber, msgs ?? messages, active);
-            const merged = await this.mergeDirectives(spec.policies, view, emit);
+            const merged = await this.mergeDirectives(
+                spec.policies,
+                view,
+                emit,
+            );
             const out: Record<string, unknown> = {};
 
             if (merged.activeTools) {
@@ -236,15 +255,14 @@ export class AiSdkAgentRunner implements AgentRunner {
         // PR/team for cost attribution: the code-review finder opts these in via
         // `runtimeContext`; other callers hand over raw `telemetryMetadata`.
         const runMeta = (input.runtimeContext ?? input.telemetryMetadata) as
-            | { pullRequestId?: number; teamId?: string }
-            | undefined;
+            { pullRequestId?: number; teamId?: string } | undefined;
 
         try {
             // ── the model call: ONE door. LLM.run resolves the slot → model +
             // tuning + reasoning + prompt-cache, runs the loop from these seams,
             // and records the run's usage in ONE span. The harness supplies only
             // the loop; it never touches the model nor records usage. ──
-            result = await LLM.run({
+            result = await this.modelInvoker({
                 byokConfig: this.slot,
                 organizationId: this.modelOpts.organizationId,
                 reporter: this.modelOpts.reporter,
@@ -255,6 +273,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                 runName: spec.runName ?? spec.agentName ?? spec.id,
                 spanName: spec.spanName,
                 attrs: {
+                    ...(this.modelOpts.spanAttrs ?? {}),
                     agentName: spec.agentName ?? spec.id,
                     ...(spec.phase ? { phase: spec.phase } : {}),
                     source: 'harness',

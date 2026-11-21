@@ -1686,6 +1686,50 @@ export class CodeManagementService implements ICodeManagementService {
             .userCanWrite?.(params);
     }
 
+    /**
+     * The default branch head, or `undefined` when the platform has no way to
+     * read it here (the caller reports that as unsupported, not as missing).
+     */
+    async getDefaultBranchHead(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+    }): Promise<{ branch: string; sha: string } | null | undefined> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        if (!type) {
+            return undefined;
+        }
+        const service =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        if (!service.getDefaultBranchHead) {
+            return undefined;
+        }
+        return service.getDefaultBranchHead(params);
+    }
+
+    /** A file at an exact commit; `undefined` when the platform cannot read it here. */
+    async getFileContentAtRef(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        path: string;
+        ref: string;
+        maxBytes: number;
+    }): Promise<string | null | undefined> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        if (!type) {
+            return undefined;
+        }
+        const service =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        if (!service.getFileContentAtRef) {
+            return undefined;
+        }
+        return service.getFileContentAtRef(params);
+    }
+
     async diagnoseRepositoryAccess(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

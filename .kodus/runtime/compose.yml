@@ -1,0 +1,73 @@
+# Overlay of docker-compose.dev.yml for the Kody Runtime cell
+# (.kodus/workspace.runtime.yaml). A service cannot be removed by an
+# overlay, so the ones a PR probe never reaches get a profile nobody turns
+# on. The cell itself makes the external networks the project's own.
+#
+# The API, the worker and webhooks run the production images
+# (docker/Dockerfile, targets api, worker and webhooks): compiled once at
+# build, no source bind and no `nest build --watch`, so a container starts
+# in seconds instead of recompiling on every start. That is what makes the
+# snapshot reset (data.reset: snapshot) fast: a reset restarts containers,
+# it does not rebuild them. Each target gets its own image name: one tag
+# shared by three targets would be built once and run three times.
+#
+# `!override` replaces what docker-compose.dev.yml gave a key instead of
+# adding to it (docker compose 2.24+, and the cell's own overlay): the dev
+# binds of the checkout and its node_modules must go, not stay beside the
+# image's.
+services:
+    web:
+        profiles: [runtime-cell-off]
+    try:
+        profiles: [runtime-cell-off]
+    runtime-hub:
+        profiles: [runtime-cell-off]
+    runtime-worker:
+        profiles: [runtime-cell-off]
+    kodus-api:
+        build:
+            dockerfile: docker/Dockerfile
+            target: api
+        image: kodus-ai-runtime-api:latest
+        # docker/prod-entrypoint.sh (the image's entrypoint) runs the
+        # migrations and the seeds first (RUN_MIGRATIONS, RUN_SEEDS in a local
+        # .kodus/runtime/overrides.env, not committed), then this.
+        command: ['node', 'dist/apps/api/main.js']
+        volumes: !override
+            - runtime_streams:/data/runtime-streams:ro
+        # The Runtime's own services are left out, so nothing creates the
+        # kodus_runtime database here: the API's Runtime readers connect on
+        # first use only, and a PR probe that reaches them sees the same
+        # error on base and head.
+        # A cell boots cold: migrations and seeds on an empty database, then
+        # the compiled API starts. Failures inside start_period do not count
+        # and the first passing check marks it healthy, so a wider one only
+        # delays the verdict on an API that never comes up. A snapshot reset
+        # skips the migrations and answers well inside it.
+        healthcheck:
+            start_period: 5m
+    worker:
+        build:
+            dockerfile: docker/Dockerfile
+            target: worker
+        image: kodus-ai-runtime-worker:latest
+        command: ['node', 'dist/apps/worker/main.js']
+        volumes: !reset []
+        # Only the API migrates and seeds; the shared .env asks for both.
+        environment:
+            - RUN_MIGRATIONS=false
+            - RUN_SEEDS=false
+        healthcheck:
+            test: ['CMD-SHELL', 'pgrep -f "dist/apps/worker/main.js" >/dev/null']
+    webhooks:
+        build:
+            dockerfile: docker/Dockerfile
+            target: webhooks
+        image: kodus-ai-runtime-webhooks:latest
+        command: ['node', 'dist/apps/webhooks/main.js']
+        volumes: !reset []
+        environment:
+            - RUN_MIGRATIONS=false
+            - RUN_SEEDS=false
+        healthcheck:
+            test: ['CMD-SHELL', 'pgrep -f "dist/apps/webhooks/main.js" >/dev/null']

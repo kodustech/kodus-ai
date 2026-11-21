@@ -20,3 +20,27 @@ export const usePermission = (
         repoId,
     });
 };
+
+/**
+ * The permission on every one of these repositories (an action the API checks
+ * on each, such as a Run of a multi-repository environment). No repository:
+ * the permission at all.
+ */
+export const usePermissionOnEvery = (
+    action: Action,
+    resource: ResourceType,
+    repoIds: readonly string[],
+): boolean => {
+    const { organizationId } = useAuth();
+    const permissions = usePermissions();
+    const ids = repoIds.length ? repoIds : [undefined];
+    return ids.every((repoId) =>
+        hasPermission({
+            permissions,
+            organizationId: organizationId!,
+            action,
+            resource,
+            repoId,
+        }),
+    );
+};

@@ -1,0 +1,765 @@
+[
+  {
+    "id": "kr-shop-coupon",
+    "source": "real: kr-shop#7 (bug) and #8 (correct), same description",
+    "checks": "The bug charges the subtotal where the description says charge equals total: caught; the correct PR charges the total: not flagged.",
+    "pullRequest": {
+      "title": "Quote with a coupon",
+      "description": "Adds `POST /orders/quote` so the checkout can show a price before the order is placed.\n\n- `subtotal` is the price list (`keyboard` 50, `monitor` 200, `mouse` 25) times `quantity`.\n- An optional `coupon`; `SAVE20` takes 20% off the subtotal. An unknown coupon is a 400.\n- `total` is the subtotal minus the discount, and `charge` is what the card is charged, so it must equal `total`.\n\nExample: 2 monitors with `SAVE20` → subtotal 400, discount 80, total 320, charge 320."
+    },
+    "entryPoints": [
+      {
+        "id": "POST /orders/quote",
+        "added": true
+      }
+    ],
+    "recorded": [
+      {
+        "request": {
+          "method": "POST",
+          "path": "/orders/quote",
+          "body": {
+            "item": "monitor",
+            "quantity": 2,
+            "coupon": "SAVE20"
+          }
+        },
+        "addedByDiff": true,
+        "base": {
+          "status": 404,
+          "body": {
+            "error": "not found"
+          }
+        },
+        "bug": {
+          "status": 200,
+          "body": {
+            "item": "monitor",
+            "quantity": 2,
+            "subtotal": 400,
+            "discount": 80,
+            "total": 320,
+            "charge": 400
+          }
+        },
+        "correct": {
+          "status": 200,
+          "body": {
+            "item": "monitor",
+            "quantity": 2,
+            "subtotal": 400,
+            "discount": 80,
+            "total": 320,
+            "charge": 320
+          }
+        }
+      },
+      {
+        "request": {
+          "method": "POST",
+          "path": "/orders/quote",
+          "body": {
+            "item": "mouse",
+            "quantity": 1.5
+          }
+        },
+        "addedByDiff": true,
+        "base": {
+          "status": 404,
+          "body": {
+            "error": "not found"
+          }
+        },
+        "bug": {
+          "status": 400,
+          "body": {
+            "error": "quantity must be a whole number"
+          }
+        },
+        "correct": {
+          "status": 400,
+          "body": {
+            "error": "quantity must be a whole number"
+          }
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`total` is the subtotal minus the discount, and `charge` is what the card is charged, so it must equal `total`.\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders/quote\", \"body\": {\"item\": \"monitor\", \"quantity\": 2, \"coupon\": \"SAVE20\"}}, \"assertions\": [{\"kind\": \"status\", \"status\": 200}, {\"kind\": \"computed\", \"path\": \"$.total\", \"expr\": \"$.subtotal - $.discount\"}, {\"kind\": \"sameAs\", \"path\": \"$.charge\", \"other\": \"$.total\"}]}]}",
+    "requestTemplates": [
+      {
+        "method": "POST",
+        "path": "/orders/quote",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "item": "keyboard",
+          "quantity": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "kr-shop-filter",
+    "source": "real: kr-shop#9 (bug) and #10 (correct), same description",
+    "checks": "The bug reads ?items, so ?item=keyboard still lists both orders: caught; the correct PR lists only order 1: a described change, not flagged.",
+    "pullRequest": {
+      "title": "Filter orders by item",
+      "description": "`GET /orders?item=<name>` lists only the orders of that item, so the orders page can filter by product.\n\n- `GET /orders?item=keyboard` returns only keyboard orders (seed: order 1).\n- Without `item`, the list is unchanged."
+    },
+    "entryPoints": [
+      {
+        "id": "GET /orders"
+      }
+    ],
+    "recorded": [
+      {
+        "request": {
+          "method": "GET",
+          "path": "/orders?item=keyboard"
+        },
+        "base": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        },
+        "bug": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        },
+        "correct": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            }
+          ]
+        }
+      },
+      {
+        "request": {
+          "method": "GET",
+          "path": "/orders"
+        },
+        "base": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        },
+        "bug": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        },
+        "correct": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`GET /orders?item=keyboard` returns only keyboard orders (seed: order 1).\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders?item=keyboard\"}, \"assertions\": [{\"kind\": \"status\", \"status\": 200}, {\"kind\": \"every\", \"path\": \"$[*].item\", \"value\": \"keyboard\"}, {\"kind\": \"equals\", \"path\": \"$.length\", \"value\": 1}]}]}",
+    "requestTemplates": [
+      {
+        "method": "GET",
+        "path": "/orders?items=keyboard"
+      }
+    ]
+  },
+  {
+    "id": "kr-shop-total",
+    "source": "real: kr-shop#11 (bug) and #12 (correct), same description",
+    "checks": "The bug answers total 52 for 2 keyboards at 50: caught; the correct PR answers 100: a described change, not flagged.",
+    "pullRequest": {
+      "title": "Order total",
+      "description": "`GET /orders/:id` also returns the order's price.\n\n- `unitPrice` comes from the price list (`keyboard` 50, `monitor` 200, `mouse` 25).\n- `total` is `unitPrice × quantity`.\n\nExample: order 1 is 2 keyboards → unitPrice 50, total 100."
+    },
+    "entryPoints": [
+      {
+        "id": "GET /orders/:id"
+      }
+    ],
+    "recorded": [
+      {
+        "request": {
+          "method": "GET",
+          "path": "/orders/1"
+        },
+        "base": {
+          "status": 200,
+          "body": {
+            "id": 1,
+            "item": "keyboard",
+            "quantity": 2
+          }
+        },
+        "bug": {
+          "status": 200,
+          "body": {
+            "id": 1,
+            "item": "keyboard",
+            "quantity": 2,
+            "unitPrice": 50,
+            "total": 52
+          }
+        },
+        "correct": {
+          "status": 200,
+          "body": {
+            "id": 1,
+            "item": "keyboard",
+            "quantity": 2,
+            "unitPrice": 50,
+            "total": 100
+          }
+        }
+      },
+      {
+        "planned": true,
+        "request": {
+          "method": "GET",
+          "path": "/orders/2"
+        },
+        "base": {
+          "status": 200,
+          "body": {
+            "id": 2,
+            "item": "monitor",
+            "quantity": 1
+          }
+        },
+        "bug": {
+          "status": 200,
+          "body": {
+            "id": 2,
+            "item": "monitor",
+            "quantity": 1,
+            "unitPrice": 200,
+            "total": 202
+          }
+        },
+        "correct": {
+          "status": 200,
+          "body": {
+            "id": 2,
+            "item": "monitor",
+            "quantity": 1,
+            "unitPrice": 200,
+            "total": 200
+          }
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`total` is `unitPrice × quantity`.\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders/1\"}, \"assertions\": [{\"kind\": \"computed\", \"path\": \"$.total\", \"expr\": \"$.unitPrice * $.quantity\"}, {\"kind\": \"equals\", \"path\": \"$.unitPrice\", \"value\": 50}]}]}",
+    "requestTemplates": [
+      {
+        "method": "GET",
+        "path": "/orders/1"
+      },
+      {
+        "method": "GET",
+        "path": "/orders/2"
+      }
+    ]
+  },
+  {
+    "id": "kr-shop-max-quantity",
+    "source": "real: kr-shop#13 (bug) and #14 (correct), same description",
+    "checks": "The bug also refuses 10 units, which the description says is still accepted: caught; the correct PR accepts 10 and refuses 11: not flagged.",
+    "pullRequest": {
+      "title": "At most 10 units",
+      "description": "Caps an order at 10 units (warehouse limit).\n\n- `POST /orders` with `quantity` 10 is still accepted (201).\n- `quantity` 11 or more is refused with 400 `at most 10 units per order`."
+    },
+    "entryPoints": [
+      {
+        "id": "POST /orders"
+      }
+    ],
+    "recorded": [
+      {
+        "request": {
+          "method": "POST",
+          "path": "/orders",
+          "body": {
+            "item": "keyboard",
+            "quantity": 10
+          }
+        },
+        "base": {
+          "status": 201,
+          "body": {
+            "id": 3,
+            "item": "keyboard",
+            "quantity": 10
+          }
+        },
+        "bug": {
+          "status": 400,
+          "body": {
+            "error": "at most 10 units per order"
+          }
+        },
+        "correct": {
+          "status": 201,
+          "body": {
+            "id": 3,
+            "item": "keyboard",
+            "quantity": 10
+          }
+        }
+      },
+      {
+        "request": {
+          "method": "POST",
+          "path": "/orders",
+          "body": {
+            "item": "keyboard",
+            "quantity": 11
+          }
+        },
+        "base": {
+          "status": 201,
+          "body": {
+            "id": 3,
+            "item": "keyboard",
+            "quantity": 11
+          }
+        },
+        "bug": {
+          "status": 400,
+          "body": {
+            "error": "at most 10 units per order"
+          }
+        },
+        "correct": {
+          "status": 400,
+          "body": {
+            "error": "at most 10 units per order"
+          }
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`POST /orders` with `quantity` 10 is still accepted (201).\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders\", \"body\": {\"item\": \"keyboard\", \"quantity\": 10}}, \"assertions\": [{\"kind\": \"status\", \"status\": 201}]}, {\"quote\": \"`quantity` 11 or more is refused with 400 `at most 10 units per order`.\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders\", \"body\": {\"item\": \"keyboard\", \"quantity\": 11}}, \"assertions\": [{\"kind\": \"status\", \"status\": 400}, {\"kind\": \"includes\", \"path\": \"$\", \"value\": \"at most 10 units per order\"}]}]}",
+    "requestTemplates": [
+      {
+        "method": "POST",
+        "path": "/orders",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "item": "keyboard",
+          "quantity": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "regression-request-body",
+    "feature": "kr-shop-coupon",
+    "source": "real Run, first real-model round: #7 sent {\"monitor\":2,\"coupon\":\"SAVE20\"} and got 400",
+    "checks": "Every probe of POST /orders/quote sends the body fields the request template has (item, quantity).",
+    "regression": {
+      "shape": "body_fields",
+      "route": "POST /orders/quote",
+      "fields": [
+        "item",
+        "quantity"
+      ]
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`total` is the subtotal minus the discount, and `charge` is what the card is charged, so it must equal `total`.\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders/quote\", \"body\": {\"monitor\": 2, \"coupon\": \"SAVE20\"}}, \"assertions\": [{\"kind\": \"sameAs\", \"path\": \"$.charge\", \"other\": \"$.total\"}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-required-field",
+    "feature": "kr-shop-max-quantity",
+    "source": "real Run, first real-model round: #13/#14 sent {\"quantity\":10} without item, 400 on base too; #14 flagged falsely",
+    "checks": "Every probe of POST /orders keeps the template's item field.",
+    "regression": {
+      "shape": "body_fields",
+      "route": "POST /orders",
+      "fields": [
+        "item",
+        "quantity"
+      ]
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`POST /orders` with `quantity` 10 is still accepted (201).\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders\", \"body\": {\"quantity\": 10}}, \"assertions\": [{\"kind\": \"status\", \"status\": 201}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-text-names-parameter",
+    "feature": "kr-shop-filter",
+    "source": "kr-shop #9: the planner sent ?items because the bug's code says items; the text says ?item=",
+    "checks": "Against a template that copied the bug's ?items, the probe uses the text's ?item= and catches the bug.",
+    "regression": {
+      "shape": "bug_caught_with_text_parameter",
+      "path": "/orders",
+      "param": "item",
+      "not": "items"
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`GET /orders?item=keyboard` returns only keyboard orders (seed: order 1).\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders?items=keyboard\"}, \"assertions\": [{\"kind\": \"status\", \"status\": 200}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-weak-assertion",
+    "feature": "kr-shop-filter",
+    "source": "real Run, first real-model round: #9 asserted $[0].item == \"keyboard\", which the bug also satisfies",
+    "checks": "For \"returns only keyboard orders\" the assertion catches the bug that still lists both orders.",
+    "regression": {
+      "shape": "bug_caught"
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`GET /orders?item=keyboard` returns only keyboard orders (seed: order 1).\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders?item=keyboard\"}, \"assertions\": [{\"kind\": \"equals\", \"path\": \"$[0].item\", \"value\": \"keyboard\"}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-answer-cut",
+    "feature": "kr-shop-coupon",
+    "source": "real Run, first real-model round: #8's answer hit 8192 output tokens and was dropped as not JSON",
+    "checks": "The answer is the JSON object asked for (after the one retry).",
+    "regression": {
+      "shape": "answer_parsed"
+    },
+    "observed": "{\"probes\":[{\"quote\":\"`subtotal` is the price list",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-route-rule",
+    "feature": "kr-shop-total",
+    "source": "real Run, first real-model round: #12 asserted $.total == $.unitPrice * 2, so order 2's planned probe stayed a regression",
+    "checks": "A rule over response fields explains the planner's GET /orders/2 difference on the correct PR.",
+    "regression": {
+      "shape": "route_rule",
+      "route": "GET /orders/:id",
+      "planned": "/orders/2"
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`total` is `unitPrice × quantity`.\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders/1\"}, \"assertions\": [{\"kind\": \"computed\", \"path\": \"$.total\", \"expr\": \"$.unitPrice * 2\"}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-no-probe",
+    "feature": "kr-shop-filter",
+    "source": "real Run, first real-model round: #10 got 0 probes from a valid answer",
+    "checks": "A description that names a request and its result gives at least one probe.",
+    "regression": {
+      "shape": "probe_written"
+    },
+    "observed": "{\"probes\": []}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-filter-every",
+    "feature": "kr-shop-filter",
+    "source": "real Run on release v1d: #10's three assertions held (status, $.length == 1 and one element's item; the third is reconstructed), yet the narrowed list stayed a regression",
+    "checks": "On the correct filter PR the probe's narrowed list is a described change: every on the filtered field states the contents.",
+    "regression": {
+      "shape": "correct_described"
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`GET /orders?item=keyboard` returns only keyboard orders (seed: order 1).\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders?item=keyboard\"}, \"assertions\": [{\"kind\": \"status\", \"status\": 200}, {\"kind\": \"equals\", \"path\": \"$.length\", \"value\": 1}, {\"kind\": \"equals\", \"path\": \"$[0].item\", \"value\": \"keyboard\"}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-quoted-message",
+    "feature": "kr-shop-max-quantity",
+    "source": "real Run on release v1d: #13's text quotes the message and the author asserted $ == \"at most 10 units per order\" against {\"error\":...}",
+    "checks": "A quoted error message is asserted so the correct PR, which answers it inside a JSON body, is not flagged.",
+    "regression": {
+      "shape": "correct_not_flagged"
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`quantity` 11 or more is refused with 400 `at most 10 units per order`.\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders\", \"body\": {\"item\": \"keyboard\", \"quantity\": 11}}, \"assertions\": [{\"kind\": \"status\", \"status\": 400}, {\"kind\": \"equals\", \"path\": \"$\", \"value\": \"at most 10 units per order\"}]}]}",
+    "observedHolds": false
+  },
+  {
+    "id": "regression-unevaluable",
+    "feature": "kr-shop-coupon",
+    "observedHolds": true,
+    "source": "real Run on release v1e: #8 wrote $.subtotal = 50 * $request.body.quantity ('not computable') and probed {item: mouse, quantity: 1.5}, which the correct PR refuses with 400 ($.subtotal absent): both counted as mismatches. The 400 body stands in.",
+    "checks": "An assertion that cannot be evaluated, or a field asserted on a refusal the probe does not expect, never flags the correct PR.",
+    "regression": {
+      "shape": "no_false_mismatch"
+    },
+    "observed": "{\"probes\": [{\"quote\": \"`total` is the subtotal minus the discount, and `charge` is what the card is charged, so it must equal `total`.\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders/quote\", \"body\": {\"item\": \"monitor\", \"quantity\": 2, \"coupon\": \"SAVE20\"}}, \"assertions\": [{\"kind\": \"computed\", \"path\": \"$.subtotal\", \"expr\": \"50 * $request.body.quantity\"}]}, {\"quote\": \"`total` is the subtotal minus the discount, and `charge` is what the card is charged, so it must equal `total`.\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders/quote\", \"body\": {\"item\": \"mouse\", \"quantity\": 1.5}}, \"assertions\": [{\"kind\": \"equals\", \"path\": \"$.subtotal\", \"value\": 37.5}]}]}"
+  },
+  {
+    "id": "regression-invented-value",
+    "observedHolds": true,
+    "source": "real Run on release v1e: #28 (correct limit) probed GET /orders?limit=0, which the text never gives, asserted $.length = 0, and the PR answered 2 orders. The description is as the v1e report quotes it.",
+    "checks": "A probe with a literal assertion only sends request values its source gives: the correct PR is not flagged.",
+    "regression": {
+      "shape": "no_false_mismatch"
+    },
+    "pullRequest": {
+      "title": "Limit the orders list",
+      "description": "`GET /orders?limit=N` returns the first N orders by id.\n\n- `GET /orders?limit=1` returns only order 1."
+    },
+    "entryPoints": [
+      {
+        "id": "GET /orders"
+      }
+    ],
+    "recorded": [
+      {
+        "request": {
+          "method": "GET",
+          "path": "/orders?limit=1"
+        },
+        "base": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        },
+        "correct": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            }
+          ]
+        }
+      },
+      {
+        "request": {
+          "method": "GET",
+          "path": "/orders?limit=0"
+        },
+        "base": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        },
+        "correct": {
+          "status": 200,
+          "body": [
+            {
+              "id": 1,
+              "item": "keyboard",
+              "quantity": 2
+            },
+            {
+              "id": 2,
+              "item": "monitor",
+              "quantity": 1
+            }
+          ]
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`GET /orders?limit=1` returns only order 1.\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders?limit=1\"}, \"assertions\": [{\"kind\": \"equals\", \"path\": \"$\", \"value\": [{\"id\": 1, \"item\": \"keyboard\", \"quantity\": 2}]}]}]}",
+    "observed": "{\"probes\": [{\"quote\": \"`GET /orders?limit=N` returns the first N orders by id.\", \"source\": \"description\", \"request\": {\"method\": \"GET\", \"path\": \"/orders?limit=0\"}, \"assertions\": [{\"kind\": \"equals\", \"path\": \"$.length\", \"value\": 0}]}]}"
+  },
+  {
+    "id": "regression-shape-twin",
+    "observedHolds": false,
+    "source": "real Run on release v1e: #18 (correct default quantity) asserted 201 for POST /orders {item: mouse} and held; the planner's post-order-omitted-quantity {item: widget} (base 400, PR 201) stayed a regression. The description is reconstructed (the PR body was not in hand); it does not name mouse, so the value check drops the observed probe: that case relies on the author taking a template's value.",
+    "checks": "A held status on a request of the same shape (same keys, other values) explains the planner's POST /orders {item: widget}.",
+    "regression": {
+      "shape": "route_rule",
+      "route": "POST /orders",
+      "planned": "/orders"
+    },
+    "pullRequest": {
+      "title": "Default quantity",
+      "description": "Orders default to one unit.\n\n- `POST /orders` without `quantity` creates the order with `quantity` 1 (201)."
+    },
+    "entryPoints": [
+      {
+        "id": "POST /orders"
+      }
+    ],
+    "requestTemplates": [
+      {
+        "method": "POST",
+        "path": "/orders",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "item": "widget"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/orders",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "item": "keyboard",
+          "quantity": 2
+        }
+      }
+    ],
+    "recorded": [
+      {
+        "planned": true,
+        "request": {
+          "method": "POST",
+          "path": "/orders",
+          "body": {
+            "item": "widget"
+          }
+        },
+        "base": {
+          "status": 400,
+          "body": {
+            "error": "quantity is required"
+          }
+        },
+        "bug": {
+          "status": 400,
+          "body": {
+            "error": "quantity is required"
+          }
+        },
+        "correct": {
+          "status": 201,
+          "body": {
+            "id": 3,
+            "item": "widget",
+            "quantity": 1
+          }
+        }
+      },
+      {
+        "request": {
+          "method": "POST",
+          "path": "/orders",
+          "body": {
+            "item": "keyboard"
+          }
+        },
+        "base": {
+          "status": 400,
+          "body": {
+            "error": "quantity is required"
+          }
+        },
+        "correct": {
+          "status": 201,
+          "body": {
+            "id": 3,
+            "item": "keyboard",
+            "quantity": 1
+          }
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`POST /orders` without `quantity` creates the order with `quantity` 1 (201).\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders\", \"body\": {\"item\": \"keyboard\"}}, \"assertions\": [{\"kind\": \"status\", \"status\": 201}, {\"kind\": \"equals\", \"path\": \"$.quantity\", \"value\": 1}]}]}",
+    "observed": "{\"probes\": [{\"quote\": \"`POST /orders` without `quantity` creates the order with `quantity` 1 (201).\", \"source\": \"description\", \"request\": {\"method\": \"POST\", \"path\": \"/orders\", \"body\": {\"item\": \"mouse\"}}, \"assertions\": [{\"kind\": \"status\", \"status\": 201}]}]}"
+  },
+  {
+    "id": "regression-new-route-404",
+    "observedHolds": true,
+    "source": "real Run on release v1e: #20 (correct delete) adds DELETE /orders/:id; DELETE /orders/999 answers main's Express 404 page and the PR's JSON 404, which the gate read as a regression. The description is reconstructed.",
+    "checks": "On a route the diff adds, main's 404 page against the PR's own 404 is a new endpoint, not a regression.",
+    "regression": {
+      "shape": "correct_not_regression"
+    },
+    "pullRequest": {
+      "title": "Delete an order",
+      "description": "Adds `DELETE /orders/:id`.\n\n- `DELETE /orders/999` answers 404 `{\"error\":\"not found\"}`."
+    },
+    "entryPoints": [
+      {
+        "id": "DELETE /orders/:id",
+        "added": true
+      }
+    ],
+    "recorded": [
+      {
+        "request": {
+          "method": "DELETE",
+          "path": "/orders/999"
+        },
+        "addedByDiff": true,
+        "base": {
+          "status": 404,
+          "contentType": "text/html; charset=utf-8",
+          "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot DELETE /orders/999</pre>\n</body>\n</html>\n"
+        },
+        "correct": {
+          "status": 404,
+          "body": {
+            "error": "not found"
+          }
+        }
+      }
+    ],
+    "scripted": "{\"probes\": [{\"quote\": \"`DELETE /orders/999` answers 404 `{\\\"error\\\":\\\"not found\\\"}`.\", \"source\": \"description\", \"request\": {\"method\": \"DELETE\", \"path\": \"/orders/999\"}, \"assertions\": [{\"kind\": \"status\", \"status\": 404}, {\"kind\": \"includes\", \"path\": \"$\", \"value\": \"not found\"}]}]}",
+    "observed": "{\"probes\": [{\"quote\": \"`DELETE /orders/999` answers 404 `{\\\"error\\\":\\\"not found\\\"}`.\", \"source\": \"description\", \"request\": {\"method\": \"DELETE\", \"path\": \"/orders/999\"}, \"assertions\": [{\"kind\": \"status\", \"status\": 404}]}]}"
+  }
+]

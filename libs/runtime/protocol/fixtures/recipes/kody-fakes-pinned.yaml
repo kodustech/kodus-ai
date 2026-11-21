@@ -1,0 +1,4 @@
+version: 1
+fakes:
+  stripe: { image: stripe/stripe-mock@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, env: { STRIPE_API_BASE: 'http://stripe-mock:12111' } }
+  email: { image: axllent/mailpit@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb }

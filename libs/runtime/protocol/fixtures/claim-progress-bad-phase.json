@@ -1,0 +1,22 @@
+{
+  "name": "claim-progress-bad-phase",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a60",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-0c2abe787eb4bd25248cfe79",
+    "type": "claim.progress",
+    "body": {
+      "phase": "Build Step",
+      "state": "started",
+      "at": "2026-11-04T17:38:50Z",
+      "lines": [
+        "#13 [go-builder 29/42] RUN go mod download"
+      ]
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

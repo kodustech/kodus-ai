@@ -1,0 +1,38 @@
+{
+  "name": "step-result-exercised-from-observer",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-pr-1",
+    "type": "step.result",
+    "body": {
+      "stepId": "0b6f2c1e-8d3a-4f5b-9c7e-1a2b3c4d5e6f",
+      "executor": "observer",
+      "imageId": "img-1",
+      "vmHealth": "ok",
+      "exercised": {
+        "language": "node",
+        "files": [
+          {
+            "path": "src/x.js",
+            "changedLines": 3,
+            "exercisedLines": 2,
+            "status": "measured"
+          },
+          {
+            "path": "src/y.ts",
+            "changedLines": 1,
+            "exercisedLines": null,
+            "status": "unknown",
+            "reason": "not_loaded_unproven"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

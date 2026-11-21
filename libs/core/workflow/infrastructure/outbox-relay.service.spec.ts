@@ -259,6 +259,128 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     });
 });
 
+describe('OutboxRelayService relay loop across a broker outage', () => {
+    const readyMessage = {
+        uuid: 'outbox-1',
+        exchange: 'workflow.exchange',
+        routingKey: 'workflow.jobs.created.CODE_REVIEW',
+        attempts: 0,
+        payload: { payload: { jobId: 'job-1', correlationId: 'corr-1' } },
+    };
+
+    let brokerConnected: boolean;
+    let outboxRepository: {
+        claimBatch: jest.Mock;
+        markAsSent: jest.Mock;
+        markAsFailed: jest.Mock;
+    };
+    let messageBroker: { isConnected: jest.Mock; publishMessage: jest.Mock };
+    let service: OutboxRelayService;
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        brokerConnected = false;
+        outboxRepository = {
+            // The row stays READY until a cycle claims it.
+            claimBatch: jest
+                .fn()
+                .mockResolvedValueOnce([readyMessage])
+                .mockResolvedValue([]),
+            markAsSent: jest.fn().mockResolvedValue(undefined),
+            markAsFailed: jest.fn().mockResolvedValue(undefined),
+        };
+        messageBroker = {
+            isConnected: jest.fn(() => brokerConnected),
+            publishMessage: jest.fn().mockResolvedValue(undefined),
+        };
+        const observability = {
+            runInSpan: jest.fn((_name, fn) => fn({ setAttributes: jest.fn() })),
+        };
+
+        service = new OutboxRelayService(
+            outboxRepository as any,
+            {} as any, // inboxRepository
+            {} as any, // jobRepository
+            messageBroker as any,
+            observability as any,
+            { get: jest.fn() } as any,
+            {} as any, // distributedLockService
+            {} as any, // sandboxLeaseManager
+        );
+    });
+
+    afterEach(() => {
+        service.onModuleDestroy();
+        jest.useRealTimers();
+    });
+
+    it('keeps polling while the broker is down and publishes the READY message once it is back', async () => {
+        service.onApplicationBootstrap();
+        await jest.advanceTimersByTimeAsync(30_000);
+
+        expect(messageBroker.isConnected.mock.calls.length).toBeGreaterThan(1);
+        expect(outboxRepository.claimBatch).not.toHaveBeenCalled();
+        expect(messageBroker.publishMessage).not.toHaveBeenCalled();
+
+        brokerConnected = true;
+        await jest.advanceTimersByTimeAsync(3_000);
+
+        expect(messageBroker.publishMessage).toHaveBeenCalledTimes(1);
+        expect(messageBroker.publishMessage.mock.calls[0][0]).toEqual({
+            exchange: readyMessage.exchange,
+            routingKey: readyMessage.routingKey,
+        });
+        expect(outboxRepository.markAsSent).toHaveBeenCalledWith('outbox-1');
+        expect(outboxRepository.markAsFailed).not.toHaveBeenCalled();
+    });
+
+    it('starts a single loop even when bootstrapped twice', async () => {
+        service.onApplicationBootstrap();
+        service.onApplicationBootstrap();
+
+        expect(messageBroker.isConnected).toHaveBeenCalledTimes(1);
+
+        await jest.advanceTimersByTimeAsync(30_000);
+        const cycles = messageBroker.isConnected.mock.calls.length;
+        // 1s, 2s, then 3s apart: ~11 cycles in 30 s for one loop.
+        expect(cycles).toBeLessThanOrEqual(12);
+    });
+
+    it('reports its liveness: not started, running with a fresh cycle, stopped', async () => {
+        expect(service.getLiveness()).toEqual({
+            state: 'not_started',
+            lastCycleAt: undefined,
+        });
+
+        service.onApplicationBootstrap();
+        await jest.advanceTimersByTimeAsync(10_000);
+
+        const running = service.getLiveness();
+        expect(running.state).toBe('running');
+        expect(Date.now() - running.lastCycleAt!).toBeLessThanOrEqual(3_000);
+
+        service.onModuleDestroy();
+        expect(service.getLiveness().state).toBe('stopped');
+    });
+
+    it('stops advancing its last cycle while a cycle hangs', async () => {
+        service.onApplicationBootstrap();
+        await jest.advanceTimersByTimeAsync(5_000);
+
+        brokerConnected = true;
+        outboxRepository.claimBatch
+            .mockReset()
+            .mockReturnValue(new Promise(() => undefined));
+        await jest.advanceTimersByTimeAsync(3_000);
+        const stuckAt = service.getLiveness().lastCycleAt!;
+
+        await jest.advanceTimersByTimeAsync(5 * 60_000);
+
+        expect(service.getLiveness().lastCycleAt).toBe(stuckAt);
+        expect(Date.now() - stuckAt).toBeGreaterThanOrEqual(5 * 60_000);
+    });
+});
+
 describe('OutboxRelayService names the lost work', () => {
     const build = (over: { jobRepository?: any; inboxRepository?: any }) => {
         const lock = { release: jest.fn().mockResolvedValue(undefined) };

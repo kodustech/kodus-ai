@@ -30,10 +30,8 @@ import { runSecurityScanSliceProcess } from './run-security-scan-slice-process';
 import { resolveWorkerRole } from './worker-role';
 import { WorkerModule } from './worker.module';
 import { startEventLoopMonitor } from './event-loop-monitor';
-import {
-    SECURITY_SCAN_WORKER_CHANNELS,
-    startHealthProbe,
-} from './health-probe';
+import { startHealthProbe } from './health-probe';
+import { workerHealthProbeOptions } from './health-probe-options';
 
 declare const module: any;
 
@@ -179,19 +177,10 @@ async function bootstrap() {
             process.env.WORKER_HEALTH_PORT ?? '3334',
             10,
         );
-        // The code-review and security-scan roles subscribe to AMQP, each
-        // on its own channels; the analytics role has no RabbitMQ consumers,
-        // so checking AMQP health there would flap the task unhealthy
-        // permanently.
         const healthServer = startHealthProbe({
             port: healthPort,
             appContext,
-            requireAmqp:
-                role !== 'analytics' &&
-                process.env.API_RABBITMQ_ENABLED !== 'false',
-            ...(role === 'security-scan'
-                ? { requiredChannels: SECURITY_SCAN_WORKER_CHANNELS }
-                : {}),
+            ...workerHealthProbeOptions(role, process.env),
         });
         // Close the probe when Node receives SIGTERM so we don't keep the
         // port reserved during the grace period. Nest's own shutdown hooks

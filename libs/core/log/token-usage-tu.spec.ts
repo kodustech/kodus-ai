@@ -143,6 +143,16 @@ describe('deriveTu', () => {
             ).toBe('prSummary');
         });
 
+        it('keeps a stamped Kody Runtime route', () => {
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'runtime.plan',
+                    'route': 'runtime',
+                })!.route,
+            ).toBe('runtime');
+        });
+
         describe('custom review agents (#2172)', () => {
             // A custom agent's spans are named `code-review-custom-<slug>`
             // (finder, `-recovery`) and `…-verify` / `…-convention-verify`

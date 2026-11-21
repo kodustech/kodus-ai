@@ -1,0 +1,35 @@
+{
+    "__doc": [
+        "Floors per model for the share of plan checks right (run.js --gate). Calibrated from two full runs of one tree (evals/README.md rule 9); never copy these numbers elsewhere.",
+        "2026-11-21: the django-view-via-urls fixture pins Django 5.2.17 instead of 5.1.4 (the code scan flagged the old pin; the fixture is read as text, never installed). That changed the dataset hash, so --gate answers not-measured until two fresh full runs recalibrate the floor below.",
+        "deepseek-v4-flash@fireworks: two runs on 2026-11-07 of a pre-merge commit of the Kody Runtime branch plus the planner token cut (README Measured, 'Token cut'), 45/45 each, paired per-case difference 0. The floor sits at 42/45, not 45/45: nest-service-via-controller dropped to 2/5 in three runs the same day (one before the cut, two before the mount-prefix line), the one-case swing this eval has shown."
+    ],
+    "models": {
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.93,
+            "runs": 2,
+            "values": [
+                1,
+                1
+            ],
+            "date": "2026-11-07",
+            "calibration": {
+                "plannerHost": "product",
+                "side": "planner",
+                "datasetSha256": "65d39afd55a34165593fea011c327038c19786498a3e158f0e157bb75858852f",
+                "caseIds": [
+                    "grafana-4-health-breaks",
+                    "grafana-5-health-branch-field",
+                    "grafana-9-health-failure-ttl",
+                    "grafana-6-dependency-bump",
+                    "grafana-7-recipe-only",
+                    "grafana-8-cli-text",
+                    "grafana-3-comment-only",
+                    "express-route-mounted",
+                    "nest-service-via-controller",
+                    "django-view-via-urls"
+                ]
+            }
+        }
+    }
+}

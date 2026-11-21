@@ -9,6 +9,7 @@ import {
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CustomAgentCliProvisioning,
+    planRuntimeCliInstalls,
     provisionCustomAgentClis,
 } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import {
@@ -20,6 +21,7 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     SandboxCircuitOpenError,
+    SandboxCapacityTimeoutError,
     SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -174,6 +176,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     checkoutSha: cloneInfo.checkoutSha,
                     unifiedDiff: cliContext?.cliRawDiff,
                     sandboxMetadata: { stage: 'review' },
+                    // Only the Kody Runtime sandbox uses it: it installs these
+                    // before its egress seal (it has no root and no network after).
+                    ...(isCliMode ? {} : this.runtimeCliInstalls(context)),
                     organizationId:
                         context.organizationAndTeamData?.organizationId,
                     teamId: context.organizationAndTeamData?.teamId,
@@ -281,6 +286,25 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // sandbox (a worker slot or room in the E2B plan). The review
             // never skips its sandbox for lack of capacity; it only stops
             // waiting once its job is gone.
+            // The wait for capacity outlasted SANDBOX_QUEUE_MAX_WAIT_MS: the
+            // review goes on without a sandbox and the SANDBOX_UNAVAILABLE
+            // warning says why, instead of a generic checkout failure.
+            if (err instanceof SandboxCapacityTimeoutError) {
+                const minutes = Math.max(1, Math.round(err.waitedMs / 60_000));
+                this.logger.warn({
+                    message: `No sandbox capacity for ${label} after ${err.waitedMs}ms (${err.waitingFor}); continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
+                        waitedMs: err.waitedMs,
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.sandboxUnavailableReason = `no sandbox capacity: waited about ${minutes} min for ${err.waitingFor}`;
+                });
+            }
             if (err instanceof SandboxWaitAbortedError) {
                 this.logger.warn({
                     message: `Job aborted while ${label} waited for a sandbox`,
@@ -319,9 +343,25 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         }
     }
 
+    private runtimeCliInstalls(context: CodeReviewPipelineContext) {
+        const cliInstalls = planRuntimeCliInstalls({
+            agents: context.codeReviewConfig?.customAgents,
+            onlyCustomAgent: context.onlyCustomAgent,
+            riskAssessment: context.riskAssessment,
+            changedFiles: (context.changedFiles ?? [])
+                .map((file) => file?.filename)
+                .filter(Boolean),
+            ignoredFiles: (context.ignoredFileChanges ?? [])
+                .filter((file) => file?.status !== 'removed')
+                .map((file) => file?.filename)
+                .filter(Boolean),
+        });
+        return cliInstalls.length ? { cliInstalls } : {};
+    }
+
     /**
      * Install the team CLIs of the custom agents that will run (#2172), before
-     * any agent or secret touches the sandbox. Only E2B installs them; on the
+     * any agent or secret touches the sandbox. E2B installs them as root here, the Kody Runtime before its seal; on the
      * local sandbox the review gets a warning per CLI instead. A failure here
      * never fails the review.
      */

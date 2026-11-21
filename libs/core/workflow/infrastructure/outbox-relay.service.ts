@@ -26,6 +26,10 @@ import {
     IWorkflowJobRepository,
     WORKFLOW_JOB_REPOSITORY_TOKEN,
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
+import {
+    IOutboxRelayHealth,
+    OutboxRelayLiveness,
+} from '@libs/core/workflow/domain/contracts/outbox-relay-health.contract';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { OutboxMessageModel } from './repositories/schemas/outbox-message.model';
@@ -138,9 +142,11 @@ interface MessagePayloadContent {
 
 @Injectable()
 export class OutboxRelayService
-    implements OnApplicationBootstrap, OnModuleDestroy
+    implements OnApplicationBootstrap, OnModuleDestroy, IOutboxRelayHealth
 {
     private isDestroyed = false;
+    private isPolling = false;
+    private lastCycleAt?: number;
     private isCleaning = false;
     private readonly instanceId = os.hostname();
     private readonly maxAttemptsOutbox = parsePositiveIntEnv(
@@ -190,6 +196,14 @@ export class OutboxRelayService
     ) {}
 
     onApplicationBootstrap() {
+        // One loop per instance: a second bootstrap call must not start a
+        // second loop racing the first for the same batches.
+        if (this.isPolling || this.isDestroyed) {
+            return;
+        }
+        this.isPolling = true;
+        this.lastCycleAt = Date.now();
+
         this.logger.log({
             message: 'Starting OutboxRelayService with adaptive polling',
             context: OutboxRelayService.name,
@@ -212,6 +226,17 @@ export class OutboxRelayService
 
     onModuleDestroy() {
         this.isDestroyed = true;
+    }
+
+    getLiveness(): OutboxRelayLiveness {
+        return {
+            state: this.isDestroyed
+                ? 'stopped'
+                : this.isPolling
+                  ? 'running'
+                  : 'not_started',
+            lastCycleAt: this.lastCycleAt,
+        };
     }
 
     private async poll(): Promise<void> {
@@ -239,6 +264,7 @@ export class OutboxRelayService
             });
             this.currentInterval = this.MAX_INTERVAL;
         } finally {
+            this.lastCycleAt = Date.now();
             if (!this.isDestroyed) {
                 setTimeout(() => this.poll(), this.currentInterval);
             }

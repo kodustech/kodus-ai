@@ -1,0 +1,28 @@
+{
+  "name": "step-result-redactions",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "type": "step.result",
+    "body": {
+      "stepId": "7a1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+      "executor": "vm",
+      "imageId": "img-1",
+      "vmHealth": "ok",
+      "exec": {
+        "exitCode": 0,
+        "stdout": "token [redacted:download-token]",
+        "stderr": "",
+        "truncated": false,
+        "durationMs": 3
+      },
+      "redactions": 1
+    },
+    "claimId": "claim-1"
+  },
+  "expect": {
+    "ok": true,
+    "type": "step.result"
+  }
+}

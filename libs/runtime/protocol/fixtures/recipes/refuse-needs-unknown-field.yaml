@@ -1,0 +1,10 @@
+# A need takes repo and alias only.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: api
+  expose:
+    - { service: api, port: 3000, kind: http }
+  needs:
+    - { repo: acme/billing, path: ../billing }

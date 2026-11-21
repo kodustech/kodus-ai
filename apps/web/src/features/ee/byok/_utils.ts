@@ -32,6 +32,7 @@ export const TASK_LABELS: Record<LlmTask, string> = {
     conversation: "Chat",
     customAgent: "Custom Agents",
     securityScan: "Deep scan",
+    runtime: "Kody Runtime",
 };
 
 /**
@@ -58,6 +59,8 @@ export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
         "Runs the review agents your team created. Each one reads the PRs its file patterns match, writes findings and verifies them.",
     securityScan:
         "Audits a whole repository for vulnerabilities when someone runs a deep scan. Long runs with tools, on demand.",
+    runtime:
+        "Plans and checks the Kody Runtime runs that test a pull request in a live environment.",
 };
 
 /** Resolve a model id to its human label within a pool, falling back to the raw

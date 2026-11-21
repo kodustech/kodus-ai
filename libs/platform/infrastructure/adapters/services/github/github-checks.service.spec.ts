@@ -1,6 +1,7 @@
 import {
     CheckConclusion,
     CheckStatus,
+    UnknownCheckConclusionError,
 } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
@@ -29,6 +30,9 @@ describe('GithubChecksService', () => {
                 create: jest.fn(),
                 update: jest.fn(),
                 listForRef: jest.fn(),
+            },
+            repos: {
+                createCommitStatus: jest.fn().mockResolvedValue({ data: { id: 1 } }),
             },
             graphql: jest.fn(),
         };
@@ -242,9 +246,87 @@ describe('GithubChecksService', () => {
                 repository: mockRepository,
                 checkRunId: 100,
                 status: CheckStatus.COMPLETED,
+                conclusion: CheckConclusion.FAILURE,
             });
 
             expect(result).toBe(false);
+        });
+
+        it.each([
+            [CheckConclusion.ACTION_REQUIRED, 'action_required'],
+            [CheckConclusion.CANCELLED, 'cancelled'],
+            [CheckConclusion.TIMED_OUT, 'timed_out'],
+            [CheckConclusion.FAILURE, 'failure'],
+            [CheckConclusion.NEUTRAL, 'neutral'],
+            [CheckConclusion.SKIPPED, 'skipped'],
+        ])('maps %s to the GitHub conclusion %s', async (conclusion, wire) => {
+            mockOctokit.checks.update.mockResolvedValue({});
+
+            await service.updateCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                checkRunId: 100,
+                status: CheckStatus.COMPLETED,
+                conclusion,
+            });
+
+            expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: 'completed',
+                    conclusion: wire,
+                }),
+            );
+        });
+
+        it('maps QUEUED to the GitHub status queued', async () => {
+            mockOctokit.checks.update.mockResolvedValue({});
+
+            await service.updateCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                checkRunId: 100,
+                status: CheckStatus.QUEUED,
+            });
+
+            const call = mockOctokit.checks.update.mock.calls[0][0];
+            expect(call.status).toBe('queued');
+            expect(call).not.toHaveProperty('conclusion');
+        });
+
+        it('throws on an unknown conclusion instead of reporting success', async () => {
+            await expect(
+                service.updateCheckRun({
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    checkRunId: 100,
+                    status: CheckStatus.COMPLETED,
+                    conclusion: 'stale' as CheckConclusion,
+                }),
+            ).rejects.toBeInstanceOf(UnknownCheckConclusionError);
+            expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+        });
+
+        it('throws when a completed check has no conclusion', async () => {
+            await expect(
+                service.updateCheckRun({
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    checkRunId: 100,
+                    status: CheckStatus.COMPLETED,
+                }),
+            ).rejects.toBeInstanceOf(UnknownCheckConclusionError);
+            expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+        });
+
+        it('throws on a prototype key used as conclusion', async () => {
+            await expect(
+                service.updateCheckRun({
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    checkRunId: 100,
+                    conclusion: 'toString' as CheckConclusion,
+                }),
+            ).rejects.toBeInstanceOf(UnknownCheckConclusionError);
         });
     });
     describe('findLatestCompletedCheckRun', () => {
@@ -449,6 +531,94 @@ describe('GithubChecksService', () => {
             await expect(
                 service.isChecksApiAvailable(mockOrganizationAndTeamData),
             ).resolves.toBe(expected);
+        });
+    });
+
+    describe('createCommitStatus', () => {
+        const statusParams = {
+            organizationAndTeamData: mockOrganizationAndTeamData,
+            repository: { owner: 'acme', name: 'widgets' },
+            sha: 'sha123',
+            context: 'Kody Runtime',
+            description: 'No regressions in what was tested',
+            targetUrl: 'https://app.kodus.test/runtime/runs/run-1',
+        };
+
+        // A required status passes only on success; a check passes on success, neutral or skipped.
+        // So the state keeps what the check would do to a protected branch.
+        it.each([
+            [CheckStatus.QUEUED, undefined, 'pending'],
+            [CheckStatus.IN_PROGRESS, undefined, 'pending'],
+            [CheckStatus.COMPLETED, CheckConclusion.SUCCESS, 'success'],
+            [CheckStatus.COMPLETED, CheckConclusion.NEUTRAL, 'success'],
+            [CheckStatus.COMPLETED, CheckConclusion.SKIPPED, 'success'],
+            [CheckStatus.COMPLETED, CheckConclusion.FAILURE, 'failure'],
+            [CheckStatus.COMPLETED, CheckConclusion.ACTION_REQUIRED, 'pending'],
+            [CheckStatus.COMPLETED, CheckConclusion.CANCELLED, 'error'],
+            [CheckStatus.COMPLETED, CheckConclusion.TIMED_OUT, 'error'],
+        ])('posts %s %s as the state %s', async (status, conclusion, state) => {
+            mockGithubService.getGithubAuthDetails.mockResolvedValue({ authMode: AuthMode.TOKEN } as any);
+
+            await expect(service.createCommitStatus({ ...statusParams, status, conclusion })).resolves.toBe('posted');
+
+            expect(mockOctokit.repos.createCommitStatus).toHaveBeenCalledWith({
+                owner: 'acme',
+                repo: 'widgets',
+                sha: 'sha123',
+                state,
+                context: 'Kody Runtime',
+                description: 'No regressions in what was tested',
+                target_url: 'https://app.kodus.test/runtime/runs/run-1',
+            });
+        });
+
+        it('cuts the description to the 140 characters GitHub accepts, and sends no target_url without one', async () => {
+            await service.createCommitStatus({
+                ...statusParams,
+                targetUrl: undefined,
+                description: 'x'.repeat(200),
+                status: CheckStatus.COMPLETED,
+                conclusion: CheckConclusion.SUCCESS,
+            });
+
+            const [sent] = mockOctokit.repos.createCommitStatus.mock.calls[0];
+            expect(sent.description).toHaveLength(140);
+            expect(sent.description.endsWith('…')).toBe(true);
+            expect(sent).not.toHaveProperty('target_url');
+        });
+
+        it('throws on a completed status without a known conclusion, before calling GitHub', async () => {
+            await expect(
+                service.createCommitStatus({ ...statusParams, status: CheckStatus.COMPLETED, conclusion: undefined }),
+            ).rejects.toBeInstanceOf(UnknownCheckConclusionError);
+            expect(mockOctokit.repos.createCommitStatus).not.toHaveBeenCalled();
+        });
+
+        const githubError = (status: number, message: string, headers: Record<string, string> = {}) =>
+            Object.assign(new Error(message), { status, response: { headers } });
+        const post = () => service.createCommitStatus({ ...statusParams, status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS });
+
+        // Behavior: a token that may not write commit statuses is told apart, so the Run page can say which permission to give.
+        it.each([
+            ['403 from a fine-grained token without the permission', githubError(403, 'Resource not accessible by personal access token')],
+            ['any other 403', githubError(403, 'Forbidden')],
+            ['404 with the same refusal', githubError(404, 'Resource not accessible by personal access token')],
+        ])('answers permission_missing on %s', async (_case, error) => {
+            mockOctokit.repos.createCommitStatus.mockRejectedValue(error);
+            await expect(post()).resolves.toBe('permission_missing');
+        });
+
+        // Behavior: a refusal that can pass (rate limit, platform error, network, a bare 404) keeps the retry: the publisher counts it and tries again.
+        it.each([
+            ['a 403 secondary rate limit', githubError(403, 'You have exceeded a secondary rate limit')],
+            ['a 403 with the rate limit spent', githubError(403, 'API rate limit exceeded', { 'x-ratelimit-remaining': '0' })],
+            ['a 403 asking to retry later', githubError(403, 'Forbidden', { 'retry-after': '60' })],
+            ['a 500', githubError(500, 'Server Error')],
+            ['a network error', new Error('socket hang up')],
+            ['a bare 404', githubError(404, 'Not Found')],
+        ])('answers failed on %s', async (_case, error) => {
+            mockOctokit.repos.createCommitStatus.mockRejectedValue(error);
+            await expect(post()).resolves.toBe('failed');
         });
     });
 

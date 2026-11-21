@@ -21,6 +21,12 @@ import {
     type PullRequestsDailyDigestField,
     type PullRequestsFacetName,
 } from "@services/pull-requests";
+import {
+    RUNTIME_FILTER_LABEL,
+    RUNTIME_FILTERS,
+    runtimeFilterOf,
+    type RuntimeFilter,
+} from "@services/runtime/model/pull-request-runs";
 import { SearchIcon, UserIcon, XIcon } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
@@ -31,6 +37,7 @@ import { AwaitingList } from "./pr-awaiting-list";
 import { PrDataTable } from "./pr-data-table";
 import { type PullRequestsScope } from "./pr-view-switcher";
 import { PullRequestsFilters } from "./pull-requests-filters";
+import { usePrListRuntime } from "./use-pr-list-runtime";
 
 // Filters live in the URL (nuqs) so a filtered view is shareable / deep-linkable
 // and survives reload — same pattern the Issues page uses. Writes are shallow
@@ -62,6 +69,8 @@ type PulseCard = {
     hint: string;
     // null = not known (still loading, or the count failed). Never shown as 0.
     value: number | null;
+    // The count covers only the loaded rows and more pages exist: shown with "+".
+    partial?: boolean;
     tone: string;
     active: boolean;
     onClick: () => void;
@@ -140,6 +149,13 @@ export function PullRequestsPageClient() {
         "prState",
         parseAsStringLiteral(["open", "closed"] as const).withOptions(urlOpts),
     );
+    // Kody Runtime's latest verdict per PR. Applied to the loaded rows (the
+    // Runtime state lives in its own store), so the count it gives is the
+    // loaded window's and the list keeps pulling pages to fill the screen.
+    const [runtimeFilter, setRuntimeFilter] = useQueryState(
+        "runtime",
+        parseAsStringLiteral(RUNTIME_FILTERS).withOptions(urlOpts),
+    );
 
     // View scope is temporarily PINNED to the team dashboard — the "My queue /
     // My team" switcher is hidden for now (product decision). The mine-view
@@ -217,6 +233,10 @@ export function PullRequestsPageClient() {
         // the total an upper bound too — without this the header would print
         // a DB-level count next to a shorter list.
         !!prState ||
+        // The Kody Runtime filter runs on the loaded rows, so the header
+        // counts the visible window instead. Read from the URL here: whether
+        // Runtime is on for the team is known only after the list loads.
+        !!runtimeFilter ||
         authorPolicy !== "all";
     // The header only prints the backend's total when it is exact (see
     // `canUseExactFilteredTotal` below), so that is the only time it is asked
@@ -296,6 +316,23 @@ export function PullRequestsPageClient() {
         );
     }, [pullRequests]);
 
+    const runtime = usePrListRuntime(groupedPullRequests);
+    const runtimeCellOf = runtime.cellOf;
+    const activeRuntimeFilter: RuntimeFilter | null = runtime.enabled
+        ? runtimeFilter
+        : null;
+    const visiblePullRequests = useMemo(
+        () =>
+            activeRuntimeFilter
+                ? groupedPullRequests.filter(
+                      (g) =>
+                          runtimeFilterOf(runtimeCellOf(g)) ===
+                          activeRuntimeFilter,
+                  )
+                : groupedPullRequests,
+        [groupedPullRequests, activeRuntimeFilter, runtimeCellOf],
+    );
+
     const clearAllFilters = () => {
         setSelectedRepository(null);
         setSearchQuery("");
@@ -308,6 +345,7 @@ export function PullRequestsPageClient() {
         setPrState(null);
         setCreatedAtFrom(null);
         setCreatedAtTo(null);
+        setRuntimeFilter(null);
     };
 
     // Surface the applied filters as removable chips (the popover only shows a
@@ -373,6 +411,13 @@ export function PullRequestsPageClient() {
             label: `Status: ${STATUS_LABEL[statusFilter]}`,
             clear: () => {
                 setStatusFilter(null);
+            },
+        },
+        activeRuntimeFilter && {
+            key: "runtime",
+            label: `Runtime: ${RUNTIME_FILTER_LABEL[activeRuntimeFilter]}`,
+            clear: () => {
+                setRuntimeFilter(null);
             },
         },
         (createdAtFrom || createdAtTo) && {
@@ -441,7 +486,7 @@ export function PullRequestsPageClient() {
             : groupedPullRequests.length
         : canUseExactFilteredTotal
           ? filteredPrTotal
-          : groupedPullRequests.length;
+          : visiblePullRequests.length;
     // Exact counts (facets.all, filteredPrTotal) are never partial; only the
     // loaded-window fallback gets the "+".
     const isPartialCount =
@@ -541,6 +586,30 @@ export function PullRequestsPageClient() {
                   active: !isAwaiting && needsAttention === "true",
                   onClick: toggleNeedsAttention,
               },
+              ...(runtime.enabled
+                  ? [
+                        {
+                            key: "runtime-regression",
+                            label: "Runtime found a regression",
+                            sub: "loaded",
+                            hint: "Pull requests below whose latest Kody Runtime run found a regression: this PR behaves differently from its base branch. Counts the pull requests loaded so far; click to see only these.",
+                            value: runtime.regressionCount,
+                            partial: hasNextPage,
+                            tone: "text-danger",
+                            active:
+                                !isAwaiting &&
+                                activeRuntimeFilter === "regression",
+                            onClick: () => {
+                                setView(null);
+                                setRuntimeFilter(
+                                    activeRuntimeFilter === "regression"
+                                        ? null
+                                        : "regression",
+                                );
+                            },
+                        },
+                    ]
+                  : []),
           ]
         : [];
     // "Minha fila" cards — my worklist. Both numbers are author-scoped by the
@@ -648,6 +717,11 @@ export function PullRequestsPageClient() {
                                                     : card.tone,
                                             )}>
                                             {card.value ?? "—"}
+                                            {card.partial &&
+                                            card.value !== null &&
+                                            card.value > 0
+                                                ? "+"
+                                                : ""}
                                         </span>
                                     </button>
                                 );
@@ -804,6 +878,37 @@ export function PullRequestsPageClient() {
                             ))}
                         </SelectContent>
                     </Select>
+
+                    {runtime.enabled && (
+                        <Select
+                            value={activeRuntimeFilter ?? "all"}
+                            onValueChange={(value) =>
+                                setRuntimeFilter(
+                                    value === "all"
+                                        ? null
+                                        : (value as RuntimeFilter),
+                                )
+                            }>
+                            <SelectTrigger
+                                size="sm"
+                                aria-label="Kody Runtime result"
+                                className={cn(
+                                    "h-9 w-auto gap-1.5 rounded-lg",
+                                    activeRuntimeFilter &&
+                                        "border-primary-light/50",
+                                )}>
+                                <SelectValue placeholder="Runtime" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Runtime</SelectItem>
+                                {RUNTIME_FILTERS.map((f) => (
+                                    <SelectItem key={f} value={f}>
+                                        {RUNTIME_FILTER_LABEL[f]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
 
                 {queryLooksLikePrNumber && (
@@ -870,14 +975,25 @@ export function PullRequestsPageClient() {
                     </div>
                 ) : (
                     <PrDataTable
-                        data={groupedPullRequests}
-                        loading={isLoading && !groupedPullRequests.length}
+                        data={visiblePullRequests}
+                        loading={
+                            (isLoading && !groupedPullRequests.length) ||
+                            (!!activeRuntimeFilter &&
+                                runtime.isLoading &&
+                                !visiblePullRequests.length)
+                        }
                         hasNextPage={hasNextPage}
                         isFetchingNextPage={isFetchingNextPage}
                         fetchNextPage={fetchNextPage}
                         fetchNextPageFailed={isFetchNextPageError}
                         hasActiveFilters={activeChips.length > 0}
                         onClearFilters={clearAllFilters}
+                        runtime={
+                            runtime.enabled
+                                ? { rowOf: runtime.rowOf }
+                                : undefined
+                        }
+                        teamId={teamId}
                     />
                 )}
             </Page.Content>

@@ -1483,6 +1483,8 @@ export class AzureReposService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        /** Throw a failed listing instead of answering null, as the other platforms do. */
+        failOnError?: boolean;
     }): Promise<any[] | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -1541,6 +1543,7 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
+            if (params.failOnError) throw error;
             return null;
         }
     }
@@ -2347,6 +2350,8 @@ export class AzureReposService implements Omit<
         commentId: number;
         body: string;
         threadId?: number;
+        /** Throw the failure (with its HTTP status) instead of answering null. */
+        failOnError?: boolean;
     }): Promise<any | null> {
         try {
             const {
@@ -2385,6 +2390,7 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
+            if (params.failOnError) throw error;
             return null;
         }
     }
@@ -6601,7 +6607,13 @@ export class AzureReposService implements Omit<
                 ref: pr?.sourceRefName?.replace('refs/heads/', ''),
                 sha: pr?.lastMergeSourceCommit?.commitId ?? '',
                 repo: {
-                    id: pr?.repository?.id ?? '',
+                    // A PR from a fork names its source repository in forkSource: the
+                    // head repo is then not the target's (the Runtime's fork policy reads it).
+                    id:
+                        (pr as { forkSource?: { repository?: { id?: string } } })
+                            ?.forkSource?.repository?.id ??
+                        pr?.repository?.id ??
+                        '',
                     name: pr?.repository?.name ?? '',
                     defaultBranch: pr?.repository?.defaultBranch ?? '',
                     fullName: `${pr?.repository?.name ?? ''}/${pr?.sourceRefName?.replace('refs/heads/', '')}`,

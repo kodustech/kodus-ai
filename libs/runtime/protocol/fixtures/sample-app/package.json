@@ -1,0 +1,9 @@
+{
+  "name": "kody-runtime-sample-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Express + Postgres app the Kody Runtime e2e boots on base and PR",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "4.21.2", "pg": "8.13.1" }
+}

@@ -49,6 +49,42 @@ variable "MCP_MANAGER_TAGS" {
   default = "kodus-mcp-manager:local"
 }
 
+variable "RUNTIME_HUB_TAGS" {
+  default = "kodus-runtime-hub:local"
+}
+
+variable "RUNTIME_WORKER_TAGS" {
+  default = "kodus-runtime-worker:local"
+}
+
+variable "RUNTIME_FLEET_TAGS" {
+  default = "kodus-runtime-fleet:local"
+}
+
+variable "RUNTIME_CELL_TAGS" {
+  default = "kodus-runtime-cell:local"
+}
+
+variable "RUNTIME_BUILDER_TAGS" {
+  default = "kodus-runtime-builder:local"
+}
+
+variable "RUNTIME_SANDBOX_TAGS" {
+  default = "kodus-runtime-sandbox:local"
+}
+
+variable "RUNTIME_MICROVM_ENVIRONMENT_TAGS" {
+  default = "kodus-runtime-microvm-environment:local"
+}
+
+variable "RUNTIME_MICROVM_KIT_TAGS" {
+  default = "kodus-runtime-microvm-kit:local"
+}
+
+variable "RUNTIME_MICROVM_PLATFORMS" {
+  default = "linux/amd64"
+}
+
 variable "RABBITMQ_TAGS" {
   default = "kodus-rabbitmq:local"
 }
@@ -125,6 +161,118 @@ target "rabbitmq" {
   tags = split(",", RABBITMQ_TAGS)
   cache-from = ["type=gha,scope=${CACHE_SCOPE}-rabbitmq"]
   cache-to = ["type=gha,scope=${CACHE_SCOPE}-rabbitmq,mode=max"]
+}
+
+# Kody Runtime: the control plane from the product image, the cell from Go.
+# Not in the default group: the product release does not publish them until
+# the Runtime ships.
+target "runtime-hub" {
+  inherits = ["base"]
+  target = "runtime-hub"
+  tags = split(",", RUNTIME_HUB_TAGS)
+}
+
+target "runtime-worker" {
+  inherits = ["base"]
+  target = "runtime-worker"
+  tags = split(",", RUNTIME_WORKER_TAGS)
+}
+
+target "runtime-fleet" {
+  inherits = ["base"]
+  target = "runtime-fleet"
+  tags = split(",", RUNTIME_FLEET_TAGS)
+}
+
+target "runtime-cell" {
+  context = "./apps/runtime-cell"
+  # The cell's own Dockerfile: distroless, nonroot, version stamped through -ldflags (apps/runtime-cell/README.md).
+  dockerfile = "Dockerfile"
+  args = {
+    RELEASE_VERSION = "${RELEASE_VERSION}"
+  }
+  tags = split(",", RUNTIME_CELL_TAGS)
+  cache-from = ["type=gha,scope=${CACHE_SCOPE}-runtime-cell"]
+  cache-to = ["type=gha,scope=${CACHE_SCOPE}-runtime-cell,mode=max"]
+}
+
+# The cell's image builder: upstream rootless BuildKit with the overlay differ
+# fixed for gVisor (apps/runtime-cell/builder-image/README.md). No cache: its
+# digest is pinned in the cell (cmd/cell/config.go), so it is built from
+# scratch, both platforms, with timestamps from SOURCE_DATE_EPOCH.
+target "runtime-builder" {
+  context = "./apps/runtime-cell/builder-image"
+  dockerfile = "Dockerfile"
+  platforms = ["linux/amd64", "linux/arm64"]
+  tags = split(",", RUNTIME_BUILDER_TAGS)
+  no-cache = true
+  attest = ["type=provenance,disabled=true", "type=sbom,disabled=true"]
+  output = ["type=image,rewrite-timestamp=true"]
+}
+
+# The code sandbox's tool image with the guest agent (apps/runtime-cell/sandbox-image,
+# docs/runtime/sandbox.md): the cell's -gvisor-sandbox-image. Built from the cell's
+# Go module (the guest agent) and pinned tools, both platforms.
+target "runtime-sandbox" {
+  context = "./apps/runtime-cell"
+  dockerfile = "sandbox-image/Dockerfile"
+  platforms = ["linux/amd64", "linux/arm64"]
+  tags = split(",", RUNTIME_SANDBOX_TAGS)
+  cache-from = ["type=gha,scope=${CACHE_SCOPE}-runtime-sandbox"]
+  cache-to = ["type=gha,scope=${CACHE_SCOPE}-runtime-sandbox,mode=max"]
+}
+
+# The sandbox base of the microVM kit: the same tool image, for the kit's
+# platforms only, so building the x86_64 kit never builds the arm64 sandbox
+# (which needs emulation on an x86_64 host). Untagged: the kit takes it as a
+# named context.
+target "runtime-microvm-sandbox" {
+  context = "./apps/runtime-cell"
+  dockerfile = "sandbox-image/Dockerfile"
+  platforms = split(",", RUNTIME_MICROVM_PLATFORMS)
+}
+
+# The environment microVM's base (apps/runtime-cell/microvm-kit/environment.Dockerfile):
+# Docker, Compose, buildx and the cell builder's buildkitd on Ubuntu, turned
+# into the kit's rootfs/environment.ext4.
+target "runtime-microvm-environment" {
+  context = "./apps/runtime-cell/microvm-kit"
+  dockerfile = "environment.Dockerfile"
+  contexts = {
+    builder = "target:runtime-microvm-builder"
+  }
+  platforms = split(",", RUNTIME_MICROVM_PLATFORMS)
+  tags = split(",", RUNTIME_MICROVM_ENVIRONMENT_TAGS)
+}
+
+# The cell builder (runtime-builder) for the kit's platforms only, as the
+# environment base's named context.
+target "runtime-microvm-builder" {
+  inherits = ["runtime-builder"]
+  platforms = split(",", RUNTIME_MICROVM_PLATFORMS)
+  tags = []
+  output = []
+}
+
+# The microVM kit (apps/runtime-cell/microvm-kit/README.md): firecracker and the
+# jailer, the guest kernel and the two base root file systems, with a manifest
+# the cell verifies by digest. x86_64 by default (RUNTIME_MICROVM_PLATFORMS):
+# KVM on arm64 needs bare metal.
+target "runtime-microvm-kit" {
+  context = "./apps/runtime-cell"
+  dockerfile = "microvm-kit/Dockerfile"
+  contexts = {
+    sandbox     = "target:runtime-microvm-sandbox"
+    environment = "target:runtime-microvm-environment"
+  }
+  platforms = split(",", RUNTIME_MICROVM_PLATFORMS)
+  tags = split(",", RUNTIME_MICROVM_KIT_TAGS)
+  attest = ["type=provenance,disabled=true", "type=sbom,disabled=true"]
+  output = ["type=image,rewrite-timestamp=true"]
+}
+
+group "runtime" {
+  targets = ["runtime-hub", "runtime-worker", "runtime-fleet", "runtime-cell", "runtime-builder", "runtime-sandbox"]
 }
 
 group "default" {

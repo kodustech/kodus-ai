@@ -108,11 +108,14 @@ export class ManageTeamCliKeysUseCase {
             );
         }
 
+        // The repo list has its own route, which checks each repository
+        // against the team: a new key starts without one.
+        const { repositoryIds: _repositoryIds, ...config } = body.config ?? {};
         const key = await this.teamCliKeyService.generateKey(
             teamId,
             body.name,
             userId,
-            body.config,
+            body.config ? config : undefined,
         );
 
         this.eventEmitter.emit(AuditLogEvents.CLI_KEY, {
@@ -181,9 +184,20 @@ export class ManageTeamCliKeysUseCase {
             );
         }
 
+        // The repo list has its own route (PUT .../cli-keys/:keyId/repositories),
+        // which checks each repository against the team: a capabilities edit
+        // neither wipes nor writes it.
+        const { repositoryIds: _repositoryIds, ...edited } = body.config;
+        const nextConfig: ITeamCliKeyConfig = {
+            ...edited,
+            ...(key.config?.repositoryIds
+                ? { repositoryIds: key.config.repositoryIds }
+                : {}),
+        };
+
         const updatedKey = await this.teamCliKeyService.update(
             { uuid: keyId },
-            { config: body.config },
+            { config: nextConfig },
         );
 
         if (!updatedKey) {
@@ -267,6 +281,9 @@ export class ManageTeamCliKeysUseCase {
 
         return {
             capabilities: Array.from(capabilities),
+            ...(config?.repositoryIds
+                ? { repositoryIds: config.repositoryIds }
+                : {}),
         };
     }
 }

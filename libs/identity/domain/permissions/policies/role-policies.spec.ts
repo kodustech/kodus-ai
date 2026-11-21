@@ -66,6 +66,20 @@ describe('ROLE_POLICIES', () => {
         expect(
             has(Role.BILLING_MANAGER, { resource: ResourceType.CliReview }),
         ).toBe(false);
+        // Opening a Runtime preview runs the repository's code: repo-scoped
+        // for every role but owner, never for billing.
+        for (const role of [Role.REPO_ADMIN, Role.CONTRIBUTOR]) {
+            expect(
+                ROLE_POLICIES[role].filter(
+                    (r) => r.resource === ResourceType.RuntimePreview,
+                ),
+            ).toEqual([
+                { action: Action.Read, resource: ResourceType.RuntimePreview, scope: 'repo' },
+            ]);
+        }
+        expect(
+            has(Role.BILLING_MANAGER, { resource: ResourceType.RuntimePreview }),
+        ).toBe(false);
         // Security scan: Repo Admin starts one on an assigned repo, Contributor
         // reads; Billing never sees it.
         expect(

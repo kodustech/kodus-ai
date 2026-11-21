@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1d2330; }
+  main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 28px; margin: 0 0 16px; }
+  ul { list-style: none; padding: 0; margin: 0 0 24px; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  li { display: flex; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #eceef2; font-size: 17px; }
+  li:last-child { border-bottom: 0; }
+  .qty { color: #5b6475; }
+  #empty { padding: 14px 18px; background: #fff; border-radius: 10px; color: #8a92a3; }
+  form { display: flex; gap: 12px; align-items: end; background: #fff; padding: 18px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  label { display: flex; flex-direction: column; font-size: 13px; color: #5b6475; gap: 6px; }
+  input { font: inherit; padding: 8px 10px; border: 1px solid #cfd4dd; border-radius: 6px; width: 160px; }
+  button { font: inherit; font-weight: 600; padding: 9px 18px; border: 0; border-radius: 6px; background: #2f6fed; color: #fff; cursor: pointer; }
+  #status { min-height: 20px; color: #2b7a3d; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Orders</h1>
+  <ul id="orders" aria-label="Orders"></ul>
+  <p id="empty" hidden>No orders yet</p>
+  <h2>New order</h2>
+  <form id="new-order">
+    <label>Item <input id="item" name="item" required></label>
+    <label>Quantity <input id="quantity" name="quantity" type="number" min="1" value="1" required></label>
+    <button id="place" type="submit">Place order</button>
+  </form>
+  <p id="status" role="status"></p>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

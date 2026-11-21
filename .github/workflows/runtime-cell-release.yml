@@ -1,0 +1,662 @@
+name: "Runtime cell: release"
+
+# Cuts a Kody Runtime cell release (apps/runtime-cell/README.md, "Release"):
+#   git tag runtime-cell/v1.2.3 && git push origin runtime-cell/v1.2.3
+# or run it by hand from a ref (the version is then 0.0.0-dev+<sha>).
+# Only a runtime-cell/v* tag push signs the binaries' SHA256SUMS (job `sign`),
+# in the runtime-cell-release environment, the only place the release key
+# lives; a dispatched (dev) build is never signed, and cells refuse it.
+# Produces:
+#   - static linux/arm64 + linux/amd64 binaries and PROTOCOL (the hub
+#     protocol versions the cell speaks) with SHA256SUMS, an SPDX SBOM
+#     and a GitHub build-provenance attestation (for hosts that run the
+#     binaries directly);
+#   - one multi-arch image with every binary (the chart's `images.cell`),
+#     built once and pushed to two registries under the same digest:
+#       * AWS ECR, for Kodus-managed cells (OIDC role, no stored keys);
+#       * GHCR, ghcr.io/<owner>/kodus-runtime-cell, for self-hosted cells;
+#     with a BuildKit SBOM and max-mode provenance inside the image index,
+#     a keyless cosign signature and a GitHub provenance attestation in
+#     each registry. docs/runtime/cell-distribution.md says who pulls what;
+#   - the cell's image builder (apps/runtime-cell/builder-image), built first,
+#     both platforms, to the same two registries, signed and attested the
+#     same way. The cell pins it by digest (cmd/cell/config.go,
+#     defaultBuilderImage): the build is reproducible, and the release stops
+#     before the cell image when the digest it built is not the pinned one;
+#   - the microVM kit (apps/runtime-cell/microvm-kit), linux/amd64, to GHCR,
+#     signed and attested the same way, with the manifest digest the cell
+#     pins (-firecracker-kit-digest) in the run's summary.
+# Environment runtime-cell-release (GitHub settings, not this file): required
+# reviewers, deployments only from tags runtime-cell/v*, and the environment
+# secret RUNTIME_CELL_RELEASE_SIGNING_KEY (no repository secret of that name).
+# A tag ruleset on runtime-cell/v* keeps who can push such a tag narrow.
+# Repository variables (no values in this file; the run fails first without):
+#   RUNTIME_CELL_AWS_ROLE_ARN    IAM role GitHub OIDC assumes to push to ECR
+#   RUNTIME_CELL_AWS_REGION      region of the ECR repositories
+#   RUNTIME_CELL_ECR_REPOSITORY  ECR repository name (e.g. kodus-runtime-cell)
+#   RUNTIME_BUILDER_ECR_REPOSITORY  ECR repository of the builder image
+#                                (e.g. kodus-runtime-builder)
+# Never runs on pull requests: it needs id-token and registry write.
+on:
+    push:
+        tags:
+            - "runtime-cell/v*"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: runtime-cell-release-${{ github.ref }}
+    cancel-in-progress: false
+
+env:
+    MODULE: github.com/kodustech/kodus-ai/apps/runtime-cell
+    COMMANDS: cell egress resolver injector injector-admin observer reaper
+
+jobs:
+    meta:
+        name: Version and registry
+        runs-on: ubuntu-latest
+        outputs:
+            version: ${{ steps.v.outputs.version }}
+            image_tag: ${{ steps.v.outputs.image_tag }}
+            epoch: ${{ steps.v.outputs.epoch }}
+        steps:
+            - name: Registries are configured
+              env:
+                  ROLE_ARN: ${{ vars.RUNTIME_CELL_AWS_ROLE_ARN }}
+                  REGION: ${{ vars.RUNTIME_CELL_AWS_REGION }}
+                  ECR_REPOSITORY: ${{ vars.RUNTIME_CELL_ECR_REPOSITORY }}
+                  BUILDER_ECR_REPOSITORY: ${{ vars.RUNTIME_BUILDER_ECR_REPOSITORY }}
+              run: |
+                  failed=0
+                  if [ -z "$ROLE_ARN" ]; then
+                      echo "::error::Set the repository variable RUNTIME_CELL_AWS_ROLE_ARN: the IAM role (arn:aws:iam::<account>:role/<name>) whose trust policy admits this repository's OIDC token for refs/tags/runtime-cell/v* and that may push to the ECR repository."
+                      failed=1
+                  elif ! printf '%s' "$ROLE_ARN" | grep -Eq '^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$'; then
+                      echo "::error::RUNTIME_CELL_AWS_ROLE_ARN is not an IAM role ARN (arn:aws:iam::<12 digits>:role/<name>)."
+                      failed=1
+                  fi
+                  if [ -z "$REGION" ]; then
+                      echo "::error::Set the repository variable RUNTIME_CELL_AWS_REGION: the region of the ECR repository (e.g. us-east-1)."
+                      failed=1
+                  elif ! printf '%s' "$REGION" | grep -Eq '^[a-z]{2}(-[a-z]+)+-[0-9]$'; then
+                      echo "::error::RUNTIME_CELL_AWS_REGION '$REGION' is not an AWS region name."
+                      failed=1
+                  fi
+                  if [ -z "$ECR_REPOSITORY" ]; then
+                      echo "::error::Set the repository variable RUNTIME_CELL_ECR_REPOSITORY: the ECR repository name the cell image goes to (e.g. kodus-runtime-cell). The workflow does not create it."
+                      failed=1
+                  elif ! printf '%s' "$ECR_REPOSITORY" | grep -Eq '^[a-z0-9]+([._/-][a-z0-9]+)*$'; then
+                      echo "::error::RUNTIME_CELL_ECR_REPOSITORY '$ECR_REPOSITORY' is not an ECR repository name (lowercase, no registry host, no tag)."
+                      failed=1
+                  fi
+                  if [ -z "$BUILDER_ECR_REPOSITORY" ]; then
+                      echo "::error::Set the repository variable RUNTIME_BUILDER_ECR_REPOSITORY: the ECR repository name the cell's image builder goes to (e.g. kodus-runtime-builder), in the same region, pushable by the same role. The workflow does not create it."
+                      failed=1
+                  elif ! printf '%s' "$BUILDER_ECR_REPOSITORY" | grep -Eq '^[a-z0-9]+([._/-][a-z0-9]+)*$'; then
+                      echo "::error::RUNTIME_BUILDER_ECR_REPOSITORY '$BUILDER_ECR_REPOSITORY' is not an ECR repository name (lowercase, no registry host, no tag)."
+                      failed=1
+                  elif [ "$BUILDER_ECR_REPOSITORY" = "$ECR_REPOSITORY" ]; then
+                      echo "::error::RUNTIME_BUILDER_ECR_REPOSITORY must not be the cell's repository."
+                      failed=1
+                  fi
+                  exit "$failed"
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Version from the tag
+              id: v
+              env:
+                  REF_TYPE: ${{ github.ref_type }}
+                  REF_NAME: ${{ github.ref_name }}
+              run: |
+                  if [ "$REF_TYPE" = tag ]; then
+                      case "$REF_NAME" in
+                          runtime-cell/v[0-9]*) ;;
+                          *) echo "::error::tag $REF_NAME is not runtime-cell/vX.Y.Z"; exit 1 ;;
+                      esac
+                      version="${REF_NAME#runtime-cell/}"
+                      image_tag="${version#v}"
+                  else
+                      version="v0.0.0-dev+${GITHUB_SHA::12}"
+                      image_tag="sha-${GITHUB_SHA::12}"
+                  fi
+                  {
+                      echo "version=$version"
+                      echo "image_tag=$image_tag"
+                      # Reproducible image timestamps: the commit time, not now.
+                      echo "epoch=$(git log -1 --format=%ct)"
+                  } >> "$GITHUB_OUTPUT"
+
+    binaries:
+        name: Static binaries
+        needs: meta
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+            attestations: write
+        defaults:
+            run:
+                working-directory: apps/runtime-cell
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache: false # a release is built from a clean cache
+
+            - name: Build
+              env:
+                  VERSION: ${{ needs.meta.outputs.version }}
+                  CGO_ENABLED: "0"
+                  GOFLAGS: -mod=readonly
+              run: |
+                  set -eu
+                  go mod verify
+                  mkdir -p dist
+                  for arch in arm64 amd64; do
+                      for c in $COMMANDS; do
+                          GOOS=linux GOARCH=$arch go build -trimpath -buildvcs=true \
+                              -ldflags "-s -w -buildid= -X $MODULE/internal/version.Version=$VERSION -X $MODULE/internal/version.Commit=$GITHUB_SHA" \
+                              -o "dist/$c-linux-$arch" "./cmd/$c"
+                      done
+                  done
+                  # PROTOCOL: the hub protocol versions this release's cell speaks,
+                  # listed in SHA256SUMS like the binaries, so it is signed with them.
+                  # cell update refuses a release the hub it last reached would refuse.
+                  go run ./cmd/release-sign protocol -dir dist
+                  (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+
+            # Unsigned here: the release key is never in this job. A tag's
+            # signature is added by the job `sign`.
+
+            - name: SBOM (SPDX) of the Go module
+              uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+              with:
+                  path: apps/runtime-cell
+                  format: spdx-json
+                  output-file: apps/runtime-cell/dist/runtime-cell.spdx.json
+                  upload-artifact: false
+
+            - name: Build provenance
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-checksums: apps/runtime-cell/dist/SHA256SUMS
+
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: runtime-cell-${{ needs.meta.outputs.image_tag }}
+                  path: apps/runtime-cell/dist/
+                  if-no-files-found: error
+
+    # S-17 (a): an installed cell verifies the next release offline against
+    # the key pinned in internal/releasesig/keys. The key is an environment
+    # secret of runtime-cell-release, so only this job can read it, and only
+    # for a runtime-cell/v* tag push (the `if`, and the environment's own
+    # tag rule and required reviewers): a dispatch from any ref, a branch
+    # build or a workflow added on a branch never reaches it. A tag build
+    # without the key fails: a release no cell can verify is no release.
+    sign:
+        name: Sign SHA256SUMS and the release index (release tags only)
+        needs: [meta, binaries]
+        if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/runtime-cell/v')
+        runs-on: ubuntu-latest
+        environment: runtime-cell-release
+        permissions:
+            contents: read
+        defaults:
+            run:
+                working-directory: apps/runtime-cell
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache: false
+
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: runtime-cell-${{ needs.meta.outputs.image_tag }}
+                  path: apps/runtime-cell/dist
+
+            # The signing tool checks every file SHA256SUMS lists before it
+            # signs, and binds the signature to the release's name.
+            - name: Sign SHA256SUMS
+              env:
+                  SIGNING_KEY: ${{ secrets.RUNTIME_CELL_RELEASE_SIGNING_KEY }}
+                  VERSION: ${{ needs.meta.outputs.version }}
+                  MINIMUM: ${{ vars.RUNTIME_CELL_MINIMUM_RELEASE }}
+                  REVOKED: ${{ vars.RUNTIME_CELL_REVOKED_KEYS }}
+                  GOFLAGS: -mod=readonly
+              run: |
+                  set -eu
+                  if [ -z "$SIGNING_KEY" ]; then
+                      echo "::error::environment secret RUNTIME_CELL_RELEASE_SIGNING_KEY (environment runtime-cell-release) is not set: cells refuse an unsigned release (S-17)"
+                      exit 1
+                  fi
+                  key="$RUNNER_TEMP/release-signing.key"
+                  trap 'rm -f "$key"' EXIT
+                  (umask 077 && printf '%s\n' "$SIGNING_KEY" > "$key")
+                  RUNTIME_CELL_RELEASE_SIGNING_KEY_FILE="$key" scripts/sign-release.sh sign dist "$VERSION"
+                  # The release index a cell requires (internal/releasesig/index.go): this
+                  # release is the latest; the floor and the revoked keys are repository
+                  # variables, the floor this release when unset. Valid 90 days.
+                  RUNTIME_CELL_RELEASE_SIGNING_KEY_FILE="$key" scripts/sign-release.sh index dist "$VERSION" "${MINIMUM:-$VERSION}" 90 "${REVOKED:-}"
+
+            # The same artifact, now with SHA256SUMS.sig next to what it signs.
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: runtime-cell-${{ needs.meta.outputs.image_tag }}
+                  path: apps/runtime-cell/dist/
+                  if-no-files-found: error
+                  overwrite: true
+
+    # The cell's image builder. Reproducible: the base images and BuildKit's
+    # commit are pinned in its Dockerfile, the BuildKit that builds it is pinned
+    # here, its timestamps are BuildKit's release commit time, and no
+    # attestation goes inside its index (they are pushed next to it). So the
+    # digest it builds is the one the cell pins, or the release stops here.
+    builder:
+        name: Image builder to ECR and GHCR, pinned digest, signatures
+        needs: meta
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+            id-token: write
+            attestations: write
+        outputs:
+            digest: ${{ steps.build.outputs.digest }}
+        env:
+            TAG: ${{ needs.meta.outputs.image_tag }}
+            ECR_REPOSITORY: ${{ vars.RUNTIME_BUILDER_ECR_REPOSITORY }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: The digest the cell pins
+              id: pin
+              run: |
+                  set -eu
+                  pinned="$(sed -nE 's/^const defaultBuilderImage = "[^"@]+@(sha256:[a-f0-9]{64})"$/\1/p' apps/runtime-cell/cmd/cell/config.go)"
+                  [ -n "$pinned" ] || { echo "::error::apps/runtime-cell/cmd/cell/config.go has no defaultBuilderImage pinned by digest."; exit 1; }
+                  echo "digest=$pinned" >> "$GITHUB_OUTPUT"
+
+            - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+              with:
+                  driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+
+            - name: AWS credentials (OIDC)
+              uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0 (MIT)
+              with:
+                  role-to-assume: ${{ vars.RUNTIME_CELL_AWS_ROLE_ARN }}
+                  aws-region: ${{ vars.RUNTIME_CELL_AWS_REGION }}
+                  role-session-name: runtime-builder-release-${{ github.run_id }}
+                  mask-aws-account-id: true
+
+            - name: Log in to ECR
+              id: ecr
+              uses: aws-actions/amazon-ecr-login@19d944daaa35f0fa1d3f7f8af1d3f2e5de25c5b7 # v2.1.4 (MIT)
+
+            - name: Mask the ECR registry
+              env:
+                  ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+              run: echo "::add-mask::$ECR_REGISTRY"
+
+            - name: Log in to GHCR
+              uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Image names
+              id: names
+              env:
+                  ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+                  OWNER: ${{ github.repository_owner }}
+              run: |
+                  owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+                  {
+                      echo "ecr=${ECR_REGISTRY}/${ECR_REPOSITORY}"
+                      echo "ghcr=ghcr.io/${owner}/kodus-runtime-builder"
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Build and push
+              id: build
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              env:
+                  # BuildKit v0.34.0's commit time (builder-image/Dockerfile),
+                  # never this repository's: the digest must not move with it.
+                  SOURCE_DATE_EPOCH: "1791400699"
+              with:
+                  context: apps/runtime-cell/builder-image
+                  file: apps/runtime-cell/builder-image/Dockerfile
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ${{ steps.names.outputs.ecr }}:${{ env.TAG }}
+                      ${{ steps.names.outputs.ghcr }}:${{ env.TAG }}
+                  sbom: false
+                  provenance: false
+                  outputs: type=image,push=true,rewrite-timestamp=true
+                  no-cache: true
+                  pull: true
+
+            - name: The pinned digest, in both registries
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  PINNED: ${{ steps.pin.outputs.digest }}
+                  ECR_IMAGE: ${{ steps.names.outputs.ecr }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  set -eu
+                  if [ "$DIGEST" != "$PINNED" ]; then
+                      echo "::error::The builder image built as $DIGEST; cmd/cell/config.go pins $PINNED. Nothing is signed and no cell image is published. Find what moved (builder-image/README.md), set defaultBuilderImage to the digest a reproducible build gives, and tag again."
+                      exit 1
+                  fi
+                  for ref in "${ECR_IMAGE}:${TAG}" "${GHCR_IMAGE}:${TAG}"; do
+                      got="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest)"
+                      if [ "$got" != "$DIGEST" ]; then
+                          echo "::error::$ref resolves to $got, the build pushed $DIGEST. Refusing to sign two different images."
+                          exit 1
+                      fi
+                  done
+
+            - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+            - name: Sign the digest in both registries
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  ECR_IMAGE: ${{ steps.names.outputs.ecr }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  set -eu
+                  cosign sign --yes "${ECR_IMAGE}@${DIGEST}"
+                  cosign sign --yes "${GHCR_IMAGE}@${DIGEST}"
+
+            # Provenance next to the image, not inside its index: inside, it
+            # would change the digest on every run.
+            - name: Provenance attestation (ECR)
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-name: ${{ steps.names.outputs.ecr }}
+                  subject-digest: ${{ steps.build.outputs.digest }}
+                  push-to-registry: true
+
+            - name: Provenance attestation (GHCR)
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-name: ${{ steps.names.outputs.ghcr }}
+                  subject-digest: ${{ steps.build.outputs.digest }}
+                  push-to-registry: true
+
+            - name: Summary
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  {
+                      echo "### Runtime image builder ${TAG}"
+                      echo
+                      echo "Digest: \`${DIGEST}\` (the cell's default \`-gvisor-builder-image\`, same in both registries)."
+                      echo
+                      echo "- Self-hosted: \`${GHCR_IMAGE}@${DIGEST}\`"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+    image:
+        name: Multi-arch image to ECR and GHCR, SBOM, provenance, signatures
+        # A cell whose default builder is not in the registries is not published.
+        needs: [meta, builder]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write # push to GHCR with GITHUB_TOKEN
+            id-token: write # OIDC for the AWS role and keyless cosign
+            attestations: write # GitHub provenance attestation per registry
+        outputs:
+            digest: ${{ steps.build.outputs.digest }}
+            ghcr_image: ${{ steps.out.outputs.ghcr_image }}
+        env:
+            TAG: ${{ needs.meta.outputs.image_tag }}
+            ECR_REPOSITORY: ${{ vars.RUNTIME_CELL_ECR_REPOSITORY }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+            # ECR: short-lived credentials from the role, nothing stored.
+            - name: AWS credentials (OIDC)
+              uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0 (MIT)
+              with:
+                  role-to-assume: ${{ vars.RUNTIME_CELL_AWS_ROLE_ARN }}
+                  aws-region: ${{ vars.RUNTIME_CELL_AWS_REGION }}
+                  role-session-name: runtime-cell-release-${{ github.run_id }}
+                  mask-aws-account-id: true
+
+            - name: Log in to ECR
+              id: ecr
+              uses: aws-actions/amazon-ecr-login@19d944daaa35f0fa1d3f7f8af1d3f2e5de25c5b7 # v2.1.4 (MIT)
+
+            # The registry host carries the account id; this repository's logs
+            # are public. Masked values never leave the job as outputs, so the
+            # ECR reference is rebuilt from vars where it is needed.
+            - name: Mask the ECR registry
+              env:
+                  ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+              run: echo "::add-mask::$ECR_REGISTRY"
+
+            - name: Log in to GHCR
+              uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Image names
+              id: names
+              env:
+                  ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+                  OWNER: ${{ github.repository_owner }}
+              run: |
+                  owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+                  {
+                      echo "ecr=${ECR_REGISTRY}/${ECR_REPOSITORY}"
+                      echo "ghcr=ghcr.io/${owner}/kodus-runtime-cell"
+                  } >> "$GITHUB_OUTPUT"
+
+            # One build, one index: both tags point at the same manifest list,
+            # its SBOM and provenance attestations included, so the digest is
+            # the same in both registries.
+            - name: Build and push
+              id: build
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              env:
+                  SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.epoch }}
+              with:
+                  context: apps/runtime-cell
+                  file: apps/runtime-cell/Dockerfile
+                  platforms: linux/arm64,linux/amd64
+                  build-args: |
+                      RELEASE_VERSION=${{ needs.meta.outputs.version }}
+                      RELEASE_COMMIT=${{ github.sha }}
+                  tags: |
+                      ${{ steps.names.outputs.ecr }}:${{ env.TAG }}
+                      ${{ steps.names.outputs.ghcr }}:${{ env.TAG }}
+                  labels: |
+                      org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+                      org.opencontainers.image.revision=${{ github.sha }}
+                      org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+                  sbom: true
+                  provenance: mode=max
+                  outputs: type=image,push=true,rewrite-timestamp=true
+                  no-cache: true
+
+            - name: Same digest in both registries
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  ECR_IMAGE: ${{ steps.names.outputs.ecr }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  set -eu
+                  for ref in "${ECR_IMAGE}:${TAG}" "${GHCR_IMAGE}:${TAG}"; do
+                      got="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest)"
+                      if [ "$got" != "$DIGEST" ]; then
+                          echo "::error::$ref resolves to $got, the build pushed $DIGEST. Refusing to sign two different images."
+                          exit 1
+                      fi
+                  done
+
+            - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+            # Keyless: the signature binds the digest to this workflow's OIDC
+            # identity; a signature lives next to the image, so each registry
+            # gets its own. docs/runtime/cell-distribution.md says how to verify.
+            - name: Sign the digest in both registries
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  ECR_IMAGE: ${{ steps.names.outputs.ecr }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  set -eu
+                  cosign sign --yes "${ECR_IMAGE}@${DIGEST}"
+                  cosign sign --yes "${GHCR_IMAGE}@${DIGEST}"
+
+            # Provenance as a GitHub attestation, pushed next to the image in
+            # each registry (`gh attestation verify oci://...`), on top of the
+            # BuildKit provenance already inside the index.
+            - name: Provenance attestation (ECR)
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-name: ${{ steps.names.outputs.ecr }}
+                  subject-digest: ${{ steps.build.outputs.digest }}
+                  push-to-registry: true
+
+            - name: Provenance attestation (GHCR)
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-name: ${{ steps.names.outputs.ghcr }}
+                  subject-digest: ${{ steps.build.outputs.digest }}
+                  push-to-registry: true
+
+            - name: Digest for the deployments
+              id: out
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+                  REGION: ${{ vars.RUNTIME_CELL_AWS_REGION }}
+              run: |
+                  echo "ghcr_image=${GHCR_IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+                  {
+                      echo "### Runtime cell image ${TAG}"
+                      echo
+                      echo "Digest: \`${DIGEST}\` (same in both registries)."
+                      echo
+                      echo "- Kodus cloud: \`<account>.dkr.ecr.${REGION}.amazonaws.com/${ECR_REPOSITORY}@${DIGEST}\`"
+                      echo "- Self-hosted: \`${GHCR_IMAGE}@${DIGEST}\`"
+                      echo
+                      echo "kodus-installer charts/kodus-runtime values, self-hosted:"
+                      echo
+                      echo '```yaml'
+                      echo "images:"
+                      echo "  cell: ${GHCR_IMAGE}@${DIGEST}"
+                      echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+    # The microVM kit for the firecracker backend: firecracker and the jailer
+    # by checksum, the guest kernel built from kernel.org, the two base root
+    # file systems. Self-hosted pulls it from GHCR; its manifest digest is
+    # what a cell pins.
+    microvm-kit:
+        name: microVM kit to GHCR, signature, manifest digest
+        needs: meta
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+            id-token: write
+            attestations: write
+        env:
+            TAG: ${{ needs.meta.outputs.image_tag }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+              with:
+                  driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+
+            - name: Log in to GHCR
+              uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Image name
+              id: names
+              env:
+                  OWNER: ${{ github.repository_owner }}
+              run: |
+                  owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+                  echo "ghcr=ghcr.io/${owner}/kodus-runtime-microvm-kit" >> "$GITHUB_OUTPUT"
+
+            - name: Build and push
+              id: build
+              env:
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  set -eu
+                  docker buildx bake runtime-microvm-kit \
+                      --set "runtime-microvm-kit.tags=${GHCR_IMAGE}:${TAG}" \
+                      --set 'runtime-microvm-kit.output=type=image,push=true,rewrite-timestamp=true' \
+                      --metadata-file meta.json
+                  digest="$(jq -r '."runtime-microvm-kit"."containerimage.digest"' meta.json)"
+                  case "$digest" in sha256:*) ;; *) echo "::error::no image digest in the bake metadata"; exit 1 ;; esac
+                  # The same build again, from the cache, as files: the manifest
+                  # digest the cell pins, checked by the kit's own verifier.
+                  docker buildx bake runtime-microvm-kit --set 'runtime-microvm-kit.output=type=local,dest=kit-out'
+                  echo "digest=$digest" >> "$GITHUB_OUTPUT"
+                  echo "manifest=$(cat kit-out/kit/DIGEST)" >> "$GITHUB_OUTPUT"
+
+            - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+            - name: Sign the digest
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: cosign sign --yes "${GHCR_IMAGE}@${DIGEST}"
+
+            - name: Provenance attestation
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-name: ${{ steps.names.outputs.ghcr }}
+                  subject-digest: ${{ steps.build.outputs.digest }}
+                  push-to-registry: true
+
+            - name: Summary
+              env:
+                  DIGEST: ${{ steps.build.outputs.digest }}
+                  MANIFEST: ${{ steps.build.outputs.manifest }}
+                  GHCR_IMAGE: ${{ steps.names.outputs.ghcr }}
+              run: |
+                  {
+                      echo "### Runtime microVM kit ${TAG}"
+                      echo
+                      echo "- Artifact: \`${GHCR_IMAGE}@${DIGEST}\`"
+                      echo "- Manifest digest (\`-firecracker-kit-digest\`): \`${MANIFEST}\`"
+                  } >> "$GITHUB_STEP_SUMMARY"

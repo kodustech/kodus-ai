@@ -30,6 +30,9 @@ const APP_DIR = path.join(__dirname, "..", "..", "app", "(app)");
 const ROUTELESS_RESOURCES = new Set<string>([
     "KodyRules", // shown inside code-review / library pages
     "IssuesSettings", // shown inside the issues page
+    // Opened from the Run page; its page (/runtime/runs/:runId/preview) sits
+    // under the RuntimeRun routes and the API checks the repo scope.
+    "RuntimePreview",
 ]);
 
 // Routes that, by design, only the OWNER reaches (canAccessRoute early-returns

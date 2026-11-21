@@ -23,7 +23,10 @@ export function RightSidebar({
     isCompleted,
     onJumpToIssue,
     activeIssueId,
+    top,
 }: {
+    /** Cards above the findings (the Kody Runtime card). */
+    top?: React.ReactNode;
     pr?: PrInfo;
     issues: ReviewIssue[];
     isCompleted: boolean;
@@ -43,6 +46,7 @@ export function RightSidebar({
 
     return (
         <aside className="space-y-3">
+            {top}
             {isCompleted &&
                 groups.map((group) => (
                     <SeverityGroup

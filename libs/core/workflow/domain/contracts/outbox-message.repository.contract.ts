@@ -2,6 +2,8 @@ import { OutboxMessage } from '../interfaces/outbox-message.interface';
 
 export interface IOutboxMessageRepository {
     create(message: OutboxMessage, transactionManager?: unknown): Promise<any>;
+    /** Every row commits together; an error leaves no message of this batch visible to the relay. */
+    createBatch(messages: OutboxMessage[]): Promise<any[]>;
     claimBatch(limit: number, lockedBy: string): Promise<any[]>;
     markAsSent(messageId: string): Promise<void>;
     markAsFailed(

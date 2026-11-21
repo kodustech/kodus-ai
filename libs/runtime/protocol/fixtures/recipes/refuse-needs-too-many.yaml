@@ -1,0 +1,19 @@
+# At most nine other repositories.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: api
+  expose:
+    - { service: api, port: 3000, kind: http }
+  needs:
+    - { repo: acme/service-1 }
+    - { repo: acme/service-2 }
+    - { repo: acme/service-3 }
+    - { repo: acme/service-4 }
+    - { repo: acme/service-5 }
+    - { repo: acme/service-6 }
+    - { repo: acme/service-7 }
+    - { repo: acme/service-8 }
+    - { repo: acme/service-9 }
+    - { repo: acme/service-10 }

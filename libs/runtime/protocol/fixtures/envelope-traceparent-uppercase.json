@@ -1,0 +1,8 @@
+{
+  "name": "envelope-traceparent-uppercase",
+  "frame": "{\"v\":1,\"id\":\"6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b\",\"cellId\":\"cell-dev-1\",\"claimId\":\"claim-1\",\"traceparent\":\"00-0AF7651916CD43DD8448EB211C80319C-B7AD6B7169203331-01\",\"type\":\"claim.renew\",\"body\":{\"leaseExpiresAt\":\"2026-10-30T12:30:00Z\"}}",
+  "expect": {
+    "ok": false,
+    "code": "invalid_envelope"
+  }
+}
