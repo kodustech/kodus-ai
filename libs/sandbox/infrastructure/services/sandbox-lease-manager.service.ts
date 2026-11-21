@@ -485,7 +485,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 `the deployment cap of ${gate.maxConcurrent} sandboxes`,
             );
         }
-        if (failed?.outcome === 'error') throw (failed as { error: unknown }).error;
+        if (failed?.outcome === 'error') throw (failed as unknown as { error: unknown }).error;
         if (failed?.outcome === 'cancelled') throw new SandboxInvalidatedError(prKey);
         throw new SandboxWaitAbortedError(prKey, waitedMs, 'a deployment capacity slot');
     }
