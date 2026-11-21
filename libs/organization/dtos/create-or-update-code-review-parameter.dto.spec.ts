@@ -217,10 +217,13 @@ describe('CreateOrUpdateCodeReviewParameterDto — conversation.implicitReplies'
     });
 
     it('rejects a key the nested conversation config does not declare', async () => {
-        await expect(
-            through({
-                conversation: { implicitReplies: false, answerEveryone: true },
-            }),
-        ).rejects.toThrow();
+        const response = await through({
+            conversation: { implicitReplies: false, answerEveryone: true },
+        }).catch((error) => error.getResponse());
+
+        // Before the nested DTO existed the pipe rejected the whole
+        // `conversation` object without ever naming the key inside it, so
+        // asserting the key is what pins the declaration.
+        expect(JSON.stringify(response)).toContain('answerEveryone');
     });
 });
