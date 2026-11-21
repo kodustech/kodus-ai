@@ -77,6 +77,7 @@ async function bootstrapHandlers(options: RabbitMQWrapperOptions) {
 }
 
 describe('security-scan queue isolation', () => {
+    // Guard, green before the fix too: the scan worker still consumes its queue.
     it('registers only its own subscriber even when review modules are imported', async () => {
         const createSubscriber = await bootstrapHandlers({
             enableConsumers: true,
