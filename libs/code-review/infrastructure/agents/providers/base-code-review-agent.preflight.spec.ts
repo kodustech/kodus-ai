@@ -71,6 +71,20 @@ describe('assertContextWindowFitsOverhead', () => {
             ).toThrow(AgentContextWindowTooSmallError);
         });
 
+        it('fits a 24K window only with the compact overhead', () => {
+            const compact = resolveAdaptiveProfile(24_000);
+            const check = (adaptiveProfile: any) => () =>
+                assertContextWindowFitsOverhead({
+                    input: { changedFiles: [], adaptiveProfile },
+                    contextWindow: 24_000,
+                    modelName: 'llama-24k',
+                });
+            expect(check(compact)).not.toThrow();
+            expect(check({ ...compact, compactPrompt: false })).toThrow(
+                AgentContextWindowTooSmallError,
+            );
+        });
+
         it('leaves out a callGraph the profile drops', () => {
             const light = resolveAdaptiveProfile(32_768);
             const check = (adaptiveProfile: any) => () =>
