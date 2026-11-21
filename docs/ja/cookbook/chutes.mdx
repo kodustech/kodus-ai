@@ -1,150 +1,106 @@
 ---
-title: "Chutes — オープンソースモデルのサブスクリプション上限付き推論"
-description: "DeepSeek、Llama、Qwen、MiniMaxなどをカバーするChutes AIのサブスクリプションプランをKodusに接続する方法を学びます。"
+title: "Chutes — オープンソースモデル向けサーバーレス推論"
+description: "DeepSeek、Kimi、GLM、Qwen などを提供する Chutes AI を Kodus に接続する方法を説明します。"
 icon: "cloud-bolt"
 ---
 
-## Chutes の動作方法
+## Chutes の仕組み
 
-Chutes AI はオープンソースモデル向けの分散型サーバーレスコンピュートプラットフォームです。**OpenAI 互換**の推論エンドポイントを公開し、各モデルの1トークンあたりの価格から計算される、同等のペイパートークン値の倍数として表される上限まで API の使用量をバンドルする**サブスクリプションプラン**を提供しています — Z.AI GLM Coding Plan と構造が似ていますが、完全なオープンソースカタログ（DeepSeek、Llama、Qwen、MiniMax、Kimi、その他多数）をカバーしています。
+Chutes AI は、オープンソースモデル向けの分散型サーバーレスコンピュートプラットフォームです。**OpenAI 互換**の推論エンドポイント `https://llm.chutes.ai/v1` を公開しており、利用料金はアカウント残高からトークン単位で課金されます。
 
-Kodus は他のすべてで使用しているのと同じ OpenAI 互換アダプターを通じて Chutes と通信するため、コードの変更は不要です — BYOK クレデンシャルだけです。
-
-## プランの概要
+Kodus は他のプロバイダーと同じ OpenAI 互換アダプターを通じて Chutes と通信するため、コードの変更は不要で、必要なのは BYOK の認証情報だけです。
 
 <Info>
-  価格とクォータルールは変更されます。ティアを選択する前に、[chutes.ai/pricing](https://chutes.ai/pricing) で必ず確認してください。
+  料金や課金条件は変更されます。アカウントにチャージする前に、必ず [chutes.ai/pricing](https://chutes.ai/pricing) で最新の情報を確認してください。
 </Info>
-
-2026年初頭以降、すべての Chutes サブスクリプションには、各モデルの100万トークンあたりの価格から計算された、ティアの**同等のペイアズユーゴー値の5倍**の使用量が含まれます。
-
-代表的なティア（価格設定ページで最新の数値を確認してください）：
-
-| ティア | 月額料金 | 備考 |
-| ---- | ----------- | ----- |
-| Base | 約$3/月 | エントリーティア；限られたモデル選択。 |
-| Standard | 約$10/月 | フロンティアモデル（DeepSeek V3、MiniMax M2.1 など）に必要。 |
-| Pro | 約$20+/月 | より大量のレビューのための高い 5× 上限。 |
-| Enterprise | カスタム | Chutes に問い合わせ。 |
-
-- 5× 上限は月次でリセットされ、ペイアズユーゴーで支払う同じトークン単価に対して計算されます。
-- 一部のモデルには **Standard 以上**が必要です — ベースティアはフロンティアコーディングモデルを含みません。
-- Chutes は一部のモデルに、信頼実行環境（機密コンピュート）バリアントを示す `-TEE` サフィックスを付けます。
 
 ### 推奨モデル
 
-Chutes は HuggingFace スタイルの `org/model` 識別子を使用し、一部は機密コンピュートバリアントの `-TEE` サフィックスが付きます：
+Chutes は HuggingFace 形式の `org/model` 識別子を使用します。末尾が `-TEE` のモデルも多くありますが、モデルが信頼実行環境（TEE）で動作するかどうかは、名前ではなくカタログの `confidential_compute` フラグで判断します。次のモデルは、カタログ上でツール呼び出しと構造化出力に対応しています。
 
-| モデル ID | 備考 |
-| -------- | ----- |
-| `deepseek-ai/DeepSeek-V3-0324-TEE` | フロンティアコーディングモデル；強力なエージェント動作。Standard 以上が必要。 |
-| `moonshotai/Kimi-K2-Instruct` | 長コンテキスト Kimi K2 — 大きな PR に最適。 |
-| `Qwen/Qwen3-Coder-480B-A35B-Instruct` | 専門コーダー。 |
-| `chutes/MiniMaxAI/MiniMax-M2.1-TEE` | 代替フロンティアオプション。 |
+| モデル ID | コンテキストウィンドウ |
+| -------- | -------------- |
+| `moonshotai/Kimi-K2.7-Code` | 約262k トークン |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | 約1M トークン |
+| `zai-org/GLM-5.3` | 約1M トークン |
+| `Qwen/Qwen3.5-397B-A17B-TEE` | 約262k トークン |
 
-ライブリストと現在の価格は [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) で確認できます。
+カタログは頻繁に更新されます。最新の一覧は [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) で確認できます。このページは公開されており、各モデルの価格、コンテキスト長、対応機能が表示されます。
 
 ## APIキーの作成
 
-<Warning>アクティブなサブスクリプション（またはペイアズユーゴー残高）を持つ Chutes アカウントが必要です。</Warning>
+<Warning>チャージ済みの残高がある Chutes アカウントが必要です。</Warning>
 
-1. [chutes.ai](https://chutes.ai) にアクセスしてアカウントを作成します。
-2. [chutes.ai/pricing](https://chutes.ai/pricing) でティアにサブスクライブするか、希望する場合はペイアズユーゴーを有効にします。
-3. 開発者コンソールを開いて APIキーを作成します。すぐにコピーします。
+1. [chutes.ai/auth/signup](https://chutes.ai/auth/signup) でアカウントを作成します。Google、GitHub、またはユーザー名で登録できます。
+2. Chutes アプリで残高をチャージします。課金は従量制で最低利用額はなく、支払い方法は [chutes.ai/pricing](https://chutes.ai/pricing) に記載されています。
+3. Chutes アプリで APIキーを作成します。キーは `cpk_` で始まります。パスワードと同様に厳重に保管してください。
 
 ## Kodus で Chutes を設定する
 
-### オプション1 — Kodus Cloud での BYOK（推奨）
+### オプション1 — AI providers ページ（推奨）
 
-1. サイドバーで **AI providers** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。
-2. Chutes には専用のタイルがありません — **Providers** タブで **Custom** の下にある **OpenAI-compatible** を選択します。デフォルトで実行するモデルとフォールバックのモデルは、後から **Routing** タブで設定します。
-3. フォームを入力します：
+[プロバイダーを接続する](/ja/how_to_use/byok#プロバイダーを接続する)の手順に従い、**Custom → OpenAI-compatible** を選びます。フォームには次の値を指定します。
 
-   | フィールド | 値 |
-   | --- | --- |
-   | **ベース URL** | `https://llm.chutes.ai/v1` |
-   | **モデル** | 例：`deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **API key** | Chutes APIキー |
-   | **Max concurrent requests** | `3〜5` が安全な出発点；上限に達しなければ上げる（Advanced settings 内） |
+| フィールド | 値 |
+| --- | --- |
+| **Key**（**API key** カード内） | Chutes の APIキー |
+| **Base URL** | `https://llm.chutes.ai/v1` |
+| **Model** | 一覧から選択するか、`zai-org/GLM-5.3` などの ID を入力 |
+| **Max concurrent requests** | 任意。**Advanced (optional)** → **Advanced settings** 内にあります。空欄のままにするか、Chutes がレート制限エラーを返す場合は上限を設定します |
 
-4. **Test & save** をクリックします。Kodus はエンドポイントをプローブし、成功時に設定を保存します。
-
-<Tip>
-  5× 上限はトークン単価から計算されます。高価なフロンティアモデルは小さなモデルよりも上限を速く消費します — ドル当たりのレビューを最大化したい場合は、定期的な PR には Chutes を安価なモデル（Llama、Qwen 小型バリアント）と組み合わせ、複雑なレビューには **Routing** タブでのエージェントごとのオーバーライド、またはリポジトリごとの **Code review model**（**Code review → General**）を通じてフロンティアモデルを節約してください。
-</Tip>
+**Test & save** をクリックし、[Routing](/ja/how_to_use/code_review/configs/routing) でデフォルトモデルとフォールバックモデルを選びます。
 
 <Note>
-  Chutes は分散コンピュートで実行されるため、コールドスタートと末尾レイテンシは専用プロバイダーよりも変動が大きくなります。ノードが遅いか月次上限に達した場合に Kodus がフェイルオーバーできるよう、**Routing** タブで OpenAI または Anthropic のモデルを **Fallback (optional)** として設定します。
+  Chutes がエラーを返した場合や残高が尽きた場合でもレビューを継続できるよう、他のプロバイダーのモデルを **Fallback model** に設定してください。
 </Note>
 
 ### オプション2 — セルフホスト（環境変数）
 
-固定モード（単一グローバルプロバイダー、組織ごとの BYOK なし）で Kodus を実行している場合は、API とワーカーコンテナの `.env` で Chutes を設定します：
+セルフホスト環境で `.env` から 1 つのモデルを指定するには、次のように設定します。
 
 ```env
-# Chutes configuration (Fixed Mode)
-API_LLM_PROVIDER_MODEL="deepseek-ai/DeepSeek-V3-0324-TEE"   # any model id from the catalog
-API_OPENAI_FORCE_BASE_URL="https://llm.chutes.ai/v1"
-API_OPEN_AI_API_KEY="your-chutes-api-key"
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://llm.chutes.ai/v1"
+API_LLM_API_KEY="your-chutes-api-key"
 ```
 
-<Note>
-  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**を優先してください — UI ベースのフローはクラウドと同じです。
-</Note>
-
-`.env` を編集後、API とワーカーコンテナを再起動して確認します：
-
-```bash
-docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
-```
-
-完全なセルフホストセットアップ（ドメイン、セキュリティキー、データベース、Webhook、リバースプロキシ）については、[汎用VMデプロイガイド](https://docs.kodus.io/ja/how_to_deploy/deploy_kodus/generic_vm) に従い、LLM ブロックのみ上記のものと置き換えてください。
+インストールガイドに従って[モデルの変更を反映してください](/ja/how_to_deploy/deploy_kodus/generic_vm#モデルの変更を反映する)。
 
 ## Chutes を選ぶ場合
 
-- **サブスクリプション価格で最も幅広いオープンソースカタログが欲しい場合** — フロンティア DeepSeek / MiniMax / Qwen を定額料金で予測可能な上限付きで使用。
-- **機密コンピュートが重要な場合** — Chutes はコンプライアンス体制で必要な場合に信頼実行環境内で実行される `-TEE` バリアントを提供。
-- **低〜中程度のボリュームで実行しており**、安価なティアの 5× PAYG 上限内に収まる場合。
+- **オープンソースモデルを 1 つのエンドポイントで利用したい場合**：DeepSeek、Kimi、GLM、Qwen などを利用できます。
+- **機密コンピュートを重視する場合**：カタログで `confidential_compute: true` と示されたモデルは信頼実行環境内で動作します。コンプライアンス要件で必要な場合に有用です。
 
-モデルごとの上限計算なしにシンプルな定額サブスクリプションが欲しい場合は Synthetic を選択してください。特に GLM ファミリーが好みのモデルの場合は Z.AI を選択してください。
+定額のサブスクリプションを希望する場合は Synthetic を、特に GLM ファミリーを使いたい場合は Z.AI を選択してください。
 
 ## トラブルシューティング
 
 <AccordionGroup>
-  <Accordion title="モデルが上位ティアを必要とする">
-    - フロンティアモデル（DeepSeek V3、MiniMax M2.1、一部 Qwen バリアント）は 2026年2月以降 Standard ティア以上にゲートされています。
-    - アップグレードするか、現在のティアで利用可能なモデル（小型 Llama または Qwen バリアント）を選択してください。
-  </Accordion>
-
-  <Accordion title="月次 5× 上限に達した">
-    - Chutes ダッシュボードで現在の使用量を確認します。
-    - 上限を延ばすために一時的により安価なモデルに切り替えるか、ティアをアップグレードします。
-    - 上限に達している間もレビューが継続されるよう、**Routing** タブで **Fallback (optional)** モデルを設定します。
-  </Accordion>
-
   <Accordion title="401 / 認証エラー">
-    - Chutes ダッシュボードでキーがアクティブでサブスクリプションが最新であることを確認します。
-    - `.env` の値に末尾のスペースや引用符がないことを確認します。
+    - Chutes ダッシュボードでキーが有効であり、アカウントに残高があることを確認します。
+    - `.env` の値に末尾のスペースや引用符が含まれていないことを確認します。
   </Accordion>
 
   <Accordion title="モデルが見つからない">
-    - Chutes は `org/model` 形式を使用し、一部のバリアントは `-TEE`（機密コンピュート）で終わります。[llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) で正確な大文字小文字を確認してください。
+    - Chutes は `org/model` 形式を使用し、一部のバリアントは末尾が `-TEE` です。[llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) から、大文字小文字を含めて ID を正確にコピーしてください。
+    - モデルは随時追加・終了されます。以前は使えていたモデル ID が一覧から消えることがあります。
   </Accordion>
 
-  <Accordion title="遅いまたは不安定なレイテンシ">
-    - Chutes は分散コンピュートで実行されるため、末尾レイテンシは専用クラウドより高くなります。
-    - レイテンシに敏感なレビューには専用プロバイダーを優先し、夜間またはバッチレビュージョブに Chutes を予約するか、**Routing** で高速プロバイダーを **Model for all tasks** として、Chutes を **Fallback (optional)** として設定します。
+  <Accordion title="応答が遅い、またはレート制限エラーが発生する">
+    - **Code review → Routing** で、他のプロバイダーのモデルを **Fallback model** に設定します。
+    - **Advanced (optional)** → **Advanced settings** の **Max concurrent requests** を下げます。
   </Accordion>
 
   <Accordion title="接続エラー">
-    - サーバーが `llm.chutes.ai` に到達できることを確認します。
-    - API とワーカーのログで正確な上流エラーを確認します。
+    - サーバーから `llm.chutes.ai` に到達できることを確認します。
+    - API とワーカーのログで、上流の正確なエラーを確認します。
   </Accordion>
 </AccordionGroup>
 
 ## 関連リンク
 
-- [Chutes 価格](https://chutes.ai/pricing)
+- [Chutes の料金](https://chutes.ai/pricing)
 - [Chutes API リファレンス](https://chutes.ai/docs/api-reference/overview)
 - [ライブモデルカタログ](https://llm.chutes.ai/v1/models)
 - [BYOK の概要](/ja/how_to_use/byok)

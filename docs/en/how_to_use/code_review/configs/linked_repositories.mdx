@@ -3,9 +3,22 @@ title: "Linked Repositories"
 description: "Let Kody read sibling repositories as context during review — for cross-repo contracts, and for code your repository depends on but doesn't contain."
 ---
 
-Linked Repositories let Kody read other repositories of your organization as **read-only context** while reviewing a pull request. Without it, the review sees exactly one thing: the repository under review, checked out at the PR's head. Anything that lives in another repository — a service you call, a library you import, a git submodule — is invisible.
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-Available on **Teams and Enterprise** plans. Configured **per repository** — there is no global default, because relationships are directional: linking `frontend → backend-api` means *reviews of `frontend`* may consult `backend-api`, not the other way around. Link both directions explicitly if both teams want the check.
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Available on Kodus Cloud, including the trial.">
+    <Badge icon="cloud" stroke>Teams &amp; Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requires an Enterprise license.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+Linked Repositories let Kody read other repositories of your organization as **read-only context** while reviewing a pull request. Without it, the review sees exactly one thing: the repository under review, checked out at the PR's head. Anything that lives in another repository — a service you call, a library you import — is invisible.
+
+Link up to three connected repositories per review repository.
+
+Links are directional and configured per repository. Linking `frontend → backend-api` gives Kody access to `backend-api` when it reviews `frontend`. Add the reverse link if both repositories need the check.
 
 ## When you need it
 
@@ -13,12 +26,12 @@ Three situations, all common, all invisible to a single-repo review:
 
 1. **Producer/consumer contract breakage.** The backend renames an API field and the frontend still reads the old one; a producer adds an enum value no consumer handles; writer and reader derive the same cache key differently. The contract is split across two repos and enforced by nothing.
 
-2. **The code your repo depends on is not in your repo.** Git submodules, vendored internal packages, shared libraries pulled at build time. The review clones your repository *without submodules* and *without fetching packages*, so a submoduled or build-time dependency is an empty directory (or an import the agent can't follow) during review. If your canonical types, rules, or clients live in such a repo, linking it is the only way the review can read them.
+2. **The code your repo depends on is not in your repo.** Vendored internal packages, shared libraries pulled at build time, git submodules. The review *does not fetch packages*, so a build-time dependency is an import the agent can't follow. It fetches a git submodule only when the submodule is already declared on the PR's base branch, lives on the same Git host and is not nested inside another submodule, and only within a time limit. Any other submodule is an empty directory during review. If your canonical types, rules, or clients live in such a repo, linking it is the way to make them readable.
 
 3. **The same business rule reimplemented per channel or service.** Pricing, availability, validation, order-state transitions that exist once in a canonical place and get copied, approximately, elsewhere. Linking the canonical repo lets the agent compare against the source of truth instead of guessing.
 
 <Note>
-**What the review already sees without this feature:** the full repository under review (not just the diff) at the PR's head commit, plus the PR description. It can grep and read any file in that checkout. It cannot see other repositories, submodule contents, or installed dependencies.
+**What the review already sees without this feature:** the full repository under review (not just the diff) at the PR's head commit, plus the PR description. It can grep and read any file in that checkout. It cannot see other repositories, installed dependencies, or submodules it does not fetch.
 </Note>
 
 Linked repositories do **not** cover contracts that live outside your code — a third-party API's validation rules, for example, are not discoverable in any linked repository.
@@ -46,7 +59,7 @@ The review summary also shows what was consulted: **Additional context used:** `
 
 ## How it works
 
-When a pull request in a repository with linked repositories touches boundary surface, Kody's review agent can search and read the linked repositories — the same way it greps your own repo — to verify that both sides of a contract still agree. Linked repos are fetched lazily, only when the agent first reads them.
+When a pull request in a repository with linked repositories touches boundary surface, Kody's review agent can search and read the linked repositories — the same way it greps your own repo — to verify that both sides of a contract still agree. Linked repos are fetched lazily, only when the agent first reads them. [Custom agents](/en/how_to_use/code_review/custom_agents) use the same links, but only as evidence for what their own instructions ask them to review.
 
 ### What arms the pass
 
@@ -59,7 +72,7 @@ Configuring a link is not enough on its own. Before the review, a cheap determin
 - status-, state-, error-code-like identifiers (`status`, `code`, `errorCode`, `kind`, `event`, `key`, …)
 - contract-ish file paths (`dto/`, `schema/`, `api/`, `types/`, `clients/`, `openapi`, `proto`, …)
 
-Internal-only refactors — renaming a private helper, moving code around, formatting — typically hit none of these, so the linked repositories are never fetched and the review runs exactly as a single-repo review. This is intentional: it keeps the pass off for diffs where it can't find anything.
+The check is permissive: one added line with a string literal, a property key or an export is enough. A diff that only deletes code, reorders imports, edits comments or renames a private helper hits none of these, so the linked repositories are never fetched and the review runs exactly as a single-repo review. This is intentional: it keeps the pass off for diffs where it can't find anything.
 
 ### When you see nothing
 
@@ -74,7 +87,7 @@ The first two are the feature working as designed. To confirm a link is wired co
 
 <Info>
 - Only repositories **already connected to the same Kodus organization** can be linked (Kody reuses your existing Git integration — no extra tokens).
-- Up to **3 linked repositories** per repository.
+- Up to **3 linked repositories** per repository. In `kodus-config.yml`, entries after the third are dropped.
 - Access is read-only. Kody never pushes to, comments on, or modifies a linked repository.
 - If a linked repository can't be fetched (permissions, timeout), the review continues normally without it.
 </Info>
@@ -83,7 +96,7 @@ The first two are the feature working as designed. To confirm a link is wired co
 
 ### In the web app
 
-In the sidebar, pick your repository in the scope picker at the top of the **Code review** group (if it isn't listed, create its settings first with **Add repository configuration**), then open **Code review → Linked repositories** (the page only exists at repository scope). Click **Add repository**, pick a repository in the **Add linked repository** dialog (only connected repos appear), and click **Save settings**. Each link has two optional fields, **Instructions · optional** and **Branch / ref pin · optional**, described below.
+In the sidebar, pick your repository in the scope picker at the top of the **Code review** group, then open **Code review → Linked repositories**. The page exists at repository scope only. Click **Add repository**, pick a repository in the **Add linked repository** dialog (only connected repositories appear), and click **Save settings**. Click a link to open its two optional fields, **Instructions** (up to 500 characters) and **Branch / ref pin**, described below. Remove a link with the **X** on its row. **Add repository** is disabled once there are three links.
 
 ### In `kodus-config.yml`
 
@@ -99,7 +112,7 @@ linkedRepositories:
 - `repository` (required) — full name of a repository connected to the organization (`owner/repo`).
 - `instructions`, `ref` — same meaning as the fields in the web app (below).
 
-How the file interacts with the web settings follows the normal [config-file rules](/en/how_to_use/code_review/configs/general#config-priority): the file is only read when `kodusConfigFileOverridesWebPreferences` is enabled for the repository (**kodus Config File Overrides Web Preferences** on **Code review → General** at repository scope), it is read from the repository's **default branch**, and the file's `linkedRepositories` list **replaces** the web list for that repository (the lists are not merged; `linkedRepositories: []` in the file turns the feature off). The plan requirement applies regardless of where the links are declared.
+How the file interacts with the web settings follows the normal [config-file rules](/en/how_to_use/code_review/configs/general#config-priority): the file is only read when **Prefer kodus-config.yml settings** is on for the repository (**Code review → General**), it is read from the repository's **default branch**, and the file's `linkedRepositories` list **replaces** the web list for that repository (the lists are not merged; `linkedRepositories: []` in the file turns the feature off). The plan requirement applies regardless of where the links are declared.
 
 ### Instructions
 
@@ -136,9 +149,9 @@ The cross-repo pass looks for **mismatches across the boundary** — a field nam
 
 Controls which branch ("ref") of the linked repository Kody reads. **Most teams leave this empty**: Kody then reads the branch with the same name as your PR's branch when it exists (so coordinated multi-repo changes see each other before merging), and falls back to the default branch otherwise.
 
-The full resolution order, first match wins:
+The full resolution order. Kody uses the first one it can fetch, so a pin that does not exist falls through to the next step:
 
-1. **PR description override** — mention the linked repo's branch or PR in the description of the PR under review (e.g. `org/backend-api#123` or `org/backend-api@feature-x`). One-off, highest priority. Only applies to repos already linked.
+1. **PR description override** — mention the linked repo's branch or PR in the title or description of the PR under review (e.g. `org/backend-api#123`, a PR URL, or `org/backend-api@feature-x`). One-off, highest priority. Only applies to repos already linked.
 2. **Config `ref` pin** (this field), if set.
 3. **Open PR on a matching branch** — an open pull request in the linked repo whose head branch matches your PR's head branch.
 4. **Same branch name** in the linked repo.
@@ -152,4 +165,4 @@ Set a **ref pin** (e.g. `main`, `develop`, `release/2.x`) when you want determin
 For a submodule, pin `ref` to the commit or branch your repo actually tracks if it lags behind the library's default branch — otherwise the review may compare against code you haven't pulled yet.
 </Tip>
 
-The review summary always shows which ref was actually used. For a walkthrough with examples, see [How to use linked repositories](/en/knowledge_base/how-to-use-linked-repositories-in-code-review).
+When a linked repository is read, the **Additional context used** line shows the ref that was actually used. For a walkthrough with examples, see [How to use linked repositories](/en/knowledge_base/how-to-use-linked-repositories-in-code-review).

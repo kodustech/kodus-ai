@@ -5,20 +5,20 @@ description: "Genera el Fine-Grained PAT de GitHub que Kody necesita para la rev
 
 ## Introducción al FGPAT
 
-Para permitir que Kody realice Revisiones de Código automáticas, necesitas generar un Token de Acceso Personal de Grano Fino (FGPAT) en GitHub. Este token permite a Kody acceder de forma segura a tus repositorios y realizar análisis de código de manera controlada.
+Para permitir que Kody realice Revisiones de Código automáticas, necesitas generar un Fine-Grained Personal Access Token (FGPAT) en GitHub. Este token permite a Kody acceder de forma segura a tus repositorios y realizar análisis de código de manera controlada.
 
 ## Verificar los Permisos de Acceso de Grano Fino
 
-Por defecto, un PAT de Grano Fino puede no tener acceso al contenido de tu organización. Asegura el acceso siguiendo estos pasos:
+Por defecto, un Fine-Grained PAT puede no tener acceso al contenido de tu organización. Asegura el acceso siguiendo estos pasos:
 
 ![title](/images/fgpat.png)
 
 1. Debes ser el propietario de la organización.
 1. Ve a la configuración de tu organización en GitHub:
-   - Puedes usar esta URL reemplazando con el nombre de tu organización: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>.
-1. En **Tokens de Acceso Personal de Grano Fino**, selecciona **"Permitir acceso mediante tokens de acceso personal de grano fino"** para habilitar el acceso seguro para Kody.
+   - Puedes usar esta URL reemplazando con el nombre de tu organización: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens</small>.
+1. En la barra lateral izquierda, en **Personal access tokens**, haz clic en **Settings**. En la pestaña **Fine-grained tokens**, selecciona **Allow access via personal access tokens** y haz clic en **Save**.
 
-## Generar el FGPAT (Token de Acceso Personal de Grano Fino)
+## Generar el FGPAT (Fine-Grained Personal Access Token)
 
 Sigue estos pasos para configurar el token correctamente:
 
@@ -26,40 +26,40 @@ Sigue estos pasos para configurar el token correctamente:
 
    - [Haz clic aquí para acceder a la página de configuración del perfil](https://github.com/settings/profile).
 
-2. **Navega a `Configuración de Desarrollador`**:
+2. **Navega a `Developer Settings`**:
 
-   - En la barra lateral izquierda, desplázate hacia abajo para encontrar `Configuración de Desarrollador` y haz clic en ella.
+   - En la barra lateral izquierda, desplázate hacia abajo para encontrar `Developer Settings` y haz clic en ella.
 
-3. **Ve a `Tokens de Acceso Personal`**:
+3. **Ve a `Personal Access Tokens`**:
 
-   - Aún en la barra lateral izquierda, bajo `Configuración de Desarrollador`, selecciona `Tokens de Acceso Personal`.
-   - Luego, haz clic en [Tokens de Grano Fino](https://github.com/settings/tokens?type=beta).
+   - Aún en la barra lateral izquierda, bajo `Developer Settings`, selecciona `Personal Access Tokens`.
+   - Luego, haz clic en [Fine-grained Tokens](https://github.com/settings/tokens?type=beta).
 
 4. **Genera un nuevo token**:
 
-   - Haz clic en el botón `Generar nuevo token`.
+   - Haz clic en el botón `Generate new token`.
 
 5. **Configura el nuevo token con las siguientes especificaciones**:
 
-   - **Nombre del Token**: Elige un nombre fácilmente identificable, como `kody_code_review`.
-   - **Fecha de Vencimiento**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
-   - **Propietario del Recurso**: Asegúrate de que la organización esté configurada como propietaria del token, ya que los repositorios del equipo están bajo la organización.
-   - **Acceso al Repositorio**: Selecciona **Todos los repositorios** para permitir el acceso del token a todos los repositorios.
-   - **Permisos**: Configura los siguientes permisos de solo lectura:
-   - **Repositorio**:
-     - **Actions**: Permiso de lectura.
+   - **Token Name**: Elige un nombre fácilmente identificable, como `kody_code_review`.
+   - **Expiration Date**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
+   - **Resource Owner**: Asegúrate de que la organización esté configurada como propietaria del token, ya que los repositorios del equipo están bajo la organización.
+   - **Repository Access**: Selecciona **All repositories** para permitir el acceso del token a todos los repositorios.
+   - **Permissions**: Configura los siguientes permisos:
+   - **Repository**:
      - **Commit statuses**: Permiso de lectura.
      - **Contents**: Permiso de lectura y escritura.
-     - **Deployments**: Permiso de lectura.
      - **Issues**: Permiso de lectura.
      - **Metadata**: Permiso de lectura.
      - **Pull requests**: Permiso de lectura y escritura.
      - **Webhooks**: Permiso de lectura y escritura.
-   - **Organización**:
+   - **Organization**:
      - **Members**: Permiso de lectura.
 
+   Kody no usa **Actions** ni **Deployments**; déjalos en **No access**.
+
 6. **Finaliza y guarda el token**:
-   - Después de configurar los permisos, haz clic en `Generar token`.
+   - Después de configurar los permisos, haz clic en `Generate token`.
    - Asegúrate de copiar el token generado y guardarlo de forma segura, ya que lo necesitarás para configurar Kody.
 
 ## Agregar el Token a Kody
@@ -68,5 +68,16 @@ Después de generar el token, pégalo en Kodus:
 
 - **Durante el onboarding**: en **Connect your Git tool**, elige la pestaña **Github** y haz clic en **Connect via token**.
 - **Más tarde**: en la barra lateral, abre **Repositories**, haz clic en **Github** en **Connect a provider**, cambia a la pestaña **Token**, pega el token y haz clic en **Validate and save**.
+- **Reemplazar un token**: en **Repositories**, haz clic en **Reset** en la tarjeta de **Github**, elige **Just reset the integration** y vuelve a conectar con el nuevo token como se describe arriba.
 
 Con un token, las revisiones se publican con tu perfil de GitHub en lugar del de Kody, y GitHub Checks / el estado del PR no están disponibles.
+
+## GitHub Enterprise Server (Beta)
+
+Para conectar GitHub Enterprise Server con un token, el workspace en Cloud necesita acceso a esta beta. En una instancia autoalojada de Kodus, configura `BETA_FEATURES=true`.
+
+1. Crea el token en tu instancia de GitHub Enterprise Server.
+2. En el diálogo de token de **Github**, activa **Self-hosted** e ingresa tu **GitHub Enterprise URL**, por ejemplo `https://github.your-company.com`. Debe empezar con `http://` o `https://`.
+3. Pega el token y haz clic en **Validate and save**.
+
+Kodus llama a la API de la instancia en `<GitHub Enterprise URL>/api/v3`. Si el token o la URL son incorrectos, el diálogo muestra **Invalid Token or GitHub Enterprise URL**.

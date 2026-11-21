@@ -1,44 +1,40 @@
 ---
 title: "Cómo compartir estándares de codificación entre repositorios"
-description: "Usa la herencia de reglas y las reglas a nivel de organización para mantener estándares de codificación coherentes en todos tus repositorios."
+description: "Usa reglas globales, la herencia de reglas y las fuentes de reglas globales para mantener los mismos estándares de codificación en todos tus repositorios."
 ---
 
-Cuando tienes múltiples repositorios, mantener la coherencia de los estándares de codificación es un desafío. Kodus admite la herencia de reglas para que puedas definir reglas una vez y aplicarlas en todos lados.
+Cuando tienes múltiples repositorios, mantener la coherencia de los estándares de codificación es un desafío. Kodus te permite definir reglas una vez y aplicarlas en todos lados.
 
-## Reglas a nivel de organización
+## Reglas globales
 
-Crea reglas a nivel de organización y se aplican automáticamente a todos los repositorios:
+Crea reglas con alcance **Global** y se aplican a todos los repositorios:
 
 1. Selecciona **Global** en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral y luego abre **Kody Rules**
-2. Crea tus reglas con **New rule** — se aplican a todos los repositorios de la organización
-3. Los repositorios individuales pueden heredar, anular o excluir reglas específicas
+2. Crea tus reglas con **New rule**, o agrégalas desde la [Rules Library](/es/how_to_use/code_review/configs/rules_library)
+3. Los repositorios y directorios las heredan
 
 ## Herencia de reglas
 
-Las reglas fluyen desde la organización → repositorio → directorio:
+Las reglas fluyen desde Global → repositorio → directorio:
 
-- Las **reglas de organización** se aplican en todos lados por defecto
-- Las **reglas de repositorio** pueden anular o extender las reglas de la organización
-- Las **reglas de directorio** pueden especializarse aún más para rutas específicas
+- Las **reglas Global** se aplican a todos los repositorios
+- Las **reglas de repositorio** se suman a las Global para ese repositorio
+- Las **reglas de directorio** se suman a ellas para los pull requests revisados con los ajustes de ese directorio
 
-Un repositorio puede **excluir** una regla heredada si no aplica a esa base de código.
+Un repositorio puede marcar una regla heredada como desactivada en su lista, y una regla puede marcarse como no heredable. Ambas acciones cambian cómo se lista la regla; una revisión sigue aplicando todas las reglas Global y de repositorio. Consulta [Herencia de Reglas](/es/how_to_use/code_review/configs/rules_inheritance).
 
-## Referencias entre repositorios
+## Mantén los estándares en un solo repositorio
 
-Usa `@repo:org/proyecto` en las instrucciones de la regla para referenciar archivos de otros repositorios:
+Si tus estándares viven en un repositorio dedicado, las [Fuentes de Reglas Globales](/es/how_to_use/code_review/configs/global_rule_sources) importan sus archivos de reglas como reglas globales y los actualizan cuando se mergea un pull request allí. No está disponible en el plan Free. Las reglas en la carpeta `.kody/rules` de cada proyecto (consulta [Reglas del Repositorio](/es/how_to_use/code_review/configs/repository_rules)) se aplican solo a ese proyecto.
 
-```
-Asegurarse de que los endpoints de la API sigan el patrón definido en @repo:team/api-standards.
-```
-
-Esto te permite mantener un repositorio central de estándares al que todas las reglas hacen referencia.
+Para gestionar los ajustes de revisión y las reglas de toda la organización desde un solo repositorio, usa la [Configuración Centralizada](/es/how_to_use/code_review/configs/centralized_config).
 
 ## Memorias en toda la organización
 
-Las Memorias con alcance de **nivel de organización** se aplican en todos los repositorios. Por ejemplo:
+Las Memorias con alcance de **organización** se aplican en todos los repositorios. Crea una con **New memory** en el alcance **Global**, o pídeselo a Kody en un comentario de PR:
 
 ```
-@kody remember: en todos los repositorios usamos el formato de ESLint flat config.
+@kody remember: across all repos, we use ESLint flat config format.
 ```
 
 Para más detalles, consulta [Herencia de Reglas](/es/how_to_use/code_review/configs/rules_inheritance).

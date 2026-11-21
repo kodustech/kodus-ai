@@ -1,91 +1,97 @@
 ---
-title: "Kodus 用于 Monorepo"
-description: "配置目录级规则、路径特定覆盖和规则继承，以在 monorepo 中获得精确的代码审查。"
+title: "Monorepo 中的 Kodus"
+description: "配置目录级规则、特定路径的覆盖设置和规则继承，在 monorepo 中获得精准的代码审查。"
 icon: "folder-tree"
 ---
 
 ## 挑战
 
-在 monorepo 中，不同的包有不同的标准。React 前端关注组件模式，NestJS 后端关注依赖注入，共享库关注 API 稳定性。一刀切的审查行不通。
+在 monorepo 中，不同的包有不同的标准。React 前端关心组件模式，NestJS 后端关心依赖注入，共享库关心 API 稳定性。一刀切的审查行不通。
 
 ## 策略概述
 
-Kodus 支持三个配置级别，自然映射到 monorepo：
+Kodus 支持三个配置层级，天然对应 monorepo：
 
-| 级别 | 适用于 | 示例 |
-|------|--------|------|
-| **Global** | 所有代码库 | "永远不要提交 `.env` 文件" |
-| **代码库** | 整个 monorepo | "使用约定式提交" |
-| **目录** | 特定包 | "React 组件必须使用 PascalCase" |
+| 层级 | 适用范围 | 示例 |
+|-------|-----------|---------|
+| **Global** | 所有仓库 | “永远不要提交 `.env` 文件” |
+| **Repository** | 该 monorepo | “使用 conventional commits” |
+| **Directory** | 特定的包 | “React 组件必须使用 PascalCase” |
 
-## 步骤 1 — 映射您的包
+## 步骤 1 — 梳理你的包
 
-识别 monorepo 中的不同区域及其审查需求：
+识别 monorepo 中不同的区域及其审查需求：
 
 ```
 monorepo/
 ├── apps/
-│   ├── web/          → React 规则、组件模式
-│   ├── api/          → NestJS 规则、架构边界
-│   └── mobile/       → React Native 规则
+│   ├── web/          → React rules, component patterns
+│   ├── api/          → NestJS rules, architecture boundaries
+│   └── mobile/       → React Native rules
 ├── libs/
-│   ├── shared/       → API 稳定性、破坏性变更检测
-│   └── ui/           → 设计系统合规
-└── infra/            → Terraform/IaC 规则
+│   ├── shared/       → API stability, breaking change detection
+│   └── ui/           → Design system compliance
+└── infra/            → Terraform/IaC rules
 ```
 
-## 步骤 2 — 创建目录级配置
+## 步骤 2 — 创建目录范围
 
-在侧边栏中，打开 **Code review** 分组顶部的范围选择器，选择 **Add repository configuration**。在 **Create repository settings** 中，**Select the target repository**（即该 monorepo），然后 **Select the target directories**（一个或多个包文件夹），并点击 **Create settings**。每个目录都会以缩进形式显示在范围选择器中对应代码库的下方 — 选择它即可进行配置。
+在 **Code review** 组顶部的范围选择器中选择该 monorepo，再次打开选择器并选择 **Add directory scope**。在 **Select directories** 下，选择一个或多个共享审查设置的包文件夹，然后点击 **Add directory scope**。每个目录范围会缩进显示在选择器中的仓库之下 — 选中它即可进行配置。
 
-每个目录可以有自己的：
-- **Kody 规则**（文件级和 PR 级）
-- **What to review**（启用哪些类别，以及发布建议的最低严重性）
-- **Ignored files**（位于 **General**）
+每个目录范围可以有自己的：
+- **Kody Rules**（文件级和 PR 级）
+- **What to review**（启用哪些类别，以及发布的最低严重级别）
+- **Custom agents**，会叠加到仓库的自定义 agent 之上
+- **Ignored files**（在 **General** 中）
+
+当 pull request 只涉及某个已配置的目录而不涉及其他已配置目录时，会使用该目录的设置。pull request 如何选择其设置，请参阅[目录级设置](/zh/how_to_use/code_review/configs/directory_level)。
 
 ## 步骤 3 — 编写有针对性的规则
 
-### 前端规则（范围：`apps/web/`）
+在 **Code review → Kody Rules** 的 **Review Rules** 标签页，点击 **New rule**。在目录范围创建的规则没有 **Path**，因此会应用于使用该目录范围设置审查的 pull request 的每个文件。涉及两个或更多目录范围、或不涉及任何目录范围的 pull request，会使用仓库的设置进行审查，此时**每个**目录范围的规则都会应用于其所有文件。请把目录规则写成在这种情况下依然成立，例如在指令中写明文件夹名称。请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。如需针对包的一部分，请在仓库范围创建规则并设置 **Path** glob。
+
+### 前端规则（范围：该 monorepo，带路径）
 
 ```
-名称：React 组件必须使用设计系统令牌
-执行模式：Per file
-路径：apps/web/src/components/**/*.tsx
-严重性：高
-说明：
-  检查 fileDiff 中的硬编码颜色、间距或字体大小。
-  组件必须从 @file:libs/ui/src/tokens.ts 导入令牌。
-  标记不来自令牌文件的任何十六进制颜色、像素值或字体大小。
+Rule name: React components must use design system tokens
+Execution mode: Per file
+Path: apps/web/src/components/**/*.tsx
+Severity: High
+Instructions:
+  Check fileDiff for hardcoded colors, spacing, or font sizes.
+  Components must import tokens from @file:libs/ui/src/tokens.ts.
+  Flag any hex color, pixel value, or font-size not from the token file.
 ```
 
-### 后端规则（范围：`apps/api/`）
+### 后端规则（范围：`apps/api/` 目录）
 
 ```
-名称：领域层不得从基础设施导入
-执行模式：Per file
-路径：apps/api/src/domain/**/*.ts
-严重性：严重
-说明：
-  检查 fileDiff 中任何来自 "../infrastructure"、
-  "../../infrastructure" 或包含 "/infrastructure/" 的路径的导入。
-  领域模块只能依赖其他领域模块和共享接口。
+Rule name: Domain layer must not import from infrastructure
+Execution mode: Per file
+Severity: Critical
+Instructions:
+  In files under apps/api/src/domain, check fileDiff for any import from
+  "../infrastructure", "../../infrastructure", or any path containing
+  "/infrastructure/". Domain modules must only depend on other
+  domain modules and shared interfaces.
 ```
 
-### 共享库规则（范围：`libs/shared/`）
+### 共享库规则（范围：`libs/shared/` 目录）
 
 ```
-名称：公共 API 更改需要变更集
-执行模式：Per PR
-严重性：高
-说明：
-  如果 pr_files_diff 修改了 libs/shared/src/index.ts 中的任何文件
-  或添加/删除了导出，检查 .changeset/ 目录中是否存在变更集文件。
-  如果缺少，标记为没有文档的潜在破坏性变更。
+Rule name: Public API changes require changeset
+Execution mode: Per PR
+Severity: High
+Instructions:
+  If pr_files_diff modifies any file in libs/shared/src/index.ts
+  or adds/removes exports, check that a changeset file exists
+  in the .changeset/ directory. If missing, flag it as a
+  potential breaking change without documentation.
 ```
 
-## 步骤 4 — 使用记忆处理跨领域约定
+## 步骤 4 — 用记忆处理跨领域约定
 
-某些约定适用于所有地方。将它们作为记忆教给 Kody：
+有些约定适用于所有地方。把它们作为记忆来传授：
 
 ```
 @kody remember: in this monorepo, all packages use ESM imports.
@@ -97,17 +103,19 @@ CommonJS require() is not allowed anywhere.
 Any breaking change requires a major version bump and a changeset.
 ```
 
-## 步骤 5 — 按目录设置严重性阈值
+## 步骤 5 — 按目录设置严重级别阈值
 
-高流量包可能需要更严格的过滤。在范围选择器中选择该目录，打开 **What to review**，并设置 **Minimum severity to post**：
+流量大的包可能需要更严格的过滤。在范围选择器中选择该目录，打开 **What to review**，设置 **Minimum severity to post**：
 
-- **apps/web/** — **Medium**（前端变化快）
-- **libs/shared/** — **Low/All**（稳定性重要）
-- **infra/** — **High**（少但关键）
+- **apps/web/** — **Medium**（前端迭代快）
+- **libs/shared/** — **Low/All**（稳定性很重要）
+- **infra/** — **High**（数量更少但更关键）
+
+只有开启 **Apply the threshold to Kody Rules** 时，该阈值才会应用于 Kody Rules。
 
 ## 步骤 6 — 忽略生成的路径
 
-添加 monorepo 特定的忽略以避免噪音：
+添加 monorepo 专用的忽略项以避免噪声：在 **Code review → General → Review scope** 中，点击 **Ignored files** 下的 **Edit**，或在 `kodus-config.yml` 中设置（仅当该仓库开启 **Prefer kodus-config.yml settings** 时才会读取）：
 
 ```yaml
 ignorePaths:
@@ -121,8 +129,8 @@ ignorePaths:
 
 ## 提示
 
-- 从每个目录 2-3 个规则开始，根据团队在审查中实际标记的内容进行扩展
-- 使用规则继承 — 组织级规则覆盖安全性，代码库级覆盖约定，目录级覆盖架构
-- 如果规则在一个包中触发过于频繁但在其他地方有效，从该规则中排除该目录而不是削弱规则
+- 每个目录从 2-3 条规则开始，再根据团队在审查中实际标记的内容逐步扩展
+- 使用规则继承 — 组织级规则覆盖安全，仓库级覆盖约定，目录级覆盖架构
+- 如果规则在某个包中触发过于频繁，请在创建规则的范围内缩小 **Path** 或重写规则。
 
-有关目录配置的更多信息，请参阅[目录级配置](/zh/how_to_use/code_review/configs/directory_level)。有关规则继承，请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。
+有关目录范围的更多信息，请参阅[目录级设置](/zh/how_to_use/code_review/configs/directory_level)。有关规则继承，请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。

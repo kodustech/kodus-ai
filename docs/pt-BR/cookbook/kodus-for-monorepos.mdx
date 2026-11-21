@@ -1,6 +1,6 @@
 ---
 title: "Kodus para monorepos"
-description: "Configure regras em nível de diretório, substituições específicas por caminho e herança de regras para obter revisões de código precisas em um monorepo."
+description: "Configure regras em nível de diretório, overrides específicos por caminho e herança de regras para obter code reviews precisos em um monorepo."
 icon: "folder-tree"
 ---
 
@@ -10,7 +10,7 @@ Em um monorepo, pacotes diferentes têm padrões diferentes. Seu frontend em Rea
 
 ## Visão geral da estratégia
 
-O Kodus suporta três níveis de configuração que se mapeiam naturalmente para um monorepo:
+A Kodus suporta três níveis de configuração que se encaixam naturalmente em um monorepo:
 
 | Nível | Aplica-se a | Exemplo |
 |-------|-------------|---------|
@@ -20,35 +20,40 @@ O Kodus suporta três níveis de configuração que se mapeiam naturalmente para
 
 ## Passo 1 — Mapeie seus pacotes
 
-Identifique as áreas distintas no seu monorepo e suas necessidades de revisão:
+Identifique as áreas distintas no seu monorepo e as necessidades de revisão de cada uma:
 
 ```
 monorepo/
 ├── apps/
-│   ├── web/          → Regras React, padrões de componentes
-│   ├── api/          → Regras NestJS, limites de arquitetura
-│   └── mobile/       → Regras React Native
+│   ├── web/          → React rules, component patterns
+│   ├── api/          → NestJS rules, architecture boundaries
+│   └── mobile/       → React Native rules
 ├── libs/
-│   ├── shared/       → Estabilidade de API, detecção de breaking changes
-│   └── ui/           → Conformidade com o design system
-└── infra/            → Regras Terraform/IaC
+│   ├── shared/       → API stability, breaking change detection
+│   └── ui/           → Design system compliance
+└── infra/            → Terraform/IaC rules
 ```
 
-## Passo 2 — Crie configs em nível de diretório
+## Passo 2 — Crie escopos de diretório
 
-Na barra lateral, abra o seletor de escopo no topo do grupo **Code review** e escolha **Add repository configuration**. Em **Create repository settings**, use **Select the target repository** (o monorepo), depois **Select the target directories** (uma ou mais pastas de pacote) e clique em **Create settings**. Cada diretório aparece recuado sob o repositório no seletor de escopo — selecione-o para configurá-lo.
+Escolha o monorepo no seletor de escopo no topo do grupo **Code review**, abra o seletor de novo e escolha **Add directory scope**. Em **Select directories**, escolha uma ou mais pastas de pacote que compartilham as mesmas configurações de revisão e clique em **Add directory scope**. Cada escopo de diretório aparece recuado sob o repositório no seletor — escolha-o para configurá-lo.
 
-Cada diretório pode ter seus próprios:
+Cada escopo de diretório pode ter seus próprios:
 - **Kody Rules** (em nível de arquivo e de PR)
 - **What to review** (quais categorias habilitar e a severidade mínima para publicar)
+- **Custom agents**, somados aos do repositório
 - **Ignored files** (em **General**)
+
+Um pull request usa as configurações de um diretório quando toca esse diretório configurado e nenhum outro diretório configurado. Veja [Configurações por diretório](/pt-BR/how_to_use/code_review/configs/directory_level) para saber como um pull request escolhe suas configurações.
 
 ## Passo 3 — Escreva regras direcionadas
 
-### Regras de frontend (escopo: `apps/web/`)
+Em **Code review → Kody Rules**, na aba **Review Rules**, clique em **New rule**. Uma regra criada em um escopo de diretório não tem **Path**, então se aplica a todos os arquivos de um pull request revisado com as configurações daquele escopo de diretório. Um pull request que toca dois ou mais escopos de diretório, ou nenhum, é revisado com as configurações do repositório, e aí as regras de **todos** os escopos de diretório se aplicam a todos os seus arquivos. Escreva as regras de diretório de modo que continuem valendo nesse caso, por exemplo citando a pasta nas instruções. Veja [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance). Para direcionar uma parte de um pacote, crie a regra no escopo do repositório com um glob em **Path**.
+
+### Regra de frontend (escopo: o monorepo, com um path)
 
 ```
-Name: React components must use design system tokens
+Rule name: React components must use design system tokens
 Execution mode: Per file
 Path: apps/web/src/components/**/*.tsx
 Severity: High
@@ -58,24 +63,23 @@ Instructions:
   Flag any hex color, pixel value, or font-size not from the token file.
 ```
 
-### Regras de backend (escopo: `apps/api/`)
+### Regra de backend (escopo: o diretório `apps/api/`)
 
 ```
-Name: Domain layer must not import from infrastructure
+Rule name: Domain layer must not import from infrastructure
 Execution mode: Per file
-Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
-  Check fileDiff for any import from "../infrastructure",
-  "../../infrastructure", or any path containing "/infrastructure/".
-  Domain modules must only depend on other domain modules
-  and shared interfaces.
+  In files under apps/api/src/domain, check fileDiff for any import from
+  "../infrastructure", "../../infrastructure", or any path containing
+  "/infrastructure/". Domain modules must only depend on other
+  domain modules and shared interfaces.
 ```
 
-### Regras de biblioteca compartilhada (escopo: `libs/shared/`)
+### Regra de biblioteca compartilhada (escopo: o diretório `libs/shared/`)
 
 ```
-Name: Public API changes require changeset
+Rule name: Public API changes require changeset
 Execution mode: Per PR
 Severity: High
 Instructions:
@@ -87,7 +91,7 @@ Instructions:
 
 ## Passo 4 — Use Memories para convenções transversais
 
-Algumas convenções se aplicam em todo lugar. Ensine-as como Memories:
+Algumas convenções valem para tudo. Ensine-as como Memories:
 
 ```
 @kody remember: in this monorepo, all packages use ESM imports.
@@ -101,15 +105,17 @@ Any breaking change requires a major version bump and a changeset.
 
 ## Passo 5 — Defina o limite de severidade por diretório
 
-Pacotes de alto tráfego podem precisar de filtros mais rígidos. Selecione o diretório no seletor de escopo, abra **What to review** e defina **Minimum severity to post**:
+Pacotes de alto tráfego podem precisar de filtros mais rígidos. Escolha o diretório no seletor de escopo, abra **What to review** e defina **Minimum severity to post**:
 
-- **apps/web/** — **Medium** (frontend evolui rápido)
+- **apps/web/** — **Medium** (o frontend anda rápido)
 - **libs/shared/** — **Low/All** (estabilidade importa)
-- **infra/** — **High** (menos, mas críticas)
+- **infra/** — **High** (menos, mas críticos)
+
+O limite só se aplica às Kody Rules quando **Apply the threshold to Kody Rules** está ativado.
 
 ## Passo 6 — Ignore caminhos gerados
 
-Adicione ignores específicos do monorepo para evitar ruído:
+Adicione ignores específicos do monorepo para evitar ruído: em **Code review → General → Review scope**, clique em **Edit** em **Ignored files**, ou defina-os no `kodus-config.yml` (lido só quando **Prefer kodus-config.yml settings** está ativado para o repositório):
 
 ```yaml
 ignorePaths:
@@ -123,8 +129,8 @@ ignorePaths:
 
 ## Dicas
 
-- Comece com 2-3 regras por diretório e expanda com base no que seu time realmente sinaliza nas revisões
+- Comece com 2-3 regras por diretório e expanda com base no que seu time realmente aponta nas revisões
 - Use herança de regras — regras em nível de organização cobrem segurança, nível de repositório cobre convenções, nível de diretório cobre arquitetura
-- Se uma regra disparar com muita frequência em um pacote, mas for válida nos demais, exclua esse diretório da regra em vez de enfraquecê-la
+- Se uma regra dispara com muita frequência em um pacote, restrinja o **Path** ou reescreva a regra no escopo onde ela foi criada.
 
-Para mais informações sobre configurações de diretório, consulte [Configuração em Nível de Diretório](/pt-BR/how_to_use/code_review/configs/directory_level). Para herança de regras, consulte [Herança de Regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance).
+Para saber mais sobre escopos de diretório, veja [Configurações por diretório](/pt-BR/how_to_use/code_review/configs/directory_level). Para herança de regras, veja [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance).

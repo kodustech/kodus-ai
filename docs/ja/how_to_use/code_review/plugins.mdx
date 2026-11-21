@@ -1,80 +1,108 @@
 ---
 title: "プラグイン"
-description: "プラグインは外部のビジネスコンテキストを Kody のレビューワークフローに直接取り込む方法です。"
+description: "チームのツールを MCP 経由で Kody に接続し、返信、ビジネスロジック検証、カスタムエージェントから読み取れるようにします。"
 tag: 'beta'
 ---
 
-<Callout icon="alien" iconType="regular">これはベータ機能です。まだ本番環境に対応しておらず、期待通りに動作しない場合があります。</Callout>
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-## 概要
+<div className="kodus-feature-badges">
+  <FeatureBadge id="beta" detail="Owner がプラグインをインストールして設定できます。Free とライセンスのないセルフホストでは、最大 3 個をインストールできます。">
+    <Badge icon="flask" color="orange" stroke>ベータ版</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="セルフホストでプラグインを使うには、MCP Manager の起動が必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+</div>
 
-プラグインにより、外部のビジネスコンテキストを Kody のレビューワークフローに直接取り込めます。Jira などのツールからのデータで Kody の理解を拡張し、フィードバックとアクションをチームのプロセスに沿ったものにします。
+プラグインは、ワークスペースに接続されたリモートの Model Context Protocol（MCP）サーバーです。チケットトラッカー、Wiki、エラーモニターなどが該当します。Kody はそこから読み取り、依頼されたときだけ操作を行います。
 
-## プラグインとは
+| 場所 | 動作 |
+| --- | --- |
+| `@kody` をメンションしたコメント | Kody はインストール済みのプラグインを呼び出し、同じスレッドで返信します。チケットの移動やルールの編集など、何かを変更するのは、コメントで求められたときだけです。 |
+| [ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation) | Kody は、プルリクエストが参照するタスクをトラッカーから読み取ります。 |
+| [カスタムエージェント](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp) | エージェントは、そのエージェント用にオンにしたプラグインから読み取ります。読み取りツールのみです。 |
 
-プラグインは Kodus がキュレートした Model Context Protocol（MCP）サーバーです。各プラグインは、Kody がプルリクエストで協業する際に使用できる特定の機能（タスクの取得や仕様の確認など）を公開します。
+## Plugins ページ
 
-## Kodus MCP
+サイドバーで **Plugins** を開きます。プラグインをインストールまたは変更できるのはオーナーだけです。Billing Manager、Repo Admin、Contributor は閲覧できます。各カードにはプラグインが表示され、接続後は **Installed**、**Default**、**Locked** のいずれかが表示されます。セルフホスト環境では、このページに [MCP Manager](/ja/how_to_deploy/deploy_kodus/mcp_manager) が必要です。
 
-すべてのワークスペースには Kodus MCP がすでに接続されています。GitHub、GitLab、Bitbucket、Azure DevOps のすべてのサポートされた Git プロバイダーの安全なアダプターを集約しているため、別々のコード操作プラグインをインストールする必要はありません。
+| プラグイン | Kody が読み取れるもの | サインイン |
+| --- | --- | --- |
+| **Git Issues** | リポジトリのトラッカー（GitHub、GitLab、Bitbucket、Forgejo）の Issue。Git 接続を通じて読み取ります | なし |
+| **Linear** | Issue、プロジェクト、サイクル | OAuth または API キー |
+| **Atlassian Rovo** | Jira と Confluence | OAuth または API トークン |
+| **Notion** | ページ、データベース、ドキュメント | OAuth |
+| **Sentry** | プロジェクト、Issue、イベント | OAuth |
+| **Fireflies** | 会議の文字起こし、サマリー、アクションアイテム | API キー |
+| **Kodus Docs** | Kodus のドキュメント | なし |
+| **Exa Search** | Web 検索とコード検索 | なし |
+| **Kodus OSV** | パッケージの既知の脆弱性 | なし |
 
-ソースコントロールを超えて、Kodus MCP はファーストパーティの自動化を解放します：
+**Kodus MCP** はすべてのワークスペースに接続されています（**Default**）。Git プロバイダーからリポジトリ、プルリクエスト、コミット、ファイル、差分を読み取り、Kody Rules、メモリ、Kody の Issue を管理します。常にオンで、以下の Free プランの上限にはカウントされません。
 
-- レビュースレッドから直接 Kody ルールを管理します（作成、編集、削除）。
-- 自動フローの外でカスタムフォローアップが必要な場合に Kody のイシューを手動で開きます。
+## プラグインをインストールする
 
-## サジェストでのプラグインの使用
+<Steps>
+  <Step title="プラグインを開く">
+    カードをクリックします。
+  </Step>
+  <Step title="接続する">
+    サインインが必要なプラグインでは、最初にサインインを求められます。プラグインの **Authenticate with** をクリックするか（OAuth）、フィールドに入力して **Connect** をクリックします（API キーまたはトークン）。接続するとすぐにインストールされます。Kody は、プラグインが読み取り専用とマークしたツールから始めます。マークされたツールがない場合は、すべてのツールから始めます。
 
-<img src="https://kodus.io/wp-content/uploads/2025/10/comment-mcp.gif" alt="サジェストでのプラグイン使用例" />
+    サインインが不要なプラグインは、そのまま **Selected tools** に進みます。Kody に使わせるツールを選び、**Install plugin** をクリックします。
+  </Step>
+  <Step title="あとからツールを変更する">
+    インストール済みのプラグインを開き、**Selected tools** を変更して **Update Tools** をクリックします。**Reset Authentication** で接続を解除します。
+  </Step>
+</Steps>
 
-
-コードレビューサジェスト内でプラグインと対話するには、コメントで Kody に明示的にメンションします。呼び出されると、Kody は関連するプラグインを呼び出して同じスレッドで返信します。
-
-### プロンプトの例
-
-- `@kody, この kody ルールをテストファイルを無視するよう更新してください`
-- `@kody, このタスク https://jira.com/task-123 を DONE に移動してください`
-
-これらのプロンプトはディスカッションをコンテキストに保ち、チームメンバーが PR 内の完全な会話を追えるようにします。
-
-## ビジネスロジックの検証
-
-プルリクエストを仕様と照合したい場合は `@kody -v business-logic` コマンドを使用します。仕様のコンテンツをインラインで提供するか、リンクを共有します：
-
-- `@kody -v business-logic https://jira.com/task-123`
-
-Kody はプラグインを通じて参照された仕様を取得し、実装が文書化された動作と一致するかどうかを確認します。
-
-<Card title="ビジネスロジック検証ガイド" icon="shield-check" href="/ja/how_to_use/code_review/business_logic_validation">
-    `@kody -v business-logic` の前提条件とトラブルシューティングを含む詳細なウォークスルーを確認します。
-</Card>
-
-## アクセス制御
-
-Kody は各ワークスペースで有効にしたツールのみを参照します。ワークフローに重要なプラグインをインストールし、その他はすべてプライベートに保ちます。
-
-インストールするには、サイドバーで **Plugins** を開き、グリッドからプラグインを選択します。認証し（アプリの OAuth フローでサインインするか、API トークンを入力してから **Connect** をクリック）、**Selected tools** で Kody が使用できるツールを選び、**Install plugin** をクリックします。インストール済みのプラグインには **Installed** と表示されます。再度開くと **Update Tools** や **Reset Authentication** を実行できます。
+名前から破壊的な操作（delete、remove、archive）を思わせるツールには警告が付き、未選択の状態から始まります。それらを選択してインストールするには、下部のチェックボックスで確認してください。Kody は選択したどのツールでも使えるため、必要なものだけを選択してください。
 
 <Note>
-  Free プラン（およびライセンスのないセルフホスト）では、Kody が同時に実行するインストール済みプラグインは最大 3 つまでです。スキップされたプラグインは Plugins ページのバナーに表示されます。デフォルトの Kodus MCP はこの上限に含まれません。コードプロバイダーが Azure Repos または Bitbucket Data Center の場合、課題トラッカーのプラグインはインストールできません。
+  Free プラン（およびライセンスのないセルフホスト）では、Kody が同時に実行するインストール済みプラグインは最大 3 つで、古いものが優先されます。スキップされたプラグインは Plugins ページのバナーに表示され、カードには **Locked** と表示されます。コードプロバイダーが Azure Repos または Bitbucket Data Center の場合、ネイティブの課題トラッカーがないため、**Git Issues** はインストールできません。
 </Note>
 
 ## カスタムプラグイン
 
-キュレートされたカタログを超える機能が必要な場合は、独自の MCP サーバーを持ち込みます。
+カタログがカバーしていないツールには、独自の MCP サーバーを追加します。サーバーは Kodus から到達できる必要があります。`localhost` ではなく、リモートの HTTP または SSE エンドポイントです。
 
-1. サイドバーで **Plugins** を開き、**Add Custom Plugin** カードで **Add Plugin** をクリックします。
-2. エンドポイントの詳細を提供します：
-   - **プラグイン名**（必須）とオプションの**説明**（チームメンバーが統合を理解するのに役立ちます）。
-   - オプションのカタログでの認識可能なアイコン用の**ロゴ URL**。
-   - サーバーをホストする MCP **URL** と期待される**プロトコル**（HTTP または SSE）。
-   - **Authorization** 方法（None、Bearer Token、Basic Auth、API Key、または OAuth 2.0）と、任意の **Custom Headers**。
-3. **プラグインを作成**をクリックして、現在のワークスペース内で Kody がすぐに使用できるようにします。
+<Steps>
+  <Step title="追加する">
+    **Add Custom Plugin** カードで **Add Plugin** をクリックします。
+  </Step>
+  <Step title="フォームに入力する">
+    | フィールド | 説明 |
+    | --- | --- |
+    | **Plugin Name** | 必須。 |
+    | **Description**、**Logo URL** | 任意。カタログでチームメンバーが見分けやすくなります。 |
+    | **URL** | MCP エンドポイント。 |
+    | **Protocol** | **HTTP** または **SSE**。 |
+    | **Authorization** | **None**、**Bearer Token**、**Basic Auth**、**API Key**（ヘッダー名付き）、**OAuth 2.0**。OAuth 2.0 では、**Use Dynamic Client Registration**、または **Client ID**、任意の **Client Secret**、任意の **Scopes** を使います。 |
+    | **Custom Headers** | 追加のヘッダー。**Add Header** で追加します。Authorization が設定するヘッダーは、Authorization によって上書きされます。 |
 
-カスタムプラグインはキュレートされた統合と同じ権限モデルに従います：プラグインがインストールされているワークスペースのみが呼び出せ、明示的に設定していないエンドポイントに Kody はアクセスしません。
+    **Create Plugin** をクリックします。
+  </Step>
+  <Step title="インストールする">
+    プラグインが開きます。OAuth 2.0 の場合は、最初にプラグインの **Authenticate with** をクリックします。続いて **Selected tools** でツールを選び、**Install plugin** をクリックします。一覧が空の場合は、URL、プロトコル、Authorization を確認してください。
+  </Step>
+</Steps>
 
-## ヒント
+カスタムプラグインを開くと、**Edit Plugin** または **Delete Plugin** ができます。詳しい手順は [カスタム MCP プラグインのインストール](/ja/cookbook/custom-plugin-install) を参照してください。
 
-- 正しいプラグインが重複なしに実行されるよう、リクエストごとに Kody を 1 回だけメンションしてください。
-- リンクをワークスペースからアクセス可能にしてください。Kody はプラグインを通じてターゲットリソースに到達するための権限が必要です。
-- プラグインカタログを定期的に確認してください。Kodus が追加の MCP サーバーをキュレートするにつれて新しい統合が追加されます。
+## 返信でプラグインを使う
+
+<img src="https://kodus.io/wp-content/uploads/2025/10/comment-mcp.gif" alt="サジェストでのプラグイン使用例" />
+
+サジェストまたはプルリクエストへのコメントで Kody をメンションします。Kody は必要なプラグインを呼び出し、同じスレッドで返信します。
+
+- `@kody, この kody ルールをテストファイルを無視するよう更新してください`
+- `@kody, このタスク https://jira.com/task-123 を DONE に移動してください`
+
+## ビジネスロジックを検証する
+
+`@kody -v business-logic` は、プルリクエストを、それが参照するタスク（トラッカーのプラグイン経由で読み取り）と比較します。
+
+<Card title="ビジネスロジック検証" icon="shield-check" href="/ja/how_to_use/code_review/business_logic_validation">
+  `@kody -v business-logic` の前提条件、設定、トラブルシューティング。
+</Card>

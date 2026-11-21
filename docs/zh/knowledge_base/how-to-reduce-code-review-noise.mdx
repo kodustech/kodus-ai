@@ -1,18 +1,18 @@
 ---
 title: "如何减少代码审查噪音和误报"
-description: "调整 AI 代码审查，仅显示最相关的建议，避免警报疲劳。"
+description: "调整 AI 代码审查,仅显示最相关的建议,避免警报疲劳。"
 ---
 
-过多的低优先级建议会让开发者完全忽略代码审查反馈。关键是调整审查，使其显示重要的内容，对不重要的保持安静。
+过多的低优先级建议会让开发者完全忽略代码审查反馈。关键是调整审查,使其显示重要的内容,对不重要的保持安静。
 
 ## 严重性阈值
 
 Kodus 会过滤哪些发现真正被发布:
 
-- **Minimum severity to post** —— 只发布达到或高于阈值的建议(默认:Medium)。Kody 仍然会发现较低严重性的问题,只是不会对其发表评论。
-- **Apply the threshold to Kody Rules** —— 默认关闭,让团队自己的规则始终出现
+- **Minimum severity to post** — 只发布达到或高于阈值的建议(默认:Medium)。Kody 仍然会发现较低严重性的问题,只是不会对其发表评论。
+- **Apply the threshold to Kody Rules** — 默认关闭,让团队自己的规则始终出现
 
-在侧边栏的 **Code review → What to review**(原 **Review filters**)中或在 `kodus-config.yml` 中配置:
+在侧边栏的 **Code review → What to review** 中配置,或在 `kodus-config.yml` 中配置:
 
 ```yaml
 suggestionControl:
@@ -20,11 +20,11 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
-只有在 **Code review → General** 中(代码库或目录范围)开启了 **kodus Config File Overrides Web Preferences** 时,本页中的 `kodus-config.yml` 片段才会对该代码库生效。
+只有在该代码库的 **Prefer kodus-config.yml settings**(**Code review → General**,代码库范围)开启时,本页中的 `kodus-config.yml` 片段才会生效。Kody 从默认分支上代码库根目录读取该文件。参见[配置优先级](/zh/how_to_use/code_review/configs/general#config-priority)。
 
 ## 忽略文件和路径
 
-跳过产生噪音的文件（锁定文件、生成的代码、配置）。在 **Code review → General** 的 **Ignored files** 下添加它们，或在 `kodus-config.yml` 中配置：
+跳过产生噪音的文件(锁定文件、生成的代码、配置)。在 **Code review → General** 的 **Ignored files** 下添加它们,或在 `kodus-config.yml` 中配置:
 
 ```yaml
 ignorePaths:
@@ -34,9 +34,11 @@ ignorePaths:
   - dist/**
 ```
 
+文件中的列表会替换在应用中设置的列表,包括默认模式。请把您想保留的默认项复制到其中。
+
 ## 按标题跳过 PR
 
-跳过不需要审查的 PR（发布、版本升级）。在 **Code review → General** 的 **Ignore title keywords** 下添加关键词，或在 `kodus-config.yml` 中配置：
+跳过不需要审查的 PR(发布、版本升级)。在 **Code review → General** 的 **Ignore title keywords** 下添加关键词,或在 `kodus-config.yml` 中配置:
 
 ```yaml
 ignoredTitleKeywords:
@@ -47,18 +49,26 @@ ignoredTitleKeywords:
 
 ## 切换分析类别
 
-使用 **Code review → What to review** 中的 **Bug**、**Performance**、**Security** 和 **Business Logic** 开关禁用您不需要的审查类别，或在 `kodus-config.yml` 中配置：
+使用 **Code review → What to review** 中的 **Bug**、**Performance**、**Security** 和 **Business Logic** 开关禁用您不需要的审查类别,或在 `kodus-config.yml` 中配置:
 
 ```yaml
 reviewOptions:
   bug: true
   security: true
-  performance: false        # 噪音过多时可关闭
-  business_logic: false     # 不相关时可关闭
+  performance: false        # disable if too noisy
+  business_logic: false     # disable if not relevant
 ```
 
 ## 审查节奏
 
-使用 **Auto-pause**（**Code review → General** → **Enable Automated Code Review** → **Review Cadence**）防止活跃开发期间的垃圾信息 — 当 Kodus 检测到快速连续推送时暂停审查（默认：15 分钟内 3 次推送）。
+使用 **Auto-pause**(**Code review → General** → **Automated code review** → **Review Cadence**)防止活跃开发期间的垃圾信息。Kodus 会在一连串审查之后(默认:15 分钟内 3 次审查)暂停某个 PR,直到有人评论 `@kody start-review`。
 
-更多详情，请参阅[通用配置](/zh/how_to_use/code_review/configs/general)和[严重性阈值](/zh/how_to_use/code_review/configs/suggestion_control)。
+## 开始和结束消息
+
+Kody 会在审查开始时发布一条消息,在审查结束时发布另一条。在 **Code review → What Kody writes → Comments during the review** 中,使用 **Post this message** 可让每条消息仅在 PR 打开时发布,或从不发布。参见[自定义消息](/zh/how_to_use/code_review/configs/custom_messages)。
+
+## Business Logic 评论
+
+当 PR 满足其任务时,Kody 会发布一条单行评论。在 **Business Logic** 设置中关闭 **Comment when every requirement is met**,即可只收到关于缺口的评论。参见[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。
+
+更多详情,请参阅[通用配置](/zh/how_to_use/code_review/configs/general)和[严重性阈值](/zh/how_to_use/code_review/configs/suggestion_control)。

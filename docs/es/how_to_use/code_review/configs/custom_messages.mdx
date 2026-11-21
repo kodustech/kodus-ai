@@ -1,164 +1,82 @@
 ---
 title: "Mensajes Personalizados"
-description: "Configura mensajes de inicio y fin de revisión personalizados para Kody"
+description: "Edita los comentarios que Kody publica cuando una revisión empieza, termina o falla, y cómo aparecen sus comentarios en el pull request."
 ---
 
-## Descripción General
+Abre **Code review → What Kody writes**. Los mensajes están en la sección **Comments during the review**, con una pestaña por mensaje: **Review starts**, **Review ends** y **Review fails**. Cada pestaña tiene una caja **Message** y un menú **Reset to…**. El menú ofrece **Inherited message** en el alcance de repositorio y de directorio, y **Default message** en Global.
 
-Personaliza los mensajes que Kody envía al comienzo y al final de las revisiones de código. Esta función te permite adaptar el estilo de comunicación y agregar contexto o instrucciones específicas para tu equipo.
+Los mensajes se pueden definir en los alcances Global, Repository y Directory.
 
-En la barra lateral, abre **Code review → What Kody writes**. Los mensajes están en la sección **Comments during the review**, con una pestaña por mensaje: **Review starts**, **Review ends** y **Review fails**. Cada pestaña tiene una caja **Message** y un menú **Reset to…** (restaura el mensaje heredado, o el mensaje predeterminado en Global).
+## Cómo aparecen los mensajes
 
-## Comportamiento Predeterminado
+Kody publica el mensaje de inicio cuando empieza una revisión. Cuando la revisión termina, edita ese mismo comentario para convertirlo en el mensaje de fin. Las sugerencias se publican como comentarios de revisión entre ambos.
 
-Cuando no has personalizado ningún mensaje, Kody funciona de la siguiente manera:
+- **Inicio y fin publicados:** un solo comentario, que muestra primero el mensaje de inicio y el mensaje de fin cuando la revisión termina.
+- **Inicio no publicado en esta ejecución:** el mensaje de fin se publica como un comentario nuevo tras la revisión.
+- **Fin en Never:** el comentario de inicio se queda como está, también tras una revisión fallida. La reacción 😕 es entonces la única señal del fallo.
+- **La revisión falla:** Kody publica su comentario de error predeterminado en lugar de tu mensaje de fin, con el texto de **Review fails** debajo.
 
-1. **Mensaje Inicial**: Kody envía un mensaje estándar de inicio de revisión
-2. **Sugerencias**: Kody proporciona todas las sugerencias de revisión de código
-3. **Mensaje Final**: Kody actualiza el mensaje inicial con un resumen de la revisión
+En GitHub, cuando empieza una nueva revisión, Kody colapsa el comentario de la revisión anterior.
 
-## Comportamiento con Mensajes Personalizados
+## Post this message
 
-Una vez que editas el mensaje de inicio o de fin de revisión por primera vez, el comportamiento de Kody cambia a:
+En **Review starts** y **Review ends**, el selector **Post this message** define cuándo se publica ese mensaje. Cada mensaje tiene su propio ajuste.
 
-1. **Mensaje Inicial**: Kody envía tu mensaje de inicio de revisión personalizado
-2. **Sugerencias**: Kody proporciona todas las sugerencias de revisión de código
-3. **Mensaje Final**: Kody envía tu mensaje de fin de revisión personalizado (sin actualizar el mensaje inicial)
+- **On every push** (`every_push`, predeterminado) — se publica en cada ejecución de revisión: cuando se abre el pull request y después de cada push que activa una revisión.
+- **Only when the PR opens** (`only_when_opened`) — se publica una sola vez, en la primera ejecución de revisión.
+- **Never** (`off`) — no se publica. El texto se conserva, y la caja **Message** y **Add context** quedan deshabilitados. Kody sigue ejecutando la revisión y publicando sugerencias.
 
-Esto crea una línea de tiempo completa: **Mensaje Inicial → Sugerencias → Mensaje Final**
+Los mensajes se publican solo cuando se ejecuta una revisión. Con una cadencia de revisión **Manual** y **Automated code review** activado, la primera revisión se ejecuta cuando se abre el pull request; los pushes posteriores no publican nada hasta que alguien comenta `@kody start-review`.
 
-## Opciones de Configuración de Mensajes
+## Add context
 
-### Post this message
+El menú **Add context** junto a **Message** inserta un token que Kody reemplaza con datos reales del pull request.
 
-En las pestañas **Review starts** y **Review ends**, usa el selector **Post this message**
-para decidir cuándo Kody debe publicar ese mensaje (cada mensaje tiene su propio
-ajuste):
-
-- **Importante:** Los mensajes solo se envían cuando realmente se ejecuta una revisión.  
-  Si tu cadencia de revisión es **Manual**, los mensajes se publican solo cuando alguien ejecuta `@kody start-review`.
-
-- **On every push** (`every_push`): se publica cuando se abre el pull request y de nuevo
-  después de cada nuevo push **que active una revisión**. Esto ocurre automáticamente
-  solo cuando la cadencia es **Automática** o **Auto-pausa**.
-- **Only when the PR opens** (`only_when_opened`): se publica solo una vez, justo
-  después de la primera ejecución de revisión. Si la cadencia es **Manual**, la primera ejecución de revisión es
-  cuando llamas a `@kody start-review`. Los pushes futuros solo agregan sugerencias de revisión
-  más la reacción habitual para que los autores sepan que la revisión volvió a ejecutarse.
-- **Never** (`off`): el mensaje no se publica; el texto se conserva para más adelante. Kody
-  aún ejecuta la revisión y publica sugerencias.
-
-Cuando un mensaje está en **On every push** o **Only when the PR opens**, Kody usa las
-plantillas que hayas completado. Si solo personalizas el mensaje de inicio, solo ese
-mensaje se envía; lo mismo aplica para el mensaje de fin. Esto mantiene la línea de tiempo familiar de
-**Mensaje Inicial → Sugerencias → Mensaje Final** siempre que el comportamiento permita
-publicar mensajes.
-
-**Ejemplo (cadencia Manual)**  
-PR abierto → sin mensaje aún  
-`@kody start-review` → mensaje de inicio → sugerencias → mensaje de fin
-
-## Contexto Dinámico
-
-Puedes enriquecer tus mensajes personalizados con contexto dinámico usando el menú **Add context** junto a **Message** (en las pestañas **Review starts** y **Review ends**). Esto te permite incluir:
-
-### changedFiles
-
-Un resumen de los archivos modificados, mostrando adiciones y eliminaciones por archivo. Proporciona un desglose detallado de lo que se modificó en el pull request.
-
-### changeSummary
-
-Un resumen exhaustivo de todos los cambios en el pull request, ofreciendo una visión general del alcance completo de las modificaciones.
-
-### reviewOptions
-
-Un reflejo de la configuración de revisión del equipo, mostrando qué categorías de revisión están habilitadas o deshabilitados para la revisión.
-
-### reviewCadence
-
-Proporciona la política exacta de revisiones de seguimiento para que los autores sepan qué sucede después
-de la primera revisión automatizada:
-
-- **Automática**: Kody revisa cada push tan pronto como llega.
-- **Auto-pausa**: Kody revisa los pushes automáticamente, pero si detecta una
-  "ráfaga de pushes" (por ejemplo, 3 pushes en 15 minutos, según tus
-  umbrales) pausa las revisiones de seguimiento hasta que las reanudes. El contexto de cadencia
-  incluye los límites de pushes y tiempo para que el equipo sepa cuándo puede
-  activarse la pausa.
-- **Manual**: Kody espera a que alguien ejecute `@kody start-review` antes de hacer
-  otra revisión.
-
-### reviewScope
-
-Muestra qué nivel de configuración —global, repositorio o directorio— se usó para
-revisar este pull request, para que los autores sepan qué ajustes se aplicaron.
-
-### agentPrompt
-
-<Note>
-  **Solo en el mensaje de fin de revisión.** Agrupa las sugerencias de los
-  comentarios de línea de la revisión, que no existen hasta que la revisión se
-  ejecuta, por lo que no se ofrece en el mensaje de inicio.
-</Note>
-
-Agrupa todas las sugerencias de la revisión en un único bloque de prompt para
-copiar y pegar (mostrado como un desplegable **Open Agent Prompt**). Pégalo en tu
-agente de código para aplicar todas las correcciones de la revisión de una vez.
-
-<Info>
-  Estas variables de contexto se completarán automáticamente con los datos reales
-  de tu pull request cuando Kody envíe el mensaje.
-</Info>
-
-<Note>
-  En `kodus-config.yml` estos tokens se escriben con prefijo `@` — `@changedFiles`,
-  `@changeSummary`, `@reviewOptions`, `@reviewCadence`, `@reviewScope`, `@agentPrompt` —
-  en cualquier posición dentro del `content` del mensaje. El menú **Add context** inserta
-  los mismos tokens por ti en la interfaz web.
-</Note>
-
-## Mensaje de error
-
-Aparte del par inicio/fin, puedes añadir tu propio texto al comentario que Kody publica cuando
-una revisión **falla** — por ejemplo cuando no hay proveedor BYOK configurado, o el proveedor
-rechazó la petición. Escríbelo en la pestaña **Review fails**.
-
-No hay un ajuste de activar/desactivar para este mensaje: el propio texto es el interruptor.
-
-- **Vacío** (por defecto) — Kody publica su mensaje de error estándar sin cambios.
-- **Completado** — tu texto se añade debajo del mensaje de error estándar.
-
-Úsalo para dirigir a la gente al responsable interno o al runbook, en lugar de dejarles un fallo
-genérico:
-
-```yaml
-customMessages:
-    errorReviewMessage:
-        status: 'active' # off | active
-        content: |
-            ¿Fallan las revisiones? Escribe a #platform-eng — la clave de la API de Kodus es nuestra.
-```
-
-Dejar `content` vacío mantiene el mensaje de error por defecto sin cambios.
-
-## Visibilidad de comentarios (ajustes globales)
-
-Dos toggles que aplican a todos los comentarios de Kody, no solo a los mensajes personalizados. Están en la
-sección **Comment visibility** de **What Kody writes**:
-
-| Ajuste | Por defecto | Qué hace |
+| Elemento del menú | Token | Qué añade |
 | --- | --- | --- |
-| `hideComments` | `false` | Publica cada mensaje de revisión como comentario oculto/minimizado. Se muestra en la interfaz como **Post as hidden comment**. **Solo GitHub** — el toggle se oculta cuando no existe ninguna conexión con GitHub. |
-| `suggestionCopyPrompt` | `true` | Añade a las sugerencias la opción de copiar como prompt, para pegarlas en un agente de código. Se muestra en la interfaz como **Add a copyable prompt to each suggestion**. **No disponible en Bitbucket** — el toggle se oculta cuando Bitbucket es tu única plataforma conectada. |
+| **Changed files** | `@changedFiles` | Una tabla colapsable de los archivos modificados, con estado, adiciones y eliminaciones. |
+| **Changes summary** | `@changeSummary` | Totales de archivos, líneas añadidas, líneas eliminadas y cambios. |
+| **Review options** | `@reviewOptions` | Qué categorías de revisión están activadas o desactivadas. |
+| **Review cadence** | `@reviewCadence` | Cómo funcionan las revisiones de seguimiento: automática, auto-pausa con sus límites, o manual. |
+| **Review scope** | `@reviewScope` | Qué nivel, global, de repositorio o de directorio, se usó para esta revisión. |
+| **Agent Prompt** | `@agentPrompt` | Todas las sugerencias de la revisión como un único prompt para pegar en un agente de programación, en un bloque colapsable **Open Agent Prompt**. |
+
+`@agentPrompt` se ofrece solo en **Review ends**, porque su contenido existe únicamente después de la revisión.
+
+## Mensaje Review fails
+
+Escribe texto en la pestaña **Review fails** para añadirlo debajo del comentario que Kody publica cuando una revisión falla, por ejemplo cuando no hay ningún proveedor de IA configurado o el proveedor rechazó la solicitud. Úsalo para dirigir a la gente a un responsable interno o a un runbook.
+
+No hay un interruptor para este mensaje: el propio texto es el interruptor. Vacío (el valor predeterminado) mantiene el comentario de error estándar de Kody tal como está.
+
+## Visibilidad de comentarios
+
+La sección **Comment visibility** tiene dos ajustes.
+
+| Ajuste | Predeterminado | Qué hace |
+| --- | --- | --- |
+| **Post as hidden comment** (`hideComments`) | Desactivado | El comentario que contiene los mensajes **Review starts** y **Review ends** se publica colapsado, como obsoleto, para que la conversación del pull request se mantenga corta. Las sugerencias en línea y los comentarios a nivel de PR no se colapsan. Solo GitHub; el interruptor se oculta cuando GitHub no está conectado. |
+| **Add a copyable prompt to each suggestion** (`suggestionCopyPrompt`) | Activado | Cada sugerencia incluye un prompt que el desarrollador puede pegar en un asistente de IA para aplicar la corrección. En Bitbucket el prompt se publica como respuesta en el mismo hilo; con el ajuste desactivado, los comentarios de Bitbucket no muestran la corrección. |
+
+## YAML
+
+Los mensajes se almacenan como `customMessages` en los archivos `kodus-config.yml` de un repositorio de [configuración centralizada](/es/how_to_use/code_review/configs/centralized_config). Un `kodus-config.yml` en la raíz de un repositorio revisado no los cambia; usa la aplicación.
 
 ```yaml
 customMessages:
+    startReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: |
+            Review started. @changedFiles
+    endReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: |
+            Review finished. @changeSummary
+    errorReviewMessage:
+        status: 'active' # off | active; a review reads only content
+        content: |
+            Reviews failing? Ping #platform-eng.
     globalSettings:
-        hideComments: false # solo GitHub
-        suggestionCopyPrompt: true # no disponible en Bitbucket
+        hideComments: false
+        suggestionCopyPrompt: true
 ```
-
-<Note>
-  Siempre puedes volver al comportamiento predeterminado deshabilitando ambos mensajes
-  personalizados o limpiando el contenido del mensaje.
-</Note>{" "}

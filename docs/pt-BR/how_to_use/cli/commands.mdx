@@ -1,72 +1,81 @@
 ---
 title: "Referência de Comandos"
-description: "Referência completa de todos os comandos, flags e opções do Kodus CLI."
+description: "Referência completa de todos os comandos, flags e opções do CLI da Kodus."
 ---
 
 ## Flags Globais
 
 Essas flags estão disponíveis em todos os comandos:
 
-| Flag              | Curto | Padrão     | Descrição                                     |
-| ----------------- | ----- | ---------- | --------------------------------------------- |
-| `--format <fmt>`  | `-f`  | `terminal` | Formato de saída: `terminal`, `json`, `markdown` |
-| `--output <file>` | `-o`  | —          | Salvar saída em um arquivo                    |
-| `--verbose`       | `-v`  | `false`    | Saída detalhada                               |
-| `--quiet`         | `-q`  | `false`    | Modo silencioso (apenas erros)                |
-| `--agent`         | —     | `false`    | Modo agente: saída determinística legível por máquina |
+| Flag              | Curto | Padrão     | Descrição                                                                   |
+| ----------------- | ----- | ---------- | --------------------------------------------------------------------------- |
+| `--format <fmt>`  | `-f`  | `terminal` | Formato de saída: `terminal`, `json`, `markdown`                            |
+| `--output <file>` | `-o`  | —          | Salvar a saída em um arquivo                                                |
+| `--verbose`       | `-v`  | `false`    | Saída detalhada, no stderr                                                  |
+| `--quiet`         | `-q`  | `false`    | Modo silencioso (apenas erros)                                              |
+| `--agent`         | —     | `false`    | Modo agente: saída JSON determinística para scripts e agentes               |
+| `--version`       | `-V`  | —          | Imprimir a versão do CLI                                                    |
+
+`--format` vale para `review`, `pr` e `trace`. `--agent` funciona em `review`, `pr`, `schema`, `hook install`, `hook uninstall`, `trace status`, `trace disable` e `trace <path>`; ele imprime um envelope JSON com `ok`, `command`, `data`, `error` e `meta`. Os outros comandos que imprimem dados estruturados aceitam `--json`.
+
+Com `--fail-on`, um `kodus review --agent` que dispara o gate imprime um segundo envelope depois do primeiro, com `ok: false` e `error.code` `INTERNAL_ERROR`. Leia o código de saída, ou leia apenas o primeiro envelope.
+
+Os resultados e as mensagens informativas vão para o stdout. Indicadores de progresso, avisos e erros vão para o stderr. Para salvar a revisão em JSON em uma automação, use `kodus review --format json --output review.json`. Com `--fail-on`, leia o código de saída separadamente. Uma revisão que aciona o bloqueio imprime uma linha extra no stdout.
 
 ---
 
 ## `kodus review`
 
-Analisa arquivos modificados em busca de problemas de qualidade de código, bugs, vulnerabilidades de segurança e violações de estilo.
+Analisa suas alterações em busca de bugs, vulnerabilidades de segurança, problemas de desempenho e violações de estilo. Uma revisão usa as Kody Rules e as configurações de code review do seu time.
 
 ### Uso
 
 ```bash
-kodus review                          # Revisar alterações na árvore de trabalho (interativo)
-kodus review [files...]               # Revisar arquivos específicos
-kodus review --staged                 # Revisar apenas arquivos staged
-kodus review --branch main            # Comparar com uma branch
-kodus review --commit abc123          # Analisar um commit específico
-kodus review --fix                    # Aplicar automaticamente todos os problemas corrigíveis
-kodus review --prompt-only            # Saída otimizada para agentes de IA
+kodus review                          # Review working tree changes (interactive)
+kodus review [files...]               # Review specific files
+kodus review --staged                 # Review staged files only
+kodus review --branch main            # Compare against a branch
+kodus review --commit abc123          # Analyze a specific commit
+kodus review --fix                    # Apply all fixable issues
+kodus review --prompt-only            # Output optimized for AI agents
 ```
+
+Sem nenhuma flag de escopo, `kodus review` revisa as alterações rastreadas na sua árvore de trabalho, staged e unstaged. Se você passar mais de um escopo, arquivos vencem `--branch`, `--branch` vence `--commit` e `--commit` vence `--staged`. Veja [Modos de Diff](/pt-BR/how_to_use/cli/concepts#modos-de-diff).
 
 ### Flags
 
-| Flag                   | Curto | Descrição                                                    |
-| ---------------------- | ----- | ------------------------------------------------------------ |
-| `--staged`             | `-s`  | Analisar apenas arquivos staged                              |
-| `--commit <sha>`       | `-c`  | Analisar diff de um commit específico                        |
-| `--branch <name>`      | `-b`  | Comparar a branch atual com a branch especificada            |
-| `--rules-only`         | —     | Revisar usando apenas regras configuradas (sem sugestões gerais) |
-| `--fast`               | —     | Modo rápido: análise mais ágil com verificações mais leves   |
-| `--focus <text>`       | —     | Direciona a revisão a uma área específica — veja [Direcionar uma Revisão](/pt-BR/how_to_use/code_review/review_directive) |
-| `--heavy`              | —     | Heavy mode: revisores especialistas rodam junto com a revisão principal para maior recall (mais tokens), qualquer que seja o modo de revisão configurado — veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode) |
-| `--balanced`           | —     | Balanced mode: só a revisão principal, em um repositório configurado como Heavy — veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode) |
-| `--interactive`        | `-i`  | Modo interativo: navegar e aplicar correções                 |
-| `--fix`                | —     | Aplicar automaticamente todos os problemas corrigíveis       |
-| `--prompt-only`        | —     | Saída otimizada para agentes de IA                           |
-| `--fail-on <severity>` | —     | Sair com código 1 se problemas atingirem ou superarem a severidade |
-| `--context <file>`     | —     | Arquivo de contexto personalizado para incluir na revisão    |
-| `--fields <csv>`       | —     | Selecionar campos de resposta (modo JSON/agent), ex.: `summary,issues.file` |
-| `--github-pat <token>` | —     | Token do GitHub (`read:repo`) usado para clonar repositórios privados. Apenas usuários em trial. Também via `KODUS_GITHUB_PAT`. Fica só em memória, nunca é persistido. |
-| `--no-hunk`            | —     | Pula o visualizador hunk e usa a lista interativa antiga (apenas sessões interativas) |
+| Flag                   | Curto | Descrição                                                   |
+| ---------------------- | ----- | ----------------------------------------------------------- |
+| `--staged`             | `-s`  | Analisar apenas arquivos staged                             |
+| `--commit <sha>`       | `-c`  | Analisar o diff de um commit específico                     |
+| `--branch <name>`      | `-b`  | Comparar a branch atual com `<name>`                        |
+| `--rules-only`         | —     | Revisar usando apenas as regras configuradas (sem sugestões gerais) |
+| `--fast`               | —     | Modo rápido: análise mais veloz com verificações mais leves |
+| `--focus <text>`       | —     | Direcionar a revisão para uma área específica — veja [Direcionar a revisão](/pt-BR/how_to_use/code_review/review_directive) |
+| `--heavy`              | —     | Modo heavy: revisores especialistas rodam ao lado da revisão principal para maior recall (mais tokens), qualquer que seja o modo de revisão definido. Exige um time logado nos planos Teams ou Enterprise — veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode) |
+| `--balanced`           | —     | Modo balanced: apenas a revisão principal, em um repositório definido como Heavy — veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode) |
+| `--interactive`        | `-i`  | Usar a lista interativa para navegar e aplicar correções. Não pode ser combinada com `--prompt-only` ou `--fix` |
+| `--fix`                | —     | Aplicar todos os problemas corrigíveis, após uma confirmação |
+| `--prompt-only`        | —     | Saída otimizada para agentes de IA                          |
+| `--fail-on <severity>` | —     | Terminar com código 1 se um problema estiver em `info`, `warning`, `error` ou `critical`, ou acima |
+| `--context <file>`     | —     | Arquivo de contexto customizado para incluir na revisão     |
+| `--fields <csv>`       | —     | Selecionar campos da resposta, ex.: `summary,issues.file`. Exige `--format json` ou `--agent` |
+| `--github-pat <token>` | —     | Token do GitHub (`read:repo`) usado para clonar repositórios privados. Apenas para usuários em trial. Também lido de `KODUS_GITHUB_PAT`, `GITHUB_TOKEN` ou `GH_TOKEN`. Mantido apenas em memória, nunca persistido |
+| `--no-hunk`            | —     | Pular o visualizador Hunk e usar a lista interativa (apenas em terminais interativos) |
 
 ### Modos de Revisão
 
 <Tabs>
   <Tab title="Interativo (Padrão)">
-    Navegue pelos arquivos com contagens de problemas, visualize correções sugeridas e aplique-as uma a uma.
+    Em um terminal no macOS e no Linux, os achados abrem no visualizador de diff Hunk, ao lado do código. No Windows, com `--no-hunk` ou com `--interactive`, você recebe uma lista: navegue pelos arquivos com a contagem de problemas, visualize as correções sugeridas, aplique-as uma a uma ou copie um prompt de correção para um agente de IA.
 
     ```bash
     kodus review
     ```
 
   </Tab>
-  <Tab title="Correção Automática">
-    Aplica todos os problemas corrigíveis de uma vez com uma confirmação.
+  <Tab title="Auto-fix">
+    Aplica todos os problemas corrigíveis de uma vez após um prompt de confirmação.
 
     ```bash
     kodus review --fix
@@ -74,7 +83,7 @@ kodus review --prompt-only            # Saída otimizada para agentes de IA
 
   </Tab>
   <Tab title="Agente de IA">
-    Saída mínima e estruturada projetada para Claude Code, Cursor ou Windsurf. Habilita loops autônomos de revisão e correção.
+    Saída mínima e estruturada projetada para Claude Code, Cursor ou Windsurf. Ela começa com `REVIEW_ANALYSIS_COMPLETE`, termina com `END_REVIEW` e imprime `NO_ISSUES_FOUND` quando a revisão está limpa. Habilita loops autônomos de revisão e correção.
 
     ```bash
     kodus review --prompt-only
@@ -83,37 +92,87 @@ kodus review --prompt-only            # Saída otimizada para agentes de IA
   </Tab>
 </Tabs>
 
+### Notas
+
+- Se o plano do time conectado não inclui o modo Heavy, a revisão solicitada com `--heavy` roda no modo Balanced e exibe um aviso. Com `--agent` ou `--format json`, consulte `notices` no resultado para conferir se o modo solicitado rodou.
+- Se suas credenciais forem rejeitadas (uma chave de equipe revogada ou uma sessão expirada), `kodus review` roda como uma revisão de trial e informa isso.
+
+---
+
+## `kodus diff`
+
+Abre o conjunto de alterações atual no visualizador de diff de terminal Hunk.
+
+```bash
+kodus diff
+```
+
+Este é um wrapper fino em torno de `hunk diff`. Todo argumento que você passa é repassado a ele sem alteração, então qualquer flag que o Hunk suporta funciona aqui também. Não está disponível no Windows.
+
+<Note>
+  Útil para olhar um conjunto de alterações antes de rodar `kodus review` nele. O mesmo visualizador sustenta a revisão interativa. Passe `--no-hunk` para `kodus review` se você preferir a lista.
+</Note>
+
 ---
 
 ## `kodus pr suggestions`
 
-Busca sugestões alimentadas por IA para pull requests abertos.
+Busca as sugestões que a Kody fez em um pull request. Exige um login ou uma chave de equipe.
 
 ### Uso
 
 ```bash
 kodus pr suggestions --pr-url https://github.com/org/repo/pull/42
 kodus pr suggestions --pr-number 42 --repo-id <id>
-kodus pr suggestions --pr-number 42 --repo-id <id> --severity error,warning
+kodus pr suggestions --pr-number 42 --repo-id <id> --severity critical,high
 kodus pr suggestions --pr-number 42 --repo-id <id> --format json
+kodus pr suggestions --pr-number 42 --repo-id <id> --format markdown
+```
+
+Encontre o ID de um repositório com `kodus config remote list --json`.
+
+### Flags
+
+| Flag                   | Descrição                                                        |
+| ---------------------- | ---------------------------------------------------------------- |
+| `--pr-url <url>`       | URL do pull request                                              |
+| `--pr-number <number>` | Número do pull request (exige `--repo-id`)                       |
+| `--repo-id <id>`       | ID do repositório do pull request                                |
+| `--severity <list>`    | Severidades separadas por vírgula: `info`, `warning`, `error`, `critical`, `high`, `medium`, `low` |
+| `--category <list>`    | Categorias separadas por vírgula, das [Categorias de Problemas](#categorias-de-problemas) abaixo |
+| `--fields <csv>`       | Selecionar campos da resposta, ex.: `summary,issues.file`. Exige `--format json` ou `--agent` |
+
+Informe `--pr-url`, ou `--pr-number` junto com `--repo-id`. `--prompt-only` não está disponível aqui.
+
+---
+
+## `kodus pr reviews`
+
+Mostra todas as revisões que a Kody rodou em um pull request, da mais recente para a mais antiga: quando, o status, quantas sugestões foram enviadas e filtradas, o commit revisado e o motivo quando uma execução falhou. Exige um login.
+
+### Uso
+
+```bash
+kodus pr reviews 42
+kodus pr reviews 42 --repo org/repo
+kodus pr reviews 42 --repo-id <id> --limit 50 --json
 ```
 
 ### Flags
 
-| Flag                   | Descrição                                           |
-| ---------------------- | --------------------------------------------------- |
-| `--pr-url <url>`       | URL do pull request                                 |
-| `--pr-number <number>` | Número do pull request (requer `--repo-id`)         |
-| `--repo-id <id>`       | ID do repositório para o pull request               |
-| `--severity <list>`    | Severidades separadas por vírgula para incluir      |
-| `--category <list>`    | Categorias separadas por vírgula para incluir       |
-| `--fields <csv>`       | Selecionar campos de resposta (modo JSON/agent), ex.: `summary,issues.file` |
+| Flag             | Descrição                                                                  |
+| ---------------- | -------------------------------------------------------------------------- |
+| `--repo <repo>`  | Repositório como `owner/repo` ou nome. Por padrão, o origin deste checkout |
+| `--repo-id <id>` | ID do repositório. Vence `--repo`                                          |
+| `--team <team>`  | Nome ou id do time, quando sua organização tem mais de um time             |
+| `--limit <n>`    | Execuções mais recentes a retornar, de 1 a 100 (padrão 20)                 |
+| `--json`         | Imprimir as execuções como JSON                                            |
 
 ---
 
 ## `kodus pr business-validation`
 
-Valida um diff local em relação às regras de negócio/critérios de aceitação de uma tarefa. Útil antes de fazer merge para confirmar que a implementação corresponde ao objetivo da tarefa.
+Valida um diff local contra as regras de negócio e os critérios de aceite de uma tarefa. Útil antes de mergear para confirmar que a implementação corresponde à tarefa. Exige um login ou uma chave de equipe. Nada é postado em um pull request.
 
 ### Uso
 
@@ -122,39 +181,53 @@ kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441
 kodus pr business-validation --task-id KC-1441 --staged
 kodus pr business-validation --task-id KC-1441 --branch main
 kodus pr business-validation --task-id KC-1441 --commit abc123
+kodus pr business-validation --task-id KC-1441 src/billing/invoice.ts
 kodus pr business-validation --task-id KC-1441 --dry-run
 ```
 
+Com `--format json` ou `--agent`, ele imprime o veredito como dados estruturados. Veja [Validação de regras de negócio](/pt-BR/how_to_use/code_review/business_logic_validation#pela-cli).
+
 ### Flags
 
-| Flag                 | Curto | Descrição                                                           |
-| -------------------- | ----- | ------------------------------------------------------------------- |
-| `--task-url <url>`   | —     | URL da tarefa para incluir no comando de validação                  |
-| `--task-id <id>`     | —     | ID da tarefa ou chave do issue (ex.: `KC-1441`) para incluir        |
-| `--staged`           | `-s`  | Usar apenas alterações staged                                       |
-| `--commit <sha>`     | `-c`  | Usar diff de um commit específico                                   |
-| `--branch <name>`    | `-b`  | Comparar a branch atual com uma branch base                         |
-| `--dry-run`          | —     | Imprimir o payload sem executar a chamada de API                    |
+| Flag                 | Curto | Descrição                                                          |
+| -------------------- | ----- | ------------------------------------------------------------------ |
+| `--task-url <url>`   | —     | URL da tarefa. Use-a ou `--task-id`, não os dois                   |
+| `--task-id <id>`     | —     | ID da tarefa ou chave da issue (ex.: `KC-1441`)                    |
+| `--staged`           | `-s`  | Usar apenas as alterações staged                                   |
+| `--commit <sha>`     | `-c`  | Usar o diff de um commit específico                                |
+| `--branch <name>`    | `-b`  | Comparar a branch atual com uma branch base                        |
+| `--dry-run`          | —     | Imprimir o payload sem chamar a API                                |
+
+Passe no máximo um escopo: arquivos, `--staged`, `--branch` ou `--commit`. Sem nenhum, ele usa as alterações da sua árvore de trabalho.
 
 ---
 
 ## `kodus auth`
 
-Gerencia autenticação com a API do Kodus.
+Gerencia a autenticação com a API da Kodus.
 
 ### `auth login`
 
 ```bash
-kodus auth login                              # Login interativo
-kodus auth login -e user@mail.com -p password # Não interativo
+kodus auth login                              # Browser login
+kodus auth login --device-code                # Code login, for SSH and headless machines
+kodus auth login --legacy -e user@mail.com
 ```
 
-O login interativo abre a página **Authorize Kodus CLI** no seu navegador; clique em **Authorize CLI** ali para concluir.
+O login abre a página **Authorize Kodus CLI** no seu navegador e imprime a URL dela; clique em **Authorize CLI** lá para concluir. Se você não estiver logado na Kodus nesse navegador, você cai no dashboard depois de entrar: abra a URL novamente.
 
-| Flag                    | Curto | Descrição          |
-| ----------------------- | ----- | ------------------ |
-| `--email <email>`       | `-e`  | E-mail da conta    |
-| `--password <password>` | `-p`  | Senha da conta     |
+Em uma sessão SSH privada ou máquina sem navegador, use `--device-code` e siga as [etapas de login](/pt-BR/how_to_use/cli/getting_started). Os dois fluxos aguardam até 10 minutos. No CI, use `KODUS_TEAM_KEY` como secret.
+
+Em uma instância self-hosted, a página fica no host definido pelo `API_FRONTEND_URL` da API.
+
+Para usar o login legado, execute o exemplo acima e digite a senha quando o CLI pedir. O CLI mascara a digitação.
+
+| Flag                    | Curto | Descrição                                                            |
+| ----------------------- | ----- | -------------------------------------------------------------------- |
+| `--device-code`         | —     | Usar o fluxo de código mesmo quando há um navegador disponível       |
+| `--legacy` | — | Login obsoleto por e-mail e senha. Em scripts e CI, use o segredo `KODUS_TEAM_KEY`. |
+| `--email <email>`       | `-e`  | E-mail da conta (implica `--legacy`)                                 |
+| `--password <password>` | `-p` | Flag de senha obsoleta (implica `--legacy`). Digite a senha no prompt. Passá-la como argumento pode expô-la a outros processos ou ao histórico do shell. |
 
 ### `auth logout`
 
@@ -162,7 +235,7 @@ O login interativo abre a página **Authorize Kodus CLI** no seu navegador; cliq
 kodus auth logout
 ```
 
-Remove a autenticação local (login e chave de equipe).
+Remove o login armazenado e apaga `~/.kodus/config.json`: a chave de equipe e uma URL de API ou configurações do Cloudflare Access salvas.
 
 ### `auth status`
 
@@ -170,15 +243,17 @@ Remove a autenticação local (login e chave de equipe).
 kodus auth status
 ```
 
-Exibe o modo de autenticação, e-mail, validade do token, organizações, status de trial e limites de uso.
+Mostra como você está logado. Com um login: seu e-mail, se o token é válido e o id da sua organização. Com uma chave de equipe salva por `kodus auth team-key`: a organização e o time. No modo trial: revisões usadas, o limite e quando ele é redefinido. Ele lê apenas credenciais armazenadas: com `KODUS_TEAM_KEY` ou `KODUS_TOKEN` definidos no ambiente e nada armazenado, ele diz "No credentials found". Use `kodus status` para esses casos.
+
+### `auth token`
+
+O comando aparece na ajuda do CLI. O endpoint que ele chama está ausente na API atual. No pipeline, configure a chave de equipe no secret `KODUS_TEAM_KEY`. Veja [Integração com CI/CD](/pt-BR/how_to_use/cli/self_hosted).
 
 ### `auth team-key`
 
-```bash
-kodus auth team-key --key kodus_xxxxx
-```
+Salva uma chave de equipe compartilhada em `~/.kodus/config.json`. O comando exige `--key`, verifica a chave com a API, registra o dispositivo e substitui qualquer login armazenado.
 
-Autentica usando uma chave de API de equipe compartilhada. Também pode ser definida via variável de ambiente `KODUS_TEAM_KEY`.
+No uso cotidiano, defina `KODUS_TEAM_KEY` no ambiente do CLI. O CLI lê a variável diretamente. As chaves de equipe começam com `kodus_`.
 
 ### `auth team-status`
 
@@ -186,36 +261,45 @@ Autentica usando uma chave de API de equipe compartilhada. Também pode ser defi
 kodus auth team-status
 ```
 
-Exibe detalhes de autenticação da equipe (nome da organização e da equipe).
-
-### `auth token`
-
-```bash
-kodus auth token
-```
-
-Gera um token de CI/CD para uso em pipelines automatizados. Use com a variável de ambiente `KODUS_TOKEN`.
+Mostra a organização e o time da chave de equipe armazenada.
 
 ---
 
 ## `kodus hook`
 
-Gerencia hooks Git pre-push para revisão automática de código antes do push.
+Gerencia um hook Git pre-push que revisa seus commits antes que eles saiam da sua máquina.
 
 ### `hook install`
 
 ```bash
-kodus hook install                    # Padrão: fail-on critical, modo rápido habilitado
-kodus hook install --fail-on error    # Bloquear pushes em severidade error
-kodus hook install --no-fast          # Desabilitar modo rápido
-kodus hook install --force            # Sobrescrever hook existente
+kodus hook install                    # Default: fail-on critical, fast mode enabled
+kodus hook install --fail-on error    # Block pushes on error severity
+kodus hook install --no-fast          # Disable fast mode
+kodus hook install --force            # Overwrite existing hook
+kodus hook install --dry-run          # Show what would be written
 ```
 
-| Flag                   | Padrão     | Descrição                                   |
-| ---------------------- | ---------- | ------------------------------------------- |
-| `--fail-on <severity>` | `critical` | Severidade mínima para bloquear push        |
-| `--fast` / `--no-fast` | `true`     | Habilitar/desabilitar modo rápido           |
-| `--force`              | —          | Sobrescrever hook existente sem confirmação |
+| Flag                   | Padrão     | Descrição                                         |
+| ---------------------- | ---------- | ------------------------------------------------- |
+| `--fail-on <severity>` | `critical` | Severidade mínima para bloquear o push (`info`, `warning`, `error`, `critical`) |
+| `--fast` / `--no-fast` | `true`     | Habilitar/desabilitar o modo rápido               |
+| `--force`              | —          | Sobrescrever um hook existente sem perguntar      |
+| `--dry-run`            | —          | Imprimir as alterações planejadas sem gravar arquivos |
+
+No `git push`, o hook executa isto para a branch que você envia:
+
+```bash
+kodus review --branch <remote>/<branch> --fast --fail-on <severity> --format terminal --quiet
+```
+
+Isso revisa os commits que o remoto ainda não tem. O `--fast` fica de fora com `--no-fast`.
+
+- O push é bloqueado (código de saída 1) quando um achado atinge a severidade de `--fail-on`, e também quando a revisão falha, por exemplo quando a API não pode ser alcançada.
+- Em um terminal interativo no macOS e no Linux, os achados abrem no visualizador Hunk antes de o push continuar, mesmo quando não há nenhum. Saia do visualizador para prosseguir.
+- Sem um terminal interativo (uma IDE, uma GUI do Git), o visualizador não consegue abrir e qualquer achado bloqueia o push. Veja [Solução de Problemas](/pt-BR/how_to_use/cli/troubleshooting).
+- Ele revisa apenas a branch que você tem em checkout e ignora branches novas, exclusões de branch e `git push origin HEAD`. Envie a branch pelo nome.
+- Com um login ou chave de equipe, ele revisa como qualquer outro `kodus review`; sem um, roda uma revisão de trial. O limite do trial (2 revisões por hora) se aplica, e quando é atingido o push passa.
+- Se o `kodus` não estiver instalado, ele imprime um aviso e deixa o push passar.
 
 ### `hook uninstall`
 
@@ -223,7 +307,7 @@ kodus hook install --force            # Sobrescrever hook existente
 kodus hook uninstall
 ```
 
-Remove o hook pre-push instalado pelo Kodus.
+Remove o hook pre-push instalado pela Kodus. Adicione `--dry-run` para visualizar. Um hook que a Kodus não instalou é deixado em paz.
 
 ### `hook status`
 
@@ -231,7 +315,7 @@ Remove o hook pre-push instalado pelo Kodus.
 kodus hook status
 ```
 
-Exibe o status do hook, severidade de fail-on, configuração de modo rápido e caminho.
+Mostra se o hook está instalado, sua severidade de fail-on, a configuração do modo rápido e o caminho.
 
 ### Ignorando o Hook
 
@@ -241,9 +325,68 @@ KODUS_SKIP_HOOK=1 git push
 
 ---
 
+## `kodus config remote`
+
+Lê e altera as configurações de code review armazenadas na Kodus: globais, por repositório e por diretório.
+
+<Note>`kodus config repo` ainda funciona como um alias de `kodus config remote`.</Note>
+
+Quais comandos funcionam depende de como você está logado. Com um login, `show` e `set` alcançam toda configuração em todo nível, e `unset`, `model`, `messages`, `language` e `skills` estão disponíveis. `keys` não exige login. Com uma chave de equipe, `show` e `set` cobrem seis configurações de um repositório, e `add`, `setup` e `open` exigem uma chave de equipe. A chave deve ter **Allow repository configuration via CLI** ativado (**Organization → CLI keys**, **Configure** na chave; desativado por padrão). Veja [Modos de Autenticação](/pt-BR/how_to_use/cli/concepts#modos-de-autenticação).
+
+O argumento `[repository]` aceita `.` para o repositório atual, `owner/repo`, um id de repositório ou `global`. Sempre o informe quando o comando também recebe uma chave ou um valor.
+
+### Uso
+
+```bash
+kodus config remote list                                # Repositories added to Kodus
+kodus config remote show .                              # Settings, with the level each value comes from
+kodus config remote show . --directory packages/api     # Settings of one directory
+kodus config remote keys                                # Every setting you can change
+kodus config remote set . suggestionControl.severityLevelFilter high
+kodus config remote set global runOnDraft true
+kodus config remote unset . runOnDraft                  # Inherit from the level above again
+kodus config remote add-ignore-file . "**/*.generated.ts"
+kodus config remote add-base-branch . "release/*"
+kodus config remote add-ignore-title . "WIP"
+kodus config remote add .                               # Add the current repo to Kodus (team key)
+kodus config remote setup .                             # Guided setup (team key)
+```
+
+`kodus config -r [repository]` é um atalho para `kodus config remote add [repository]`.
+
+### Subcomandos
+
+| Subcomando                                                  | Descrição                                                                                |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `add [repository]`                                          | Adicionar um repositório à Kodus. `--no-prompt` pula o prompt de configuração           |
+| `list`                                                      | Listar os repositórios adicionados à Kodus. `--team`, `--json`                          |
+| `show [repository]`                                         | Mostrar as configurações e o nível de onde cada valor vem. `--no-file-overlay` pula a leitura do `kodus-config.yml` |
+| `set [repository] <key> <value>`                            | Definir uma configuração. `--create-directory` dá a `--directory` suas próprias configurações se ele não tiver nenhuma |
+| `unset [repository] <key>`                                  | Descartar o valor próprio de um nível para que ele volte a herdar                        |
+| `keys`                                                      | Listar as chaves configuráveis com seu tipo, valores permitidos e página                 |
+| `setup [repository]`                                        | Assistente de configuração guiada. `--yes` aplica as respostas atuais sem prompts        |
+| `open [repository]`                                         | Abrir o app web. `--section` é um entre `general`, `review-categories`, `custom-prompts`, `suggestion-control`, `pr-summary`, `kody-rules`, `custom-messages`, `business-rules` |
+| `add-pattern [repository] <field> <pattern>`                | Adicionar um padrão a uma lista. Campos: `ignore-files`, `base-branches`, `ignore-titles` |
+| `remove-pattern [repository] <field> <pattern>`             | Remover um padrão de uma lista                                                           |
+| `add-ignore-file`, `remove-ignore-file [repository] <pattern>`   | Atalhos para a lista `ignore-files`                                                 |
+| `add-base-branch`, `remove-base-branch [repository] <pattern>`   | Atalhos para a lista `base-branches`                                                |
+| `add-ignore-title`, `remove-ignore-title [repository] <pattern>` | Atalhos para a lista `ignore-titles`                                                |
+| `model list`, `model set [repository] <modelId>`, `model unset [repository]`, `model test <modelId>` | Escolher o modelo de revisão entre os modelos BYOK que sua organização configurou. `set` aceita `--force` para um id que não está na lista |
+| `messages show`, `set`, `unset`, `fields`                   | Ler e alterar as mensagens customizadas que a Kody posta quando uma revisão começa, termina ou falha |
+| `language show`, `set <language>`, `list`                   | Ler e alterar o idioma de revisão do time, por código (`pt-BR`) ou nome                  |
+| `skills list`, `discover`, `add`, `remove`, `link`, `unlink` | Gerenciar as skills e docs que a revisão principal e os agentes customizados seguem     |
+
+Os comandos que recebem um escopo aceitam `--team <team>` (necessário quando sua organização tem mais de um time) e `--directory <path>`. A maioria também aceita `--json`.
+
+Com uma chave de equipe, `set` aceita `review.enabled`, `review.autoApprove`, `review.requestChanges.minSeverity`, `patterns.ignoreFiles`, `patterns.baseBranches` e `patterns.ignoreTitles`. Esses nomes funcionam quando você está logado também.
+
+Quando a [Centralized Config](#kodus-config-centralized) está ligada, uma alteração é proposta como um pull request e o comando imprime o link dele.
+
+---
+
 ## `kodus config centralized`
 
-Gerencia configuração centralizada pelo CLI.
+Gerencia a configuração centralizada pelo CLI. Exige uma chave de equipe com **Allow repository configuration via CLI** ativado.
 
 ### Uso
 
@@ -257,216 +400,362 @@ kodus config centralized download --out ./centralized-config.zip
 
 ### Subcomandos
 
-| Subcomando              | Descrição                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `status`                | Exibe se a configuração centralizada está habilitada e o repositório de origem selecionado |
-| `init [repository]`     | Habilita a configuração centralizada para um repositório selecionado               |
-| `sync`                  | Executa a sincronização de configuração centralizada sob demanda                   |
-| `disable`               | Desabilita a configuração centralizada e limpa o repositório selecionado           |
-| `download --out <path>` | Baixa o pacote ZIP de configuração centralizada                                    |
+| Subcomando              | Descrição                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `status`                | Mostrar se a configuração centralizada está habilitada e o repositório de origem selecionado |
+| `init [repository]`     | Habilitar a configuração centralizada para um repositório selecionado         |
+| `sync`                  | Executar a sincronização da configuração centralizada sob demanda            |
+| `disable`               | Desabilitar a configuração centralizada e limpar o repositório selecionado    |
+| `download --out <path>` | Baixar o pacote ZIP da configuração centralizada                              |
 
 ### Flags
 
-| Flag                           | Aplica-se a                 | Descrição                          |
-| ------------------------------ | --------------------------- | ---------------------------------- |
-| `--sync-option <pr \| manual>` | `init`                      | Estratégia de sincronização. Padrão é `pr` |
+| Flag                           | Aplica-se a                 | Descrição                         |
+| ------------------------------ | --------------------------- | --------------------------------- |
+| `--sync-option <pr or manual>` | `init`                      | Estratégia de sincronização. O padrão é `pr` |
 | `--out <path>`                 | `download`                  | Caminho de saída obrigatório para o arquivo ZIP |
-| `--json`                       | todos os subcomandos centralized | Saída JSON estruturada          |
+| `--json`                       | todos os subcomandos de centralized | Imprimir JSON estruturado |
 
-Para um guia completo, veja: [/en/how_to_use/code_review/configs/centralized_config#cli-dedicated-section](/pt-BR/how_to_use/code_review/configs/centralized_config#cli)
-
----
-
-## `kodus config repo`
-
-Inspeciona e atualiza configurações de repositório armazenadas no Kodus. Requer autenticação por chave de equipe, e a chave precisa ter **Allow repository configuration via CLI** ativado (**Organization → CLI keys**, **Configure** na chave; desativado por padrão). Use `.` para referenciar o repositório atual.
-
-<Note>`kodus config repo` e `kodus config remote` são aliases para o mesmo grupo de comandos.</Note>
-
-### Uso
-
-```bash
-kodus config repo add                                   # Adicionar repositório atual ao Kodus
-kodus config repo add owner/repo                        # Adicionar um repositório específico
-kodus config repo list                                  # Listar repositórios configurados
-kodus config repo show                                  # Exibir configurações do repositório atual
-kodus config repo setup                                 # Assistente de configuração guiado
-kodus config repo set . reviewEnabled true              # Definir uma configuração diretamente
-kodus config repo open                                  # Abrir o painel do Kodus
-kodus config repo add-ignore-file . "**/*.generated.ts"
-kodus config repo add-base-branch . "release/*"
-kodus config repo add-ignore-title . "^WIP:"
-```
-
-### Subcomandos
-
-| Subcomando                                         | Descrição                                                                   |
-| -------------------------------------------------- | --------------------------------------------------------------------------- |
-| `add [repository]`                                 | Adicionar um repositório ao Kodus (atalho: `kodus config -r [repository]`) |
-| `list`                                             | Listar repositórios configurados no Kodus                                   |
-| `show [repository]`                                | Exibir configurações do repositório                                         |
-| `setup [repository]`                               | Executar um assistente de configuração de repositório guiado                |
-| `set [repository] <key> <value>`                   | Definir uma configuração de repositório diretamente                         |
-| `open [repository]`                                | Abrir o painel do Kodus para configurações avançadas                        |
-| `add-pattern [repository] <field> <pattern>`       | Adicionar um padrão a um campo de lista (`ignore-files`, `base-branches`, `ignore-titles`) |
-| `remove-pattern [repository] <field> <pattern>`    | Remover um padrão de um campo de lista                                      |
-| `add-ignore-file [repository] <pattern>`           | Atalho: adicionar um padrão aos padrões de arquivo ignorados                |
-| `remove-ignore-file [repository] <pattern>`        | Atalho: remover um padrão de arquivo ignorado                               |
-| `add-base-branch [repository] <pattern>`           | Atalho: adicionar um padrão de branch base                                  |
-| `remove-base-branch [repository] <pattern>`        | Atalho: remover um padrão de branch base                                    |
-| `add-ignore-title [repository] <pattern>`          | Atalho: adicionar um padrão de título ignorado                              |
-| `remove-ignore-title [repository] <pattern>`       | Atalho: remover um padrão de título ignorado                                |
-
-### Flags
-
-| Flag          | Aplica-se a | Descrição                              |
-| ------------- | ----------- | -------------------------------------- |
-| `--no-prompt` | `add`       | Ignorar o prompt de configuração pós-adição |
+Para um passo a passo completo, veja o [guia de Configuração Centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config#cli).
 
 ---
 
 ## `kodus rules`
 
-Cria, atualiza e visualiza Kody Rules — regras estruturadas que o Kodus aplica durante as revisões.
+Cria, atualiza, visualiza, pausa, retoma e exclui Kody Rules — regras estruturadas que a Kodus aplica durante a revisão.
 
-Com uma chave de equipe, a chave precisa ter **Allow Kody Rules management via CLI** ativado (**Organization → CLI keys**, **Configure** na chave; desativado por padrão).
+Com uma chave de equipe, a chave precisa de **Allow Kody Rules management via CLI** ativado (**Organization → CLI keys**, **Configure** na chave; desativado por padrão). Com um login, valem as permissões do seu role no app web. `pause`, `resume` e `delete` exigem um login.
 
 ### Uso
 
 ```bash
-kodus rules view                                         # Ver todas as regras da sua equipe
-kodus rules view --repo-id <id>                          # Filtrar por repositório
-kodus rules view --uuid <rule-uuid>                      # Buscar uma única regra
+kodus rules view                                         # View all rules for your team
+kodus rules view --repo-id <id>                          # Filter by repository
+kodus rules view --uuid <rule-uuid>                      # Fetch a single rule
 kodus rules create --title "No console.log" --rule "Avoid leaving console.log in committed code" --severity high
 kodus rules update --uuid <rule-uuid> --severity critical
+kodus rules pause --uuid <rule-uuid>
+kodus rules resume --uuid <rule-uuid>
+kodus rules delete --uuid <rule-uuid>
 ```
 
 ### Subcomandos
 
-| Subcomando | Descrição                    |
-| ---------- | ---------------------------- |
-| `create`   | Criar uma nova Kody Rule     |
-| `update`   | Atualizar uma regra existente |
-| `view`     | Visualizar Kody Rules        |
+| Subcomando | Descrição                                                |
+| ---------- | -------------------------------------------------------- |
+| `create`   | Criar uma nova Kody Rule                                 |
+| `update`   | Atualizar uma regra existente                            |
+| `view`     | Ver Kody Rules                                           |
+| `pause`    | Manter as regras na lista, mas parar de aplicá-las nas revisões |
+| `resume`   | Voltar a aplicar as regras pausadas                      |
+| `delete`   | Excluir regras                                           |
 
 ### Flags de `rules create`
 
-| Flag                    | Padrão      | Descrição                                              |
-| ----------------------- | ----------- | ------------------------------------------------------ |
-| `--title <title>`       | —           | Título da regra                                        |
-| `--rule <rule>`         | —           | Conteúdo/descrição da regra                            |
-| `--repo-id <id>`        | `global`    | ID do repositório (ou `global` para aplicar a todos)   |
-| `--severity <severity>` | `medium`    | `low`, `medium`, `high`, `critical`                    |
-| `--scope <scope>`       | `file`      | `pull request` ou `file`                               |
-| `--path <glob>`         | `**/*`      | Padrão glob para seleção de arquivos                   |
-| `--json`                | `false`     | Exportar regra criada como JSON                        |
+| Flag                    | Padrão      | Descrição                                         |
+| ----------------------- | ----------- | ------------------------------------------------- |
+| `--title <title>`       | —           | Título da regra (obrigatório)                     |
+| `--rule <rule>`         | —           | Conteúdo/descrição da regra (obrigatório)         |
+| `--repo-id <id>`        | `global`    | ID do repositório (ou `global` para aplicar a todos os repos) |
+| `--severity <severity>` | `medium`    | `low`, `medium`, `high`, `critical`               |
+| `--scope <scope>`       | `file`      | `file` ou `pull-request`                          |
+| `--path <glob>`         | `**/*`      | Padrão glob para direcionar arquivos              |
+| `--team <team>`         | —           | Nome ou id do time, quando sua organização tem mais de um (apenas com login) |
+| `--json`                | `false`     | Imprimir a regra criada como JSON                 |
 
 ### Flags de `rules update`
 
-| Flag                    | Descrição                                        |
-| ----------------------- | ------------------------------------------------ |
-| `--uuid <uuid>`         | UUID da regra a atualizar (obrigatório)           |
-| `--repo-id <id>`        | ID de repositório atualizado                     |
-| `--title <title>`       | Título atualizado                                |
-| `--rule <rule>`         | Conteúdo/descrição atualizado                    |
-| `--severity <severity>` | Severidade atualizada                            |
-| `--scope <scope>`       | Escopo atualizado                                |
-| `--path <glob>`         | Padrão glob atualizado                           |
-| `--json`                | Exportar regra atualizada como JSON              |
+| Flag                    | Descrição                                       |
+| ----------------------- | ----------------------------------------------- |
+| `--uuid <uuid>`         | UUID da regra a atualizar (obrigatório)         |
+| `--repo-id <id>`        | ID do repositório atualizado                    |
+| `--title <title>`       | Título atualizado                               |
+| `--rule <rule>`         | Conteúdo/descrição atualizado                   |
+| `--severity <severity>` | Severidade atualizada                           |
+| `--scope <scope>`       | Escopo atualizado                               |
+| `--path <glob>`         | Padrão glob atualizado                          |
+| `--team <team>`         | Nome ou id do time (apenas com login)           |
+| `--json`                | Imprimir a regra atualizada como JSON           |
+
+Passe pelo menos um campo para alterar.
 
 ### Flags de `rules view`
 
-| Flag             | Descrição                          |
-| ---------------- | ---------------------------------- |
-| `--uuid <uuid>`  | Buscar uma única regra por UUID    |
+| Flag             | Descrição                      |
+| ---------------- | ------------------------------ |
+| `--uuid <uuid>`  | Buscar uma única regra por UUID |
 | `--repo-id <id>` | Filtrar regras por ID de repositório |
-| `--json`         | Exportar regras como JSON          |
+| `--team <team>`  | Nome ou id do time (apenas com login) |
+| `--json`         | Imprimir as regras como JSON   |
+
+### Flags de `rules pause`, `resume` e `delete`
+
+| Flag            | Descrição                                                           |
+| --------------- | ------------------------------------------------------------------- |
+| `--uuid <uuid>` | UUID da regra (obrigatório). Repita a flag ou separe vários com vírgulas |
+| `--team <team>` | Nome ou id do time, quando sua organização tem mais de um           |
+| `--json`        | Imprimir o resultado como JSON                                      |
+
+Uma regra que mantém seu status, por exemplo porque seu plano não permite mais regras ativas, é listada e o comando termina com código 1.
+
+Quando a [Centralized Config](#kodus-config-centralized) está ligada, `create`, `update`, `pause`, `resume` e `delete` abrem um pull request e imprimem o link dele em vez de alterar a regra.
+
+---
+
+## `kodus agents`
+
+Lista, cria, edita, liga e desliga, exclui e testa [agentes customizados](/pt-BR/how_to_use/code_review/custom_agents).
+
+Faça login em um workspace com [acesso aos custom agents](/pt-BR/how_to_use/code_review/custom_agents). Para criar ou alterar agentes, use uma conta Owner ou Repo Admin de um repositório atribuído.
+
+### Uso
+
+```bash
+kodus agents list
+kodus agents show "Billing guard"
+kodus agents create --name "Billing guard" --instructions "Flag invoice totals computed with floating point" --include "src/billing/**"
+kodus agents try "Billing guard" --repo org/repo --pr https://github.com/org/repo/pull/42
+kodus agents enable "Billing guard"
+```
+
+Um agente é identificado pelo id, pelo nome ou pelo comando `@kody -v`.
+
+### Subcomandos
+
+| Subcomando       | Descrição                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| `list`           | Listar os agentes que uma revisão roda neste nível                                       |
+| `show <agent>`   | Mostrar um agente com sua configuração completa                                          |
+| `create`         | Criar um agente. Ele começa desligado: teste-o, depois ligue-o. `--enable` o liga na hora |
+| `update <agent>` | Alterar um agente. Só mudam os campos que você passar                                    |
+| `enable <agent>` | Ligar um agente: as revisões o rodam                                                     |
+| `disable <agent>`| Desligar um agente: as revisões não o rodam                                              |
+| `delete <agent>` | Excluir um agente. Os achados dele permanecem nos pull requests passados                 |
+| `try <agent>`    | Rodar um agente em um pull request sem postar. Exige `--pr <url>` e `--repo`. Os campos do agente que você passar mudam apenas esta execução |
+
+### Flags de nível
+
+Todo subcomando aceita estas:
+
+| Flag                    | Padrão   | Descrição                                                       |
+| ----------------------- | -------- | --------------------------------------------------------------- |
+| `--team <name or id>`   | —        | Time, quando sua organização tem mais de um                     |
+| `--repo <repository>`   | `global` | ID ou nome do repositório, ou `global` para os agentes que todo repositório recebe |
+| `--directory <path or id>` | —     | Um diretório de `--repo` com suas próprias configurações        |
+| `--json`                | —        | Imprimir como JSON                                              |
+
+### Flags de campo do agente
+
+`create`, `update` e `try` aceitam estas. `create` também aceita `--template <id>` (`architecture`, `e2e-coverage`, `regression-hallucination`, `security` ou `blank`).
+
+| Flag                        | Descrição                                                         |
+| --------------------------- | ----------------------------------------------------------------- |
+| `--name <name>`             | Nome do agente (também o comando `@kody -v` dele)                 |
+| `--instructions <text>`     | O que o agente revisa e como                                      |
+| `--from-file <file>`        | Ler os campos do agente de um arquivo `.json`, ou as instruções de qualquer outro arquivo |
+| `--include <glob>`          | Rodar apenas nos arquivos alterados que correspondem ao glob. Repetível |
+| `--exclude <glob>`          | Pular os arquivos alterados que correspondem ao glob. Repetível   |
+| `--color <hex>`             | Cor da tag dos comentários dele                                   |
+| `--comment-format <format>` | `inline` ou `single-comment`                                      |
+| `--min-severity <severity>` | Menor severidade que ele posta: `low`, `medium`, `high`, `critical` ou `none` |
+| `--max-comments <n>`        | Máximo de comentários que ele posta por revisão                   |
+| `--suggested-fix <mode>`    | `when-confident` ou `never`                                       |
+| `--writing <text>`          | Como os comentários dele são escritos                             |
+| `--model <modelId>`         | ID do modelo BYOK em que ele roda. Um valor vazio usa a tabela de routing |
+| `--ast-grep <yaml or path>` | YAML de regra do ast-grep, ou o caminho no repositório de um arquivo de regra |
+| `--ast-grep-file <file>`    | Ler o YAML de regra do ast-grep de um arquivo local               |
+| `--skill <path>`            | Vincular uma pasta de skill do repositório. Repetível             |
+| `--doc <path>`              | Vincular um arquivo de doc do repositório. Repetível              |
+| `--unlink <path>`           | Desvincular uma skill ou doc. Repetível                           |
+
+Quando a [Centralized Config](#kodus-config-centralized) está ligada, as alterações abrem um pull request e imprimem o link dele.
+
+---
+
+## `kodus cockpit`
+
+Lê os painéis do Cockpit do app web, um subcomando por aba.
+
+Faça login como Owner ou Repo Admin. Valem os mesmos [requisitos de plano e self-hosted do Cockpit](/pt-BR/how_to_use/cockpit/overview).
+
+```bash
+kodus cockpit kodus-review
+kodus cockpit productivity --from 2026-10-01 --to 2026-10-31 --repo org/repo
+kodus cockpit intent --json
+kodus cockpit code-areas --repo org/repo
+```
+
+| Subcomando      | Aba e o que ela mostra                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| `kodus-review`  | Kodus Review: taxa de implementação, críticos ignorados, feedback, resultados das revisões, saúde dos repositórios e das Kody Rules |
+| `intent`        | Entregue como pedido: pull requests conferidos contra a tarefa deles                               |
+| `productivity`  | Productivity: frequência de deploy, tempo de ciclo de PR, proporção de bugs, tamanho de PR e atividade do time |
+| `code-areas`    | Hotspots de código (beta): as áreas de um repositório que mais mudam e concentram mais correções de bugs. Veja [Hotspots de código](/pt-BR/how_to_use/cockpit/code_hotspots) |
+
+| Flag                  | Descrição                                                                       |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `--from <date>`       | Data inicial, `YYYY-MM-DD` (padrão: 15 dias atrás)                              |
+| `--to <date>`         | Data final, `YYYY-MM-DD` (padrão: hoje)                                         |
+| `--repo <repository>` | ID do repositório ou `owner/name` (padrão: todos os repositórios; `code-areas` usa por padrão o primeiro repositório do time) |
+| `--team <team>`       | Nome ou id do time, quando sua organização tem mais de um                       |
+| `--json`              | Imprimir as métricas brutas como JSON                                           |
+
+`code-areas` usa a janela de histórico armazenada para o repositório. `--from` e `--to` alteram o intervalo dos outros subcomandos.
+
+Veja o [Cockpit](/pt-BR/how_to_use/cockpit/overview) para o significado de cada métrica.
+
+---
+
+## `kodus usage`
+
+Consulte os dados de uso exibidos no app web.
+
+Faça login como Owner, Billing Manager ou Repo Admin. Veja o painel em [Token usage](/pt-BR/how_to_use/organization/token_usage).
+
+### `usage tokens`
+
+Uso e custo de tokens: totais, custo, a variação em relação ao período anterior e um detalhamento.
+
+```bash
+kodus usage tokens
+kodus usage tokens --by model --from 2026-10-01 --to 2026-10-31
+kodus usage tokens --by developer --repo org/repo --json
+```
+
+| Flag                     | Descrição                                                                |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `--by <dimension>`       | Detalhamento: `daily`, `pr`, `developer`, `review`, `model` (padrão `daily`) |
+| `--from <date>`          | Data inicial, `YYYY-MM-DD` (padrão: 15 dias atrás)                       |
+| `--to <date>`            | Data final, `YYYY-MM-DD` (padrão: hoje)                                  |
+| `--repo <repository>`    | ID do repositório ou `owner/name`                                        |
+| `--developer <developer>`| Apenas este desenvolvedor                                                |
+| `--pr <number>`          | Apenas este número de pull request                                       |
+| `--team <team>`          | Nome ou id do time, quando sua organização tem mais de um                |
+| `--json`                 | Imprimir os dados de uso como JSON                                       |
+
+---
+
+## `kodus issues`
+
+<Note>
+  Este comando já está no `main` e ainda não faz parte da versão 0.4.22 do CLI.
+</Note>
+
+Liste as [Kody Issues](/pt-BR/how_to_use/issues/overview) que sua conta tem permissão para ler. Por padrão, aparecem as issues abertas, em ordem decrescente de severidade.
+
+Rode `kodus auth login` como Owner, Repo Admin ou Contributor. O comando funciona em todos os planos.
+
+```bash
+kodus auth login
+kodus issues list
+kodus issues list --repo my-repo --status all --json
+```
+
+| Opção | Descrição |
+| --- | --- |
+| `--status <status>` | Filtra por `open`, `resolved`, `dismissed` ou `all`. O padrão é `open`. |
+| `--repo <repo>` | Filtra por nome ou ID do repositório. |
+| `--json` | Retorna a lista em JSON. |
+
+Os achados do Deep Scan e os prompts de correção exigem um workspace da Kodus Cloud com acesso ao alpha privado.
+
+---
+
+## `kodus trace`
+
+Lê as decisões registradas para um caminho e gerencia a captura de sessões de agentes de programação.
+
+```bash
+kodus trace src/billing                 # Decisions recorded for a path
+kodus trace enable                      # Start capturing in this repository
+kodus trace status                      # What was captured, which hooks are installed
+kodus trace forget <id>                 # Remove a decision that is wrong
+kodus trace pin <id>                    # Mark a decision to always keep
+kodus trace ui                          # Browse sessions in your browser
+kodus trace disable                     # Remove the hooks
+```
+
+Veja [Kodus Trace](/pt-BR/how_to_use/cli/trace) para saber como funciona.
 
 ---
 
 ## `kodus skills`
 
-Inspeciona e instala as skills de agentes incluídas no CLI (Claude Code, Cursor, Codex).
+Inspeciona e instala as skills da Kodus incluídas no CLI nos agentes de IA da sua máquina.
 
 ### Uso
 
 ```bash
-kodus skills list                                        # Listar skills incluídas
-kodus skills install                                     # Instalar nas raízes de agentes detectadas
-kodus skills install --dry-run                           # Visualizar alterações
-kodus skills resync                                      # Ressincronizar skills incluídas
-kodus skills uninstall                                   # Remover skills incluídas
+kodus skills list                                        # List bundled skills
+kodus skills install                                     # Install into detected agents
+kodus skills install --dry-run                           # Preview changes
+kodus skills resync                                      # Refresh installed skills
+kodus skills uninstall                                   # Remove installed skills
 ```
 
 ### Subcomandos
 
-| Subcomando  | Descrição                                                                    |
-| ----------- | ---------------------------------------------------------------------------- |
-| `list`      | Listar skills incluídas disponíveis neste pacote CLI                         |
-| `sync`      | Sincronizar skills incluídas com diretórios de agentes locais detectados     |
-| `resync`    | Ressincronizar skills incluídas com diretórios de agentes locais detectados  |
-| `install`   | Instalar skills incluídas nas raízes de agentes detectadas (cria dirs se necessário) |
-| `uninstall` | Desinstalar skills gerenciadas incluídas dos diretórios de agentes detectados |
+| Subcomando  | Descrição                                                                                |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `list`      | Listar as skills incluídas nesta versão do CLI (também o que `kodus skills` sozinho imprime) |
+| `install`   | Instalar as skills em todo agente que o CLI detecta, no diretório atual e na sua pasta home, criando a pasta de skills se necessário |
+| `sync`      | Atualizar as skills nos agentes que já as têm                                            |
+| `resync`    | Igual a `sync`                                                                           |
+| `uninstall` | Remover as skills que o CLI instalou                                                     |
 
 ### Flags
 
-| Flag        | Aplica-se a                               | Descrição                                      |
-| ----------- | ----------------------------------------- | ---------------------------------------------- |
-| `--dry-run` | `install`, `sync`, `resync`, `uninstall`  | Mostrar alterações planejadas sem gravar arquivos |
+| Flag        | Aplica-se a                              | Descrição                                      |
+| ----------- | ---------------------------------------- | ---------------------------------------------- |
+| `--dry-run` | `install`, `sync`, `resync`, `uninstall` | Mostrar as alterações planejadas sem gravar arquivos |
 
-<Tip>Para bootstrap completo com múltiplos agentes, prefira o instalador de plataforma (`curl -fsSL https://review-skill.com/install | bash`). `kodus skills` cobre ressincronização local e limpeza.</Tip>
+O CLI detecta um agente pela pasta de configuração dele. [Agentes de IA](/pt-BR/how_to_use/cli/ai_agents) lista os agentes e as skills.
+
+<Tip>Para um bootstrap completo da máquina, prefira o instalador (`curl -fsSL https://review-skill.com/install | bash`). O `kodus skills` cobre atualização e limpeza.</Tip>
 
 ---
 
 ## `kodus status`
 
-Exibe um status consolidado do Kodus: modo de autenticação, organização, repositório, hook, skills incluídas e versão do CLI.
+Mostra um status consolidado da Kodus: versão do CLI, modo de autenticação, se uma chave de equipe está configurada, repositório e branch, hook pre-push, hooks de decisão e o número de skills incluídas.
 
 ```bash
 kodus status
 ```
 
-Útil como primeiro diagnóstico quando algo não funciona ou ao configurar uma nova máquina.
-
----
-
-## `kodus diff`
-
-Abre o changeset atual no visualizador de diff do Hunk no terminal.
-
-```bash
-kodus diff
-```
-
-É um wrapper fino sobre o `hunk diff` — todo argumento que você passar é repassado sem alteração,
-então qualquer flag suportada pelo Hunk também funciona aqui.
-
-<Note>
-  Útil para dar uma olhada no changeset antes de rodar o `kodus review` nele. O mesmo
-  visualizador sustenta a experiência de revisão interativa; passe `--no-hunk` ao `kodus review`
-  se preferir a lista antiga.
-</Note>
+Útil como primeiro diagnóstico quando algo se comporta mal ou ao configurar uma máquina nova.
 
 ---
 
 ## `kodus update`
 
-Atualiza o Kodus CLI para a versão mais recente do npm.
+Atualiza o CLI da Kodus para a versão mais recente do npm.
 
 ```bash
 kodus update
 ```
 
-Resolve o comando de instalação global correto para o seu gerenciador de pacotes (`npm`, `yarn`, `pnpm`, `bun`) e o executa. Se um script de instalação foi usado, o CLI aponta para o comando de re-execução correspondente.
+Executa o comando de instalação global do gerenciador de pacotes que o iniciou (`npm`, `pnpm`, `yarn` ou `bun`; `npm` quando não consegue identificar) e depois imprime como atualizar as skills dos seus agentes. Execute `kodus skills resync` para atualizá-las.
 
 ---
 
 ## `kodus subscribe`
 
-Abre a página de preços/upgrade do Kodus no seu navegador.
+Abre a página de preços da Kodus no seu navegador.
 
 ```bash
 kodus subscribe
+```
+
+---
+
+## `kodus schema`
+
+Imprime a árvore de comandos como JSON: todo comando, seus argumentos e suas opções. Útil para um agente que precisa conferir quais flags existem.
+
+```bash
+kodus schema
+kodus schema --command "pr suggestions"
 ```
 
 ---
@@ -475,23 +764,23 @@ kodus subscribe
 
 Os problemas são categorizados por severidade, do mais ao menos crítico:
 
-| Nível      | Descrição                                                             |
-| ---------- | --------------------------------------------------------------------- |
+| Nível      | Descrição                                                        |
+| ---------- | ---------------------------------------------------------------- |
 | `critical` | Problemas graves de segurança ou estabilidade que exigem atenção imediata |
-| `error`    | Bugs ou problemas significativos                                      |
-| `warning`  | Problemas potenciais que merecem atenção                              |
-| `info`     | Sugestões e boas práticas                                             |
+| `error`    | Bugs ou problemas significativos                                 |
+| `warning`  | Problemas potenciais que valem ser tratados                      |
+| `info`     | Sugestões e boas práticas                                        |
 
 ## Categorias de Problemas
 
-| Categoria                | Descrição                                   |
-| ------------------------ | ------------------------------------------- |
-| `security_vulnerability` | Problemas relacionados à segurança          |
-| `bug`                    | Bugs potenciais                             |
-| `performance`            | Oportunidades de otimização de desempenho   |
-| `code_quality`           | Melhorias de qualidade de código            |
-| `best_practices`         | Violações de boas práticas                  |
-| `complexity`             | Problemas de complexidade de código         |
-| `maintainability`        | Preocupações de manutenibilidade            |
-| `style`                  | Problemas de estilo de código               |
-| `documentation`          | Lacunas de documentação (aceito por `--category` em `kodus pr suggestions`) |
+| Categoria                | Descrição                              |
+| ------------------------ | -------------------------------------- |
+| `security_vulnerability` | Problemas relacionados à segurança     |
+| `bug`                    | Possíveis bugs                         |
+| `performance`            | Oportunidades de otimização de desempenho |
+| `code_quality`           | Melhorias na qualidade do código       |
+| `best_practices`         | Violações de boas práticas             |
+| `complexity`             | Problemas de complexidade do código    |
+| `maintainability`        | Preocupações de manutenibilidade       |
+| `style`                  | Problemas de estilo de código          |
+| `documentation`          | Lacunas de documentação (aceita por `--category` em `kodus pr suggestions`) |

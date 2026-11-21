@@ -1,38 +1,41 @@
 ---
 title: "Frequência de Deploy"
-description: "Meça com que frequência sua equipe faz deploy de código para produção"
+description: "Quantos pull requests seu time fecha por semana, usado como indicador de com que frequência ele faz deploy"
 ---
 
 ## O que é Frequência de Deploy
 
-A Frequência de Deploy mede quantas vezes sua equipe faz deploy de código para produção com sucesso dentro de um determinado período. Essa métrica é um indicador-chave da capacidade da sua equipe de entregar valor rapidamente e manter um pipeline de entrega fluido.
+A Frequência de Deploy é o número médio de pull requests que o seu time fecha por semana. O Cockpit não lê deploys do seu CI/CD, então usa pull requests fechados como substituto de com que frequência o código chega à produção.
+
+No Cockpit, é o card **Deploy Frequency** na aba **Productivity**.
 
 ## Como Calculamos
 
-Rastreamos automaticamente cada vez que sua equipe faz merge de código na branch principal (ou branch padrão). Como merges para a main normalmente disparam deploys, isso nos dá uma boa medida de com que frequência sua equipe entrega código para produção.
-
-**O que rastreamos:**
-- Cada merge para sua branch main/padrão
-- O intervalo de datas selecionado no topo do Cockpit, exibido como média por semana
-- Integrações de código bem-sucedidas
-
-**Como é calculado:**
 ```
-Frequência de Deploy = (Número de Merges para Main) ÷ (Período em Semanas)
+Deploy Frequency = (PRs closed in the range) ÷ (weeks in the range)
 ```
 
-Por exemplo, se você faz merge 12 vezes para main em um período de 4 semanas, sua frequência de deploy é de 3 merges por semana.
+- O intervalo é o intervalo de datas selecionado no topo do Cockpit. Sua duração em semanas é arredondada para cima, com mínimo de uma semana.
+- Todo PR fechado conta, qualquer que seja sua branch base, e um PR fechado sem merge conta igual a um mergeado.
 
-**Nota**: Medimos merges para main porque eles tipicamente representam quando o código está pronto para deploy em produção. Se sua equipe tem um fluxo de trabalho diferente (como deploy a partir de feature branches), essa métrica pode precisar de interpretação.
+Por exemplo, se 12 PRs são fechados em um intervalo de 4 semanas, a Frequência de Deploy é 3 por semana.
 
-## Por que é Importante
+Se o seu time faz deploy em um ritmo diferente do que fecha PRs (por exemplo, release trains ou deploys a partir de feature branches), leia esse número como throughput de PRs, não como deploys.
 
-Deploys frequentes garantem que novas funcionalidades e correções de bugs cheguem aos usuários rapidamente, aumentando a satisfação do cliente e a competitividade. Eles também reduzem riscos e facilitam a resolução de problemas.
+## Lendo o card
+
+O card mostra a média por semana, um badge de nível e o valor do período anterior de mesma duração, com a variação percentual. O rodapé diz "Last 2 weeks was …" qualquer que seja o intervalo selecionado; o número é do período anterior. Passe o mouse sobre o badge para ver os níveis:
+
+| PRs fechados por semana | Nível |
+| --- | --- |
+| Mais de 5 | Elite |
+| 2 a 5 | High |
+| 1 a 2 | Fair |
+| Menos de 1 | Need focus |
 
 ## Como Melhorar
 
-- Implemente pipelines CI/CD para deploys automatizados
 - Divida grandes alterações em PRs menores
+- Implemente pipelines CI/CD para deploys automatizados
 - Use feature flags para fazer deploy sem expor funcionalidades
-- Implemente infraestrutura como código para deploys repetíveis
-- Configure monitoramento abrangente e rollback rápido
+- Configure monitoramento e rollback rápido

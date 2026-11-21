@@ -1,0 +1,51 @@
+---
+title: "Token usage"
+description: "See how many tokens your reviews use and what they cost, by day, pull request, review run, developer, model and task."
+---
+
+**Organization → Token usage** shows the tokens your reviews consume and an estimate of what they cost.
+
+Owners, Billing Managers and Repo Admins can open the dashboard or query usage with `kodus usage tokens` after signing in.
+
+For a monthly budget with alerts, see [Spend limit](/en/how_to_use/spend-limit), which links here for the full breakdown.
+
+To check token usage and estimated cost from the terminal or export them as JSON, use [`kodus usage tokens`](/en/how_to_use/cli/commands#usage-tokens).
+
+## Filters
+
+- **Models**: tick the models to include. All are selected by default.
+- **Repository**: shown when you have connected repositories.
+- **View**: **Daily**, **By PR**, **By Review** or **By Developer**. **By PR** adds a **PR Number** box, and **By Developer** adds a developer picker.
+- **Date range**: **Last week**, **Last 15 days**, **Last month**, **Last 3 months** or custom dates. The default is the last 15 days.
+
+## Summary cards
+
+Totals for the range and filters, with the change against the previous period of the same length where shown.
+
+| Card | What it shows |
+| --- | --- |
+| **Total cost** | Estimated cost, with the average per day and per PR |
+| **Total tokens** | All tokens used, including reasoning tokens |
+| **Uncached input** | Input tokens billed at the full input price |
+| **Cache read** | Input tokens served from the provider's prompt cache, billed at a discount, with what that saved |
+| **Output** | Output tokens, including reasoning |
+| **Cache write** | Input tokens that filled a cache entry. Shown only when there are some |
+
+Cost is estimated from each model's per-token prices. Models with **Price unavailable** still contribute to token counts. The cost totals omit their spend, so treat those totals as partial estimates.
+
+If you set a monthly budget, a **Monthly spend limit (BYOK)** bar shows this month's spend against it. It always covers the current month and ignores the date range.
+
+## Chart
+
+The chart follows the **View** you picked, and **Tokens** / **USD** switches its unit. **By PR**, **By Review** and **By Developer** show the 24 biggest consumers by tokens:
+
+- **Daily**: **Usage over time**, split by uncached input, cache, output and reasoning.
+- **By PR**: **Top pull requests**, the PRs that used the most tokens.
+- **By Review**: **Top review runs**. Each bar is one review run, so a PR reviewed twice appears twice. A **Review activity** table below lists each run with its PR, start time, models, tokens and cost, most expensive first, up to 100 runs. Narrow the filters to see the rest.
+- **By Developer**: **Top developers**, with usage attributed to the PR author.
+
+## Where tokens go
+
+**Where tokens go** breaks spend down by task, such as Code Review, Kody Rules Review, PR Summary, Conversation and Custom Agents, with a bar showing the mix of input, cache, output and reasoning. Expand a task to see the steps it ran and which models ran it and when. Spend that can't be tied to a task is listed as **Unrouted**.
+
+Below it, each model has its own row with its cost. Expand a row for its tokens and cost per token type, and hover the price icon for the model's rates.

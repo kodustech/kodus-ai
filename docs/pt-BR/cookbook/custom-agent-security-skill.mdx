@@ -6,9 +6,11 @@ icon: "shield-halved"
 
 ## Por que uma skill
 
-Seu time pode já manter as regras de segurança como uma skill de agente, para assistentes de código. Um agente personalizado pode seguir a mesma skill no code review: ele abre a skill quando a mudança pede, lê os arquivos de referência e cita a regra que cada apontamento aplica. Quando a skill muda na branch principal, o agente segue a versão nova sem mexer nas configurações.
+Seu time pode já manter as regras de segurança como uma skill de agente, para assistentes de código. Um agente personalizado pode seguir a mesma skill no code review: ele abre a skill quando a mudança pede, lê os arquivos de referência e cita a regra que cada apontamento aplica. Quando a skill muda na branch para a qual um pull request aponta, o agente segue a versão nova sem nenhuma mudança de configuração.
 
 O exemplo é uma API de agendamento multi-tenant em que toda consulta precisa ficar restrita ao workspace de quem chama.
+
+Os agentes personalizados estão em beta, nos planos Teams e Enterprise e durante o trial. A Kodus self-hosted também precisa de `BETA_FEATURES=true`.
 
 ## Passo 1 — A skill no repositório
 
@@ -34,7 +36,7 @@ For the list of tenant tables, see references/tenant-tables.md.
 bookings, calendars, invoices, members, resources
 ```
 
-O nome da pasta e o `name` precisam ser iguais, e `description` é obrigatório.
+O `name` usa letras minúsculas, dígitos e hifens (um `name` diferente da pasta é lido como o nome da pasta), e `description` é obrigatório.
 
 ## Passo 2 — Importe como agente
 
@@ -83,9 +85,9 @@ Se o seu gerenciador de tarefas está instalado como plugin, ligue-o em **Tools 
 | **Minimum severity** | High | Só vazamento entre tenants e falta de autorização, não ideias de hardening. |
 | **Suggested fix** | When confident | |
 
-Clique em **Save**.
+Clique em **Save settings**.
 
-## Passo 6 — Try it
+## Passo 6 — Teste
 
 Rode o **Try it** num pull request que adiciona um endpoint. Confira:
 
@@ -103,10 +105,10 @@ Ligue o agente. Para pedir uma segunda opinião num pull request aberto mais tar
 
 ## Checklist
 
-- [ ] O `SKILL.md` tem `name` igual ao da pasta e uma `description`
-- [ ] Os arquivos de referência ficam no máximo uma pasta abaixo da skill
+- [ ] O `SKILL.md` tem um `name` e uma `description`
+- [ ] Os arquivos de referência ficam dentro da pasta da skill
 - [ ] As instruções dizem que prova um apontamento precisa
 - [ ] A severidade mínima combina com o quanto o agente deve falar
 - [ ] Testado num pull request com uma falha conhecida
 
-Veja [Skills & docs](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs) para a detecção e os orçamentos.
+Veja [Skills & docs](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#skills-&-docs) para a detecção e os orçamentos.

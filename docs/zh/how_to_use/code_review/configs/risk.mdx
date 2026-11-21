@@ -1,0 +1,71 @@
+---
+title: "风险评估"
+description: "独立于自动批准来评估 PR 风险。"
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="适用于 Kodus Cloud，试用版也可使用。">
+    <Badge icon="cloud" stroke>Teams 和 Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="需要 Enterprise 许可证和 BETA_FEATURES=true。">
+    <Badge icon="server" stroke>自托管</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="Kodus Cloud 工作区需要开通此 Beta 功能。">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+Kody 会评估整个 PR。[审查模式](/zh/how_to_use/code_review/configs/routing)和以风险为条件的自定义智能体会使用评估结果来确定审查方式。开启[自动批准](/zh/how_to_use/code_review/configs/auto_approve)时，评估结果也可能阻止批准。
+
+## 启用风险评估
+
+1. 打开 **Code review → Risk assessment**。
+2. 开启 **Risk assessment**，然后点击 **Save settings**。
+
+风险评估默认关闭。关闭自动批准时仍可使用风险评估。
+
+## 结果
+
+- **Risk found:** 以风险为条件的智能体可能会运行,Routing 使用其 risk-found 模式,并且自动批准会被阻止。
+- **No risk found:** Routing 使用其 no-risk 模式。批准仍然需要一次干净的审查和匹配的策略。
+- **Unavailable:** Routing 使用配置的默认审查模式。自动批准会被阻止,需要确认存在风险的智能体不会自动运行。
+
+关闭评估后,Routing 对所有 PR 使用同一种配置的模式。没有确认存在风险时,条件性智能体不会运行;显式的手动智能体命令会绕过该条件。
+
+一次评估对应一个 PR 的 head、标题和描述。新的提交,或标题、描述的更改,会让自动批准暂停,直到进行新的审查。
+
+## 在 PR 上预览
+
+**Preview on a PR** 会打开一个侧边面板。选择一个已连接的代码库和 PR 编号,即可试用当前的准则,包括未保存的修改。它使用配置的风险评估模型,不会发布评论,也不会批准 PR。
+
+## 可选的团队准则
+
+没有团队准则时,Kody 也会评估风险。准则会补充团队上下文,例如更改账户权限或删除客户数据的后果。
+
+一条准则包含名称、说明、开关,以及可选的包含/排除文件模式。最多可以添加 50 条。名称最长 120 个字符,说明最长 4,000 个字符;在文件中,每个 `id` 必须唯一。其文件过滤器用于限定指引的范围;匹配到某个文件并不会自动将 PR 判定为有风险。Kody 仍会评估变更的其余部分。
+
+评估使用 diff 以及可用的代码/历史上下文。缺失的历史属于未知信息,不能作为安全的证据。
+
+## YAML
+
+在使用代码库配置文件之前,请先在 **Code review → General**(代码库范围)中开启 **Prefer kodus-config.yml settings**。
+
+```yaml
+riskAssessmentActive: true
+riskCriteria:
+  - id: access-control
+    name: Access control
+    enabled: true
+    instructions: 'Check whether permission changes expose data across accounts. Distinguish them from equivalent refactors.'
+    includedFiles:
+      - 'src/access/**'
+    excludedFiles:
+      - '**/*.test.ts'
+```
+
+`riskCriteria: []` 会保留 Kody 的标准评估。要停止评估,请设置 `riskAssessmentActive: false`。
+
+从未设置过 **Risk assessment** 的配置,在你更改此设置之前会保持其现有的批准风险行为。开启或关闭自动批准不会改变 **Risk assessment** 开关。

@@ -5,7 +5,7 @@ description: "Link sibling repositories so Kody can read contracts and APIs acro
 
 When your product is split across repositories — for example a frontend that calls a backend API, or a service that depends on a shared contracts package — a single-repo review can miss breakages at the boundary. **Linked repositories** give Kody optional, on-demand context from those sibling codebases during code review.
 
-> **Plan requirement:** Linked repositories are available on **Teams** and **Enterprise** plans (trial included as a preview). Free plans do not include cross-repo context.
+> **Plan requirement:** Linked repositories are available on **Teams** and **Enterprise** plans, and during the trial. Free plans do not include cross-repo context. Self-hosted needs an Enterprise license.
 
 This is different from [sharing coding standards across repositories](/en/knowledge_base/how-to-share-standards-across-repositories) (org-level rules and inheritance). Linked repositories share **source context** for a review, not review rules.
 
@@ -27,7 +27,7 @@ Linked repositories are **per repository**, not global. Relationships are direct
 1. In the scope picker at the top of the **Code review** group in the sidebar, pick a **specific repository** (not Global).
 2. Open **Linked repositories** (it only appears at repository scope).
 3. Click **Add repository** and pick sibling repos that are already connected to your organization.
-4. Optionally set:
+4. Optionally, click a link to set:
    - **Instructions · optional** — free-text hint for Kody (e.g. “REST API this frontend consumes”).
    - **Branch / ref pin · optional** — branch/tag pin. Leave empty to use the automatic ref cascade (below).
 5. Click **Save settings**.
@@ -49,7 +49,7 @@ linkedRepositories:
 - `instructions` (optional): short description of why the link exists.
 - `ref` (optional): pin a branch, tag, or commit. When omitted, Kody uses the ref cascade.
 
-Empty `linkedRepositories: []` means the feature is off.
+Empty `linkedRepositories: []` means the feature is off. The file is only read when **Prefer kodus-config.yml settings** (**Code review → General**) is on for the repository, and its list replaces the one set in the web app. See the [settings reference](/en/how_to_use/code_review/configs/linked_repositories#in-kodus-config-yml).
 
 ## How the ref is chosen
 
@@ -73,7 +73,7 @@ Supported forms:
 | Form | Meaning |
 | --- | --- |
 | `owner/repo#123` | Use the head of PR/MR `#123` on that repo |
-| PR/MR URL | Same as above (GitHub, GitLab, Bitbucket, Azure DevOps) |
+| PR/MR URL | Same as above, for a URL on `github.com`, `bitbucket.org`, `dev.azure.com` or a host with `gitlab` in its name |
 | `owner/repo@branch` | Pin that branch on the linked repo |
 
 Examples:
@@ -83,7 +83,7 @@ Depends on org/backend-api#842
 Also needs org/shared-contracts@feature/new-events
 ```
 
-Later mentions of the same repository win. Mentions of repos that are **not** linked are ignored (they do not create new links).
+Mention each linked repository once. With several mentions, an `owner/repo@branch` pin wins over a PR reference wherever it appears, and among mentions of the same form the last one wins. Mentions of repos that are **not** linked are ignored (they do not create new links).
 
 ## When cross-repo context activates (boundary gate)
 
@@ -111,11 +111,11 @@ Internal refactors that only move or reformat non-boundary code typically keep t
 - Post review comments on files that exist only in a linked repository
 - Review the entire linked repo as if it were the PR
 - Link repositories outside the organization or that are not connected to Kodus
-- Exceed the soft cap of 3 linked repositories per reviewing repo
+- Use more than 3 linked repositories per reviewing repo (in `kodus-config.yml`, entries after the third are dropped)
 
-## Transparency at the end of the review
+## What the review shows
 
-When linked repositories were part of the run, review metadata records which repos were configured, which refs were resolved (and from which source: description, pin, open PR, head branch, or default), and whether the boundary gate activated. Failed or skipped links surface as warnings rather than failing the whole review.
+When Kody read a linked repository, the comment it posts when the review ends includes **Additional context used:** with the repository and ref it read, for example `org/backend-api@main` or the open PR it used. No line means no linked repository was read. A link that can't be fetched or isn't connected to the organization is skipped, and the review continues without it.
 
 ## Recommended setups
 
@@ -130,7 +130,6 @@ Prefer **narrow, directional** links (the consumer points at the producer) over 
 ## Related guides
 
 - [Linked Repositories settings reference](/en/how_to_use/code_review/configs/linked_repositories) — the settings page, field by field
-
 - [How to share coding standards across repositories](/en/knowledge_base/how-to-share-standards-across-repositories) — org-level rules and inheritance (not source context)
 - [How to review PRs with project-specific context](/en/knowledge_base/how-to-review-prs-with-project-context) — memories, file references, category instructions, MCP
 - [How to reduce code review noise](/en/knowledge_base/how-to-reduce-code-review-noise) — keep reviews focused when you add more context

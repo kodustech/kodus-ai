@@ -3,7 +3,7 @@ title: "Best Practices"
 description: "Write custom agents that find real problems in your pull requests and stay quiet otherwise."
 ---
 
-<Callout icon="alien" iconType="regular">Custom agents are in beta. Behavior and screens may still change.</Callout>
+See [custom agent requirements](/en/how_to_use/code_review/custom_agents) for plans and self-hosted setup.
 
 ## One agent per concern
 
@@ -40,7 +40,7 @@ The agent reports only what its instructions ask for, and the verifier drops any
 
 Findings are checked before they post. Give the agent something it can prove:
 
-- **A rule in a guide**: link the doc or skill and ask the agent to quote the rule. The quote is checked against the guide on the target branch.
+- **A rule in a guide**: link the doc or skill and ask the agent to quote the rule. The quote is checked against the guide on the target branch. A rule kept in another repository works the same way, checked against that repository at its default branch or the branch or tag you set.
 - **A CLI result**: the CLI output lines that name the file go into the comment as evidence.
 - **An ast-grep rule**: a match counts as proof on its own, with no model check.
 
@@ -82,10 +82,12 @@ Dropped findings tell you what to fix in the agent:
 | Quote not found | The guide on the target branch doesn't have that text. Link the right guide, or put the rule in the instructions. |
 | Outside the agent's focus | The instructions don't ask for it. Add it, or leave it to Kody. |
 | No support in the code | The agent guessed. Ask for concrete proof in the instructions. |
-| Below minimum severity, or over the comment limit | Expected filtering. Lower the floor if you want to see more. |
+
+A finding below the minimum severity, or over **Max comments per pull request**, is not dropped: **Try it** shows it as **kept, not posted**. Lower the floor or raise the limit to post it.
 
 ## Keep the volume right
 
 - Set **Max comments per pull request** on agents that can produce many findings, such as a duplicate-code agent. The most severe are kept.
 - Use **One PR comment** for agents whose findings read better together, such as a coverage report.
 - Use **Suggested fix: Never** when a fix would be a guess, such as an architecture move.
+- Set **Run automatically** to **When risk is found** for an agent that is slow or only matters on risky changes. It needs [Risk assessment](/en/how_to_use/code_review/configs/risk) on, and `@kody -v <name>` still runs it on demand.

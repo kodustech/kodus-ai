@@ -12,7 +12,7 @@ Kodus filtra qué hallazgos se publican realmente:
 - **Minimum severity to post** — publica solo sugerencias en o por encima de un umbral (por defecto: Medium). Kody sigue encontrando los problemas de menor severidad; simplemente no los comenta.
 - **Apply the threshold to Kody Rules** — desactivado por defecto, para que las reglas propias de tu equipo siempre aparezcan
 
-Configúralos en la barra lateral en **Code review → What to review** (antes **Review filters**), o en `kodus-config.yml`:
+Configúralos en la barra lateral en **Code review → What to review**, o en `kodus-config.yml`:
 
 ```yaml
 suggestionControl:
@@ -20,7 +20,7 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
-Los fragmentos de `kodus-config.yml` de esta página solo tienen efecto en un repositorio cuando **kodus Config File Overrides Web Preferences** está activado en **Code review → General** (alcance de repositorio o directorio).
+Los fragmentos de `kodus-config.yml` de esta página solo tienen efecto cuando **Prefer kodus-config.yml settings** está activado para el repositorio (**Code review → General**, en el alcance de repositorio). Kody lee el archivo en la raíz del repositorio, en la rama por defecto. Consulta [Prioridad de configuración](/es/how_to_use/code_review/configs/general#prioridad-de-configuración).
 
 ## Ignorar archivos y rutas
 
@@ -33,6 +33,8 @@ ignorePaths:
   - "**/*.generated.ts"
   - dist/**
 ```
+
+Una lista en el archivo reemplaza la lista definida en la app, incluidos los patrones por defecto. Copia en ella los valores por defecto que quieras conservar.
 
 ## Omitir PRs por título
 
@@ -53,12 +55,20 @@ Desactiva categorías de revisión completas que no necesitas con los interrupto
 reviewOptions:
   bug: true
   security: true
-  performance: false        # desactiva si genera demasiado ruido
-  business_logic: false     # desactiva si no es relevante
+  performance: false        # disable if too noisy
+  business_logic: false     # disable if not relevant
 ```
 
 ## Cadencia de revisión
 
-Usa la **pausa automática** (**Auto-pause**, en **Code review → General** → **Enable Automated Code Review** → **Review Cadence**) para evitar spam durante el desarrollo activo — Kodus pausa las revisiones cuando detecta pushes consecutivos rápidos (por defecto: 3 pushes en 15 minutos).
+Usa **Auto-pause** (**Code review → General** → **Automated code review** → **Review Cadence**) para evitar spam durante el desarrollo activo. Kodus pausa un PR después de una ráfaga de revisiones (por defecto: 3 revisiones en 15 minutos) hasta que alguien comenta `@kody start-review`.
+
+## Mensajes de inicio y de fin
+
+Kody publica un mensaje cuando empieza una revisión y otro cuando termina. En **Code review → What Kody writes → Comments during the review**, usa **Post this message** para publicar cada uno solo cuando se abre el PR, o nunca. Consulta [Mensajes personalizados](/es/how_to_use/code_review/configs/custom_messages).
+
+## Comentarios de Business Logic
+
+Cuando un PR cumple su tarea, Kody publica un comentario de una línea. Desactiva **Comment when every requirement is met** en los ajustes de **Business Logic** para enterarte solo de las brechas. Consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation).
 
 Para más detalles, consulta [Configuración General](/es/how_to_use/code_review/configs/general) y [Umbral de severidad](/es/how_to_use/code_review/configs/suggestion_control).

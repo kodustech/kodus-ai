@@ -1,16 +1,18 @@
 ---
-title: "基于代码库 skill 的安全审查者"
-description: "把团队的安全 skill 变成一个在每个拉取请求上遵循它的自定义智能体。"
+title: "基于仓库 skill 的安全审查者"
+description: "把团队的安全 skill 变成自定义 agent，在每个 pull request 上遵循它。"
 icon: "shield-halved"
 ---
 
 ## 为什么用 skill
 
-您的团队可能已经把安全规则写成了供编码助手使用的智能体 skill。自定义智能体可以在代码审查中遵循同一个 skill：在变更需要时打开它，读取其参考文件，并引用每条发现所应用的规则。当主分支上的 skill 发生变化时，智能体无需修改设置就会遵循新版本。
+你的团队可能已经把安全规则保存为 agent skill，供编码助手使用。自定义 agent 可以在 code review 中遵循同一个 skill：当变更需要时它会打开该 skill，读取其中的参考文件，并引用每条发现所应用的规则。当 pull request 目标分支上的 skill 发生变化时，agent 会遵循新版本，无需更改任何设置。
 
-示例是一个多租户的排程 API，其中每个查询都必须限定在调用者的工作区内。
+示例是一个多租户日程 API，其中每个查询都必须限定在调用者的工作区范围内。
 
-## 步骤 1 — 代码库中的 skill
+自定义 agent 处于 beta 阶段，适用于 Teams 和 Enterprise 套餐以及试用期间。自托管 Kodus 还需要 `BETA_FEATURES=true`。
+
+## 步骤 1 — 仓库中的 skill
 
 ```markdown .claude/skills/tenant-isolation/SKILL.md
 ---
@@ -34,19 +36,19 @@ For the list of tenant tables, see references/tenant-tables.md.
 bookings, calendars, invoices, members, resources
 ```
 
-文件夹名必须与 `name` 一致，并且 `description` 是必填的。
+`name` 使用小写字母、数字和连字符（与文件夹不同的 `name` 会被当作文件夹名读取），`description` 为必填项。
 
-## 步骤 2 — 作为智能体导入
+## 步骤 2 — 将其导入为 agent
 
 <Steps>
-  <Step title="打开代码库的设置">
-    在范围选择器中选择该代码库，然后进入 **What to review → Custom agents → New agent**。
+  <Step title="打开仓库的设置">
+    在范围选择器中选择该仓库，然后进入 **What to review → Custom agents → New agent**。
   </Step>
-  <Step title="Import from repository">
-    该标签页列出在默认分支上找到的 skills。点击 **tenant-isolation**。
+  <Step title="从仓库导入">
+    该标签页会列出在默认分支上找到的 skill。点击 **tenant-isolation**。
   </Step>
   <Step title="检查结果">
-    智能体以关闭状态创建，名为 **Tenant isolation reviewer**，已关联该 skill，指令如下：
+    agent 创建后处于关闭状态，名为 **Tenant isolation reviewer**，已链接该 skill，并带有以下指令：
 
     ```text
     Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
@@ -54,9 +56,9 @@ bookings, calendars, invoices, members, resources
   </Step>
 </Steps>
 
-## 步骤 3 — 细化指令
+## 步骤 3 — 完善指令
 
-保留对 skill 的引用，并补充一条发现需要什么证据：
+保留 skill 引用，并补充一条发现需要什么证明：
 
 ```text Instructions
 Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
@@ -68,45 +70,45 @@ Ignore tests and seed scripts. Do not report general security issues the skill d
 
 | 字段 | 值 |
 | --- | --- |
-| **Files** | `src/api/**`、`src/jobs/**`、`src/repositories/**` |
-| **Except** | `**/*.test.ts`、`src/db/seeds/**` |
+| **Files** | `src/api/**`, `src/jobs/**`, `src/repositories/**` |
+| **Except** | `**/*.test.ts`, `src/db/seeds/**` |
 
 ## 步骤 4 — 可选：插件
 
-如果您的任务跟踪工具已作为插件安装，可在 **Tools → Plugins** 中开启它。只会提供读取类工具。当拉取请求描述中链接了工单时，智能体可以读取工单，并检查变更是否符合其要求。
+如果你的 issue 跟踪器已作为插件安装，请在 **Tools → Plugins** 下将其打开。只提供读取类工具。当 pull request 描述中链接了工单时，agent 可以读取它，并对照工单的要求检查变更。
 
 ## 步骤 5 — 评论
 
 | 字段 | 值 | 原因 |
 | --- | --- | --- |
 | **Format** | Inline comments | |
-| **Minimum severity** | High | 只关注租户泄露和缺失的鉴权，不包括加固建议。 |
+| **Minimum severity** | High | 只关注租户泄露和缺失的认证，不关注加固建议。 |
 | **Suggested fix** | When confident | |
 
-点击 **Save**。
+点击 **Save settings**。
 
-## 步骤 6 — Try it
+## 步骤 6 — 试一试
 
-在一个新增了端点的拉取请求上运行 **Try it**。检查：
+在一个新增了端点的 pull request 上运行 **Try it**。检查：
 
-- **Skills opened** 列出了 `.claude/skills/tenant-isolation`，并在智能体需要时列出 `references/tenant-tables.md`。
-- 保留的发现引用了 skill 中的规则：
+- **Skills opened** 列出 `.claude/skills/tenant-isolation`，以及 agent 需要时的 `references/tenant-tables.md`。
+- 被保留的发现引用了 skill 中的规则：
 
 ```markdown
 **Rule** (`.claude/skills/tenant-isolation/SKILL.md`):
 > Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
 ```
 
-- 被丢弃的发现会显示原因。skill 未覆盖的一般性安全意见会因超出智能体的关注范围而被丢弃，这正是此处想要的效果。
+- 被丢弃的发现会显示原因。skill 未涵盖的一般性安全评论会因超出 agent 的关注范围而被丢弃，这正是此处想要的效果。
 
-开启该智能体。之后如果想对某个打开的拉取请求再听一次意见，可以评论 `@kody -v tenant-isolation-reviewer`。
+启用该 agent。之后若想对一个打开的 pull request 获取第二意见，可评论 `@kody -v tenant-isolation-reviewer`。
 
 ## 检查清单
 
-- [ ] `SKILL.md` 包含与文件夹名一致的 `name` 以及 `description`
-- [ ] 参考文件最多位于 skill 下一层文件夹中
-- [ ] 指令说明了一条发现需要什么证据
-- [ ] 最低严重程度符合智能体应有的"音量"
-- [ ] 已在一个已知存在问题的拉取请求上试运行
+- [ ] `SKILL.md` 有 `name` 和 `description`
+- [ ] 参考文件位于 skill 的文件夹内
+- [ ] 指令说明了一条发现需要什么证明
+- [ ] 最低严重级别与 agent 应有的发声程度相符
+- [ ] 已在含有已知缺口的 pull request 上试过
 
-检测和预算的说明，请参阅 [Skills & docs](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs)。
+有关检测和预算，请参阅 [Skills & docs](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#skills-&-docs)。

@@ -1,115 +1,121 @@
 ---
-title: "モノレポ向けKodus"
-description: "モノレポで正確なコードレビューを行うために、ディレクトリレベルのルール、パス固有のオーバーライド、ルール継承を設定する方法。"
+title: "モノレポで使う Kodus"
+description: "ディレクトリレベルのルール、パス固有のオーバーライド、ルール継承を設定して、モノレポで精度の高いコードレビューを実現します。"
 icon: "folder-tree"
 ---
 
 ## 課題
 
-モノレポでは、パッケージによって標準が異なります。Reactフロントエンドはコンポーネントパターンを重視し、NestJSバックエンドは依存性注入を重視し、共有ライブラリはAPIの安定性を重視します。画一的なレビューは機能しません。
+モノレポでは、パッケージごとに基準が異なります。React のフロントエンドはコンポーネントのパターンを重視し、NestJS のバックエンドは依存性注入を重視し、共有ライブラリは API の安定性を重視します。画一的なレビューでは機能しません。
 
 ## 戦略の概要
 
-Kodusはモノレポに自然にマッピングされる3つの設定レベルをサポートしています：
+Kodus は、モノレポに自然に対応する 3 つの設定レベルをサポートしています。
 
-| レベル | 適用範囲 | 例 |
+| レベル | 適用対象 | 例 |
 |-------|-----------|---------|
-| **Global** | すべてのリポジトリ | "`.env` ファイルをコミットしない" |
-| **リポジトリ** | モノレポ | "コンベンショナルコミットを使用する" |
-| **ディレクトリ** | 特定のパッケージ | "ReactコンポーネントはPascalCaseを使用する必要がある" |
+| **Global** | すべてのリポジトリ | 「`.env` ファイルをコミットしない」 |
+| **Repository** | そのモノレポ | 「Conventional Commits を使う」 |
+| **Directory** | 特定のパッケージ | 「React コンポーネントは PascalCase を使う」 |
 
 ## ステップ1 — パッケージをマッピングする
 
-モノレポ内の異なる領域とそのレビューニーズを特定します：
+モノレポ内の個別の領域と、それぞれのレビューのニーズを洗い出します。
 
 ```
 monorepo/
 ├── apps/
-│   ├── web/          → Reactルール、コンポーネントパターン
-│   ├── api/          → NestJSルール、アーキテクチャの境界
-│   └── mobile/       → React Nativeルール
+│   ├── web/          → React rules, component patterns
+│   ├── api/          → NestJS rules, architecture boundaries
+│   └── mobile/       → React Native rules
 ├── libs/
-│   ├── shared/       → APIの安定性、破壊的変更の検出
-│   └── ui/           → デザインシステムへの準拠
-└── infra/            → Terraform/IaCルール
+│   ├── shared/       → API stability, breaking change detection
+│   └── ui/           → Design system compliance
+└── infra/            → Terraform/IaC rules
 ```
 
-## ステップ2 — ディレクトリレベルの設定を作成する
+## ステップ2 — ディレクトリスコープを作成する
 
-サイドバーで **Code review** グループ上部のスコープピッカーを開き、**Add repository configuration** を選択します。**Create repository settings** で **Select the target repository**（モノレポ）を選び、次に **Select the target directories**（1つ以上のパッケージフォルダ）を選んで **Create settings** をクリックします。各ディレクトリはスコープピッカー内でリポジトリの下にインデントされて表示されます — 設定するにはそれを選択してください。
+**Code review** グループの上部にあるスコープピッカーでモノレポを選び、もう一度ピッカーを開いて **Add directory scope** を選びます。**Select directories** で、レビュー設定を共有する 1 つ以上のパッケージフォルダーを選び、**Add directory scope** をクリックします。各ディレクトリスコープは、ピッカー内でリポジトリの下にインデントされて表示されます。それを選ぶと設定できます。
 
-各ディレクトリは以下を持つことができます：
-- **Kodyルール**（ファイルレベルとPRレベル）
-- **What to review**（有効にするカテゴリと、投稿する最小重要度）
+各ディレクトリスコープには、それぞれ次の設定を持たせられます。
+- **Kody Rules**（ファイルレベルと PR レベル）
+- **What to review**（有効にするカテゴリと、投稿する最小の重要度）
+- **Custom agents**（リポジトリのものに追加されます）
 - **Ignored files**（**General** 内）
 
-## ステップ3 — ターゲットを絞ったルールを作成する
+プルリクエストは、設定済みのあるディレクトリに触れ、ほかの設定済みディレクトリには触れない場合に、そのディレクトリの設定を使います。プルリクエストが設定をどう選ぶかは [ディレクトリレベルの設定](/ja/how_to_use/code_review/configs/directory_level) を参照してください。
 
-### フロントエンドルール（スコープ：`apps/web/`）
+## ステップ3 — 的を絞ったルールを書く
+
+**Code review → Kody Rules** の **Review Rules** タブで **New rule** をクリックします。ディレクトリスコープで作成したルールには **Path** がなく、そのディレクトリスコープの設定でレビューされるプルリクエストのすべてのファイルに適用されます。2 つ以上のディレクトリスコープに触れる、またはどれにも触れないプルリクエストは、リポジトリの設定でレビューされ、**すべての**ディレクトリスコープのルールがそのすべてのファイルに適用されます。そのような場合でも成り立つように、たとえば instructions にフォルダー名を明記して、ディレクトリのルールを書いてください。[ルール継承](/ja/how_to_use/code_review/configs/rules_inheritance) を参照してください。パッケージの一部を対象にするには、リポジトリスコープで **Path** の glob を指定してルールを作成します。
+
+### フロントエンドのルール（スコープ：モノレポ、パスあり）
 
 ```
-Name: ReactコンポーネントはデザインシステムトークンをDesign System Tokensを使用する必要がある
+Rule name: React components must use design system tokens
 Execution mode: Per file
 Path: apps/web/src/components/**/*.tsx
 Severity: High
 Instructions:
-  fileDiffでハードコードされた色、スペーシング、またはフォントサイズを確認する。
-  コンポーネントは @file:libs/ui/src/tokens.ts からトークンをインポートする必要がある。
-  トークンファイルに含まれていない16進数カラー、ピクセル値、またはフォントサイズにフラグを立てる。
+  Check fileDiff for hardcoded colors, spacing, or font sizes.
+  Components must import tokens from @file:libs/ui/src/tokens.ts.
+  Flag any hex color, pixel value, or font-size not from the token file.
 ```
 
-### バックエンドルール（スコープ：`apps/api/`）
+### バックエンドのルール（スコープ：`apps/api/` ディレクトリ）
 
 ```
-Name: ドメイン層はインフラストラクチャからインポートしてはならない
+Rule name: Domain layer must not import from infrastructure
 Execution mode: Per file
-Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
-  fileDiffで "../infrastructure"、"../../infrastructure"、
-  または "/infrastructure/" を含むパスからのインポートを確認する。
-  ドメインモジュールは他のドメインモジュールと
-  共有インターフェースにのみ依存できる。
+  In files under apps/api/src/domain, check fileDiff for any import from
+  "../infrastructure", "../../infrastructure", or any path containing
+  "/infrastructure/". Domain modules must only depend on other
+  domain modules and shared interfaces.
 ```
 
-### 共有ライブラリルール（スコープ：`libs/shared/`）
+### 共有ライブラリのルール（スコープ：`libs/shared/` ディレクトリ）
 
 ```
-Name: パブリックAPIの変更にはチェンジセットが必要
+Rule name: Public API changes require changeset
 Execution mode: Per PR
 Severity: High
 Instructions:
-  pr_files_diffがlibsshared/src/index.ts内のファイルを変更したり、
-  エクスポートを追加/削除した場合、.changeset/ディレクトリに
-  チェンジセットファイルが存在するか確認する。見つからない場合は、
-  ドキュメントのない潜在的な破壊的変更としてフラグを立てる。
+  If pr_files_diff modifies any file in libs/shared/src/index.ts
+  or adds/removes exports, check that a changeset file exists
+  in the .changeset/ directory. If missing, flag it as a
+  potential breaking change without documentation.
 ```
 
-## ステップ4 — クロスカッティング規約にMemoriesを使用する
+## ステップ4 — 横断的な規約には Memories を使う
 
-一部の規約はどこでも適用されます。それらをMemoriesとして教えます：
-
-```
-@kody remember: このモノレポでは、すべてのパッケージがESMインポートを使用する。
-CommonJSのrequire()はどこでも使用できない。
-```
+規約によっては、あらゆる場所に適用されます。それらは Memories として教えます。
 
 ```
-@kody remember: 共有ライブラリは後方互換性を維持する必要がある。
-破壊的変更にはメジャーバージョンのバンプとチェンジセットが必要。
+@kody remember: in this monorepo, all packages use ESM imports.
+CommonJS require() is not allowed anywhere.
+```
+
+```
+@kody remember: shared libs must maintain backward compatibility.
+Any breaking change requires a major version bump and a changeset.
 ```
 
 ## ステップ5 — ディレクトリごとに重要度のしきい値を設定する
 
-トラフィックの多いパッケージにはより厳格なフィルターが必要な場合があります。スコープピッカーでディレクトリを選択し、**What to review** を開いて **Minimum severity to post** を設定します：
+トラフィックの多いパッケージには、より厳しいフィルターが必要な場合があります。スコープピッカーでディレクトリを選び、**What to review** を開いて **Minimum severity to post** を設定します。
 
-- **apps/web/** — **Medium**（フロントエンドは速く変化する）
+- **apps/web/** — **Medium**（フロントエンドは動きが速い）
 - **libs/shared/** — **Low/All**（安定性が重要）
-- **infra/** — **High**（少なくても重要なもの）
+- **infra/** — **High**（件数は少なく、重要なものだけ）
 
-## ステップ6 — 生成されたパスを除外する
+しきい値が Kody Rules に適用されるのは、**Apply the threshold to Kody Rules** がオンの場合だけです。
 
-ノイズを避けるためにモノレポ固有の除外設定を追加します：
+## ステップ6 — 生成されたパスを無視する
+
+ノイズを避けるため、モノレポ固有の除外を追加します。**Code review → General → Review scope** の **Ignored files** で **Edit** をクリックするか、`kodus-config.yml` で設定します（リポジトリで **Prefer kodus-config.yml settings** がオンの場合にのみ読み込まれます）。
 
 ```yaml
 ignorePaths:
@@ -123,8 +129,8 @@ ignorePaths:
 
 ## ヒント
 
-- ディレクトリごとに2〜3のルールから始め、チームが実際にレビューでフラグを立てるものに基づいて拡張する
-- ルール継承を使用する — 組織レベルのルールはセキュリティをカバーし、リポジトリレベルは規約をカバーし、ディレクトリレベルはアーキテクチャをカバーする
-- あるパッケージではルールが頻繁に発火するが他では有効な場合は、ルールを弱めるのではなく、そのディレクトリをルールから除外する
+- ディレクトリごとに 2〜3 個のルールから始め、チームが実際にレビューで指摘する内容に基づいて広げていきます
+- ルール継承を使います。組織レベルのルールでセキュリティを、リポジトリレベルで規約を、ディレクトリレベルでアーキテクチャをカバーします
+- 特定のパッケージでルールが頻繁に発火する場合は、ルールを作成したスコープで **Path** を絞り込むか、ルールを書き換えてください。
 
-ディレクトリ設定の詳細については、[ディレクトリレベル設定](/ja/how_to_use/code_review/configs/directory_level) を参照してください。ルール継承については、[ルール継承](/ja/how_to_use/code_review/configs/rules_inheritance) を参照してください。
+ディレクトリスコープの詳細は [ディレクトリレベルの設定](/ja/how_to_use/code_review/configs/directory_level) を、ルール継承については [ルール継承](/ja/how_to_use/code_review/configs/rules_inheritance) を参照してください。

@@ -5,31 +5,50 @@ icon: "arrow-up"
 ---
 
 <Note>
-  Versions shipping anonymous self-hosted telemetry are enabled by default
-  and send one daily heartbeat to `telemetry.kodus.io` with aggregated
-  counters only — no code, names, or identifiers. Inspect what would be
-  sent with `pnpm run telemetry:preview`, or set `KODUS_TELEMETRY_DISABLED=true`
-  to opt out. Full schema and policy in
-  [Anonymous Telemetry](/en/how_to_deploy/deploy_kodus/telemetry).
+  Self-hosted instances send one anonymous heartbeat per day to `telemetry.kodus.io`, with aggregated counters only. Set `KODUS_TELEMETRY_DISABLED=true` to opt out. See [Anonymous Telemetry](/en/how_to_deploy/deploy_kodus/telemetry) for what is sent.
 </Note>
 
-To update your Kodus installation to the latest version:
+## Docker Compose
 
-```bash
-# Navigate to your Kodus installation directory
-cd kodus-installer
+Run these steps from the `kodus-installer` directory.
 
-# Pull the latest changes from the repository
-git pull
+Before the upgrade, back up PostgreSQL, MongoDB and the `.env` file. Keep the existing `API_CRYPTO_KEY` with the backup so encrypted credentials remain readable after restoration.
 
-# If you are upgrading from 1.x, update your .env with the new 2.0 variables
-# (RabbitMQ, MCP Manager, and webhooks).
+<Steps>
+  <Step title="Update the installer">
+    ```bash
+    git pull
+    ```
 
-# Re-run the installer to pull images, start services, and run migrations
-./scripts/install.sh
+    This keeps `docker-compose.yml`, `.env.example` and the required-variable list in step with the release. Compare `.env.example` with your `.env` and add any variable you are missing.
+  </Step>
+  <Step title="Set the version">
+    In `.env`, set `IMAGE_TAG` to the release you want, for example `IMAGE_TAG=2.2.11`. Versions are listed on the [kodus-ai releases page](https://github.com/kodustech/kodus-ai/releases) as _Self-Hosted Release_. Without `IMAGE_TAG` the installer uses `latest`, which Docker only re-pulls when you ask it to.
+  </Step>
+  <Step title="Pull the images and recreate the containers">
+    ```bash
+    ./scripts/validate-env.sh
+    docker compose pull
+    ./scripts/install.sh
+    ```
 
-# Optional: run diagnostics
-./scripts/doctor.sh
-```
+    The `api` container runs the database migrations when it starts.
+  </Step>
+  <Step title="Check the result">
+    ```bash
+    ./scripts/doctor.sh
+    ```
+  </Step>
+</Steps>
 
+<Warning>
+  Do not run `./scripts/generate-secrets.sh` on an installation that already has data. It replaces every secret in `.env`, including the database passwords and `API_CRYPTO_KEY`.
+</Warning>
 
+Your data lives in Docker volumes: `pgdata` (PostgreSQL), `mongodbdata` (MongoDB), `rabbitmq-data-prod` (RabbitMQ) and `log_volume`. Docker prefixes all but `rabbitmq-data-prod` with the Compose project name; `docker volume ls` shows them. `docker compose down` keeps them, and `docker compose down -v` deletes them. Back up PostgreSQL and MongoDB before an upgrade; migrations do not revert.
+
+If you use the analytics worker, start it again after the upgrade with `docker compose --profile analytics up -d worker-analytics`.
+
+## Kubernetes
+
+Chart versions pin the Kodus release. To move to a new release, upgrade the chart or set `imageTag`; the migration job runs before the pods roll. See [Kubernetes & OpenShift](/en/how_to_deploy/deploy_kodus/kubernetes#upgrading).

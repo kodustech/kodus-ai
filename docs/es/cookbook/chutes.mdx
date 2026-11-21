@@ -1,139 +1,95 @@
 ---
-title: "Chutes — Inferencia con Cap de Suscripción para Modelos de Código Abierto"
-description: "Aprende a conectar los planes de suscripción de Chutes AI — que cubren DeepSeek, Llama, Qwen, MiniMax y más — a Kodus."
+title: "Chutes — Inferencia sin servidor para modelos de código abierto"
+description: "Aprende a conectar Chutes AI — que cubre DeepSeek, Kimi, GLM, Qwen y más — a Kodus."
 icon: "cloud-bolt"
 ---
 
 ## Cómo funciona Chutes
 
-Chutes AI es una plataforma de cómputo sin servidor descentralizada para modelos de código abierto. Expone un endpoint de inferencia **compatible con OpenAI** y ofrece **planes de suscripción** que agrupan el uso de la API hasta un límite expresado como múltiplo del valor equivalente de pago por token — similar en estructura al GLM Coding Plan de Z.AI, pero cubriendo el catálogo completo de código abierto (DeepSeek, Llama, Qwen, MiniMax, Kimi y muchos más).
+Chutes AI es una plataforma de cómputo sin servidor descentralizada para modelos de código abierto. Expone un endpoint de inferencia **compatible con OpenAI** en `https://llm.chutes.ai/v1`. El uso se factura por token contra el saldo de tu cuenta.
 
-Kodus se comunica con Chutes a través del mismo adaptador compatible con OpenAI que usa para todo lo demás, por lo que no hay cambios de código — solo credenciales BYOK.
-
-## Planes de un vistazo
+Kodus se comunica con Chutes a través del mismo adaptador compatible con OpenAI que usa para todo lo demás, por lo que no hay cambios de código, solo credenciales BYOK.
 
 <Info>
-  Los precios y las reglas de cuota cambian. Siempre confirma en [chutes.ai/pricing](https://chutes.ai/pricing) antes de elegir un nivel.
+  Los precios y las condiciones de facturación cambian. Confirma siempre en [chutes.ai/pricing](https://chutes.ai/pricing) antes de cargar saldo en una cuenta.
 </Info>
-
-Desde principios de 2026, cada suscripción de Chutes incluye una asignación de uso igual a **5× el valor equivalente de pago por uso** del nivel, calculado a partir del precio por millón de tokens de cada modelo.
-
-Niveles representativos (confirma los números actuales en la página de precios):
-
-| Nivel | Tarifa mensual | Notas |
-| ----- | -------------- | ----- |
-| Base | ~$3/mes | Nivel de entrada; selección de modelos limitada. |
-| Standard | ~$10/mes | Requerido para modelos frontier (DeepSeek V3, MiniMax M2.1, etc.). |
-| Pro | ~$20+/mes | Cap 5× más alto para mayor volumen de revisiones. |
-| Enterprise | personalizado | Contactar a Chutes. |
-
-- El cap 5× se reinicia mensualmente y se calcula contra los mismos precios por token que pagarías en pago por uso.
-- Algunos modelos requieren **Standard o superior** — el nivel base no incluye modelos frontier de codificación.
-- Chutes marca algunos modelos con el sufijo `-TEE` indicando variantes de entorno de ejecución confiable (cómputo confidencial).
 
 ### Modelos recomendados
 
-Chutes usa identificadores estilo HuggingFace `org/model`, a veces con un sufijo `-TEE` para la variante de cómputo confidencial:
+Chutes usa identificadores estilo HuggingFace `org/model`. Muchos terminan en `-TEE`, pero lo que indica si un modelo se ejecuta en un entorno de ejecución confiable (TEE) es el indicador `confidential_compute` del catálogo, no el nombre. Estos modelos figuran en el catálogo con llamadas a herramientas y salidas estructuradas:
 
-| ID del modelo | Notas |
-| ------------- | ----- |
-| `deepseek-ai/DeepSeek-V3-0324-TEE` | Modelo frontier de codificación; comportamiento agéntico robusto. Requiere ≥ Standard. |
-| `moonshotai/Kimi-K2-Instruct` | Kimi K2 de contexto largo — excelente en PRs grandes. |
-| `Qwen/Qwen3-Coder-480B-A35B-Instruct` | Codificador especializado. |
-| `chutes/MiniMaxAI/MiniMax-M2.1-TEE` | Opción frontier alternativa. |
+| ID del modelo | Ventana de contexto |
+| ------------- | ------------------- |
+| `moonshotai/Kimi-K2.7-Code` | ~262k tokens |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | ~1M tokens |
+| `zai-org/GLM-5.3` | ~1M tokens |
+| `Qwen/Qwen3.5-397B-A17B-TEE` | ~262k tokens |
 
-Consulta la lista en vivo y los precios actuales en [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models).
+El catálogo cambia con frecuencia. Consulta la lista en vivo en [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models), que es pública y muestra el precio, la longitud de contexto y las funciones compatibles de cada modelo.
 
 ## Crear una clave de API
 
-<Warning>Se requiere una cuenta de Chutes con una suscripción activa (o saldo de pago por uso).</Warning>
+<Warning>Se requiere una cuenta de Chutes con saldo cargado.</Warning>
 
-1. Ve a [chutes.ai](https://chutes.ai) y crea una cuenta.
-2. Suscríbete a un nivel en [chutes.ai/pricing](https://chutes.ai/pricing), o habilita el pago por uso si lo prefieres.
-3. Abre la consola de desarrollador y crea una clave de API. Cópiala de inmediato.
+1. Crea una cuenta en [chutes.ai/auth/signup](https://chutes.ai/auth/signup). Puedes registrarte con Google, GitHub o un nombre de usuario.
+2. Carga saldo en la app de Chutes. La facturación es de pago por uso, sin compromiso mínimo, y las opciones de pago están en [chutes.ai/pricing](https://chutes.ai/pricing).
+3. En la app de Chutes, crea una clave de API. Las claves empiezan con `cpk_`. Guárdala como una contraseña.
 
 ## Configurar Chutes en Kodus
 
-### Opción 1 — BYOK en Kodus Cloud (recomendado)
+### Opción 1 — Página AI providers (recomendado)
 
-1. En la barra lateral, abre **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)).
-2. Chutes no tiene un mosaico dedicado — en la pestaña **Providers**, elige **OpenAI-compatible** en **Custom**. Qué modelo se ejecuta por defecto y cuál es el respaldo se define después en la pestaña **Routing**.
-3. Completa el formulario:
+Sigue [Conectar un proveedor](/es/how_to_use/byok#conectar-un-proveedor) y elige **Custom → OpenAI-compatible**. Usa estos valores en el formulario.
 
-   | Campo | Valor |
-   | --- | --- |
-   | **Base URL** | `https://llm.chutes.ai/v1` |
-   | **Model** | por ejemplo, `deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **API key** | tu clave de API de Chutes |
-   | **Max concurrent requests** | `3–5` es un inicio seguro; auméntalo si no alcanzas el cap (en configuración avanzada) |
+| Campo | Valor |
+| --- | --- |
+| **Key** (en la tarjeta **API key**) | tu clave de API de Chutes |
+| **Base URL** | `https://llm.chutes.ai/v1` |
+| **Model** | elige de la lista, o escribe un ID como `zai-org/GLM-5.3` |
+| **Max concurrent requests** | opcional; en **Advanced (optional)** → **Advanced settings**. Déjalo vacío, o define un tope si Chutes devuelve errores de límite de velocidad |
 
-4. Haz clic en **Test & save**. Kodus verifica el endpoint y persiste la configuración si tiene éxito.
-
-<Tip>
-  El cap 5× se calcula a partir de los precios por token. Los modelos frontier costosos consumen el cap más rápido que los pequeños — si quieres maximizar las revisiones por dólar, combina Chutes con un modelo más barato (variantes pequeñas de Llama o Qwen) para PRs rutinarios y reserva los modelos frontier para revisiones complejas mediante un override por agente en la pestaña **Routing** o un **Code review model** por repositorio (**Code review → General**).
-</Tip>
+Haz clic en **Test & save** y elige el modelo predeterminado y de respaldo en [Routing](/es/how_to_use/code_review/configs/routing).
 
 <Note>
-  Dado que Chutes se ejecuta en cómputo descentralizado, la latencia de arranque en frío y la latencia de cola varían más que en proveedores dedicados. Define un modelo de OpenAI o Anthropic como **Fallback (optional)** en la pestaña **Routing** para que Kodus pueda conmutar cuando un nodo sea lento o se alcance el cap mensual.
+  Define un modelo de otro proveedor como **Fallback model**, para que las revisiones sigan funcionando si Chutes devuelve errores o tu saldo se agota.
 </Note>
 
 ### Opción 2 — Alojamiento autónomo (variables de entorno)
 
-Si ejecutas Kodus en Modo Fijo (proveedor global único, sin BYOK por organización), configura Chutes en el `.env` de tus contenedores de API + worker:
+Para darle un modelo a una instancia con alojamiento autónomo mediante `.env`:
 
 ```env
-# Configuración de Chutes (Modo Fijo)
-API_LLM_PROVIDER_MODEL="deepseek-ai/DeepSeek-V3-0324-TEE"   # cualquier ID de modelo del catálogo
-API_OPENAI_FORCE_BASE_URL="https://llm.chutes.ai/v1"
-API_OPEN_AI_API_KEY="your-chutes-api-key"
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://llm.chutes.ai/v1"
+API_LLM_API_KEY="your-chutes-api-key"
 ```
 
-<Note>
-  Esta opción solo es necesaria para instalaciones de Kodus con alojamiento autónomo que deshabilitan deliberadamente el BYOK. Si el BYOK está habilitado en tu instancia con alojamiento autónomo, prefiere la **Opción 1** — el flujo basado en la interfaz es el mismo que en Cloud.
-</Note>
-
-Reinicia los contenedores de API y worker después de editar `.env`, luego verifica:
-
-```bash
-docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
-```
-
-Para la configuración completa con alojamiento autónomo (dominios, claves de seguridad, base de datos, webhooks, proxy inverso), sigue la [guía de despliegue en VM genérica](https://docs.kodus.io/es/how_to_deploy/deploy_kodus/generic_vm) y solo reemplaza el bloque LLM con el anterior.
+Sigue la guía de instalación para [aplicar el cambio de modelo](/es/how_to_deploy/deploy_kodus/generic_vm#aplicar-cambios-en-el-modelo).
 
 ## Cuándo elegir Chutes
 
-- **Quieres el catálogo de código abierto más amplio a un precio de suscripción** — DeepSeek / MiniMax / Qwen frontier a una tarifa plana con caps predecibles.
-- **Te importa el cómputo confidencial** — Chutes ofrece variantes `-TEE` que se ejecutan dentro de entornos de ejecución confiables, útil si tu postura de cumplimiento lo requiere.
-- **Estás operando a volumen bajo o medio** y te ajustas dentro del cap de 5× del PAYG de un nivel económico.
+- **Quieres modelos de código abierto detrás de un solo endpoint**, incluidos DeepSeek, Kimi, GLM y Qwen.
+- **Te importa el cómputo confidencial.** Los modelos marcados con `confidential_compute: true` en el catálogo se ejecutan dentro de entornos de ejecución confiables, útil si tu postura de cumplimiento lo requiere.
 
-Elige Synthetic en su lugar si quieres una suscripción plana más simple sin cálculo de cap por modelo. Elige Z.AI si tu modelo preferido es específicamente la familia GLM.
+Elige Synthetic si prefieres una suscripción plana, o Z.AI si tu modelo preferido es específicamente la familia GLM.
 
 ## Solución de problemas
 
 <AccordionGroup>
-  <Accordion title="El modelo requiere un nivel superior">
-    - Los modelos frontier (DeepSeek V3, MiniMax M2.1, algunas variantes de Qwen) están limitados al nivel Standard y superiores desde febrero de 2026.
-    - Actualiza, o elige un modelo disponible en tu nivel actual (variantes más pequeñas de Llama o Qwen).
-  </Accordion>
-
-  <Accordion title="Cap mensual 5× alcanzado">
-    - Verifica el uso actual en el panel de Chutes.
-    - Cambia temporalmente a un modelo más barato para extender el cap, o actualiza el nivel.
-    - Define un modelo **Fallback (optional)** en la pestaña **Routing** para que las revisiones sigan funcionando mientras estás en el cap.
-  </Accordion>
-
   <Accordion title="Errores 401 / de autenticación">
-    - Confirma que la clave esté activa en el panel de Chutes y la suscripción esté vigente.
+    - Confirma que la clave esté activa en el panel de Chutes y que la cuenta tenga saldo.
     - Asegúrate de que no haya espacios al final ni comillas en el valor del `.env`.
   </Accordion>
 
   <Accordion title="Modelo no encontrado">
-    - Chutes usa el formato `org/model`, con algunas variantes que terminan en `-TEE` (cómputo confidencial). Verifica la capitalización exacta en [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models).
+    - Chutes usa el formato `org/model`, y algunas variantes terminan en `-TEE`. Copia el ID exacto, con sus mayúsculas y minúsculas, de [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models).
+    - Los modelos se agregan y se retiran con el tiempo. Un ID de modelo que funcionaba antes puede desaparecer de la lista.
   </Accordion>
 
-  <Accordion title="Latencia lenta o inconsistente">
-    - Chutes se ejecuta en cómputo descentralizado, por lo que la latencia de cola es mayor que en nubes dedicadas.
-    - Para revisiones sensibles a la latencia, prefiere proveedores dedicados; reserva Chutes para revisiones nocturnas o por lotes, o define un proveedor rápido como **Model for all tasks** y Chutes como **Fallback (optional)** en **Routing**.
+  <Accordion title="Respuestas lentas o errores de límite de velocidad">
+    - Define un modelo de otro proveedor como **Fallback model** en **Code review → Routing**.
+    - Reduce **Max concurrent requests** en **Advanced (optional)** → **Advanced settings**.
   </Accordion>
 
   <Accordion title="Errores de conexión">

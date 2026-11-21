@@ -11,12 +11,15 @@ icon: "laptop"
 </Note>
 
 <Note>
-  Local dev runs with `API_CLOUD_MODE=false`, which is the same mode as a
-  self-hosted instance — and which means the daily anonymous heartbeat to
-  `telemetry.kodus.io` is enabled by default. If you don't want your local
-  experiments showing up in the fleet, set `KODUS_TELEMETRY_DISABLED=true`
-  in your `.env`. See [Anonymous Telemetry](/en/how_to_deploy/deploy_kodus/telemetry)
-  for what is sent and how to inspect it.
+  `.env.example` is the template shared with Kodus Cloud, so a fresh `.env` ships
+  `API_CLOUD_MODE=true` and `SANDBOX_PROVIDER=e2b`. To run the way a
+  self-hosted instance does, set `API_CLOUD_MODE=false` and
+  `SANDBOX_PROVIDER=local` in `.env` before you start the services. With
+  `API_CLOUD_MODE=false` the daily anonymous heartbeat to `telemetry.kodus.io`
+  is enabled by default. If you don't want your local experiments showing up
+  in the fleet, set `KODUS_TELEMETRY_DISABLED=true`. See
+  [Anonymous Telemetry](/en/how_to_deploy/deploy_kodus/telemetry) for what is
+  sent and how to inspect it.
 </Note>
 
 ## Prerequisites
@@ -25,7 +28,7 @@ icon: "laptop"
 - pnpm
 - Docker
 - OpenSSL
-- LLM API Keys
+- An LLM API key
 
 <Note>
   kodus-ai is a pnpm workspace — `pnpm-lock.yaml` is the only lockfile in the repo. npm and yarn
@@ -50,22 +53,15 @@ icon: "laptop"
       </Warning>
 
       This script will automatically:
-      - ✅ Check all required dependencies (Node.js, pnpm, Docker, OpenSSL)
-      - ✅ Install project dependencies
-      - ✅ Create and configure the `.env` file
-      - ✅ Generate all required security keys automatically
-      - ✅ Set up Docker networks
-      - ✅ Provide clear next steps
+      - Check all required dependencies (Node.js, pnpm, Docker, OpenSSL)
+      - Install project dependencies
+      - Create the `.env` file from `.env.example`
+      - Generate the security keys
+      - Create the `kodus-backend-services` and `shared-network` Docker networks
+      - Print the next steps
 
-    ### Choose your LLM mode (required)
+      Then [connect a model](#connect-a-model) and start the services:
 
-    Select one mode and fill your .env before starting the services.
-
-    <Snippet file="llm-api-keys.mdx" />
-
-      ### Next steps
-
-      **Basic setup:**
       ```bash
       pnpm run docker:start
       ```
@@ -93,6 +89,7 @@ icon: "laptop"
 
       ```bash
       git clone https://github.com/kodustech/kodus-ai.git
+      cd kodus-ai
       ```
 
       ### 2. Install dependencies
@@ -106,35 +103,31 @@ icon: "laptop"
       ```bash
       cp .env.example .env
       ```
-      ### 4. Choose your LLM mode (required)
 
-Select one mode and fill your .env before starting the services.
+      ### 4. Generate security keys
 
-      <Snippet file="llm-api-keys.mdx" />
-
-      ### 5. Generate Security Keys
-
-      Before configuring your environment variables, you'll need to generate secure keys for JWT tokens and other security-related configurations:
+      Generate secure values for the secrets in `.env`:
 
       ```bash
-      # For most security keys (JWT secrets, etc.)
+      # JWT secrets and the NextAuth secret
       openssl rand -base64 32
 
-      # For crypto keys and code management secrets
+      # Encryption key and code management secret
       openssl rand -hex 32
 
-      # For webhook tokens (URL-safe)
+      # Webhook token (URL-safe)
       openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'
       ```
 
-      You'll need to generate values for these security keys:
+      Set these variables:
       - `API_JWT_SECRET` (use `openssl rand -base64 32`)
       - `API_JWT_REFRESH_SECRET` (use `openssl rand -base64 32`)
+      - `API_CRYPTO_KEY` (use `openssl rand -hex 32`)
       - `CODE_MANAGEMENT_SECRET` (use `openssl rand -hex 32`)
       - `CODE_MANAGEMENT_WEBHOOK_TOKEN` (use `openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`)
+      - `WEB_NEXTAUTH_SECRET` and `NEXTAUTH_SECRET`, with the same value (use `openssl rand -base64 32`)
 
-
-      ### 6. Set up Docker networks
+      ### 5. Set up Docker networks
 
       Create the required Docker networks:
 
@@ -143,7 +136,11 @@ Select one mode and fill your .env before starting the services.
       docker network create shared-network || true
       ```
 
-      ### 7. Starting the development environment
+      ### 6. Connect a model
+
+      Follow [Connect a model](#connect-a-model) below.
+
+      ### 7. Start the development environment
 
       Launch the services using Docker:
 
@@ -160,7 +157,6 @@ Select one mode and fill your .env before starting the services.
       - PostgreSQL database
       - MongoDB database
       - RabbitMQ
-      - Required network configurations
 
       To also create a public endpoint for external services:
       ```bash
@@ -196,12 +192,39 @@ Select one mode and fill your .env before starting the services.
 
       - Web UI: `http://localhost:3000`
       - API: `http://localhost:3001`
+      - Webhooks: `http://localhost:3332`
       - RabbitMQ Management: `http://localhost:15672`
-      - Debug Port: `9229`
+      - PostgreSQL: `localhost:5432`, MongoDB: `localhost:27017`
+      - API debug port: `9229`
 
   </Tab>
 </Tabs>
 
+## Connect a model
+
+Kodus needs a model to run reviews. Pick one way before you start the services:
+
+- **In the app.** After you sign in, open **AI providers** in the sidebar and connect a provider with your key. See [BYOK](/en/how_to_use/byok).
+- **In `.env`.** One model for the whole instance:
+
+  ```env
+  API_LLM_PROVIDER=openai                  # openai, openai_compatible, anthropic, anthropic_compatible, google_gemini or google_vertex
+  API_LLM_PROVIDER_MODEL="your-model-id"
+  API_LLM_API_KEY="your-api-key"
+  # API_LLM_BASE_URL="https://your-provider.example.com/v1"   # required for the *_compatible providers
+  ```
+
+  See [LLM Provider Configuration](/en/how_to_deploy/deploy_kodus/generic_vm#llm-provider-configuration) for what each provider needs. A model connected on the **AI providers** page overrides the one in `.env`.
+
+## Optional services
+
+`pnpm run docker:start` does not start the MCP Manager or the analytics worker. Add them with `KODUS_DEV_EXTRAS`:
+
+```bash
+KODUS_DEV_EXTRAS=mcp pnpm run docker:start          # MCP Manager (also set API_MCP_SERVER_ENABLED=true)
+KODUS_DEV_EXTRAS=analytics pnpm run docker:start    # analytics worker
+KODUS_DEV_EXTRAS=mcp,analytics pnpm run docker:start
+```
 
 ## Development workflow
 
@@ -237,18 +260,18 @@ If you need to test integrations with external services (like Git webhooks):
 pnpm run dev:health-check
 ```
 
-This comprehensive health check validates:
-- ✅ **Services**: Kodus API, Worker, Webhooks, Web, PostgreSQL, MongoDB, RabbitMQ
-- 🔌 **Port availability**: Web (3000), API (3001), PostgreSQL (5432), MongoDB (27017), RabbitMQ (5672/15672)
-- 🗄️ **Database setup**: Migrations and seed data
-- 🌐 **API endpoints**: Health endpoints and basic connectivity
+This health check validates:
+- **Services**: the API, worker, webhooks, web, PostgreSQL, MongoDB and RabbitMQ containers
+- **Port availability**: Web (3000), API (3001), PostgreSQL (5432), MongoDB (27017), RabbitMQ (5672)
+- **Database setup**: migrations and seed data
+- **API endpoints**: `/health/simple`, `/health` and basic connectivity
 
 
 ### Manual Verification
 
 1. **Check Web UI**: Visit `http://localhost:3000` in your browser
 2. **Check API health**: Visit `http://localhost:3001/health`
-3. **Check RabbitMQ**: Visit `http://localhost:15672` (default credentials: `guest`/`guest`)
+3. **Check RabbitMQ**: Visit `http://localhost:15672` (default credentials: `dev`/`devpass`, from `RABBITMQ_DEFAULT_USER` and `RABBITMQ_DEFAULT_PASS` in `.env`)
 4. **Verify database connections**: Check the logs for successful database connections
 5. **Test webhook endpoints**: Your Git provider webhooks should point to `http://localhost:3332/[provider]/webhook` (or to your API domain if a reverse proxy routes `/.../webhook` to the webhooks service)
 
@@ -268,7 +291,7 @@ openssl version
 
 **Permission issues with Docker:**
 ```bash
-# Add your user to the docker group (Linux/macOS)
+# Add your user to the docker group (Linux)
 sudo usermod -aG docker $USER
 # Then log out and log back in
 ```
@@ -276,7 +299,7 @@ sudo usermod -aG docker $USER
 **Network creation errors:**
 ```bash
 # Check if networks already exist
-docker network ls | grep kodus
+docker network ls | grep -E "kodus|shared"
 # Remove conflicting networks if needed
 docker network rm kodus-backend-services shared-network
 ```
@@ -284,7 +307,7 @@ docker network rm kodus-backend-services shared-network
 ### Common Issues
 
 **Port conflicts:**
-- Ensure ports 3000 (Web), 3001 (API), 5432 (PostgreSQL), 27017 (MongoDB), and 5672/15672 (RabbitMQ) are available
+- Ensure ports 3000 (Web), 3001 (API), 3332 (Webhooks), 5432 (PostgreSQL), 27017 (MongoDB), and 5672/15672 (RabbitMQ) are available
 - Stop other services using these ports before starting Kodus
 
 **Environment variables not loading:**
@@ -303,6 +326,12 @@ docker network rm kodus-backend-services shared-network
 - Check if migrations and seed data are loaded
 - Verify the `.env` file has all required variables
 - Run health check to see which specific components are failing
+
+**Reviews don't run:**
+- No model is connected. Open **AI providers**, or set `API_LLM_PROVIDER_MODEL` and a key in `.env`.
+
+**Reviews have no cross-file context:**
+- `SANDBOX_PROVIDER=e2b` with no `API_E2B_KEY` runs reviews without a sandbox. Set `SANDBOX_PROVIDER=local`.
 
 **Webhook issues with external services:**
 - Use `pnpm run tunnel` to create a public endpoint for external webhooks

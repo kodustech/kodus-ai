@@ -1,13 +1,13 @@
 ---
 title: "Configuración a Nivel de Directorio"
-description: "Aplica configuraciones de revisión de código personalizadas a carpetas específicas de tu repositorio. Ideal para monorepos."
+description: "Da a carpetas específicas de un repositorio su propia configuración de revisión de código. Ideal para monorepos."
 ---
 
 ## Descripción General
 
-Aplica configuraciones de revisión de código personalizadas a carpetas específicas de tu repositorio. Ideal para monorepos donde diferentes áreas tienen estándares o propietarios distintos.
+Un alcance de directorio aplica su propia configuración de revisión de código a una o más carpetas de un repositorio. Úsalo en monorepos, donde las áreas tienen estándares o propietarios distintos.
 
-Kody selecciona una única configuración por PR: **Directorio** → **Repositorio** → **Global**
+Kody usa una única configuración por pull request: **Directorio** → **Repositorio** → **Global**.
 
 <Note>
   Aprende cómo fluyen los ajustes entre niveles en <a href="/es/how_to_use/code_review/configs/inheritance_overrides">Herencia y Overrides de Configuración</a>.
@@ -15,46 +15,61 @@ Kody selecciona una única configuración por PR: **Directorio** → **Repositor
 
 ## Cómo Funciona
 
-- Configura cualquier carpeta a cualquier profundidad (p. ej., `api/src/services`)
-- Configura tantas carpetas como quieras
-- **Sin superposición**: si configuras `api/src/services`, no puedes también configurar `api/src/services/users`
+- Un alcance de directorio puede contener una carpeta o varias. Todas sus carpetas comparten los mismos ajustes.
+- Las carpetas pueden estar a cualquier profundidad, por ejemplo `api/src/services`.
+- Puedes añadir tantos alcances de directorio como necesites.
+- Una carpeta pertenece a un solo alcance de directorio. Las carpetas dentro de una carpeta que ya tiene un alcance no se pueden seleccionar.
 
 ### Reglas de Selección
 
-- **Un directorio configurado afectado**: Usa la configuración de ese directorio
-- **Ningún directorio configurado afectado**: Usa la configuración del repositorio (o la global si no hay configuración de repositorio)
-- **Dos o más directorios configurados afectados**: Escala a la configuración del repositorio (o la global si no hay configuración de repositorio)
+Kody comprueba qué alcances de directorio toca el pull request:
+
+- **Se toca un alcance:** usa los ajustes de ese alcance. Los archivos fuera de cualquier alcance no cambian esto.
+- **No se toca ningún alcance:** usa los ajustes del repositorio, o los Global si el repositorio no tiene.
+- **Se tocan dos o más alcances:** usa los ajustes del repositorio, o los Global si el repositorio no tiene.
 
 <Note>
-  Kody usa una configuración por PR para mantener las revisiones predecibles. Mezclar configuraciones causa conflictos.
+  Kody usa una configuración por pull request para mantener las revisiones predecibles. Mezclar configuraciones causa conflictos.
 </Note>
 
 ## Ejemplos
 
 <Tabs>
-  <Tab title="Un directorio configurado afectado">
-    Configuraste `src/microservice-alpha`. El PR cambia archivos en `src/microservice-alpha` y carpetas no configuradas.
-    
-    Usa la configuración de **microservice-alpha**.
+  <Tab title="Un solo directorio configurado">
+    Añadiste un alcance para `src/microservice-alpha`. Un pull request cambia archivos en `src/microservice-alpha` y en carpetas sin configurar.
+
+    Usa los ajustes de **microservice-alpha**.
   </Tab>
-  <Tab title="Ningún directorio configurado afectado">
-    El PR solo toca directorios sin configuraciones específicas.
-    
-    Usa la configuración del **repositorio** (o la **global** si no hay configuración de repositorio).
+  <Tab title="Ningún directorio configurado">
+    Un pull request toca solo carpetas sin alcance.
+
+    Usa los ajustes del **repositorio** (o los **Global** si el repositorio no tiene).
   </Tab>
-  <Tab title="Múltiples directorios configurados afectados">
-    Configuraste `src/microservice-alpha` y `src/microservice-beta`. El PR toca ambos.
-    
-    Escala a la configuración del **repositorio** (o la **global** si no hay configuración de repositorio).
+  <Tab title="Varios directorios configurados">
+    Añadiste alcances para `src/microservice-alpha` y `src/microservice-beta`. Un pull request toca ambos.
+
+    Usa los ajustes del **repositorio** (o los **Global** si el repositorio no tiene).
   </Tab>
 </Tabs>
 
 ## Configuración
 
-1. En la barra lateral, abre el selector de alcance en la parte superior del grupo **Code review** y elige **Add repository configuration**
-2. En **Create repository settings**, usa **Select the target repository**, luego **Select the target directories** (una o más carpetas) y haz clic en **Create settings**
-3. Elige el nuevo alcance de directorio — aparece con sangría bajo su repositorio en el selector de alcance — y cambia los ajustes en cualquier página (General, What to review, Kody Rules, What Kody writes); las páginas de ajustes se guardan con **Save settings**
+1. En la barra lateral, elige el repositorio en el selector de alcance en la parte superior del grupo **Code review**.
+2. Abre el selector de nuevo y elige **Add directory scope** al final.
+3. En el diálogo **Add directory scope**, marca las carpetas en **Select directories**. Aparecen listadas en **Selected directories**. Haz clic en **Add directory scope**.
+4. Elige el nuevo alcance. Aparece con sangría bajo su repositorio en el selector. Cambia los ajustes en cualquier página y haz clic en **Save settings**.
 
-Para cambiar las carpetas más adelante, usa el menú **⋯** junto al selector de alcance → **Edit directories**; **Delete configuration** elimina la configuración del directorio.
+Para cambiar las carpetas más adelante, abre el menú **⋯** junto al selector de alcance y elige **Edit directories**, luego **Save directories**. **Delete configuration** elimina el alcance; los ajustes del repositorio vuelven a aplicarse a esas carpetas.
 
-Si también usas `kodus-config.yml`, anula los ajustes de la interfaz web (consulta Prioridad de Configuración en los ajustes Generales).
+## kodus-config.yml y los alcances de directorio
+
+- Kody lee `kodus-config.yml` solo desde la raíz de la rama predeterminada del repositorio. Nunca lee un `kodus-config.yml` colocado dentro de una carpeta.
+- Lee el archivo de la raíz solo cuando **Prefer kodus-config.yml settings** está activado en el alcance de **repositorio**. El interruptor también aparece en el alcance de directorio, pero no cambia una revisión: activarlo ahí no hace que Kody lea un archivo para ese directorio, y desactivarlo no impide que se aplique el archivo del repositorio.
+- Un ajuste sobrescrito en el alcance de directorio tiene prioridad sobre el mismo ajuste en el archivo del repositorio.
+- Para mantener los ajustes de un alcance de directorio en archivos, usa un repositorio de [configuración centralizada](/es/how_to_use/code_review/configs/centralized_config), donde un `kodus-config.yml` en la carpeta del alcance se sincroniza con los ajustes del alcance de directorio.
+
+Consulta [General](/es/how_to_use/code_review/configs/general#prioridad-de-configuración) para el archivo en sí y [Herencia y Overrides de Configuración](/es/how_to_use/code_review/configs/inheritance_overrides#kodus-config-yml) para el orden.
+
+## Kody Rules en un alcance de directorio
+
+Un pull request se revisa con las Kody Rules del alcance de directorio bajo la misma selección que los ajustes anteriores. Cuando no se selecciona un único alcance, se aplican las reglas de todos los alcances de directorio del repositorio. Consulta [Herencia de Reglas](/es/how_to_use/code_review/configs/rules_inheritance).

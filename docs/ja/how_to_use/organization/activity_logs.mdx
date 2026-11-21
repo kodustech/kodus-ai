@@ -1,0 +1,63 @@
+---
+title: "アクティビティログ"
+description: "組織内で、誰が Kody Rules、レビュー設定、連携、アクセスを変更したかを確認します。"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="Kodus Cloud の Enterprise または有効なトライアルで利用できます。">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Enterprise ライセンスが必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+</div>
+
+**Organization → Activity logs** は、設定変更の監査証跡です。ページのタイトルは **User Activity Logs** です。オーナー、Repo Admin、Billing Manager、Contributor が閲覧でき、それぞれ組織内のすべてのエントリを確認できます。
+
+| プラン | 表示される内容 |
+| --- | --- |
+| Enterprise、またはトライアル | ページ全体 |
+| Free または Teams | サイドバーの項目に南京錠が付き、ページを開くと **See plans** ボタン付きのプレビューが表示されます |
+| Enterprise ライセンスキーを持つセルフホスト | ページ全体 |
+| ライセンスキーのないセルフホスト | 南京錠と、**Activate a license** ボタン付きのプレビュー |
+| 期限切れ、キャンセル済み、または支払いに失敗したプラン | 南京錠とプレビュー |
+
+それ以外のプランでは、API がリクエストを拒否します。記録は別に確認されます。Kodus は、Free を除くすべての有効なプランで変更を記録し、セルフホストではライセンスキーがある場合にのみ記録します。Free、またはキーのないセルフホストインスタンスで行われた変更は、記録されません。
+
+## 記録される内容
+
+アプリで行われた変更と、その変更を行った人です。
+
+- コードレビュー設定（リポジトリまたはディレクトリの設定の削除を含む）
+- Kody Rules
+- レビュー対象に選択されたリポジトリ
+- 接続または削除された Git 連携
+- プルリクエストのメッセージ
+- 組織設定
+- CLI キー
+- メンバーの招待、ロールの変更、リポジトリへのアクセス
+- シートのステータスの変更
+
+## 一覧
+
+新しい順に表示されます。各行には次の項目があります。
+
+| 列 | 表示される内容 |
+| --- | --- |
+| **Action** | **ADD**、**CREATE**、**EDIT**、**DELETE**、**CLONE** |
+| **User** | 変更を行った人のメールアドレス |
+| **Description** | 変更された内容 |
+| **Action Description** | 変更の種類を示す短いラベル |
+| **Level** | 変更が適用される場所：**Main**、**Global**、**Repository**、**Directory** |
+| **Date** | どれくらい前か |
+
+行の目のアイコンをクリックすると **Log Details** が開き、ユーザー、レベル、作成日時と更新日時、エントリ内のすべての変更が表示されます。**Action**、**User**、**Level**、**Date** をクリックすると並べ替えられます。
+
+## 検索と日付範囲
+
+ページには、最新の 100 件のエントリが読み込まれます。次の 2 つのコントロールでその一覧を絞り込むため、これより古いエントリにはここからアクセスできません。
+
+- **Search logs...**：ユーザーのメールアドレスと変更の説明に一致します。
+- 日付範囲：**Today**、**Last week**、**Last 2 weeks**、**Last month**、**Last 3 months**、または最大約 3 か月のカスタム日付。

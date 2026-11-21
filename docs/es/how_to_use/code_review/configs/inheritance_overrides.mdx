@@ -13,10 +13,10 @@ El nivel más específico tiene prioridad: Directorio > Repositorio > Global
 
 ```
 Global
- ├─ Repositorio A
- │   ├─ Directorio A1
- │   └─ Directorio A2
- └─ Repositorio B
+ ├─ Repository A
+ │   ├─ Directory A1
+ │   └─ Directory A2
+ └─ Repository B
 ```
 
 ## Cómo Funciona
@@ -31,29 +31,45 @@ Una vez que se anula, un campo deja de seguir al padre y usa su valor local en s
 
 ## En la app
 
-- **Cambiar de nivel:** el selector de alcance en la parte superior del grupo **Code review** de la barra lateral lista **Global** ("applies to every repository"), luego cada repositorio que tiene su propia configuración, con sus directorios con sangría debajo. Cambiar de alcance te mantiene en la misma página (General, What to review, Kody Rules, What Kody writes).
-- **Agregar un nivel:** en el selector de alcance, elige **Add repository configuration**. El diálogo **Create repository settings** te pide **Select the target repository** y, opcionalmente, **Select the target directories**; haz clic en **Create settings**. Consulta [Configuración a Nivel de Directorio](/es/how_to_use/code_review/configs/directory_level).
+- **Cambiar de nivel:** el selector de alcance en la parte superior del grupo **Code review** de la barra lateral lista **Global** ("applies to every repository"), luego cada repositorio que Kody revisa, con sus alcances de directorio con sangría debajo. Un repositorio sin configuración propia aparece marcado como **Inherits Global**. Cambiar de alcance te mantiene en la misma página cuando esa página existe en el nuevo alcance.
+- **Agregar un nivel:** un repositorio obtiene su propia configuración la primera vez que guardas un cambio en su alcance. Para agregar un alcance de directorio, elige el repositorio y selecciona **Add directory scope** al final del selector. Consulta [Configuración a Nivel de Directorio](/es/how_to_use/code_review/configs/directory_level).
 - **Ver overrides:** una píldora numérica junto a un alcance o una página en la barra lateral cuenta los ajustes anulados en ese nivel ("N settings overridden at this level"). En la página, cada campo anulado muestra un distintivo **Overridden**; su botón de deshacer devuelve el campo a la herencia.
-- **Eliminar un nivel:** el menú **⋯** junto al selector de alcance tiene **Delete configuration** (y **Edit directories** para un alcance de directorio).
+- **Eliminar un nivel:** el menú **⋯** junto al selector de alcance tiene **Delete configuration**, y **Edit directories** para un alcance de directorio. Tras eliminar, un repositorio usa la configuración Global y las carpetas de un directorio usan la de su repositorio. La configuración de un repositorio solo se puede eliminar después de eliminar sus alcances de directorio.
+
+## kodus-config.yml
+
+Cuando **Prefer kodus-config.yml settings** está activado para un repositorio, Kody lee `kodus-config.yml` desde la raíz de la rama predeterminada del repositorio. Se aplica sobre la configuración Global y la propia del repositorio, y por debajo de cualquier ajuste que un alcance de directorio sobrescriba. Consulta [General](/es/how_to_use/code_review/configs/general#prioridad-de-configuración).
+
+```
+Global
+ └─ Repository
+     └─ kodus-config.yml at the repository root (optional)
+         └─ Directory
+```
+
+- El archivo de la raíz es el único archivo que lee Kody. No lee un `kodus-config.yml` dentro de una carpeta.
+- El archivo de la raíz se lee solo cuando el interruptor está activado en el alcance de **repositorio**. El interruptor también aparece en el alcance de directorio, pero no cambia una revisión.
+- Los alcances de directorio toman su configuración de la aplicación o de un repositorio de [configuración centralizada](/es/how_to_use/code_review/configs/centralized_config), que escribe en los mismos ajustes Global, de repositorio y de directorio.
+- El nivel de directorio se aplica solo cuando el pull request toca exactamente un alcance de directorio. Consulta [Configuración a Nivel de Directorio](/es/how_to_use/code_review/configs/directory_level#reglas-de-selección).
 
 ## Ejemplos
 
 <Tabs>
   <Tab title="El cambio Global se propaga">
     Cambias **Minimum severity to post** (en **What to review**) en Global.
-    
+
     Todos los repositorios y directorios sin un override se actualizan automáticamente. Los que tienen override permanecen sin cambios.
   </Tab>
 
   <Tab title="Override en Repositorio">
     En el Repositorio X, anulas el mensaje **Review starts** (en **What Kody writes → Comments during the review**).
-    
+
     Los directorios dentro del Repositorio X ahora heredan de él (a menos que tengan su propio override).
   </Tab>
 
   <Tab title="Volver a la herencia">
     En el Repositorio Y, eliminas el override de los interruptores de categoría en **What to review**.
-    
+
     El campo sigue a Global nuevamente y recibe futuros cambios globales.
   </Tab>
 </Tabs>
@@ -75,6 +91,6 @@ Una vez que se anula, un campo deja de seguir al padre y usa su valor local en s
   </Accordion>
 
   <Accordion title="¿Un Directorio hereda del Repositorio o de Global?">
-    Del Repositorio primero. Si el Repositorio no tiene override para ese campo, hereda de Global.
+    Del Repositorio primero, incluido el `kodus-config.yml` del repositorio cuando se prefiere. Si el Repositorio no tiene override para ese campo, hereda de Global.
   </Accordion>
 </AccordionGroup>

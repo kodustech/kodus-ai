@@ -15,12 +15,14 @@ Poner en marcha un nuevo equipo con Kodus lleva unos 30 minutos. Esta guía reco
 3. Conecta tu proveedor de Git (GitHub, GitLab, Bitbucket, Azure Repos o Forgejo)
 4. Selecciona los repositorios a monitorear
 
+La guía de configuración continúa con la severidad mínima para publicar, el interruptor de instrucciones para agentes de código (Paso 3) y un pull request para la primera revisión de Kody.
+
 ## Paso 2 — Establece la línea base de revisión
 
-Comienza con valores predeterminados razonables antes de personalizar:
+Kodus parte de valores predeterminados razonables, así que personaliza solo lo que sea distinto. Puedes establecer la línea base en la aplicación web, en **Code review → What to review** (categorías y **Minimum severity to post**), o mantenerla en un `kodus-config.yml` en la raíz de cada repositorio, en su rama por defecto. Kody lee ese archivo solo después de que actives **Prefer kodus-config.yml settings** en **Code review → General** para el repositorio.
 
 ```yaml
-# kodus-config.yml — coloca esto en la raíz de cada repositorio
+# kodus-config.yml — these are the defaults
 reviewOptions:
   bug: true
   security: true
@@ -74,14 +76,14 @@ Use interfaces and dependency injection.
 No direct DB access from services or controllers.
 ```
 
-Estas se convierten en Memorias que aplican de inmediato a todas las revisiones.
+Estas se convierten en Memorias que Kody usa en revisiones posteriores. Con **Kody knowledge approval** activado, cada una espera en **Pending review** hasta que alguien la apruebe.
 
 ## Paso 5 — Crea 2-3 reglas críticas
 
-Añade reglas para cosas que nunca deben ocurrir:
+Añade reglas para cosas que nunca deben ocurrir. En **Code review → Kody Rules**, en la pestaña **Review Rules**, haz clic en **New rule**:
 
 ```
-Name: No console.log in production code
+Rule name: No console.log in production code
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: High
@@ -91,7 +93,7 @@ Exclude test files (*.spec.ts, *.test.ts).
 ```
 
 ```
-Name: No hardcoded API URLs
+Rule name: No hardcoded API URLs
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -102,7 +104,7 @@ URLs must come from environment variables or config files.
 
 ## Paso 6 — Conecta la gestión de tareas (opcional pero recomendado)
 
-Conecta Jira, Linear, Notion o ClickUp en **Plugins** (en la barra lateral) para habilitar la validación de lógica de negocio. Esto permite a Kodus verificar si los PRs implementan lo que describen las tareas.
+Conecta Atlassian Rovo (Jira), Linear, Notion o Git Issues en **Plugins** (en la barra lateral) para habilitar la [validación de lógica de negocio](/es/how_to_use/code_review/business_logic_validation). Esto permite a Kodus verificar si los PRs implementan lo que describen las tareas.
 
 ## Paso 7 — Ejecuta un PR piloto
 
@@ -120,7 +122,7 @@ Tras una semana de revisiones, consulta al equipo:
 - ¿Hay demasiadas sugerencias? → Sube **Minimum severity to post** en **Code review → What to review** (`severityLevelFilter` en `kodus-config.yml`)
 - ¿Las reglas generan demasiado ruido? → Reduce las rutas de archivos o añade exclusiones
 - ¿Faltan patrones importantes? → Añade nuevas reglas o Memorias
-- ¿Quieres reglas generadas automáticamente? → Selecciona el repositorio en el selector de alcance, abre **Code review → Kody Rules**, haz clic en **Configuration** y activa **Generate from past reviews** para obtener sugerencias del historial de revisiones
+- ¿Quieres reglas generadas automáticamente? → Selecciona el repositorio en el selector de alcance, abre **Code review → Kody Rules**, haz clic en **Configuration** y activa **Generate from past reviews** para que Kody redacte reglas a partir de los comentarios de tus revisores. En la nube, fuera del trial, esto requiere [BYOK](/es/how_to_use/byok)
 
 ## Consejos
 

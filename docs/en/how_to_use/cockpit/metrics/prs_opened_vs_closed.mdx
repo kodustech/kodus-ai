@@ -6,41 +6,40 @@ description: "Compare how many pull requests your team opens against how many it
 ## What is PRs Opened vs Closed
 
 This chart puts two weekly counts side by side: how many pull requests were **opened** and how
-many were **closed** in the same week. It answers a question none of the speed metrics do — is
-your team keeping up with its own throughput, or is work piling up faster than it gets merged?
+many were **closed** in the same week. It shows whether the team keeps up with the work it opens,
+or whether pull requests pile up faster than they close.
 
 ## How We Calculate It
 
-For every week in the selected period we count:
+For every week in the selected date range:
 
-- **Opened** — pull requests created during that week.
-- **Closed** — pull requests closed during that week (merged or otherwise closed).
+- **Opened**: pull requests opened that week, whatever their status today. For a PR opened before
+  its repository was connected, and not among the PRs imported at connection, the date is when
+  Kodus first recorded it.
+- **Closed**: pull requests closed that week, merged or closed without merging.
 
-The two are counted independently: a PR opened in one week and closed three weeks later shows up
-in the "opened" bar of the first week and the "closed" bar of the third. That's deliberate — it's
-what makes a backlog visible.
+The two are counted independently: a PR opened in one week and closed three weeks later counts in
+the **Opened** bar of the first week and the **Closed** bar of the fourth. That is what makes a
+backlog visible.
 
 ## How to Read It
 
-- **Closed ≈ Opened, week after week** — steady state. The team is absorbing what it takes on.
-- **Opened consistently above Closed** — the backlog is growing. Review capacity, not authoring
-  capacity, is usually the constraint.
-- **Closed spikes well above Opened** — often a cleanup sweep: someone closed a batch of stale
-  PRs. Worth confirming before reading it as a productivity win.
-- **Both collapse at once** — usually a calendar effect (holiday, freeze, incident), not a
-  behavior change.
+- **Closed close to Opened, week after week**: steady state. The team closes what it opens.
+- **Opened above Closed for several weeks**: the backlog is growing.
+- **Closed well above Opened**: often a batch of stale PRs closed at once. Check before reading it
+  as a productivity gain.
+- **Both drop at once**: usually a holiday, a freeze or an incident.
 
 <Tip>
-  Read this one next to [PR Cycle Time](/en/how_to_use/cockpit/metrics/lead_time_for_changes).
-  A growing gap here with a rising cycle time is the clearest signal that reviews — not
-  development — are the bottleneck.
+  Read this chart next to [PR Cycle Time](/en/how_to_use/cockpit/metrics/lead_time_for_changes).
+  A growing gap here with a rising cycle time points to review as the bottleneck.
 </Tip>
 
 ## Where to Find It
 
-Cockpit → **Productivity** tab, in the detailed charts section.
+Cockpit → **Productivity** tab, in the detailed charts section. Weeks start on Monday, and you can hide **Opened** or **Closed** by clicking its name under the chart.
 
 <Note>
   This chart can be hidden for your whole organization. If you don't see it, check
-  **Organization → Cockpit visibility** — see [Cockpit Configuration](/en/how_to_use/cockpit/configuration).
+  **Organization → Cockpit visibility**. See [Cockpit Configuration](/en/how_to_use/cockpit/configuration).
 </Note>

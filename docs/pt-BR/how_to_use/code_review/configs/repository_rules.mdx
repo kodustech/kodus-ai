@@ -1,108 +1,95 @@
 ---
-title: "Regras do Repositório"
-description: "Crie Kody Rules personalizadas diretamente no seu repositório usando arquivos markdown com templates estruturados."
+title: "Regras do repositório"
+description: "Mantenha as Kody Rules no seu repositório como arquivos markdown, um arquivo por regra, versionados junto com o seu código."
 ---
 
 <Info>
-As Regras do Repositório estão sempre sincronizadas: não há configuração para ativar. Elas são os únicos arquivos de um repositório que viram Kody Rules. Instruções escritas para agentes de código (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`) são tratadas à parte, veja <a href="/pt-BR/how_to_use/code_review/configs/rules_file_detection">Instruções para Agentes de Código</a>.
+As Regras do Repositório estão sempre sincronizadas: não há configuração para ativar. Elas são os únicos arquivos de um repositório que viram Kody Rules. Instruções escritas para agentes de código (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`) são tratadas à parte, veja <a href="/pt-BR/how_to_use/code_review/configs/rules_file_detection">Instruções para agentes de código</a>.
 </Info>
 
-## Como Usar
-Você pode criar Kody Rules personalizadas diretamente no seu repositório colocando arquivos markdown estruturados em diretórios específicos. Isso permite versionar suas regras junto com o código e compartilhá-las com toda a equipe.
+## Como funciona
 
-<Info>
-Arquivos de regras do repositório são importados **verbatim** — sem conversão por LLM. O frontmatter é parseado como está, o corpo markdown vira as instruções da regra exatamente como você escreveu (identificadores, formatação e texto preservados), e os exemplos Bad/Good são importados estruturalmente. Cada arquivo produz uma regra. Um arquivo que não segue o template (sem frontmatter, `title` ou corpo) é ignorado, e a sincronização registra isso no log; nada é gerado a partir dele.
-</Info>
+Coloque no seu repositório um arquivo markdown com o template abaixo. A Kody o importa como uma regra, e a regra acompanha o arquivo: edite o arquivo e a regra muda, apague-o e a regra é removida.
 
-### Sincronização
-- **Detecção Automática**: As regras do repositório são detectadas e sincronizadas em todo repositório conectado; não há nada para habilitar
-- **Importar agora**: No painel **Kody Rules → Configuration** do repositório, **Import rule files now** lê todos os arquivos de regras da branch padrão
-- **Aplicação Web**: As regras sincronizadas aparecem na página **Code review → Kody Rules** do repositório, com a origem **Auto-sync** (regras importadas de arquivos de agentes de código antes de pararem de ser convertidas mostram **Agent file**)
-- **Atualizações em Tempo Real**: As alterações nos arquivos de regras são sincronizadas quando Pull Requests são mesclados na branch padrão
+Os arquivos são importados **verbatim**, sem conversão por LLM. O frontmatter é lido como está escrito, o corpo markdown vira as instruções da regra exatamente como você escreveu, e os exemplos Bad e Good são importados do corpo. Cada arquivo produz uma regra.
 
-## Localização dos Arquivos
+- **Automático:** os arquivos de regras são sincronizados em todo repositório conectado.
+- **No merge:** quando um pull request que adiciona, altera, renomeia ou remove um arquivo de regra é mesclado, a regra é criada, atualizada ou removida. Pull requests em um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config) não são sincronizados.
+- **Importar agora:** para arquivos que já estão no repositório, abra **Code review → Kody Rules → Configuration** do repositório e clique em **Import rule files now**. A Kody lê todos os arquivos de regras da branch padrão.
+- **No app:** as regras sincronizadas aparecem na página **Kody Rules** do repositório com a origem **Auto-sync** e o caminho do arquivo como fonte.
 
-Coloque seus arquivos de regras em um destes diretórios, na raiz do repositório ou em qualquer subdiretório:
-- `.kody/rules/**/*.md`
+Novas regras entram ativas, ou ficam em **Pending review** quando **Kody knowledge approval** está ativado.
+
+O arquivo é a fonte da verdade. O texto, o path, a severidade e o status de uma regra são substituídos a partir do arquivo a cada sincronização, então altere o arquivo em vez da regra no app. Uma regra pausada no app volta a ficar ativa na próxima vez que o arquivo sincroniza.
+
+## Localização dos arquivos
+
+Coloque os arquivos de regras em um destes locais, na raiz do repositório ou em qualquer subdiretório:
+
+- `.kody/rules/`
 - `rules/**/*.md`
-- `.rules/**` e `docs/coding-standards/**` (apenas arquivos que seguem o template)
+- `.rules/` e `docs/coding-standards/` (apenas arquivos que seguem o template)
 
-## Template de Regra
+O escopo de uma regra vem do seu `path`, não de onde o arquivo está. Uma regra em `services/billing/.kody/rules/` sem `path` continua valendo para todos os arquivos.
 
-Cada arquivo de regra deve seguir exatamente esta estrutura de template:
+## Template de regra
 
-```markdown
+````markdown
 ---
-title: "<nome da regra>"
-scope: "file"            # "file" ou "pull-request"
-path: []                 # lista de globs. exemplo: ["**/*.ts", "apps/web/**"]
+title: "<rule name>"
+scope: "file"            # "file" or "pull-request"
+path: []                 # list of globs. example: ["**/*.ts", "apps/web/**"]
 severity_min: "high"     # "low", "medium", "high", "critical"
-languages: []            # opcional. ex: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
-buckets: []              # opcional. ex: ["style-conventions", "error-handling", "security"]
-uuid: ""                 # opcional. use para ID de regra estável
-enabled: true            # opcional
+enabled: true            # optional
 ---
 
 ## Instructions
-Descreva o que revisar e como decidir. Seja direto e objetivo.
-- Foque nos impactos de segurança, performance e contrato público.
-- Forneça preferências ou padrões da equipe quando aplicável.
-- Se for uma regra de PR, explique o que considerar no changeset.
+Describe what to review and how to decide. Be direct and objective.
+- Focus on security, performance and public contract impacts.
+- Give team preferences or patterns when applicable.
+- If it's a PR rule, explain what to consider in the changeset.
 
 ## Examples
 
 ### Bad example
-\`\`\`lang
-// cole aqui um breve contra-exemplo que viola a regra
-\`\`\`
-
-### Good example  
-\`\`\`lang
-// cole aqui um breve exemplo que segue a regra
-\`\`\`
+```lang
+// paste here a short counter-example that violates the rule
 ```
-## Campos do Template
 
-### Campos Obrigatórios
+### Good example
+```lang
+// paste here a short example that follows the rule
+```
+````
 
-Só duas coisas são estritamente obrigatórias: um `title` não vazio e um corpo de regra não vazio.
-Um arquivo sem um dos dois é ignorado por completo.
+### Campos
 
-| Campo | Descrição | Valores |
-|-------|-------------|---------|
-| `title` | Nome da regra exibido na interface | Qualquer string descritiva |
-
-### Campos com valor padrão
-
-Todo o resto é opcional — se omitir, vale o padrão.
+Apenas um `title` não vazio e um corpo não vazio são obrigatórios. Um arquivo sem um dos dois é ignorado.
 
 | Campo | Descrição | Valores | Padrão |
-|-------|-------------|---------|---------|
-| `scope` | Escopo de análise da regra | `"file"` ou `"pull-request"` | `"file"` |
-| `path` | Caminhos onde a regra se aplica. A regra dispara em arquivos que casem com **qualquer** um dos globs | Array de padrões glob | `**/*` (todos os arquivos) |
-| `severity_min` | Nível mínimo de severidade | `"low"`, `"medium"`, `"high"`, `"critical"` | `"medium"` |
-| `enabled` | Defina `false` para não importar este arquivo (uma regra já importada não é removida) | boolean | `true` |
-| `uuid` | Identificador estável da regra — mantém a mesma regra na plataforma mesmo se o arquivo for renomeado | string | nenhum |
-| `languages`, `buckets` | Metadados informativos | — | — |
+|-------|-----------|---------|--------|
+| `title` | Nome da regra exibido no app | Qualquer string | obrigatório |
+| `scope` | **Per file** ou **Per PR** | `"file"` ou `"pull-request"` | `"file"` |
+| `path` | Arquivos aos quais a regra se aplica; ela roda em arquivos que casem com **qualquer** um dos globs. Não é usado por regras `pull-request` | Um glob ou uma lista de globs | `**/*` (todos os arquivos) |
+| `severity_min` | A severidade da regra | `"low"`, `"medium"`, `"high"`, `"critical"` | `"medium"` |
+| `enabled` | `false` ignora o arquivo. Uma regra já importada dele não é removida | boolean | `true` |
 
 <Note>
-  `severity` é aceito como alias de `severity_min`, já que é um erro fácil de digitar e a
-  intenção é inequívoca. Qualquer valor fora dos quatro níveis cai para `"medium"`, e qualquer
-  `scope` diferente de `"pull-request"` é tratado como `"file"`.
+  `severity` é aceito como alias de `severity_min`. Um valor fora dos quatro níveis cai para `"medium"`, e qualquer `scope` diferente de `"pull-request"` é tratado como `"file"`. Outras chaves do frontmatter são ignoradas.
 </Note>
 
-## Exemplos de Regras
+Os exemplos Bad e Good vêm de headings que contêm "bad" ou "good" (por exemplo `### Bad example`); todo bloco de código cercado sob um heading assim vira um exemplo.
 
-### Exemplo de Regra no Nível de Arquivo
-```markdown
+## Exemplos de regras
+
+### Regra no nível de arquivo
+
+````markdown
 ---
 title: "Avoid console.log in production code"
 scope: "file"
 path: ["src/**/*.ts", "src/**/*.tsx"]
 severity_min: "medium"
-languages: ["jsts"]
-buckets: ["style-conventions"]
-enabled: true
 ---
 
 ## Instructions
@@ -114,33 +101,31 @@ Check for console.log statements in production TypeScript/JavaScript files.
 ## Examples
 
 ### Bad example
-\`\`\`typescript
+```typescript
 function processUser(user: User) {
   console.log('Processing user:', user.id);
   return user.process();
 }
-\`\`\`
+```
 
 ### Good example
-\`\`\`typescript
+```typescript
 import { logger } from './logger';
 
 function processUser(user: User) {
   logger.info('Processing user:', user.id);
   return user.process();
 }
-\`\`\`
 ```
+````
 
-### Exemplo de Regra no Nível de Pull Request
-```markdown
+### Regra no nível de pull request
+
+````markdown
 ---
 title: "New API endpoints must have tests"
 scope: "pull-request"
-path: ["**/*"]
 severity_min: "high"
-buckets: ["testing"]
-enabled: true
 ---
 
 ## Instructions
@@ -156,34 +141,23 @@ Added new endpoint `/api/users/profile` but no test file included in the PR.
 
 ### Good example
 Added new endpoint `/api/users/profile` with corresponding test file `tests/api/users/profile.test.ts` that covers success and error cases.
-```
+````
 
-## Requisitos de Configuração
+## Quando um arquivo para de sincronizar
 
-1. **Criar arquivos de regras**: Coloque arquivos `.md` que seguem o template em `.kody/rules/**` ou `rules/**`. Arquivos em `.rules/**` e `docs/coding-standards/**` que seguem o template também são importados.
-2. **Fazer o merge**: Um arquivo de regra sincroniza quando um Pull Request que o adiciona, altera, renomeia ou remove é mesclado na branch padrão. Remover o arquivo remove a regra correspondente.
-3. **Arquivos existentes**: Para importar arquivos de regras que já estão na branch padrão, use **Import rule files now** no painel **Kody Rules → Configuration** do repositório.
+- **O arquivo não segue o template.** Um arquivo sem frontmatter, `title` ou corpo é ignorado. Se uma regra já tinha sido importada dele, a regra mantém o último texto e status, e o painel lateral da regra avisa que o arquivo não sincroniza mais. O aviso some quando o arquivo volta a ser lido.
+- **Manter um arquivo fora da sincronização.** Adicione `@kody-ignore` nas primeiras ou nas últimas 10 linhas do arquivo. A regra dele é removida na próxima sincronização.
+- **Parar de importar um arquivo.** `enabled: false` faz o arquivo deixar de ser importado. Isso não remove nem pausa uma regra que já existe; apague o arquivo ou use `@kody-ignore` para isso.
 
-Novas regras entram ativas, ou em **Pending review** quando **Kody knowledge approval** está ativado.
+## Logs do self-hosted
 
-<Tip>
-Adicione `@kody-ignore` em qualquer lugar de um arquivo de regra para mantê-lo no repositório sem sincronizá-lo. A regra existente dele é removida na próxima sincronização.
-</Tip>
+Em deployments self-hosted, procure nos logs por estes marcadores:
 
-## Verificando sincronização e avaliação de regras (self-hosted)
+- `[kody-rules-sync]`: um resumo de cada sincronização com os arquivos importados, ignorados (com o motivo) e removidos.
+- `[kody-rules-eval]`: durante um review, quais regras (uuid e título) foram selecionadas para os arquivos alterados.
 
-Em deployments self-hosted, os logs da API carregam marcadores grep-áveis para debug:
-
-- `[kody-rules-sync]` — sumário por execução de sync: quais arquivos foram importados, pulados (com o motivo) ou removidos.
-- `[kody-rules-eval]` — trace de avaliação por arquivo durante um review: exatamente quais regras (uuid + título) foram selecionadas para o prompt de cada arquivo revisado.
-
-```bash
-docker logs kodus_api 2>&1 | grep "kody-rules-sync"
-docker logs kodus_api 2>&1 | grep "kody-rules-eval"
-```
-
-Se uma regra aparece como ativa na UI mas nunca aparece em `[kody-rules-eval]` para os arquivos esperados, verifique o glob do campo **Path** — uma regra só roda em arquivos que casam com o path.
+Se uma regra está ativa no app mas nunca aparece em `[kody-rules-eval]` para os arquivos esperados, verifique o **Path** dela: uma regra só roda em arquivos que casam com o seu path.
 
 ## Limites de regras
 
-Organizações no plano **Free** da cloud (ou cuja assinatura foi cancelada ou expirou) e instâncias self-hosted rodando **sem licença válida** (Community Edition) avaliam no máximo **10 regras ativas** por review (as mais antigas primeiro). Regras além do limite continuam na lista como **Locked** e são puladas em todo PR; um banner em **Code review → Kody Rules** informa quantas estão sendo puladas. Planos pagos da cloud e instâncias self-hosted licenciadas não têm esse limite. Se regras além da 10ª não disparam, esse limite é o motivo.
+O plano Free e as instâncias self-hosted sem licença rodam no máximo 10 regras ativas, incluindo as regras vindas de arquivos. Veja [limites de regras](/pt-BR/how_to_use/code_review/configs/kody_rules#limites-de-regras).

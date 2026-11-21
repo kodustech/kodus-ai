@@ -6,12 +6,6 @@
   for manual deployment options.
 </Tip>
 
-Set the proper permissions for the installation script:
-
-```bash
-chmod +x scripts/install.sh
-```
-
 Run the script:
 
 ```bash
@@ -22,14 +16,14 @@ Run the script:
 
 Our installer automates several important steps:
 
-- Verifies Docker installation
-- Creates networks for Kodus services
-- Clones repositories and configures environment files
-- Runs docker-compose to start all services
-- Executes database migrations
-- Seeds initial data
+- Checks that Docker and Docker Compose are installed
+- Validates the required variables in `.env`
+- Creates the Docker networks Kodus uses
+- Starts the services with Docker Compose and waits for RabbitMQ and PostgreSQL to be healthy
 
-🎉 **Success!** When complete, the Kodus Web App and backend services (API, worker, webhooks, MCP manager) should be running on your machine.
+The `api` container runs the database migrations and seeds when it starts.
+
+When it finishes, the Kodus Web App and the backend services (API, worker, webhooks, and the MCP manager if enabled) are running on your machine.
 
 You can verify your installation by visiting `http://localhost:3000` - you should see the Kodus Web Application interface.
 

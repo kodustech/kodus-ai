@@ -1,0 +1,63 @@
+---
+title: "Registros de actividad"
+description: "Consulta quién cambió las Kody Rules, los ajustes de revisión, las integraciones y los accesos en tu organización."
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="Disponible en Kodus Cloud con Enterprise o un trial activo.">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requiere una licencia Enterprise.">
+    <Badge icon="server" stroke>Autoalojado</Badge>
+  </FeatureBadge>
+</div>
+
+**Organization → Activity logs** es un registro de auditoría de los cambios de configuración. La página se titula **User Activity Logs**. Los Owners, Repo Admins, Billing Managers y Contributors pueden leerla, y cada uno ve todas las entradas de la organización.
+
+| Tu plan | Qué ves |
+| --- | --- |
+| Enterprise, o un trial | La página completa |
+| Free o Teams | La entrada de la barra lateral lleva un candado, y la página abre una vista previa con un botón **See plans** |
+| Self-hosted con una clave de licencia Enterprise | La página completa |
+| Self-hosted sin clave de licencia | El candado y una vista previa con un botón **Activate a license** |
+| Plan vencido, cancelado o con el pago fallido | El candado y la vista previa |
+
+La API rechaza la solicitud en cualquier otro plan. El registro se comprueba por separado: Kodus registra los cambios en todos los planes válidos excepto Free, y en self-hosted solo con una clave de licencia. Los cambios hechos en Free, o en una instancia self-hosted sin clave, nunca se registran.
+
+## Qué se registra
+
+Los cambios hechos en la app, con quién los hizo:
+
+- Ajustes de code review, incluida la eliminación de la configuración de un repositorio o directorio
+- Kody Rules
+- Repositorios seleccionados para revisión
+- Integraciones de Git conectadas o eliminadas
+- Mensajes de pull requests
+- Ajustes de la organización
+- Claves de la CLI
+- Invitaciones de miembros, cambios de rol y acceso a repositorios
+- Cambios del estado de los asientos
+
+## La lista
+
+Primero lo más reciente. Cada fila tiene:
+
+| Columna | Qué muestra |
+| --- | --- |
+| **Action** | **ADD**, **CREATE**, **EDIT**, **DELETE** o **CLONE** |
+| **User** | El email de la persona que hizo el cambio |
+| **Description** | Qué cambió |
+| **Action Description** | Una etiqueta corta para el tipo de cambio |
+| **Level** | Dónde se aplica el cambio: **Main**, **Global**, **Repository** o **Directory** |
+| **Date** | Hace cuánto tiempo |
+
+Haz clic en el icono del ojo de una fila para abrir **Log Details**: el usuario, el nivel, las horas de creación y actualización, y cada cambio de la entrada. Haz clic en **Action**, **User**, **Level** o **Date** para ordenar.
+
+## Búsqueda y rango de fechas
+
+La página carga las 100 entradas más recientes. Estos dos controles reducen esa lista, así que las entradas más antiguas no son accesibles desde aquí:
+
+- **Search logs...**: coincide con el email del usuario y las descripciones de los cambios.
+- Rango de fechas: **Today**, **Last week**, **Last 2 weeks**, **Last month**, **Last 3 months** o fechas personalizadas, hasta unos tres meses.

@@ -7,9 +7,9 @@ icon: "dharmachakra"
 ¿Prefieres un clúster en lugar de una sola VM? Kodus ofrece **Helm charts** para
 Kubernetes y OpenShift en el repositorio
 [kodus-installer](https://github.com/kodustech/kodus-installer). Esta página es la
-visión general — el [README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
-de los charts es la referencia completa (instalaciones air-gapped, ExternalSecrets,
-operadores, observabilidad y hardening orientado a SOC 2).
+visión general. El [README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
+de los charts es la referencia completa: instalaciones air-gapped, ExternalSecrets,
+operadores, observabilidad y hardening.
 
 ## Requisitos
 
@@ -20,32 +20,42 @@ operadores, observabilidad y hardening orientado a SOC 2).
 ## Inicio rápido (data stores integrados)
 
 El modo por defecto `bundled` levanta PostgreSQL (pgvector), MongoDB y RabbitMQ como
-StatefulSets gestionados por el chart — el equivalente a `USE_LOCAL_DB=true` de
-Docker Compose. Un solo comando, sin operadores:
+StatefulSets gestionados por el chart, el equivalente a `USE_LOCAL_DB=true` de
+Docker Compose.
+
+Clona el instalador y compila la dependencia del chart. Sustituye los hosts de ejemplo por tus nombres DNS y apúntalos a un controlador Ingress ya instalado. La clase Ingress predeterminada es `nginx`. Configura `ingress.tls.secretName` si usas un Secret de TLS en el namespace del release. El certificado debe cubrir los tres hosts.
 
 ```bash
-git clone https://github.com/kodustech/kodus-installer
+git clone https://github.com/kodustech/kodus-installer.git
 cd kodus-installer/charts/kodus
 helm dependency build
-helm install kodus . -n kodus --create-namespace \
-  --set imageTag=<versión> \
-  --set global.config.WEB_HOSTNAME_API=api.kodus.example.com \
-  --set global.config.NEXTAUTH_URL=https://kodus.example.com \
-  --set ingress.hosts.web.host=kodus.example.com \
-  --set ingress.hosts.api.host=api.kodus.example.com
+helm install kodus . \
+  -n kodus --create-namespace \
+  --set global.config.NEXTAUTH_URL=https://kodus.example.net \
+  --set global.config.API_FRONTEND_URL=https://kodus.example.net \
+  --set global.config.API_USER_INVITE_BASE_URL=https://kodus.example.net \
+  --set ingress.hosts.web.host=kodus.example.net \
+  --set ingress.hosts.api.host=api.kodus.example.net \
+  --set ingress.hosts.webhooks.host=webhooks.kodus.example.net
 ```
 
-`imageTag` fija la versión de Kodus para todo el stack (como el `IMAGE_TAG` de
-Docker Compose); usa una tag real, nunca `latest`, en producción. Los secrets de
-autenticación/cifrado se generan automáticamente con el formato correcto y se
-mantienen estables entre upgrades.
+La versión del chart es independiente de la versión de las imágenes de Kodus. El chart usa por defecto su `appVersion` para todas las imágenes de Kodus, incluido el job de migración. Consulta el [README del chart](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md) para instalar una versión publicada desde OCI.
+
+Define `NEXTAUTH_URL`, `API_FRONTEND_URL` y `API_USER_INVITE_BASE_URL` con la URL web pública. Se usan para iniciar sesión, volver desde la GitHub App, iniciar sesión desde la CLI y enviar invitaciones. Si usas SSO con SAML, configura también `global.config.API_URL` con la URL pública de la API.
 
 <Tip>
-  El servicio de webhooks necesita su propio host público. Apunta
-  `ingress.hosts.webhooks.host` (o `route.hosts.webhooks.host` en OpenShift) a un
-  hostname dedicado y el chart deriva `API_<provider>_CODE_MANAGEMENT_WEBHOOK`
-  automáticamente.
+  El servicio de webhooks necesita su propio host público. Apunta `ingress.hosts.webhooks.host`
+  (o `route.hosts.webhooks.host` en OpenShift) a un hostname dedicado y el chart
+  deriva por ti la URL `*_CODE_MANAGEMENT_WEBHOOK` de cada proveedor. Si lo dejas en el
+  placeholder, define tú mismo `global.config.API_GITHUB_CODE_MANAGEMENT_WEBHOOK` (o la variable de
+  tu proveedor), o los repositorios conectados nunca dispararán revisiones.
 </Tip>
+
+Abre el host web, crea tu cuenta y conecta un modelo en **AI providers**. Si lo configuras durante la instalación, pon los ajustes que no son secretos bajo `global.config` y la clave bajo `global.secrets`. Consulta la [configuración de proveedores de LLM](/es/how_to_deploy/deploy_kodus/generic_vm#configuración-de-proveedores-de-llm).
+
+<Warning>
+  `WEB_HOSTNAME_API` no es un hostname público. El pod web llama a la API del lado del servidor a través de `/api/proxy`, y `WEB_HOSTNAME_API` y `WEB_PORT_API` son la dirección de la API dentro del clúster. El chart los define por defecto como `<release>-api` y `3001`. Apuntar `WEB_HOSTNAME_API` a tu Ingress o Route público envía al pod web hacia el router y de vuelta, lo que puede fallar con `fetch failed`. Los proveedores Git envían eventos a las URL públicas de sus webhooks. Por ejemplo, Bitbucket usa la URL de `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` y Azure Repos usa `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK`.
+</Warning>
 
 ## Modos de data store
 
@@ -55,33 +65,88 @@ Cada store (`postgres`, `mongodb`, `rabbitmq`) tiene un `mode` independiente:
 |------|----------|------|
 | `bundled` *(por defecto)* | un StatefulSet gestionado por el chart | dev / pruebas |
 | `external` | tu servicio gestionado/propio mediante un `existingSecret` | producción |
-| `operator` | un CR reconciliado por un operador del clúster (HA) — CloudNativePG, RabbitMQ Cluster Operator, MongoDB Community Operator | producción |
+| `operator` | un CR reconciliado por un operador del clúster (HA): CloudNativePG, RabbitMQ Cluster Operator, MongoDB Community Operator | producción |
 
-En producción, prefiere `external` u `operator` — delegan la operación de la base de
-datos a algo hecho para ello.
+En producción, prefiere `external` u `operator`: delegan la operación de la base de
+datos a algo hecho para ello. Un PostgreSQL externo necesita la extensión `vector`, y un
+RabbitMQ externo necesita el plugin de delayed message exchange, los virtual hosts `kodus-ai` y
+`kodus-ast` y `consumer_timeout = 7200000`. El README de los charts lista los
+prerrequisitos de cada store.
+
+Para un Postgres externo que requiere TLS, asigna `"false"` a `global.config.API_DATABASE_DISABLE_SSL`.
 
 ## OpenShift
 
-Añade el overlay de OpenShift — los Routes reemplazan al Ingress y los UIDs de los
-pods se dejan al SCC del namespace (`restricted-v2`), sin UIDs fijos:
+OpenShift necesita el overlay `values-openshift.yaml` de un checkout del repositorio.
+Los Routes reemplazan al Ingress y los UIDs de los pods se dejan al SCC del namespace (`restricted-v2`),
+sin UIDs fijos:
 
 ```bash
-helm install kodus . -f values.yaml -f values-openshift.yaml \
-  -n kodus --create-namespace --set imageTag=<versión>
+git clone https://github.com/kodustech/kodus-installer
+cd kodus-installer/charts/kodus
+helm dependency build
+helm install kodus . -f values-openshift.yaml \
+  -n kodus --create-namespace \
+  --set global.config.NEXTAUTH_URL=https://kodus.apps.cluster.example.net \
+  --set global.config.API_FRONTEND_URL=https://kodus.apps.cluster.example.net \
+  --set global.config.API_USER_INVITE_BASE_URL=https://kodus.apps.cluster.example.net \
+  --set route.hosts.web.host=kodus.apps.cluster.example.net \
+  --set route.hosts.api.host=kodus-api.apps.cluster.example.net \
+  --set route.hosts.webhooks.host=kodus-webhooks.apps.cluster.example.net
 ```
 
-Deja `route.hosts.*.host` vacío para que OpenShift asigne automáticamente el
-hostname `<name>-<namespace>.apps…`. Ten en cuenta que algunos clústeres reflejan o
-bloquean imágenes `library/*` de Docker Hub, por lo que la imagen integrada de
-`mongo` puede necesitar un override (`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8`)
+Usa hostnames con una sola etiqueta de profundidad bajo el dominio de apps, como `kodus-api.apps…`. El
+certificado wildcard por defecto cubre solo una etiqueta, y un host más profundo falla
+con los clientes que verifican TLS, incluida la entrega de webhooks de los proveedores Git.
+
+Si OpenShift asigna los hosts, consúltalos con `oc get route -n kodus`. Actualiza los tres ajustes web públicos anteriores y configura la variable de webhook de tu proveedor con su URL HTTPS en el host de webhooks asignado.
+
+Algunos clústeres reflejan o bloquean imágenes `library/*` de Docker Hub, por lo que la imagen integrada de `mongo`
+puede necesitar un override con el mismo tag que fija el chart (`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8.3.13`)
 o un data store `external` / `operator`.
 
-## Servicios opcionales y verificación
+Si tus nodos de MongoDB usan Linux 6.19 o posterior, consulta la [guía de arranque de MongoDB](/es/how_to_deploy/deploy_kodus/troubleshooting#mongodb-termina-con-server-121912) antes de elegir una etiqueta de imagen.
 
-- **MCP manager** — `--set services.mcp-manager.enabled=true`
-- **Worker de analytics** — `--set services.worker-analytics.enabled=true`
-- **Health check** — `../../scripts/doctor-k8s.sh -n kodus` inspecciona workloads,
-  configuración y los endpoints reales de salud.
+## Servicios opcionales
+
+`mcp-manager` y `worker-analytics` están habilitados por defecto. Desactiva cualquiera de los dos para una
+instalación mínima:
+
+```bash
+--set services.mcp-manager.enabled=false
+--set services.worker-analytics.enabled=false
+```
+
+- **MCP manager** sirve la pantalla de Plugins. Consulta [MCP Manager](/es/how_to_deploy/deploy_kodus/mcp_manager).
+- **Analytics worker** ejecuta `WORKER_ROLE=analytics` para Cockpit. Solo hace trabajo útil con una licencia self-hosted Enterprise. Consulta [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker).
+
+### Beta
+
+Para activar las funciones que requieren la opción beta en instalaciones autoalojadas, añade `BETA_FEATURES: "true"` bajo `global.config` en tu archivo de valores y aplica el cambio con `helm upgrade`. Cada función tiene sus requisitos de plan y configuración.
+
+## Actualización
+
+Guarda los valores que personalizaste, actualiza tu copia del instalador al chart de destino y ejecuta la actualización desde `charts/kodus`. En OpenShift, conserva la configuración de Routes en el archivo de valores. Elimina cualquier valor de `imageTag` que hayas fijado si quieres usar la versión predeterminada del nuevo chart.
+
+Guarda tus ajustes personalizados como `kodus-values.yaml`.
+
+```bash
+helm dependency build
+helm upgrade kodus . -n kodus -f kodus-values.yaml
+```
+
+Antes de actualizar, guarda copias de las bases de datos y conserva los Secrets. Helm rollback restaura el despliegue anterior. Las migraciones de bases de datos requieren su propio proceso de recuperación.
+
+## Verificación
+
+```bash
+../../scripts/doctor-k8s.sh -n kodus
+helm test kodus -n kodus
+```
+
+`doctor-k8s.sh` inspecciona workloads, configuración y los endpoints reales de salud. Para un bundle de
+soporte con datos sensibles redactados, ejecuta `../../scripts/collect-diagnostics.sh -n kodus`. Ambos se ejecutan desde `charts/kodus`
+en un checkout del repositorio.
 
 <Card title="Referencia completa de Helm" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
   Configuración de los operadores de data store, reutilización de bases existentes,

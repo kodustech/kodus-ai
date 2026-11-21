@@ -1,42 +1,124 @@
 ---
 title: "一般設定"
-description: "Code review → General にあるレビューの中核設定 — 頻度、PR ワークフロー、スキップ条件 — と kodus-config.yml の完全なリファレンス。"
+description: "Kody がレビューを行うタイミング、スキップするプルリクエストとファイル、プルリクエストへの報告方法、および kodus-config.yml のリファレンス。"
 ---
 
-サイドバーで **Code review → General**（ページタイトルは **General settings**）を開きます。レビューカテゴリと
-重大度しきい値はもうここにはありません — **Code review → What to review** にあります。
-
-## コア設定
+**Code review → General**（ページタイトルは **General settings**）を開きます。レビューカテゴリと重大度しきい値は [What to review](/ja/how_to_use/code_review/configs/what_to_review) にあります。サマリー、メッセージ、Kody の語り口は **What Kody writes** にあります。
 
 <Note>
-  Kodus には 3 つの設定レベルがあります：グローバル、リポジトリ、ディレクトリ。仕組みについては <a href="/ja/how_to_use/code_review/configs/inheritance_overrides">設定の継承とオーバーライド</a> を参照してください。
+  Kodus には、Global、Repository、Directory の3つの設定レベルがあります。仕組みについては <a href="/ja/how_to_use/code_review/configs/inheritance_overrides">設定の継承とオーバーライド</a> を参照してください。
 </Note>
+
+## 自動コードレビュー
+
+**Automated code review** スイッチをオンにすると、Kody はプルリクエストが開かれたときにレビューします。デフォルトではオンです。オフの場合は、プルリクエストに `@kody start-review` とコメントしてレビューを開始します。
+
+<Info>
+  このスイッチが対象とするのは**最初のレビュー**です。以降のプッシュについては、下記のレビュー頻度を参照してください。
+</Info>
+
+### レビュー頻度
+
+**Automated code review** がオンの場合に表示されます。最初のレビュー以降のレビューを Kody がどのように扱うかを決めます。
+
+<Tabs>
+  <Tab title="自動">
+    新しいプッシュごとにレビューします。これがデフォルトです。
+  </Tab>
+
+  <Tab title="自動一時停止">
+    プッシュが短時間に集中した場合に、レビューを一時停止します。**Time window (minutes)** の間に、Kody が **Pushes to trigger pause** 回プルリクエストをレビューすると、次のプッシュはレビューされず、`@kody start-review` とコメントするまでプルリクエストは一時停止のままになります。
+
+    デフォルト: 15分間に3回のプッシュ。
+  </Tab>
+
+  <Tab title="手動">
+    Kody は、プルリクエストが開かれたときの最初のプッシュをレビューします。以降のプッシュは、`@kody start-review` とコメントした場合にのみレビューされます。
+  </Tab>
+</Tabs>
+
+### ドラフトのプルリクエストをレビューする
+
+**Review draft pull requests** はデフォルトでオンのため、ドラフトもレビューされます。オフにすると、ドラフトは ready になるまでスキップされます。
+
+## レビューモード
+
+General には、有効になっているレビューモードとモデルが表示されます。モードや、リスク結果によって選択されるモードを変更したり、リポジトリやディレクトリのモデルを上書きしたりするには、**Configure routing** に進みます。[Routing](/ja/how_to_use/code_review/configs/routing) を参照してください。
+
+リスク評価には、専用のページとスイッチがあります。[リスク評価](/ja/how_to_use/code_review/configs/risk)を参照してください。
+
+## PR ワークフロー
+
+**Automatic PR approval** — Kody は、問題のないレビューの後、または自分が残したすべてのコメントが解決された時点で PR を承認します。マージは行いません。承認ポリシーは、Kody が承認できる問題のない PR を定義し、有効なリスク評価はすべてのポリシーに適用されます。[自動承認](/ja/how_to_use/code_review/configs/auto_approve)を参照してください。
+
+**対応プラットフォーム:** GitHub、GitLab、Bitbucket、Azure Repos、Forgejo
+
+## レビューフィードバック
+
+- **Request changes on critical issues**（`isRequestChangesActive`、デフォルトはオフ）— Kody が重大な問題を見つけると、プルリクエストのレビューを Request Changes に設定します。それらの指摘が解決されると、Kody は、承認しないプルリクエストであっても、リクエストを取り下げます。対応プラットフォーム: GitHub、Bitbucket、Azure Repos、Forgejo。接続済みのプラットフォームが GitLab のみの場合、このスイッチは表示されません。
+- **Show status feedback**（デフォルトはオン）— レビューがスキップまたはブロックされたときに、Kody がリアクションまたはコメントを行います。
+- **Committable suggestions**（Alpha、デフォルトはオン）— Kody は、コミットとして直接適用できるコードを提案できます。GitHub のみ。GitHub の接続がない場合、このスイッチは無効になります。
+
+## レビュー範囲
+
+Kody は、これらの設定に一致するファイルとプルリクエストをスキップします。`@kody start-review` で開始したレビューでは、**Ignore title keywords**、**Base Branches**、**Review draft pull requests** は無視されます。
+
+### 無視するファイル
+
+Kody がスキップするファイルの glob パターンです。パターンは大文字と小文字を区別し、ドットファイルにも一致します。フィールドにはいくつかのパターンが表示され、**Edit** で **Ignored files** ダイアログが開きます。新しいパターンごとに glob 構文が有効かどうかが確認され、**Test a file** で、パスが無視されるのか（どのパターンによるか）、レビューされるのかがわかります。**Apply** はフィールドを更新するだけです。**Save settings** をクリックするまで、何も保存されません。
+
+デフォルトのリストは長く、`yarn.lock`、`package-lock.json`、`package.json`、`.env`、`**/*.json`、`**/*.xml`、`**/*.lock`、`**/*.min.*`、画像、フォント、アーカイブ、IDE や OS のファイル、および `**/build/**`、`**/bin/**`、`**/out/**`、`**/vendor/*`、`**/deploy/**`、`**/prod/**` などのフォルダーが含まれます。Kody がレビューを期待するファイルをスキップする場合は、リストに広すぎるパターンがないかを確認し、あれば削除してください。
+
+変更されたファイルがすべて無視されていても、その中のいずれかをカスタムエージェントが明示的に対象にしていればレビューを実行できます。削除されたファイルは除外されます。メインレビューとカスタムエージェントを合わせてレビュー対象が 2,000 ファイルを超えると、Kody はレビューをスキップします。生成ファイルやベンダーのフォルダーは **Ignored files** で除外できます。
+
+### 無視するタイトルのキーワード
+
+タイトルにこれらのキーワードのいずれかが含まれるプルリクエストは、Kody がスキップします。照合は大文字と小文字を区別せず、各キーワードは最大100文字です。
+
+### ベースブランチ
+
+どのターゲットブランチに自動レビューを行うかを指定します。
+
+<Info>
+  **デフォルトの空は、リポジトリのデフォルトブランチのみを意味します。** 他のブランチをレビューするには、エントリを追加します。リストにエントリがある場合、Kody は、そのいずれかに一致するプルリクエストと、`!` で除外しない限りデフォルトブランチをレビューします。
+
+  エントリは、`contains:` を除き、プルリクエストの**ターゲット**ブランチと照合されます。
+
+  | エントリ | 効果 |
+  | --- | --- |
+  | `develop` | `develop` を対象とするプルリクエストをレビューします。 |
+  | `release/*` | `release/` で始まる任意のブランチを対象とするプルリクエストをレビューします。`*` はスラッシュを含む任意の文字に一致します。 |
+  | `*` | 任意のブランチを対象とするプルリクエストをレビューします。 |
+  | `!staging` | `staging` を対象とするプルリクエストは一切レビューしません。除外は、他のすべての一致より優先されます。デフォルトブランチを対象外にするには `!main` を使用します。 |
+  | `contains:hotfix` | ターゲットにかかわらず、**ソース**ブランチに `hotfix` を含むプルリクエストをレビューします。 |
+
+  各エントリは最大100文字です。
+</Info>
+
+## その他の設定
+
+- **Kody Language**（Global のみ）— Kody がレビューの返信で使用する言語。
+- **Configure centralized config**（Global のみ、ページヘッダー）— レビュー設定を1つのリポジトリで管理します。[集中設定](/ja/how_to_use/code_review/configs/centralized_config)を参照してください。
+
+## kodus-config.yml
 
 ### 設定の優先度
 
-Web UI の代わりに、リポジトリルートの `kodus-config.yml` ファイルでレビュー設定を管理できます。
+Web アプリの代わりに、リポジトリのルートにある `kodus-config.yml` ファイルでレビュー設定を管理できます。
 
 <Warning>
-  **オプトインするまでこのファイルは無視されます。** デフォルトでは
-  `kodusConfigFileOverridesWebPreferences` が `false` のため、Kody は `kodus-config.yml` を
-  一切読み込みません — ファイルをコミットしただけでは何も起こりません。
+  **オプトインするまで、このファイルは無視されます。** リポジトリで **Prefer kodus-config.yml settings** がオンになっていない限り、Kody は `kodus-config.yml` を読み取りません。ファイルをコミットしただけでは何も起こりません。
 
-  まず有効化してください：サイドバーの **Code review** グループ上部にあるスコープピッカーで
-  リポジトリ（またはディレクトリ）を選択し、**Code review → General** を開いて **kodus Config
-  File Overrides Web Preferences**（`kodusConfigFileOverridesWebPreferences`）を有効にします。この
-  トグルはリポジトリとディレクトリのスコープにのみ存在します。それではじめてファイルが有効になります —
-  その後、サイドバーのスコープピッカーの下に **kodus-config.yml applied**、**kodus-config.yml not found**、
-  または **kodus-config.yml unavailable** のバッジが表示されます。
+  サイドバーの **Code review** グループ上部にあるスコープピッカーでリポジトリを選択し、**Code review → General** を開いて、**Prefer kodus-config.yml settings** をオンにします。このスイッチはディレクトリスコープにも表示されますが、ファイルを読み取るかどうかを決めるのは、リポジトリの設定のみです。これは Web の設定であり、ファイルからオンにすることはできません。オンにすると、サイドバーのスコープピッカーの下に **kodus-config.yml applied**、**kodus-config.yml not found**、**kodus-config.yml unavailable** のいずれかが表示されます。
 </Warning>
 
-有効化すると、ファイルは Web 設定の上にマージされます。変更したいキーだけを書けばよく、
-省略したものは Web 側の値がそのまま使われます。
-
-<Note>
-  **未知のキーは警告なく破棄されます。** 現在のスキーマに含まれないトップレベルのキーは、
-  設定が適用される前に削除されます — エラーも警告も出ません。設定が効いていないように
-  見える場合は、下のサンプルとスペルを照合してください。
-</Note>
+- Kody は、リポジトリのデフォルトブランチのルートからファイルを読み取ります。
+- ファイルは、Global とリポジトリの Web 設定の上に適用されます。変更したいキーだけを記述してください。省略したキーは Web の値のままです。
+- ネストされた設定は、キーごとにマージされます。`ignorePaths` のようなファイル内のリストは、Web のリストを置き換えます。
+- ディレクトリスコープで上書きした設定は、リポジトリのファイル内の同じ設定よりも優先されます。[設定の継承とオーバーライド](/ja/how_to_use/code_review/configs/inheritance_overrides)を参照してください。
+- 不明なトップレベルのキーは、エラーなしで破棄されます。設定が反映されないように見える場合は、下のサンプルとスペルを照合してください。
+- `customAgents` と `knowledge` は、ファイルから読み取られません。レビューコメントにもその旨が表示されます。カスタムエージェントはアプリで設定してください。
+- Kody Rules の設定と `customMessages` は、リポジトリ自身のファイルからは読み取られません。アプリで設定するか、同じファイルで指定できる[集中設定](/ja/how_to_use/code_review/configs/centralized_config)リポジトリで設定してください。
 
 <Accordion title="kodus-config.yml のサンプル">
 ```yaml
@@ -44,217 +126,68 @@ version: 2.0
 
 # general
 automatedReviewActive: true
-reviewMode: balanced # balanced | heavy
-showStatusFeedback: true
-kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
     type: 'automatic' # automatic | auto_pause | manual
-    timeWindow: 15 # 分
-    pushesToTrigger: 3
-pullRequestApprovalActive: false
-approvalLabels: []
-approvalAuthors: []
-approvalRiskActive: false
-approvalRiskInstructions: ''
-approvalSensitivePaths: []
-isRequestChangesActive: false # GitLab では利用できません
+    timeWindow: 15 # minutes, auto_pause only
+    pushesToTrigger: 3 # auto_pause only
 runOnDraft: true
+reviewMode: balanced # balanced | heavy
+riskAssessmentActive: false
+riskCriteria: []
+riskReviewRouting:
+    noRisk: balanced
+    riskFound: heavy
+byokModel: '' # empty = inherit (directory -> repository -> the organization's main model)
+pullRequestApprovalActive: false
+approvalPolicies: []
+approvalSensitivePaths: []
+isRequestChangesActive: false # not available on GitLab
+showStatusFeedback: true
+enableCommittableSuggestions: true # GitHub only
+
+# review scope
 ignorePaths:
     - 'yarn.lock'
     - 'package-lock.json'
     - 'package.json'
     - '.env'
     - '**/*.json'
-    # ...省略：出荷時のデフォルトにはさらに数百のパターンが含まれます
+    # ...abbreviated: the shipped default lists about 1,100 patterns in total
 ignoredTitleKeywords: []
-baseBranches: []
-enableCommittableSuggestions: true
-byokModel: '' # 空 = 継承（ディレクトリ -> リポジトリ -> AI providers のメインモデル）
+baseBranches: [] # empty = the repository's default branch only
 
-# linked repositories — Teams / Enterprise のみ。レビュー中にエージェントが参照できる関連リポジトリ。
-# 推奨上限は 3、空 = 機能オフ。
+# linked repositories — Teams / Enterprise only, up to 3
 linkedRepositories: []
 
-# what to review：カテゴリ
+# what to review
 reviewOptions:
     bug: true
     performance: true
     security: true
     business_logic: true
-
-# what to review：決定的チェック（オプトイン、ベータ）
-deterministicEvidence:
-    ciChecks: false # 自分たちのパイプラインがすでに生成した CI 結果を読み取る
-    tools: # 有効にしたツールでも、CI がすでに同等のものを実行している場合はスキップされる
-        secrets: false # 変更されたファイルに対する認証情報スキャン
-        dependencies: false # この PR が追加または更新する依存関係の既知の CVE
-
-# what to review：コーディングエージェント向けの指示
-repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules; the severity filter applies
-
-# what to review：重大度しきい値
+repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules
 suggestionControl:
-    applyFiltersToKodyRules: false
     severityLevelFilter: 'medium' # low | medium | high | critical
+    applyFiltersToKodyRules: false
+deterministicEvidence: # beta
+    ciChecks: false
+    tools:
+        secrets: false
+        dependencies: false
+# businessLogic: see Business Logic Validation
+# v2PromptOverrides: see Instructions & Personality
 
-# what Kody writes：PR サマリー
+# what Kody writes
 summary:
     generatePRSummary: true
-    behaviourForNewCommits: 'none'
-    behaviourForExistingDescription: 'replace'
+    behaviourForExistingDescription: 'replace' # replace | concatenate | complement
+    behaviourForNewCommits: 'none' # none | concatenate | replace
     customInstructions: ''
-
-# kody rules
-kodyRulesGeneratorEnabled: true
-kodyLearningExcludedReviewers: []
-kodyKnowledgeApproval:
-    enabled: false
-
-# what Kody writes：レビュー中のコメント + コメントの表示
-customMessages:
-    globalSettings:
-        hideComments: false # GitHub のみ
-        suggestionCopyPrompt: true # Bitbucket では利用できません
-    errorReviewMessage:
-        status: 'off' # off | active
-        content: ''
-    startReviewMessage:
-        status: 'every_push' # every_push | only_when_opened | off
-        content: ''
-    endReviewMessage:
-        status: 'every_push' # every_push | only_when_opened | off
-        content: ''
 ```
 </Accordion>
 
 <Note>
-  このサンプルは出荷時のデフォルトを反映しています。正典となるのは kodus-ai リポジトリの
+  デフォルト値の正典は、kodus-ai リポジトリの
   [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
   です。
-</Note>
-
-## レビュー動作
-
-### 自動レビュー
-
-Kody は PR が開かれたときに自動的にレビューするか、`@kody start-review` とコメントしたときのみレビューできます。
-これは **Enable Automated Code Review** トグルです。
-
-<Info>
-  これは**初回レビュー**にのみ影響します。以降のコミットについては、下記のレビュー頻度を参照してください。
-</Info>
-
-#### レビュー頻度
-
-**Enable Automated Code Review** がオンのときに、その下に表示されます。以降のコミットで Kody がレビューを
-処理する方法：
-
-<Tabs>
-  <Tab title="自動">
-    すべての新しいプッシュをレビュー。すべての変更に対して継続的なフィードバック。
-  </Tab>
-  
-  <Tab title="自動一時停止">
-    急速な連続プッシュ中にレビューを一時停止します（例：15 分以内に 3 回のプッシュ）。活発なコーディング中のスパムを防ぎます。
-    
-    デフォルト：3 回のプッシュ / 15 分（**Pushes to trigger pause** / **Time window (minutes)**）
-  </Tab>
-  
-  <Tab title="手動">
-    `@kody start-review` とコメントした場合のみフォローアップレビューを実行します。
-  </Tab>
-</Tabs>
-
-### レビューモード
-
-Kody がプルリクエストをどこまで深くレビューするか（`reviewMode`）：
-
-- **Balanced**（デフォルト）：標準のレビュー。
-- **Heavy**：9 つの専門レビュアーがメインレビューと並行して実行され、モデル呼び出しが増える代わりに
-  リコールが高まります。[Heavy mode](/ja/how_to_use/code_review/review_directive#heavy-mode) を参照してください。
-
-このモードはすべてのレビュー（自動レビュー、`@kody review`、`kodus review`）に適用されます。1 回の
-レビューだけ、`--heavy` または `--balanced` でもう一方のモードを指定できます。このページの他の設定と
-同様に、グローバル、リポジトリ単位、ディレクトリ単位で設定できます。
-
-2 つの選択肢の下にある **Review models** には、各モードが実行されるモデルが読み取り専用で表示されます。
-モデルは **AI providers → Routing** で決まります（変更するには **View organization routing** を開きます）。
-ただし、リポジトリまたはディレクトリが独自のモデルを設定している場合は、そのモデルが両方のモードで
-使われます。接続済みのモデルが 1 つだけの場合、このセクションはその旨を表示するだけです。独自の
-モデルがない場合（Kodus 管理）は表示されません。
-
-### PR ワークフロー
-
-#### PR の自動承認
-**Automatic PR approval** — Kody は、クリーンなレビューの後、または自分が残したコメントがすべて解決された時点で PR を承認します。マージは行いません。**Conditional approval (Beta)** を使うと、Kody が承認できる PR と、代わりに人が承認すべき場合を指定できます。[自動承認](/ja/how_to_use/code_review/configs/auto_approve)を参照してください。
-
-**対応プラットフォーム：** GitHub、GitLab、Bitbucket、Azure Repos、Forgejo
-
-#### 変更のリクエスト
-**Enable changing status of Review to 'Request Changes'** — クリティカルな問題が見つかった場合、Kody は
-変更をリクエストします。
-
-**対応プラットフォーム：** GitHub、Bitbucket、Azure Repos、Forgejo（接続済みのプラットフォームが GitLab のみの
-場合、トグルは表示されません）
-
-### スキップ条件
-
-**Ignored files：** Kody がスキップするファイルの glob パターン（例：`**/*.js`）。フィールドにはいくつかの
-パターンがチップとして表示されます。**Edit** をクリックすると **Ignored files** モーダルが開き、新しいパターンごとに
-glob 構文が正しいかチェックされます。**Test a file** ボックスでは、あるパスが（どのパターンによって）無視されるのか、
-レビューされるのかを確認できます。**Apply** はフィールドを更新するだけで、**Save settings** をクリックするまで
-何も保存されません。デフォルト：`yarn.lock`、`package-lock.json`、`package.json`、`.env`、`**/*.json`、
-およびビルド、バイナリ、IDE 関連ファイルの長いリスト。
-
-**Ignore title keywords：** 特定のキーワードを含む PR をスキップします（大文字・小文字を区別しない、最大 100 文字）
-
-**ベースブランチ：** *どの*ターゲットブランチをレビューするかを絞り込みます。
-
-<Info>
-  **空（デフォルト）はすべてのターゲットブランチをレビューする意味です** — `dev`/`release`/`master`
-  といった組み込みのリストは存在しません。スコープを*狭めたい*ときだけエントリを追加してください。
-  リストが空でなくなると、Kody はそれらのブランチ宛の PR だけをレビューします（リポジトリの
-  デフォルトブランチは常に含まれます）。
-
-  エントリは PR の**ターゲット**ブランチと照合され、専用の記法をサポートします：
-
-  | エントリ | 一致するもの |
-  | --- | --- |
-  | `main` | ちょうど `main` 宛の PR |
-  | `release/*` | `release/` 配下の任意のブランチ宛の PR（`*` は 1 階層のワイルドカード） |
-  | `=main` | 完全一致。`main` と書くのと同じ |
-  | `!staging` | `staging` 宛の PR を除外 |
-  | `contains:hotfix` | 代わりに**ソース**ブランチと照合 — ヘッドブランチに `hotfix` を含む PR |
-
-  複数のエントリが一致した場合は、より具体的なものが優先されます。各エントリは 100 文字以内で、
-  使用できる文字は `a-z A-Z 0-9 / * - _ ! = :` のみ、`**` は使えません。
-</Info>
-
-**ドラフト PR：** **Enable Running on Draft Pull Requests**（`runOnDraft`）はデフォルトでオンなので、
-ドラフトもレビューされます。オフにすると、PR が ready になるまでスキップされます。
-
-### このページのその他の設定
-
-- **Show Status Feedback** — レビューがスキップまたはブロックされたときに、Kody がステータスのフィードバック
-  （絵文字リアクションまたはコメント）を表示します。
-- **Enable committable suggestions**（Alpha、GitHub のみ）— コミットとして直接適用できるサジェスト。
-- **Code review model**（リポジトリとディレクトリのスコープのみ。AI プロバイダーが設定されると表示）—
-  このスコープでレビューに使用するモデル。デフォルトでは継承します（`byokModel`）。
-- **Kody Language**（Global のみ）— Kody がコードレビューの返信で使用する言語。
-
-## レビューカテゴリ（旧 Analysis Types）
-
-Kody は 4 つのカテゴリでレビューします。カテゴリはもう **General** にはありません：
-**Code review → What to review** の各スイッチで、または `kodus-config.yml` の `reviewOptions` で
-個別にオン・オフを切り替えます。
-
-- **Bug** — ロジックエラー、競合状態、null 参照、エッジケース、誤った挙動。
-- **Security** — 脆弱性、インジェクション、認証の問題、データ露出、シークレット。
-- **Performance** — N+1 クエリ、ホットパスでのアロケーション、キャッシュ不足、ブロッキング I/O。
-- **Business Logic** — PR に紐づくビジネスルール・要件・受け入れ基準に対して実装を検証します。
-  [ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation) を参照してください。
-
-<Note>
-  Kody Rules はこれらのカテゴリの 1 つ**ではありません** — `reviewOptions` とは無関係に常に実行されます。
-  [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) を参照してください。
 </Note>

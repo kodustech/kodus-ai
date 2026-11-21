@@ -1,30 +1,25 @@
 ---
 title: "如何在 GitHub 上设置 AI 代码审查"
-description: "安装和配置 Kodus 以在每个拉取请求上获得自动 AI 代码审查。"
+description: "将 GitHub 连接到 Kodus，并选择要自动审查的仓库。"
 ---
-
-在 GitHub 上设置 Kodus 只需几分钟。连接后，每个拉取请求都会自动审查。
 
 ## 步骤
 
-1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
-2. **连接 GitHub** — 在入门引导的 **Connect your Git tool** 步骤中，点击 **Install Github app**（之后也可以从侧边栏的 **Repositories** 进行连接）
-3. **选择代码库** — 选择 Kodus 应审查的代码库
-4. **打开 PR** — Kodus 自动审查并发布评论
-
-## 您获得什么
-
-- 每个 PR 自动审查（或使用 `@kody start-review` 按需审查）
-- 直接在 PR 中发布的代码建议评论
-- 可自定义的规则、审查类别和最低严重性阈值
-- 根据关联任务的业务逻辑验证
+1. **创建账户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
+2. **连接 GitHub** — 在入门引导的 **Connect your Git tool** 步骤中,点击 **Install Github app**(之后也可以从侧边栏的 **Repositories** 进行连接:在 **Connect a provider** 下点击 **Github**,然后在 **OAuth** 选项卡上点击 **Go to OAuth**)
+3. **选择代码库** — 选择 Kodus 应审查的代码库,或在 **Repositories** 上开启[审查所有代码库](/zh/how_to_use/code_review/configs/review_all_repositories)
+4. 在已选仓库中打开一个拉取请求。[查看 Kody 会发布什么以及如何确认审查状态](/zh/how_to_use/code_review/flow)。
 
 ## 自定义配置
 
-在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件会在该代码库开启 **kodus Config File Overrides Web Preferences**（**Code review → General**）后覆盖 Web 设置。
+通过 [kodus-config.yml](/zh/how_to_use/code_review/configs/general#kodus-config-yml) 自定义各仓库的审查配置。
 
 ## 使用个人访问令牌
 
-对于私有代码库或权限更严格的组织，可能需要配置 GitHub 个人访问令牌（PAT）。在入门引导中选择 **Connect via token**（或在 **Repositories** 上连接 GitHub 时选择 **Token** 选项卡）。此后审查将以令牌所有者的帐户发布，并且 GitHub Checks/PR 状态不可用。
+如果您无法安装 GitHub App,请改用 GitHub 个人访问令牌(PAT)连接。在入门引导中选择 **Connect via token**(或在 **Repositories** 上连接 GitHub 时选择 **Token** 选项卡)。此后审查将以令牌所有者的账户发布,并且 GitHub Checks/PR 状态不可用。Kodus 会在每个选定的代码库上创建一个 webhook;如果失败,请参阅[创建 Webhook](/zh/how_to_deploy/platforms/github/github_webhook)。
 
-完整设置指南，请参阅[快速开始](/zh/how_to_use/quickstart)和 [GitHub App 设置](/zh/how_to_deploy/platforms/github/github_app)。
+## 自托管
+
+自托管的 Kodus 使用您自己创建的 GitHub App 或令牌进行连接。**Install Github app** 需要在您的 `.env` 中配置该 App 的凭据:参见 [GitHub App 设置](/zh/how_to_deploy/platforms/github/github_app)。如需同时允许用户使用 GitHub 登录,请参阅 [GitHub OAuth App](/zh/how_to_deploy/platforms/github/github_oauth)。
+
+完整设置指南,请参阅[快速开始](/zh/how_to_use/quickstart)。

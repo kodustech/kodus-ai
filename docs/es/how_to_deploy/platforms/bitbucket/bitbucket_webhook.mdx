@@ -1,23 +1,25 @@
 ---
 title: Crear un webhook
-description: "Crea manualmente el webhook de Bitbucket cuando el registro automático no ocurrió, y marca solo los triggers de pull request que Kodus consume."
+description: "Crea manualmente el webhook de Bitbucket cuando el registro automático no ocurrió, y elige los triggers de pull request que Kodus realmente consume."
 icon: webhook
 ---
 
-Kodus generalmente crea el webhook automáticamente. Si eso no ocurrió, sigue estos pasos para configurarlo manualmente:
+Kodus normalmente crea el webhook automáticamente cuando guardas la selección de repositorios. Para eso necesita acceso de administrador al repositorio: en Bitbucket Cloud, además, los scopes `read:webhook:bitbucket` y `write:webhook:bitbucket` en el API token; en Bitbucket Data Center, el permiso **Repository admin**. Si no ocurrió, **Repositories** muestra el repositorio con el motivo, y puedes configurar el webhook manualmente:
 
 <Note>
   Las URLs de webhook deben llegar al servicio de Webhooks (puerto 3332). Usar el dominio de la API solo funciona si tu proxy inverso enruta las rutas `/.../webhook` al servicio de webhooks.
 </Note>
 
+## Bitbucket Cloud
+
 1. Navega a tu repositorio de Bitbucket
 2. Haz clic en "Repository settings" en la barra lateral izquierda
 3. Selecciona "Webhooks"
 4. Haz clic en "Add webhook"
-5. Configura tu webhook:
+5. Es hora de configurar tu webhook:
 
    - **Title**: Kodus Code Review
-   - **URL**: Ingresa la URL donde deseas recibir notificaciones, la URL que colocaste en `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` en el archivo `.env`
+   - **URL**: La URL que colocaste en `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` en el archivo `.env` (termina en `/bitbucket/webhook`)
    - **Status**: Active
    - **SSL/TLS**: Marca Enable SSL verification
    - **Triggers**: Selecciona estos eventos:
@@ -30,13 +32,19 @@ Kodus generalmente crea el webhook automáticamente. Si eso no ocurrió, sigue e
 
 6. Haz clic en "Save"
 
-¡Y listo! Has configurado correctamente un webhook para realizar revisiones de código en tu repositorio de Bitbucket.
+## Bitbucket Data Center
+
+El soporte para Bitbucket Data Center está en alpha. Abre el repositorio, ve a **Repository settings** > **Webhooks** y crea un webhook con:
+
+- **URL**: el mismo valor de `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK`
+- **Events**: los eventos de pull request `pr:opened`, `pr:modified`, `pr:comment:added`, `pr:merged` y `pr:declined`
 
 <Note>
-  Kodus solo consume eventos de Pull Request — `created`, `updated`, `merged`, `declined` y
-  `comment created`. Los triggers de Repository, Issue y build status se descartan al llegar;
-  dejarlos sin marcar reduce el tráfico del webhook.
-
-  En Bitbucket Data Center los eventos equivalentes son `pr:opened`, `pr:modified`,
-  `pr:reviewer:updated`, `pr:comment:added`, `pr:merged` y `pr:declined`.
+  Kodus solo consume eventos de pull request: en Cloud `created`, `updated`, `merged`, `declined` y `comment created`, en Data Center los cinco indicados arriba. Los triggers de Repository, Issue y build status se descartan al llegar, por lo que dejarlos sin marcar reduce el tráfico del webhook. El registro automático en Data Center también se suscribe a `pr:reviewer:updated`, que Kodus recibe e ignora.
 </Note>
+
+### Pushes a un pull request abierto
+
+En Data Center, un push de nuevos commits a un pull request abierto llega como `pr:from_ref_updated`. Kodus no se suscribe a este evento y lo descarta, por lo que un push no inicia una revisión. `pr:modified` se dispara cuando cambia el título, la descripción, la rama de destino o el estado de borrador. Kodus lo ignora a menos que el último commit sea nuevo para Kodus o el pull request deje de ser borrador. Para revisar los nuevos commits, comenta `@kody start-review` en el pull request.
+
+En Cloud, Kodus trata `pullrequest:updated` de la misma forma: inicia una revisión solo cuando el último commit es nuevo para Kodus o el pull request deja de ser borrador.

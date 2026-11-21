@@ -1,75 +1,44 @@
 ---
 title: "Introducción"
-description: "Qué es Kodus, qué hace Kody, el revisor de código con IA, por tu equipo, y hacia dónde seguir."
+description: "Revisa pull requests y cambios locales con Kody."
 ---
 
 ## Qué es Kodus
 
-Kodus crea Agentes de IA de código abierto para ayudar a los equipos de ingeniería a mejorar la calidad del código. Nuestro primer agente es **Kody**, un Revisor de Código de IA que optimiza tu proceso de revisión.
+**Kody** revisa pull requests en GitHub, GitLab, Bitbucket, Azure Repos y Forgejo. Comprueba los cambios con las reglas de tu equipo. Kodus es de código abierto y puede ejecutarse en tu propia infraestructura.
 
-<Frame caption="Kody será tu nuevo compañero de equipo.">
-  <img src="/images/kody.png" />
-</Frame>
-
-## Características Principales
+## Haz tu primera revisión
 
 <CardGroup cols={2}>
-  <Card title="100% Código Abierto" icon="github">
-    Todo el código fuente está disponible en GitHub para que cualquiera pueda inspeccionarlo, usarlo y mejorarlo.
+  <Card title="Revisar un pull request" icon="code-branch" href="/es/how_to_use/quickstart">
+    Conecta tu proveedor Git, elige un repositorio y revisa un PR abierto.
   </Card>
-  <Card title="Sin Juegos de Inferencia" icon="hand-holding-dollar">
-    Pagas directamente a los proveedores a sus tarifas. Costos predecibles y capacidades completas del modelo
-  </Card>
-  <Card title="Análisis de Código Impulsado por IA" icon="sparkles">
-    Comprensión profunda del código en múltiples lenguajes con recomendaciones contextuales
-  </Card>
-  <Card title="A Prueba de Futuro por Diseño" icon="wand-magic-sparkles">
-    ¿Se lanzó un nuevo modelo? Úsalo de inmediato. Funciona con cualquier proveedor de IA y cualquier modelo
-  </Card>
-  <Card title="Visibilidad Real" icon="magnifying-glass">
-    No solo "IA explicable" sino transparencia completa. Ve cada archivo leído, cada decisión considerada, cada token usado
-  </Card>
-  <Card title="Integración Fluida con Git" icon="code-branch">
-    Funciona directamente con GitHub, GitLab, Bitbucket, Azure Repos y Forgejo sin interrumpir tu flujo de trabajo
-  </Card>
-  <Card title="Reglas Personalizables" icon="sliders">
-    Define y aplica los estándares de codificación y mejores prácticas de tu equipo
-  </Card>
-  <Card title="Retención de Conocimiento" icon="brain">
-    Conserva convenciones explícitas del equipo con Memorias y Kody Rules para futuras revisiones.
+  <Card title="Revisar cambios locales" icon="terminal" href="/es/how_to_use/cli/getting_started">
+    Instala la CLI de Kodus y revisa tus cambios antes de abrir un PR.
   </Card>
 </CardGroup>
+
+## Qué hace Kodus
+
+- [Entiende el resultado de una revisión](/es/how_to_use/code_review/flow#qué-recibes). Descubre qué publica Kody en el PR y cómo solicitar otra revisión.
+- [Ajusta lo que comprueba Kody](/es/how_to_use/code_review/configs/what_to_review). Elige las categorías, la gravedad mínima y qué debe comprobar Kody.
+- [Enseña a Kody las reglas de tu equipo](/es/how_to_use/code_review/configs/kody_rules). Usa reglas y memorias para aplicar las convenciones del equipo en las revisiones.
+- [Comprueba el PR frente a su tarea](/es/how_to_use/code_review/business_logic_validation). Compara la implementación con los requisitos de tu gestor de tareas.
+
+## Amplía y supervisa las revisiones
+
+- [Agentes personalizados](/es/how_to_use/code_review/custom_agents). Añade revisores especializados con instrucciones, guías y herramientas propias.
+- [Plugins](/es/how_to_use/code_review/plugins). Usa herramientas externas como gestores de tareas para aportar contexto.
+- [Cockpit](/es/how_to_use/cockpit/overview). Consulta la eficacia de las revisiones y las métricas de entrega.
+- [Kody Issues](/es/how_to_use/issues/overview). Haz seguimiento de las sugerencias que quedaron pendientes tras cerrar el PR.
+
+## Configura tu espacio de trabajo
+
+- [Proveedores de IA](/es/how_to_use/byok). Conecta tu clave y elige los modelos.
+- [Roles y permisos](/es/how_to_use/workspace_roles). Define quién puede gestionar la configuración y los repositorios.
+- [Planes y licencias](/es/how_to_use/pricing). Consulta qué incluye cada plan, los límites de la prueba y las licencias por desarrollador.
+- [Instalación autoalojada](/es/how_to_deploy/deploy_kodus/generic_vm). Ejecuta Kodus en tu propia infraestructura.
 
 ## Lenguajes Compatibles
 
 Kody funciona con cualquier lenguaje de programación o tipo de archivo de forma inmediata usando análisis semántico (LLM), respaldado por búsqueda de código (estilo grep) para un contexto preciso a nivel de repositorio.
-
-## Beneficios para Tu Equipo
-
-- **Revisiones Más Rápidas**: Automatiza las verificaciones rutinarias y concéntrate en los aspectos complejos
-- **Calidad Consistente**: Asegúrate de que todo el código cumpla con los estándares de tu equipo
-- **Convenciones del equipo**: Orienta las revisiones con Memorias y Kody Rules explícitas.
-
-## Nuestra Visión a Largo Plazo
-
-En Kodus, nuestra misión es empoderar a los equipos de ingeniería para lograr resultados 10x a través de flujos de trabajo mejorados por IA:
-
-- 🚀 **Productividad**: Entrega más rápido sin comprometer la calidad
-- 🎯 **Impacto**: Potencia el valor del negocio con cada recomendación
-- 💜 **Satisfacción**: Crea un entorno donde los miembros del equipo prosperen
-
-<CardGroup cols={1}>
-  <Card title="Primeros Pasos" icon="rocket" href="quickstart">
-    Configura Kody rápidamente e intégralo con las herramientas y plataformas de tu equipo.
-  </Card>
-  <Card title="Roles y Permisos del Espacio de Trabajo" icon="users" href="workspace_roles">
-    Aprende sobre el control de acceso basado en roles y cómo gestionar eficazmente los miembros del espacio de trabajo.
-  </Card>
-  <Card
-    title="Explorar Precios"
-    icon="money-bill-wave"
-    href="https://kodus.io/pricing"
-  >
-    Profundiza en nuestra estructura de precios y encuentra el plan que se adapta a tus necesidades.
-  </Card>
-</CardGroup>

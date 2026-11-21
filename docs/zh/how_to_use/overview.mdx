@@ -1,75 +1,44 @@
 ---
 title: "介绍"
-description: "Kodus 是什么、AI 代码审查员 Kody 能为团队做什么,以及接下来该看哪里。"
+description: "使用 Kody 审查拉取请求和本地变更。"
 ---
 
 ## 什么是 Kodus
 
-Kodus 构建开源 AI 代理来帮助工程团队提高代码质量。我们的首个代理是 **Kody**，一个能够简化审查流程的 AI 代码审查器。
+**Kody** 可以审查 GitHub、GitLab、Bitbucket、Azure Repos 和 Forgejo 上的拉取请求，并根据团队规则检查代码变更。Kodus 是开源的，可部署在自己的基础设施上。
 
-<Frame caption="Kody 将成为您的新队友。">
-  <img src="/images/kody.png" />
-</Frame>
-
-## 核心功能
+## 运行第一次审查
 
 <CardGroup cols={2}>
-  <Card title="100% 开源" icon="github">
-    所有源代码均在 GitHub 上公开，任何人都可以检查、使用和改进。
+  <Card title="审查拉取请求" icon="code-branch" href="/zh/how_to_use/quickstart">
+    连接 Git 平台，选择仓库，然后审查一个打开的 PR。
   </Card>
-  <Card title="无推理游戏" icon="hand-holding-dollar">
-    您直接按提供商的费率付费。成本可预测，模型功能完整
-  </Card>
-  <Card title="AI 驱动的代码分析" icon="sparkles">
-    跨多种语言的深度代码理解，提供上下文感知的建议
-  </Card>
-  <Card title="面向未来的设计" icon="wand-magic-sparkles">
-    新模型发布了？立即使用。适用于任何 AI 提供商，任何模型
-  </Card>
-  <Card title="真正的可见性" icon="magnifying-glass">
-    不仅仅是"可解释的 AI"，而是完全透明。查看每个读取的文件、每个考虑的决策、每个使用的令牌
-  </Card>
-  <Card title="无缝 Git 集成" icon="code-branch">
-    直接与 GitHub、GitLab、Bitbucket、Azure Repos 和 Forgejo 配合使用，不会打断您的工作流程
-  </Card>
-  <Card title="可自定义规则" icon="sliders">
-    定义并执行您团队的编码标准和最佳实践
-  </Card>
-  <Card title="知识保留" icon="brain">
-    通过记忆和 Kody Rules 保存明确的团队约定，供后续审查使用。
+  <Card title="审查本地变更" icon="terminal" href="/zh/how_to_use/cli/getting_started">
+    安装 Kodus CLI，在创建 PR 之前审查代码变更。
   </Card>
 </CardGroup>
+
+## Kodus 能做什么
+
+- [查看审查结果](/zh/how_to_use/code_review/flow#你会得到什么)。了解 Kody 会在 PR 中发布什么，以及如何请求再次审查。
+- [调整审查内容](/zh/how_to_use/code_review/configs/what_to_review)。选择审查类别、最低严重级别和要检查的内容。
+- [教 Kody 遵守团队规范](/zh/how_to_use/code_review/configs/kody_rules)。使用规则和记忆，在审查中应用团队约定。
+- [按任务要求核对 PR](/zh/how_to_use/code_review/business_logic_validation)。将代码实现与任务管理工具中的要求进行对比。
+
+## 扩展和跟踪审查
+
+- [自定义智能体](/zh/how_to_use/code_review/custom_agents)。添加专门的审查者，为其配置独立的指令、指南和工具。
+- [插件](/zh/how_to_use/code_review/plugins)。将任务管理工具等外部工具提供的内容用于审查。
+- [Cockpit](/zh/how_to_use/cockpit/overview)。查看审查效果和交付指标。
+- [Kody Issues](/zh/how_to_use/issues/overview)。跟踪 PR 关闭后仍未处理的审查建议。
+
+## 设置工作区
+
+- [AI 提供商](/zh/how_to_use/byok)。连接自己的密钥并选择模型。
+- [角色与权限](/zh/how_to_use/workspace_roles)。设置哪些人可以管理配置和仓库。
+- [套餐与许可证](/zh/how_to_use/pricing)。查看各套餐的功能、试用限制和开发者许可证。
+- [自托管安装](/zh/how_to_deploy/deploy_kodus/generic_vm)。在自己的基础设施上运行 Kodus。
 
 ## 支持的语言
 
-Kody 开箱即用地支持任何编程语言或文件类型，使用语义（LLM）分析，并通过代码搜索（grep 样式）支持精确的、代码库范围的上下文。
-
-## 对您团队的好处
-
-- **更快的审查**：自动化常规检查，专注于复杂方面
-- **一致的质量**：确保所有代码符合您团队的标准
-- **团队约定**：通过明确的记忆和 Kody Rules 指导审查。
-
-## 我们的长期愿景
-
-在 Kodus，我们的使命是通过 AI 增强的工作流程，帮助工程团队实现 10 倍的成果：
-
-- 🚀 **生产力**：在不影响质量的情况下更快地交付
-- 🎯 **影响力**：通过每个建议提升业务价值
-- 💜 **满意度**：创造一个让团队成员茁壮成长的环境
-
-<CardGroup cols={1}>
-  <Card title="快速开始" icon="rocket" href="quickstart">
-    快速设置 Kody 并与您团队的工具和平台集成。
-  </Card>
-  <Card title="工作区角色与权限" icon="users" href="workspace_roles">
-    了解基于角色的访问控制以及如何有效管理工作区成员。
-  </Card>
-  <Card
-    title="探索定价"
-    icon="money-bill-wave"
-    href="https://kodus.io/pricing"
-  >
-    深入了解我们的定价结构，找到适合您需求的计划。
-  </Card>
-</CardGroup>
+Kody 开箱即用地支持任何编程语言或文件类型,使用语义(LLM)分析,并通过代码搜索(grep 样式)提供精确的、代码库范围的上下文。

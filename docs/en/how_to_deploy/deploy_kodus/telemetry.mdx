@@ -7,7 +7,8 @@ icon: "satellite-dish"
 Each self-hosted Kodus instance sends **one anonymous heartbeat per day** to
 `https://telemetry.kodus.io`. The payload contains aggregated counters and
 runtime metadata only — never code, identities, or anything that could trace
-back to you or your users.
+back to you or your users. The code review `worker` sends it, at 03:17 UTC.
+When the worker starts, it logs whether telemetry is enabled.
 
 This page documents exactly what is sent, why, where it goes, and how to
 turn it off.
@@ -23,17 +24,17 @@ A single `POST /v1/heartbeat` once per UTC day, ~700 bytes. Example payload
   "instance_id": "0188f5c5-5b8f-4f45-92d4-b20c25df0b5a",
   "sent_at": "2026-05-04T03:17:00.000Z",
   "kodus": {
-    "version": "0.4.15",
+    "version": "2.2.11",
     "deployment": "docker",
     "uptime_hours": 124
   },
   "runtime": {
-    "node_version": "v20.11.1",
+    "node_version": "v22.23.4",
     "os": "linux",
     "arch": "x64",
     "cpu_count": 8,
     "db_type": "postgres",
-    "db_version": "PostgreSQL 15.4"
+    "db_version": "PostgreSQL 16.4"
   },
   "usage_7d": {
     "active_users": 12,
@@ -51,6 +52,8 @@ A single `POST /v1/heartbeat` once per UTC day, ~700 bytes. Example payload
   }
 }
 ```
+
+`suggestions_generated`, `suggestions_applied` and `agent_review_repos_pct` are always sent as `0`. `deployment` is `k8s` on Kubernetes, `docker` in a container and `unknown` otherwise. `integrations` lists only integration types from a fixed list, such as `github` or `slack`.
 
 The full schema lives in the [kodus-beacon repository](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md) — it is enforced server-side
 with a strict validator that rejects any unknown field with a `400`.
@@ -87,16 +90,16 @@ do not contact you based on telemetry. We do not share or sell the data.
 
 ## Inspect what your instance would send
 
-Before any heartbeat leaves your instance, you can dump the exact payload
-that the daily cron would build:
+You can dump the exact payload that the daily cron would build, without
+sending it. Run this from a checkout of the [kodus-ai](https://github.com/kodustech/kodus-ai)
+repository with a `.env` that points at your PostgreSQL and MongoDB:
 
 ```bash
 pnpm run telemetry:preview
 ```
 
 This boots a minimal Kodus context, runs the same collector the cron uses,
-and prints the JSON to stdout — without sending it. Pipe it through `jq` to
-explore:
+and prints the JSON to stdout. Pipe it through `jq` to explore:
 
 ```bash
 pnpm run telemetry:preview | jq '.usage_7d'
@@ -104,8 +107,7 @@ pnpm run telemetry:preview | jq '.usage_7d'
 
 ## Disable telemetry
 
-Set `KODUS_TELEMETRY_DISABLED=true` in your environment. The cron skips
-silently — no heartbeat is sent, ever, until you flip it back.
+Set `KODUS_TELEMETRY_DISABLED=true` in the worker environment. With Docker Compose, edit `.env` and apply it with `docker compose up -d worker`. With Helm, set the value under `global.config` and upgrade the release so the worker receives it.
 
 ```bash
 # .env
@@ -120,18 +122,13 @@ other value (including empty) keeps telemetry enabled.
 - **Receiver:** a small Node.js service (Fastify) deployed at
   `telemetry.kodus.io`. Source code is public:
   [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
-- **Storage:** Neon Postgres, US region, encrypted at rest, TLS-only.
-  Two tables — `telemetry_instances` (one row per instance, last seen
-  + version) and `telemetry_heartbeats` (one row per instance per UTC
-  day, payload stored as JSONB).
-- **Retention:** individual heartbeat rows are kept for **12 months**.
-  After that we aggregate the counters into historical statistics
-  (e.g. "X active instances in January 2026") and drop the per-day
-  rows. The instance row stays — it carries no time-series, only the
-  most recent version + last-seen timestamp.
-- **Access:** product engineering team only, via individual Neon
-  credentials with audit logging. The data is never shared with third
-  parties and never used to train any AI model.
+- **Storage:** Neon Postgres in AWS `us-east-1`, reached over TLS.
+  Two tables: `telemetry_instances` (one row per instance, with last seen
+  and last version) and `telemetry_heartbeats` (one row per instance per
+  UTC day, payload stored as JSONB). A second heartbeat on the same UTC day
+  overwrites that day's row.
+- **Database role:** the receiver writes with a role that has only the
+  privileges heartbeat writes need.
 
 ## Source code you can audit
 
@@ -140,8 +137,8 @@ Both ends are open and small enough to read end-to-end:
 - **Client** (what runs on your instance): the cron, collector, and HTTP
   transport live under [`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
   and [`apps/worker/src/cron/self-hosted-beacon.cron.ts`](https://github.com/kodustech/kodus-ai/blob/main/apps/worker/src/cron/self-hosted-beacon.cron.ts).
-- **Server** (what runs at `telemetry.kodus.io`): the entire receiver is
-  ~80 lines of Fastify route + a Postgres upsert. See
+- **Server** (what runs at `telemetry.kodus.io`): a small Fastify service
+  that validates the payload and upserts it into Postgres. See
   [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
 
 ## Questions

@@ -1,158 +1,127 @@
 ---
 title: "コードレビューフロー"
-description: "Kody のレビューが最初から最後までどう動くか：いつ実行され、いつスキップされ、何が返ってきて、各ステータス絵文字が何を意味するか。"
+description: "Kody のレビューが最初から最後までどう動くか：何がレビューを開始し、いつスキップされ、何が返ってきて、各ステータスが何を意味するか。"
 ---
 
-## 概要
-
-Kody は自動またはオンデマンドで PR をレビューし、明確なサジェストを追加し、チームがマージのタイミングを決定するのを助けます。以下は仕組みのシンプルなユーザー向けのビューです。
-
-参考：<a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Code-Review-Flow?node-id=4-274" target="_blank">Figma ボード</a>
-
-## Kody が実行するタイミング
-
-- PR が開かれたとき
-- PR に新しいコミットがプッシュされたとき（頻度設定による）
-- コメントによる手動トリガー：`@kody start-review`
-
-## Kody がスキップするタイミング
-
-- 前回の実行以降に新しいコミットがない
-- 実際の変更のないマージコミットのみ
-- 変更されたすべてのファイルが設定パターンで無視されている
-- PR が設定されたファイル制限を超えている
-- 無効または欠落した設定
-
-<Note>
-  スキップを上書きして新しいレビューを強制するには（例：「新しいコミットがない」の後）、`@kody review --force` とコメントしてください。
-</Note>
-
-## Kody が行うこと
-
-- 適用される設定を解決し（グローバル → リポジトリ → ディレクトリ）、検証します
-- この PR の関連する差分とコンテキストを収集します
-- PR レベルのチェックを実行します（例：カスタムルールと有効な場合のクロスファイル分析）
-- 差分に焦点を当てて変更されたファイルをレビューします
-- ノイズを減らすためにサジェストをフィルタリングして優先順位付けします（関連性、重大度、重複排除、セーフガード）
-- インラインコメントを投稿し、該当する場合は PR レベルのサマリーも投稿します
-- オプションで、それらのポリシーが有効な場合に承認または変更をリクエストします
-- フォローアップを増分的に保つために最後に分析したコミットを記憶します
+接続済みリポジトリの PR を今すぐレビューするには、PR のコメントを `@kody review` で始めます。レビューが表示されない場合は、[スキップ理由](#kody-がスキップするタイミング)を確認してください。
 
 ## 得られるもの
 
-- 具体的なサジェストを含むインラインコメント
-- ハイライトを含むオプションの PR レベルサマリー
-- オプションのステータス：承認または変更リクエスト（有効の場合）
+- 具体的なサジェストを含むインラインコメント。
+- 有効な場合は、PR サマリー。
+- オプションで、承認または変更のリクエスト。[レビューポリシー](/ja/how_to_use/code_review/policy) を参照してください。
+- GitHub（GitHub App としてインストールされている場合）と Forgejo では、PR の head コミットに **Kody Code Review** チェックが付きます。complete、completed with warnings、failed、skipped のいずれかです。PR に指摘があるかではなく、レビューが実行されたかどうかを報告します。
+- レビューのステータスを示す、PR へのリアクション。
+
+## レビューが始まるタイミング
+
+**自動：** プルリクエストが開かれたとき、新しいコミットがプッシュされたとき、またはドラフトがレビュー準備完了にされたとき（Forgejo を除くすべてのプロバイダー）です。**Review draft pull requests** がオフでない限り、Kody はドラフトもレビューします。
+
+### PR コメントのコマンド
+
+**オンデマンド：** PR へのコメントで実行します。コマンドはコメントの先頭に書く必要があります。
+
+| コマンド | 動作 |
+| --- | --- |
+| `@kody start-review` または `@kody review` | 前回のレビュー以降のコミットをレビューします（初回のレビューでは PR 全体）。一時停止中の PR を再開します。 |
+| `@kody review --force` | 新しいコミットがなくても、PR 全体を再度レビューします。 |
+| `@kody review --heavy` または `--balanced` | この実行のレビューモードを選びます。[ルーティング](/ja/how_to_use/code_review/configs/routing) を参照してください。 |
+| `@kody review focus on the auth logic` | レビューの方向を指示します。[レビューを誘導する](/ja/how_to_use/code_review/review_directive) を参照してください。 |
+| `@kody -v <agent>` | PR 全体に対して 1 つの [カスタムエージェント](/ja/how_to_use/code_review/custom_agents) を実行します。 |
+| `@kody -v business-logic` | PR をそのタスクと照合します。[Business Logic Validation](/ja/how_to_use/code_review/business_logic_validation) を参照してください。 |
+| `@kody <question>` | PR またはサジェストについての会話を始めます。 |
+
+レビューコマンドは、**Automated code review**、**Review Cadence**、**Ignore title keywords**、**Base Branches**、**Review draft pull requests** を無視します。ライセンス、無視する作成者、無視するファイルは引き続き適用されます。
+
+PR ですでにレビューが実行中の場合、コマンドは待機し、現在のレビューが終了してから実行されます。その間に届いたプッシュによって 2 回目のレビューが始まることはありません。レビューするには `@kody review` とコメントしてください。
+
+GitHub で、Kody がユーザーアカウント（パーソナルアクセストークン）としてレビューしている場合、すでにレビュー済みの PR で Kody に対して **Re-request review** を行うと、`@kody start-review` と同じように動作します。
 
 ## ステータスリアクション
 
-Kody は絵文字リアクションを使用して、Git プロバイダーでコードレビューのライブステータスを直接表示します。作業中か、完了か、問題が発生したかを推測する必要はありません。常に前の絵文字を最新のステータスに置き換えます（例：🚀 → 🎉、👀、👎、または 😕）。
+Kody はレビューのステータスを Git プロバイダー上のリアクションとして表示し、前のリアクションを最新のものに置き換えます（例：🚀 の次に 🎉）。
 
 <Note>
-  **ネイティブのリアクション**は GitHub、GitLab、Forgejo で動作します。
+  **ネイティブのリアクション** は GitHub、GitLab、Forgejo で動作します。
 
-  Azure DevOps と Bitbucket にはリアクション API がないため、Kody はステータス絵文字を
-  **コメント**として投稿します。そこでは 👀（スキップ）、😕（エラー）、👎（ライセンスなし）
-  が表示されますが、進行中を示す 🚀 / 🎉 のペアは表示されません。
+  Azure DevOps と Bitbucket にはリアクション API がないため、Kody はステータス絵文字を **コメント** として投稿します。そこでは 👀（スキップ）、😕（エラー）、👎（ライセンスなし）が表示されますが、🚀 と 🎉 のペアは表示されません。
 </Note>
 
 ### 各絵文字の意味
 
-- 🚀 処理中 — Kody がコードを処理しています：
-  - ファイルを分析中
-  - ルールとポリシーを確認中
-  - サジェストを生成中
-- 🎉 完了 — レビューが終了しました：
-  - すべてのコメントが投稿済み
-  - 分析完了
-  - サジェストを確認できます
-- 👀 スキップ — レビューがスキップされました。一般的な理由：
-  - 前回の実行以降に新しいコミットがない
-  - マージコミットのみ検出
-  - PR/MR が設定されたファイル制限を超えている
-  - レビューする関連ファイルがない（無視パターン）
-  - レビュー用にブランチが設定されていない
-  - PR/MR がドラフトモード（ドラフトをスキップするよう設定されている場合）
-- 👎 ライセンスなし — ユーザーがライセンスを持っていません：
-  - Kody は有効なライセンスなしでは実行できません
-  - PR/MR を開いたユーザーにライセンスが割り当てられていることを確認してください
-  - オプションで、ライセンスを自動的に割り当てるために[ライセンスの自動割り当て](/ja/how_to_use/auto_license_assignment)を有効にしてください
-- 😕 エラー — 何か問題が発生しました：
-  - レビュー中の一時的な技術的問題
-  - 再試行してください。問題が続く場合は [Discord コミュニティ](https://discord.gg/TFZBRk9fT6)に参加してください
+- 🚀 処理中：Kody がレビューを実行しています。
+- 🎉 完了：レビューが終了し、コメントが投稿されました。
+- 👀 スキップ：レビューは実行されませんでした。[Kody がスキップするタイミング](#kody-がスキップするタイミング) を参照してください。
+- 👎 ライセンスなし：PR の作成者にライセンスがありません。GitLab では代わりに鍵（🔒）が表示されます。
+- 😕 エラー：レビューが失敗しました。`@kody start-review` で再実行してください。失敗が続く場合は、[トラブルシューティング](/ja/how_to_use/code_review/troubleshooting) を確認するか、[Discord](https://discord.gg/TFZBRk9fT6) で質問してください。
 
 ### リアクションが表示される場所
 
-- 自動レビュー（PR が開かれたかまたは新しいコミット）：PR/MR の説明のリアクション（スレッドの上部）
-- 手動レビュー（コメント `@kody start-review`）：Kody を呼び出したコメントのリアクション
+- 自動レビュー：PR の説明。
+- レビューコマンド：あなたのコメント。
 
-### シナリオの例
+### スキップとブロックのフィードバックをオフにする
 
-- 新しい PR（自動）：実行中に 🚀 → 完了時に 🎉
-- 手動コマンド：コメントに 🚀 → 完了時に 🎉
-- 前回の実行以降に変更がない：👀 リアクション
-- ライセンスのないユーザー：👎 リアクション
-- 一時的な問題：😕 リアクション
+**Code review → General → Review feedback → Show status feedback** は、👀 と 👎 のリアクションとサブスクリプションのコメントを制御します。オフにしても、Kody は 🚀、🎉、😕 を表示します。**Automated code review** がオフの場合、Kody はスキップした PR にリアクションしません。
 
-### FAQ
+## Kody がスキップするタイミング
 
-**リアクションが表示されません**
+ステータスフィードバックがオフでない限り、Kody はスキップしたレビューに 👀 を表示します。どちらの場合も理由は記録されます。理由は **Kody Code Review** チェックに表示されます（GitHub App と Forgejo）。設定によってブロックされた PR（ライセンス、manual または一時停止中の cadence、無視する作成者）は、**Pull Requests** ページの **Kody skipped** に一覧表示されます。
 
-- GitHub / GitLab / Forgejo：✅ ネイティブのリアクション
-- Azure DevOps / Bitbucket：❌ リアクション API なし — コメントとして投稿されたステータス絵文字を確認してください
+| 理由 | 内容 | 対処 |
+| --- | --- | --- |
+| Automated Review is disabled | **Automated code review** がオフです。 | オンにするか、`@kody start-review` とコメントします。 |
+| Title Ignored | タイトルに **Ignore title keywords** のエントリが含まれています。 | キーワードを削除するか、`@kody start-review` とコメントします。 |
+| Draft PR Skipped | **Review draft pull requests** がオフです。 | PR をレディ状態にするか、設定をオンにします。 |
+| Branch Mismatch | ターゲットブランチがデフォルトブランチでも **Base Branches** にもありません。 | ブランチを **Base Branches** に追加します。 |
+| PR is Closed, PR is Locked | 自動レビューはクローズ済みやマージ済みの PR をスキップし、`@kody review --force` も同様です。通常の `@kody review` は、クローズ済みやマージ済みの PR をレビューします。ロックされた PR はレビューされません。 | PR を再オープンまたはロック解除するか、クローズ済みの PR には `@kody review` とコメントします。 |
+| No New Commits | 最新のコミットはすでにレビュー済みです。 | `@kody review --force` とコメントします。 |
+| Only Merge Commits | 新しいコミットは別のブランチをマージするだけです。 | コードの変更をプッシュするか、`@kody review --force` とコメントします。 |
+| Rebase Without Changes | リベースで、すでにレビュー済みのコードに変更はありませんでした。 | `@kody review --force` とコメントします。 |
+| No Files Changed, No changed files in this pull request, All Files Ignored | 今回の実行でレビューできる変更ファイルがありません。削除されたファイルは対象外です。無視されたファイルは、今回実行されるカスタムエージェントが明示的に含めた場合に対象になります。前回のレビュー以降にコミットがない PR でレビューコマンドを実行したときも、この状態になることがあります。 | **Ignored files** を確認するか、`@kody review --force` とコメントして PR 全体をレビューします。 |
+| Too Many Files | メインレビューとカスタムエージェントを合わせたレビュー対象が 2,000 ファイルを超えています。 | PR を分割します。 |
+| Changes Unreadable, Provider Rate Limited | Git プロバイダーが差分を完全には返さなかったか、リクエストを制限しました。 | しばらくしてからレビューを再実行します。 |
+| User is ignored by configuration | PR の作成者が **Repositories → PR author filters** によって除外されています。 | [ライセンスの自動割り当て](/ja/how_to_use/auto_license_assignment#pr-作成者フィルター) を参照してください。 |
+| Code reviews are disabled for the centralized config repository, or for the global Kody Rules source repository | Kody は、共有設定やルールを保持するリポジトリをレビューしません。 | 別のリポジトリをレビューしてください。 |
+| User Not Licensed | PR の作成者にライセンスがありません。 | ライセンスを割り当てるか、[ライセンスの自動割り当て](/ja/how_to_use/auto_license_assignment) をオンにします。 |
+| No Active Subscription, Plan Limit Exceeded, Trial Reviews Used Up, BYOK Configuration Required, Subscription Check Unavailable | 組織が現在レビューを実行できません。**Show status feedback** がオフでない限り、Kody は PR にもコメントします。 | コメントに従ってください。[制限と料金](/ja/how_to_use/pricing) を参照してください。 |
+| PR is paused, Manual mode requires @kody start-review | **Review Cadence** が Auto-pause または Manual です。 | `@kody start-review` とコメントします。 |
 
-**なぜ絵文字が変わったのですか？**
-
-- 正常 — Kody は前のステータスを置き換えます（🚀 → 🎉/👀/😕）
-
-**👀 を見たがレビューが欲しかった**
-
-- スキップされた可能性があります：新しいコミットがない、マージのみ、無視されたファイル、またはファイル制限
-- 修正：`@kody review --force` とコメントする — 新しいコミットがない場合、通常の `start-review` は再びスキップされます
-
-**👎 を見た**
-
-- PR/MR を開いたユーザーはライセンスを持っていません
-- 修正：ライセンスを割り当てるか[ライセンスの自動割り当て](/ja/how_to_use/auto_license_assignment)を有効にする
-
-**😕 を見た**
-
-- `@kody start-review` で再試行してください。問題が続く場合は[トラブルシューティング](/ja/how_to_use/code_review/troubleshooting)または [Discord](https://discord.gg/TFZBRk9fT6) を確認してください
+<Note>
+  `--force` は、レビュー済みとしてスキップされたレビューを再実行します。ライセンス、プラン、ファイル数上限によるスキップや、クローズ済みまたはマージ済みの PR は上書きしません。
+</Note>
 
 ## 重要な設定
 
-- 自動と手動のレビューとフォローアップの頻度（**Code review → General**）
-- 無視するファイルとスコープ内のベースブランチ（**Code review → General**）
-- カスタムルールとクロスファイル分析
-- 重大度しきい値（旧レビューフィルター）：**Minimum severity to post** と、それを Kody Rules に適用するかどうか（**Code review → What to review**）
-- ファイル制限とタイムアウト
+- [レビューのタイミングを変える](/ja/how_to_use/code_review/configs/general)。自動レビュー、頻度、ドラフト、ベースブランチ、無視するファイルを設定します。
+- [Kody が報告する内容を変える](/ja/how_to_use/code_review/configs/what_to_review)。レビューのカテゴリと重大度の下限を選びます。
+- [レビューの深さとモデルを選ぶ](/ja/how_to_use/code_review/configs/routing)。Balanced または Heavy を選び、適用されるモデルを確認します。
+- [承認を制御する](/ja/how_to_use/code_review/policy)。Kody が変更を要求する条件と、問題のない PR を承認する条件を確認します。
+- [レビューの問題を解決する](/ja/how_to_use/code_review/troubleshooting)。レビューが実行されない場合や、結果が予想と異なる場合の原因を調べます。
 
-<CardGroup cols={2}>
-  <Card
-    title="一般設定"
-    icon="sliders"
-    href="/ja/how_to_use/code_review/configs/general"
-  >
-    モード、頻度、ブランチ、サジェストオプションを設定します
-  </Card>
-  <Card
-    title="レビューポリシー"
-    icon="shield-check"
-    href="/ja/how_to_use/code_review/policy"
-  >
-    サジェストとブロッキングを理解し、それぞれをいつ有効にするかを学びます
-  </Card>
-  <Card
-    title="トラブルシューティング"
-    icon="triangle-exclamation"
-    href="/ja/how_to_use/code_review/troubleshooting"
-  >
-    一般的な問題を修正し、制限について学びます
-  </Card>
-</CardGroup>
+## レビューの頻度
+
+**Code review → General → Automated code review** で、自動レビューのオンとオフを切り替えます。**Review Cadence** は、最初のレビュー後のプッシュで何が起こるかを決めます。
+
+- **Automatic：** すべてのプッシュがレビューされます。
+- **Auto-pause：** Kody は、**Time window (minutes)** 内にその PR で完了したレビューの数を数えます。その数が **Pushes to trigger pause**（デフォルトは 15 分間に 3 回）に達すると、次のプッシュで PR が一時停止され、Kody は "Auto-paused – comment @kody start-review when you're ready." とコメントします。誰かが `@kody start-review` とコメントするまで、プッシュはスキップされます。
+- **Manual：** 最初のレビューは PR が開かれたときに実行されます。それ以降のプッシュは、誰かが `@kody start-review` とコメントするまでスキップされます。
+
+## Kody が行うこと
+
+1. PR をレビューできるかを確認します。ライセンス、フィルター、cadence、新しいコミットです。
+2. 適用される設定（グローバル、リポジトリ、ディレクトリ）を解決し、検証します。
+3. [リスク評価](/ja/how_to_use/code_review/configs/risk) がオンの場合、PR を評価してレビューモードを選びます。
+4. 変更されたファイルとコンテキストを読み込みます。無視するファイルはスキップします。
+5. **What Kody writes** で有効になっていれば、冒頭のコメントを投稿します。
+6. PR がタスクを参照していて **Business Logic** がオンの場合、PR をそのタスクと照合します。
+7. 変更をレビューします。問題を見つけ、Kody Rules とカスタムエージェントを適用し、各指摘を検証し、重複を取り除き、**Minimum severity to post** を適用します。
+8. インラインコメント、PR レベルのコメント、サマリーを投稿します。
+9. 有効になっていれば、PR を承認するか、変更をリクエストします。
+
+Kody は最後にレビューしたコミットを保持するため、次のレビューは前回以降に変更された部分だけを対象にします。リベースや force-push のあとは、新しい差分をレビュー済みの差分と比較できる場合は変更された部分だけを、そうでない場合は PR 全体をレビューします。
 
 ## ヒント
 
-- PR を小さく保つ — 大きな差分はレビューの品質を低下させます
-- PR の説明に仕様/チケットをリンクする
-- フィードバックに対処した後、`@kody start-review` で再実行する
+- PR を小さく保ってください。大きな差分はレビューの品質を低下させます。
+- PR のタイトル、ブランチ、または説明にタスクをリンクすると、Kody が PR をそのタスクと照合できます。

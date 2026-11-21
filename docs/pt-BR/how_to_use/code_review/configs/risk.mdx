@@ -1,0 +1,71 @@
+---
+title: "Avaliação de risco"
+description: "Avalie o risco do PR independentemente da aprovação automática."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Disponível na Kodus Cloud, incluindo o trial.">
+    <Badge icon="cloud" stroke>Teams e Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requer uma licença Enterprise e BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="O workspace na Kodus Cloud precisa ter acesso a este beta.">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+A Kody avalia o PR inteiro e usa o resultado para escolher o [modo de revisão](/pt-BR/how_to_use/code_review/configs/routing) e decidir quais agentes condicionados ao risco podem rodar. Com a [aprovação automática](/pt-BR/how_to_use/code_review/configs/auto_approve) ativada, o resultado também pode impedir a aprovação.
+
+## Ative a avaliação de risco
+
+1. Abra **Code review → Risk assessment**.
+2. Ative **Risk assessment** e clique em **Save settings**.
+
+A avaliação de risco vem desligada. A Kody pode avaliar risco mesmo com a aprovação automática desativada.
+
+## Resultados
+
+- **Risk found:** agentes condicionados a risco podem rodar, o Routing usa o modo de risk-found e a aprovação automática é bloqueada.
+- **No risk found:** o Routing usa o modo de no-risk. A aprovação ainda exige um review limpo e uma policy correspondente.
+- **Unavailable:** o Routing usa o modo de review padrão configurado. A aprovação automática é bloqueada, e agentes que exigem risco confirmado não rodam automaticamente.
+
+Com a avaliação desativada, o Routing usa um único modo configurado para todos os PRs. Agentes condicionais não rodam sem risco confirmado; comandos manuais explícitos de agente ignoram essa condição.
+
+Uma avaliação cobre um head de PR, o título e a descrição. Um novo commit, ou uma mudança no título ou na descrição, mantém a aprovação automática em espera até um novo review.
+
+## Preview em um PR
+
+**Preview on a PR** abre um painel lateral. Escolha um repositório conectado e o número do PR para testar os critérios atuais, incluindo edições não salvas. Ele usa o modelo de risk assessment configurado e não publica comentário nem aprova o PR.
+
+## Critérios opcionais do time
+
+A Kody avalia o risco sem critérios do time. Os critérios adicionam contexto do time, como as consequências de alterar permissões de conta ou apagar dados de clientes.
+
+Um critério tem um nome, instruções, um switch e padrões opcionais de arquivos incluídos/excluídos. Você pode adicionar até 50. O nome tem até 120 caracteres e as instruções até 4.000; em um arquivo, cada `id` deve ser único. Os filtros de arquivo delimitam a orientação; casar com um arquivo não declara automaticamente o PR como arriscado. A Kody ainda avalia o restante da mudança.
+
+A avaliação usa o diff e o contexto de código/histórico disponível. Histórico ausente é informação desconhecida, não evidência de segurança.
+
+## YAML
+
+Ative **Prefer kodus-config.yml settings** em **Code review → General** (escopo de repositório) antes de usar arquivos de configuração do repositório.
+
+```yaml
+riskAssessmentActive: true
+riskCriteria:
+  - id: access-control
+    name: Access control
+    enabled: true
+    instructions: 'Check whether permission changes expose data across accounts. Distinguish them from equivalent refactors.'
+    includedFiles:
+      - 'src/access/**'
+    excludedFiles:
+      - '**/*.test.ts'
+```
+
+`riskCriteria: []` mantém a avaliação padrão da Kody. Para parar a avaliação, defina `riskAssessmentActive: false`.
+
+Uma configuração que nunca definiu **Risk assessment** mantém o comportamento de risco da aprovação existente até você alterar essa configuração. Ativar ou desativar a aprovação automática não altera o switch **Risk assessment**.

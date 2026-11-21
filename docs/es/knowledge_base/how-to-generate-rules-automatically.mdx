@@ -1,32 +1,32 @@
 ---
 title: "Cómo generar reglas de revisión de código automáticamente"
-description: "Deja que la IA analice tu historial de revisiones de código y sugiera reglas personalizadas basadas en los patrones y estándares reales de tu equipo."
+description: "Deja que Kody lea los comentarios anteriores de tus revisores y redacte reglas a partir de los estándares que repiten."
 ---
 
-Escribir reglas de revisión de código desde cero puede ser tedioso. Kodus puede analizar el historial de revisiones de tu equipo y sugerir automáticamente reglas basadas en los patrones que encuentra.
+Escribir reglas de revisión de código desde cero puede ser tedioso. Kodus puede leer los comentarios que tu equipo dejó en pull requests cerrados y redactar reglas a partir de los patrones que encuentra.
 
 ## Cómo funciona
 
-1. Selecciona el repositorio en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral, abre **Kody Rules** y haz clic en **Configuration**
+1. Selecciona **Global** o un repositorio en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral, abre **Kody Rules** y haz clic en **Configuration**
 2. Activa **Generate from past reviews**
-3. Kodus escanea los PRs cerrados de los últimos 3 meses en tu repositorio
-4. Identifica patrones de feedback recurrentes y preferencias de codificación
-5. Genera reglas adaptadas a tu equipo, que aparecen en la página de Kody Rules con el origen **Kody-generated**
+3. Kody lee los últimos 3 meses de PRs cerrados del repositorio, mirando los comentarios de tus revisores (no los de bots ni los de la propia Kody). Activado para un repositorio, esto comienza de inmediato; activado a nivel **Global**, los repositorios se procesan en la siguiente ejecución semanal
+4. Redacta reglas para los estándares que surgen repetidamente, listadas en la página de Kody Rules con el origen **Kody-generated**
+
+Opcionalmente, usa el selector de revisores debajo del interruptor para excluir a los desarrolladores de cuyos comentarios Kody no debe aprender.
 
 ## Qué sucede después
 
-- Por defecto, las reglas generadas quedan activas de inmediato y se aplican durante las revisiones de código
-- Para revisarlas antes de que se apliquen, activa **Kody knowledge approval** en la misma hoja de **Configuration**: las nuevas reglas esperarán entonces en la sección **Pending review** hasta que las apruebes (**Approve**) o descartes (**Discard**)
+- Por defecto, las reglas generadas quedan activas de inmediato y se verifican durante las revisiones de código
+- Para revisarlas antes, activa **Kody knowledge approval** en la misma hoja de **Configuration**: las nuevas reglas esperarán entonces en la sección **Pending review** hasta que las apruebes (**Approve**) o descartes (**Discard**)
 - Edita, pausa o elimina cualquier regla generada como cualquier otra Kody Rule
 
 ## Aprendizaje continuo
 
-Después de la configuración inicial, Kodus genera nuevas reglas **semanalmente** a medida que evoluciona el estilo de codificación de tu equipo. Vuelve a revisar regularmente para ver las nuevas reglas.
+Después de la primera pasada, Kodus lee los comentarios de los revisores de la última semana **cada semana** y redacta nuevas reglas a partir de ellos.
 
 ## Requisitos
 
-- Al menos **3 meses** de historial de revisiones en el repositorio
-- Actividad regular de revisión de código para una mejor detección de patrones
-- Acceso al repositorio con los permisos adecuados
+- Comentarios de revisores en pull requests cerrados del repositorio. No hay una cantidad mínima de historial
+- En la nube, fuera del trial, tu propia clave de modelo ([BYOK](/es/how_to_use/byok)); las instancias autoalojadas usan el modelo del despliegue
 
 Para más detalles, consulta [Generación Automática de Reglas](/es/how_to_use/code_review/learning/kody_rules_generation).

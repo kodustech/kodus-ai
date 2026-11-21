@@ -1,0 +1,48 @@
+---
+title: "組織設定"
+description: "組織の管理場所：一般設定、CLI キー、およびサイドバーの Organization にあるその他のページ。"
+---
+
+サイドバーの **Organization** グループには、組織全体に適用されるすべてが含まれます。表示される内容はロールによって異なります。[ワークスペースロール](/ja/how_to_use/workspace_roles) を参照してください。
+
+| ページ | 用途 |
+| --- | --- |
+| **General** | タイムゾーンと自動参加。下記を参照してください。 |
+| **SSO** | SAML シングルサインオン。[シングルサインオン](/ja/how_to_use/security/sso) を参照してください。 |
+| **Cockpit visibility** | すべてのユーザーに対して Cockpit のタブとメトリクスを非表示にします。[Cockpit の設定](/ja/how_to_use/cockpit/configuration) を参照してください。 |
+| **CLI keys** | Kodus CLI 用のチームキー。下記を参照してください。 |
+| **Notifications** | イベントとロールごとのメール通知とアプリ内通知。[通知](/ja/how_to_use/organization/notifications) を参照してください。 |
+| **Subscription** | プラン、開発者ライセンス、ワークスペースメンバー。[プランとライセンス](/ja/how_to_use/pricing) と [ワークスペースロール](/ja/how_to_use/workspace_roles) を参照してください。 |
+| **Activity logs** | 誰が何を変更したか。[アクティビティログ](/ja/how_to_use/organization/activity_logs) を参照してください。 |
+| **Token usage** | トークンと推定コスト。[トークン使用量](/ja/how_to_use/organization/token_usage) を参照してください。 |
+
+General、SSO、Cockpit visibility、CLI keys、Notifications はオーナー向けです。
+
+## 一般設定
+
+**Organization → General**（**General settings**）を開きます。
+
+- **Timezone**：**New York** または **São Paulo**。**Pull Requests** ページに表示される正確な日付と時刻、相対時間（「opened 2 hours ago」）のツールチップ、各レビューステージの **Started** 時刻のタイムゾーンを設定します。**General** を初めて開くと New York が保存され、それまでは、これらの時刻は UTC で表示されます。他の場所ではこの設定は参照されません。スケジュールされたジョブ、通知、メールレポート、Cockpit の日付範囲、Token usage は、固定のタイムゾーンを使用します。
+- **Auto Join**：**Enable Auto Join** をオンにして、メールドメインをカンマ区切りで列挙すると、そのいずれかのドメインでサインアップした人が組織に参加できるようになります。gmail.com などのパブリックドメインは使用できず、追加できるのは自分のドメインのみです。参加した人は **Contributor** として入ります。[ワークスペースロール](/ja/how_to_use/workspace_roles#ワークスペースメンバーの自動参加) を参照してください。
+
+適用するには **Save settings** をクリックします。
+
+## CLI キー
+
+CLI キーを使うと、[Kodus CLI](/ja/how_to_use/cli/introduction) が対話型のログインなしでワークスペースのために動作できます。CI パイプラインや AI コーディングエージェントに適しています。**Organization → CLI keys** を開きます。一覧のキーは、選択したワークスペースのものです。キーを作成、設定、取り消しできるのはオーナーだけです。
+
+<Steps>
+  <Step title="キーを生成する">
+    キーを使う場所がわかる **Key name**（たとえば `CI pipeline deploy key`）を入力し、**Generate key** をクリックします。
+  </Step>
+
+  <Step title="コピーする">
+    **CLI key created** でキーをコピーします。キーが表示されるのは 1 回だけです。ダイアログには、チームと共有できるインストールコマンドも表示されます。
+  </Step>
+
+  <Step title="できることを選ぶ">
+    キーの **Configure** をクリックします。**Allow repository configuration via CLI** は、そのキーで `kodus config remote`（`kodus config repo` とも呼ばれます）と `kodus config centralized` を有効にします。**Allow Kody Rules management via CLI** は、`kodus rules view`、`create`、`update` を有効にします。どちらもデフォルトではオフです。**Save changes** をクリックします。キーでは、`kodus rules pause`、`resume`、`delete` を実行することはできず、1 つのリポジトリの 6 つの設定しか設定できません。それらにはログインが必要です。[認証モード](/ja/how_to_use/cli/concepts#認証モード) を参照してください。
+  </Step>
+</Steps>
+
+**Existing CLI keys** には、各キーの **Name**、**Status**（**Active** または **Revoked**）、**Last used**、**Created at**、**Created by** が一覧表示されます。**Revoke** はキーを即座に無効にし、元に戻せません。キーの作成と取り消しは、[アクティビティログ](/ja/how_to_use/organization/activity_logs) に表示されます。

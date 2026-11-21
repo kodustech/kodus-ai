@@ -1,44 +1,40 @@
 ---
 title: "如何跨代码库共享编码标准"
-description: "使用规则继承和组织级规则在所有代码库中保持一致的编码标准。"
+description: "使用全局规则、规则继承和全局规则来源,在所有代码库中保持一致的编码标准。"
 ---
 
-当您有多个代码库时，保持编码标准一致是一个挑战。Kodus 支持规则继承，您可以定义一次规则并在任何地方应用。
+当您有多个代码库时,保持编码标准一致是一个挑战。Kodus 让您只需定义一次规则,即可在任何地方应用。
 
-## 组织级规则
+## 全局规则
 
-在组织级别创建规则，它们自动应用于所有代码库：
+在 **Global** 范围创建规则,它们会应用于每个代码库:
 
-1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global**，然后打开 **Kody Rules**
-2. 使用 **New rule** 创建您的规则 — 它们应用于组织中的每个代码库
-3. 各个代码库可以继承、覆盖或排除特定规则
+1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global**,然后打开 **Kody Rules**
+2. 使用 **New rule** 创建您的规则,或从[规则库](/zh/how_to_use/code_review/configs/rules_library)添加
+3. 代码库和目录会继承它们
 
 ## 规则继承
 
-规则从组织 → 代码库 → 目录向下流动：
+规则从 Global → 代码库 → 目录向下流动:
 
-- **组织规则**默认在所有地方应用
-- **代码库规则**可以覆盖或扩展组织规则
-- **目录规则**可以进一步针对特定路径进行专门化
+- **全局规则**应用于每个代码库
+- **代码库规则**在该代码库中叠加到全局规则之上
+- **目录规则**对于使用该目录设置审查的拉取请求,叠加到它们之上
 
-代码库可以**排除**继承的规则（如果它不适用于该代码库）。
+代码库可以在其列表中将继承的规则标记为已禁用,规则也可以被标记为不可继承。两者只改变规则的列出方式;审查仍会应用每一条全局和代码库规则。参见[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。
 
-## 跨代码库引用
+## 将标准保存在一个代码库中
 
-在规则说明中使用 `@repo:org/project` 引用其他代码库中的文件：
+如果您的标准存放在专用代码库中,[全局规则来源](/zh/how_to_use/code_review/configs/global_rule_sources)会将其规则文件导入为全局规则,并在拉取请求在那里合并时更新它们。Free 套餐不可用。每个项目自己的 `.kody/rules` 文件夹中的规则(参见[代码库规则](/zh/how_to_use/code_review/configs/repository_rules))仅应用于该项目。
 
-```
-确保 API 端点遵循 @repo:team/api-standards 中定义的模式。
-```
-
-这让您可以维护一个所有规则引用的中央标准代码库。
+要从一个代码库管理整个组织的审查设置和规则,请使用[集中配置](/zh/how_to_use/code_review/configs/centralized_config)。
 
 ## 跨组织的记忆
 
-范围限定为**组织级别**的记忆应用于所有代码库。例如：
+范围限定为**组织**的记忆应用于所有代码库。在 **Global** 范围使用 **New memory** 创建一条,或在 PR 评论中让 Kody 创建:
 
 ```
 @kody remember: across all repos, we use ESLint flat config format.
 ```
 
-更多详情，请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。
+更多详情,请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。

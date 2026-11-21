@@ -15,8 +15,8 @@ By default, a Fine-Grained PAT may not have access to your organization’s cont
 
 1. You must be the organization owner.
 1. Go to your organization's settings in GitHub:
-   - You can use this URL replacing with your org name: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>.
-1. Under **Fine-Grained Personal Access Tokens**, select **"Allow access via fine-grained personal access tokens"** to enable secure access for Kody.
+   - You can use this URL replacing with your org name: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens</small>.
+1. In the left sidebar, under **Personal access tokens**, click **Settings**. On the **Fine-grained tokens** tab, select **Allow access via personal access tokens** and click **Save**.
 
 ## Generating the FGPAT (Fine-Grained Personal Access Token)
 
@@ -45,18 +45,18 @@ Follow these steps to set up the token correctly:
    - **Expiration Date**: If possible, select a long expiration date, preferably at least 180 days.
    - **Resource Owner**: Ensure the organization is set as the token owner, as the team’s repositories are under the organization.
    - **Repository Access**: Select **All repositories** to allow the token access to all repositories.
-   - **Permissions**: Configure the following read-only permissions:
+   - **Permissions**: Configure the following permissions:
    - **Repository**:
-     - **Actions**: Read permission.
      - **Commit statuses**: Read permission.
      - **Contents**: Read and write permission.
-     - **Deployments**: Read permission.
      - **Issues**: Read permission.
      - **Metadata**: Read permission.
      - **Pull requests**: Read and write permission.
      - **Webhooks**: Read and write permission.
    - **Organization**:
      - **Members**: Read permission.
+
+   Kody does not use **Actions** or **Deployments**; leave them at **No access**.
 
 6. **Finalize and save the token**:
    - After setting up the permissions, click on `Generate token`.
@@ -68,5 +68,16 @@ After generating the token, paste it into Kodus:
 
 - **During onboarding**: on **Connect your Git tool**, pick the **Github** tab and click **Connect via token**.
 - **Later**: in the sidebar, open **Repositories**, click **Github** under **Connect a provider**, switch to the **Token** tab, paste the token and click **Validate and save**.
+- **Replacing a token**: on **Repositories**, click **Reset** on the **Github** card, choose **Just reset the integration**, then connect again with the new token as described above.
 
 With a token, reviews are published under your GitHub profile instead of Kody's, and GitHub Checks / PR status aren't available.
+
+## GitHub Enterprise Server (Beta)
+
+To connect GitHub Enterprise Server with a token, your Cloud workspace needs access to this beta. On self-hosted Kodus, set `BETA_FEATURES=true`.
+
+1. Create the token on your GitHub Enterprise Server instance.
+2. In the **Github** token dialog, turn on **Self-hosted** and enter your **GitHub Enterprise URL**, for example `https://github.your-company.com`. It must start with `http://` or `https://`.
+3. Paste the token and click **Validate and save**.
+
+Kodus calls the instance's API at `<GitHub Enterprise URL>/api/v3`. If the token or the URL is wrong, the dialog says **Invalid Token or GitHub Enterprise URL**.

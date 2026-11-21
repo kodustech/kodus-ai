@@ -1,48 +1,97 @@
 ---
-title: "GitHubまたはGitLabのWebhook問題を修正する方法"
-description: "GitプロバイダーとKodus間のWebhook接続問題をデバッグして解決します。"
+title: "Webhook の問題を修正する方法"
+description: "Git プロバイダーと Kodus の間の Webhook 配信の問題をデバッグして解決します。"
 ---
 
-WebhookはKodusがPRが開かれたり更新されたりしたときを知る方法です。動作していない場合、レビューはトリガーされません。
+Webhook は、PR が作成、更新、コメントされたことを Kodus が知るための仕組みです。動作していないと、レビューはトリガーされません。
 
-## 問題の診断
+GitHub App では、イベントは App 自身の Webhook から届きます。それ以外の接続では、**Repositories** で選択を保存したときに、Kodus が各リポジトリに Webhook を作成します。
+
+## まず Repositories を確認する
+
+プロバイダーが Webhook の作成を拒否した場合、**Repositories** に警告 **A repository has no webhook** または **N repositories have no webhook** が、各リポジトリとその理由とともに表示されます。Kodus はそれらのリポジトリの Pull Request を検知できないため、レビューは実行されません。通常の原因は、Webhook を管理できない認証情報です。
+
+### プロバイダー別の Webhook 権限
+
+| プロバイダー | 認証情報に必要なもの |
+| --- | --- |
+| GitHub（トークン） | リポジトリの Webhook への読み取りと書き込みアクセス：`admin:repo_hook`、または fine-grained トークンの **Webhooks: Read and write** |
+| GitLab | プロジェクトでの **Maintainer** または **Owner** ロール |
+| Bitbucket Cloud | リポジトリへの管理者アクセスと `read:webhook:bitbucket` と `write:webhook:bitbucket` |
+| Bitbucket Data Center | **Repository admin** 権限 |
+| Azure DevOps | プロジェクトでの **Edit subscriptions**（Project Administrators は持っています） |
+| Forgejo | リポジトリへの管理者アクセスと `write:repository` スコープ |
+
+権限を修正してから、もう一度選択を保存します（**Save selected repositories**）。**Review every repository** がオンの場合、Kodus は同期のたびにこれらのリポジトリを再試行します。
+
+Azure DevOps の拒否がここに表示されるのは、**Review every repository** がオンの場合のみです。選択を指定している場合は、**Project settings** → **Service hooks** でサブスクリプションを確認してください。
+
+## 配信を確認する
 
 ### GitHub
 
-1. リポジトリの**設定** → **Webhook** に移動します
-2. KodusのWebhookを見つけます
-3. クリックして**最近の配信**を確認します
-4. 失敗した配信（非2xxステータスコード）を探します
+1. リポジトリの **Settings** → **Webhooks** に移動します
+2. Kodus の Webhook を見つけます
+3. クリックして **Recent Deliveries** を確認します
+4. 失敗した配信（2xx 以外のステータスコード）を探します
+
+セルフホストのインスタンス用に作成した GitHub App の場合は、代わりに App の設定にある **Advanced** → **Recent Deliveries** を確認します。
 
 ### GitLab
 
-1. プロジェクトの**設定** → **Webhook** に移動します
-2. KodusのWebhookを見つけます
-3. エラーの配信履歴を確認します
+1. プロジェクトの **Settings** → **Webhooks** に移動します
+2. Kodus の Webhook を見つけます
+3. 配信履歴にエラーがないか確認します
 
-## 一般的な修正方法
+### Azure DevOps
 
-### WebhookのURLが間違っているか古い
+**Project settings** → **Service hooks** を開き、サブスクリプションの履歴を確認します。
 
-KodusのデプロイURLを変更した場合は、GitプロバイダーのWebhook設定でURLを更新します。
+## URL が Kodus に届くことを確認する
 
-### SSL証明書の問題
+Webhook は API や Web アプリではなく、別のサービス（ポート 3332）で処理されます。実際のイベントがなくてもサービスが受け付けるリクエストを送信します。
 
-セルフホストしている場合は、SSL証明書が有効であることを確認します。GitHubとGitLabは無効な証明書を持つWebhookを拒否します。
+```bash
+curl -i -X POST https://kodus-webhooks.yourdomain.com/github/webhook \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: ping' \
+  -d '{}'
+```
+
+`Webhook ignored (event not supported)` を伴う `200` は、リクエストが Webhook サービスに届いたことを意味します。`404`、リダイレクト、または HTML ページが返る場合は、URL が API または Web アプリを指しています。URL またはリバースプロキシを修正してください。他のプロバイダーでは `/gitlab/webhook`、`/bitbucket/webhook`、`/forgejo/webhook` を使用します。Azure Repos は `token` パラメーターがないと `403 Unauthorized` を返しますが、これもルートが正しいことの証明になります。
+
+`200` は、サービスがリクエストを受け付けたことしか意味しません。Kodus は、**Repositories** で選択されていないリポジトリからのイベントを破棄します。
+
+## よくある修正
+
+### Webhook の URL が間違っている、または古い
+
+各プロバイダーの URL は、その環境変数から決まります。
+
+| プロバイダー | 変数 | パス |
+| --- | --- | --- |
+| GitHub | `API_GITHUB_CODE_MANAGEMENT_WEBHOOK` | `/github/webhook` |
+| GitLab | `API_GITLAB_CODE_MANAGEMENT_WEBHOOK` | `/gitlab/webhook` |
+| Bitbucket | `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | `/bitbucket/webhook` |
+| Azure DevOps | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | `/azure-repos/webhook` |
+| Forgejo | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | `/forgejo/webhook` |
+
+Kodus は既存の Webhook を URL で照合します。URL を変更した後は、API を再起動して、もう一度選択を保存してください。Kodus は新しい Webhook を作成し、古いものはそのまま残します。古い Webhook は Git プロバイダーで削除してください。
+
+### SSL 証明書の問題
+
+Kodus が GitHub と GitLab に作成する Webhook は SSL 検証がオンです。他のプロバイダーは、それぞれのデフォルトを使用します。セルフホストしている場合は、SSL 証明書が有効であることを確認してください。そうでないと、プロバイダーが配信を拒否します。
 
 ### ファイアウォールによるブロック
 
-Kodusがファイアウォールの背後にある場合は、GitプロバイダーのIPレンジがWebhookエンドポイントに到達できることを確認します。
+Kodus がファイアウォールの背後にある場合は、Git プロバイダーの IP 範囲が Webhook エンドポイントに到達できることを確認してください。
 
-### Webhookが削除された
+### Webhook が削除された
 
-Kodusは、サイドバーの **Repositories** でリポジトリの選択が保存されるたびに（**Add repository** → **Save selected repositories**）不足しているWebhookを登録します。そのため、選択の変更を保存するとWebhookが再登録されます。Webhook URLを手動で追加することもできます。
+**Repositories** で選択を保存する（**Add repository** → **Save selected repositories**）と、不足している Webhook が登録されます。手動で追加することもできます：[GitHub](/ja/how_to_deploy/platforms/github/github_webhook)、[GitLab](/ja/how_to_deploy/platforms/gitlab/gitlab_webhook)、[Bitbucket](/ja/how_to_deploy/platforms/bitbucket/bitbucket_webhook)、[Azure DevOps](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook)、[Forgejo](/ja/how_to_deploy/platforms/forgejo/forgejo_webhook)。
 
 ## テスト
 
-ほとんどのGitプロバイダーでは、最近のWebhookペイロードを**再配信**できます。新しいPRを作成せずにテストするためにこれを使用します。
+ほとんどの Git プロバイダーでは、最近の Webhook ペイロードを**再配信**できます。新しい PR を作成せずにテストするには、これを使用します。
 
-プラットフォーム固有のガイドについては以下を参照してください：
-- [GitHub Webhook](/ja/how_to_deploy/platforms/github/github_webhook)
-- [GitLab Webhook](/ja/how_to_deploy/platforms/gitlab/gitlab_webhook)
-- [Bitbucket Webhook](/ja/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+セルフホストの場合：インストーラーのフォルダーから `./scripts/doctor.sh` を実行します。Git に関するチェックでは、トークンで読み取りやコメントができないリポジトリ、Kodus の Webhook がないリポジトリ、Webhook URL が設定されていて過去 7 日間にイベントを受信したかどうかが報告されます。

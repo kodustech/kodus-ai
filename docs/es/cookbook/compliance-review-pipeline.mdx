@@ -37,10 +37,12 @@ New endpoints default to authenticated + authorized, never public.
 
 ## Paso 2 — Crea reglas de registro de auditoría
 
+Crea cada regla en **Code review → Kody Rules**: en la pestaña **Review Rules**, haz clic en **New rule** y completa los campos como se muestra a continuación.
+
 ### Regla de registro de auditoría
 
 ```
-Name: Data mutations must have audit logging
+Rule name: Data mutations must have audit logging
 Execution mode: Per file
 Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
@@ -56,7 +58,7 @@ Instructions:
 ### Regla de retención de datos
 
 ```
-Name: Soft delete required for user data
+Rule name: Soft delete required for user data
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -72,7 +74,7 @@ Instructions:
 ### Prevención de exposición de PII
 
 ```
-Name: No PII in logs or error responses
+Rule name: No PII in logs or error responses
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -86,7 +88,7 @@ Instructions:
 ### Requisito de cifrado
 
 ```
-Name: PII fields must use encryption helpers
+Rule name: PII fields must use encryption helpers
 Execution mode: Per file
 Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
@@ -100,7 +102,7 @@ Instructions:
 ## Paso 4 — Crea reglas de control de acceso
 
 ```
-Name: New endpoints must have auth guards
+Rule name: New endpoints must have auth guards
 Execution mode: Per PR
 Severity: Critical
 Instructions:
@@ -117,7 +119,7 @@ Instructions:
 ## Paso 5 — Añade una verificación de cumplimiento a nivel de PR
 
 ```
-Name: Compliance impact assessment
+Rule name: Compliance impact assessment
 Execution mode: Per PR
 Severity: High
 Instructions:
@@ -132,9 +134,11 @@ Instructions:
 
 ## Paso 6 — Configura para la aplicación
 
-1. En **Code review → General**, activa **Enable changing status of Review to 'Request Changes'** para que las infracciones de cumplimiento bloqueen el merge
-2. Configura todas las reglas de cumplimiento en severidad **Crítica**
+1. En **Code review → General → Review feedback**, activa **Request changes on critical issues** (no disponible cuando todos los proveedores conectados son GitLab). Kody marca la revisión como Request Changes cuando publica un comentario inline Critical, y retira la solicitud una vez que esos hallazgos se resuelven
+2. Configura todas las reglas de cumplimiento en severidad **Critical**
 3. Usa la herencia de reglas para aplicar las reglas de cumplimiento en todos los repositorios de la organización — créalas con **Global** seleccionado en el selector de alcance
+
+Request changes sigue a los comentarios inline, por lo que lo establecen las reglas **Per file**. Una regla **Per PR** publica un único comentario en el pull request y no lo establece.
 
 ## Lista de verificación
 
@@ -143,7 +147,7 @@ Instructions:
 - [ ] La regla de exposición de PII cubre logs y respuestas de error
 - [ ] La regla de cifrado cubre las definiciones de entidades y modelos
 - [ ] La regla de control de acceso cubre todos los nuevos endpoints
-- [ ] Solicitar cambios habilitado para hallazgos críticos
+- [ ] **Request changes on critical issues** está activado
 - [ ] Las reglas están configuradas en el alcance **Global** (para toda la organización) para consistencia
 - [ ] Un PR de prueba verificó que las reglas se activan correctamente
 

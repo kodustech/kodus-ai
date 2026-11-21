@@ -1,42 +1,43 @@
 ---
-title: "JiraをコードレビューツールにConnectする方法"
-description: "JiraをKodusにリンクして、AIコードレビューがタスク要件と受け入れ基準に対してPRを自動的に検証するようにします。"
+title: "Jira を接続してプルリクエストを検証する"
+description: "Kodus で Atlassian Rovo を設定し、Jira チケットに照らして PR を検証します。"
 ---
 
-JiraをKodusに接続すると、2つの強力な機能が有効になります：Jiraチケットに対する自動**ビジネスロジック検証**と、コードレビュー提案のためのリッチなコンテキスト。
+プルリクエストが参照する Jira プロジェクトの読み取り権限が必要です。
 
 ## 接続方法
 
-1. サイドバーから **Plugins** を開きます
-2. **Jira** タイルをクリックします
-3. 認証（OAuthまたはAPIトークン）を行い、Jiraワークスペースへのアクセスを許可します
-4. Kodyが使用できるツールを選択し、**Install plugin** をクリックします
+1. サイドバーで **Plugins** を開きます（プラグインのインストールには Owner ロールが必要です）
+2. **Atlassian Rovo** タイル（Jira）をクリックします
+3. プラグインの **Authenticate with** をクリックして Jira ワークスペースへのアクセスを許可するか（OAuth）、Atlassian のメールアドレスと API トークンを入力して **Connect** をクリックします
+4. 接続するとすぐに、読み取り専用のツールが選択された状態でプラグインがインストールされます。後から変更するには、プラグインを開いて **Selected tools** を編集し、**Update Tools** をクリックします
+
+Kody はこれらのツールでチケットを読み取るため、次のツールは選択したままにしてください：`getJiraIssue`、`getAccessibleAtlassianResources`、`getVisibleJiraProjects`。オフにしたツールは使用できません。
 
 ## 有効になる機能
 
 ### 自動ビジネスロジック検証
 
-PRがJiraチケットにリンクされ、**Code review → What to review** で **Business Logic** カテゴリがオンになっていると、Kodusは自動的に：
-- チケットのタイトル、説明、受け入れ基準を取得
-- PRのdiffを要件と比較
-- 不足している実装、スコープの不一致、ギャップを報告
+Jira チケットを PR のタイトル、ブランチ名、または説明に記載します。**Code review → What to review** の **Business Logic** がオン（初期設定）の場合、Kody は最初のレビューで PR を検証します。 Kody はチケット、親タスク、サブタスクを読み取ります。
 
 ### オンデマンド検証
 
-PRコメントに任意のJira URLを貼り付けます：
+PR コメントに、任意の Jira URL またはチケットキーを貼り付けます。
 
 ```
 @kody -v business-logic https://your-org.atlassian.net/browse/PROJ-123
 ```
 
-### リッチなコードレビューコンテキスト
+## 得られるもの
 
-Jiraが接続されると、Kodyはルール内のMCP関数を使用してタスクコンテキストを取得し、イシューのステータスを確認し、要件をクロスリファレンスできます。
+Kody は、検証した要件と各結果の根拠となるコードを **Kody · Business Logic** コメントにまとめます。再検証すると同じコメントが更新されます。結果のステータスと再検証の方法は[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)を参照してください。
 
-## 要件
+## 最良の結果を得るためのヒント
 
-- Jira CloudまたはJira Data Center
-- OAuthまたはAPIトークンアクセス
-- 関連プロジェクトを読む権限
+- Jira チケットに**受け入れ基準**を追加します。基準が見出しの下やカスタムフィールドにある場合は、Business Logic の設定で **Requirements → Where acceptance criteria live** を設定します。
+- Jira のサブタスクは、親チケットの要件のうち、そのタイトルが対象としているものに対してチェックされます。
+- ギャップを修正したら、`@kody -v business-logic` とコメントして再チェックします。
 
-ビジネスロジック検証の詳細については、[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)を参照してください。プラグインのセットアップについては、[プラグイン](/ja/how_to_use/code_review/plugins)を参照してください。
+## 会話でのプラグインツール
+
+PR コメントで Kody にメンションすると、Kody はプラグインを使用できます。[カスタムエージェント](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp)でもオンにできます。

@@ -3,84 +3,117 @@ title: "コンセプト"
 description: "Kodus CLI を最大限に活用するためのメンタルモデル。"
 ---
 
-CLI のあらゆる場所に登場するアイデアの簡単なツアーです。一度読めば、残りのドキュメントがより理解しやすくなります。
+CLI のあらゆる場面に登場する考え方を簡単に紹介します。一度読んでおくと、残りのドキュメントが理解しやすくなります。
 
 ## 差分モード
 
-すべてのレビューは1つの質問に答える必要があります: *何が変わったか?* CLI は4つの差分モードをサポートしており、それぞれ異なる情報源を持ちます。
+すべてのレビューは1つの問いに答える必要があります。*何が変わったか?* CLI は4つの差分モードをサポートしており、それぞれ差分の取得元が異なります。
 
-| モード                      | 差分のソース                                | ファイルをインライン化? | 使用タイミング                                         |
-| --------------------------- | ------------------------------------------- | ----------------------- | ------------------------------------------------------ |
-| **作業ツリー**（デフォルト） | 作業ディレクトリ内のコミットされていない変更 | はい                    | 開発中、ステージング前。                               |
-| **ステージ済み**（`--staged`）| `git diff --cached`                         | はい                    | コミット直前 — `git commit` と同じスコープ。           |
-| **ブランチ**（`--branch <base>`）| `base..HEAD` のコミット済み差分          | いいえ                  | ブランチ全体のマージ前レビュー。                       |
-| **コミット**（`--commit <sha>`）| 単一コミットによって導入された差分        | いいえ                  | 1つのコミットの監査、チェリーピックレビュー。          |
+| モード                           | 差分のソース                                                   | ファイルの内容を送信? | 使用タイミング                                    |
+| -------------------------------- | -------------------------------------------------------------- | --------------------- | ------------------------------------------------- |
+| **作業ツリー**（デフォルト）     | 作業ディレクトリ内の追跡対象の変更（ステージ済みと未ステージの両方） | はい                  | 開発中、コミット前。                              |
+| **ステージ済み**（`--staged`）   | `git diff --cached`                                            | はい                  | コミット直前 — `git commit` と同じスコープ。      |
+| **ブランチ**（`--branch <base>`）| `git diff <base>...HEAD`: ブランチが `<base>` から分岐して以降のコミット | いいえ  | ブランチ全体のマージ前レビュー。                  |
+| **コミット**（`--commit <sha>`） | 単一のコミットで加えられた差分                                 | いいえ                | 1つのコミットの監査、チェリーピックのレビュー。   |
+
+コマンドラインでファイルを指定すると（`kodus review src/auth.ts`）、作業ツリーのレビューは指定したファイルに限定されます。複数のスコープを渡した場合は、ファイル指定が `--branch` より、`--branch` が `--commit` より、`--commit` が `--staged` より優先されます。
+
+追跡されていないファイルは、`git add` するまでどの差分にも含まれません。
 
 <Tip>
-  **インライン化が重要な理由は?** 作業ツリーとステージ済みレビューは、バックエンドがコミットされていない作業を確認できないため、差分と一緒にファイルの内容を送信します。ブランチとコミットモードはインライン化をスキップします — バックエンドは同じコミットを直接クローンします。そのため、ブランチ/コミットレビューは、作業ツリーレビューがリクエストサイズ制限を超えてしまうような巨大な差分でも機能します。
+  **送信される内容が重要な理由は?** 作業ツリーとステージ済みのレビューでは、バックエンドがコミットされていない作業を確認できないため、差分と一緒に変更されたファイルの内容を送信します。ブランチとコミットのレビューでは、バックエンドがそれらのコミットを直接読み取れるため、差分のみを送信します。`--fast` も差分のみを送信します。そのため、作業ツリーのレビューではリクエストサイズの上限を超えてしまうような巨大な差分でも、これらのモードなら動作します。トライアルのレビューは、どのモードでも差分のみを送信します。
 </Tip>
 
 ## レビューモード
 
-3つの出力スタイル、同じ基本的なレビュー。
+出力スタイルは3種類で、基盤となるレビューは同じです。
 
-- **インタラクティブ**（デフォルト）— ファイルを一覧表示し、問題を展開し、プレビューで1つずつ修正を適用する TUI。ターミナルで作業する自然な方法。
-- **自動修正**（`--fix`）— 単一の確認で、修正可能な問題を全て一度に適用します。ルールを信頼してバッチ適用したい場合に使用。
-- **プロンプトのみ**（`--prompt-only`）— AIエージェントが解析して行動するために設計された最小限の構造化テキスト。エージェントループで `--fail-on` と組み合わせて、レビューがクリーンになったときにループがきれいに終了するようにします。
+- **インタラクティブ**（デフォルト）— macOS と Linux のターミナルでは、指摘事項がコードの横の Hunk 差分ビューアーで開きます。Windows、`--no-hunk` 指定時、または `--interactive` 指定時には、ファイルごとの問題数を表示し、修正をプレビューして1つずつ適用でき、AI エージェント向けの修正プロンプトをコピーできるリストが表示されます。
+- **自動修正**（`--fix`）— 1回の確認で、修正可能なすべての問題を一度に適用します。ルールを信頼していて一括適用したい場合に使用します。
+- **プロンプトのみ**（`--prompt-only`）— AI エージェントが解析して処理できるよう設計された、最小限の構造化テキストです。エージェントループで `--fail-on` と組み合わせると、レビューに問題がなくなった時点でループが正常に終了します。
 
-非インタラクティブなコンシューマー（CI、スクリプト、ウェブフック）には、任意のコマンドで `--format json` または `--format markdown` も使用できます。
+非インタラクティブな利用先（CI、スクリプト、Webhook）向けに、`--format json` や `--format markdown` も使用できます。
+
+## レビューの深さ
+
+- **デフォルト** — Kodus でリポジトリに設定されたレビューモードです（変更していなければ Balanced）。
+- **`--fast`** — 軽量なチェックと小さめのステップ予算で実行します。`kodus hook install` でインストールされるフックはこれを使用します。
+- **`--heavy`** — 専門のレビュアーを追加して再現率を高めますが、コストが増えます。Teams または Enterprise プランでサインイン済みのチームで実行されます。それ以外のレビューは Balanced で実行され、その旨が表示されます。Heavy に設定されたリポジトリでメインのレビューのみを実行するには `--balanced` を使用します。[Heavy mode](/ja/how_to_use/code_review/review_directive#heavy-mode) を参照してください。
+- **`--focus <text>`** — レビューを特定の領域に向けます。[レビューの方向付け（フォーカス）](/ja/how_to_use/code_review/review_directive) を参照してください。
 
 ## 認証モード
 
-マシンごとに1つ選択します。CLI は利用可能なものを自動検出します。
+マシンごとに1つ選択します。CLI は最初に見つかった認証情報を次の順序で使用します。`KODUS_TOKEN`、`KODUS_TEAM_KEY`、保存されたログイン、保存されたチームキーの順です。
 
-- **トライアル** — 認証なし。1日5回のレビュー。「一度試す」のに最適。
-- **個人ログイン**（`kodus auth login`）— 個人アカウント。トークンは自動更新。
-- **チームキー**（`kodus auth team-key --key kodus_xxxxx`）— Web アプリの **Organization → CLI keys** で生成される、チーム用の共有キー。AIエージェントやインタラクティブなログインを避けたい場所に推奨。
-- **CI/CD トークン**（`kodus auth token`）— パイプライン用の長期トークン。ログイン済みのマシンから生成し、`KODUS_TOKEN` 経由で使用。
+- **トライアル** — 認証なし。1時間あたり2回のレビュー。「一度試す」のに最適です。トライアルのレビューにはチームがないため、デフォルト設定で実行され、Kody Rules は適用されません。チームのデータを読み取ったり変更したりするコマンドには、ログインまたはチームキーが必要です。
+- **個人ログイン**（`kodus auth login`）— 個人アカウント。トークンは自動的に更新されます。
+- **チームキー**（`KODUS_TEAM_KEY`）— Web アプリの **Organization → CLI keys** で生成する、チーム共有の1つのキーです。AI エージェント、CI、対話的なログインを避けたい場面で推奨します。
 
-詳細な決定ツリーは [はじめに](getting_started) を参照してください。
+各モードで使用できるコマンド:
+
+| コマンド                                                         | トライアル | チームキー                    | ログイン |
+| ---------------------------------------------------------------- | :--------: | :---------------------------: | :------: |
+| `review`, `diff`, `hook`, `skills`, `status`, `update`, `trace`, `schema`, `config remote keys` | はい | はい | はい |
+| `pr suggestions`, `pr business-validation`                       | —          | はい                          | はい     |
+| `pr reviews`, `agents`, `cockpit`, `usage`                       | —          | —                             | はい     |
+| `rules view`, `create`, `update`                                 | —          | キーが許可している場合は可    | はい     |
+| `rules pause`, `resume`, `delete`                                | —          | —                             | はい     |
+| `config remote list`, `show`, `set`, およびパターンのショートカット | —       | キーが許可している場合は可。`show` と `set` は1つのリポジトリの6つの設定が対象 | すべての設定、任意のスコープ |
+| `config remote add`, `setup`, `open`, および `config centralized` | —         | キーが許可している場合は可    | —        |
+| `config remote unset`, `model`, `messages`, `language`, `skills` | —          | —                             | はい     |
+
+チームキーには、CLI からリポジトリを設定する権限と Kody Rules を管理する権限を付与できます。**Organization → CLI keys** を開き、キーの **Configure** をクリックしてください。どちらもデフォルトではオフです。ログインしている場合は、Web アプリでのロールの権限が代わりに適用されます。
+
+<Note>
+  環境変数に設定した `KODUS_TEAM_KEY` は、ログイン中であっても `rules` と `config remote` で使用されます。ログインが必要なコマンドでは無視されます。
+</Note>
+
+サインイン方法については [はじめに](/ja/how_to_use/cli/getting_started) を参照してください。
 
 ## Kody Rules
 
-**Kody Rule** は、Kodus レビュアーがすべてのレビュー中に適用する構造化ルールで、リポジトリにスコープされるかチームにグローバルに適用されます。
+**Kody Rule** は、Kodus レビュアーがすべてのレビューで適用する構造化ルールで、リポジトリ単位、またはチーム全体のグローバルなスコープで設定します。
 
 ```
 Rule
 ├── title          "No console.log in production code"
 ├── rule           "Avoid leaving console.log in committed code"
 ├── severity       low | medium | high | critical
-├── scope          file | pull request
-├── path           **/*.ts       (ファイルターゲティングのグロブ)
+├── scope          file | pull-request
+├── path           **/*.ts       (glob for file targeting)
 └── repo-id        <uuid> | global
 ```
 
-ルールは一般的な Kodus レビューの上に重なります — AIはそれらを代替品ではなく追加基準として使用します。
+ルールは通常の Kodus レビューに上乗せされます。AI はそれらを置き換えではなく、追加の基準として使用します。
 
-ルールは Web アプリ（**Code review → Kody Rules**）から、または `kodus rules create|update|view` を使って CLI から管理します。CLI はルールをバージョン管理に置きたい場合（スクリプトから生成し、リポジトリにチェックインし、プロビジョニング時に再適用する）に便利です。
+ルールは Web アプリ（**Code review → Kody Rules**）から、または CLI の `kodus rules create|update|view|pause|resume|delete` で管理します。ルールをバージョン管理に置きたい場合（スクリプトから生成する、リポジトリにチェックインする、プロビジョニング時に再適用する）は CLI が便利です。[集中設定](#集中設定) では、ルールの変更は直接の書き込みではなくプルリクエストになります。
 
-## リポジトリ設定
+## レビュー設定
 
-Kodus の各リポジトリには、レビューの動作を管理する設定があります: 無視するファイル、ベースブランチのパターン、タイトルフィルター、機能トグル。これらは Kodus バックエンドに存在し、リポジトリがレビューされる場所（ウェブ PR、CLI レビュー、エージェントループ）でミラーリングされます。
+コードレビュー設定は、Kody がどのようにレビューするかを定めます。チェックするカテゴリ、重大度の上限、無視するファイル、ベースブランチ、PR サマリー、承認などが含まれます。設定は **global**、**repository**、**directory** の3つのレベルで適用されます。最も具体的なレベルが優先され、独自の値を持たないレベルは1つ上のレベルの値を継承します。
 
 CLI から:
 
 ```bash
-kodus config repo list                 # 設定されたリポジトリを確認
-kodus config repo show                 # 現在のリポジトリの設定を確認
-kodus config repo setup                # ガイド付きウィザード
-kodus config repo set . reviewEnabled true
-kodus config repo add-ignore-file . "**/*.generated.ts"
-kodus config repo open                 # ウェブダッシュボードにジャンプ
+kodus config remote list                       # Repositories added to Kodus
+kodus config remote show .                     # Settings of this repo, with the level each value comes from
+kodus config remote keys                       # Every setting you can change
+kodus config remote set . runOnDraft true
+kodus config remote set global suggestionControl.severityLevelFilter high
+kodus config remote unset . runOnDraft         # Inherit again
 ```
 
-`kodus config repo` と `kodus config remote` は同じコマンドグループのエイリアスです。
+`show` はリポジトリの `kodus-config.yml` も読み取るため、どの値がファイルで上書きされているかを確認できます。`keys` は、各キーについて許可される値と、そのキーが属する設定ページを一覧表示します。レベルの組み合わせ方については [設定の継承とオーバーライド](/ja/how_to_use/code_review/configs/inheritance_overrides) を参照してください。
 
-## 集中管理設定
+`kodus config repo` も `kodus config remote` のエイリアスとして引き続き使用できます。
 
-通常、各リポジトリの設定は Kodus に存在します。**集中管理設定**を使用すると、チームはそれらの設定を単一の信頼できるソース git リポジトリに保存できます — すべての変更がそのリポジトリへのプルリクエストになり、レビュー設定自体のレビューとバージョン履歴が得られます。
+CLI レビューでは、チームのグローバル設定と Kody Rules に加えて、一致したリポジトリのルール、レビューモード、リポジトリの指示が使用されます。それ以外のリポジトリごとの設定（ベースブランチや無視するタイトルなど）は、プルリクエストに関するものです。
 
-有効化、同期、または状態の確認:
+## 集中設定
+
+通常、各リポジトリの設定は Kodus に保存されます。**集中設定**を使うと、チームはそれらの設定を単一の信頼できる情報源となる git リポジトリに保存できます。すべての変更がそのリポジトリへのプルリクエストになるため、レビュー設定そのものにレビューとバージョン履歴が付きます。
+
+有効化、同期、状態の確認（チームキーが必要）:
 
 ```bash
 kodus config centralized status
@@ -89,38 +122,46 @@ kodus config centralized sync
 kodus config centralized disable
 ```
 
-チームがレビュー設定の監査可能なバージョン管理を望む場合は集中管理設定を使用します。その手間が過剰な場合はデフォルト（Kodus 内のリポジトリごとの設定）を維持します。
+レビュー設定を監査可能な形でバージョン管理したい場合は集中設定を使用します。その手間が大げさな場合は、デフォルト（Kodus 内のリポジトリごとの設定）のままにしてください。[集中設定ガイド](/ja/how_to_use/code_review/configs/centralized_config#cli) を参照してください。
 
 ## ビジネス検証
 
-`kodus review` が「このコードは良いか?」を問うのに対し、`kodus pr business-validation` は「この差分は実際にタスクが指示したことを行っているか?」を問います。Linear/Jira/URL ベースのタスクと差分ソース（作業ツリー、ステージ済み、ブランチ、コミット）を指定すると、タスクの受け入れ基準に対して実装をチェックします。
+`kodus review` が「このコードは良いか?」を問うのに対し、`kodus pr business-validation` は「この差分は、タスクで指示された内容を実際に実現しているか?」を問います。タスク（ID または URL）と差分のソース（作業ツリー、ステージ済み、ブランチ、コミット）を指定すると、タスクの受け入れ基準に照らして実装をチェックします。ログインまたはチームキーが必要です。
 
 ```bash
 kodus pr business-validation --task-id KC-1441 --branch main
-kodus pr business-validation --task-url https://linear.app/… --staged
+kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441 --staged
 ```
 
-人間のレビュー前に「コードは動作するが、要求されたものではない」を検出するためのマージ前チェックと組み合わせます。
+マージ前のチェックと組み合わせると、人間によるレビューの前に「コードは動くが、依頼された内容ではない」という状況を検出できます。[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation#cli-から) を参照してください。
+
+## カスタムエージェント
+
+カスタムエージェントは、チームが定義する追加のレビュアーで、それぞれが独自の指示、ファイル、ツールを持ちます。`kodus agents` で、ログインした状態でエージェントの一覧表示、作成、編集、オン/オフの切り替え、削除、試行ができます。新しいエージェントはオフの状態で作成されます。`kodus agents try` でプルリクエストに対して実行し、`kodus agents enable` でオンにします。[カスタムエージェント](/ja/how_to_use/code_review/custom_agents) を参照してください。
+
+## Kodus Trace
+
+Kodus Trace は、AI コーディングエージェントが行った変更の背後にある判断を記録し、`kodus trace <path>` で、そのパスについて記録された内容を読み出します。[Kodus Trace](/ja/how_to_use/cli/trace) を参照してください。
 
 ## AI エージェント出力（`--prompt-only` と `--agent`）
 
-2つの関連するフラグ、異なる役割。
+関連する2つのフラグですが、役割が異なります。
 
-- **`--prompt-only`** — 出力は AI エージェントが解析して行動するために最適化されています。レビュースタイルの出力を生成するコマンド（`review`、`pr suggestions`）にのみ機能します。
-- **`--agent`** — 任意のコマンドで**決定論的な機械可読**出力を強制するグローバルフラグ。スクリプトやエージェントが CLI 出力を解析する場合に使用し、厳密なフォーマット要件には `--format json` と組み合わせます。
+- **`--prompt-only`** — 出力は、AI エージェントが解析して処理できるよう最適化されています。`kodus review` でのみ使用できます。
+- **`--agent`** — 決定論的な JSON エンベロープ（`ok`、`command`、`data`、`error`、`meta`）を出力するグローバルフラグです。`review`、`pr`、`schema`、`hook install`、`hook uninstall`、`trace status`、`trace disable`、`trace <path>` で動作します。その他のコマンドでは、JSON 出力に `--json` を使用します。
 
-ほとんどのエージェント統合では `--prompt-only` だけで十分です。ハーネスやツール呼び出しループから CLI を操作する場合に `--agent` を使用します。
+ほとんどのエージェント連携では `--prompt-only` で十分です。ハーネスやツール呼び出しループなど、厳密なフォーマットが求められる環境から CLI を操作する場合に `--agent` を使用してください。
 
 ## 次のステップ
 
 <CardGroup cols={2}>
-  <Card title="コマンドリファレンス" icon="book" href="commands">
-    完全なコマンド + フラグ一覧。
+  <Card title="コマンドリファレンス" icon="book" href="/ja/how_to_use/cli/commands">
+    コマンドとフラグの完全な一覧。
   </Card>
-  <Card title="AI エージェント" icon="robot" href="ai_agents">
+  <Card title="AI エージェント" icon="robot" href="/ja/how_to_use/cli/ai_agents">
     コーディングエージェントとのレビュー・修正ループを構築。
   </Card>
-  <Card title="トラブルシューティング" icon="life-ring" href="troubleshooting">
-    一般的なエラーと終了コード。
+  <Card title="トラブルシューティング" icon="life-ring" href="/ja/how_to_use/cli/troubleshooting">
+    よくあるエラーと終了コード。
   </Card>
 </CardGroup>

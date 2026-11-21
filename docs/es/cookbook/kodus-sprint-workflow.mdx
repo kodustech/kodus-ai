@@ -1,6 +1,6 @@
 ---
 title: "Kodus + flujo de trabajo de sprint"
-description: "Integra la validación de lógica de negocio en tu ciclo de sprint para que cada PR sea validado contra los requisitos de la tarea antes del merge."
+description: "Verifica cada pull request contra la tarea que referencia, desde la primera revisión hasta el merge."
 icon: "arrows-spin"
 ---
 
@@ -8,39 +8,39 @@ icon: "arrows-spin"
 
 Los equipos registran los requisitos en Jira, Linear o Notion. Los desarrolladores los implementan en PRs. Pero nadie verifica sistemáticamente si el PR realmente cubre todos los criterios de aceptación — hasta que QA encuentra las brechas en staging.
 
-Este cookbook cierra ese ciclo validando los PRs contra los requisitos de las tareas de forma automática.
+Este cookbook cierra ese ciclo con la [Validación de lógica de negocio](/es/how_to_use/code_review/business_logic_validation): Kody verifica cada PR contra la tarea que referencia.
 
 ## El flujo de trabajo
 
 ```
-Tarea creada (Jira/Linear/Notion)
+Task created (Jira, Linear, Notion)
     ↓
-Desarrollador implementa → Abre PR
+Developer implements → Opens PR that references the task
     ↓
-Kodus automáticamente:
-  1. Obtiene el contexto de la tarea desde la herramienta vinculada
-  2. Compara el diff del PR contra los criterios de aceptación
-  3. Reporta implementaciones faltantes o parciales
+Kodus, on the PR's first review:
+  1. Finds the task in the PR title, branch or description
+  2. Reads it from the connected tracker
+  3. Lists every requirement and where it stands in the code
     ↓
-Desarrollador atiende los hallazgos → Revalida
+Developer addresses the gaps → Re-checks with @kody -v business-logic
     ↓
-Merge con confianza
+Merge with confidence
 ```
 
-## Paso 1 — Conecta tu herramienta de gestión de tareas
+## Paso 1 — Conecta tu gestor de tareas
 
 En la barra lateral, abre **Plugins** y conecta tu herramienta:
 
-- **Jira** — para equipos que usan Atlassian
-- **Linear** — para equipos que usan Linear
-- **Notion** — para equipos que usan Notion como gestor de tareas
-- **ClickUp** — para equipos que usan ClickUp
+- **Atlassian Rovo** — para Jira
+- **Linear**
+- **Notion**
+- **Git Issues** — para issues en el gestor propio de tu repositorio
 
-Una vez conectada, Kodus puede obtener automáticamente el contexto de la tarea durante las revisiones.
+Cualquier otro gestor funciona a través de un [plugin personalizado](/es/cookbook/custom-plugin-install). Kody solo lee tareas por su id y nunca escribe en tu gestor.
 
-## Paso 2 — Habilita la validación de lógica de negocio
+## Paso 2 — Verifica que Business Logic esté activado
 
-Está habilitada por defecto, pero verifica:
+Está activado por defecto. Actívalo o desactívalo en **Code review → What to review**, en la fila **Business Logic**, o en `kodus-config.yml` (se lee solo cuando **Prefer kodus-config.yml settings** está activado para el repositorio):
 
 ```yaml
 reviewOptions:
@@ -49,13 +49,13 @@ reviewOptions:
 
 ## Paso 3 — Escribe buenos criterios de aceptación
 
-La calidad de la validación depende completamente de la calidad de las descripciones de tus tareas. Kodus clasifica el contexto de la tarea como:
+Cuánto puede verificar Kody depende de la tarea:
 
-| Calidad | Qué significa | Qué hacer |
-|---------|--------------|-----------|
-| **Completo** | Título + descripción + criterios de aceptación | Mejores resultados — validación criterio por criterio |
-| **Parcial** | Título + descripción, sin criterios | Buenos resultados — análisis basado en comportamiento |
-| **Mínimo** | Solo un título | Resultados pobres — solo se marcan las brechas obvias |
+| Tarea | Qué hace Kody |
+|------|----------------|
+| Criterios de aceptación: un campo de criterios, una checklist o una lista en la descripción | Verifica cada requisito y cita el archivo y la línea |
+| Una descripción, sin lista | Verifica el comportamiento que enuncia la descripción |
+| Solo un título | No verifica. Comenta pidiendo criterios de aceptación |
 
 **Plantilla para tareas en Jira/Linear:**
 
@@ -71,55 +71,50 @@ Brief context about what needs to change and why.
 5. API returns 403 for unauthorized delete attempts
 ```
 
-## Paso 4 — Usa la validación bajo demanda durante el desarrollo
+Si tus criterios están bajo un encabezado o en un campo personalizado, define **Where acceptance criteria live** en la configuración de Business Logic.
 
-Antes de marcar un PR como listo, los desarrolladores pueden hacer una autocomprobación:
+## Paso 4 — Haz que el PR nombre su tarea
 
-```
-@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
-```
+Kody busca la tarea en el título del PR, el nombre de la rama y la descripción, en ese orden: una clave como `KC-1292`, `#123`, `AB#123`, o un enlace a la tarea. "Closes KC-1292" verifica el PR contra la tarea completa. "Part of KC-1292" verifica una parte y lista lo que falta sin tratarlo como un bloqueo.
 
-Esto detecta brechas temprano, antes de que el revisor siquiera mire el PR.
+Para exigirlo, abre **Code review → What to review → Business Logic** y activa **Ask for a task when the PR references none**. Entonces Kody comenta preguntando para qué tarea es el PR. Los PRs de bots como Dependabot se dejan de lado.
 
-## Paso 5 — Enseña convenciones del sprint como Memorias
+## Paso 5 — Vuelve a verificar a medida que el PR cambia
 
-```
-@kody remember: every PR must be linked to a Jira ticket.
-PRs without a linked ticket should be flagged.
-```
+Kody verifica en la primera revisión del PR. Después, comenta:
 
 ```
-@kody remember: acceptance criteria marked as "out of scope"
-in the ticket should not be flagged as missing.
+@kody -v business-logic
 ```
 
-## Paso 6 — Crea una regla de requisito de PR
+Kody edita su único comentario en lugar de publicar uno nuevo. Para verificar contra una tarea específica, agrega su enlace o id: `@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292`.
+
+Para volver a verificar sin pedirlo, define **Re-check after a push** en **While something is missing**: cada push vuelve a verificar hasta que se cumpla cada requisito.
+
+## Paso 6 — Enseña las convenciones del equipo
+
+En la configuración de Business Logic, **Team guidance** guarda notas que Kody sigue cuando juzga:
 
 ```
-Name: PR must reference a task
-Execution mode: Per PR
-Severity: Medium
-Instructions:
-  Check pr_description and pr_title for a task reference
-  (e.g., KC-1234, TEAM-456, or a URL to Jira/Linear/Notion).
-  If no task reference is found, flag it and ask the developer
-  to link the relevant task for business logic validation.
+Requirements the ticket marks as out of scope are not missing.
+Feature flags count as implemented when the flag exists and defaults to off.
 ```
+
+Un revisor, no el autor del PR, también puede aceptar una brecha respondiendo al comentario de Kody y mencionando a Kody, por ejemplo "@kody Fuera de alcance, movido a SAA-102". Kody confirma que la tarea existe y marca el requisito como aceptado. Consulta [Responder al comentario](/es/how_to_use/code_review/business_logic_validation#responder-al-comentario) para saber quién puede aceptar.
 
 ## El resultado
 
 Tras la configuración, cada PR en tu sprint recibe:
 
 1. **Revisión de calidad de código** — seguridad, rendimiento, estilo (Kodus estándar)
-2. **Validación de lógica de negocio** — ¿están implementados todos los criterios de aceptación?
-3. **Detección de alcance incorrecto** — ¿este PR está trabajando en la tarea correcta?
+2. **Validación de lógica de negocio** — cada requisito mostrado como cumplido, parcial, faltante o para verificar a mano, más los cambios que la tarea no pide
 
 QA encuentra menos brechas, las demos del sprint van más fluidas y el "creía que eso estaba hecho" se vuelve poco frecuente.
 
 ## Consejos
 
 - Anima al equipo a escribir criterios de aceptación numerados — obtienen la mejor validación
-- Usa la validación bajo demanda durante el desarrollo, no solo en el momento de la revisión
-- Si un PR intencionalmente no cubre todos los criterios (entrega por fases), anótalo en la descripción del PR para que Kody pueda tenerlo en cuenta
+- Ejecuta `@kody -v business-logic` durante el desarrollo, no solo en el momento de la revisión
+- Para entregas por fases, escribe "Part of KC-1292" en la descripción del PR para que Kody no trate el resto como bloqueos
 
 Para más detalles, consulta [Validación de lógica de negocio](/es/how_to_use/code_review/business_logic_validation).

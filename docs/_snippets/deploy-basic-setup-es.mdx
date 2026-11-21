@@ -2,13 +2,13 @@
 
 <AccordionGroup>
   <Accordion title="Hardware Recomendado">
-    Dimensionado para el modo de sandbox `local` por defecto (kodus-graph
-    + contexto cross-file corren dentro del contenedor worker).
+    Dimensionado para el modo de sandbox `local` por defecto (kodus-graph + contexto
+    cross-file corren dentro del contenedor worker).
 
-    - **CPU**: 2+ núcleos (4+ recomendado para repos arriba de ~100k LOC)
+    - **CPU**: 2+ núcleos (4+ recomendado para repos de más de ~100k LOC)
     - **RAM**: 8GB+ (16GB recomendado al ejecutar el sandbox `local` en repos grandes)
     - **Almacenamiento**: 60GB+ de espacio libre (Postgres guarda el caché del AST graph;
-      crece con la cantidad de repos y volumen de PRs)
+      crece con la cantidad de repos y el volumen de PRs)
   </Accordion>
   <Accordion title="Software Requerido">
     - **Docker** (última versión estable) con el plugin Compose
@@ -16,18 +16,21 @@
       proveedores Git en la nube (GitHub.com, GitLab.com, etc.)
   </Accordion>
   <Accordion title="Puertos Requeridos">
-    Mapeos por defecto de puertos del host — ajusta en `.env` si hay conflicto.
+    Publicados en el host por el archivo Compose del instalador.
 
-    - **3000** — Kodus Web App
+    - **3000** — Kodus Web App (`WEB_PORT`)
     - **3001** — API
-    - **3332** — Webhooks
-    - **5432** — PostgreSQL
-    - **27017** — MongoDB
-    - **5672, 15672, 15692** — RabbitMQ (AMQP, panel, métricas)
-    - **3101** — MCP Manager _(solo si `API_MCP_SERVER_ENABLED=true`)_
+    - **3332** — Webhooks (`API_WEBHOOKS_PORT`)
+    - **3101** — MCP Manager (`API_MCP_MANAGER_PORT`), _solo si `API_MCP_SERVER_ENABLED=true`_
+    - **15692** — Métricas de Prometheus de RabbitMQ
+
+    PostgreSQL (5432), MongoDB (27017) y RabbitMQ (5672 AMQP, 15672
+    interfaz de administración) se publican en puertos aleatorios del host. Los contenedores
+    los alcanzan a través de las redes de Docker; ejecuta `docker compose port <service> <port>`
+    para encontrar el puerto del host.
   </Accordion>
   <Accordion title="Servicios">
-    Lo que `./scripts/install.sh` levanta, basado en tu `.env`.
+    Lo que `./scripts/install.sh` levanta, según tu `.env`.
 
     **Core (siempre activos):**
     - `api` — backend principal
@@ -35,32 +38,34 @@
     - `webhooks` — receptor de webhooks de proveedores Git
     - `kodus-web` — frontend Next.js
     - `db_kodus_postgres`, `db_kodus_mongodb`, `rabbitmq` —
-      infraestructura local. Sáltalo con `USE_LOCAL_DB=false` /
-      `USE_LOCAL_RABBITMQ=false` para apuntar a instancias gestionadas.
+      infraestructura local. Configura `USE_LOCAL_DB=false` /
+      `USE_LOCAL_RABBITMQ=false` para apuntar a instancias gestionadas. Los
+      contenedores igualmente se inician como dependencias, pero Kodus no los usa.
 
     **Opcionales:**
-    - `kodus-mcp-manager` — broker del Model Context Protocol. Habilita
-      con `API_MCP_SERVER_ENABLED=true`. Ver [MCP Manager](/es/how_to_deploy/deploy_kodus/mcp_manager).
-    - `worker-analytics` — ingestión del Cockpit (métricas DORA,
-      classifier de PR). **Exclusivo del self-hosted Enterprise**, no se
-      activa por defecto. Ver [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker).
+    - `kodus-mcp-manager` — broker del Model Context Protocol. Habilítalo
+      con `API_MCP_SERVER_ENABLED=true`. Consulta [MCP Manager](/es/how_to_deploy/deploy_kodus/mcp_manager).
+    - `worker-analytics` — ingestión del Cockpit (métricas DORA, clasificador
+      de PRs). **Exclusivo del self-hosted Enterprise.** Está detrás del perfil
+      `analytics` de Compose, por lo que el instalador no lo inicia.
+      Consulta [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker).
   </Accordion>
 </AccordionGroup>
 
 <Note>
   Code review usa un AST graph + contexto cross-file que corre en un
-  sandbox — `local` (default, dentro del worker) o `e2b` (sandbox remoto
-  pago). Ver [Sandbox & AST Graph](/es/how_to_deploy/deploy_kodus/sandbox)
-  para los modos, comportamiento de caché, y cuándo elegir cada uno.
+  sandbox — `local` (por defecto, corre dentro del worker) o `e2b` (sandbox
+  remoto de pago). Consulta [Sandbox & AST Graph](/es/how_to_deploy/deploy_kodus/sandbox)
+  para conocer los modos, el comportamiento del caché y cuándo elegir cada uno.
 </Note>
 
 <Note>
-  **Se requiere acceso a internet si planeas conectarte a servicios Git en la nube (GitHub, GitLab, Bitbucket) o proveedores de LLM en la nube (OpenAI, Anthropic, etc.).** Para herramientas Git auto-alojadas y LLMs on-premise dentro de tu red, el acceso externo a internet es opcional.
+  Las imágenes de instalación deben estar disponibles en sus registros o mirrors, o ya cargadas en el host. Para un despliegue interno, usa servicios Git y endpoints de modelos accesibles desde tu red. Los servicios externos opcionales requieren acceso a sus propios endpoints.
 </Note>
 
 ## Configuración de Dominio (Opcional)
 
-Si planeas integrar Kodus con proveedores Git en la nube (GitHub, GitLab o Bitbucket), necesitarás URLs públicas tanto para la aplicación web de Kodus como para su API. Esto permite que tu servidor reciba webhooks para el correcto funcionamiento de la Revisión de Código y garantiza el comportamiento correcto de la aplicación.
+Tu proveedor Git debe poder acceder a la URL del webhook por HTTPS. El instalador requiere al menos una URL de webhook HTTPS, incluso cuando Kodus y Git están en una red privada. Los usuarios deben poder acceder a la aplicación web, también al volver del inicio de sesión o del proveedor Git.
 
 Recomendamos configurar dos subdominios:
 - Uno para la Aplicación Web, por ejemplo, `kodus-web.tudominio.com`.
@@ -70,9 +75,8 @@ Los webhooks son gestionados por un servicio separado (puerto 3332). Puedes:
 - Usar un subdominio dedicado para webhooks, por ejemplo, `kodus-webhooks.tudominio.com`, o
 - Seguir usando el dominio de la API y enrutar `/github/webhook`, `/gitlab/webhook`, etc. al servicio de webhooks en tu proxy inverso.
 
-Ambos subdominios deben tener registros DNS A apuntando a la dirección IP de tu servidor. Más adelante en esta guía, configuraremos un proxy inverso (Nginx) para enrutar las solicitudes de estos subdominios a los servicios internos correctos. Esta configuración es esencial para la funcionalidad completa, incluyendo webhooks y autenticación.
+Ambos subdominios deben tener registros DNS A apuntando a la dirección IP de tu servidor. El [proxy inverso](/es/how_to_deploy/deploy_kodus/reverse_proxy) enruta cada subdominio al servicio interno correcto.
 
-> **Nota**: Si solo te conectas a herramientas Git auto-alojadas en tu red y no necesitas acceso público ni webhooks, podrías usar una configuración más simple, pero esta guía se centra en despliegues con acceso público.
 
 ## Configuración
 
@@ -90,8 +94,12 @@ Ambos subdominios deben tener registros DNS A apuntando a la dirección IP de tu
   </Step>
   <Step title="Generar claves seguras para las variables de entorno requeridas">
     ```bash
-    ./generate-keys.sh
+    ./scripts/generate-secrets.sh
     ```
+
+    <Warning>
+      Ejecútalo una sola vez, antes de la primera instalación. Si lo ejecutas de nuevo, reemplaza todos los secretos de `.env`, incluidas las contraseñas de las bases de datos y `API_CRYPTO_KEY`, y los datos existentes dejan de funcionar.
+    </Warning>
   </Step>
   <Step title="Editar el archivo de entorno">
     Edita `.env` con tus valores usando tu editor de texto preferido. 
@@ -99,27 +107,34 @@ Ambos subdominios deben tener registros DNS A apuntando a la dirección IP de tu
     nano .env
     ```
 
-    Consulta [Configuración de Variables de Entorno](/es/how_to_deploy/deploy_kodus/generic_vm#configuración-de-variables-de-entorno) para instrucciones detalladas.
+    Agrega `IMAGE_TAG=<version>` para fijar la versión que instalas, por ejemplo `IMAGE_TAG=2.2.11`. Sin esa variable, el instalador usa `latest`. Las versiones se listan en la [página de releases de kodus-ai](https://github.com/kodustech/kodus-ai/releases) como _Self-Hosted Release_.
+
+    Consulta [Configuración de variables de entorno](/es/how_to_deploy/deploy_kodus/generic_vm#configuración-de-variables-de-entorno) para instrucciones detalladas.
   </Step>
 
   <Step title="Ejecutar el instalador">
     ```bash
+    ./scripts/validate-env.sh
     ./scripts/install.sh
     ```
+
+    `validate-env.sh` verifica `.env` contra el esquema. `install.sh` se niega a iniciar hasta que estén definidas las variables requeridas y al menos una URL de webhook de Git sea válida. El contenedor `api` ejecuta las migraciones y los seeds de la base de datos al iniciar.
   </Step>
-  <Step title="¡Éxito! 🎉">
-  Una vez completado, los servicios de Kodus deberían estar ejecutándose en tu máquina.
-  Puedes verificar la instalación con el siguiente script:
+  <Step title="Verificar la instalación">
+  Cuando el instalador termina, los servicios están en ejecución. Verifícalos con:
   ```bash
   ./scripts/doctor.sh
   ```
+
+  La primera línea indica si las revisiones están funcionando. Cada problema que aparece después lista qué pierdes y cómo solucionarlo. Agrega `--verbose` para ver todas las verificaciones.
   </Step>
   <Step title="Acceder a la interfaz web">
     Al acceder a la interfaz web por primera vez, necesitarás:
 
 1. **Crear tu cuenta de administrador** - Este será el primer usuario con acceso completo al sistema
-2. **Configurar tu proveedor Git** - Conecta GitHub, GitLab o Bitbucket siguiendo las instrucciones en pantalla
-3. **Seleccionar repositorios** para análisis - Elige qué repositorios de código revisará Kody
+2. **Conectar un proveedor de LLM** - Kodus es bring-your-own-key, y ninguna revisión corre sin un modelo. Abre **AI providers** en la barra lateral, o define el modelo en `.env` (consulta [Configuración de proveedores de LLM](/es/how_to_deploy/deploy_kodus/generic_vm#configuración-de-proveedores-de-llm))
+3. **Configurar tu proveedor Git** - Conecta GitHub, GitLab, Bitbucket, Azure DevOps o Forgejo siguiendo las instrucciones en pantalla
+4. **Seleccionar repositorios** para análisis - Elige qué repositorios de código revisará Kody
 
 <Info>
   Para pasos detallados sobre el proceso de configuración inicial, consulta nuestra [Guía de Inicio Rápido](/es/how_to_use/quickstart).

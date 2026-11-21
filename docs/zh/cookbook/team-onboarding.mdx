@@ -1,26 +1,28 @@
 ---
-title: "新团队入门"
-description: "分步指南：为新团队设置 Kodus — 从连接代码库到教授首批约定。"
+title: "新团队接入"
+description: "为新团队设置 Kodus 的分步指南 — 从连接仓库到传授第一批约定。"
 icon: "users-gear"
 ---
 
 ## 概述
 
-为新团队启动 Kodus 大约需要 30 分钟。本指南介绍完整设置，使您的团队从第一个 PR 开始就能获得价值。
+让一个新团队用上 Kodus 大约需要 30 分钟。本指南带你走完完整的设置，让团队从第一个 PR 起就获得价值。
 
-## 步骤 1 — 创建和配置工作区
+## 步骤 1 — 创建并配置工作区
 
-1. 在 [kodus.io](https://kodus.io) 注册或访问自托管实例
-2. 为团队创建新工作区
-3. 连接 Git 提供商（GitHub、GitLab、Bitbucket、Azure Repos 或 Forgejo）
-4. 选择要监控的代码库
+1. 在 [kodus.io](https://kodus.io) 注册，或访问你自托管的实例
+2. 为你的团队创建一个新工作区
+3. 连接你的 Git 提供商（GitHub、GitLab、Bitbucket、Azure Repos 或 Forgejo）
+4. 选择要监控的仓库
 
-## 步骤 2 — 设置审查基线
+设置指南接下来会继续介绍发布的最低严重级别、coding-agent 指令开关（步骤 3），以及用于 Kody 首次审查的 pull request。
 
-在自定义之前从合理的默认值开始：
+## 步骤 2 — 设定审查基线
+
+Kodus 以合理的默认值启动，因此只需自定义不同之处。你可以在 Web 应用的 **Code review → What to review**（类别和 **Minimum severity to post**）中设置基线，也可以把它保存在每个仓库默认分支根目录下的 `kodus-config.yml` 中。只有在你为该仓库的 **Code review → General** 中开启 **Prefer kodus-config.yml settings** 之后，Kody 才会读取该文件。
 
 ```yaml
-# kodus-config.yml — 放入每个代码库根目录
+# kodus-config.yml — these are the defaults
 reviewOptions:
   bug: true
   security: true
@@ -34,21 +36,21 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-这为您提供具有合理严重性阈值的自动审查。根据反馈在一周后调整。
+这会为你提供带有合理严重级别阈值的自动审查。一周后根据反馈进行调整。
 
-## 步骤 3 — 使用您已经为编码代理编写的指令
+## 步骤 3 — 使用你已为 coding agent 编写的指令
 
-如果团队已经维护了 Cursor、Copilot、Claude 或 `AGENTS.md` 指令：
+如果你的团队已经维护了 Cursor、Copilot、Claude 或 `AGENTS.md` 指令：
 
-1. 在侧边栏中，通过 **Code review** 分组顶部的范围选择器选择 **Global** 或某个代码库，打开 **What to review**，并开启 **Coding-agent instructions**
-2. Kody 读取覆盖每个拉取请求所更改文件的指令文件，并指出违反这些指令的更改
-3. 对于希望在每次审查中强制执行的约定，请在 `.kody/rules` 中把它写成规则文件
+1. 在侧边栏中，于 **Code review** 组顶部的范围选择器中选择 **Global** 或某个仓库，打开 **What to review**，并开启 **Coding-agent instructions**
+2. Kody 会读取涵盖每个 pull request 所改文件的指令文件，并指出违反这些指令的变更
+3. 对于希望在每次审查中都强制执行的约定，请把它写成 `.kody/rules` 中的规则文件
 
-这些指令文件从不会变成 Kody 规则，因此不会悄悄改变您的审查策略。
+这些指令文件绝不会被转换为 Kody Rules，因此不会悄悄改变你的审查策略。
 
-## 步骤 4 — 教授前 5 个约定
+## 步骤 4 — 传授你最重要的 5 条约定
 
-不要试图在第一天就编码所有内容。从团队争论最多的 5 个约定开始：
+不要试图在第一天就把所有东西编码进去。从团队争论最多的 5 条约定开始：
 
 ```
 @kody remember: we use camelCase for variables and PascalCase for types.
@@ -74,57 +76,59 @@ Use interfaces and dependency injection.
 No direct DB access from services or controllers.
 ```
 
-这些成为立即应用于所有审查的记忆。
+这些会成为 Kody 在后续审查中使用的记忆。开启 **Kody knowledge approval** 后，每一条都会在 **Pending review** 中等待，直到有人批准。
 
-## 步骤 5 — 创建 2-3 个关键规则
+## 步骤 5 — 创建 2-3 条关键规则
 
-添加绝对不能发生的事情的规则：
-
-```
-名称：生产代码中禁止 console.log
-执行模式：Per file
-路径：src/**/*.ts
-严重性：高
-说明：标记 fileDiff 中的任何 console.log、console.warn 或 console.error。
-请使用项目日志记录器。排除测试文件（*.spec.ts、*.test.ts）。
-```
+为绝不能发生的事情添加规则。在 **Code review → Kody Rules** 的 **Review Rules** 标签页中，点击 **New rule**：
 
 ```
-名称：禁止硬编码 API URL
-执行模式：Per file
-路径：src/**/*.ts
-严重性：严重
-说明：标记 fileDiff 中任何看起来像 API 端点的硬编码 URL（http:// 或 https://）。
-URL 必须来自环境变量或配置文件。
+Rule name: No console.log in production code
+Execution mode: Per file
+Path: src/**/*.ts
+Severity: High
+Instructions: Flag any console.log, console.warn, or console.error
+in fileDiff. Use the project logger instead.
+Exclude test files (*.spec.ts, *.test.ts).
+```
+
+```
+Rule name: No hardcoded API URLs
+Execution mode: Per file
+Path: src/**/*.ts
+Severity: Critical
+Instructions: Flag any hardcoded URL (http:// or https://)
+in fileDiff that looks like an API endpoint.
+URLs must come from environment variables or config files.
 ```
 
 ## 步骤 6 — 连接任务管理（可选但推荐）
 
-在 **Plugins**（位于侧边栏）中连接 Jira、Linear、Notion 或 ClickUp 以启用业务逻辑验证。这让 Kodus 检查 PR 是否实现了任务描述的内容。
+在 **Plugins**（侧边栏中）连接 Atlassian Rovo (Jira)、Linear、Notion 或 Git Issues，以启用[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。这让 Kodus 能检查 PR 是否实现了任务所描述的内容。
 
-## 步骤 7 — 运行试点 PR
+## 步骤 7 — 运行一个试点 PR
 
 打开一个测试 PR 并验证：
 
-- [ ] Kodus 评论出现在 PR 上
-- [ ] 建议相关且严重性适当
-- [ ] 自定义规则在应该触发时触发
-- [ ] 记忆反映在审查上下文中
+- [ ] PR 上出现了 Kodus 的评论
+- [ ] 建议相关，且严重级别合适
+- [ ] 你的自定义规则在该触发时触发
+- [ ] 记忆体现在审查上下文中
 
 ## 步骤 8 — 一周后收集反馈
 
-一周审查后，与团队确认：
+经过一周的审查后，与团队沟通：
 
-- 建议太多？→ 在 **Code review → What to review** 中提高 **Minimum severity to post**（即 `kodus-config.yml` 中的 `severityLevelFilter`）
-- 规则太嘈杂？→ 缩小文件路径或添加排除
-- 遗漏重要模式？→ 添加新规则或记忆
-- 想要自动生成规则？→ 在范围选择器中选择代码库，打开 **Code review → Kody Rules**，点击 **Configuration**，并开启 **Generate from past reviews**，从审查历史中获取建议
+- 建议太多？ → 在 **Code review → What to review** 中提高 **Minimum severity to post**（`kodus-config.yml` 中的 `severityLevelFilter`）
+- 规则噪声太大？ → 收窄文件路径或添加排除项
+- 缺少重要的模式？ → 添加新规则或记忆
+- 想要自动生成规则？ → 在范围选择器中选择该仓库，打开 **Code review → Kody Rules**，点击 **Configuration**，并开启 **Generate from past reviews**，让 Kody 根据审阅者的评论起草规则。在云端、试用期之外，这需要 [BYOK](/zh/how_to_use/byok)
 
 ## 提示
 
-- 第一天不要过度添加规则 — 从小处开始逐步增长
-- 让团队在正式化为规则之前通过对话自然地教 Kody
-- 前几个 PR 使用 `@kody start-review` 让团队看到 Kodus 的实际效果
-- 如果想审查 Kody 学到的内容，开启 **Kody knowledge approval**（**Code review → Kody Rules → Configuration**）
+- 第一天不要用过多规则 — 从小处开始，逐步增长
+- 在把它们正式化为规则之前，让团队通过对话自然地教会 Kody
+- 前几个 PR 使用 `@kody start-review`，让团队看到 Kodus 的实际运作
+- 如果想审核 Kody 学到的内容，请开启 **Kody knowledge approval**（**Code review → Kody Rules → Configuration**）
 
-完整设置指南，请参阅[快速开始](/zh/how_to_use/quickstart)。
+完整的设置指南请参阅[快速开始](/zh/how_to_use/quickstart)。

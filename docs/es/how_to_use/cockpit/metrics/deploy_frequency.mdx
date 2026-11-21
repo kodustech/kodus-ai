@@ -1,38 +1,41 @@
 ---
 title: "Frecuencia de Despliegue"
-description: "Mide con qué frecuencia tu equipo despliega código a producción"
+description: "Cuántos pull requests cierra tu equipo por semana, usado como indicador de con qué frecuencia entrega"
 ---
 
 ## Qué es la Frecuencia de Despliegue
 
-La Frecuencia de Despliegue mide cuántas veces tu equipo despliega exitosamente código a producción dentro de un período de tiempo determinado. Esta métrica es un indicador clave de la capacidad de tu equipo para entregar valor rápidamente y mantener un pipeline de entrega fluido.
+La Frecuencia de Despliegue (Deploy Frequency) es el número promedio de pull requests que tu equipo cierra por semana. Cockpit no lee los despliegues de tu CI/CD, así que usa los pull requests cerrados como sustituto de con qué frecuencia el código llega a producción.
+
+En el Cockpit, es la tarjeta **Deploy Frequency** de la pestaña **Productivity**.
 
 ## Cómo la Calculamos
 
-Rastreamos automáticamente cada vez que tu equipo fusiona código en la rama principal (o rama predeterminada). Dado que las fusiones en la rama principal típicamente desencadenan despliegues, esto nos da una buena medida de la frecuencia con la que tu equipo entrega código a producción.
-
-**Lo que Rastreamos:**
-- Cada fusión en tu rama principal/predeterminada
-- El rango de fechas seleccionado en la parte superior del Cockpit, mostrado como promedio semanal
-- Integraciones de código exitosas
-
-**Cómo se Calcula:**
 ```
-Frecuencia de Despliegue = (Número de Fusiones a Main) ÷ (Período de Tiempo en Semanas)
+Deploy Frequency = (PRs closed in the range) ÷ (weeks in the range)
 ```
 
-Por ejemplo, si fusionas 12 veces en main en un período de 4 semanas, tu frecuencia de despliegue es de 3 fusiones por semana.
+- El rango es el rango de fechas seleccionado en la parte superior del Cockpit. Su duración en semanas se redondea hacia arriba, con un mínimo de una semana.
+- Cuenta cada PR cerrado, sin importar su rama base, y un PR cerrado sin merge cuenta igual que uno mergeado.
 
-**Nota**: Medimos las fusiones en main porque típicamente representan cuándo el código está listo para el despliegue en producción. Si tu equipo tiene un flujo de trabajo diferente (como desplegar desde ramas de funciones), esta métrica puede necesitar interpretación.
+Por ejemplo, si se cierran 12 PRs en un rango de 4 semanas, la Deploy Frequency es de 3 por semana.
 
-## Por qué es Importante
+Si tu equipo despliega con un ritmo distinto al de cierre de PRs (por ejemplo, release trains o despliegues desde ramas de funcionalidad), interpreta este número como throughput de PRs, no como despliegues.
 
-Los despliegues frecuentes garantizan que las nuevas funciones y correcciones de errores lleguen rápidamente a los usuarios, aumentando la satisfacción del cliente y la competitividad. También reducen riesgos y facilitan la resolución de problemas.
+## Cómo leer la tarjeta
+
+La tarjeta muestra el promedio por semana, una insignia de nivel y el valor del período anterior de la misma duración con el cambio porcentual. El pie dice "Last 2 weeks was …" sin importar qué rango esté seleccionado; el número corresponde al período anterior. Pasa el cursor sobre la insignia para ver los niveles:
+
+| PRs cerrados por semana | Nivel |
+| --- | --- |
+| Más de 5 | Elite |
+| 2 a 5 | High |
+| 1 a 2 | Fair |
+| Menos de 1 | Need focus |
 
 ## Cómo Mejorar
 
-- Implementar pipelines de CI/CD para despliegues automatizados
 - Dividir los cambios grandes en PRs más pequeños
-- Usar feature flags para desplegar sin exponer funciones
-- Hacer la infraestructura como código para despliegues repetibles
-- Configurar monitoreo integral y rollback rápido
+- Implementar pipelines de CI/CD para despliegues automatizados
+- Usar feature flags para desplegar sin exponer funcionalidades
+- Configurar monitoreo y rollback rápido
