@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
+import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 /**
  * Mongo model for `kodus-agent-sessions` — the conversation record that used to
@@ -107,7 +108,8 @@ export class AgentSessionModel extends CoreDocument {
     sessionData: PersistedSessionData;
 }
 
-export const AgentSessionSchema = SchemaFactory.createForClass(AgentSessionModel);
+export const AgentSessionSchema =
+    SchemaFactory.createForClass(AgentSessionModel);
 
 // Upsert/lookup key. Deliberately NOT unique: the legacy flow engine could
 // write multiple documents per threadId (a new session per TTL window), so a
@@ -132,14 +134,12 @@ AgentSessionSchema.index(
 // `sessionData`, as a number, which a TTL ignores anyway), so nothing ever
 // expired. Documents written before `updatedAt` existed are not reached by
 // this; scripts/purge-legacy-agent-sessions.ts removes those once.
-export const AGENT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+// Defined in release-index-definitions.ts, which the index migration builds too.
+export const AGENT_SESSION_TTL_SECONDS =
+    RELEASE_INDEX.agentSessionTtl.options.expireAfterSeconds;
 AgentSessionSchema.index(
-    { updatedAt: 1 },
-    {
-        name: 'ttl_updatedAt',
-        expireAfterSeconds: AGENT_SESSION_TTL_SECONDS,
-        background: true,
-    },
+    RELEASE_INDEX.agentSessionTtl.key,
+    RELEASE_INDEX.agentSessionTtl.options,
 );
 
 export const AgentSessionModelInstance = {

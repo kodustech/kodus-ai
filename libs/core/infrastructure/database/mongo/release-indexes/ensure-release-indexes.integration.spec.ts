@@ -84,8 +84,11 @@ const withQuery = (uri: string, query: string) =>
             expect(result.failed.map((f) => f.index)).toEqual([
                 'security_scans.one_active_scan_per_repository',
             ]);
-            expect(result.built).toHaveLength(RELEASE_INDEXES.length - 1);
+            expect(result.ensured).toHaveLength(RELEASE_INDEXES.length - 1);
             expect(log.some((m) => m.includes('ERROR'))).toBe(true);
+            // The duplicate's values stay out of the boot log.
+            expect(log.join('\n')).not.toContain('org:repo');
+            expect(JSON.stringify(result.failed)).not.toContain('org:repo');
             expect(
                 await stored(
                     'security_scans',
@@ -116,6 +119,12 @@ const withQuery = (uri: string, query: string) =>
                 .asPromise();
             try {
                 expect(secondaryRead.readyState).toBe(1);
+                // It reads from secondaries, and Mongoose turned index builds
+                // off for it rather than refusing the connection.
+                expect(secondaryRead.getClient().readPreference.mode).toBe(
+                    'secondaryPreferred',
+                );
+                expect((secondaryRead as any).config?.autoIndex).toBe(false);
             } finally {
                 await secondaryRead.close();
             }

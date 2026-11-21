@@ -8,9 +8,10 @@ import { SecurityScanSchema } from '@libs/security-scan/infrastructure/security-
 
 import { RELEASE_INDEXES } from './ensure-release-indexes';
 
-// The migration repeats the schemas' index definitions (its build cannot
-// import Mongoose models). A change on either side must reach the other, or
-// the migration builds an index the code does not declare.
+// The schemas declare these indexes from release-index-definitions.ts, the
+// list the migration builds. This pins that each one is really declared, on
+// the same collection and with the very same key and options, so a schema
+// that declares it some other way, or stops declaring it, is caught.
 const SCHEMAS: Schema[] = [
     AgentSessionSchema,
     KodusCreditChargeModelSchema,
@@ -18,12 +19,6 @@ const SCHEMAS: Schema[] = [
     PullRequestsSchema,
     SecurityScanSchema,
 ];
-
-const RULES = [
-    'unique',
-    'partialFilterExpression',
-    'expireAfterSeconds',
-] as const;
 
 describe('RELEASE_INDEXES', () => {
     it.each(RELEASE_INDEXES.map((index) => [index.options.name, index]))(
@@ -44,11 +39,7 @@ describe('RELEASE_INDEXES', () => {
             const [schemaIndex] = declared;
             expect(index.collection).toBe(schemaIndex.collection);
             expect(index.key).toEqual(schemaIndex.key);
-            for (const rule of RULES) {
-                expect((index.options as any)[rule]).toEqual(
-                    (schemaIndex.options as any)[rule],
-                );
-            }
+            expect(index.options).toEqual(schemaIndex.options);
         },
     );
 });

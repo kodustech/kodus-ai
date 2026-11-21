@@ -12,6 +12,7 @@ import {
     SecurityScanSpend,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
+import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 @Schema({ collection: 'security_scans', timestamps: true })
 export class SecurityScanModel extends CoreDocument {
@@ -114,16 +115,13 @@ export class SecurityScanModel extends CoreDocument {
 export const SecurityScanSchema =
     SchemaFactory.createForClass(SecurityScanModel);
 
+// Defined in release-index-definitions.ts, which the index migration builds too.
 SecurityScanSchema.index(
-    { 'organizationId': 1, 'repository.id': 1, 'createdAt': -1 },
-    { name: 'organization_repository_recent' },
+    RELEASE_INDEX.securityScansRecent.key,
+    RELEASE_INDEX.securityScansRecent.options,
 );
 
 SecurityScanSchema.index(
-    { activeKey: 1 },
-    {
-        name: 'one_active_scan_per_repository',
-        unique: true,
-        partialFilterExpression: { activeKey: { $exists: true } },
-    },
+    RELEASE_INDEX.oneActiveScanPerRepository.key,
+    RELEASE_INDEX.oneActiveScanPerRepository.options,
 );

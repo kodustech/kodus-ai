@@ -1,84 +1,30 @@
 /**
- * The Mongo indexes this release declared on Mongoose schemas, as a migration
- * builds them. Schema indexes are built on boot only while MONGO_AUTO_INDEX is
- * on, so with it off nothing else would create these, the unique ones that
- * enforce a rule included (one active security scan per repository, one issue
- * per finding).
+ * Builds the indexes this release added (release-index-definitions.ts) from a
+ * migration, so they exist with MONGO_AUTO_INDEX off too.
  *
  * Dependency-free (only the driver's types), like the rest of this folder: the
- * migration build compiles it in isolation. The definitions repeat the
- * schemas'; ensure-release-indexes.spec.ts fails when the two drift apart.
+ * migration build compiles it in isolation.
  */
-import { CreateIndexesOptions, Db, IndexSpecification } from 'mongodb';
+import { Db } from 'mongodb';
 
-export interface ReleaseIndex {
-    collection: string;
-    key: IndexSpecification;
-    options: CreateIndexesOptions & { name: string };
-}
+import { RELEASE_INDEXES, ReleaseIndex } from './release-index-definitions';
 
-const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
-
-export const RELEASE_INDEXES: ReleaseIndex[] = [
-    {
-        collection: 'kodus-agent-sessions',
-        key: { updatedAt: 1 },
-        options: {
-            name: 'ttl_updatedAt',
-            expireAfterSeconds: THIRTY_DAYS_SECONDS,
-        },
-    },
-    {
-        collection: 'kodus_credit_charges',
-        key: { organizationId: 1, prNumber: 1, spanAt: -1 },
-        options: {
-            name: 'idx_org_pr_spanAt',
-            partialFilterExpression: { prNumber: { $exists: true } },
-        },
-    },
-    {
-        collection: 'issues',
-        key: { organizationId: 1, updatedAt: -1 },
-        options: { name: 'organization_updated' },
-    },
-    {
-        collection: 'issues',
-        key: { 'organizationId': 1, 'repository.id': 1, 'fingerprint': 1 },
-        options: {
-            name: 'organization_repository_fingerprint_unique',
-            unique: true,
-            partialFilterExpression: { fingerprint: { $exists: true } },
-        },
-    },
-    {
-        collection: 'pullRequests',
-        key: { 'organizationId': 1, 'user.id': 1, 'createdAt': -1 },
-        options: { name: 'idx_org_user_id_createdAt_for_seat_labels' },
-    },
-    {
-        collection: 'security_scans',
-        key: { 'organizationId': 1, 'repository.id': 1, 'createdAt': -1 },
-        options: { name: 'organization_repository_recent' },
-    },
-    {
-        collection: 'security_scans',
-        key: { activeKey: 1 },
-        options: {
-            name: 'one_active_scan_per_repository',
-            unique: true,
-            partialFilterExpression: { activeKey: { $exists: true } },
-        },
-    },
-];
+export { RELEASE_INDEXES };
+export type { ReleaseIndex };
 
 // What an index build can hit that no retry fixes, and that must not stop the
 // boot that runs the migration: the old code ran without these indexes.
-const DUPLICATE_KEY = 11000; // existing data breaks a unique index
-const INDEX_OPTIONS_CONFLICT = 85; // the same key exists under another name
-const INDEX_KEY_SPECS_CONFLICT = 86; // the name exists with another key or options
+// The reason is worded here, never taken from the server's message: a
+// duplicate-key message carries the colliding document's values.
+const REFUSALS: Record<number, string> = {
+    11000: 'existing documents break this unique index; deduplicate them',
+    85: 'the same key is indexed under another name',
+    86: 'an index with this name exists with another key or options',
+};
 
 export interface EnsureReleaseIndexesResult {
-    built: string[];
+    /** Present after the call: built now, or already there. */
+    ensured: string[];
     failed: Array<{ index: string; reason: string }>;
 }
 
@@ -93,26 +39,20 @@ export async function ensureReleaseIndexes(
     log: (message: string) => void,
     indexes: ReleaseIndex[] = RELEASE_INDEXES,
 ): Promise<EnsureReleaseIndexesResult> {
-    const result: EnsureReleaseIndexesResult = { built: [], failed: [] };
+    const result: EnsureReleaseIndexesResult = { ensured: [], failed: [] };
     for (const { collection, key, options } of indexes) {
         const index = `${collection}.${options.name}`;
         try {
             await db.collection(collection).createIndex(key, options);
-            result.built.push(index);
+            result.ensured.push(index);
             log(`[release-indexes] ${index} ok`);
         } catch (error) {
             const code = (error as { code?: number }).code;
-            if (
-                code !== DUPLICATE_KEY &&
-                code !== INDEX_OPTIONS_CONFLICT &&
-                code !== INDEX_KEY_SPECS_CONFLICT
-            ) {
-                throw error;
-            }
-            const reason = (error as Error).message;
+            const reason = code === undefined ? undefined : REFUSALS[code];
+            if (!reason) throw error;
             result.failed.push({ index, reason });
             log(
-                `[release-indexes] ERROR ${index} not built, fix by hand: ${reason}`,
+                `[release-indexes] ERROR ${index} not built (code ${code}), fix by hand: ${reason}`,
             );
         }
     }
