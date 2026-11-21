@@ -182,6 +182,13 @@ export interface WorkerConfig extends RuntimeConfig {
      */
     dbosRetentionDays: number;
     /**
+     * RUNTIME_RUN_RETENTION_DAYS (30..3650, default 365): age past which the hourly retention deletes an ended Run's
+     * projection row (`runtime_runs`) with its PR generation record, fork approval and preview record
+     * (shared/persistence/runtime-schema.ts `applyRetention`). Never a Run still live, nor one a live claim, a kept
+     * check or the stability history still names.
+     */
+    runRetentionDays: number;
+    /**
      * RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT (0..100, default 50): the share of a Run's measured
      * changed lines that must run during the probes for a green Run to stay green; below it the Run
      * is partly tested (decideRunVerdict exercised). 0 never downgrades.
@@ -495,6 +502,7 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
         queueTimeoutMs,
         isolationMinimum,
         dbosRetentionDays: boundedInt(env, 'RUNTIME_DBOS_RETENTION_DAYS', 30, 8, 3650),
+        runRetentionDays: boundedInt(env, 'RUNTIME_RUN_RETENTION_DAYS', 365, 30, 3650),
         exercisedLinesThresholdPercent: boundedInt(env, 'RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT', DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT, 0, 100),
         secretSealKey,
         git: {

@@ -155,7 +155,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                 { provide: CONSUMER_LOCKS, useExisting: RUN_ENGINE_LOCKS },
                 { provide: LOCK_SCOPED_PG, inject: [RUNTIME_PG_POOL, RUN_ENGINE_LOCKS], useFactory: (pool: Pool, locks: PgDistributedLocks) => new LockScopedPg(pool, locks) },
                 { provide: PR_ADMISSION_STORE, inject: [RUNTIME_PG_POOL, LOCK_SCOPED_PG], useFactory: (pool: Pool, sql: LockScopedPg) => new PgPrAdmissionStore(pool, sql) },
-                { provide: RUN_ENGINE_RETENTION, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => () => applyRetention(pool) },
+                { provide: RUN_ENGINE_RETENTION, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => () => applyRetention(pool, undefined, undefined, config.runRetentionDays) },
                 // RUNTIME_DBOS_RETENTION_DAYS: the age past which DBOS's terminal workflows are deleted.
                 { provide: RUN_ENGINE_WORKFLOW_RETENTION, inject: [RUNTIME_CONFIG], useFactory: (c: WorkerConfig) => ({ maxAgeMs: c.dbosRetentionDays * 86_400_000 }) },
                 {

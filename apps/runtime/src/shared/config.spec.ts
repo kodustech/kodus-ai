@@ -157,6 +157,15 @@ describe('runtime config', () => {
         expect(loadWorkerConfig({ ...base, RUNTIME_DBOS_RETENTION_DAYS: '90' }).dbosRetentionDays).toBe(90);
         for (const bad of ['7', '0', '1.5', 'month']) expect(() => loadWorkerConfig({ ...base, RUNTIME_DBOS_RETENTION_DAYS: bad })).toThrow(/RUNTIME_DBOS_RETENTION_DAYS/);
     });
+
+    it('deletes an ended Run past 365 days unless RUNTIME_RUN_RETENTION_DAYS says otherwise, never under 30 or over 3650', () => {
+        const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
+        expect(loadWorkerConfig(base).runRetentionDays).toBe(365);
+        expect(loadWorkerConfig({ ...base, RUNTIME_RUN_RETENTION_DAYS: '90' }).runRetentionDays).toBe(90);
+        expect(loadWorkerConfig({ ...base, RUNTIME_RUN_RETENTION_DAYS: '30' }).runRetentionDays).toBe(30);
+        expect(loadWorkerConfig({ ...base, RUNTIME_RUN_RETENTION_DAYS: '3650' }).runRetentionDays).toBe(3650);
+        for (const bad of ['29', '0', '3651', '1.5', 'year']) expect(() => loadWorkerConfig({ ...base, RUNTIME_RUN_RETENTION_DAYS: bad })).toThrow(/RUNTIME_RUN_RETENTION_DAYS/);
+    });
     it("runs 2 setups of one organization at once unless set, between 1 and 8", () => {
         const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
         expect(loadWorkerConfig(base).setupPerOrg).toBe(2);

@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 
 import { KEPT_CHECK_RESULTS_RETENTION_DAYS } from '@libs/runtime/contracts/kept-check';
 import { STABILITY_RETENTION_DAYS } from '@libs/runtime/gate/stability';
+import { TERMINAL_STATES } from '@libs/runtime/run/run-state';
 
 // Tables of the Runtime database next to the DBOS system tables (docs §8).
 // The hub writes runtime_cell_sessions and runtime_steps_index. One exception:
@@ -1057,6 +1058,20 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS sandbox_pool_target integer;
         ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS sandbox_pool_ready integer;`,
     },
+    {
+        version: 46,
+        name: 'the ended Runs the Run retention deletes by',
+        // applyRetention deletes a Run `RUNTIME_RUN_RETENTION_DAYS` after it ended. The partial index holds only ended
+        // Runs, by the time they ended (updated_at for one that never recorded finished_at), so a pass with nothing old
+        // to delete reads one index page. Built concurrently: runtime_runs takes the worker's writes on every step.
+        concurrentIndexes: [
+            {
+                name: 'runtime_runs_ended_idx',
+                sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS runtime_runs_ended_idx ON runtime.runtime_runs ((COALESCE(finished_at, updated_at)))
+                    WHERE state IN ('no_regressions', 'regression', 'partly_tested', 'could_not_boot', 'nothing_to_test', 'skipped', 'superseded', 'cancelled', 'timed_out', 'errored', 'halted')`,
+            },
+        ],
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
@@ -1136,6 +1151,8 @@ export const RETENTION_MAX_BATCHES = 200;
  * The fleet cells those claims ran on are kept as long (the report reads a claim's cell owner).
  */
 export const CLAIM_RETENTION_DAYS = 400;
+/** Days an ended Run (its projection row and what hangs off it) is kept when RUNTIME_RUN_RETENTION_DAYS says nothing. */
+export const DEFAULT_RUN_RETENTION_DAYS = 365;
 
 /**
  * Deletes the rows of `table` that `where` selects, `batch` at a time (each its own short statement), until a
@@ -1152,7 +1169,7 @@ async function deleteInBatches(pool: Pick<Pool, 'query'>, table: string, where: 
 }
 
 /** Rows kept 30 days (§11): stream/evidence indexes and fully cleaned terminal admission intents. */
-export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch = RUN_EVENTS_RETENTION_BATCH): Promise<number> {
+export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch = RUN_EVENTS_RETENTION_BATCH, runDays = DEFAULT_RUN_RETENTION_DAYS): Promise<number> {
     let removed = 0;
     const older = (column: string) => `${column} < now() - make_interval(days => $1)`;
     for (const [table, where, value] of [
@@ -1189,6 +1206,7 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         removed += await deleteInBatches(pool, table, where, value, batch);
     }
     removed += await deleteEndedFleetCells(pool, CLAIM_RETENTION_DAYS);
+    removed += await deleteEndedRuns(pool, runDays, batch);
     // The stream is the big table: oldest seq first, in batches, until a batch comes back short.
     for (;;) {
         const n =
@@ -1222,6 +1240,44 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
             ).rowCount ?? 0;
         removed += n;
         if (n < page) break;
+    }
+    return removed;
+}
+
+/** The terminal states as a SQL list: the same set as `TERMINAL_STATES` (libs/runtime/run/run-state.ts), which the index of migration 46 spells out. */
+const TERMINAL_RUN_STATES = [...TERMINAL_STATES];
+
+/**
+ * Runs that ended `days` ago, with the per-Run rows no other rule sweeps (the PR generation record, the fork approval
+ * and the preview record), `batch` Runs at a time until a batch comes back short or RETENTION_MAX_BATCHES ran. Never a
+ * Run that is not terminal, one a live claim still names, or one a kept check or the stability history still cites:
+ * those rows keep their own (shorter) retention and the Run goes with the last of them. The stream, the steps index,
+ * the claim blockers, the kept checks and the stability rows of a Run are older rows other rules already swept.
+ */
+async function deleteEndedRuns(pool: Pick<Pool, 'query'>, days: number, batch: number): Promise<number> {
+    let removed = 0;
+    for (let i = 0; i < RETENTION_MAX_BATCHES; i++) {
+        const r = await pool.query(
+            `WITH doomed AS (
+                SELECT run_id, organization_id FROM runtime.runtime_runs r
+                 WHERE r.state = ANY($1::text[])
+                   AND COALESCE(r.finished_at, r.updated_at) < now() - make_interval(days => $2)
+                   AND NOT EXISTS (SELECT 1 FROM runtime.runtime_claims c WHERE c.run_id = r.run_id AND c.released_at IS NULL)
+                   AND NOT EXISTS (SELECT 1 FROM runtime.runtime_kept_check_results k WHERE k.run_id = r.run_id AND k.org_id = r.organization_id)
+                   AND NOT EXISTS (SELECT 1 FROM runtime.runtime_stability s WHERE s.run_id = r.run_id AND s.org_id = r.organization_id)
+                 ORDER BY COALESCE(r.finished_at, r.updated_at) LIMIT $3
+                 FOR UPDATE OF r SKIP LOCKED),
+             g AS (DELETE FROM runtime.runtime_pr_run_generations x USING doomed d WHERE x.run_id = d.run_id AND x.organization_id = d.organization_id),
+             f AS (DELETE FROM runtime.runtime_fork_approvals x USING doomed d WHERE x.run_id = d.run_id),
+             p AS (DELETE FROM runtime.runtime_previews x USING doomed d WHERE x.run_id = d.run_id AND x.org_id = d.organization_id
+                     AND x.state NOT IN ('starting', 'ready', 'sleeping', 'blocked')),
+             gone AS (DELETE FROM runtime.runtime_runs x USING doomed d WHERE x.run_id = d.run_id RETURNING 1)
+             SELECT count(*)::int AS n FROM gone`,
+            [TERMINAL_RUN_STATES, days, batch],
+        );
+        const n = Number(r.rows[0]?.n ?? 0);
+        removed += n;
+        if (n < batch) break;
     }
     return removed;
 }
