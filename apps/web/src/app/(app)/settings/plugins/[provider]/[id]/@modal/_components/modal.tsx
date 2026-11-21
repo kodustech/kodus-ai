@@ -36,11 +36,18 @@ import {
 import {
     CUSTOM_MCP_SESSION_STORAGE_KEYS,
     KODUS_ISSUES_INTEGRATION_ID,
+    MCP_CONNECTION_STATUS,
 } from "@services/mcp-manager/types";
 import { useMCPPluginsLimit } from "@services/mcp-manager/use-mcp-plugins-limit";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { EditIcon, PlugIcon, RefreshCwIcon, Trash } from "lucide-react";
+import {
+    EditIcon,
+    PlugIcon,
+    RefreshCwIcon,
+    Trash,
+    TriangleAlertIcon,
+} from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
 import { countInstalledPlugins } from "src/core/utils/mcp-plugins/compute-locked-plugins";
@@ -81,6 +88,10 @@ export const PluginModal = ({
     );
 
     const isConnected = plugin.isConnected;
+    // Installed, but its credential was refused and could not be refreshed.
+    const needsReconnect =
+        isConnected &&
+        plugin.connectionStatus === MCP_CONNECTION_STATUS.EXPIRED;
     const isDefault = plugin.isDefault;
     const canEdit = usePermission(Action.Update, ResourceType.PluginSettings);
     const canDelete = usePermission(Action.Delete, ResourceType.PluginSettings);
@@ -366,13 +377,21 @@ export const PluginModal = ({
                                         </Badge>
                                     )}
 
-                                    {isConnected && (
-                                        <Badge
-                                            variant="tertiary"
-                                            className="bg-success! text-card-lv2!">
-                                            Installed
-                                        </Badge>
-                                    )}
+                                    {isConnected &&
+                                        (needsReconnect ? (
+                                            <Badge
+                                                variant="tertiary"
+                                                leftIcon={<TriangleAlertIcon />}
+                                                className="bg-warning/10! text-warning!">
+                                                Reconnect needed
+                                            </Badge>
+                                        ) : (
+                                            <Badge
+                                                variant="tertiary"
+                                                className="bg-success! text-card-lv2!">
+                                                Installed
+                                            </Badge>
+                                        ))}
 
                                     {isDefault && (
                                         <Badge
@@ -382,6 +401,14 @@ export const PluginModal = ({
                                         </Badge>
                                     )}
                                 </div>
+                            )}
+
+                            {needsReconnect && (
+                                <p className="border-warning/30 bg-warning/10 text-warning rounded-lg border px-3 py-2.5 text-sm">
+                                    {plugin.name} refused the saved credential,
+                                    so reviews stopped using this plugin. Use
+                                    Reset Authentication to connect it again.
+                                </p>
                             )}
 
                             {(plugin.requiredParams?.length || 0) > 0 && (

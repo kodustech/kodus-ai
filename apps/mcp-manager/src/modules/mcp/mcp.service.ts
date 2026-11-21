@@ -7,7 +7,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
-import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
+import {
+    IntegrationOAuthService,
+    RejectedCredentialOutcome,
+} from '../integrations/integration-oauth.service';
 import {
     MCPIntegrationAuthType,
     MCPIntegrationOAuthStatus,
@@ -604,6 +607,49 @@ export class McpService {
         }
 
         return { headers };
+    }
+
+    /**
+     * An MCP server refused the credential the worker got from
+     * getKodusMCPConnectionConfig. Refresh it or, when it is gone for good,
+     * expire the connection: the runtime only lists ACTIVE connections, so the
+     * reviews stop sending it, and the plugin page asks to reconnect.
+     */
+    async handleRejectedKodusMcpCredential(
+        organizationId: string,
+        integrationId: string,
+        fingerprint: string,
+    ): Promise<{ outcome: RejectedCredentialOutcome }> {
+        const outcome =
+            await this.integrationOAuthService.handleRejectedCredential(
+                organizationId,
+                integrationId,
+                fingerprint,
+            );
+
+        if (outcome === 'grant_lost') {
+            await this.expireConnectionOfLostGrant(
+                organizationId,
+                integrationId,
+            );
+        } else if (outcome === 'token_rejected') {
+            await this.connectionRepository
+                .createQueryBuilder()
+                .update()
+                .set({ status: MCPConnectionStatus.EXPIRED })
+                .where('"organizationId" = :organizationId', { organizationId })
+                .andWhere('"integrationId" = :integrationId', { integrationId })
+                .andWhere('"status" = :active', {
+                    active: MCPConnectionStatus.ACTIVE,
+                })
+                .execute();
+        }
+
+        this.logger.warn(
+            `MCP server refused the ${integrationId} credential: ${outcome}`,
+            { organizationId, integrationId, outcome },
+        );
+        return { outcome };
     }
 
     /**

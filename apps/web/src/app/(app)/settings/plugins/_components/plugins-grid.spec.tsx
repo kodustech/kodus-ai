@@ -184,3 +184,20 @@ describe("PluginsGrid — free plan cap", () => {
         );
     });
 });
+
+describe("PluginsGrid — a plugin whose credential was refused", () => {
+    it("asks to reconnect instead of showing it installed", () => {
+        renderOnFreePlan(
+            [
+                plugin("linear", {
+                    isConnected: true,
+                    connectionStatus: MCP_CONNECTION_STATUS.EXPIRED,
+                }),
+            ],
+            [],
+        );
+
+        expect(screen.getByText("Reconnect needed")).toBeInTheDocument();
+        expect(screen.queryByText("Installed")).not.toBeInTheDocument();
+    });
+});

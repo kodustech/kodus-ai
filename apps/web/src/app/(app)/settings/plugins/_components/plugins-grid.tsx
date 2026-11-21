@@ -16,7 +16,7 @@ import { Link } from "@components/ui/link";
 import type { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { MCP_CONNECTION_STATUS } from "@services/mcp-manager/types";
 import { useMCPPluginsLimit } from "@services/mcp-manager/use-mcp-plugins-limit";
-import { CheckIcon, ImageOff, LockIcon } from "lucide-react";
+import { CheckIcon, ImageOff, LockIcon, TriangleAlertIcon } from "lucide-react";
 import type { AwaitedReturnType } from "src/core/types";
 import { cn } from "src/core/utils/components";
 import { captureGateHit } from "src/core/utils/gate-hit";
@@ -179,6 +179,17 @@ export const PluginsGrid = ({
                                                     leftIcon={<LockIcon />}
                                                     className="pointer-events-none">
                                                     Locked
+                                                </Badge>
+                                            ) : item.isConnected &&
+                                              item.connectionStatus ===
+                                                  MCP_CONNECTION_STATUS.EXPIRED ? (
+                                                <Badge
+                                                    variant="tertiary"
+                                                    leftIcon={
+                                                        <TriangleAlertIcon />
+                                                    }
+                                                    className="bg-warning/10! text-warning! pointer-events-none">
+                                                    Reconnect needed
                                                 </Badge>
                                             ) : (
                                                 item.isConnected &&

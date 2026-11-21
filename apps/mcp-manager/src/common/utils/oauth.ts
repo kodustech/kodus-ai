@@ -352,14 +352,19 @@ export async function checkAndRefreshOAuth(
         clientId: string;
         clientSecret?: string;
         redirectUri: string;
+        /**
+         * Refresh whatever the stated expiry says: the resource server has
+         * already refused the access token (revoked, or rotated elsewhere).
+         */
+        force?: boolean;
     },
 ) {
-    const { tokens, clientId, clientSecret, redirectUri } = params;
+    const { tokens, clientId, clientSecret, redirectUri, force } = params;
 
     const now = Date.now();
     const { expiresAt, refreshToken } = tokens;
 
-    if (expiresAt < now + 5 * 60 * 1000 && refreshToken) {
+    if ((force || expiresAt < now + 5 * 60 * 1000) && refreshToken) {
         const body = new URLSearchParams({
             grant_type: 'refresh_token',
             client_id: clientId,

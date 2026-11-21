@@ -26,8 +26,18 @@ import {
 import { MCPIntegrationUniqueFields } from './interfaces/mcp-integration.interface';
 import { ManagedTokenCredential } from './managed-credential.types';
 import { renderTokenAuthHeaders } from './managed-auth-header';
+import { credentialFingerprint } from '@libs/mcp-server/credential-fingerprint';
 
 const MANAGED_TOKEN_KIND = 'managed-token';
+
+/**
+ * What a refused credential led to: `stale` (an older credential, nothing
+ * done), `token_rejected` (the stored static token is refused), `grant_lost`
+ * (OAuth grant INACTIVE), `refreshed` (a new access token is stored), `kept`
+ * (the refresh failed for a reason that says nothing about the grant).
+ */
+export type RejectedCredentialOutcome =
+    'stale' | 'token_rejected' | 'grant_lost' | 'refreshed' | 'kept';
 
 type IntegrationOAuthState = Partial<
     MCPIntegrationUniqueFields<MCPIntegrationAuthType.OAUTH2>
@@ -153,8 +163,10 @@ export class IntegrationOAuthService {
         organizationId: string;
         integrationId: string;
         oauthState: IntegrationOAuthState;
+        /** Refresh even though the stated expiry has not come. */
+        force?: boolean;
     }): Promise<IntegrationOAuthState> {
-        const { organizationId, integrationId } = params;
+        const { organizationId, integrationId, force } = params;
         let { oauthState } = params;
 
         const { tokens, clientId, clientSecret, redirectUri, asMetadata } =
@@ -192,6 +204,7 @@ export class IntegrationOAuthService {
                     clientId,
                     clientSecret,
                     redirectUri,
+                    force,
                 },
             );
 
@@ -240,6 +253,78 @@ export class IntegrationOAuthService {
             });
             return oauthState;
         }
+    }
+
+    /**
+     * The MCP server refused the credential this manager handed out, though
+     * by its stated expiry it was still good: the user or the provider
+     * revoked it, or it was rotated elsewhere. Left alone, every review sends
+     * it again and fails the same way, and the UI never asks to reconnect.
+     *
+     * `rejectedFingerprint` names the credential the caller sent
+     * (credentialFingerprint over its auth headers). When what is stored now
+     * is a different credential — refreshed or reconnected in between — the
+     * refusal was about an older one and nothing changes.
+     *
+     * - a static token: refused for good, the user must enter a new one;
+     * - OAuth: refreshed now; refused, or nothing to refresh with, and the
+     *   grant is lost (INACTIVE, tokens dropped) until the user connects again;
+     * - a refresh that fails for another reason (network, 5xx) keeps the grant.
+     */
+    async handleRejectedCredential(
+        organizationId: string,
+        integrationId: string,
+        rejectedFingerprint: string,
+    ): Promise<RejectedCredentialOutcome> {
+        const credential = await this.getManagedCredential(
+            organizationId,
+            integrationId,
+        );
+        if (credential) {
+            return credentialFingerprint(renderTokenAuthHeaders(credential)) ===
+                rejectedFingerprint
+                ? 'token_rejected'
+                : 'stale';
+        }
+
+        const oauthState = await this.getOAuthState(
+            organizationId,
+            integrationId,
+        );
+        const current = oauthState?.tokens as TokenData | undefined;
+        if (!oauthState || !current?.accessToken) return 'stale';
+        if (
+            credentialFingerprint({
+                Authorization: `Bearer ${current.accessToken}`,
+            }) !== rejectedFingerprint
+        ) {
+            return 'stale';
+        }
+
+        const canRefresh =
+            !!current.refreshToken &&
+            !!oauthState.asMetadata?.token_endpoint &&
+            !!oauthState.redirectUri &&
+            !!oauthState.clientId;
+        if (!canRefresh) {
+            await this.markGrantLost(
+                organizationId,
+                integrationId,
+                oauthState,
+                'the MCP server refused the access token and there is no refresh token',
+            );
+            return 'grant_lost';
+        }
+
+        const after = await this.refreshOAuthStateIfNeeded({
+            organizationId,
+            integrationId,
+            oauthState,
+            force: true,
+        });
+        const next = after.tokens as TokenData | undefined;
+        if (!next?.accessToken) return 'grant_lost';
+        return next.accessToken === current.accessToken ? 'kept' : 'refreshed';
     }
 
     /**
