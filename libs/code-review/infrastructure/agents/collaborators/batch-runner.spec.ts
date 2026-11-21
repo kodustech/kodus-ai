@@ -79,6 +79,36 @@ describe('runChunkedReview — #2171', () => {
         expect(runBatch).toHaveBeenCalledTimes(2);
     });
 
+    it('hands no batch the parent’s file tiers (#2205)', async () => {
+        const runBatch = jest.fn(async (_: ReviewAgentInput) => batchResult());
+        await runChunkedReview(
+            {
+                ...makeInput(),
+                fileTiers: new Map([
+                    ['src/a.ts', 'critical'],
+                    ['src/b.ts', 'optional'],
+                ]),
+            },
+            {
+                identity: {
+                    name: 'agent',
+                    description: 'd',
+                    goal: 'g',
+                    expertise: [],
+                },
+                agentCategory: 'bug',
+                startTime: Date.now(),
+                diffBudget: 3_000,
+                runBatch,
+                logger: { log: jest.fn(), error: jest.fn() },
+            },
+        );
+        expect(runBatch).toHaveBeenCalledTimes(2);
+        for (const [batchInput] of runBatch.mock.calls) {
+            expect(batchInput.fileTiers).toBeUndefined();
+        }
+    });
+
     it('is incomplete when any batch ended without finishing', async () => {
         const out = await run([
             batchResult(),

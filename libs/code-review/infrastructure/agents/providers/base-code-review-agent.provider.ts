@@ -526,6 +526,7 @@ export abstract class BaseCodeReviewAgentProvider {
                         reviewMode: input.reviewMode,
                     },
                 });
+                estimatedPromptTokens = filteredTokens;
 
                 if (adaptiveProfile.lowSignalFilterUnconditional) {
                     emitWarning(
@@ -553,16 +554,13 @@ export abstract class BaseCodeReviewAgentProvider {
                 input.callGraphJson,
             );
             fileTiers = assignFileTiers(scores);
-            // Adaptive fit (`minimal`): force every file to `optional`
-            // so the user prompt renders hunk-headers only (cutting
-            // ~80–90% of diff chars). The agent must readFile each hunk
-            // it cares about — slower per-finding but the only way to
-            // squeeze a multi-file PR into an 8K–16K window.
+            // Adaptive fit (`minimal`): every file is `optional` for the
+            // coverage gate. The prompt still sends full diffs; sending
+            // optional files as hunk headers is #2652.
             if (adaptiveProfile.allOptional) {
                 for (const filename of fileTiers.keys()) {
                     fileTiers.set(filename, 'optional');
                 }
-                emitWarning('HUNK_HEADERS_ONLY');
             }
 
             let criticalCount = 0;
@@ -593,13 +591,10 @@ export abstract class BaseCodeReviewAgentProvider {
                     reviewMode: input.reviewMode,
                 },
             });
-            // Stash so buildUserPrompt and formatDiffs can render tiered
-            // output without recomputing scores.
+            // Feeds the coverage list and the completion gate. Diffs are
+            // sent whole whatever the tier (#2652), so the estimate above
+            // must not discount optional files.
             input = { ...input, fileTiers };
-            // Re-estimate prompt tokens now that optional files will be
-            // rendered as hunk headers only — this often brings a large
-            // PR back under the single-batch budget.
-            estimatedPromptTokens = estimatePromptTokens(input);
         }
 
         if (
@@ -676,8 +671,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     startTime,
                     diffBudget: chunkDiffBudget,
                     // Parent-level warnings emitted before the chunk split
-                    // (PROMPT_COMPACTED, DIFF_TRUNCATED, LOW_SIGNAL_FILES_DROPPED,
-                    // HUNK_HEADERS_ONLY) — forward so they're preserved in the
+                    // (PROMPT_COMPACTED, DIFF_TRUNCATED, LOW_SIGNAL_FILES_DROPPED)
+                    // — forward so they're preserved in the
                     // final aggregate. Each per-batch execute() resolves the
                     // profile again and may emit additional dedup-able copies;
                     // dedupReviewWarnings in the orchestrator folds them.

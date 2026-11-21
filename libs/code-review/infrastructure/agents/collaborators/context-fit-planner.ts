@@ -12,7 +12,6 @@ import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
-import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 
 /** Rough token estimate: 1 token ≈ 4 characters */
 /**
@@ -100,7 +99,17 @@ export function assertContextWindowFitsOverhead(params: {
 }): void {
     const overheadTokens = estimateNonDiffOverheadTokens(params.input);
 
-    if (overheadTokens >= params.contextWindow) {
+    // On a small window, overhead past the prompt budget leaves no room
+    // for a batch's diff and the answer: every batch would overflow. A
+    // full-size window keeps the whole window as the limit, so a huge
+    // callGraph still runs as one batch.
+    const smallWindow =
+        !!params.input.adaptiveProfile &&
+        params.input.adaptiveProfile.kind !== 'full';
+    const limit = smallWindow
+        ? Math.floor(params.contextWindow * PROMPT_BUDGET_RATIO)
+        : params.contextWindow;
+    if (overheadTokens >= limit) {
         throw new AgentContextWindowTooSmallError({
             contextWindow: params.contextWindow,
             overheadTokens,
@@ -167,24 +176,14 @@ export function estimatePromptTokens(input: {
     callGraph?: string;
     prTitle?: string;
     prBody?: string;
-    fileTiers?: Map<string, CoverageTier>;
     adaptiveProfile?: AdaptiveProfile;
 }): number {
-    const tiers = input.fileTiers;
-    const diffChars = (input.changedFiles || []).reduce((sum, f) => {
-        const diff = f.patchWithLinesStr ?? f.patch ?? '';
-        if (tiers) {
-            const tier = tiers.get(normalizeFilenameForTier(f.filename));
-            if (tier === 'optional') {
-                // Optional files are rendered as hunk headers only,
-                // so their prompt footprint collapses to the hunk count
-                // plus the filename header (~60 chars per hunk + ~120
-                // for the file header).
-                return sum + estimateHunkHeaderChars(diff);
-            }
-        }
-        return sum + diff.length;
-    }, 0);
+    // Every file is counted at its full diff because every prompt builder
+    // sends it whole, whatever its tier.
+    const diffChars = (input.changedFiles || []).reduce(
+        (sum, f) => sum + (f.patchWithLinesStr ?? f.patch ?? '').length,
+        0,
+    );
     const diffTokens = Math.ceil(diffChars / CHARS_PER_TOKEN);
     return diffTokens + estimateNonDiffOverheadTokens(input);
 }
@@ -194,19 +193,6 @@ export function normalizeFilenameForTier(filename?: string): string {
         return '';
     }
     return filename.replace(/^\/+/, '').replace(/\\/g, '/').trim();
-}
-
-export function estimateHunkHeaderChars(diff: string): number {
-    if (!diff) {
-        return 0;
-    }
-    let hunkCount = 0;
-    for (const line of diff.split('\n')) {
-        if (line.startsWith('@@ ')) {
-            hunkCount++;
-        }
-    }
-    return 120 + hunkCount * 60; // file header + per-hunk line
 }
 
 export function extractHunkHeaders(diff: string): string[] {
