@@ -1306,6 +1306,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                               oldConfig.reviewMode === 'ultra'
                                   ? oldConfig.reviewMode
                                   : ('balanced' as const),
+                          ...(oldConfig.reviewMode === 'ultra' && {
+                              riskFound: 'ultra' as const,
+                          }),
                       },
                   }
                 : oldConfig;
