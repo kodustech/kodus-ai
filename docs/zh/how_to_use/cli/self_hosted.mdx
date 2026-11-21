@@ -39,7 +39,7 @@ description: "将 Kodus CLI 连接到您的自托管 Kodus 实例。"
         运行 `kodus auth team-key` 时 CLI 会自动创建此文件，并保留其中已有的 `apiUrl`。您也可以手动创建。
 
         <Warning>
-          `kodus auth login` 和 `kodus auth logout` 会删除此文件，包括 `apiUrl`。如果您使用登录方式，请改用环境变量。
+          `kodus auth login` 和 `kodus auth logout` 可能删除此文件，包括 API URL 和 Cloudflare Access 设置。请设置环境变量 `KODUS_API_URL`。如果您的 API 使用 Cloudflare Access，请同时设置 `CF_ACCESS_CLIENT_ID` 和 `CF_ACCESS_CLIENT_SECRET`。
         </Warning>
       </Tab>
       <Tab title="内联（一次性）">

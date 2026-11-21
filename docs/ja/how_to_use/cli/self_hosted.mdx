@@ -39,7 +39,7 @@ description: "Kodus CLI をセルフホスト型の Kodus インスタンスに�
         CLI は `kodus auth team-key` を実行したときにこのファイルを自動的に作成し、すでに含まれている `apiUrl` はそのまま保持します。手動で作成することもできます。
 
         <Warning>
-          `kodus auth login` と `kodus auth logout` は、`apiUrl` を含めてこのファイルを削除します。ログインでサインインする場合は、代わりに環境変数を使用してください。
+          `kodus auth login` と `kodus auth logout` は、API URL と Cloudflare Access の設定を含むこのファイルを削除することがあります。環境変数 `KODUS_API_URL` を設定してください。API が Cloudflare Access を使う場合は、`CF_ACCESS_CLIENT_ID` と `CF_ACCESS_CLIENT_SECRET` も設定してください。
         </Warning>
       </Tab>
       <Tab title="インライン（一回限り）">

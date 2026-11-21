@@ -30,7 +30,7 @@ A custom agent is a reviewer your team writes for one concern: architecture boun
 
 Agents run beside Kody's own review. Each one reports only its own focus, and its comments carry a tag with its name, so the team knows who is speaking.
 
-Under **Run automatically**, choose **Every matching PR** or **When risk is found**. The latter runs only after [Risk assessment](/en/how_to_use/code_review/configs/risk) confirms a risk on the pull request: with assessment off or unavailable, the agent does not run on its own, so turn assessment on first. Every agent also receives the risk result as context. An explicit `@kody -v <agent>` ignores this condition while keeping the agent's files, permissions and plan checks. An agent-only run never approves the PR.
+Under **Run automatically**, choose **Every matching PR** or **When risk is found**. The latter runs only after [Risk assessment](/en/how_to_use/code_review/configs/risk) confirms a risk on the pull request. Choose **Every matching PR** if the agent should also run when assessment is off or unavailable. Every agent also receives the risk result as context. An explicit `@kody -v <agent>` ignores this condition while keeping the agent's files, permissions and plan checks. An agent-only run never approves the PR.
 
 Free keeps saved agents, skills and docs. Agents run again after an upgrade.
 

@@ -39,7 +39,7 @@ If you're running Kodus on your own infrastructure, the CLI works the same way â
         The CLI creates this file automatically when you run `kodus auth team-key`, and keeps an `apiUrl` that is already in it. You can also create it manually.
 
         <Warning>
-          `kodus auth login` and `kodus auth logout` delete this file, including `apiUrl`. If you sign in with a login, use the environment variable instead.
+          `kodus auth login` and `kodus auth logout` can delete this file, including the API URL and Cloudflare Access settings. Set `KODUS_API_URL` in your environment. If your API uses Cloudflare Access, also set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`.
         </Warning>
       </Tab>
       <Tab title="Inline (One-off)">

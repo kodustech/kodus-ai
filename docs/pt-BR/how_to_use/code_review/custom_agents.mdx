@@ -30,7 +30,7 @@ Um agente personalizado é um revisor que o seu time escreve para um assunto só
 
 Os agentes rodam ao lado da revisão da própria Kody. Cada um reporta só o seu foco, e os comentários dele levam uma tag com o nome do agente, para o time saber quem está falando.
 
-Em **Run automatically**, escolha **Every matching PR** ou **When risk is found**. A segunda só roda depois que a [avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) confirma um risco no pull request: com a avaliação desativada ou indisponível, o agente não roda sozinho, então ative a avaliação primeiro. Todo agente também recebe o resultado de risco como contexto. Um `@kody -v <agent>` explícito ignora essa condição, mantendo os arquivos, as permissões e as verificações de plano do agente. Uma execução só de agente nunca aprova o PR.
+Em **Run automatically**, escolha **Every matching PR** ou **When risk is found**. A segunda só roda depois que a [avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) confirma um risco no pull request. Escolha **Every matching PR** se o agente também deve rodar quando a avaliação estiver desativada ou indisponível. Todo agente também recebe o resultado de risco como contexto. Um `@kody -v <agent>` explícito ignora essa condição, mantendo os arquivos, as permissões e as verificações de plano do agente. Uma execução só de agente nunca aprova o PR.
 
 No Free, os agentes, skills e docs salvos são mantidos. Os agentes voltam a rodar após o upgrade.
 

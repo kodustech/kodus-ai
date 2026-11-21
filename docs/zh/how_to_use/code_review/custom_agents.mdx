@@ -30,7 +30,7 @@ import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
 智能体与 Kody 自己的审查并行运行。每个智能体只报告自己关注的内容,它的评论带有一个写着其名称的标签,团队可以知道是谁在说话。
 
-在 **Run automatically** 下,选择 **Every matching PR** 或 **When risk is found**。后者只有在[风险评估](/zh/how_to_use/code_review/configs/risk)确认拉取请求存在风险之后才会运行:评估关闭或不可用时,智能体不会自行运行,因此请先开启评估。每个智能体还会将风险结果作为上下文接收。显式的 `@kody -v <agent>` 会忽略此条件,同时保留智能体的文件、权限和套餐检查。仅由智能体运行的审查永远不会批准 PR。
+在 **Run automatically** 下,选择 **Every matching PR** 或 **When risk is found**。后者只有在[风险评估](/zh/how_to_use/code_review/configs/risk)确认拉取请求存在风险之后才会运行。如果希望智能体在评估关闭或不可用时也运行，请选择 **Every matching PR**。每个智能体还会将风险结果作为上下文接收。显式的 `@kody -v <agent>` 会忽略此条件,同时保留智能体的文件、权限和套餐检查。仅由智能体运行的审查永远不会批准 PR。
 
 在 Free 套餐中，已保存的智能体、技能和文档会保留。升级后，智能体会恢复运行。
 
