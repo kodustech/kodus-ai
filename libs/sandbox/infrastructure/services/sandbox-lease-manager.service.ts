@@ -14,9 +14,11 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SandboxRunOptions,
+    SandboxUsage,
     SANDBOX_PROVIDER_TOKEN,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
@@ -177,6 +179,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      */
     private readonly leaseIdToPrKey = new Map<string, string>();
 
+    /** How each held lease used its sandbox, until its release (see trackUse). */
+    private readonly leaseIdToUse = new Map<string, SandboxUsage>();
+
     /**
      * Fails sandbox creation fast while the infrastructure is degraded —
      * see SandboxCreateCircuitBreaker. Per process, like leaseIdToPrKey.
@@ -272,7 +277,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 );
                 if (slot)
                     this.leaseIdToSlot.set(result.leaseId, { prKey, slot });
-                return result;
+                return {
+                    ...result,
+                    sandbox: this.trackUse(
+                        result.sandbox,
+                        result.leaseId,
+                        consumer,
+                    ),
+                };
             } catch (err) {
                 if (slot) this.dropSlot(prKey, slot);
                 throw err;
@@ -563,7 +575,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * provider keeps `lifecycle: { onTimeout: 'pause' }`, so even if Mongo
      * is briefly unavailable for the cron, E2B itself pauses the sandbox
      * at the same idleMs window — billing stops; the reaper TTL pass picks
-     * up the orphaned doc later.
+     * up the orphaned doc later. That call is fired, not awaited, so a
+     * release costs the Mongo writes only.
      *
      * Callers choose `idleMs` based on the flow: review uses 30s because
      * @kody arrives within seconds or much later; conversation uses the
@@ -591,10 +604,27 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         const updated = await this.leaseRepo.decrementLease(prKey);
         this.leaseIdToPrKey.delete(leaseId);
 
+        const use = this.leaseIdToUse.get(leaseId);
+        this.leaseIdToUse.delete(leaseId);
+        if (use) use.releasedAt = new Date();
+
         this.logger.log({
             message: `SandboxLeaseManager: released leaseId="${leaseId}" prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
             context: SandboxLeaseManager.name,
-            metadata: { leaseId, prKey, leaseCount: updated?.leaseCount },
+            metadata: {
+                leaseId,
+                prKey,
+                leaseCount: updated?.leaseCount,
+                consumer: use?.consumer,
+                heldMs: use ? Date.now() - use.acquiredAt.getTime() : undefined,
+                // Both unset when the holder never ran a command on the sandbox
+                acquireToFirstUseMs: use?.firstUsedAt
+                    ? use.firstUsedAt.getTime() - use.acquiredAt.getTime()
+                    : undefined,
+                lastUseToReleaseMs: use?.lastUsedAt
+                    ? Date.now() - use.lastUsedAt.getTime()
+                    : undefined,
+            },
         });
 
         if (updated && updated.leaseCount <= 0 && updated.sandboxId) {
@@ -608,6 +638,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 if (claimed) {
                     try {
                         await deleteLocalSandbox(updated.sandboxId);
+                        if (use) use.stopAt = new Date();
                         await this.leaseRepo.completeCleanup(
                             prKey,
                             updated.sandboxId,
@@ -644,6 +675,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             const idleMs = opts?.idleMs ?? IDLE_TIMEOUT_MS;
             const killAt = new Date(Date.now() + idleMs);
             await this.leaseRepo.setKillAt(prKey, killAt);
+            if (use) use.stopAt = killAt;
 
             this.logger.log({
                 message: `SandboxLeaseManager: scheduled idle-kill at ${killAt.toISOString()} for sandboxId="${updated.sandboxId}"`,
@@ -656,19 +688,20 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 },
             });
 
+            // Not awaited: the lease is already released, and a review that
+            // releases before publishing must not wait on E2B (60s request
+            // timeout) to post its comments (#2628).
             const apiKey = this.configService.get<string>('API_E2B_KEY');
+            const sandboxId = updated.sandboxId;
             if (apiKey) {
-                try {
-                    await Sandbox.setTimeout(updated.sandboxId, idleMs, {
-                        apiKey,
-                    });
-                } catch (err) {
-                    this.logger.warn({
-                        message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${updated.sandboxId}" (kill cron is the primary path)`,
-                        context: SandboxLeaseManager.name,
-                        error: err,
-                    });
-                }
+                void Sandbox.setTimeout(sandboxId, idleMs, { apiKey }).catch(
+                    (err) =>
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${sandboxId}" (kill cron is the primary path)`,
+                            context: SandboxLeaseManager.name,
+                            error: err,
+                        }),
+                );
             }
         }
     }
@@ -1334,6 +1367,60 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         });
 
         return { sandbox, leaseId, sandboxId, wasCreated: false };
+    }
+
+    /**
+     * Stamp the commands the lease's holder runs on its sandbox: when the
+     * first one starts and when the last one settles. A release can then
+     * tell how long the sandbox stayed held before its first use and after
+     * its last (#2628). The null sandbox runs nothing and is handed out as it
+     * is.
+     */
+    private trackUse(
+        sandbox: SandboxInstance,
+        leaseId: string,
+        consumer: string,
+    ): SandboxInstance {
+        if (sandbox.type === 'null') return sandbox;
+
+        const use: SandboxUsage = { consumer, acquiredAt: new Date() };
+        this.leaseIdToUse.set(leaseId, use);
+
+        const stamped =
+            <A extends unknown[], R>(command: (...args: A) => Promise<R>) =>
+            async (...args: A): Promise<R> => {
+                use.firstUsedAt ??= new Date();
+                try {
+                    return await command(...args);
+                } finally {
+                    use.lastUsedAt = new Date();
+                }
+            };
+
+        // Every repository tool is one of these, so each one is stamped,
+        // including a tool added later. Callers tell a missing command by its
+        // absence (`sandbox?.run`), so only the ones present are wrapped.
+        const remoteCommands =
+            sandbox.remoteCommands &&
+            (Object.fromEntries(
+                Object.entries(sandbox.remoteCommands).map(
+                    ([name, command]) => [
+                        name,
+                        typeof command === 'function'
+                            ? stamped(command)
+                            : command,
+                    ],
+                ),
+            ) as unknown as RemoteCommands);
+
+        return {
+            ...sandbox,
+            remoteCommands,
+            run: sandbox.run && stamped(sandbox.run),
+            readFile: sandbox.readFile && stamped(sandbox.readFile),
+            writeFile: sandbox.writeFile && stamped(sandbox.writeFile),
+            usage: () => ({ ...use }),
+        };
     }
 
     /**

@@ -29,12 +29,14 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
 
 /**
- * After review finishes, only keep the sandbox warm for 30 seconds. Either
- * `@kody` arrives in a hot window (likely seconds after the review comment
- * lands) — and benefits from warm-resume — or the user takes their time and
- * comes back well past the lease TTL anyway, where cold-start is unavoidable.
- * 30s strikes the balance without keeping a paused sandbox occupying an E2B
- * concurrent slot for the full default 5-min idle window.
+ * After the review's last read of the checkout, only keep the sandbox warm for
+ * 30 seconds. Either `@kody` arrives in a hot window (likely seconds after the
+ * review comment lands) — and benefits from warm-resume — or the user takes
+ * their time and comes back well past the lease TTL anyway, where cold-start
+ * is unavoidable.
+ * The sandbox keeps running, and billing, through the window, so 30s rather
+ * than the default 5 min. (A paused E2B sandbox bills no compute and holds no
+ * concurrent slot; this window is spent running, not paused.)
  */
 const REVIEW_IDLE_TIMEOUT_MS = 30_000;
 
@@ -182,13 +184,23 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 { signal: context.parentSignal },
             );
 
-            // Override cleanup so the observer's context.sandboxHandle.cleanup()
-            // releases the lease (pause) rather than killing the sandbox.
-            // 30s idle window — see REVIEW_IDLE_TIMEOUT_MS rationale.
-            sandbox.cleanup = async () => {
-                await this.leaseManager.release(leaseId, {
-                    idleMs: REVIEW_IDLE_TIMEOUT_MS,
-                });
+            // Override cleanup so it releases the lease (pause) rather than
+            // killing the sandbox. 30s idle window — see
+            // REVIEW_IDLE_TIMEOUT_MS rationale. Releases once: AgentReviewStage
+            // releases after its last read of the checkout (#2628), and the
+            // observer's call at pipeline end is the fallback for a review
+            // that never got there or whose release failed. Overlapping calls
+            // share one release and its outcome; a failed one is forgotten,
+            // so the next call releases again.
+            let release: Promise<void> | undefined;
+            sandbox.cleanup = () => {
+                release ??= this.leaseManager
+                    .release(leaseId, { idleMs: REVIEW_IDLE_TIMEOUT_MS })
+                    .catch((error) => {
+                        release = undefined;
+                        throw error;
+                    });
+                return release;
             };
 
             this.logger.log({

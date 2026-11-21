@@ -323,6 +323,40 @@ describe('CodeReviewPipelineObserver', () => {
         );
     });
 
+    // With the pipeline end, it measures how long the checkout stays held
+    // after its last read (#2628).
+    it("records the sandbox's use on the AgentReviewStage log", async () => {
+        const usage = {
+            consumer: 'review',
+            acquiredAt: new Date('2026-11-21T10:00:00Z'),
+            firstUsedAt: new Date('2026-11-21T10:00:20Z'),
+            lastUsedAt: new Date('2026-11-21T10:03:00Z'),
+            releasedAt: new Date('2026-11-21T10:03:05Z'),
+            stopAt: new Date('2026-11-21T10:03:35Z'),
+        };
+        context.sandboxHandle = { usage: () => usage } as any;
+
+        await observer.onStageStart(
+            'AgentReviewStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+        await observer.onStageFinish(
+            'AgentReviewStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(
+            mockAutomationExecutionService.updateStageLog,
+        ).toHaveBeenCalledWith(
+            'stage-log-uuid',
+            expect.objectContaining({
+                metadata: expect.objectContaining({ sandboxUsage: usage }),
+            }),
+        );
+    });
+
     it('should fallback to creating new log on finish if log ID missing in map', async () => {
         // We do NOT call onStageStart, so the map is empty
 

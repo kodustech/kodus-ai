@@ -59,7 +59,10 @@ import {
     REJECTED_FIX_STATUS,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import {
+    OrchestratorOutput,
+    ReviewOrchestratorService,
+} from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
 import {
     SPECIALISTS_STAGE_NAME,
@@ -803,6 +806,31 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         });
     }
 
+    /**
+     * Give the review's sandbox lease back once the orchestrator returns: it
+     * is the review's last reader of the checkout, and everything after it
+     * reads the diff the platform returned (#2628). Another holder of the
+     * PR's sandbox, such as a `@kody` reply, keeps it running.
+     */
+    private async releaseSandbox(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        try {
+            await context.sandboxHandle?.cleanup?.();
+        } catch (error) {
+            this.logger.warn({
+                message: `[AGENT] Could not release the sandbox for PR#${context.pullRequest?.number}; the pipeline end retries`,
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
+    }
+
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
@@ -1074,31 +1102,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 changedFiles,
             );
             stageWarnings.push(...reviewKnowledge.warnings);
-            const result = await this.reviewOrchestrator.execute({
-                ...buildOrchestratorInput(context, {
-                    changedFiles,
-                    prNumber,
-                    repositoryId,
-                    reviewOptions,
-                    onAgentProgress,
-                    gitHubToken: await this.resolveGitHubToken(context),
-                    callGraph,
-                    adaptiveProfile,
-                    kodyRules: await this.prepareKodyRulesForReview(context),
-                    linkedRepoAccess,
-                    repoInstructions,
-                }),
-                customAgents,
-                onlyCustomAgent: context.onlyCustomAgent,
-                ignoredChangedFiles,
-                knowledgeByTarget: reviewKnowledge.byTarget,
-                knowledgeReader: reviewKnowledge.reader,
-                customAgentTooling: {
-                    sandbox: context.sandboxHandle,
-                    installedClis: context.customAgentClis?.byAgentId,
-                    onCliRun: (run) => cliRuns.push(run),
-                },
-            });
+            let result: OrchestratorOutput;
+            try {
+                result = await this.reviewOrchestrator.execute({
+                    ...buildOrchestratorInput(context, {
+                        changedFiles,
+                        prNumber,
+                        repositoryId,
+                        reviewOptions,
+                        onAgentProgress,
+                        gitHubToken: await this.resolveGitHubToken(context),
+                        callGraph,
+                        adaptiveProfile,
+                        kodyRules:
+                            await this.prepareKodyRulesForReview(context),
+                        linkedRepoAccess,
+                        repoInstructions,
+                    }),
+                    customAgents,
+                    onlyCustomAgent: context.onlyCustomAgent,
+                    ignoredChangedFiles,
+                    knowledgeByTarget: reviewKnowledge.byTarget,
+                    knowledgeReader: reviewKnowledge.reader,
+                    customAgentTooling: {
+                        sandbox: context.sandboxHandle,
+                        installedClis: context.customAgentClis?.byAgentId,
+                        onCliRun: (run) => cliRuns.push(run),
+                    },
+                });
+            } finally {
+                await this.releaseSandbox(context);
+            }
 
             // Snapshot linked-repo metadata after the review so clone status
             // (ready/failed) reflects what the agent actually used. When the
