@@ -1,5 +1,6 @@
 import { extractProviderMessage } from './review-error-diagnostics';
 import { AgentContextWindowTooSmallError } from './errors';
+import { isRoutingRefusal } from './routing-refusal';
 
 /**
  * Canonical categories for LLM/provider errors surfaced when calling a model.
@@ -137,18 +138,14 @@ export function classifyLLMError(
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
-    // Last, so a 400 that says "context length", "invalid api key" or "quota"
-    // keeps the category its wording names.
     // A gateway that refuses to route a valid model (allowed providers, a
     // region pin) answers 400 or 404 as it likes; the body is the same
     // finding either way, and the fix is the routing, not the request.
-    if (
-        isRoutingRefusal(lower) &&
-        (category === LlmErrorCategory.UNKNOWN ||
-            category === LlmErrorCategory.REQUEST_REJECTED)
-    ) {
+    if (isRoutingRefusal(lower) && category === LlmErrorCategory.UNKNOWN) {
         category = LlmErrorCategory.MODEL_NOT_FOUND;
     }
+    // Last, so a 400 that says "context length", "invalid api key" or "quota"
+    // keeps the category its wording names.
     if (
         category === LlmErrorCategory.UNKNOWN &&
         (httpStatus === 400 || httpStatus === 422)
@@ -343,8 +340,11 @@ function matchByHttpStatus(
 ): LlmErrorCategory {
     if (status === undefined) return LlmErrorCategory.UNKNOWN;
     // OpenRouter answers a key that spent its monthly cap with a 403: the key
-    // is fine, and "check the key" sent the customer the wrong way.
-    if (status === 403 && looksLikeQuota(lowerMessage)) {
+    // is fine, and "check the key" sent the customer the wrong way. A 403 is
+    // an auth refusal first, so only wording that names a limit or a cap
+    // counts, not the 429 vocabulary ("billing", "credit"), which an auth
+    // refusal can carry when its body echoes the request.
+    if (status === 403 && namesASpentCap(lowerMessage)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
     }
     if (status === 401 || status === 403) {
@@ -410,6 +410,13 @@ function matchByHttpStatus(
  * BOTH directions -- the wording it must catch, and the neighbouring
  * temporary wording it must leave on RATE_LIMIT.
  */
+/** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */
+function namesASpentCap(lower: string): boolean {
+    return /\b(?:key|usage|spend(?:ing)?|credit|monthly|weekly|daily|quota)[-\s](?:limit|cap)s?\b/.test(
+        lower,
+    );
+}
+
 function looksLikeQuota(lower: string): boolean {
     // A per-minute quota is a rate limit that clears on its own, not a spent
     // balance. Google words both as "You exceeded your current quota"; only the
@@ -577,19 +584,6 @@ function matchByMessage(lower: string): LlmErrorCategory {
  * it. The status is identical to "no such model"; only the body distinguishes
  * them, so the body is what has to be read.
  */
-function isRoutingRefusal(providerText?: string): boolean {
-    const said = (providerText ?? '').toLowerCase();
-    if (!said) return false;
-    return (
-        said.includes('allowed-providers') ||
-        said.includes('allowed providers') ||
-        (said.includes('no allowed') && said.includes('provider')) ||
-        // Vercel AI Gateway with Region Pinning: "No provider for <model> can
-        // serve any of the team's pinned inference regions (eu)".
-        said.includes('pinned inference region')
-    );
-}
-
 function buildFriendlyMessage(
     category: LlmErrorCategory,
     provider?: string,

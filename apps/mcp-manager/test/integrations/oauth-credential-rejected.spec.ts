@@ -20,6 +20,12 @@ jest.mock('axios');
 // stated an expiry — was handed out again on every review.
 class FakeRepo {
     rows: any[] = [];
+    private nextId = 1;
+    // The refresh lock is a Postgres advisory lock; one process needs none.
+    manager = {
+        transaction: async (work: (m: any) => Promise<unknown>) =>
+            work({ query: async () => [] }),
+    };
     async findOne({ where }: { where: any }) {
         return (
             this.rows.find(
@@ -30,7 +36,16 @@ class FakeRepo {
         );
     }
     create(obj: any) {
-        return { ...obj };
+        return { id: `row-${this.nextId++}`, ...obj };
+    }
+    // Like UPDATE … WHERE: every criterion must still hold.
+    async update(criteria: any, partial: any) {
+        const row = this.rows.find((r) =>
+            Object.entries(criteria).every(([k, v]) => r[k] === v),
+        );
+        if (!row) return { affected: 0 };
+        Object.assign(row, partial);
+        return { affected: 1 };
     }
     async save(entity: any) {
         const idx = this.rows.findIndex(

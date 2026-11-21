@@ -57,14 +57,14 @@ describe('MCPRegistry.register — a refused credential', () => {
 
     it('still fails the registration when the report itself throws', async () => {
         connect.mockRejectedValue(new HttpError(401, 'Unauthorized'));
+        const onCredentialRejected = jest.fn(() => {
+            throw new Error('report failed');
+        });
 
         await expect(
-            new MCPRegistry().register(
-                linear(() => {
-                    throw new Error('report failed');
-                }),
-            ),
+            new MCPRegistry().register(linear(onCredentialRejected)),
         ).rejects.toThrow('Unauthorized');
+        expect(onCredentialRejected).toHaveBeenCalledTimes(1);
     });
 });
 

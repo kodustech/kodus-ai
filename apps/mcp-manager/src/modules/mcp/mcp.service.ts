@@ -627,22 +627,13 @@ export class McpService {
                 fingerprint,
             );
 
-        if (outcome === 'grant_lost') {
+        // Both leave the stored credential INACTIVE; the expiry re-checks that
+        // in its own statement, so a reconnect in between stays ACTIVE.
+        if (outcome === 'grant_lost' || outcome === 'token_rejected') {
             await this.expireConnectionOfLostGrant(
                 organizationId,
                 integrationId,
             );
-        } else if (outcome === 'token_rejected') {
-            await this.connectionRepository
-                .createQueryBuilder()
-                .update()
-                .set({ status: MCPConnectionStatus.EXPIRED })
-                .where('"organizationId" = :organizationId', { organizationId })
-                .andWhere('"integrationId" = :integrationId', { integrationId })
-                .andWhere('"status" = :active', {
-                    active: MCPConnectionStatus.ACTIVE,
-                })
-                .execute();
         }
 
         this.logger.warn(
@@ -653,8 +644,9 @@ export class McpService {
     }
 
     /**
-     * Expire the connection only while its grant is still INACTIVE, in the same
-     * statement: a reconnect that saved an ACTIVE grant in between must not be
+     * Expire the connection only while its stored credential (OAuth grant or
+     * refused static token) is still INACTIVE, in the same statement: a
+     * reconnect that saved an ACTIVE credential in between must not be
      * overwritten with EXPIRED.
      */
     private async expireConnectionOfLostGrant(

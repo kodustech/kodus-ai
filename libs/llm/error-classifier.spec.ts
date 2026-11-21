@@ -649,6 +649,21 @@ describe('classifyLLMError', () => {
             ).toBe(LlmErrorCategory.AUTH_INVALID);
         });
 
+        // The 429 vocabulary is wider than a 403 can bear: an auth refusal
+        // that echoes the request may carry "billing" or "credit" for an
+        // unrelated reason, and QUOTA_EXCEEDED would drop the key fix.
+        it.each([
+            'Forbidden: this key cannot access the billing endpoint',
+            'permission_error: the credit report scope is not granted to this key',
+        ])(
+            'keeps a 403 auth refusal that only mentions billing words on AUTH_INVALID (%s)',
+            (message) => {
+                expect(classifyLLMError(apiError(403, message)).category).toBe(
+                    LlmErrorCategory.AUTH_INVALID,
+                );
+            },
+        );
+
         it.each([
             [
                 'OpenCode Go weekly cap',

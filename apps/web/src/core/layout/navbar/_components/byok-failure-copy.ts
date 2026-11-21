@@ -1,3 +1,5 @@
+import { isRoutingRefusal } from "@libs/llm/routing-refusal";
+
 /**
  * Title and body of the "BYOK model is failing" banner.
  *
@@ -68,19 +70,4 @@ export function byokFailureCopy(
                 body: `${provider} returned errors on recent requests. Its latest answer is in the details below. ${tail}`,
             };
     }
-}
-
-/**
- * Mirror of `isRoutingRefusal` in libs/llm/error-classifier.ts — a copy on
- * purpose: importing a value from `@libs/*` breaks the isolated web build.
- */
-function isRoutingRefusal(providerMessage?: string): boolean {
-    const said = (providerMessage ?? "").toLowerCase();
-    if (!said) return false;
-    return (
-        said.includes("allowed-providers") ||
-        said.includes("allowed providers") ||
-        (said.includes("no allowed") && said.includes("provider")) ||
-        said.includes("pinned inference region")
-    );
 }
