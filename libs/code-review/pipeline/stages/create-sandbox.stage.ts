@@ -189,21 +189,18 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // REVIEW_IDLE_TIMEOUT_MS rationale. Releases once: AgentReviewStage
             // releases after its last read of the checkout (#2628), and the
             // observer's call at pipeline end is the fallback for a review
-            // that never got there or whose release failed.
-            // The flag is claimed before the await, so two overlapping calls
-            // cannot both decrement the lease.
-            let released = false;
-            sandbox.cleanup = async () => {
-                if (released) return;
-                released = true;
-                try {
-                    await this.leaseManager.release(leaseId, {
-                        idleMs: REVIEW_IDLE_TIMEOUT_MS,
+            // that never got there or whose release failed. Overlapping calls
+            // share one release and its outcome; a failed one is forgotten,
+            // so the next call releases again.
+            let release: Promise<void> | undefined;
+            sandbox.cleanup = () => {
+                release ??= this.leaseManager
+                    .release(leaseId, { idleMs: REVIEW_IDLE_TIMEOUT_MS })
+                    .catch((error) => {
+                        release = undefined;
+                        throw error;
                     });
-                } catch (error) {
-                    released = false;
-                    throw error;
-                }
+                return release;
             };
 
             this.logger.log({

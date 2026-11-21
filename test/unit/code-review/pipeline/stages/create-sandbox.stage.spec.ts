@@ -281,6 +281,26 @@ describe('CreateSandboxStage', () => {
             expect(mockLeaseManager.release).toHaveBeenCalledTimes(1);
         });
 
+        it('an overlapping cleanup sees the in-flight release fail', async () => {
+            let fail!: (error: Error) => void;
+            mockLeaseManager.release.mockReturnValueOnce(
+                new Promise<void>((_, reject) => (fail = reject)),
+            );
+            const result = await (stage as any).executeStage(
+                createBaseContext({
+                    changedFiles: [{ filename: 'test.ts' } as any],
+                }),
+            );
+
+            const first = result.sandboxHandle.cleanup();
+            const second = result.sandboxHandle.cleanup();
+            fail(new Error('mongo down'));
+
+            await expect(first).rejects.toThrow('mongo down');
+            await expect(second).rejects.toThrow('mongo down');
+            expect(mockLeaseManager.release).toHaveBeenCalledTimes(1);
+        });
+
         it('releases again at the next cleanup when the first release failed', async () => {
             mockLeaseManager.release.mockRejectedValueOnce(
                 new Error('mongo down'),
