@@ -1768,6 +1768,24 @@ describe('SandboxLeaseManager', () => {
             expect(sandbox.usage?.().lastUsedAt).toBeInstanceOf(Date);
         });
 
+        // A review releases before publishing: E2B must not hold its comments
+        it("does not wait for E2B's idle timeout to release", async () => {
+            const { leaseId } = await acquireCreated();
+            jest.spyOn(Sandbox, 'setTimeout').mockReturnValueOnce(
+                new Promise(() => {}),
+            );
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(Sandbox.setTimeout).toHaveBeenCalledWith(
+                'review-sandbox-id',
+                30_000,
+                { apiKey: 'test-e2b-key' },
+            );
+            expect(leaseRepo.setKillAt).toHaveBeenCalled();
+        });
+
         it('records no stop when another holder keeps the sandbox', async () => {
             const { sandbox, leaseId } = await acquireCreated();
 

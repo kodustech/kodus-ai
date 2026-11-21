@@ -575,7 +575,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * provider keeps `lifecycle: { onTimeout: 'pause' }`, so even if Mongo
      * is briefly unavailable for the cron, E2B itself pauses the sandbox
      * at the same idleMs window — billing stops; the reaper TTL pass picks
-     * up the orphaned doc later.
+     * up the orphaned doc later. That call is fired, not awaited, so a
+     * release costs the Mongo writes only.
      *
      * Callers choose `idleMs` based on the flow: review uses 30s because
      * @kody arrives within seconds or much later; conversation uses the
@@ -687,19 +688,20 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 },
             });
 
+            // Not awaited: the lease is already released, and a review that
+            // releases before publishing must not wait on E2B (60s request
+            // timeout) to post its comments (#2628).
             const apiKey = this.configService.get<string>('API_E2B_KEY');
+            const sandboxId = updated.sandboxId;
             if (apiKey) {
-                try {
-                    await Sandbox.setTimeout(updated.sandboxId, idleMs, {
-                        apiKey,
-                    });
-                } catch (err) {
-                    this.logger.warn({
-                        message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${updated.sandboxId}" (kill cron is the primary path)`,
-                        context: SandboxLeaseManager.name,
-                        error: err,
-                    });
-                }
+                void Sandbox.setTimeout(sandboxId, idleMs, { apiKey }).catch(
+                    (err) =>
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${sandboxId}" (kill cron is the primary path)`,
+                            context: SandboxLeaseManager.name,
+                            error: err,
+                        }),
+                );
             }
         }
     }
