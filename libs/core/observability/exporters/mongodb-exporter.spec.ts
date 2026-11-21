@@ -262,3 +262,103 @@ describe('MongoDBExporter indexes', () => {
         ]);
     });
 });
+
+/**
+ * #2639: 61% of error rows stored `metadata.organizationId: "unknown"`, and
+ * ~28,600 of them carried the organization one level deeper, under
+ * `metadata.params.organizationAndTeamData`, because the code-management
+ * services log their whole `params` object (#2639).
+ */
+describe('MongoDBExporter organization attribution', () => {
+    const originalLogLevel = process.env.API_LOG_LEVEL;
+
+    beforeEach(() => {
+        process.env.API_LOG_LEVEL = 'info';
+    });
+
+    afterAll(() => {
+        process.env.API_LOG_LEVEL = originalLogLevel;
+    });
+
+    const logged = (context: Record<string, any>) => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+            bucketKeys: ['organizationId', 'teamId', 'tenantId'],
+        });
+
+        (exporter as any)._pushLog(
+            'error',
+            'Error to get default branch',
+            'BitbucketCloudService',
+            context,
+        );
+
+        return (exporter as any).logBuffer[0];
+    };
+
+    it('reads the pair nested in the params a service logs', () => {
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            message: 'Error to get default branch',
+            metadata: {
+                params: {
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-1');
+        expect(entry.metadata.teamId).toBe('team-1');
+        expect(entry.metadata.tenantId).toBe('org-1');
+    });
+
+    it('reads the pair under metadata without params', () => {
+        const entry = logged({
+            component: 'AzureReposService',
+            metadata: {
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-2');
+        expect(entry.metadata.teamId).toBe('team-2');
+    });
+
+    it('keeps the shallowest pair when a nested payload also carries one', () => {
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            organizationAndTeamData: {
+                organizationId: 'org-top',
+                teamId: 'team-top',
+            },
+            metadata: {
+                params: {
+                    organizationAndTeamData: {
+                        organizationId: 'org-nested',
+                        teamId: 'team-nested',
+                    },
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-top');
+        expect(entry.metadata.teamId).toBe('team-top');
+    });
+
+    it('still says unknown when no shape carries the pair', () => {
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            metadata: { params: { repository: { id: 'repo-1' } } },
+        });
+
+        expect(entry.metadata.organizationId).toBe('unknown');
+        expect(entry.metadata.teamId).toBe('unknown');
+    });
+});

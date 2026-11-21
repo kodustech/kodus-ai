@@ -37,6 +37,10 @@ jest.mock('@libs/core/log/logger', () => ({
         debug: jest.fn(),
         info: jest.fn(),
     }),
+    // The Mongo exporter serializes every entry through this. An identity keeps
+    // specs that exercise `_pushLog` quiet and running, without changing what
+    // they assert (sanitization itself has its own requireActual suite).
+    deepSanitize: (value: unknown) => value,
 }));
 
 // The observability/tracing subsystem was ported out of into
