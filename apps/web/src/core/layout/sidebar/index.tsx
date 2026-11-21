@@ -1262,7 +1262,7 @@ const OrganizationGroup = () => {
         },
         {
             href: "/token-usage",
-            label: "Token usage",
+            label: "Usage",
             icon: ChartColumnIcon,
             visible: canReadTokenUsage,
         },

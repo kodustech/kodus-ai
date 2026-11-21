@@ -6,11 +6,9 @@ import {
     RuntimeEmptyState,
     RuntimeErrorState,
 } from "@components/runtime/empty-state";
-import { RuntimeHeader } from "@components/runtime/runtime-header";
 import { Metric, RuntimeSection } from "@components/runtime/section";
 import { StatusChip } from "@components/runtime/status-chip";
 import { Button } from "@components/ui/button";
-import { Page } from "@components/ui/page";
 import {
     Select,
     SelectContent,
@@ -58,7 +56,7 @@ import {
     useRuntimeSettings,
     useRuntimeUsageReport,
 } from "@services/runtime/queries";
-import { ArrowLeftIcon, DownloadIcon } from "lucide-react";
+import { DownloadIcon } from "lucide-react";
 
 const ALL = "__all__";
 
@@ -133,7 +131,7 @@ const Summary = ({ report }: { report: RuntimeUsageReport }) => {
 const LlmByAgent = ({ report }: { report: RuntimeUsageReport }) => (
     <RuntimeSection
         title="LLM by agent"
-        description="Tokens and their price per agent, read from the same usage records as Token Usage. A prompt above a model's tier threshold is priced at that tier.">
+        description="Tokens and their price per agent, read from the same usage records as the LLM tokens tab. A prompt above a model's tier threshold is priced at that tier.">
         {report.llm.source === "not_measured" ? (
             <p className="text-text-secondary text-sm">
                 {NOT_MEASURED}: token usage is not readable on this deployment.
@@ -353,7 +351,11 @@ const RunsTable = ({ report }: { report: RuntimeUsageReport }) => (
     </RuntimeSection>
 );
 
-export const RuntimeUsagePage = () => {
+/**
+ * A month of Kody Runtime usage: summary, LLM by agent, machine time and Runs,
+ * with its filters and CSV export. It is the Runtime tab of the Usage screen.
+ */
+export const RuntimeUsageContent = () => {
     // GET /runtime/settings/usage is the org owner's (checkRole OWNER), the same people as Manage on RuntimeEnvironment.
     const isOwner = usePermission(
         Action.Manage,
@@ -373,106 +375,93 @@ export const RuntimeUsagePage = () => {
     const report = useRuntimeUsageReport(query, isOwner);
 
     return (
-        <Page.Root>
-            <RuntimeHeader
-                actions={isOwner ? <ExportButton query={query} /> : undefined}
-            />
-            <Page.Content>
-                <NextLink
-                    href="/runtime/settings"
-                    className="text-text-secondary flex w-fit items-center gap-1 text-sm hover:underline">
-                    <ArrowLeftIcon className="size-4" /> Settings
-                </NextLink>
-                {!isOwner ? (
-                    <RuntimeEmptyState title="Usage is for the organization's owner">
-                        Ask the owner of your organization for the Kody Runtime
-                        usage report.
-                    </RuntimeEmptyState>
-                ) : (
-                    <>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <Select value={month} onValueChange={setMonth}>
-                                <SelectTrigger
-                                    className="w-48"
-                                    aria-label="Month">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {months.map((m) => (
-                                        <SelectItem
-                                            key={m.value}
-                                            value={m.value}>
-                                            {m.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                value={repositoryId}
-                                onValueChange={setRepositoryId}>
-                                <SelectTrigger
-                                    className="w-64"
-                                    aria-label="Repository">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={ALL}>
-                                        All repositories
+        <div className="flex flex-col gap-6">
+            {!isOwner ? (
+                <RuntimeEmptyState title="Usage is for the organization's owner">
+                    Ask the owner of your organization for the Kody Runtime
+                    usage report.
+                </RuntimeEmptyState>
+            ) : (
+                <>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Select value={month} onValueChange={setMonth}>
+                            <SelectTrigger className="w-48" aria-label="Month">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {months.map((m) => (
+                                    <SelectItem key={m.value} value={m.value}>
+                                        {m.label}
                                     </SelectItem>
-                                    {(settings.data?.repositories ?? []).map(
-                                        (r) => (
-                                            <SelectItem
-                                                key={r.repositoryId}
-                                                value={r.repositoryId}>
-                                                {r.repositoryName ??
-                                                    r.repositoryId}
-                                            </SelectItem>
-                                        ),
-                                    )}
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                value={environmentId}
-                                onValueChange={setEnvironmentId}>
-                                <SelectTrigger
-                                    className="w-64"
-                                    aria-label="Environment">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={ALL}>
-                                        All environments
-                                    </SelectItem>
-                                    {(environments.data ?? []).map((e) => (
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={repositoryId}
+                            onValueChange={setRepositoryId}>
+                            <SelectTrigger
+                                className="w-64"
+                                aria-label="Repository">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={ALL}>
+                                    All repositories
+                                </SelectItem>
+                                {(settings.data?.repositories ?? []).map(
+                                    (r) => (
                                         <SelectItem
-                                            key={e.environmentId}
-                                            value={e.environmentId}>
-                                            {e.repositoryName ??
-                                                e.environmentId}
+                                            key={r.repositoryId}
+                                            value={r.repositoryId}>
+                                            {r.repositoryName ?? r.repositoryId}
                                         </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                    ),
+                                )}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={environmentId}
+                            onValueChange={setEnvironmentId}>
+                            <SelectTrigger
+                                className="w-64"
+                                aria-label="Environment">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={ALL}>
+                                    All environments
+                                </SelectItem>
+                                {(environments.data ?? []).map((e) => (
+                                    <SelectItem
+                                        key={e.environmentId}
+                                        value={e.environmentId}>
+                                        {e.repositoryName ?? e.environmentId}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <div className="ml-auto">
+                            <ExportButton query={query} />
                         </div>
-                        {report.isLoading ? (
-                            <Skeleton className="h-64 w-full" />
-                        ) : report.isError || !report.data ? (
-                            <RuntimeErrorState
-                                what="the usage report"
-                                error={report.error}
-                                onRetry={() => report.refetch()}
-                            />
-                        ) : (
-                            <>
-                                <Summary report={report.data} />
-                                <LlmByAgent report={report.data} />
-                                <MachineTime report={report.data} />
-                                <RunsTable report={report.data} />
-                            </>
-                        )}
-                    </>
-                )}
-            </Page.Content>
-        </Page.Root>
+                    </div>
+                    {report.isLoading ? (
+                        <Skeleton className="h-64 w-full" />
+                    ) : report.isError || !report.data ? (
+                        <RuntimeErrorState
+                            what="the usage report"
+                            error={report.error}
+                            onRetry={() => report.refetch()}
+                        />
+                    ) : (
+                        <>
+                            <Summary report={report.data} />
+                            <LlmByAgent report={report.data} />
+                            <MachineTime report={report.data} />
+                            <RunsTable report={report.data} />
+                        </>
+                    )}
+                </>
+            )}
+        </div>
     );
 };

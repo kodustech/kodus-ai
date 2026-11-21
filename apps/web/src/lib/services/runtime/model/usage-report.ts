@@ -125,12 +125,17 @@ export type UsageTile = { label: string; value: string; hint?: string };
 const previewTile = (r: RuntimeUsageReport): UsageTile[] => {
     const p = r.previews;
     if (!p || !p.starts) return [];
-    const opens = p.sessions === null ? undefined : `${number(p.sessions)} open${p.sessions === 1 ? "" : "s"}`;
+    const opens =
+        p.sessions === null
+            ? undefined
+            : `${number(p.sessions)} open${p.sessions === 1 ? "" : "s"}`;
     return [
         {
             label: "Previews",
             value: number(p.starts),
-            hint: [`${number(Math.round(p.heldMinutes))} machine-min`, opens].filter(Boolean).join(" · "),
+            hint: [`${number(Math.round(p.heldMinutes))} machine-min`, opens]
+                .filter(Boolean)
+                .join(" · "),
         },
     ];
 };
@@ -303,3 +308,6 @@ const TRIGGER_LABELS: Record<string, string> = {
 /** What started a Run, as the people who started it call it. */
 export const triggerLabel = (trigger: string | null) =>
     trigger ? (TRIGGER_LABELS[trigger] ?? trigger) : "—";
+
+/** Where the organization's Runtime usage lives: the Runtime tab of the Usage screen. */
+export const RUNTIME_USAGE_HREF = "/token-usage?tab=runtime";

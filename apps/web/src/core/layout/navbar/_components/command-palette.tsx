@@ -162,10 +162,10 @@ const PAGES: Array<{
         permission: { action: Action.Read, resource: ResourceType.Billing },
     },
     {
-        label: "Token usage",
+        label: "Usage",
         href: "/token-usage",
         icon: ChartColumnIcon,
-        keywords: "cost spend tokens",
+        keywords: "token usage cost spend tokens machines runtime",
         permission: { action: Action.Read, resource: ResourceType.TokenUsage },
     },
     {

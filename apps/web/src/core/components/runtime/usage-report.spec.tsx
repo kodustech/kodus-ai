@@ -17,10 +17,10 @@ import {
     within,
 } from "@testing-library/react";
 
-import { RuntimeUsagePage } from "./_page-component";
+import { RuntimeUsageContent } from "./usage-report";
 
 jest.mock("next/navigation", () => ({
-    usePathname: () => "/runtime/settings/usage",
+    usePathname: () => "/token-usage",
 }));
 jest.mock("@services/permissions/hooks", () => ({ usePermission: jest.fn() }));
 jest.mock("@services/runtime/queries", () => ({
@@ -148,18 +148,16 @@ beforeEach(() => {
         isLoading: false,
         isError: false,
     });
-    (getRuntimeUsageCsv as jest.Mock)
-        .mockReset()
-        .mockResolvedValue({
-            filename: "kody-runtime-usage-2026-11.csv",
-            text: "run_id\r\n",
-        });
+    (getRuntimeUsageCsv as jest.Mock).mockReset().mockResolvedValue({
+        filename: "kody-runtime-usage-2026-11.csv",
+        text: "run_id\r\n",
+    });
 });
 
-describe("the Runtime usage screen", () => {
+describe("the Runtime usage content", () => {
     it("shows the owner the summary first, then each Run, and 'Not measured' where nothing was read", () => {
         (usePermission as jest.Mock).mockReturnValue(true);
-        render(<RuntimeUsagePage />);
+        render(<RuntimeUsageContent />);
 
         const sections = screen
             .getAllByRole("region")
@@ -188,7 +186,7 @@ describe("the Runtime usage screen", () => {
         const saved = jest
             .spyOn(HTMLAnchorElement.prototype, "click")
             .mockImplementation(() => undefined);
-        render(<RuntimeUsagePage />);
+        render(<RuntimeUsageContent />);
 
         fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
 
@@ -201,7 +199,7 @@ describe("the Runtime usage screen", () => {
 
     it("asks anyone but the owner to ask the owner, and never fetches the report for them", () => {
         (usePermission as jest.Mock).mockReturnValue(false);
-        render(<RuntimeUsagePage />);
+        render(<RuntimeUsageContent />);
         expect(
             screen.getByText("Usage is for the organization's owner"),
         ).toBeInTheDocument();

@@ -41,7 +41,10 @@ import {
     stuckTone,
 } from "@services/runtime/model/health";
 import { speedTakeaway, speedValue } from "@services/runtime/model/speed";
-import { formatUsageUsd } from "@services/runtime/model/usage-report";
+import {
+    formatUsageUsd,
+    RUNTIME_USAGE_HREF,
+} from "@services/runtime/model/usage-report";
 import { useRuntimeHealth, useRuntimeSpeed } from "@services/runtime/queries";
 import { ArrowLeftIcon, BarChart3Icon } from "lucide-react";
 
@@ -73,7 +76,7 @@ const Summary = ({ health }: { health: RuntimeHealth }) => {
                         <>
                             {cost.hint} ·{" "}
                             <NextLink
-                                href={health.cost.usagePath}
+                                href={RUNTIME_USAGE_HREF}
                                 className="underline">
                                 usage
                             </NextLink>
@@ -435,7 +438,7 @@ export const RuntimeHealthPage = () => {
             <RuntimeHeader
                 actions={
                     isOwner ? (
-                        <NextLink href="/runtime/settings/usage">
+                        <NextLink href={RUNTIME_USAGE_HREF}>
                             <Button
                                 size="md"
                                 variant="secondary"
