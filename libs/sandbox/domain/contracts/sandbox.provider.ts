@@ -52,8 +52,9 @@ export interface SandboxRunResult {
  * How one lease used its sandbox: when it was handed out, when its holder
  * started its first command and finished its last one, and when the lease
  * went back. `stopAt` is set only when that release left the sandbox with no
- * holder: the time the provider stops it (E2B pauses and the idle-kill cron
- * kills it; a local checkout is deleted at once).
+ * holder: the stop it scheduled (E2B pauses and the idle-kill cron kills it; a
+ * local checkout is deleted at once). A holder that joins before then cancels
+ * it, and the sandbox runs on that holder's time.
  */
 export interface SandboxUsage {
     consumer: string;
