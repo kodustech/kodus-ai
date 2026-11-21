@@ -185,6 +185,8 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
 
             await expect(list(service)).rejects.toMatchObject({
                 response: { status },
+                // The job logs this: never an empty message.
+                message: `Forgejo request failed with status ${status}`,
             });
         },
     );

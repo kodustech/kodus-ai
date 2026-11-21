@@ -229,7 +229,8 @@ function throwIfForgejoFailed(result: {
         (typeof result.error === 'string' ? result.error : undefined);
 
     throw Object.assign(
-        new Error(detail ?? `Forgejo request failed with status ${status}`),
+        // An empty body gives an empty detail: the status says more.
+        new Error(detail || `Forgejo request failed with status ${status}`),
         { status, response: { status, headers } },
     );
 }
