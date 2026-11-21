@@ -99,7 +99,17 @@ export function assertContextWindowFitsOverhead(params: {
 }): void {
     const overheadTokens = estimateNonDiffOverheadTokens(params.input);
 
-    if (overheadTokens >= params.contextWindow) {
+    // On a small window, overhead past the prompt budget leaves no room
+    // for a batch's diff and the answer: every batch would overflow. A
+    // full-size window keeps the whole window as the limit, so a huge
+    // callGraph still runs as one batch.
+    const smallWindow =
+        !!params.input.adaptiveProfile &&
+        params.input.adaptiveProfile.kind !== 'full';
+    const limit = smallWindow
+        ? Math.floor(params.contextWindow * PROMPT_BUDGET_RATIO)
+        : params.contextWindow;
+    if (overheadTokens >= limit) {
         throw new AgentContextWindowTooSmallError({
             contextWindow: params.contextWindow,
             overheadTokens,

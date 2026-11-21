@@ -633,7 +633,7 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
     if (err instanceof AgentContextWindowTooSmallError) {
         const window = err.contextWindow.toLocaleString('en-US');
         return [
-            `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but this review needs at least ${err.overheadTokens.toLocaleString('en-US')} tokens of context.`,
+            `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but this review's fixed prompt alone takes ${err.overheadTokens.toLocaleString('en-US')} tokens, leaving no room for the diff and the answer.`,
             '',
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
