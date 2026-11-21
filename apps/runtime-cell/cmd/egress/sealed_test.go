@@ -18,7 +18,7 @@ func TestTheMirrorServesNoSealedClaim(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	req := httptest.NewRequest("GET", "/npm/left-pad", nil)
+	req := httptest.NewRequest(http.MethodGet, "/npm/left-pad", nil)
 	req.RemoteAddr = "10.0.0.2:5555"
 	put(false)
 	if !servesClaim(store, req) {
@@ -40,9 +40,9 @@ func TestNoMirrorRouteAnswersASealedClaim(t *testing.T) {
 	if err := store.Put(policy.ClaimPolicy{ClaimID: "c", OrgID: "o", Sources: []string{"10.0.0.2"}, Phase: policy.PhaseTest, Sealed: true, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	h := refuseSealed(store, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
+	h := refuseSealed(store, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	for _, path := range []string{"/npm/left-pad", "/pypi/simple/requests/", "/go/example.com/m/@v/list", "/v2/library/alpine/manifests/3"} {
-		req := httptest.NewRequest("GET", path, nil)
+		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.RemoteAddr = "10.0.0.2:5555"
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)

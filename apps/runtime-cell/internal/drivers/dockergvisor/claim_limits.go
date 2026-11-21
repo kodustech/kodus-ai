@@ -302,8 +302,8 @@ func ValidateClaimLimitDaemon(info dockercli.CgroupDaemonInfo, backend, runtime 
 	return nil
 }
 
-// OCISeccomp: runsc applies the container's seccomp profile (Docker's
-// default) inside the sandbox. Without --oci-seccomp runsc ignores it, and a
+// OCISeccomp reports whether runsc applies the container's seccomp profile
+// (Docker's default) inside the sandbox. Without --oci-seccomp runsc ignores it, and a
 // command could unshare a user namespace and be root with every capability in
 // it (boundary probe P01, dev cell 2026-11-20): nothing it reached then, but
 // all of the Sentry's namespace and mount code is in reach. With it, unshare
