@@ -346,8 +346,9 @@ const skip = process.env.SKIP_INTEGRATION === 'true';
                     INT,
                     MCPIntegrationOAuthStatus.ACTIVE,
                     {
-                        clientId: 'client-it',
-                        redirectUri: 'https://app.example.test/callback',
+                        clientId: 'client-reconnected',
+                        redirectUri:
+                            'https://app.example.test/callback-reconnected',
                         asMetadata: { token_endpoint: tokenUrl },
                         tokens: {
                             accessToken: 'reconnected',
@@ -361,8 +362,14 @@ const skip = process.env.SKIP_INTEGRATION === 'true';
             expect(await a.oauth.resolveManagedAuthHeaders(ORG, INT)).toEqual({
                 Authorization: 'Bearer reconnected',
             });
-            expect(await a.oauth.resolveManagedAuthHeaders(ORG, INT)).toEqual({
-                Authorization: 'Bearer reconnected',
+            const stored = await a.oauth.getOAuthState(ORG, INT);
+            expect(stored).toMatchObject({
+                clientId: 'client-reconnected',
+                redirectUri: 'https://app.example.test/callback-reconnected',
+            });
+            expect(stored?.tokens).toMatchObject({
+                accessToken: 'reconnected',
+                refreshToken: 'reconnected-refresh',
             });
         });
 
