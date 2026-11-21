@@ -71,6 +71,117 @@ describe('checkFix', () => {
     // no longer this gate's job to guess whether a string "reads like" code.
 
     describe('truncated', () => {
+        // Quoted lines that cut a block leave the fix with the same open
+        // brackets as the code it replaces (#2295): that is not truncation.
+        it('does not flag a fix that inherits the imbalance of the lines it replaces', () => {
+            const existingCode = 'if (a) {\n  foo();';
+            const improvedCode = 'if (a) {\n  foo();\n  bar();';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('does not flag a fix that inherits an orphan closer', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "}.property('b')";
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('flags a fix cut after an orphan closer the original also had', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = '}.property(x';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('flags a closer that mismatches an open bracket even when the original has an orphan closer', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "x(}).property('b')";
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('still accepts an orphan closer met with an empty stack (positive control)', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "}.property('b').other()";
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('accepts a TypeScript regex literal containing a slash and a star', () => {
+            expect(
+                checkFix(
+                    'const r = /src/;',
+                    'const r = /src\\/*/;',
+                    'typescript',
+                ),
+            ).toBeNull();
+        });
+
+        it.each([
+            ['dockerfile', 'COPY app/main /app/', 'COPY app/* /app/'],
+            ['makefile', 'SRC = src/main.c', 'SRC = src/*.c'],
+            [
+                'bash',
+                'for f in src/main; do echo $f; done',
+                'for f in src/*; do echo $f; done',
+            ],
+        ])(
+            'accepts a %s glob without treating it as a block comment',
+            (language, existing, improved) => {
+                expect(checkFix(existing, improved, language)).toBeNull();
+            },
+        );
+
+        it.each([
+            ['Dockerfile', 'COPY build/ /app/', 'COPY dist/* /app/'],
+            ['Makefile', 'rm -f build/x.o', 'rm -f build/*.o'],
+            ['bash', 'cp build/a out/', 'cp dist/* out/'],
+            ['bash', 'cp build/a out/', 'cp /* out'],
+        ])('accepts the requested %s glob', (language, existing, improved) => {
+            expect(checkFix(existing, improved, language)).toBeNull();
+        });
+
+        it.each([
+            'c', 'c++', 'javascript', 'typescript', 'java', 'go', 'rust',
+            'css', 'php', 'kotlin', 'swift', 'c#', 'sql', ' TypeScript ',
+            undefined,
+        ])('detects an adjacent block comment for %s', (language) => {
+            expect(checkFix('x=a;', 'x=a/* retry', language)).toBe('truncated');
+            expect(checkFix('run(', 'run(/* retry', language)).toBe('truncated');
+        });
+
+        it('flags a fix cut inside an unterminated block comment', () => {
+            const existingCode = 'if (a) {\n  run();';
+            const improvedCode = 'if (a) {\n  run();\n  /* retry the call';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('accepts a closed block comment in a fix that inherits the imbalance', () => {
+            const existingCode = 'if (a) {\n  run();';
+            const improvedCode = 'if (a) {\n  run();\n  /* retry the call */';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('accepts a dangling block comment opener the replaced lines already had', () => {
+            const existingCode = 'if (a) {\n  /* note';
+            const improvedCode = 'if (a) {\n  /* note\n  run();';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('flags a fix cut inside a block when the original was balanced', () => {
+            const existingCode = 'foo();';
+            const improvedCode = 'if (a) {\n  foo();';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('flags a fix that opens more than the lines it replaces', () => {
+            const existingCode = 'if (a) {';
+            const improvedCode = 'if (a) {\n  call(';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('still flags an unclosed string when the original was cut the same way', () => {
+            const existingCode = 'if (a) {';
+            const improvedCode = 'if (a) {\n  s = "abc';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
         it('flags unbalanced brackets', () => {
             const existingCode = 'function parseConfig(raw) {\n  return JSON.parse(raw);\n}';
             const improvedCode =

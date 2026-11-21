@@ -201,6 +201,43 @@ function stripRegexLiterals(code: string): string {
 }
 
 /**
+ * The brackets `code` leaves open or unmatched. `signature` is `null` when
+ * they balance, otherwise "<closers with no opener>|<unclosed openers>" ("|{("
+ * for an open block holding an open call, "}|" for a lone "}"). Two texts with
+ * the same signature are cut in the same place. `mismatched` is true when a
+ * closer meets a NON-empty stack whose top is a different bracket
+ * (`x(})`): that is broken whatever the quoted lines look like, whereas a
+ * closer met with an empty stack is only an orphan the original can share.
+ */
+function bracketImbalance(nonLiteral: string): {
+    signature: string | null;
+    mismatched: boolean;
+} {
+    const closers: Record<string, string> = { '}': '{', ')': '(', ']': '[' };
+    const stack: string[] = [];
+    let orphans = '';
+    let mismatched = false;
+    for (const ch of nonLiteral) {
+        if (ch === '{' || ch === '(' || ch === '[') {
+            stack.push(ch);
+        } else if (ch in closers) {
+            if (stack[stack.length - 1] === closers[ch]) {
+                stack.pop();
+            } else {
+                if (stack.length > 0) {
+                    mismatched = true;
+                }
+                orphans += ch;
+            }
+        }
+    }
+    return {
+        signature: orphans || stack.length > 0 ? `${orphans}|${stack.join('')}` : null,
+        mismatched,
+    };
+}
+
+/**
  * Is `code` structurally broken — brackets that don't close, a string
  * literal that never does, or a tail that cannot end a statement in any
  * supported language? All three are strong, language-agnostic truncation
@@ -219,13 +256,27 @@ function stripRegexLiterals(code: string): string {
  * character is legitimately part of a lifetime marker there and never closes
  * by design (see `STRING_LITERAL_RE_RUST`), so it carries no truncation
  * signal for that language the way it does everywhere else.
+ *
+ * `reference` (the code the fix replaces) only relaxes the bracket check: when
+ * the quoted lines cut a block, the fix inherits that same imbalance, so an
+ * identical signature in `reference` is not a truncation signal. A closer that
+ * mismatches an open bracket (`x(})`) is never excused by `reference`.
  */
-function isStructurallyBroken(code: string, language: string | undefined): boolean {
+function isStructurallyBroken(
+    code: string,
+    language: string | undefined,
+    reference?: string,
+): boolean {
+    const nonLiteralOf = (text: string) =>
+        stripRegexLiterals(
+            stripStringLiterals(
+                outsideStringLiterals(text, language, stripComments),
+                language,
+            ),
+        );
     const withoutComments = outsideStringLiterals(code, language, stripComments);
     // Everything left over after every COMPLETE literal is removed.
-    const nonLiteral = stripRegexLiterals(
-        stripStringLiterals(withoutComments, language),
-    );
+    const nonLiteral = nonLiteralOf(code);
 
     // A tail that cannot end a statement in ANY supported language — a bare
     // binary/assignment operator, a dangling "?"/":"/",", or an arrow with
@@ -281,18 +332,34 @@ function isStructurallyBroken(code: string, language: string | undefined): boole
         }
     }
 
-    const closers: Record<string, string> = { '}': '{', ')': '(', ']': '[' };
-    const stack: string[] = [];
-    for (const ch of nonLiteral) {
-        if (ch === '{' || ch === '(' || ch === '[') {
-            stack.push(ch);
-        } else if (ch in closers) {
-            if (stack.pop() !== closers[ch]) {
-                return true;
-            }
-        }
+    // A `/*` that survives comment stripping never closed: applied, it would
+    // comment out the rest of the file. Equal bracket signatures must not
+    // excuse it, unless the replaced lines already carried the same dangling
+    // opener. Without a language, retain the original conservative check.
+    const blockCommentLanguage =
+        !language?.trim() ||
+        /^(?:c|c\+\+|cpp|cxx|objective-c|objective-c\+\+|javascript|javascriptreact|js|jsx|typescript|typescriptreact|ts|tsx|java|go|golang|rust|css|scss|php|kotlin|swift|c#|csharp|sql)$/i.test(
+            language.trim(),
+        );
+    if (
+        blockCommentLanguage &&
+        nonLiteral.includes('/*') &&
+        (reference === undefined || !nonLiteralOf(reference).includes('/*'))
+    ) {
+        return true;
     }
-    return stack.length > 0;
+
+    const imbalance = bracketImbalance(nonLiteral);
+    if (imbalance.mismatched) {
+        return true;
+    }
+    return (
+        imbalance.signature !== null &&
+        imbalance.signature !==
+            (reference === undefined
+                ? null
+                : bracketImbalance(nonLiteralOf(reference)).signature)
+    );
 }
 
 /**
@@ -346,9 +413,9 @@ function startsWithListMarker(code: string): boolean {
  * before the more involved structural checks run.
  *
  * `language` (the finding's own `CodeSuggestion.language`) is optional and
- * only changes how a single-quote character is read — everything else is
- * language-agnostic by construction. Omitting it is always safe: it just
- * falls back to the general (non-Rust) reading.
+ * controls Rust single-quote handling and enables the dangling block-comment
+ * check only for languages with block comments. An omitted or blank language
+ * retains that check and the general (non-Rust) quote handling.
  */
 export function checkFix(
     existingCode: string | null | undefined,
@@ -379,7 +446,7 @@ export function checkFix(
     }
 
     if (
-        isStructurallyBroken(fix, lang) ||
+        isStructurallyBroken(fix, lang, existing) ||
         looksLikeDiffHunk(fix) ||
         startsWithListMarker(fix)
     ) {
