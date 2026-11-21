@@ -476,24 +476,20 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             ),
                         );
 
-                        const automationExecutionsPRs = [
-                            ...new Set(
-                                eligiblePullRequestRefs
-                                    .map((ref) => ref.pullRequestNumber)
-                                    .filter((prNumber): prNumber is number =>
-                                        Number.isInteger(prNumber),
-                                    ),
-                            ),
-                        ];
+                        const eligibleRefs = eligiblePullRequestRefs.filter(
+                            (ref) => Number.isInteger(ref.pullRequestNumber),
+                        );
 
-                        if (!automationExecutionsPRs?.length) {
+                        if (!eligibleRefs.length) {
                             return;
                         }
 
+                        // Read the PRs these references name, not every PR of
+                        // the organization carrying the same number (#2625).
                         const openPullRequestsWithSuggestions =
                             await this.pullRequestService.findPullRequestsWithDeliveredSuggestions(
                                 organizationId,
-                                automationExecutionsPRs,
+                                eligibleRefs,
                                 PullRequestState.OPENED,
                             );
                         // Conditional policies can finish with no suggestions,

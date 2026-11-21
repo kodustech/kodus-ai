@@ -65,9 +65,29 @@ describe('SaveCodeReviewFeedbackUseCase', () => {
 
         await useCase.execute(payload);
 
+        // A message published before the pair existed carries the numbers
+        // alone; it is still read, on the number-only match it was sent with.
         expect(getReactionsUseCase.execute).toHaveBeenCalledWith(
             { organizationId: 'org-001', teamId: 'team-001' },
-            [42],
+            [{ pullRequestNumber: 42 }],
+        );
+    });
+
+    it('reads the repository of each PR when the message carries the refs', async () => {
+        await useCase.execute({
+            ...payload,
+            pullRequestRefs: [
+                { repositoryId: 'repo-a', pullRequestNumber: 42 },
+                { repositoryId: 'repo-b', pullRequestNumber: 42 },
+            ],
+        });
+
+        expect(getReactionsUseCase.execute).toHaveBeenCalledWith(
+            { organizationId: 'org-001', teamId: 'team-001' },
+            [
+                { repositoryId: 'repo-a', pullRequestNumber: 42 },
+                { repositoryId: 'repo-b', pullRequestNumber: 42 },
+            ],
         );
     });
 

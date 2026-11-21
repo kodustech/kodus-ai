@@ -228,7 +228,12 @@ export class PreviewPrApprovalUseCase {
                 const candidates =
                     await this.pullRequests.findPullRequestsWithDeliveredSuggestions(
                         organizationAndTeamData.organizationId,
-                        [prNumber],
+                        [
+                            {
+                                repositoryId: repository.id,
+                                pullRequestNumber: prNumber,
+                            },
+                        ],
                         [
                             PullRequestState.OPENED,
                             PullRequestState.CLOSED,

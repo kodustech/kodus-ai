@@ -6,7 +6,10 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
     IPullRequestsService,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import { IPullRequestWithDeliveredSuggestions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    IPullRequestRef,
+    IPullRequestWithDeliveredSuggestions,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { ReactionSyncAbortedError } from '@libs/code-review/domain/codeReviewFeedback/errors/reaction-sync-aborted.error';
 import { ICollectedReaction } from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
@@ -68,16 +71,21 @@ export class GetReactionsUseCase implements IUseCase {
      */
     async execute(
         organizationAndTeamData: OrganizationAndTeamData,
-        automationExecutionsPRs: number[],
+        pullRequestRefs: IPullRequestRef[],
     ): Promise<ICollectedReaction[]> {
-        if (!automationExecutionsPRs?.length) {
+        if (!pullRequestRefs?.length) {
             return [];
         }
 
+        // Each reference names the repository the review ran in. The same
+        // number exists in every repository of the organization that reached
+        // it, and the sync used to read them all: most of those PRs were never
+        // reviewed here, and the reads are what got the organization rate
+        // limited (#2625).
         const pullRequests =
             await this.pullRequestService.findPullRequestsWithDeliveredSuggestions(
                 organizationAndTeamData.organizationId,
-                automationExecutionsPRs,
+                pullRequestRefs,
                 [PullRequestState.MERGED, PullRequestState.CLOSED],
             );
 
@@ -189,9 +197,7 @@ export class GetReactionsUseCase implements IUseCase {
                                       comment?.id,
                                   ];
                             const suggestion = candidateIds
-                                .filter(
-                                    (id) => id !== undefined && id !== null,
-                                )
+                                .filter((id) => id !== undefined && id !== null)
                                 .map((id) => suggestionsByCommentId.get(id))
                                 .find((found) => found !== undefined);
 

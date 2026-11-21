@@ -122,7 +122,10 @@ export class CodeReviewFeedbackConsumer {
                         this.logger.error({
                             message: `Error processing code review feedback for team ${payload.teamId}`,
                             context: CodeReviewFeedbackConsumer.name,
-                            error: error.message,
+                            // The error itself, not its message: the log record
+                            // serializes name/message/stack and a bare string
+                            // left every field null (#2625).
+                            error,
                             metadata: {
                                 teamId: payload.teamId,
                                 organizationId: payload.organizationId,
