@@ -30,7 +30,7 @@ export class AgentContextWindowTooSmallError extends Error {
     constructor(params: AgentContextWindowTooSmallErrorParams) {
         super(
             `Model '${params.modelName}' has a context length of ${params.contextWindow} tokens, ` +
-                `but the agent's static overhead alone is ${params.overheadTokens} tokens, leaving no room for the diff and the answer. ` +
+                `but the agent's static overhead alone is ${params.overheadTokens} tokens, past the share of the window kept for the prompt, leaving no room for the diff and the answer. ` +
                 `Choose a model with at least 32K context, or raise the model's max input tokens ` +
                 `if the deployed model genuinely supports more than the default lookup reports.`,
         );
