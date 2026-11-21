@@ -409,11 +409,23 @@ const skip = process.env.SKIP_INTEGRATION === 'true';
                 ),
             ]);
 
-            expect(headers).toEqual([
-                { Authorization: expect.stringMatching(/^Bearer a\d$/) },
-                { Authorization: expect.stringMatching(/^Bearer a\d$/) },
-            ]);
+            // Both rotated: the endpoint issued a2 and a3, one to each.
+            const [primaryHeader, otherHeader] = (
+                headers as Array<{ Authorization: string }>
+            ).map((h) => h.Authorization.replace('Bearer ', ''));
+            expect([primaryHeader, otherHeader].sort()).toEqual(['a2', 'a3']);
             expect(endpoint.state.calls).toBe(2);
+            const primary = (await a.oauth.getOAuthState(ORG, INT))
+                ?.tokens as any;
+            const other = (
+                await a.oauth.getOAuthState(ORG, 'other-integration')
+            )?.tokens as any;
+            expect(primary.accessToken).toBe(primaryHeader);
+            expect(other.accessToken).toBe(otherHeader);
+            expect([primary.refreshToken, other.refreshToken].sort()).toEqual([
+                'r2',
+                'r3',
+            ]);
         }, 20_000);
 
         it('a grant the token endpoint refuses expires its connection', async () => {

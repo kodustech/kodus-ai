@@ -152,17 +152,10 @@ export class IntegrationOAuthService {
         integrationId: string,
     ): Promise<IntegrationOAuthState | null> {
         try {
-            const entity = await this.integrationOAuthRepository.findOne({
-                where: { integrationId, organizationId },
-            });
-
-            if (!entity || !entity.auth) {
-                return null;
-            }
-
-            return this.decryptAndParse<IntegrationOAuthState>(
-                entity.auth,
-                {} as IntegrationOAuthState,
+            return await this.readState(
+                this.integrationOAuthRepository,
+                organizationId,
+                integrationId,
             );
         } catch (error) {
             this.logger.error('Failed to get oauth state', {
@@ -636,7 +629,10 @@ export class IntegrationOAuthService {
         return { lost: true, state: lost };
     }
 
-    /** The stored OAuth state, read through `repository`. */
+    /**
+     * The stored OAuth state, read through `repository`: the shared one, or
+     * the refresh lock's transaction repository for reads under the lock.
+     */
     private async readState(
         repository: OAuthRepository,
         organizationId: string,
