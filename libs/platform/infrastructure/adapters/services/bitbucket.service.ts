@@ -72,7 +72,15 @@ export class BitbucketService implements Omit<
 
     private async getImplementation(
         organizationAndTeamData?: OrganizationAndTeamData,
+        requestedHost?: string,
     ): Promise<any> {
+        // A request that carries a Data Center host is a first-time setup: no
+        // auth is stored yet, so the lookup below cannot answer, and Cloud
+        // would take the call and report a connection it never made (#2570).
+        if (requestedHost?.trim()) {
+            return this.bitbucketDataCenterService;
+        }
+
         if (!organizationAndTeamData) {
             return this.bitbucketCloudService;
         }
@@ -619,7 +627,10 @@ export class BitbucketService implements Omit<
 
     async createAuthIntegration(params: any) {
         const impl = await this.getImplementation(
-            params.organizationAndTeamData,
+            params?.organizationAndTeamData,
+            // The submitted host decides, not the stored one: on the first
+            // Data Center connection there is nothing stored to read.
+            params?.host,
         );
         return impl.createAuthIntegration(params);
     }
