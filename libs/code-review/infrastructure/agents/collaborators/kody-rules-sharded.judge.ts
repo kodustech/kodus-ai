@@ -642,27 +642,51 @@ function candidateLines(
  * make. External evidence puts intent context above code context for this
  * decision (ContextCRBench), and it costs a few hundred tokens with no lookup.
  *
- * Same 1,000-character bound `prShardUser` already applies, so the two shards
- * stay consistent, but the cut is MARKED here: an unmarked truncation invites
- * the model to reason about a sentence that was severed mid-clause.
+ * Here the description is only intent, so it keeps 1,000 characters; the cut
+ * is MARKED, as everywhere: an unmarked truncation invites the model to reason
+ * about a sentence that was severed mid-clause.
  *
  * Returns [] when there is no title and no description, so a shard built
  * without intent keeps a byte-identical prompt to before this existed.
  */
 const INTENT_BUDGET_CHARS = 1000;
 
+/**
+ * How much of the PR description the PR-scope shard and the Kody Rule
+ * evidence check read. A PR-level rule is often about the description itself
+ * ("has a test plan section"), so a cut there reads as a missing section: at
+ * 1,000 characters every longer description lost its later sections, and the
+ * evidence check, reading the same cut, confirmed the finding. GitHub caps a
+ * description at 65,536 characters; this keeps a generated wall of text out
+ * without cutting what people write, and the PR shard already spends up to
+ * PR_SHARD_DIFF_BUDGET_CHARS on one call.
+ */
+export const PR_DESCRIPTION_BUDGET_CHARS = 20_000;
+
+/**
+ * The description as a prompt shows it: `(empty)`, whole, or cut at `budget`
+ * with the cut marked, so what follows it is not read as absent.
+ */
+export function promptDescription(
+    body: string | undefined,
+    budget: number,
+): string {
+    const text = body?.trim() ?? '';
+    if (!text) return '(empty)';
+    if (text.length <= budget) return text;
+    // Never split a surrogate pair at the cut.
+    const last = text.charCodeAt(budget - 1);
+    const end = last >= 0xd800 && last <= 0xdbff ? budget - 1 : budget;
+    return `${text.slice(0, end)}\n… (description truncated at ${budget} characters; the rest was not shown, so nothing can be reported missing from it)`;
+}
+
 function intentLines(prTitle?: string, prBody?: string): string[] {
     const title = prTitle?.trim() ?? '';
     const body = prBody?.trim() ?? '';
     if (!title && !body) return [];
-    const description = !body
-        ? '(empty)'
-        : body.length > INTENT_BUDGET_CHARS
-          ? `${body.slice(0, INTENT_BUDGET_CHARS)}\n… (description truncated at ${INTENT_BUDGET_CHARS} characters)`
-          : body;
     return [
         `<PR title=${JSON.stringify(title)}>`,
-        `Description: ${description}`,
+        `Description: ${promptDescription(body, INTENT_BUDGET_CHARS)}`,
         `</PR>`,
         `This is what the change is trying to do. Use it to judge whether the added lines break the rules above.`,
         ``,
@@ -975,7 +999,7 @@ function prShardUser(
         ``,
         ...(referenceSection?.lines ?? []),
         `<PR title=${JSON.stringify(prTitle || '')}>`,
-        `Description: ${prBody ? prBody.slice(0, 1000) : '(empty)'}`,
+        `Description: ${promptDescription(prBody, PR_DESCRIPTION_BUDGET_CHARS)}`,
         incrementalDiff
             ? 'Incremental round: these patches may omit changes reviewed in earlier rounds.'
             : 'The review may omit filtered files and truncate large patches.',

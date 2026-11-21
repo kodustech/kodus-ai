@@ -1,6 +1,7 @@
 import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import {
     judgeKodyRulesSharded,
+    PR_DESCRIPTION_BUDGET_CHARS,
     buildShardViolationsWireSchema,
     shardViolationsSchema,
     shardViolationsWireSchema,
@@ -1118,7 +1119,7 @@ describe('#1826 — the file shard receives the PR intent', () => {
         });
 
         expect(user).toContain(`Description: ${'x'.repeat(1000)}\n`);
-        expect(user).toContain('… (description truncated at 1000 characters)');
+        expect(user).toContain('… (description truncated at 1000 characters;');
         // exactly 1,000 body characters survive, not 1,001 and not 3,000
         expect(user).not.toContain('x'.repeat(1001));
     });
@@ -1154,8 +1155,13 @@ describe('#1826 — the file shard receives the PR intent', () => {
         expect(withEmptyStrings).toBe(withNeither);
         expect(withWhitespace).toBe(withNeither);
     });
+});
 
-    it('leaves the PR-scope shard prompt unchanged', async () => {
+// ── QA 2026-11-21: a PR-level rule reads the whole description ──────────────
+// A rule about the description ("has a test plan section") was judged on its
+// first 1,000 characters, so a section further down read as missing.
+describe('the PR-scope shard reads the whole description', () => {
+    const capturePrUser = async (prBody: string) => {
         let prUser = '';
         const runJudge: RunJudge = async ({ filename, user }) => {
             if (filename === null) prUser = user;
@@ -1166,19 +1172,38 @@ describe('#1826 — the file shard receives the PR intent', () => {
             rules: [
                 {
                     uuid: 'pr1',
-                    title: 'must have tests',
-                    rule: 'every PR needs a test',
+                    title: 'Test plan in the description',
+                    rule: 'The PR description has a "Test plan" section.',
                     scope: KodyRulesScope.PULL_REQUEST,
                 },
             ],
             runJudge,
             prTitle: 'fix: slider',
-            prBody: 'z'.repeat(3000),
+            prBody,
         });
-        // The PR shard's own bound is an unmarked slice; #1826 did not touch it.
+        return prUser;
+    };
+
+    it('keeps a section that starts past the 1,000th character', async () => {
+        const body = `${'Context. '.repeat(200)}\n## Test plan\nRan the suite.`;
+        const prUser = await capturePrUser(body);
+
         expect(prUser).toContain('<PR title="fix: slider">');
-        expect(prUser).toContain(`Description: ${'z'.repeat(1000)}`);
+        expect(prUser).toContain(`Description: ${body}\n`);
         expect(prUser).not.toContain('description truncated');
+    });
+
+    it('cuts at PR_DESCRIPTION_BUDGET_CHARS and marks that the rest was not shown', async () => {
+        const prUser = await capturePrUser(
+            'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS + 500),
+        );
+
+        expect(prUser).toContain(
+            `Description: ${'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS)}\n… (description truncated at ${PR_DESCRIPTION_BUDGET_CHARS} characters; the rest was not shown`,
+        );
+        expect(prUser).not.toContain(
+            'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS + 1),
+        );
     });
 });
 

@@ -151,6 +151,32 @@ describe('Kody Rule evidence deadline', () => {
         expect(judge).not.toHaveBeenCalled();
     });
 
+    it('judges a PR-metadata candidate on the whole description, not its first 1,000 characters', async () => {
+        const judge = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ verdict: 'satisfied' });
+        const prBody = `${'Context. '.repeat(200)}\n## Test plan\nRan the suite.`;
+
+        await expect(
+            kodyRuleEvidenceVerifier(
+                {
+                    changedFiles: [],
+                    prTitle: 'Update title',
+                    prBody,
+                } as unknown as ReviewAgentInput,
+                undefined,
+                false,
+            )(candidate, shard, Date.now() + 60_000),
+        ).resolves.toBe('satisfied');
+
+        const { user, system } = judge.mock.calls[0][0] as {
+            user: string;
+            system: string;
+        };
+        expect(JSON.parse(user).description).toBe(prBody);
+        expect(system).toContain('A description marked as truncated');
+    });
+
     it.each([
         [700, 700],
         [180_000, 90_000],
