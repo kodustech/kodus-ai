@@ -5,6 +5,7 @@ vi.mock('../../services/issues.service.js', () => ({
     issuesService: {
         list: vi.fn(),
         fixPrompt: vi.fn(),
+        fixPromptEnabled: vi.fn(),
     },
 }));
 
@@ -99,4 +100,22 @@ describe('issues command actions', () => {
         expect(service.fixPrompt).toHaveBeenCalledWith(['a']);
         expect(stdout).toBe('Fix this issue\n');
     });
+
+    it.each([
+        [true, true],
+        [false, false],
+    ])(
+        'points at kodus issues show only where the fix prompt is enabled (%s)',
+        async (enabled, offered) => {
+            service.list.mockResolvedValue([issue('a')]);
+            service.fixPromptEnabled.mockResolvedValue(enabled);
+            const log = vi.mocked(console.log);
+
+            await issuesListAction({});
+
+            const printed = log.mock.calls.map((c) => c.join(' ')).join('\n');
+            expect(printed).toContain('1 issue.');
+            expect(printed.includes('kodus issues show')).toBe(offered);
+        },
+    );
 });
