@@ -2,7 +2,8 @@ import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
-import { hasManagedModelKey } from '@libs/llm/managed-slot';
+import { hasManagedModelKey, resolveEnvProvider } from '@libs/llm/managed-slot';
+import { attachAttemptedSlot } from '@libs/llm/model-failover';
 import { environment } from '@libs/ee/configs/environment';
 
 jest.mock(
@@ -18,7 +19,11 @@ jest.mock('@libs/ee/configs/environment', () => ({
 }));
 jest.mock('@libs/llm/managed-slot', () => {
     const actual = jest.requireActual('@libs/llm/managed-slot');
-    return { ...actual, hasManagedModelKey: jest.fn(() => false) };
+    return {
+        ...actual,
+        hasManagedModelKey: jest.fn(() => false),
+        resolveEnvProvider: jest.fn(() => null),
+    };
 });
 
 /**
@@ -91,6 +96,7 @@ afterEach(() => {
     runSpy?.mockRestore();
     jest.clearAllMocks();
     (hasManagedModelKey as jest.Mock).mockReturnValue(false);
+    (resolveEnvProvider as jest.Mock).mockReturnValue(null);
 });
 
 describe('AgentReviewStage — LLM error category on recorded failures (#2191)', () => {
@@ -151,28 +157,84 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
     });
 
     it.each([
-        ['the org brought its own key', true, { credentialId: 'cred-1' }, true],
-        ['the Kodus-managed key served the run', true, {}, false],
+        [
+            'the org brought its own key',
+            true,
+            { credentialId: 'cred-1' },
+            true,
+            false,
+        ],
+        ['the Kodus-managed key served the run', true, {}, false, false],
         [
             'a platform-funded kodus credential served the run',
             true,
             { provider: 'kodus', credentialId: 'cred-2' },
             false,
+            false,
         ],
-        ['a self-hosted install used its env key', false, {}, true],
-    ])('records whether %s', async (_label, cloud, slot, orgOwnedKey) => {
-        environment.API_CLOUD_MODE = cloud;
+        ['a self-hosted install used its env key', false, {}, true, true],
+        [
+            'a self-hosted install with no usable env key fell to the managed default',
+            false,
+            {},
+            false,
+            false,
+        ],
+    ])(
+        'records whether %s',
+        async (_label, cloud, slot, orgOwnedKey, envKey) => {
+            environment.API_CLOUD_MODE = cloud;
+            (resolveEnvProvider as jest.Mock).mockReturnValue(
+                envKey ? { kind: 'openai_native', name: 'openai' } : null,
+            );
+            const { stage } = makeStage({
+                suggestions: [],
+                agentResults: [],
+                failures: [
+                    {
+                        agentName: 'generalist',
+                        category: 'generalist',
+                        error: Object.assign(new Error('Payment Required'), {
+                            status: 402,
+                        }),
+                    },
+                ],
+                incomplete: [],
+                unverified: [],
+                warnings: [],
+            });
+
+            const result = await run(
+                stage,
+                makeContext({
+                    codeReviewConfig: {
+                        reviewOptions: {},
+                        resolvedModelSlot: {
+                            provider: 'openai',
+                            model: 'gpt-4o-mini',
+                            ...slot,
+                        },
+                    },
+                }),
+            );
+
+            const error = (result.errors ?? []).find(
+                (e: any) => e.substage === 'agent:generalist',
+            );
+            expect(error?.metadata?.orgOwnedKey).toBe(orgOwnedKey);
+        },
+    );
+
+    it('judges ownership by the attempt that failed, not the pre-run slot', async () => {
+        const error = attachAttemptedSlot(
+            Object.assign(new Error('Payment Required'), { status: 402 }),
+            { provider: 'kodus', model: 'kodus-default' } as any,
+        );
         const { stage } = makeStage({
             suggestions: [],
             agentResults: [],
             failures: [
-                {
-                    agentName: 'generalist',
-                    category: 'generalist',
-                    error: Object.assign(new Error('Payment Required'), {
-                        status: 402,
-                    }),
-                },
+                { agentName: 'generalist', category: 'generalist', error },
             ],
             incomplete: [],
             unverified: [],
@@ -187,15 +249,15 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
                     resolvedModelSlot: {
                         provider: 'openai',
                         model: 'gpt-4o-mini',
-                        ...slot,
+                        credentialId: 'cred-1',
                     },
                 },
             }),
         );
 
-        const error = (result.errors ?? []).find(
+        const recorded = (result.errors ?? []).find(
             (e: any) => e.substage === 'agent:generalist',
         );
-        expect(error?.metadata?.orgOwnedKey).toBe(orgOwnedKey);
+        expect(recorded?.metadata?.orgOwnedKey).toBe(false);
     });
 });

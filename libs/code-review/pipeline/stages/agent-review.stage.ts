@@ -1212,7 +1212,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             agentName: failure.agentName,
                             category: failure.category,
                             errorCategory: classifyFailure(failure).category,
-                            orgOwnedKey: usesOrgOwnedKey(context),
+                            orgOwnedKey: usesOrgOwnedKey(
+                                context,
+                                failure.error,
+                            ),
                             prNumber,
                         },
                     });
@@ -2154,7 +2157,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         prNumber,
                         durationMs,
                         errorCategory: classification.category,
-                        orgOwnedKey: usesOrgOwnedKey(context),
+                        orgOwnedKey: usesOrgOwnedKey(context, stageError),
                     },
                 });
 
