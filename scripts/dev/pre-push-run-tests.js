@@ -153,8 +153,9 @@ async function main() {
 
     // The full suite no longer fits one process's heap (it ran out at 6 GB),
     // which is why CI shards it (tests.yml, 4 shards). Here the shards run one
-    // after the other, each in a fresh process; the first failure stops.
-    const shards = full ? Math.max(1, Number(process.env.PRE_PUSH_SHARDS) || 4) : 1;
+    // after the other, each in a fresh process; the first failure stops. 8 by
+    // default: a quarter of the suite still ran out of heap on a laptop.
+    const shards = full ? Math.max(1, Number(process.env.PRE_PUSH_SHARDS) || 8) : 1;
     let code = 0;
     for (let i = 1; i <= shards && code === 0; i++) {
         const args = shards > 1 ? [...jestArgs, `--shard=${i}/${shards}`] : jestArgs;
