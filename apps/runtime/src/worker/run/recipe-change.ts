@@ -41,7 +41,9 @@ export function memberNotBootedOf(req: Pick<RecipeFacts, 'environment'> & Partia
     const workspaceText = recipe.content ?? recipe.files?.find((f) => f.path === recipe.path)?.content;
     const parsed = workspaceText ? parseRecipe(workspaceText) : undefined;
     if (parsed?.ok && parsed.recipe.needs?.some((n) => n.alias === alias)) return undefined;
-    const named = new RegExp(`(^|[^A-Za-z0-9._-])\\.\\./${alias.replace(/\./g, '\\.')}(?![A-Za-z0-9._-])`, 'm');
+    // Every regex metacharacter of the alias escaped, not only its dots.
+    const literal = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const named = new RegExp(`(^|[^A-Za-z0-9._-])\\.\\./${literal}(?![A-Za-z0-9._-])`, 'm');
     const texts = [recipe.content ?? '', ...(recipe.files ?? []).map((f) => f.content)];
     return texts.some((t) => named.test(t)) ? undefined : alias;
 }

@@ -27,6 +27,8 @@ import type { ClaimService } from './claim.service';
 // strict decoder never sees the field, and its result says "not captured".
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
+/** The longest a step's result is awaited (6 h): far past every step's own timeout, far below setTimeout's 2^31-1 ms. */
+const MAX_STEP_WAIT_MS = 6 * 60 * 60_000;
 
 type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore' | 'sandbox.op' | 'claim.snapshot' | 'claim.exercised' | 'upload';
 // Known cell admission failures only. A customer's arbitrary nack code is not
@@ -169,12 +171,16 @@ export class StepDispatcher {
     }
 
     private awaitResult(conn: CellConnection, claimId: string, stepId: string, frame: Envelope, waitMs: number): Promise<StepOutcome | 'timeout'> {
+        // The callers' timeouts are bounded by the protocol schemas; this keeps
+        // the timer sane whatever reaches it (Node fires a delay past 2^31-1 ms,
+        // or a NaN, at once).
+        const delay = Number.isFinite(waitMs) ? Math.min(Math.max(0, waitMs), MAX_STEP_WAIT_MS) : MAX_STEP_WAIT_MS;
         return new Promise<StepOutcome | 'timeout'>((resolve) => {
             const timer = setTimeout(() => {
                 conn.steps.delete(stepId);
                 conn.stepFrames.delete(frame.id);
                 resolve('timeout');
-            }, waitMs);
+            }, delay);
             conn.steps.set(stepId, { claimId, resolve, timer });
             conn.stepFrames.set(frame.id, stepId);
             if (!this.connections.send(conn, frame)) {

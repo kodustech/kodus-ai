@@ -49,17 +49,43 @@ export function authoredFileKind(path: string): AuthoredFileKind | null {
     return null;
 }
 
-/** A URL with a password in it, and the password. */
-const URL_CREDENTIALS = /[a-z][a-z0-9+.-]*:\/\/([^/\s:@]*):([^/\s@]*)@([^/\s:?#]+)/gi;
+/** What follows `scheme://` in a URL with a password in it: user, password, host. */
+const URL_CREDENTIALS_AFTER_SCHEME = /([^/\s:@]*):([^/\s@]*)@([^/\s:?#]+)/y;
+const SCHEME_CHAR = /[a-z0-9+.-]/i;
+
+/**
+ * The URLs of `text` with a password in them, as [password, host]: what
+ * /[a-z][a-z0-9+.-]*:\/\/user:password@host/gi matches, in one pass. That
+ * pattern, unanchored, restarted at every letter of a long word and went
+ * quadratic on a repository's line (a 100 KB word took seconds).
+ */
+function urlCredentials(text: string): Array<[password: string, host: string]> {
+    const out: Array<[string, string]> = [];
+    for (let at = text.indexOf('://'); at >= 0; at = text.indexOf('://', at + 1)) {
+        // The scheme: the scheme characters right before ://, holding a letter.
+        // The walk back stops at the previous :// (':' is not one of them).
+        let start = at;
+        let letter = false;
+        while (start > 0 && SCHEME_CHAR.test(text[start - 1])) {
+            start--;
+            if (/[a-z]/i.test(text[start])) letter = true;
+        }
+        if (!letter) continue;
+        URL_CREDENTIALS_AFTER_SCHEME.lastIndex = at + 3;
+        const m = URL_CREDENTIALS_AFTER_SCHEME.exec(text);
+        if (m) out.push([m[2], m[3]]);
+    }
+    return out;
+}
 const KNOWN_SECRET = /(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9_-]{16,}|sk_live_|AKIA[0-9A-Z]{16}|xox[abpr]-|-----BEGIN)/;
 const TEST_VALUES = RECIPE_TEST_VALUES as readonly string[];
 
 /** Why a text holds a secret, or null. Credentials of a URL pass only with a test value as the password and a host of `hosts`. */
 function secretProblem(text: string, hosts: ReadonlySet<string> = new Set()): string | null {
     if (KNOWN_SECRET.test(text) || redactPatterns(text).text !== text) return 'holds what looks like a secret';
-    for (const m of text.matchAll(URL_CREDENTIALS)) {
-        if (!TEST_VALUES.includes(m[2]) || !hosts.has(m[3])) {
-            return `has a URL with credentials (${m[3]}); only a service of this project with the password ${TEST_VALUES[0]}`;
+    for (const [password, host] of urlCredentials(text)) {
+        if (!TEST_VALUES.includes(password) || !hosts.has(host)) {
+            return `has a URL with credentials (${host}); only a service of this project with the password ${TEST_VALUES[0]}`;
         }
     }
     return null;
@@ -154,7 +180,7 @@ function instructionsOf(content: string): Instruction[] {
             }
             text += lines[i];
         }
-        const m = /^\s*([A-Za-z]+)\s*(.*)$/.exec(text);
+        const m = /^\s*([A-Za-z]+)\s*([\s\S]*)$/.exec(text);
         out.push({ line: start + 1, keyword: (m?.[1] ?? text.trim()).toUpperCase(), args: (m?.[2] ?? '').trim() });
     }
     return out;
@@ -174,10 +200,36 @@ function flagsOf(args: string): { flags: Array<{ name: string; value?: string }>
 }
 
 /** `NAME=value NAME2="v"` or the legacy `NAME value` of ENV and ARG. */
+// Linear checks for text that comes from the repository (no backtracking regex
+// over a whole line: a long, repetitive one made them quadratic, CodeQL
+// js/polynomial-redos).
+
+/** A word of `rest` that is a URL (`://`) whose remainder names a script file. */
+function downloadsScript(rest: string): boolean {
+    return rest.split(/\s+/).some((word) => {
+        const at = word.indexOf('://');
+        return at >= 0 && /\.(?:sh|bash|py|pl|rb)\b/.test(word.slice(at + 3));
+    });
+}
+
+const SHELLS = new Set(['sh', 'bash', 'dash', 'ash']);
+
+/** `sh`, `bash`, `dash` or `ash`, bare or by an absolute path (`/bin/sh`, `//sh`). */
+function isShell(word: string): boolean {
+    const slash = word.lastIndexOf('/');
+    if (slash < 0) return SHELLS.has(word);
+    return word.startsWith('/') && slash > 0 && !/\s/.test(word) && SHELLS.has(word.slice(slash + 1));
+}
+
+/** A short-option cluster that holds `c` (`-c`, `-ec`, `-xce`): the shell runs its next argument. */
+function isCommandFlag(word: string): boolean {
+    return /^-\w+$/.test(word) && word.includes('c');
+}
+
 function assignmentsOf(args: string, legacy: boolean): Array<{ name: string; value: string; hasValue: boolean }> {
     const out: Array<{ name: string; value: string; hasValue: boolean }> = [];
     if (legacy && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(args)) {
-        const m = /^([A-Za-z_][A-Za-z0-9_]*)(?:\s+(.*))?$/.exec(args);
+        const m = /^([A-Za-z_][A-Za-z0-9_]*)(?:\s+([\s\S]*))?$/.exec(args);
         if (m) out.push({ name: m[1], value: (m[2] ?? '').trim().replace(/^["']|["']$/g, ''), hasValue: m[2] !== undefined });
         return out;
     }
@@ -292,7 +344,7 @@ export function checkAuthoredDockerfile(path: string, content: string): string[]
                 }
                 if (REMOTE_SCRIPT.some((r) => r.test(rest))) {
                     at(i, 'runs a script it downloads; install with the package manager of the image or the project instead');
-                } else if (DOWNLOAD.test(rest) && /:\/\/[^\s]*\.(sh|bash|py|pl|rb)\b/.test(rest)) {
+                } else if (DOWNLOAD.test(rest) && downloadsScript(rest)) {
                     at(i, 'downloads a script; install with the package manager of the image or the project instead');
                 }
                 break;
@@ -446,7 +498,7 @@ function commandsOf(text: string): Command[] {
                 for (const a of words.slice(1).map((x) => ASSIGNMENT.exec(x))) if (a) exported.set(a[1], a[2]);
                 words = [];
                 break;
-            } else if (/^(?:\/\S*\/)?(?:sh|bash|dash|ash)$/.test(w) && /^-\w*c\w*$/.test(words[1] ?? '')) words = words.slice(1);
+            } else if (isShell(w) && isCommandFlag(words[1] ?? '')) words = words.slice(1);
             else if (!PREFIX_WORDS.has(w) && !(w === 'corepack' && /^(pnpm|yarn|npm|npx)$/.test(words[1] ?? ''))) break;
             words = words.slice(1);
         }
