@@ -206,7 +206,13 @@ function aggregate(docs: any[], pipeline: any[]): any[] {
     return rows;
 }
 const telemetryCollection = () => ({
-    aggregate: (pipeline: any[]) => ({ option: () => ({ exec: async () => aggregate(structuredClone(stored), pipeline) }) }),
+    // The repository chains query options (.option, .read) before exec, as Mongoose's Aggregate does.
+    aggregate: (pipeline: any[]) => {
+        const query: any = { exec: async () => aggregate(structuredClone(stored), pipeline) };
+        query.option = () => query;
+        query.read = () => query;
+        return query;
+    },
 });
 
 // ── the price list: models.dev entries as served on 2026-11-12 ─────────────
