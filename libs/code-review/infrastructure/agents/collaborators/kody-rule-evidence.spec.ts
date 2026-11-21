@@ -191,6 +191,12 @@ describe('Kody Rule evidence deadline', () => {
         expect(system).toContain(
             'Only that field says the description was cut',
         );
+
+        // Guard, as before the fix: a PR with no description sends no key.
+        jest.restoreAllMocks();
+        const { sent: none } = await judgedCandidate(undefined);
+        expect(none).not.toHaveProperty('description');
+        expect(none).not.toHaveProperty('descriptionTruncated');
     });
 
     it('flags a cut description in its own field', async () => {
@@ -200,13 +206,6 @@ describe('Kody Rule evidence deadline', () => {
 
         expect(sent.description).toHaveLength(PR_DESCRIPTION_BUDGET_CHARS);
         expect(sent.descriptionTruncated).toBe(true);
-    });
-
-    it('omits the description when the PR has none', async () => {
-        const { sent } = await judgedCandidate(undefined);
-
-        expect(sent).not.toHaveProperty('description');
-        expect(sent).not.toHaveProperty('descriptionTruncated');
     });
 
     it('gives a file-level candidate the 1,000-character intent its shard read', async () => {
