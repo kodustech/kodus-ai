@@ -362,13 +362,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryName: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
         const pullRequest = await this.pullRequestsModel
-            .findOne({
-                'number': pullRequestNumber,
-                'repository.name': repositoryName,
-                'organizationId': organizationAndTeamData.organizationId,
-            })
+            .findOne(
+                {
+                    'number': pullRequestNumber,
+                    'repository.name': repositoryName,
+                    'organizationId': organizationAndTeamData.organizationId,
+                },
+                projection,
+            )
             .lean();
 
         return pullRequest
@@ -380,13 +384,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryId: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
         const pullRequest = await this.pullRequestsModel
-            .findOne({
-                'number': pullRequestNumber,
-                'repository.id': repositoryId,
-                'organizationId': organizationAndTeamData.organizationId,
-            })
+            .findOne(
+                {
+                    'number': pullRequestNumber,
+                    'repository.id': repositoryId,
+                    'organizationId': organizationAndTeamData.organizationId,
+                },
+                projection,
+            )
             .lean();
 
         return pullRequest
@@ -2359,6 +2367,55 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     }
 
     /**
+     * The totals as the sum of the stored files, written only when they
+     * differ: one update the server evaluates on the PR itself, so a save
+     * that writes no file still repairs totals an earlier save left stale
+     * (its totals step failed after the file writes), at no write when they
+     * are right. A PR with no stored file is left alone: its totals may come
+     * from the provider (a backfill stores them without the files), and an
+     * empty list proves nothing about them.
+     */
+    async refreshFileTotalsIfStale(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<boolean> {
+        if (!organizationId) {
+            throw new Error(
+                'refreshFileTotalsIfStale requires organizationId for tenant isolation',
+            );
+        }
+        const sumOf = (field: string) => ({
+            $sum: { $ifNull: [`$files.${field}`, 0] },
+        });
+        const totals = {
+            totalAdded: sumOf('added'),
+            totalDeleted: sumOf('deleted'),
+            totalChanges: sumOf('changes'),
+        };
+        const result = await this.pullRequestsModel
+            .updateOne(
+                {
+                    organizationId,
+                    '_id': mongoose.Types.ObjectId.isValid(prUuid)
+                        ? new mongoose.Types.ObjectId(prUuid)
+                        : prUuid,
+                    'files.0': { $exists: true },
+                    '$expr': {
+                        $or: Object.entries(totals).map(([key, sum]) => ({
+                            $ne: [{ $ifNull: [`$${key}`, 0] }, sum],
+                        })),
+                    },
+                },
+                // `$$NOW`: the server's clock, stored as the Date the
+                // schema's timestamps hold.
+                [{ $set: { ...totals, updatedAt: '$$NOW' } }],
+                { updatePipeline: true },
+            )
+            .exec();
+        return result.modifiedCount > 0;
+    }
+
+    /**
      * Server-side sum of the UTF-8 bytes actually embedded in
      * `files[].patch` for one PR. Uses `$strLenBytes` (which counts UTF-8
      * bytes, exactly like `Buffer.byteLength` and BSON) so the caller gets
@@ -2587,11 +2644,19 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         if (pullRequest.organizationId) {
             filter.organizationId = pullRequest.organizationId;
         }
-        const doc = await this.pullRequestsModel.findOneAndUpdate(
-            filter,
-            { $set: updateData },
-            { new: true },
-        );
+        // The PR comes back without its files, commits and PR-level
+        // suggestions: no caller reads them from here, and they are what makes
+        // the document weigh hundreds of KB to MB.
+        const doc = await this.pullRequestsModel
+            .findOneAndUpdate(
+                filter,
+                { $set: updateData },
+                {
+                    new: true,
+                    projection: { files: 0, commits: 0, prLevelSuggestions: 0 },
+                },
+            )
+            .lean();
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
     }
 

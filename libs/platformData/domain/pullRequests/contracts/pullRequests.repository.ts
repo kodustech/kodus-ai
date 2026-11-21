@@ -95,11 +95,13 @@ export interface IPullRequestsRepository {
         prNumber: number,
         repositoryName: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     findByNumberAndRepositoryId(
         prNumber: number,
         repositoryId: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     findByNumberAndRepositoryIdOptimized(
         prNumber: number,
@@ -364,6 +366,14 @@ export interface IPullRequestsRepository {
         totalDeleted: number;
         totalChanges: number;
     }>;
+    /**
+     * Sets the PR totals to the sum of its stored files, in one server-side
+     * update that writes only when they differ. True when it wrote.
+     */
+    refreshFileTotalsIfStale(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<boolean>;
 
     /**
      * Server-side sum of the UTF-8 bytes embedded in `files[].patch` for one
