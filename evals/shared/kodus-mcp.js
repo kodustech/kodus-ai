@@ -106,7 +106,7 @@ async function startKodusMcp({ storedConfig = null } = {}) {
         // Field by field, as kodyRules.repository.ts sets `rules.$.<field>`.
         updateRule,
         // The plan sync's per-rule writes in one call; returns the ids it missed.
-        updateRulesFields: async (uuid, changes) => {
+        updateRulesFields: async (_organizationId, uuid, changes) => {
             const failed = [];
             for (const { ruleId, patch } of changes) if (!(await updateRule(uuid, ruleId, patch))) failed.push(ruleId);
             return failed;

@@ -18,6 +18,7 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
+import { KodusCreditsLedgerRepository } from '@libs/analytics/infrastructure/adapters/repositories/kodus-credits-ledger.repository';
 import {
     DEBIT_BATCH_SIZE,
     KodusCreditsMeteringService,
@@ -129,9 +130,11 @@ function harness(opts: {
     const licenseService = { debitCredits: debit };
 
     const service = new KodusCreditsMeteringService(
-        telemetryModel as any,
-        chargeModel as any,
-        sweepStateModel as any,
+        new KodusCreditsLedgerRepository(
+            telemetryModel as any,
+            chargeModel as any,
+            sweepStateModel as any,
+        ),
         orgParams as any,
         licenseService as any,
     );

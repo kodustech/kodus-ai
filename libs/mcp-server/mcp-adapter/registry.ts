@@ -110,7 +110,21 @@ export class MCPRegistry {
                         ? (error.cause as any).message || String(error.cause)
                         : undefined;
 
-                this.logger.error({
+                // A refused credential is the user's to fix (reconnect), and
+                // whoever issued it is told so it stops being sent; only a
+                // refusal nobody handles stays an error.
+                const handled =
+                    isCredentialRejection(error) &&
+                    !!config.onCredentialRejected;
+                if (handled) {
+                    try {
+                        config.onCredentialRejected!();
+                    } catch {
+                        /* the report never breaks registration */
+                    }
+                }
+
+                this.logger[handled ? 'warn' : 'error']({
                     message: `Failed to register MCP server: ${errorMessage}`,
                     context: this.constructor.name,
                     error: error instanceof Error ? error : undefined,
@@ -530,4 +544,14 @@ export class MCPRegistry {
             ? normalized.slice(0, -3)
             : normalized;
     }
+}
+
+/**
+ * The server refused the credential: HTTP 401 from the transport, or the
+ * OAuth `invalid_token` error code in the body (RFC 6750 §3.1).
+ */
+export function isCredentialRejection(error: unknown): boolean {
+    if ((error as { code?: unknown })?.code === 401) return true;
+    const message = error instanceof Error ? error.message : String(error);
+    return /"error"\s*:\s*"invalid_token"/.test(message);
 }

@@ -56,9 +56,9 @@ const storedRule = (name: string, overrides: Record<string, unknown> = {}) => ({
 });
 
 function build(rules: any[], files: Record<string, any>) {
-    const createOrUpdate = {
-        execute: jest.fn().mockResolvedValue({}),
-        referenceDetectionFailed: jest.fn().mockResolvedValue(false),
+    const createOrUpdate = { execute: jest.fn().mockResolvedValue({}) };
+    const detection = {
+        lastDetectionFailed: jest.fn().mockResolvedValue(false),
     };
     const deleteRule = { execute: jest.fn().mockResolvedValue(true) };
     const kodyRulesService = {
@@ -84,6 +84,7 @@ function build(rules: any[], files: Record<string, any>) {
         createOrUpdate as any,
         deleteRule as any,
         kodyRulesService as any,
+        detection as any,
     );
     jest.spyOn(service, 'getCentralizedConfigRepository').mockResolvedValue({
         id: 'config-repo',
@@ -92,7 +93,7 @@ function build(rules: any[], files: Record<string, any>) {
     jest.spyOn(service, 'fetchKodyRuleFile').mockImplementation(
         async ({ filePath }: { filePath: string }) => files[filePath] ?? null,
     );
-    return { service, createOrUpdate, deleteRule };
+    return { service, createOrUpdate, deleteRule, detection };
 }
 
 const fileOf = (name: string, overrides: Record<string, unknown> = {}) => ({
@@ -153,9 +154,12 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
 
     describe('synchronizeKodyRules', () => {
         it('does not write a rule whose file did not change', async () => {
-            const { service, createOrUpdate } = build([storedRule('same')], {
-                [pathOf('same')]: fileOf('same'),
-            });
+            const { service, createOrUpdate, detection } = build(
+                [storedRule('same')],
+                {
+                    [pathOf('same')]: fileOf('same'),
+                },
+            );
 
             const result = await service.synchronizeKodyRules({
                 organizationAndTeamData,
@@ -176,13 +180,11 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
         ])(
             'writes an unchanged rule with references when its last detection %s',
             async (_label, answer, writes) => {
-                const { service, createOrUpdate } = build(
+                const { service, createOrUpdate, detection } = build(
                     [storedRule('refs', { contextReferenceId: 'ref-1' })],
                     { [pathOf('refs')]: fileOf('refs') },
                 );
-                createOrUpdate.referenceDetectionFailed.mockImplementation(
-                    answer,
-                );
+                detection.lastDetectionFailed.mockImplementation(answer);
 
                 await service.synchronizeKodyRules({
                     organizationAndTeamData,
@@ -190,9 +192,10 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
                     actor,
                 });
 
-                expect(
-                    createOrUpdate.referenceDetectionFailed,
-                ).toHaveBeenCalledWith('uuid-refs');
+                expect(detection.lastDetectionFailed).toHaveBeenCalledWith(
+                    'kodyRule',
+                    'uuid-refs',
+                );
                 expect(createOrUpdate.execute).toHaveBeenCalledTimes(writes);
             },
         );
@@ -200,11 +203,11 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
         // A first detection that failed leaves no reference id on the rule,
         // so the rule is asked whatever its pointer holds.
         it('writes an unchanged rule without a reference id whose first detection failed', async () => {
-            const { service, createOrUpdate } = build(
+            const { service, createOrUpdate, detection } = build(
                 [storedRule('first', { contextReferenceId: null })],
                 { [pathOf('first')]: fileOf('first') },
             );
-            createOrUpdate.referenceDetectionFailed.mockResolvedValue(true);
+            detection.lastDetectionFailed.mockResolvedValue(true);
 
             await service.synchronizeKodyRules({
                 organizationAndTeamData,
@@ -212,16 +215,20 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
                 actor,
             });
 
-            expect(
-                createOrUpdate.referenceDetectionFailed,
-            ).toHaveBeenCalledWith('uuid-first');
+            expect(detection.lastDetectionFailed).toHaveBeenCalledWith(
+                'kodyRule',
+                'uuid-first',
+            );
             expect(createOrUpdate.execute).toHaveBeenCalledTimes(1);
         });
 
         it('writes a rule whose file changed', async () => {
-            const { service, createOrUpdate } = build([storedRule('edited')], {
-                [pathOf('edited')]: fileOf('edited', { rule: 'new text' }),
-            });
+            const { service, createOrUpdate, detection } = build(
+                [storedRule('edited')],
+                {
+                    [pathOf('edited')]: fileOf('edited', { rule: 'new text' }),
+                },
+            );
 
             await service.synchronizeKodyRules({
                 organizationAndTeamData,
@@ -237,7 +244,7 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
         });
 
         it('brings back a deleted rule whose file returned', async () => {
-            const { service, createOrUpdate } = build(
+            const { service, createOrUpdate, detection } = build(
                 [storedRule('back', { status: KodyRulesStatus.DELETED })],
                 { [pathOf('back')]: fileOf('back') },
             );
@@ -256,7 +263,7 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
         });
 
         it('writes a rule the plan limit paused, so a free slot can lift the lock', async () => {
-            const { service, createOrUpdate } = build(
+            const { service, createOrUpdate, detection } = build(
                 [
                     storedRule('locked', {
                         status: KodyRulesStatus.PAUSED,
@@ -280,7 +287,7 @@ describe('CentralizedConfigService — a sync over an unchanged repository', () 
         });
 
         it('creates a rule for a new file', async () => {
-            const { service, createOrUpdate } = build([], {
+            const { service, createOrUpdate, detection } = build([], {
                 [pathOf('new')]: fileOf('new'),
             });
 

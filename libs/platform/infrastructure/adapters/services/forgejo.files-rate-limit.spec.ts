@@ -23,6 +23,14 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
             response: { status },
             error: {},
         });
+    // What the client hands back when the connection drops: the axios error
+    // itself, with no response and `error: {}` (its client catches it).
+    const connectionDropped = (code: string, message: string) =>
+        Object.assign(new Error(message), {
+            code,
+            error: {},
+            config: { headers: { Authorization: 'token secret-token' } },
+        });
     const DIFF = [
         'diff --git a/src/a.ts b/src/a.ts',
         '--- a/src/a.ts',
@@ -163,6 +171,26 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         await expect(list(service)).rejects.toMatchObject({ status: 502 });
     });
 
+    // `error` is the response body: a proxy's 429 or 502 often has none.
+    it.each([429, 502, 503])(
+        'lets a %i with an empty body through on the listing, not as an empty page',
+        async (status) => {
+            repoGetPullRequestFiles.mockResolvedValue(
+                Object.assign(
+                    new Error(`Request failed with status code ${status}`),
+                    { response: { status }, error: '' },
+                ),
+            );
+            const { service } = makeService();
+
+            await expect(list(service)).rejects.toMatchObject({
+                response: { status },
+                // The job logs this: never an empty message.
+                message: `Forgejo request failed with status ${status}`,
+            });
+        },
+    );
+
     it('lets a server error on the diff through instead of empty patches', async () => {
         repoDownloadPullDiffOrPatch.mockResolvedValue(httpError(503));
         const { service } = makeService();
@@ -187,6 +215,57 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         const { service } = makeService();
 
         await expect(list(service)).rejects.toThrow('socket hang up');
+    });
+
+    it.each([
+        ['ECONNRESET', 'read ECONNRESET'],
+        ['ERR_NETWORK', 'Network Error'],
+        ['ECONNRESET', 'socket hang up'],
+    ])(
+        'lets a connection the client answered as dropped (%s) through on the listing, not as no files',
+        async (code, message) => {
+            repoGetPullRequestFiles.mockResolvedValue(
+                connectionDropped(code, message),
+            );
+            const { service } = makeService();
+
+            await expect(list(service)).rejects.toMatchObject({
+                code,
+                message,
+            });
+        },
+    );
+
+    it('lets a connection the client answered as dropped through on the diff, not as empty patches', async () => {
+        repoDownloadPullDiffOrPatch.mockResolvedValue(
+            connectionDropped('ECONNRESET', 'read ECONNRESET'),
+        );
+        const { service } = makeService();
+
+        await expect(list(service)).rejects.toMatchObject({
+            code: 'ECONNRESET',
+        });
+    });
+
+    it('never carries the request config, which holds the token, in what it throws', async () => {
+        repoGetPullRequestFiles.mockResolvedValue(
+            connectionDropped('ECONNRESET', 'read ECONNRESET'),
+        );
+        const { service } = makeService();
+
+        const thrown = await list(service).catch((error) => error);
+
+        // It did throw: a resolved listing would pass the checks below.
+        expect(thrown).toMatchObject({ code: 'ECONNRESET' });
+        expect(thrown).not.toHaveProperty('config');
+        // message and stack are not enumerable, so JSON.stringify misses them.
+        for (const channel of [
+            thrown.message,
+            thrown.stack ?? '',
+            JSON.stringify(thrown),
+        ]) {
+            expect(channel).not.toContain('secret-token');
+        }
     });
 
     it('answers null when the listing fails for another reason', async () => {

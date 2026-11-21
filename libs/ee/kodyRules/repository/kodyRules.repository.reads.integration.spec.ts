@@ -105,7 +105,7 @@ let available = false;
         it("writes each rule's changes in one round trip and only its fields", async () => {
             commands.length = 0;
 
-            const failed = await repository.updateRulesFields(docId, [
+            const failed = await repository.updateRulesFields(ORG, docId, [
                 {
                     ruleId: 'live-1',
                     patch: {
@@ -120,12 +120,13 @@ let available = false;
                         lockedByPlan: false,
                     },
                 },
-                // A rule that is not in the document matches nothing.
+                // A rule that is not in the document matches nothing, and is
+                // reported as not written (one read back to tell which).
                 { ruleId: 'missing', patch: { lockedByPlan: true } },
             ]);
 
-            expect(failed).toEqual([]);
-            expect(commands).toEqual(['update']);
+            expect(failed).toEqual(['missing']);
+            expect(commands).toEqual(['update', 'find']);
             const doc: any = await model.findById(docId).lean();
             const byId = Object.fromEntries(
                 doc.rules.map((r: any) => [r.uuid, r]),
@@ -141,6 +142,59 @@ let available = false;
             });
             expect(byId['live-1'].rule).toContain('text of live-1');
             expect(doc.rules).toHaveLength(52);
+        });
+
+        it('a rule id that arrives as an object matches no rule and writes nothing', async () => {
+            const before: any = await model.findById(docId).lean();
+            // Without `$eq` this would be an operator matching every rule.
+            const injected = { $ne: null } as unknown as string;
+
+            const failed = await repository.updateRulesFields(ORG, docId, [
+                {
+                    ruleId: injected,
+                    patch: { status: KodyRulesStatus.DELETED },
+                },
+            ]);
+
+            expect(failed).toEqual([injected]);
+            const after: any = await model.findById(docId).lean();
+            expect(after.rules).toEqual(before.rules);
+        });
+
+        it('a document id that arrives as an object is refused and writes nothing', async () => {
+            const before: any = await model.findById(docId).lean();
+            const injected = { $ne: null } as unknown as string;
+
+            await expect(
+                repository.updateRulesFields(ORG, injected, [
+                    {
+                        ruleId: 'live-1',
+                        patch: { status: KodyRulesStatus.DELETED },
+                    },
+                ]),
+            ).rejects.toThrow(/Cast to ObjectId failed/);
+
+            const after: any = await model.findById(docId).lean();
+            expect(after.rules).toEqual(before.rules);
+        });
+
+        it("another organization cannot write this organization's rules by their ids", async () => {
+            const before: any = await model.findById(docId).lean();
+
+            const failed = await repository.updateRulesFields(
+                'another-org',
+                docId,
+                [
+                    {
+                        ruleId: 'live-1',
+                        patch: { status: KodyRulesStatus.DELETED },
+                    },
+                ],
+            );
+
+            expect(failed).toEqual(['live-1']);
+            const after: any = await model.findById(docId).lean();
+            expect(after.rules).toEqual(before.rules);
         });
     },
 );
