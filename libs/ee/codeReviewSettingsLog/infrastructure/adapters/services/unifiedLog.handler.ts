@@ -41,10 +41,16 @@ export interface UnifiedLogParams extends BaseLogParams {
     customChangedData?: ChangedDataToExport[];
 }
 
+/** How long a settings record waits for a repository name before it moves on. */
+const LOOKUP_TIMEOUT_MS = 5000;
+
 @Injectable()
 export class UnifiedLogHandler {
     private readonly logger = createLogger(UnifiedLogHandler.name);
     private readonly repositoryNames = new Map<string, CachedRepositoryName>();
+
+    /** The repository lookups in flight, so a burst of records shares one. */
+    private readonly repositoryNames = new Map<string, Promise<string>>();
 
     constructor(
         @Inject(CODE_REVIEW_SETTINGS_LOG_REPOSITORY_TOKEN)
@@ -403,11 +409,102 @@ export class UnifiedLogHandler {
             return '';
         }
 
-        const repositoryName = !repositoryNameParam
-            ? await this.getRepositoryName(repositoryId, organizationId)
-            : repositoryNameParam;
+        const repositoryName = repositoryNameParam
+            ? repositoryNameParam
+            : await this.repositoryNameFor(organizationId, repositoryId);
 
         return repositoryName;
+    }
+
+    /**
+     * The repository name, looked up once for a burst of records (#2581). A
+     * bulk write logs dozens of records in the same second, each one asking for
+     * the same name: the failing lookup used to run per record, so a repository
+     * absent from the integration config produced one error per record.
+     *
+     * The entry is dropped as soon as the lookup settles or runs out of time,
+     * so a repository that is added later resolves on the next record instead
+     * of staying unknown, and a lookup that hangs cannot hold every later
+     * record of that repository behind it.
+     */
+    private repositoryNameFor(
+        organizationId: string,
+        repositoryId: string,
+    ): Promise<string> {
+        const key = `${organizationId}:${repositoryId}`;
+        const inFlight = this.repositoryNames.get(key);
+
+        if (inFlight) {
+            return inFlight;
+        }
+
+        const forget = (name: string): string => {
+            if (this.repositoryNames.get(key) === mine) {
+                this.repositoryNames.delete(key);
+            }
+            return name;
+        };
+
+        const mine = this.withDeadline(
+            this.getRepositoryName(repositoryId, organizationId),
+            repositoryId,
+        ).then(
+            (name) => forget(name),
+            (error) => {
+                // The name is a label on a settings log line: a repository
+                // the integration config cannot resolve is named as
+                // unknown, and the failure is reported once for the whole
+                // burst, with the repository it is about.
+                this.logger.error({
+                    message: 'Error getting repository additional info',
+                    context: UnifiedLogHandler.name,
+                    organizationId,
+                    repositoryId,
+                    error: error,
+                });
+                return forget('Unknown');
+            },
+        );
+
+        this.repositoryNames.set(key, mine);
+
+        return mine;
+    }
+
+    /**
+     * The lookup, or a failure once it has taken longer than a settings record
+     * can wait. The name is a label on an audit line: a read that never answers
+     * must not stop the line from being written, and the entry it leaves behind
+     * must not be shared by every record that follows.
+     */
+    private withDeadline(
+        lookup: Promise<string>,
+        repositoryId: string,
+    ): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            const timer = setTimeout(
+                () =>
+                    reject(
+                        new Error(
+                            `Timed out after ${LOOKUP_TIMEOUT_MS} ms reading the name of repository ${repositoryId}`,
+                        ),
+                    ),
+                LOOKUP_TIMEOUT_MS,
+            );
+            // The timer is a guard, not work: it must not hold the process open.
+            timer.unref?.();
+
+            lookup.then(
+                (name) => {
+                    clearTimeout(timer);
+                    resolve(name);
+                },
+                (error) => {
+                    clearTimeout(timer);
+                    reject(error);
+                },
+            );
+        });
     }
 
     private async getDirectoryPath(
