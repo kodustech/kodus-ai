@@ -26,8 +26,8 @@ overrides:
   flatted: ^3.4.2
   prismjs: ^1.30.0
   lodash: ^4.17.23
-  js-yaml: ^4.1.1
-  axios: ^1.13.5
+  js-yaml: ^4.3.2
+  axios: ^1.20.0
   qs: '>=6.14.2'
   markdown-it: ^14.1.1
   minimatch: ^10.2.4
@@ -37,6 +37,17 @@ overrides:
   # Security (Dependabot): patch the transitive postcss 8.x line only; the
   # ancient postcss@4 present elsewhere is a different major left untouched.
   'postcss@>=8.0.0 <8.5.19': '8.5.19'
+  # Security: transitive packages with known vulnerabilities, floored to patched releases.
+  'prosemirror-view@<1.43.0': '1.43.0'
+  '@xmldom/xmldom@<0.8.15': '0.8.15'
+  '@xmldom/xmldom@>=0.9.0 <0.9.12': '0.9.12'
+  'follow-redirects@<1.16.2': '1.16.2'
+  'browserslist@<4.28.7': '4.28.7'
+  'source-map-js@<1.2.2': '1.2.2'
+  'baseline-browser-mapping@<2.11.0': '2.11.0'
+  'brace-expansion@>=1.0.0 <2.0.0': '1.1.21'
+  'brace-expansion@>=5.0.0 <5.0.12': '5.0.12'
+  'nanoid@>=3.0.0 <3.3.18': '3.3.18'
 
 # sharp: build permitido — Next usa para otimização de imagem (next/image).
 # unrs-resolver: false — resolver de tooling com binário pré-buildado (napi);
