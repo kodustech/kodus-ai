@@ -3,10 +3,10 @@
 The evidence object store of a Run: where each step's output and the cells' artifacts live, under the key `{orgId}/{runId}/{side}/{stepId}/{type}`. It runs in the runtime-worker (writes, takes uploads, presigns) and its local adapter is also read by the worker's evidence server. Two adapters of one port, chosen by `RUNTIME_EVIDENCE_STORE`; the flows are in [README.md "Evidence"](../../../README.md#evidence).
 
 ## Owns
-- The port: `file-evidence-store.ts` `EvidenceStore` (`put`, `get`, optional `takeUpload`), `TakenUpload`, and `canonicalEvidenceKey` (the exact five-part key or `InvalidEvidenceKeyError`).
+- The port: `file-evidence-store.ts` `EvidenceStore` (`put`, `get`, `deletePrefix`, optional `takeUpload`), `TakenUpload`, `canonicalEvidenceKey` (the exact five-part key or `InvalidEvidenceKeyError`) and `canonicalEvidencePrefix` (`{orgId}/` or `{orgId}/{runId}/`, never empty or wide). `deletePrefix` is the organization purge's delete of its evidence: the file store removes the directory, S3 lists and deletes the prefix and its `.uploads/` staging twin.
 - The local volume adapter: `file-evidence-store.ts` `FileEvidenceStore` (one file per key, 0600 under 0700 directories, a metadata sidecar) and its retention `sweep` (`EVIDENCE_RETENTION_DAYS`).
 - The S3 adapter: `s3-evidence-store.ts` `S3EvidenceStore`, also the `EvidencePresigner` of grants and reads; `takeUpload` checks a cell's staging object (type, size, ETag) and commits it, or a redacted text, to the evidence key.
-- The S3 calls: `s3-object-client.ts` `S3ObjectClient` (`head`, `get`, `put`, `copy`, `delete`, and `createBucket`, `putEvidenceLifecycle` for setup) signed with SigV4 over `fetch`, no SDK; `S3RequestError` names the operation and status only.
+- The S3 calls: `s3-object-client.ts` `S3ObjectClient` (`head`, `get`, `put`, `copy`, `delete`, `list` (ListObjectsV2) and `deleteMany` (DeleteObjects, for the purge), and `createBucket`, `putEvidenceLifecycle` for setup) signed with SigV4 over `fetch`, no SDK; `S3RequestError` names the operation and status only.
 
 ## Does not own
 - Signing grants and the HTTP server cells PUT to: `apps/runtime/src/worker/evidence/`.
@@ -43,6 +43,7 @@ Imported by:
 
 - [`apps/runtime/src/e2e`](../../e2e/AGENTS.md)
 - [`apps/runtime/src/worker`](../../worker/AGENTS.md)
+- [`apps/runtime/src/worker/commands`](../../worker/commands/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../../worker/dbos/AGENTS.md)
 - [`apps/runtime/src/worker/env`](../../worker/env/AGENTS.md)
 - [`apps/runtime/src/worker/env-session`](../../worker/env-session/AGENTS.md)

@@ -32,6 +32,9 @@ export class S3RequestError extends Error {
 
 type Fetch = typeof fetch;
 
+const escapeXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+const unescapeXml = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+
 const codeOf = (xml: string) => /<Code>([^<]{1,64})<\/Code>/.exec(xml)?.[1];
 
 export class S3ObjectClient {
@@ -179,6 +182,42 @@ export class S3ObjectClient {
         });
         if (!res.ok) return S3ObjectClient.fail('put_lifecycle', res);
         await S3ObjectClient.discard(res);
+    }
+
+    /**
+     * One page (at most 1000) of the keys under `prefix`, with the token of the next page when the listing was
+     * truncated (ListObjectsV2). The prefix is an object key prefix, so it carries the bucket's configured prefix.
+     */
+    async list(prefix: string, continuationToken?: string): Promise<{ keys: string[]; next?: string }> {
+        const res = await this.call('list', 'GET', '', {
+            query: { 'list-type': '2', prefix, ...(continuationToken ? { 'continuation-token': continuationToken } : {}) },
+        });
+        if (!res.ok) return S3ObjectClient.fail('list', res);
+        const xml = await res.text();
+        const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => unescapeXml(m[1]));
+        const next = /<IsTruncated>true<\/IsTruncated>/.test(xml) ? /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml)?.[1] : undefined;
+        return { keys, ...(next ? { next: unescapeXml(next) } : {}) };
+    }
+
+    /**
+     * DeleteObjects: up to 1000 keys in one call. A key S3 reports as failed throws with its code (never the key):
+     * the caller retries the whole purge, which is idempotent. A key that is already gone is a success.
+     */
+    async deleteMany(objectKeys: string[]): Promise<void> {
+        if (!objectKeys.length) return;
+        if (objectKeys.length > 1000) throw new S3RequestError('delete_objects', 400, 'TooManyKeys');
+        const xml = Buffer.from(
+            `<Delete xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Quiet>true</Quiet>${objectKeys.map((k) => `<Object><Key>${escapeXml(k)}</Key></Object>`).join('')}</Delete>`,
+        );
+        const res = await this.call('delete_objects', 'POST', '', {
+            query: { delete: '' },
+            headers: { 'content-type': 'application/xml', 'content-md5': createHash('md5').update(xml).digest('base64') },
+            body: xml,
+        });
+        if (!res.ok) return S3ObjectClient.fail('delete_objects', res);
+        // A 200 can carry per-key errors in the body.
+        const text = await res.text();
+        if (/<Error>/.test(text)) throw new S3RequestError('delete_objects', 200, codeOf(text));
     }
 
     async delete(objectKey: string): Promise<void> {

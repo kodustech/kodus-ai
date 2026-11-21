@@ -8,6 +8,7 @@ One handler per command the product sends through the outbox: they turn a parsed
 - What a Run boots with: `RunRequestedHandler.withRecordedRecipe` replaces the request's recipe, expose list, size and ready check with the environment setup's record (default branch, of the primary repository); a store that cannot be read fails the message.
 - `RunCancelRequestedHandler`: a cancel (`pr_closed`, or `superseded` keeping one head) fences the PR's generation and stops the live Runs it may cancel; a closed PR also forgets its sessions and ends its previews. It needs the delivery's `messageId`.
 - `command-handlers.ts`: `ForkApprovedHandler` (bound to the Run's own head and org), `EgressApprovedHandler`, `EgressRevokedHandler`, `EgressSettingsChangedHandler`, `MachineMinutesChangedHandler` (the org's own daily machine minutes, newest change wins), `StopRequestedHandler`, `StopClearedHandler`, `EnvironmentSetupRequestedHandler` (seals a plain token, then only enqueues), `EnvironmentPoolRequestedHandler`, `CellTokenIssuedHandler`, `CellTokenRevokedHandler`, `CellRevokeRequestedHandler`, `LessonUpdateRequestedHandler`.
+- `organization-purge.handler.ts` `OrganizationPurgeRequestedHandler` (`runtime.organization.purge_requested`): cancels the organization's live Runs (`engine.stop`), releases its live claims through the hub, and once none is live deletes its evidence (`{orgId}/`) and every Runtime Postgres row; while a Run or claim is still live it throws, so the control lane retries it with a delay.
 - The engine port the handlers call: `run-engine.port.ts` `RunEngine`.
 
 ## Does not own
@@ -33,15 +34,17 @@ One handler per command the product sends through the outbox: they turn a parsed
 
 ## Module map
 
-Files (4, tests apart): `command-handlers.ts`, `run-engine.port.ts`, `run-requested.handler.ts`, `runtime-command-handlers.ts`
+Files (5, tests apart): `command-handlers.ts`, `organization-purge.handler.ts`, `run-engine.port.ts`, `run-requested.handler.ts`, `runtime-command-handlers.ts`
 
 Imports these Runtime modules:
 
 - [`apps/runtime/src/shared`](../../shared/AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../../shared/admission/AGENTS.md)
+- [`apps/runtime/src/shared/evidence`](../../shared/evidence/AGENTS.md)
 - [`apps/runtime/src/shared/persistence`](../../shared/persistence/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
 - [`apps/runtime/src/worker/env`](../env/AGENTS.md)
+- [`apps/runtime/src/worker/evidence`](../evidence/AGENTS.md)
 - [`apps/runtime/src/worker/preview`](../preview/AGENTS.md)
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)
 - [`apps/runtime/src/worker/sandbox`](../sandbox/AGENTS.md)

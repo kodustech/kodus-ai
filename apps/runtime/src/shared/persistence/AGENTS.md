@@ -7,6 +7,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 - Locks: `locks.ts` `DistributedLocks`, `PgDistributedLocks` (session advisory locks on a dedicated connection; `withLock`, `tryWithLock`, `currentClient`). `lock-scoped-pg.ts` `LockScopedPg`: a store that joins the lock's live connection instead of taking a second pool slot, and refuses nested transactions.
 - Commands the API decided: `pg-command-store.ts` `PgCommandStore` (`CommandStore`: fork and egress approvals, egress audit and settings, stops, cell tokens, `revokeCell`), `egressScopes`.
 - Cell choice: `cell-directory.ts` `PgCellDirectory` (`reserveCell`, `replicaForClaim`, `replicaForCell`), `reserveCellFor` / `reserveCellCapped` (the capped, org-locked reservation in `runtime_cell_reservations`), `reserveCellRow` (the hub's uncapped one), and the SQL they share (`RESERVE_CELL_SQL`, `CELL_CAPACITY_SQL`, `BEST_CELL_SQL`).
+- The organization purge: `organization-purge.ts` `PgOrganizationPurgeStore` (`liveClaims`, `cordonPools`, `deleteOrganization`: every row of one organization in batches, the tables in `ORGANIZATION_PURGE_TABLES`; a host that is not terminated stays with its pool). `organization-purge.integration.spec.ts` fails when a `runtime` table with an organization column is missing from the list.
 - Previews: `preview-store.ts` `PgPreviewStore` (records and state, tunnel tickets, edge sessions, grants seen, tunnel holders), `normalizedSerial`, `sessionHashOf`.
 - Snapshot placements: `snapshot-placements.ts` `PgSnapshotPlacements` (which cell holds a sandbox's template or session snapshot, and the PR a session belongs to).
 
@@ -35,7 +36,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 
 ## Module map
 
-Files (10, tests apart): `cell-directory.ts`, `host-pools.ts`, `lock-scoped-pg.ts`, `locks.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `testing.ts`, `workflow-retention.ts`
+Files (11, tests apart): `cell-directory.ts`, `host-pools.ts`, `lock-scoped-pg.ts`, `locks.ts`, `organization-purge.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `testing.ts`, `workflow-retention.ts`
 
 Imports these Runtime modules:
 
@@ -44,6 +45,7 @@ Imports these Runtime modules:
 - [`libs/runtime/gate`](../../../../../libs/runtime/gate/AGENTS.md)
 - [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
+- [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
 - [`libs/runtime/run/adapters`](../../../../../libs/runtime/run/adapters/AGENTS.md)
 
 Imported by:

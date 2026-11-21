@@ -60,6 +60,7 @@ Imported by:
 - [`apps/runtime/src/hub/http`](../../../apps/runtime/src/hub/http/AGENTS.md)
 - [`apps/runtime/src/shared`](../../../apps/runtime/src/shared/AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../../../apps/runtime/src/shared/admission/AGENTS.md)
+- [`apps/runtime/src/shared/persistence`](../../../apps/runtime/src/shared/persistence/AGENTS.md)
 - [`apps/runtime/src/testing`](../../../apps/runtime/src/testing/AGENTS.md)
 - [`apps/runtime/src/worker`](../../../apps/runtime/src/worker/AGENTS.md)
 - [`apps/runtime/src/worker/agent`](../../../apps/runtime/src/worker/agent/AGENTS.md)

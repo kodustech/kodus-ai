@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { dirname, join, relative, resolve, sep } from 'path';
 
-import { evidenceKey, InvalidEvidenceKeyError } from '@libs/runtime/contracts/evidence';
+import { evidenceKey, evidenceOrganizationPrefix, InvalidEvidenceKeyError } from '@libs/runtime/contracts/evidence';
 
 // The evidence object store on a local volume (§8, self-hosted and dev): one
 // file per key {orgId}/{runId}/{side}/{stepId}/{type}, 0600 under 0700
@@ -26,6 +26,12 @@ export interface EvidenceStore {
      * evidence server checks the grant), and `get` reads it.
      */
     takeUpload?(key: string, limit: { contentType: string; maxBytes: number }, opts: { read: boolean }): Promise<TakenUpload | null>;
+    /**
+     * Deletes every object under an organization's prefix (`{orgId}/`), or one Run's (`{orgId}/{runId}/`), and returns
+     * how many objects went. Idempotent: nothing under the prefix returns 0. The data lifecycle's purge of an
+     * organization; never a prefix that is not canonical (`canonicalEvidencePrefix`), so no empty or wide one.
+     */
+    deletePrefix(prefix: string): Promise<number>;
 }
 
 /** A cell's upload of one key that passed the store's type and size check. */
@@ -57,6 +63,16 @@ export function canonicalEvidenceKey(key: string): string {
     const [organizationId, runId, side, stepId, type] = parts;
     const canonical = evidenceKey({ organizationId, runId, side, stepId, type });
     if (canonical !== key) throw new InvalidEvidenceKeyError('evidence key is not canonical');
+    return canonical;
+}
+
+/** `{orgId}/` or `{orgId}/{runId}/`, or InvalidEvidenceKeyError: a prefix is built from the same parts as a key. */
+export function canonicalEvidencePrefix(prefix: string): string {
+    const parts = String(prefix ?? '').split('/');
+    if (parts.length < 2 || parts.length > 3 || parts[parts.length - 1] !== '') throw new InvalidEvidenceKeyError('evidence prefix is an org or a Run, ending in a slash');
+    const [organizationId, runId] = parts;
+    const canonical = runId === undefined || runId === '' ? evidenceOrganizationPrefix(organizationId) : `${evidenceOrganizationPrefix(organizationId)}${evidenceOrganizationPrefix(runId)}`;
+    if (canonical !== prefix) throw new InvalidEvidenceKeyError('evidence prefix is not canonical');
     return canonical;
 }
 
@@ -94,6 +110,24 @@ export class FileEvidenceStore implements EvidenceStore {
             if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
             throw e;
         }
+    }
+
+    async deletePrefix(prefix: string): Promise<number> {
+        const dir = resolve(join(this.root, ...canonicalEvidencePrefix(prefix).split('/').filter(Boolean)));
+        const rel = relative(this.root, dir);
+        if (!rel || rel.startsWith('..') || rel.includes(`..${sep}`)) throw new InvalidEvidenceKeyError('evidence prefix escapes the store');
+        // Objects are counted before the tree goes: a directory that is not there holds none.
+        const count = async (d: string): Promise<number> => {
+            let n = 0;
+            for (const e of await fs.readdir(d, { withFileTypes: true }).catch(ifMissing([]))) {
+                if (e.isDirectory()) n += await count(join(d, e.name));
+                else if (!e.name.endsWith(META) && !e.name.endsWith('.tmp')) n++;
+            }
+            return n;
+        };
+        const removed = await count(dir);
+        await fs.rm(dir, { recursive: true, force: true });
+        return removed;
     }
 
     /** Deletes evidence older than the retention (and empty directories); returns how many objects went. */

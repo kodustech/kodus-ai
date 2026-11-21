@@ -24,6 +24,7 @@ import { type EvidenceStore, FileEvidenceStore } from '../shared/evidence/file-e
 import { S3EvidenceStore } from '../shared/evidence/s3-evidence-store';
 import { PgDistributedLocks } from '../shared/persistence/locks';
 import { PgCommandStore } from '../shared/persistence/pg-command-store';
+import { ORGANIZATION_PURGE_STORE, PgOrganizationPurgeStore } from '../shared/persistence/organization-purge';
 import { applyRetention, ensureDatabase, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { HttpLlmGateway } from './agent/http-llm-gateway';
 import { HttpRecipeAuthorClient } from './agent/http-recipe-author';
@@ -34,7 +35,7 @@ import { StepPastPlans } from './run/plan-reuse';
 import { HmacCanaryVault } from './canary/canary';
 import { RecordedLlmGateway } from './agent/llm-gateway';
 import { RuntimeCommandConsumer } from './consumer/run-request.consumer';
-import { CONSUMER_LOCKS, EGRESS_POLICY_PUSHER, POOL_TARGET_SENDER, PR_SESSIONS, runtimeCommandHandlersProvider } from './commands/runtime-command-handlers';
+import { CLAIM_RELEASER, CONSUMER_LOCKS, EGRESS_POLICY_PUSHER, POOL_TARGET_SENDER, PR_SESSIONS, runtimeCommandHandlersProvider } from './commands/runtime-command-handlers';
 import { RUNTIME_RUN_RETRY_EXCHANGE } from '@libs/runtime/run/run-messages';
 import { RuntimeRunRetry } from './consumer/runtime-run-retry';
 import { canaryKeyFrom, hubEnvironments, loadRecordedTurns, poolCellOf, RUN_DEPS_FACTORY, RunDependenciesFactory } from './dbos/run-deps.factory';
@@ -287,6 +288,8 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                         return new EnvironmentSetupService(deps, store, opts);
                     },
                 },
+                { provide: ORGANIZATION_PURGE_STORE, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgOrganizationPurgeStore(pool) },
+                { provide: CLAIM_RELEASER, inject: [HUB_CLIENT], useFactory: (hub: HubClient) => new HubClaimReleaser(hub) },
                 { provide: COMMAND_STORE, inject: [RUNTIME_PG_POOL, LOCK_SCOPED_PG], useFactory: (pool: Pool, sql: LockScopedPg) => new PgCommandStore(pool, sql) },
                 {
                     provide: EGRESS_POLICY_PUSHER,

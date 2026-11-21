@@ -4,6 +4,7 @@ import type { PreviewState } from '@libs/runtime/contracts/preview';
 import type { RunClaimUsage } from '@libs/runtime/api/domain/run-cost';
 
 import type { DistributedLocks } from './locks';
+import type { OrganizationPurgeStore } from './organization-purge';
 import { type CommandStore, type EgressApprovalRecord, type EgressAuditRecord, egressScopes } from './pg-command-store';
 import { normalizedSerial, OPEN_STATES, type PreviewAuditEntry, type PreviewPatch, type PreviewRow, type PreviewSessionRow, type PreviewStore } from './preview-store';
 import { type PlacedSession, type PullRequestRef, SESSION, sessionRef, type SnapshotPlacements } from './snapshot-placements';
@@ -269,5 +270,33 @@ export class InMemoryPreviewStore implements PreviewStore {
         if (!r || (r.state !== 'sleeping' && r.state !== 'blocked')) return false;
         r.wakeRequestedAt = at;
         return true;
+    }
+}
+
+/** The purge's Postgres half in memory: rows are counted per table, as the Pg store reports them. */
+export class InMemoryOrganizationPurgeStore implements OrganizationPurgeStore {
+    /** Rows per organization and table. */
+    readonly rows = new Map<string, Record<string, number>>();
+    /** Claims per organization that are not released; `release` ends them. */
+    readonly claims = new Map<string, Array<{ claimId: string; runId: string | null }>>();
+    readonly cordoned: string[] = [];
+    hostsKept = 0;
+    deleteCalls = 0;
+
+    async liveClaims(organizationId: string) {
+        return [...(this.claims.get(organizationId) ?? [])];
+    }
+    release(organizationId: string, claimId: string) {
+        this.claims.set(organizationId, (this.claims.get(organizationId) ?? []).filter((c) => c.claimId !== claimId));
+    }
+    async cordonPools(organizationId: string) {
+        this.cordoned.push(organizationId);
+        return 1;
+    }
+    async deleteOrganization(organizationId: string) {
+        this.deleteCalls++;
+        const deleted = this.rows.get(organizationId) ?? {};
+        this.rows.delete(organizationId);
+        return { deleted, hostsKept: this.hostsKept };
     }
 }

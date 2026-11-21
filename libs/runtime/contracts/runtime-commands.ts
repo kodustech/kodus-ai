@@ -33,6 +33,7 @@ export const RuntimeCommandName = {
     CellTokenRevoked: 'runtime.cell.registration_token_revoked',
     CellRevokeRequested: 'runtime.cell.revoke_requested',
     LessonUpdateRequested: 'runtime.lesson.update_requested',
+    OrganizationPurgeRequested: 'runtime.organization.purge_requested',
 } as const;
 export type RuntimeCommandEventName = (typeof RuntimeCommandName)[keyof typeof RuntimeCommandName];
 
@@ -388,6 +389,21 @@ export const RuntimeLessonUpdateRequestedSchema = z.strictObject({
 });
 export type RuntimeLessonUpdateRequested = z.infer<typeof RuntimeLessonUpdateRequestedSchema>;
 
+/**
+ * Every Runtime datum of one organization leaves the Runtime: its Postgres rows and its evidence objects, after its
+ * live Runs are cancelled and its claims released. Sent when the product deletes the organization and by the owner's
+ * explicit purge; the worker applies it idempotently (a second one finds nothing and ends). The product's own
+ * Postgres rows and the OpenBao secret values are the API's to delete, before this is sent.
+ */
+export const RuntimeOrganizationPurgeRequestedSchema = z.strictObject({
+    organizationId: id,
+    requestedBy: actor.optional(),
+    requestedAt: z.iso.datetime(),
+    /** Why: the organization was deleted, or its owner asked. */
+    reason: z.enum(['organization_deleted', 'owner_requested']),
+});
+export type RuntimeOrganizationPurgeRequested = z.infer<typeof RuntimeOrganizationPurgeRequestedSchema>;
+
 /** The payload of each command, by its name. */
 export interface RuntimeCommandPayloads {
     'runtime.run.fork_approved': RuntimeForkApproved;
@@ -403,6 +419,7 @@ export interface RuntimeCommandPayloads {
     'runtime.cell.registration_token_revoked': RuntimeCellTokenRevoked;
     'runtime.cell.revoke_requested': RuntimeCellRevokeRequested;
     'runtime.lesson.update_requested': RuntimeLessonUpdateRequested;
+    'runtime.organization.purge_requested': RuntimeOrganizationPurgeRequested;
 }
 
 const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
@@ -419,6 +436,7 @@ const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
     [RuntimeCommandName.CellTokenRevoked]: RuntimeCellTokenRevokedSchema,
     [RuntimeCommandName.CellRevokeRequested]: RuntimeCellRevokeRequestedSchema,
     [RuntimeCommandName.LessonUpdateRequested]: RuntimeLessonUpdateRequestedSchema,
+    [RuntimeCommandName.OrganizationPurgeRequested]: RuntimeOrganizationPurgeRequestedSchema,
 };
 
 /**

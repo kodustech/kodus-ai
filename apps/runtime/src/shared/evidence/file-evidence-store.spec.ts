@@ -31,3 +31,45 @@ describe('file evidence store retention sweep', () => {
         expect(await new FileEvidenceStore(join(dir, 'not-created')).sweep()).toBe(0);
     });
 });
+
+describe('file evidence store deletePrefix (the purge of an organization)', () => {
+    let dir: string;
+    const key = (organizationId: string, runId: string, type = 'output') => evidenceKey({ organizationId, runId, side: 'pr', stepId: STEP, type });
+
+    beforeEach(async () => {
+        dir = await fs.mkdtemp(join(tmpdir(), 'kr-evidence-purge-'));
+    });
+    afterEach(async () => {
+        await fs.rm(dir, { recursive: true, force: true });
+    });
+
+    it("removes an organization's directory with its objects and counts them, and keeps another organization's", async () => {
+        const store = new FileEvidenceStore(dir);
+        await store.put(key('org-1', 'run-1'), 'a', 'text/plain');
+        await store.put(key('org-1', 'run-2', 'logs'), 'b', 'text/plain');
+        await store.put(key('org-10', 'run-1'), 'c', 'text/plain');
+
+        expect(await store.deletePrefix('org-1/')).toBe(2);
+
+        expect(await store.get(key('org-1', 'run-1'))).toBeNull();
+        expect((await store.get(key('org-10', 'run-1')))?.body.toString()).toBe('c');
+        await expect(fs.stat(join(dir, 'org-1'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('removes one Run only, and returns 0 for a prefix that is not there', async () => {
+        const store = new FileEvidenceStore(dir);
+        await store.put(key('org-1', 'run-1'), 'a', 'text/plain');
+        await store.put(key('org-1', 'run-2'), 'b', 'text/plain');
+        expect(await store.deletePrefix('org-1/run-1/')).toBe(1);
+        expect(await store.get(key('org-1', 'run-2'))).not.toBeNull();
+        expect(await store.deletePrefix('org-9/')).toBe(0);
+        expect(await new FileEvidenceStore(join(dir, 'not-created')).deletePrefix('org-1/')).toBe(0);
+    });
+
+    it('refuses a prefix that is empty, wide or climbs out of the store', async () => {
+        const store = new FileEvidenceStore(dir);
+        await store.put(key('org-1', 'run-1'), 'a', 'text/plain');
+        for (const bad of ['', '/', 'org-1', '../', '..//', 'org-1/../', 'org-1/run-1/pr/']) await expect(store.deletePrefix(bad)).rejects.toThrow(/prefix/);
+        expect(await store.get(key('org-1', 'run-1'))).not.toBeNull();
+    });
+});

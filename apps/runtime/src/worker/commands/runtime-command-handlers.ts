@@ -4,7 +4,11 @@ import type { RunProjectionStore } from '@libs/runtime/run';
 
 import { PR_ADMISSION_STORE, type PrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { COMMAND_STORE, RUNTIME_CONFIG, RUNTIME_RUN_PROJECTION_STORE, type WorkerConfig } from '../../shared/config';
+import { EVIDENCE_STORE } from '../evidence/evidence.service';
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { DistributedLocks } from '../../shared/persistence/locks';
+import { ORGANIZATION_PURGE_STORE, type OrganizationPurgeStore } from '../../shared/persistence/organization-purge';
+import type { ClaimReleaser } from '../run/ports';
 import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import { RunEngineService } from '../dbos/run-engine.service';
 import { PREVIEW_SERVICE } from '../preview/preview.service';
@@ -30,6 +34,7 @@ import {
     StopClearedHandler,
     StopRequestedHandler,
 } from './command-handlers';
+import { OrganizationPurgeRequestedHandler } from './organization-purge.handler';
 import type { RunEngine } from './run-engine.port';
 import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler } from './run-requested.handler';
 
@@ -39,6 +44,8 @@ export const EGRESS_POLICY_PUSHER = Symbol('EGRESS_POLICY_PUSHER');
 /** The PR's sessions, removed when it closes (worker/sandbox/pr-sessions.ts). */
 export const PR_SESSIONS = Symbol('PR_SESSIONS');
 export const POOL_TARGET_SENDER = Symbol('POOL_TARGET_SENDER');
+/** Ends a claim through the hub (HubClaimReleaser): the organization purge releases the claims it finds live. */
+export const CLAIM_RELEASER = Symbol('CLAIM_RELEASER');
 /** The cluster-wide PR lock (Postgres advisory locks in production). */
 export const CONSUMER_LOCKS = Symbol('CONSUMER_LOCKS');
 
@@ -62,6 +69,8 @@ export interface CommandHandlerDeps {
     healthPath?: string;
     previews?: PullRequestPreviews;
     prSessions?: Pick<PullRequestSessions, 'forget'>;
+    /** The organization purge: without its store and releaser that command is not handled (the consumer dead-letters it). */
+    organizationPurge?: { store: OrganizationPurgeStore; releaser: ClaimReleaser; evidence: Pick<EvidenceStore, 'deletePrefix'> | null };
     warn?: (msg: string, meta: Record<string, unknown>) => void;
 }
 
@@ -83,6 +92,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
         new CellTokenRevokedHandler(commands),
         new CellRevokeRequestedHandler(commands),
         new LessonUpdateRequestedHandler(deps.lessons),
+        ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence)] : []),
     ];
 }
 
@@ -106,6 +116,9 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         RUNTIME_CONFIG,
         PREVIEW_SERVICE,
         PR_SESSIONS,
+        ORGANIZATION_PURGE_STORE,
+        CLAIM_RELEASER,
+        EVIDENCE_STORE,
     ],
     useFactory: (
         engine: RunEngine,
@@ -121,6 +134,9 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         config: Pick<WorkerConfig, 'setup'>,
         previews: PullRequestPreviews,
         prSessions: PullRequestSessions,
+        purgeStore: OrganizationPurgeStore,
+        releaser: ClaimReleaser,
+        evidence: EvidenceStore | null,
     ) => {
         const logger = new Logger('RuntimeCommandConsumer');
         return runtimeCommandHandlers({
@@ -137,6 +153,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
             healthPath: config.setup.healthPath,
             previews,
             prSessions,
+            organizationPurge: { store: purgeStore, releaser, evidence },
             warn: (msg, meta) => logger.warn({ msg, ...meta }),
         });
     },

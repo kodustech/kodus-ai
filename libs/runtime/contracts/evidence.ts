@@ -94,6 +94,12 @@ export function evidenceKey(input: {
     return `${organizationId}/${runId}/${side}/${stepId.toLowerCase()}/${type}`;
 }
 
+/** `{id}/`: the prefix of every key of an organization (or, for a Run id, of a Run); the id from the same closed set a key's is. */
+export function evidenceOrganizationPrefix(id: string): string {
+    if (!SAFE_ID.test(id)) throw new InvalidEvidenceKeyError('invalid prefix');
+    return `${id}/`;
+}
+
 const sign = (secret: string, key: string, exp: number) =>
     createHmac('sha256', secret).update(`evidence\n${key}\n${exp}`).digest('base64url');
 

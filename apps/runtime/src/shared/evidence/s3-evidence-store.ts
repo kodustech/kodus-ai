@@ -7,7 +7,7 @@ import {
 } from '@libs/runtime/contracts/evidence-s3';
 import type { EvidenceSide, EvidenceUploadType, UploadGrant } from '@libs/runtime/contracts/evidence';
 
-import { canonicalEvidenceKey, type EvidenceObject, type EvidenceStore, type TakenUpload } from './file-evidence-store';
+import { canonicalEvidenceKey, canonicalEvidencePrefix, type EvidenceObject, type EvidenceStore, type TakenUpload } from './file-evidence-store';
 import { S3ObjectClient } from './s3-object-client';
 
 // The evidence object store in an S3-compatible bucket (RUNTIME_EVIDENCE_STORE=s3,
@@ -51,6 +51,25 @@ export class S3EvidenceStore implements EvidenceStore, EvidencePresigner {
     async get(key: string): Promise<EvidenceObject | null> {
         const obj = await this.s3.get(evidenceObjectKey(this.cfg, canonicalEvidenceKey(key)));
         return obj ? { body: obj.body, contentType: obj.contentType } : null;
+    }
+
+    /**
+     * Every object under the prefix, and under its staging twin (`.uploads/`): a cell's upload that was never taken
+     * is also the organization's data. Lists a page, deletes it, follows the token; returns the objects deleted.
+     */
+    async deletePrefix(prefix: string): Promise<number> {
+        const canonical = canonicalEvidencePrefix(prefix);
+        let removed = 0;
+        for (const objectPrefix of [evidenceObjectKey(this.cfg, canonical), evidenceStagingKey(this.cfg, canonical)]) {
+            let token: string | undefined;
+            do {
+                const page = await this.s3.list(objectPrefix, token);
+                await this.s3.deleteMany(page.keys);
+                removed += page.keys.length;
+                token = page.next;
+            } while (token);
+        }
+        return removed;
     }
 
     async takeUpload(key: string, limit: { contentType: string; maxBytes: number }, opts: { read: boolean }): Promise<TakenUpload | null> {

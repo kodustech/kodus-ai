@@ -62,6 +62,33 @@ class FakeS3 {
         return 200;
     }
 
+    /** ListObjectsV2: the keys under the prefix, `pageSize` at a time, the continuation token being the last key returned. */
+    pageSize = 1000;
+    private list(url: URL) {
+        const prefix = url.searchParams.get('prefix') ?? '';
+        const after = url.searchParams.get('continuation-token');
+        this.calls.push(`LIST ${prefix}`);
+        const all = [...this.objects.keys()].filter((k) => k.startsWith(prefix) && (!after || k > after)).sort();
+        const page = all.slice(0, this.pageSize);
+        const truncated = all.length > page.length;
+        return new Response(
+            `<ListBucketResult>${page.map((k) => `<Contents><Key>${k}</Key></Contents>`).join('')}<IsTruncated>${truncated}</IsTruncated>${truncated ? `<NextContinuationToken>${page[page.length - 1]}</NextContinuationToken>` : ''}</ListBucketResult>`,
+            { status: 200 },
+        );
+    }
+
+    /** DeleteObjects: Content-MD5 must match the body, as S3 requires. */
+    failDeleteWith?: string;
+    private deleteObjects(h: Headers, body: Uint8Array) {
+        const xml = Buffer.from(body);
+        expect(h.get('content-md5')).toBe(createHash('md5').update(xml).digest('base64'));
+        const keys = [...xml.toString().matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => m[1]);
+        this.calls.push(`DELETE_OBJECTS ${keys.length}`);
+        if (this.failDeleteWith) return new Response(`<DeleteResult><Error><Key>${keys[0]}</Key><Code>${this.failDeleteWith}</Code></Error></DeleteResult>`, { status: 200 });
+        for (const k of keys) this.objects.delete(k);
+        return new Response('<DeleteResult/>', { status: 200 });
+    }
+
     fetch: typeof fetch = async (input, init) => {
         const url = new URL(String(input));
         const method = init?.method ?? 'GET';
@@ -69,6 +96,8 @@ class FakeS3 {
         expect(h.get('authorization')).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIDTEST\//);
         expect(url.origin).toBe('http://minio:9000');
         const key = this.keyOf(url);
+        if (method === 'GET' && url.searchParams.get('list-type') === '2') return this.list(url);
+        if (method === 'POST' && url.searchParams.has('delete')) return this.deleteObjects(h, init?.body as Uint8Array);
         this.calls.push(`${method} ${key}`);
         const obj = this.objects.get(key);
         const headersOf = (o: { body: Buffer; contentType: string; etag: string; meta?: Record<string, string> }) => ({
@@ -194,5 +223,55 @@ describe('S3EvidenceStore', () => {
         const u = new URL(req.baseline![0].url);
         expect(u.pathname).toBe(`/evidence/${evidenceKey({ organizationId: 'org-1', runId: 'run-1', side: 'base', stepId: STEP, type: 'screenshot-0' })}`);
         expect(u.searchParams.get('X-Amz-Expires')).toBe('300');
+    });
+
+    describe('deletePrefix (the purge of an organization)', () => {
+        const put = (s3: FakeS3, org: string, run: string, type = 'output', staging = false) =>
+            s3.set(`${staging ? '.uploads/' : ''}${evidenceKey({ organizationId: org, runId: run, side: 'pr', stepId: STEP, type })}`, 'x', 'application/json');
+
+        it("deletes an organization's evidence and its untaken uploads across pages, and nothing of another organization", async () => {
+            const { s3, store } = setup();
+            s3.pageSize = 2;
+            for (const run of ['run-1', 'run-2', 'run-3']) put(s3, 'org-1', run);
+            put(s3, 'org-1', 'run-1', 'logs', true);
+            put(s3, 'org-10', 'run-1');
+            put(s3, 'org-2', 'run-1');
+            put(s3, 'org-2', 'run-1', 'logs', true);
+
+            expect(await store.deletePrefix('org-1/')).toBe(4);
+
+            // org-10 shares the characters "org-1" but not the prefix "org-1/".
+            expect([...s3.objects.keys()].map((k) => k.split('/').slice(0, k.startsWith('.') ? 2 : 1).join('/')).sort()).toEqual(['.uploads/org-2', 'org-10', 'org-2']);
+            expect(s3.calls.filter((c) => c.startsWith('DELETE_OBJECTS'))).toEqual(['DELETE_OBJECTS 2', 'DELETE_OBJECTS 1', 'DELETE_OBJECTS 1']);
+        });
+
+        it('deletes one Run only when given its prefix, and is idempotent', async () => {
+            const { s3, store } = setup();
+            put(s3, 'org-1', 'run-1');
+            put(s3, 'org-1', 'run-2');
+            expect(await store.deletePrefix('org-1/run-1/')).toBe(1);
+            expect(s3.objects.size).toBe(1);
+            expect(await store.deletePrefix('org-1/run-1/')).toBe(0);
+        });
+
+        it('refuses an empty, a wide or a non canonical prefix before any call', async () => {
+            const { s3, store } = setup();
+            put(s3, 'org-1', 'run-1');
+            for (const bad of ['', '/', 'org-1', '../', 'org-1/../', 'org-1/run-1/pr/', 'org 1/']) await expect(store.deletePrefix(bad)).rejects.toThrow(/prefix/);
+            expect(s3.calls).toEqual([]);
+            expect(s3.objects.size).toBe(1);
+        });
+
+        it('a key S3 fails to delete throws with its code only, no key and no URL', async () => {
+            const { s3, store } = setup();
+            put(s3, 'org-1', 'run-1');
+            s3.failDeleteWith = 'AccessDenied';
+            const err = await store.deletePrefix('org-1/').then(
+                () => undefined,
+                (e: Error) => e,
+            );
+            expect(err).toMatchObject({ op: 'delete_objects', status: 200, code: 'AccessDenied' });
+            expect(err!.message).toBe('s3 delete_objects failed: 200 AccessDenied');
+        });
     });
 });
