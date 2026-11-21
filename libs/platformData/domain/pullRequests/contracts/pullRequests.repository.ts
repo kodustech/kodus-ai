@@ -15,6 +15,7 @@ import {
     IFile,
     ISuggestion,
     ISuggestionByPR,
+    IPullRequestRef,
     IPullRequestWithDeliveredSuggestions,
     IPullRequestWithKodyChangeRequest,
     IPullRequestUserMapping,
@@ -308,7 +309,7 @@ export interface IPullRequestsRepository {
     ): Promise<IPullRequestWithKodyChangeRequest[]>;
     findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
-        prNumbers: number[],
+        prRefs: IPullRequestRef[],
         status: string | string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]>;
     findPullRequestsWithoutDeliveredSuggestionsForApproval(

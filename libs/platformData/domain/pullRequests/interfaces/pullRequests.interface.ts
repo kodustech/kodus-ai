@@ -318,6 +318,21 @@ export interface IDeliveredSuggestion {
     };
 }
 
+/**
+ * A pull request addressed by what identifies it: a `number` is only unique
+ * inside a repository, and one organization holds many repositories that
+ * number their PRs independently.
+ *
+ * `repositoryId` is optional only for callers that cannot know it (a PR opened
+ * from a URL, a message published before this pair existed). Such a reference
+ * falls back to matching the number alone, which is what this query did for
+ * every caller before issue #2625.
+ */
+export interface IPullRequestRef {
+    repositoryId?: string;
+    pullRequestNumber: number;
+}
+
 export interface IPullRequestWithDeliveredSuggestions {
     _id: string;
     approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;

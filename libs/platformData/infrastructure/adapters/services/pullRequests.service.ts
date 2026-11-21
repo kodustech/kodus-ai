@@ -16,6 +16,7 @@ import {
     ICommit,
     IFile,
     IPullRequests,
+    IPullRequestRef,
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
@@ -496,12 +497,12 @@ export class PullRequestsService implements IPullRequestsService {
 
     async findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
-        prNumbers: number[],
-        status: string,
+        prRefs: IPullRequestRef[],
+        status: string | string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
-            prNumbers,
+            prRefs,
             status,
         );
     }
