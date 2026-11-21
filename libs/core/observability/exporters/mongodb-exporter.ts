@@ -1059,22 +1059,20 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     }
 
     /**
-     * The organization/team pair reaches a log call in more than one shape.
-     * Callers either pass it at the top level (`organizationAndTeamData`) or,
-     * as the code-management services do, inside the params they log
-     * (`metadata: { params }`). Reading only the first shape stored
-     * `organizationId: "unknown"` for 61% of the error rows, including the
-     * ~28,600 Bitbucket Cloud and Azure Repos rows that carried it one level
-     * deeper (#2639).
+     * The organization/team pair reaches the exporter in one of two shapes.
+     * `SimpleLogger` flattens the log call's `metadata` into the processor
+     * context, so a service that logs `metadata: { params }` arrives here as
+     * `{ params }`; other callers set the pair at the top level. Reading only
+     * the top level stored `organizationId: "unknown"` for 61% of the error
+     * rows, including the ~28,600 Bitbucket Cloud and Azure Repos rows that
+     * carried it inside `params` (#2639).
      *
-     * Precedence is the shallowest shape first, so a caller that sets the pair
-     * explicitly is never overridden by a nested payload.
+     * The shallowest shape wins, so an explicit pair is never overridden by a
+     * payload.
      */
     private organizationAndTeamDataOf(context?: LogContext): any {
         const candidates = [
             (context as any)?.organizationAndTeamData,
-            (context as any)?.metadata?.organizationAndTeamData,
-            (context as any)?.metadata?.params?.organizationAndTeamData,
             (context as any)?.params?.organizationAndTeamData,
         ];
 
