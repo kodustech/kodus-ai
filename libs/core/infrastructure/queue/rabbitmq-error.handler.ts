@@ -109,7 +109,9 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         // handler, so a throw only becomes an unhandled rejection. The broker
         // owns redelivery of any delivery left unacked.
         try {
-            if (isClaimConflictError(error)) {
+            if (isClaimConflictError(error) && error.returnToQueue) {
+                await this.returnToQueue(msg, headers, error, baseExchange);
+            } else if (isClaimConflictError(error)) {
                 await this.requeueHeldClaim(
                     msg,
                     headers,
@@ -118,9 +120,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                 );
                 channel.ack(msg);
                 return;
-            }
-
-            if (retryCount < this.maxRetriesConsumer) {
+            } else if (retryCount < this.maxRetriesConsumer) {
                 await this.retryWithDelay(
                     msg,
                     headers,
@@ -163,6 +163,50 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                 metadata,
             });
         }
+    }
+
+    /**
+     * Work this worker's shutdown stopped (a deep-scan slice preempted by a
+     * deploy; its consumer is already cancelled). A fresh copy goes to the
+     * queue's own exchange, not the delayed one, whose copies were never
+     * delivered (#2654), and starts a new delivery count, so deploys do not
+     * add up toward the quorum queue's delivery limit. x-retry-count is
+     * left alone, as for a held claim. If the publish is not confirmed the
+     * original stays unacked and the broker redelivers it.
+     */
+    private async returnToQueue(
+        msg: ConsumeMessage,
+        headers: Record<string, any>,
+        error: { message?: string },
+        baseExchange: string,
+    ): Promise<void> {
+        delete headers['x-delay'];
+        delete headers['x-delivery-count'];
+
+        this.logger.warn({
+            message: 'Stopped work returned to its queue',
+            context: RabbitMQErrorHandler.name,
+            metadata: {
+                messageId: msg.properties.messageId,
+                routingKey: msg.fields.routingKey,
+                retryCount: headers[this.RETRY_COUNT_HEADER] || 0,
+                error: error?.message,
+            },
+        });
+
+        await this.amqpConnection.publish(
+            baseExchange,
+            msg.fields.routingKey,
+            msg.content,
+            {
+                messageId: msg.properties.messageId,
+                correlationId: msg.properties.correlationId,
+                contentType: msg.properties.contentType,
+                contentEncoding: msg.properties.contentEncoding,
+                persistent: true,
+                headers,
+            },
+        );
     }
 
     /**
