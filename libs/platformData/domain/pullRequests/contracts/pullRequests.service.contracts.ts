@@ -23,6 +23,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
     findById(uuid: string): Promise<PullRequestsEntity | null>;
     findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]>;
 
@@ -44,7 +45,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
         /** The review's save: keep the stored status, merged and closedAt. */
-        options?: { keepStoredState?: boolean },
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null>;
 
     extractUser(

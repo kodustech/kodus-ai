@@ -1,9 +1,8 @@
 /**
- * INTEGRATION TEST - Validates that the SavePullRequestUseCase cache optimization
- * correctly retrieves files and commits from MongoDB instead of calling the Git API.
- *
- * This test requires a running MongoDB instance.
- * Run with: yarn test:integration or manually with Docker.
+ * PullRequestsRepository.findByNumberAndRepositoryId against a real MongoDB:
+ * the lookup the PR files endpoint, Kody chat, Kody Issues and the backfill
+ * read a stored PR through. It matches the PR by number, repository id and
+ * organization, and hands back its files and commits as stored.
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
@@ -22,14 +21,14 @@ import { resolveMongoTestGate } from '../mongo-test-uri';
 const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
 
 (shouldSkip ? describe.skip : describe)(
-    'SavePullRequestUseCase - Cache optimization (findByNumberAndRepositoryId)',
+    'PullRequestsRepository.findByNumberAndRepositoryId (real MongoDB)',
     () => {
         let repository: PullRequestsRepository;
         let model: Model<PullRequestsModel>;
         let module: TestingModule;
 
-        const TEST_ORG_ID = 'test-org-cache-' + Date.now();
-        const TEST_TEAM_ID = 'test-team-cache-' + Date.now();
+        const TEST_ORG_ID = 'test-org-lookup-' + Date.now();
+        const TEST_TEAM_ID = 'test-team-lookup-' + Date.now();
 
         const organizationAndTeamData = {
             organizationId: TEST_ORG_ID,
@@ -107,7 +106,7 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             });
         }
 
-        describe('Cache retrieval via findByNumberAndRepositoryId', () => {
+        describe('finding the stored PR', () => {
             it('should return files and commits from DB for an existing PR', async () => {
                 const testFiles = [
                     {
@@ -251,7 +250,7 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             });
         });
 
-        describe('Cache data matches what would be saved from API', () => {
+        describe('the files and commits as stored', () => {
             it('should preserve file structure with all relevant fields', async () => {
                 const richFile = {
                     filename: 'src/complex.ts',

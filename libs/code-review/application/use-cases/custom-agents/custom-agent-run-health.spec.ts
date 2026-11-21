@@ -247,23 +247,18 @@ describe('toCustomAgentRunRecords', () => {
 });
 
 describe('GetCustomAgentsStatusUseCase with run records', () => {
-    const empty = { toArray: async () => [] };
-
     it('lists an agent whose runs all failed, with why, and the files it cited', async () => {
-        const aggregate = jest
-            .fn()
-            .mockReturnValueOnce(empty)
-            .mockReturnValueOnce(empty)
-            .mockReturnValueOnce({
-                toArray: async () => [
-                    {
-                        agentId: 'valves',
-                        reason: 'CLAUDE.md is not a guide linked to this review',
-                        findings: 2,
-                        prNumbers: [4],
-                    },
-                ],
-            });
+        const repository = {
+            findCustomAgentSuggestionRows: jest.fn(async () => []),
+            findUnfollowedCustomAgentCitations: jest.fn(async () => [
+                {
+                    agentId: 'valves',
+                    reason: 'CLAUDE.md is not a guide linked to this review',
+                    findings: 2,
+                    prNumbers: [4],
+                },
+            ]),
+        };
         const listSince = jest.fn(async () => [
             run({
                 at: new Date('2026-10-03T10:00:00Z'),
@@ -272,10 +267,10 @@ describe('GetCustomAgentsStatusUseCase with run records', () => {
                 prNumber: 4,
             }),
         ]);
-        const useCase = new GetCustomAgentsStatusUseCase(
-            { getNativeCollection: () => ({ aggregate }) } as any,
-            { record: jest.fn(), listSince },
-        );
+        const useCase = new GetCustomAgentsStatusUseCase(repository as any, {
+            record: jest.fn(),
+            listSince,
+        });
 
         const result = await useCase.execute({
             organizationId: 'org-1',
@@ -314,16 +309,13 @@ describe('GetCustomAgentsStatusUseCase with run records', () => {
     });
 
     it('still shows the findings when the run records cannot be read', async () => {
-        const aggregate = jest
-            .fn()
-            .mockReturnValueOnce({
-                toArray: async () => [
-                    { agentId: 'valves', prNumber: 1, deliveryStatus: 'sent' },
-                ],
-            })
-            .mockReturnValue(empty);
         const useCase = new GetCustomAgentsStatusUseCase(
-            { getNativeCollection: () => ({ aggregate }) } as any,
+            {
+                findCustomAgentSuggestionRows: jest.fn(async () => [
+                    { agentId: 'valves', prNumber: 1, deliveryStatus: 'sent' },
+                ]),
+                findUnfollowedCustomAgentCitations: jest.fn(async () => []),
+            } as any,
             {
                 record: jest.fn(),
                 listSince: jest.fn(async () => {

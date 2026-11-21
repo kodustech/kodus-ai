@@ -16,10 +16,6 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import {
-    IPullRequestsRepository,
-    PULL_REQUESTS_REPOSITORY_TOKEN,
-} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -33,9 +29,6 @@ export class SavePullRequestUseCase {
 
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService: IPullRequestsService,
-
-        @Inject(PULL_REQUESTS_REPOSITORY_TOKEN)
-        private readonly pullRequestsRepository: IPullRequestsRepository,
 
         private readonly codeManagement: CodeManagementService,
     ) {}
@@ -161,9 +154,9 @@ export class SavePullRequestUseCase {
                     ...resolvedUsers,
                 };
 
-                // Optimization: Only fetch files/commits from Git API when needed
-                // - For new PRs (opened) or new commits (synchronize): fetch from API
-                // - For other events (closed, reopened, etc.): use existing data from DB
+                // Files and commits come from the Git API only when they can
+                // have changed (opened, synchronize, ready_for_review). Any
+                // other event keeps the stored ones untouched.
                 const shouldFetchFromApi = this.shouldFetchFilesAndCommits(
                     payload,
                     platformType,
@@ -213,44 +206,6 @@ export class SavePullRequestUseCase {
                             label: `saveSync:getCommits PR#${pullRequestWithUserData.number}`,
                         },
                     );
-                } else {
-                    // For non-critical events, try to get existing data from DB
-                    const existingPR =
-                        await this.pullRequestsRepository.findByNumberAndRepositoryId(
-                            pullRequest?.number,
-                            repository.id,
-                            organizationAndTeamData,
-                        );
-
-                    if (existingPR) {
-                        // Map DB file format back to API format for compatibility
-                        // DB stores: { path, filename (short), added, deleted, previousName }
-                        // API returns: { filename (full path), additions, deletions, previous_filename }
-                        changedFiles = (existingPR.files || []).map(
-                            (f: any) => ({
-                                filename: f.path || f.filename,
-                                additions: f.added ?? 0,
-                                deletions: f.deleted ?? 0,
-                                changes: f.changes ?? 0,
-                                patch: f.patch ?? '',
-                                sha: f.sha ?? '',
-                                status: f.status ?? '',
-                                previous_filename: f.previousName ?? '',
-                            }),
-                        );
-                        pullRequestCommits = existingPR.commits || [];
-
-                        this.logger.debug({
-                            message: `Using cached files/commits for PR#${pullRequest?.number} (action: ${payload?.action || payload?.object_attributes?.action})`,
-                            context: SavePullRequestUseCase.name,
-                            metadata: {
-                                prNumber: pullRequest?.number,
-                                filesCount: changedFiles.length,
-                                commitsCount: pullRequestCommits.length,
-                                organizationAndTeamData,
-                            },
-                        });
-                    }
                 }
 
                 try {
@@ -264,6 +219,12 @@ export class SavePullRequestUseCase {
                             platformType,
                             organizationAndTeamData,
                             pullRequestCommits,
+                            undefined,
+                            // Closed, assigned, labeled...: the files and
+                            // commits are the stored ones. Re-saving them from
+                            // the stored copy rewrote every file of the PR on
+                            // every such event.
+                            { filesUnchanged: !shouldFetchFromApi },
                         );
 
                     return result;

@@ -281,12 +281,37 @@ describe('startStallWatchdog (real worker thread)', () => {
         // the 5s inspector bound plus the profile) would leave this stall
         // `not-captured`, so wait out a full capture of silence first.
         await arm({ quietMs: 6_000, maxWaitMs: 20_000 });
+        const provokedAt = Date.now();
         execSync('sleep 2');
 
-        const fail = await waitFor(() => hits.find(ourFail), 15_000);
+        // The stall this test provoked is the one that began with execSync.
+        // On a slow runner a second stall can follow it (the main thread
+        // catching up), and its report or alert can arrive first; the
+        // provoked one's report waits for the inspector, which answers only
+        // after execSync returns. So both are picked by start, not by order.
+        const provoked = (startedAt?: number) =>
+            startedAt !== undefined &&
+            startedAt >= provokedAt - 100 &&
+            startedAt <= provokedAt + 400;
+        const stall = await waitFor(
+            () =>
+                reports.find(
+                    (r) => r.kind === 'stall' && provoked(r.startedAt),
+                ),
+            20_000,
+        );
+        const fail = await waitFor(
+            () =>
+                hits.find(
+                    (h) =>
+                        ourFail(h) &&
+                        JSON.parse(h.body).context?.startedAt ===
+                            stall.startedAt,
+                ),
+            15_000,
+        );
         server.close();
 
-        const stall = reports.find((r) => r.kind === 'stall');
         expect(stall?.stalledMs).toBeGreaterThanOrEqual(400);
         // The inspector only got an answer after execSync returned: neither
         // the stack nor the profile it would carry is the stall, so neither
@@ -305,7 +330,7 @@ describe('startStallWatchdog (real worker thread)', () => {
                         stackUnavailable: r.stackUnavailable,
                     })),
                 ),
-                { armedAt },
+                { armedAt, provokedAt },
             );
         }
         expect(stall?.stack).toBeNull();

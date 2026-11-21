@@ -335,7 +335,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             return { find: model.find as jest.Mock, maxTimeMS };
         };
 
-        it('queries with bounded $in on both keys instead of an $or per pair', async () => {
+        it('reads each repository for its own numbers, not the numbers x repositories cross product', async () => {
             const { find, maxTimeMS } = mockFind([]);
 
             await repo.findManyByNumbersAndRepositoryIds(
@@ -347,14 +347,19 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'org-A',
             );
 
-            const [filter, projection] = find.mock.calls[0];
-            expect(filter).toEqual({
-                'organizationId': 'org-A',
-                'number': { $in: [1, 2] },
-                'repository.id': { $in: ['r1', 'r2'] },
-            });
-            expect(filter.$or).toBeUndefined();
-            expect(projection).toEqual({
+            expect(find.mock.calls.map(([filter]) => filter)).toEqual([
+                {
+                    'organizationId': 'org-A',
+                    'number': { $in: [1, 2] },
+                    'repository.id': 'r1',
+                },
+                {
+                    'organizationId': 'org-A',
+                    'number': { $in: [1] },
+                    'repository.id': 'r2',
+                },
+            ]);
+            expect(find.mock.calls[0][1]).toEqual({
                 files: 0,
                 commits: 0,
                 prLevelSuggestions: 0,
@@ -362,12 +367,20 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(maxTimeMS).toHaveBeenCalledWith(50_000);
         });
 
-        it('returns only the exact requested pairs, not the $in cross-product', async () => {
-            mockFind([
-                { number: 1, repository: { id: 'r1' } },
-                { number: 2, repository: { id: 'r1' } },
-                { number: 2, repository: { id: 'r2' } }, // cross-product, not requested
-            ]);
+        it('returns what every repository read found', async () => {
+            const { find } = mockFind([]);
+            const exec = jest
+                .fn()
+                .mockResolvedValueOnce([
+                    { number: 1, repository: { id: 'r1' } },
+                    { number: 2, repository: { id: 'r1' } },
+                ])
+                .mockResolvedValueOnce([
+                    { number: 1, repository: { id: 'r2' } },
+                ]);
+            find.mockReturnValue({
+                lean: () => ({ maxTimeMS: () => ({ exec }) }),
+            });
 
             const result = await repo.findManyByNumbersAndRepositoryIds(
                 [
@@ -380,7 +393,74 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
             expect(
                 result.map((pr: any) => `${pr.repository.id}:${pr.number}`),
-            ).toEqual(['r1:1', 'r1:2']);
+            ).toEqual(['r1:1', 'r1:2', 'r2:1']);
+        });
+
+        it('runs the per-repository reads at most five at a time, not one after another', async () => {
+            const { find } = mockFind([]);
+            const pending: Array<() => void> = [];
+            const exec = jest.fn(
+                () =>
+                    new Promise<any[]>((resolve) =>
+                        pending.push(() => resolve([])),
+                    ),
+            );
+            find.mockReturnValue({
+                lean: () => ({ maxTimeMS: () => ({ exec }) }),
+            });
+            const flush = () => new Promise((r) => setImmediate(r));
+
+            const call = repo.findManyByNumbersAndRepositoryIds(
+                Array.from({ length: 7 }, (_, i) => ({
+                    number: 1,
+                    repositoryId: `r${i}`,
+                })),
+                'org-A',
+            );
+            await flush();
+            expect(exec).toHaveBeenCalledTimes(5);
+
+            while (pending.length) {
+                pending.shift()!();
+                await flush();
+            }
+            await call;
+            expect(exec).toHaveBeenCalledTimes(7);
+        });
+
+        it('starts no further read once one has failed', async () => {
+            const { find } = mockFind([]);
+            const pending: Array<(error?: Error) => void> = [];
+            const exec = jest.fn(
+                () =>
+                    new Promise<any[]>((resolve, reject) =>
+                        pending.push((error) =>
+                            error ? reject(error) : resolve([]),
+                        ),
+                    ),
+            );
+            find.mockReturnValue({
+                lean: () => ({ maxTimeMS: () => ({ exec }) }),
+            });
+            const flush = () => new Promise((r) => setImmediate(r));
+
+            const call = repo.findManyByNumbersAndRepositoryIds(
+                Array.from({ length: 12 }, (_, i) => ({
+                    number: 1,
+                    repositoryId: `r${i}`,
+                })),
+                'org-A',
+            );
+            await flush();
+            pending.shift()!(new Error('primary stepped down'));
+            await expect(call).rejects.toThrow('primary stepped down');
+            while (pending.length) {
+                pending.shift()!();
+                await flush();
+            }
+
+            // Five were in flight; none of the seven queued ones ran.
+            expect(exec).toHaveBeenCalledTimes(5);
         });
 
         it('skips the query for an empty criteria list', async () => {
@@ -463,7 +543,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     });
 
     describe('findPullRequestsWithoutDeliveredSuggestionsForApproval', () => {
-        it('queries exact repository/PR pairs in bounded pages without loading file arrays', async () => {
+        it('reads each repository for at most 100 of its numbers, without loading file arrays', async () => {
             const failure = {
                 decision: 'approve',
                 reason: 'Approved by policy Docs.',
@@ -490,10 +570,14 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             const limit = jest.fn().mockReturnValue({ lean });
             const sort = jest.fn().mockReturnValue({ limit });
             model.find = jest.fn().mockReturnValue({ sort });
-            const refs = Array.from({ length: 101 }, (_, index) => ({
-                repositoryId: index % 2 ? 'repo-b' : 'repo-a',
-                pullRequestNumber: index + 1,
-            }));
+            // 101 PRs of repo-a and one of repo-b, which shares number 1.
+            const refs = [
+                ...Array.from({ length: 101 }, (_, index) => ({
+                    repositoryId: 'repo-a',
+                    pullRequestNumber: index + 1,
+                })),
+                { repositoryId: 'repo-b', pullRequestNumber: 1 },
+            ];
 
             const results =
                 await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
@@ -502,24 +586,61 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     'open',
                 );
 
-            expect(model.find).toHaveBeenCalledTimes(2);
+            const reads = model.find.mock.calls.map(([filter]) => [
+                filter['repository.id'],
+                filter.number.$in.length,
+            ]);
+            expect(reads).toEqual([
+                ['repo-a', 100],
+                ['repo-a', 1],
+                ['repo-b', 1],
+            ]);
             const [filter, projection] = model.find.mock.calls[0];
             expect(filter).toMatchObject({
                 organizationId: 'org-A',
                 status: 'open',
             });
-            expect(filter.$or).toHaveLength(100);
-            expect(filter.$or[0]).toEqual({
-                'repository.id': 'repo-a',
-                'number': 1,
-            });
+            expect(filter.$or).toBeUndefined();
             expect(filter.$nor).toHaveLength(1);
             expect(projection.files).toBeUndefined();
             expect(projection.approvalReasonDeliveryFailure).toBe(1);
             expect(results[0].approvalReasonDeliveryFailure).toEqual(failure);
             expect(sort).toHaveBeenCalledWith({ _id: 1 });
-            expect(limit).toHaveBeenNthCalledWith(1, 100);
-            expect(limit).toHaveBeenNthCalledWith(2, 1);
+            // The unique index bounds each read by the numbers it asks for.
+            expect(limit.mock.calls).toEqual([[100], [1], [1]]);
+        });
+
+        it('reads one repository at a time, since the cron already runs teams side by side', async () => {
+            const pending: Array<() => void> = [];
+            const exec = jest.fn(
+                () => new Promise<any[]>((r) => pending.push(() => r([]))),
+            );
+            const chain = {
+                sort: () => chain,
+                limit: () => chain,
+                lean: () => chain,
+                maxTimeMS: () => ({ exec }),
+            };
+            model.find = jest.fn().mockReturnValue(chain);
+            const flush = () => new Promise((r) => setImmediate(r));
+
+            const call =
+                repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                    'org-A',
+                    ['repo-a', 'repo-b', 'repo-c'].map((repositoryId) => ({
+                        repositoryId,
+                        pullRequestNumber: 1,
+                    })),
+                    'open',
+                );
+            await flush();
+            expect(exec).toHaveBeenCalledTimes(1);
+            while (pending.length) {
+                pending.shift()!();
+                await flush();
+            }
+            await call;
+            expect(exec).toHaveBeenCalledTimes(3);
         });
     });
 

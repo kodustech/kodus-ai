@@ -75,14 +75,12 @@ describe('ImplementationVerificationProcessor', () => {
             }),
         };
         suggestionService = {
-            checkImplementedSuggestions: jest
-                .fn()
-                .mockResolvedValue({
-                    checked: 1,
-                    decided: 0,
-                    persisted: [],
-                    unmeasured: [],
-                }),
+            checkImplementedSuggestions: jest.fn().mockResolvedValue({
+                checked: 1,
+                decided: 0,
+                persisted: [],
+                unmeasured: [],
+            }),
             resolveImplementedSuggestionsOnPlatform: jest
                 .fn()
                 .mockResolvedValue(undefined),
@@ -150,6 +148,18 @@ describe('ImplementationVerificationProcessor', () => {
         );
     });
 
+    it("reads the job organization's PR, and only its suggestions", async () => {
+        await processor.process('job-1');
+
+        const [filter, projection] = pullRequestsService.findOne.mock.calls[0];
+        expect(filter).toMatchObject({
+            'number': 42,
+            'repository.id': 'repo-1',
+            'organizationId': 'org-1',
+        });
+        expect(projection).toEqual({ 'files.suggestions': 1 });
+    });
+
     it('tells the check which PR document holds the suggestions', async () => {
         await processor.process('job-1');
 
@@ -212,7 +222,10 @@ describe('ImplementationVerificationProcessor', () => {
             checked: 1,
             decided: 1,
             persisted: [
-                { id: 's-1', implementationStatus: ImplementationStatus.IMPLEMENTED },
+                {
+                    id: 's-1',
+                    implementationStatus: ImplementationStatus.IMPLEMENTED,
+                },
             ],
             unmeasured: [],
         });
@@ -398,7 +411,10 @@ describe('ImplementationVerificationProcessor', () => {
 
     it.each([
         { scenario: 'no files', pr: { files: null } },
-        { scenario: 'a file with no suggestions', pr: { files: [{ suggestions: null }] } },
+        {
+            scenario: 'a file with no suggestions',
+            pr: { files: [{ suggestions: null }] },
+        },
     ])(
         'completes with NO_SUGGESTIONS for a saved PR with $scenario',
         async ({ pr }) => {
@@ -441,7 +457,9 @@ describe('ImplementationVerificationProcessor', () => {
         await processor.process('job-1');
 
         completedWith({ reason: 'PLATFORM_PR_NOT_FOUND' });
-        expect(pullRequestManagerService.getChangedFiles).not.toHaveBeenCalled();
+        expect(
+            pullRequestManagerService.getChangedFiles,
+        ).not.toHaveBeenCalled();
         // The skipped check stays traceable per org/PR.
         expect(warn).toHaveBeenCalledWith(
             expect.objectContaining({

@@ -8,6 +8,7 @@ import { PullRequestsModel } from '@libs/platformData/infrastructure/adapters/re
 
 import { ANALYTICS_DATA_SOURCE } from '../schema.constant';
 import { parseTimestamp } from './parse-timestamps.util';
+import { ANALYTICS_QUERY_READ } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 export const PR_INGESTION_WATERMARK = 'pull_requests';
 export const PR_INGESTION_SOURCE = 'pull_requests';
@@ -59,6 +60,45 @@ export interface IngestionRunResult {
     runId: string | null;
     durationMs: number;
 }
+
+// Projection: only fields the warehouse actually needs. Keeps
+// payload small (PR docs can be MBs each — files[] + suggestions[]
+// dominate). Anything not listed never crosses the wire.
+export const PULL_REQUEST_INGESTION_PROJECTION = {
+    _id: 1,
+    organizationId: 1,
+    repository: 1,
+    // Provider-facing PR number — feeds `pull_requests_opt.pr_number`
+    // (explorer deep links). Easy to miss: anything not listed here
+    // silently arrives as undefined in writeOnePR.
+    number: 1,
+    status: 1,
+    user: 1,
+    totalChanges: 1,
+    createdAt: 1,
+    openedAt: 1,
+    closedAt: 1,
+    updatedAt: 1,
+    // Every file field but the patch: the warehouse stores the files
+    // as JSON and no query reads a diff from it, while the patches
+    // are most of what a PR document weighs (up to 8 MB).
+    'files.id': 1,
+    'files.path': 1,
+    'files.filename': 1,
+    'files.previousName': 1,
+    'files.sha': 1,
+    'files.status': 1,
+    'files.added': 1,
+    'files.deleted': 1,
+    'files.changes': 1,
+    'files.createdAt': 1,
+    'files.updatedAt': 1,
+    'files.reviewMode': 1,
+    'files.codeReviewModelUsed': 1,
+    'files.patchTruncated': 1,
+    'files.suggestions': 1,
+    commits: 1,
+} as const;
 
 /**
  * One-shot ingestion pass: pulls PRs from Mongo (filtered by
@@ -151,27 +191,7 @@ export class PullRequestIngestionService {
             filter[cursorField] = range;
         }
 
-        // Projection: only fields the warehouse actually needs. Keeps
-        // payload small (PR docs can be MBs each — files[] + suggestions[]
-        // dominate). Anything not listed never crosses the wire.
-        const projection = {
-            _id: 1,
-            organizationId: 1,
-            repository: 1,
-            // Provider-facing PR number — feeds `pull_requests_opt.pr_number`
-            // (explorer deep links). Easy to miss: anything not listed here
-            // silently arrives as undefined in writeOnePR.
-            number: 1,
-            status: 1,
-            user: 1,
-            totalChanges: 1,
-            createdAt: 1,
-            openedAt: 1,
-            closedAt: 1,
-            updatedAt: 1,
-            files: 1,
-            commits: 1,
-        } as const;
+        const projection = PULL_REQUEST_INGESTION_PROJECTION;
 
         // Tuple sort pairs the cursor field with `_id` so ties are
         // deterministic and the watermark resume is stable across runs.
@@ -184,7 +204,7 @@ export class PullRequestIngestionService {
         // next run.
         const cursor = this.pullRequestsModel
             .find(filter, projection)
-            .read('secondaryPreferred')
+            .read(ANALYTICS_QUERY_READ)
             .sort(sortKey)
             .lean()
             .cursor({ batchSize });

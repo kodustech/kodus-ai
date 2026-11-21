@@ -19,12 +19,7 @@ describe('SavePullRequestUseCase deterministic predicates', () => {
 
     beforeEach(() => {
         // None of the four constructor deps are used by the target methods.
-        useCase = new SavePullRequestUseCase(
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-        );
+        useCase = new SavePullRequestUseCase({} as any, {} as any, {} as any);
     });
 
     const isValid = (payload: any, platformType: PlatformType) =>
@@ -365,7 +360,6 @@ describe('SavePullRequestUseCase on Forgejo saves under the instance that sent t
         const useCase = new SavePullRequestUseCase(
             integrationConfigService as any,
             pullRequestsService as any,
-            { findByNumberAndRepositoryId: jest.fn() } as any,
             codeManagement as any,
         );
         return { useCase, codeManagement, pullRequestsService };

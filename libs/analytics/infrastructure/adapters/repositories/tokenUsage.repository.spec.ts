@@ -122,7 +122,12 @@ describe('TokenUsageRepository tier brackets', () => {
 describe('TokenUsageRepository._tuRows row cap (by-review)', () => {
     it('caps whole logical buckets, never a subset of a bucket’s bracket rows', async () => {
         const exec = jest.fn().mockResolvedValue([]);
-        const option = jest.fn().mockReturnValue({ exec });
+        const option = jest.fn().mockReturnValue({
+            exec,
+            read() {
+                return this;
+            },
+        });
         const aggregate = jest.fn().mockReturnValue({ option });
         const repo = new TokenUsageRepository(
             { aggregate } as any,
@@ -182,9 +187,14 @@ describe('TokenUsageRepository._tuRows row cap (by-review)', () => {
 
     it('adds no cap stages when maxRows is 0', async () => {
         const exec = jest.fn().mockResolvedValue([]);
-        const aggregate = jest
-            .fn()
-            .mockReturnValue({ option: jest.fn().mockReturnValue({ exec }) });
+        const aggregate = jest.fn().mockReturnValue({
+            option: jest.fn().mockReturnValue({
+                exec,
+                read() {
+                    return this;
+                },
+            }),
+        });
         const repo = new TokenUsageRepository(
             { aggregate } as any,
             {} as any,

@@ -68,6 +68,7 @@ describe('SaveCodeReviewFeedbackUseCase', () => {
         expect(getReactionsUseCase.execute).toHaveBeenCalledWith(
             { organizationId: 'org-001', teamId: 'team-001' },
             [42],
+            undefined,
         );
     });
 
