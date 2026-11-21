@@ -18,7 +18,6 @@ import {
 
 import {
     ISandboxLeaseManager,
-    runPrKey,
     SANDBOX_LEASE_MANAGER_TOKEN,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
@@ -90,12 +89,12 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
     }
 
     /**
-     * A sandbox of its own for one run of an Ultra review, keyed
-     * `<prKey>#<suffix>` (runPrKey): a new key is a new lease, so the run gets a fresh
-     * sandbox with the whole lease budget, and its CPU is not shared with the
-     * other models' runs. The caller releases it (`cleanup`) when the run
-     * ends. Undefined when it cannot be had; the run then reviews without a
-     * checkout, as a review does when its sandbox fails.
+     * A hold on the PR's own sandbox for one run of an Ultra review: the same
+     * key, so the same sandbox and worker slot, and a lease of its own that
+     * keeps the sandbox up (and pushes its expiry out to `leaseTtlMs`) until
+     * the caller releases it (`cleanup`) when the run ends. Undefined when it
+     * cannot be had; the run then reviews without a checkout, as a review
+     * does when its sandbox fails.
      */
     async acquireRunSandbox(
         context: CodeReviewPipelineContext,
@@ -104,10 +103,7 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         /** Stops waiting for a slot; the review job's own signal by default. */
         signal?: AbortSignal,
     ): Promise<SandboxInstance | undefined> {
-        const prKey = runPrKey(
-            `${context.organizationAndTeamData?.organizationId}:${context.repository?.id}:${context.pullRequest?.number}`,
-            suffix,
-        );
+        const prKey = `${context.organizationAndTeamData?.organizationId}:${context.repository?.id}:${context.pullRequest?.number}`;
         const logMeta = {
             organizationId: context.organizationAndTeamData?.organizationId,
             teamId: context.organizationAndTeamData?.teamId,

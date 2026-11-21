@@ -97,7 +97,6 @@ function setup(fx: Fixture) {
             sandbox?: string;
         }>,
         sandboxes: [] as string[],
-        sandboxKeys: [] as string[],
         released: [] as string[],
         leaseTtls: [] as number[],
         merges: [] as string[],
@@ -178,11 +177,8 @@ function setup(fx: Fixture) {
                     }),
             } as any;
         },
-        acquireRunSandbox: async (_ctx, suffix, leaseTtlMs, signal) => {
-            // The run's place in the trio, without this review's tag.
-            const run = suffix.replace(/-pipe42$/, '');
+        acquireRunSandbox: async (_ctx, run, leaseTtlMs, signal) => {
             calls.sandboxes.push(run);
-            calls.sandboxKeys.push(suffix);
             calls.leaseTtls.push(leaseTtlMs);
             if (fx.waitForSlot?.includes(run)) {
                 // The lease manager gives up when the signal fires.
@@ -720,7 +716,7 @@ describe('executeUltraReview', () => {
     });
 
     describe('sandboxes', () => {
-        it("keys each run's sandbox to this review, so a later push's review never joins it", async () => {
+        it("each run holds the PR's sandbox for itself and lets go when it ends", async () => {
             const { calls, context, host } = setup({
                 passes: {
                     a: collected(['a1']),
@@ -730,11 +726,29 @@ describe('executeUltraReview', () => {
                 },
             });
             await executeUltraReview(context, host, LIMITS);
-            expect(calls.sandboxKeys.sort()).toEqual([
-                'ultra-1-pipe42',
-                'ultra-2-pipe42',
-                'ultra-3-pipe42',
+            expect(calls.sandboxes.sort()).toEqual([
+                'ultra-1',
+                'ultra-2',
+                'ultra-3',
             ]);
+            expect(calls.released.sort()).toEqual(
+                expect.arrayContaining(['ultra-1', 'ultra-2', 'ultra-3']),
+            );
+        });
+
+        it("keeps the PR's own hold until every run, the fallback's included, has let go", async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b9'], false),
+                    c: collected(['c2']),
+                    f: collected(['f3']),
+                    auxiliary: collected([]),
+                },
+            });
+            await executeUltraReview(context, host, LIMITS);
+            expect(calls.released).toContain('ultra-fallback');
+            expect(calls.released[calls.released.length - 1]).toBe('base');
         });
 
         it('a review a later push superseded takes no sandbox for its runs', async () => {

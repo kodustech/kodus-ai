@@ -26,7 +26,6 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { createLogger } from '@libs/core/log/logger';
-import { randomUUID } from 'node:crypto';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { runUltraModels, ultraReviewOutcome } from './ultra-review-runner';
@@ -123,7 +122,7 @@ export interface UltraReviewHost {
         context: CodeReviewPipelineContext,
         pass: ReviewPass,
     ): Promise<CodeReviewPipelineContext>;
-    /** A sandbox of the run's own, or undefined (the run goes without). */
+    /** A hold on the PR's sandbox for the run, or undefined (the run goes without). */
     acquireRunSandbox(
         context: CodeReviewPipelineContext,
         suffix: string,
@@ -199,18 +198,6 @@ const runTag = (model: UltraModel) =>
     model.position === 'fallback'
         ? 'ultra-fallback'
         : `ultra-${model.position}`;
-
-/**
- * A tag of this review alone, on its runs' sandbox keys: a review started by
- * a later push never joins, or inherits the lease of, this one's sandboxes.
- */
-function reviewSandboxTag(context: CodeReviewPipelineContext): string {
-    const fromPipeline = String(context.pipelineMetadata?.pipelineId ?? '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .slice(0, 12);
-    return fromPipeline || randomUUID().replace(/-/g, '').slice(0, 12);
-}
 
 const otherLocationsSection = (locations: string[]) =>
     `\n\n${OTHER_LOCATIONS_HEADING}\n${locations.map((l) => `- \`${l}\``).join('\n')}`;
@@ -367,8 +354,8 @@ async function mergeAcrossModels(
 }
 
 /**
- * Runs the Ultra review: the heavy review on each model in parallel, each in
- * its own sandbox and with that model forced on every step, one fallback for
+ * Runs the Ultra review: the heavy review on each model in parallel, all in
+ * the PR's one sandbox and with that model forced on every step, one fallback for
  * the whole review; Kody Rules and the custom agents once, on their routed
  * models; then one cross-model merge and the comments. Publishes when at
  * least one model completed; a review that did not run as configured carries
@@ -420,8 +407,8 @@ export async function executeUltraReview(
             ),
         );
 
-    // Kody Rules and the custom agents, once, on the PR's own sandbox, which
-    // is released as soon as they are done: the models have their own. They
+    // Kody Rules and the custom agents, once, on the PR's sandbox; each model
+    // holds the same sandbox for its own run. They
     // stop with the models; past the window the review goes on without them.
     let auxiliary = emptyCollected();
     const releaseFailed = (sandbox: string) => (error: unknown) =>
@@ -433,7 +420,6 @@ export async function executeUltraReview(
         });
     const releaseBase = () =>
         context.sandboxHandle?.cleanup?.().catch(releaseFailed('PR'));
-    const sandboxTag = reviewSandboxTag(context);
     // The PR's own review had a checkout: a model's run without one did
     // not review the repository and does not count as complete.
     const checkoutExpected = !!context.sandboxHandle;
@@ -444,7 +430,6 @@ export async function executeUltraReview(
     let auxiliaryMissed = false;
     if (hasAuxiliaryWork(context) && runWindow() <= 0) {
         auxiliaryMissed = true;
-        void releaseBase();
         logger.warn({
             message: `[ULTRA] PR#${prNumber}: no time left in the job for Kody Rules and custom agents; the review goes on without them`,
             context: 'UltraReview',
@@ -469,17 +454,13 @@ export async function executeUltraReview(
                         },
                     },
                 )
-                .finally(() => {
-                    stop.clear();
-                    void releaseBase();
-                }),
+                .finally(() => stop.clear()),
             runsEndAt - Date.now(),
         ).then((result) => {
             if (result !== TIMED_OUT) return result;
             abandoned = true;
             auxiliaryMissed = true;
             leftBehind.abort();
-            void releaseBase();
             logger.warn({
                 message: `[ULTRA] PR#${prNumber}: Kody Rules and custom agents did not finish in time; the review goes on without them`,
                 context: 'UltraReview',
@@ -487,8 +468,6 @@ export async function executeUltraReview(
             });
             return context;
         });
-    } else {
-        void releaseBase();
     }
 
     const runWarnings: ReviewWarning[] = [];
@@ -517,7 +496,7 @@ export async function executeUltraReview(
                 ? undefined
                 : await host.acquireRunSandbox(
                       context,
-                      `${tag}-${sandboxTag}`,
+                      tag,
                       ULTRA_RUN_LEASE_TTL_MS,
                       stop.signal,
                   );
@@ -629,6 +608,10 @@ export async function executeUltraReview(
     });
 
     let main = await auxiliaryRun;
+    // The models share the PR's sandbox: its own hold goes only now, so the
+    // sandbox is never left with no holder (and set to shut down) between a
+    // run ending and the fallback joining.
+    void releaseBase();
 
     const nativeFindings = outputs.flatMap((o) => o.output.findings);
     const auxRules = auxiliary.findings.filter((s) => s.label === 'kody_rules');
