@@ -7,10 +7,10 @@ import { RuntimeErrorState } from "@components/runtime/empty-state";
 import { ExercisedLinesThreshold } from "@components/runtime/exercised-lines-threshold";
 import { MachineHostPrice } from "@components/runtime/machine-host-price";
 import { MachineMinuteLimit } from "@components/runtime/machine-minute-limit";
-import { SandboxCapacitySection } from "@components/runtime/sandbox-capacity";
 import { RuntimePreviewSettingsSection } from "@components/runtime/preview-settings";
 import { RuntimeHeader } from "@components/runtime/runtime-header";
 import { RuntimeSecretsSection } from "@components/runtime/runtime-secrets";
+import { SandboxCapacitySection } from "@components/runtime/sandbox-capacity";
 import { RuntimeSection } from "@components/runtime/section";
 import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
@@ -34,7 +34,6 @@ import {
     TableRow,
 } from "@components/ui/table";
 import { toast } from "@components/ui/toaster/use-toast";
-import { isSelfHosted } from "src/core/utils/self-hosted";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type {
@@ -53,6 +52,7 @@ import {
 import { runtimeErrorMessage } from "@services/runtime/model/errors";
 import { machineMinutesSummary } from "@services/runtime/model/machine-minutes";
 import { modeOf } from "@services/runtime/model/rules";
+import { RUNTIME_USAGE_HREF } from "@services/runtime/model/usage-report";
 import {
     useResumeRuntime,
     useRuntimeEnvironments,
@@ -69,119 +69,7 @@ import {
     PlayIcon,
     ServerIcon,
 } from "lucide-react";
-
-const repositoryPage = (repositoryId: string) =>
-    `/settings/code-review/${encodeURIComponent(repositoryId)}/kody-runtime`;
-
-/**
- * One repository: when the Runtime runs (`mode`, the one on/off switch the
- * UI writes; the API derives `pilot` from it) and who may ask for it. Rules
- * themselves are edited on the repository's Runtime page.
- */
-const RepositoryRow = ({
-    repository,
-    note,
-}: {
-    repository: RuntimeRepositorySettings;
-    /** It is a member of another environment: what its own mode governs (ownModeNote). */
-    note?: string;
-}) => {
-    const canEdit = usePermission(
-        Action.Update,
-        ResourceType.CodeReviewSettings,
-        repository.repositoryId,
-    );
-    const update = useUpdateRuntimeRepositorySettings();
-    const disabled = !canEdit || update.isPending;
-    const name = repository.repositoryName ?? repository.repositoryId;
-    const mode = modeOf(repository);
-    const hasRules = (repository.rules?.length ?? 0) > 0;
-    const save = (patch: {
-        mode?: RuntimeMode;
-        whoCanAsk?: RuntimeWhoCanAsk;
-    }) =>
-        update.mutate(
-            { repositoryId: repository.repositoryId, ...patch },
-            {
-                onError: (error) =>
-                    toast({
-                        variant: "danger",
-                        title: `Couldn't save ${name}`,
-                        description: runtimeErrorMessage(error, {
-                            fallback: "Try again in a moment.",
-                        }),
-                    }),
-            },
-        );
-
-    return (
-        <TableRow>
-            <TableCell className="font-medium">
-                <NextLink
-                    href={repositoryPage(repository.repositoryId)}
-                    className="hover:underline">
-                    {name}
-                </NextLink>
-                {note ? (
-                    <p className="text-text-secondary mt-1 max-w-sm text-xs font-normal">
-                        {note}
-                    </p>
-                ) : null}
-            </TableCell>
-            <TableCell>
-                <Select
-                    value={mode}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                        save({ mode: value as RuntimeMode })
-                    }>
-                    <SelectTrigger
-                        className="w-48"
-                        aria-label={`When Kody Runtime runs on ${name}`}>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {RUNTIME_MODE_OPTIONS.map((option) => (
-                            <SelectItem
-                                key={option.value}
-                                value={option.value}
-                                // Rules need rules: they are written on the repository's page.
-                                disabled={
-                                    option.value === "rules" && !hasRules
-                                }>
-                                {option.label}
-                                {option.value === "rules" && hasRules
-                                    ? ` (${repository.rules!.length})`
-                                    : ""}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </TableCell>
-            <TableCell>
-                <Select
-                    value={repository.whoCanAsk}
-                    disabled={disabled || mode === "off"}
-                    onValueChange={(value) =>
-                        save({ whoCanAsk: value as RuntimeWhoCanAsk })
-                    }>
-                    <SelectTrigger
-                        className="w-64"
-                        aria-label={`Who may ask @kody runtime on ${name}`}>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {WHO_CAN_ASK_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </TableCell>
-        </TableRow>
-    );
-};
+import { isSelfHosted } from "src/core/utils/self-hosted";
 
 const TokenBudget = ({
     value,
@@ -247,52 +135,6 @@ const TokenBudget = ({
                 Save
             </Button>
         </form>
-    );
-};
-
-const minutes = (n: number) => `${n.toLocaleString()} min`;
-
-/** Today's machine minutes of the organization: used, held by machines still running, the reset, and the limit that holds. */
-const MachineTimeToday = ({ canEdit }: { canEdit: boolean }) => {
-    const today = useRuntimeMachineMinutes();
-    if (today.isLoading) return <Skeleton className="h-10 w-80" />;
-    if (today.isError || !today.data)
-        return (
-            <p className="text-text-secondary text-sm">
-                Machine time is not available on this deployment right now.
-            </p>
-        );
-    const s = machineMinutesSummary(today.data);
-    return (
-        <div className="flex flex-col gap-1 text-sm">
-            <p className="text-text-primary">
-                <span className="font-semibold">{minutes(s.usedMinutes)}</span>
-                {s.limitMinutes !== null
-                    ? ` of ${minutes(s.limitMinutes)} used`
-                    : " used (no daily limit)"}
-                {s.runningMachines > 0 &&
-                    ` · ${minutes(s.heldByRunningMinutes)} more held by ${s.runningMachines} machine${s.runningMachines === 1 ? "" : "s"} still running`}
-            </p>
-            {s.exhausted ? (
-                <p className="text-warning text-sm" role="status">
-                    {s.waitWords} Resets in {s.resetsIn}.
-                </p>
-            ) : (
-                <p className="text-text-tertiary text-xs">
-                    {s.remainingMinutes !== null
-                        ? `${minutes(s.remainingMinutes)} left · `
-                        : ""}
-                    Resets at 00:00 UTC, in {s.resetsIn}.
-                </p>
-            )}
-            <div className="border-card-lv3 mt-3 border-t pt-3">
-                <MachineMinuteLimit
-                    key={String(today.data.orgLimitMinutes ?? "")}
-                    today={today.data}
-                    canEdit={canEdit}
-                />
-            </div>
-        </div>
     );
 };
 
@@ -375,7 +217,7 @@ const StopAndResume = () => {
 
 export const RuntimeOrgSettingsPage = () => {
     const settings = useRuntimeSettings();
-    // The token budget, the machine-minute limit, the exercised-lines threshold and the host price are organization-wide.
+    // The token budget, the exercised-lines threshold and the host price are organization-wide.
     const canEditOrg = usePermission(
         Action.Update,
         ResourceType.OrganizationSettings,
@@ -391,71 +233,30 @@ export const RuntimeOrgSettingsPage = () => {
         Action.Read,
         ResourceType.RuntimeEnvironment,
     );
-    const repositories = settings.data?.repositories ?? [];
     // Absent from an API older than the setting: the field is not offered.
     const thresholdDefault =
         settings.data?.exercisedLinesThresholdDefaultPercent;
     const threshold = settings.data?.exercisedLinesThresholdPercent ?? null;
     const hostPrice = settings.data?.machineUsdPerHostHour;
-    // Where each repository is a member, so a member's row says what its own mode governs.
-    const environments = useRuntimeEnvironments();
-    const memberships = membershipsByRepository(environments.data ?? []);
 
     return (
         <Page.Root>
             <RuntimeHeader />
             <Page.Content>
-                <RuntimeSection
-                    title="Repositories"
-                    description="When Kody Runtime runs on each repository's own environment, and who may ask for it. Turning a repository on creates its environment; a member of another environment runs there by that environment's settings. Rules are written on the repository's Runtime page.">
-                    {settings.isLoading ? (
-                        <Skeleton className="h-32 w-full" />
-                    ) : settings.isError ? (
-                        // Never a table of defaults: it would read as saved, and a change would overwrite.
-                        <RuntimeErrorState
-                            what="the Runtime settings"
-                            error={settings.error}
-                            onRetry={() => settings.refetch()}
-                        />
-                    ) : repositories.length === 0 ? (
-                        <p className="text-text-secondary text-sm">
-                            No repository connected.
-                        </p>
-                    ) : (
-                        <TableContainer>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Repository</TableHead>
-                                        <TableHead>Runs</TableHead>
-                                        <TableHead>
-                                            Who may ask @kody runtime
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {repositories.map((repository) => (
-                                        <RepositoryRow
-                                            key={repository.repositoryId}
-                                            repository={repository}
-                                            note={ownModeNote(
-                                                memberships.get(
-                                                    repository.repositoryId,
-                                                ),
-                                            )}
-                                        />
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    )}
-                </RuntimeSection>
-
-                <RuntimeSection
-                    title="Machine time"
-                    description="Minutes of Kody's machines (setups, Runs, environment sessions) the organization used today (UTC), against its daily limit. A machine still running holds its whole ceiling until it ends.">
-                    <MachineTimeToday canEdit={canEditOrg} />
-                </RuntimeSection>
+                <p className="text-text-secondary text-sm">
+                    When Kody Runtime runs on each repository, and who may ask
+                    for it, is set in{" "}
+                    <NextLink
+                        href="/settings/code-review/global/routing"
+                        className="underline">
+                        Code Review &gt; Routing
+                    </NextLink>
+                    . Today&apos;s machine time and its daily limit are in{" "}
+                    <NextLink href={RUNTIME_USAGE_HREF} className="underline">
+                        Usage
+                    </NextLink>
+                    .
+                </p>
 
                 <RuntimeSection
                     title="Token budget"
@@ -537,13 +338,13 @@ export const RuntimeOrgSettingsPage = () => {
                     </RuntimeSection>
                 )}
 
-                {/* /runtime/settings/usage is the org owner's (checkRole OWNER), the same people as canStop. */}
+                {/* The Runtime tab of Usage is the org owner's (checkRole OWNER), the same people as canStop. */}
                 {canStop && (
                     <RuntimeSection
                         title="Usage"
                         description="What your Runs, setups and sandbox sessions used each month: machine time, LLM tokens and their estimated cost, Run by Run, with a CSV export."
                         aside={
-                            <NextLink href="/runtime/settings/usage">
+                            <NextLink href={RUNTIME_USAGE_HREF}>
                                 <Button
                                     size="md"
                                     variant="secondary"
