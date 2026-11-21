@@ -139,6 +139,16 @@ export function classifyLLMError(
     }
     // Last, so a 400 that says "context length", "invalid api key" or "quota"
     // keeps the category its wording names.
+    // A gateway that refuses to route a valid model (allowed providers, a
+    // region pin) answers 400 or 404 as it likes; the body is the same
+    // finding either way, and the fix is the routing, not the request.
+    if (
+        isRoutingRefusal(lower) &&
+        (category === LlmErrorCategory.UNKNOWN ||
+            category === LlmErrorCategory.REQUEST_REJECTED)
+    ) {
+        category = LlmErrorCategory.MODEL_NOT_FOUND;
+    }
     if (
         category === LlmErrorCategory.UNKNOWN &&
         (httpStatus === 400 || httpStatus === 422)
@@ -332,6 +342,11 @@ function matchByHttpStatus(
     lowerMessage: string,
 ): LlmErrorCategory {
     if (status === undefined) return LlmErrorCategory.UNKNOWN;
+    // OpenRouter answers a key that spent its monthly cap with a 403: the key
+    // is fine, and "check the key" sent the customer the wrong way.
+    if (status === 403 && looksLikeQuota(lowerMessage)) {
+        return LlmErrorCategory.QUOTA_EXCEEDED;
+    }
     if (status === 401 || status === 403) {
         return LlmErrorCategory.AUTH_INVALID;
     }
@@ -358,6 +373,16 @@ function matchByHttpStatus(
     // 499 is the gateway status for a request its upstream dropped (nginx,
     // LiteLLM and Codex-account proxies use it): the same call can succeed.
     if ((status >= 500 && status < 600) || status === 499) {
+        // An account-pool proxy (CLIProxyAPI) answers 503 "auth_unavailable"
+        // when none of its accounts can serve. It names the last upstream
+        // refusal: a permission error stays until the proxy's auth is fixed,
+        // while an overloaded upstream does pass.
+        if (
+            lowerMessage.includes('auth_unavailable') &&
+            lowerMessage.includes('permission_error')
+        ) {
+            return LlmErrorCategory.AUTH_INVALID;
+        }
         return LlmErrorCategory.TRANSIENT;
     }
     return LlmErrorCategory.UNKNOWN;
@@ -424,6 +449,14 @@ function looksLikeQuota(lower: string): boolean {
         // wording for the same reason. Its short-window sibling ("Usage limit
         // reached for 5 hour") reopens within hours and stays a rate limit.
         lower.includes('weekly/monthly limit exhausted') ||
+        // OpenCode Go's plan cap ("usage limit reached (weekly, resets in
+        // 1d 22h)") and its free tier ("Free usage limit reached ... subscribe
+        // to OpenCode Go to keep going"): neither reopens in minutes.
+        /usage limit reached \((weekly|monthly)/.test(lower) ||
+        lower.includes('free usage limit reached') ||
+        // OpenRouter's per-key spend cap: "Key limit exceeded (monthly
+        // limit) ... $10.02 of $10.00 used; resets 2026-12-01".
+        lower.includes('key limit exceeded') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
@@ -550,7 +583,10 @@ function isRoutingRefusal(providerText?: string): boolean {
     return (
         said.includes('allowed-providers') ||
         said.includes('allowed providers') ||
-        (said.includes('no allowed') && said.includes('provider'))
+        (said.includes('no allowed') && said.includes('provider')) ||
+        // Vercel AI Gateway with Region Pinning: "No provider for <model> can
+        // serve any of the team's pinned inference regions (eu)".
+        said.includes('pinned inference region')
     );
 }
 
@@ -572,7 +608,7 @@ function buildFriendlyMessage(
         category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(providerText)
     ) {
-        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model, or pick a model your current ones serve.`;
+        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model (or a region one of them serves, if the account pins regions), or pick a model your current ones serve.`;
     }
 
     switch (category) {

@@ -31,7 +31,7 @@ export function byokFailureCopy(
     if (category === "MODEL_NOT_FOUND" && routingRefusal) {
         return {
             title: `${provider} has no allowed provider for the configured model`,
-            body: `The model and key are fine, but the providers ${provider} is allowed to route to don't serve this model. Allow a provider that serves it (for OpenRouter, the pinned providers or the account's allowed providers), or pick a model they serve. ${tail}`,
+            body: `The model and key are fine, but the providers ${provider} is allowed to route to don't serve this model. Allow a provider that serves it (for OpenRouter, the pinned providers or the account's allowed providers; for Vercel AI Gateway, the Region Pinning setting), or pick a model they serve. ${tail}`,
         };
     }
 
@@ -80,6 +80,7 @@ function isRoutingRefusal(providerMessage?: string): boolean {
     return (
         said.includes("allowed-providers") ||
         said.includes("allowed providers") ||
-        (said.includes("no allowed") && said.includes("provider"))
+        (said.includes("no allowed") && said.includes("provider")) ||
+        said.includes("pinned inference region")
     );
 }
