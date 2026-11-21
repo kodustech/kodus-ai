@@ -175,7 +175,7 @@ Moonshot と Z.ai はそれぞれ、トークン従量課金の Developer API �
     | **Kimi Code Plan** | `https://api.kimi.ai/coding/v1` （海外）<br />`https://api.kimi.com/coding/v1` （中国） | [kimi.com/code](https://www.kimi.com/code) | コーディング専用のエンドポイントを使うサブスクリプション |
 
     <Info>
-      Kimi Code Plan では、上限を低い値から始めてアカウントに合わせて調整してください。[同時実行数の調整](/ja/cookbook/moonshot#同時実行数の調整)を参照してください。常に reasoning を行う Kimi のバリアント（例：`kimi-k2p7-code`、`kimi-k3`）は、temperature を `1` に固定し、reasoning をオフにできません。[Temperature](/ja/how_to_use/byok/model_settings#temperature) を参照してください。
+      Kimi Code Plan では、上限を低い値から始めてアカウントに合わせて調整してください。[同時実行数の調整](/ja/cookbook/moonshot#同時実行数の調整)を参照してください。Kimi K2.7 Code は常に reasoning を行います。Kodus は temperature フィールドを非表示にし、リクエストからも省略します。[Temperature](/ja/how_to_use/byok/model_settings#temperature) を参照してください。
     </Info>
   </Tab>
 

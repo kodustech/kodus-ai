@@ -94,7 +94,7 @@ With no scope flag, `kodus review` reviews tracked changes in your working tree,
 
 ### Notes
 
-- A review that runs differently than you asked, for example `--heavy` on a plan without it, prints a notice. With `--agent` or `--format json`, the notice is in the result's `notices`.
+- If your signed-in team's plan doesn't include Heavy mode, a review requested with `--heavy` runs in Balanced mode and prints a notice. With `--agent` or `--format json`, check the result's `notices` to see whether the requested mode ran.
 - If your credentials are rejected (a revoked team key or an expired session), `kodus review` runs as a trial review and says so.
 
 ---
@@ -220,12 +220,14 @@ For a private SSH session or a machine without a browser, use `--device-code` an
 
 On a self-hosted instance, the page is on the host set by the API's `API_FRONTEND_URL`.
 
+For legacy sign-in, run the example above and enter your password when prompted. The CLI masks what you type.
+
 | Flag                    | Short | Description                                                          |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | Use the code flow even when a browser is available                   |
 | `--legacy`              | —     | Sign in with email and password. Deprecated; kept for scripts        |
 | `--email <email>`       | `-e`  | Account email (implies `--legacy`)                                   |
-| `--password <password>` | `-p`  | Account password (implies `--legacy`)                                |
+| `--password <password>` | `-p` | Deprecated password flag (implies `--legacy`). Avoid passing credentials in the command line because other processes may see the arguments. |
 
 ### `auth logout`
 

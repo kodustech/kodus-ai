@@ -175,7 +175,7 @@ O card **Moonshot** usa o endpoint da Developer API compatível com Anthropic (`
     | **Kimi Code Plan** | `https://api.kimi.ai/coding/v1` (internacional)<br />`https://api.kimi.com/coding/v1` (China) | [kimi.com/code](https://www.kimi.com/code) | Assinatura com um endpoint de codificação dedicado |
 
     <Info>
-      No Kimi Code Plan, comece com um limite baixo e ajuste de acordo com sua conta. Veja [Ajustar a simultaneidade](/pt-BR/cookbook/moonshot#ajustar-a-simultaneidade). Variantes do Kimi que sempre fazem reasoning (ex.: `kimi-k2p7-code`, `kimi-k3`) travam a temperature em `1` e não permitem desligar o reasoning — veja [Temperature](/pt-BR/how_to_use/byok/model_settings#temperature).
+      No Kimi Code Plan, comece com um limite baixo e ajuste de acordo com sua conta. Veja [Ajustar a simultaneidade](/pt-BR/cookbook/moonshot#ajustar-a-simultaneidade). O Kimi K2.7 Code sempre usa reasoning. A Kodus oculta o campo de temperatura e omite o parâmetro nas requisições. Veja [Temperature](/pt-BR/how_to_use/byok/model_settings#temperature).
     </Info>
   </Tab>
 

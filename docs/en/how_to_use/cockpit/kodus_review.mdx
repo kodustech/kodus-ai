@@ -66,7 +66,7 @@ Clicking a row focuses the whole Cockpit on that repository (same as picking it 
 
 ## Kody Rules — health
 
-How each Kody Rule is performing in the period. Columns: **Rule**, **Scope** (Global, Repo or Folder), **Triggers**, **Impl. rate**, **👍 / 👎**, and **Status**. The **All / Healthy / Noisy / Ignored / Stale** pills filter the table, and the search box finds a rule by name. Only active rules appear; paused, deleted or pending rules are left out because you can't act on them. The list covers every active rule in the organization, whatever the repository picker says: the counts follow the picker, so a rule of another repository shows as **Stale** while a repository is selected. Active memories are listed too, as **Stale**, because they never trigger.
+How each Kody Rule is performing in the period. Columns: **Rule**, **Scope** (Global, Repo or Folder), **Triggers**, **Impl. rate**, **👍 / 👎**, and **Status**. The **All / Healthy / Noisy / Ignored / Stale** pills filter the table, and the search box finds a rule by name. The table lists all active rules in the organization. The repository picker filters the trigger counts, so a rule outside the selected repository can show **Stale**. Active memories can also appear as **Stale** because they don't generate rule triggers. Check the rule's scope and clear the repository filter before using this status to decide whether to keep it.
 
 Clicking a row opens the suggestions that rule produced.
 

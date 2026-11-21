@@ -94,7 +94,7 @@ Sin un flag de alcance, `kodus review` revisa los cambios rastreados de tu árbo
 
 ### Notas
 
-- Una revisión que se ejecuta distinto de lo que pediste, por ejemplo `--heavy` en un plan que no lo incluye, imprime un aviso. Con `--agent` o `--format json`, el aviso está en `notices` del resultado.
+- Si el plan del equipo con el que iniciaste sesión no incluye el modo Heavy, la revisión solicitada con `--heavy` se ejecuta en modo Balanced y muestra un aviso. Con `--agent` o `--format json`, consulta `notices` en el resultado para comprobar si se usó el modo solicitado.
 - Si tus credenciales son rechazadas (una clave de equipo revocada o una sesión vencida), `kodus review` se ejecuta como una revisión de prueba y lo indica.
 
 ---
@@ -220,12 +220,14 @@ En una sesión SSH privada o una máquina sin navegador, usa `--device-code` y s
 
 En una instancia con alojamiento autónomo, la página está en el host definido por `API_FRONTEND_URL` de la API.
 
+Para usar el inicio de sesión antiguo, ejecuta el ejemplo anterior y escribe la contraseña cuando el CLI la solicite. El CLI oculta lo que escribes.
+
 | Flag                    | Corto | Descripción                                                          |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | Usar el flujo de código incluso cuando hay un navegador disponible   |
 | `--legacy`              | —     | Iniciar sesión con correo y contraseña. Obsoleto; se conserva para scripts |
 | `--email <email>`       | `-e`  | Correo de la cuenta (implica `--legacy`)                             |
-| `--password <password>` | `-p`  | Contraseña de la cuenta (implica `--legacy`)                         |
+| `--password <password>` | `-p` | Flag de contraseña obsoleto (implica `--legacy`). Evita pasar credenciales por la línea de comandos, donde otros procesos pueden leer los argumentos. |
 
 ### `auth logout`
 

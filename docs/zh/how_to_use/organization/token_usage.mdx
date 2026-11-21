@@ -31,7 +31,7 @@ Owner、Billing Manager 和 Repo Admin 可以打开面板，或登录后运行 `
 | **Output** | 输出 token,包括推理 |
 | **Cache write** | 填充缓存条目的输入 token。仅在有此类 token 时显示 |
 
-成本根据每个模型的单 token 价格估算。没有已知价格的模型会显示 **Price unavailable**,并按零计算。
+成本按每个模型的单 token 价格估算。显示 **Price unavailable** 的模型仍计入 token 用量，但其费用不计入成本总额，因此这些总额只是部分估算。
 
 如果您设置了月度预算,**Monthly spend limit (BYOK)** 进度条会显示本月支出与预算的对比。它始终覆盖当前月份,并忽略日期范围。
 

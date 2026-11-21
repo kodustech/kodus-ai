@@ -94,7 +94,7 @@ kodus review --prompt-only            # Output optimized for AI agents
 
 ### 说明
 
-- 当审查的运行方式与您的要求不同时,例如在不含 `--heavy` 的套餐上使用它,会打印一条通知。使用 `--agent` 或 `--format json` 时,通知位于结果的 `notices` 中。
+- 如果已登录团队的套餐不含 Heavy mode，通过 `--heavy` 请求的审查会以 Balanced 模式运行并显示通知。使用 `--agent` 或 `--format json` 时，请查看结果中的 `notices`，确认是否以请求的模式运行。
 - 如果您的凭证被拒绝(团队密钥已被撤销或会话已过期),`kodus review` 会作为试用审查运行,并给出说明。
 
 ---
@@ -220,12 +220,14 @@ kodus auth login --legacy -e user@mail.com
 
 在自托管实例上,该页面位于 API 的 `API_FRONTEND_URL` 所设置的主机上。
 
+使用旧版登录时，请运行上面的命令，并在 CLI 提示时输入密码。CLI 会遮蔽输入内容。
+
 | 标志                    | 简写  | 描述                                                                 |
 | ----------------------- | ----- | -------------------------------------------------------------------- |
 | `--device-code`         | —     | 即使有可用的浏览器也使用代码流程                                     |
 | `--legacy`              | —     | 使用邮箱和密码登录。已弃用;为脚本保留                               |
 | `--email <email>`       | `-e`  | 账号邮箱(隐含 `--legacy`)                                          |
-| `--password <password>` | `-p`  | 账号密码(隐含 `--legacy`)                                          |
+| `--password <password>` | `-p` | 已弃用的密码标志（隐含 `--legacy`）。其他进程可能读取命令参数，请避免在命令行中传入凭据。 |
 
 ### `auth logout`
 

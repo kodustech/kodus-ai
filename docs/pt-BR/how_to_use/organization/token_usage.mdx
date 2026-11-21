@@ -31,7 +31,7 @@ Totais do intervalo e dos filtros, com a variação em relação ao período ant
 | **Output** | Tokens de output, incluindo reasoning |
 | **Cache write** | Tokens de input que preencheram uma entrada de cache. Aparece apenas quando há algum |
 
-O custo é estimado a partir dos preços por token de cada modelo. Um modelo sem preço conhecido mostra **Price unavailable** e conta como zero.
+O custo é estimado a partir do preço por token de cada modelo. Modelos com **Price unavailable** continuam incluídos na contagem de tokens. Os totais de custo excluem os gastos desses modelos e, por isso, são estimativas parciais.
 
 Se você definir um orçamento mensal, uma barra **Monthly spend limit (BYOK)** mostra o gasto deste mês em relação a ele. Ela sempre cobre o mês atual e ignora o intervalo de datas.
 

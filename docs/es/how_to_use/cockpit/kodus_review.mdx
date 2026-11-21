@@ -66,7 +66,7 @@ Hacer clic en una fila enfoca todo el Cockpit en ese repositorio (igual que sele
 
 ## Kody Rules — salud
 
-Cómo se está desempeñando cada Kody Rule en el período. Columnas: **Rule**, **Scope** (Global, Repo o Folder), **Triggers**, **Impl. rate**, **👍 / 👎** y **Status**. Los botones **All / Healthy / Noisy / Ignored / Stale** filtran la tabla, y el cuadro de búsqueda encuentra una regla por nombre. Solo aparecen las reglas activas; las pausadas, eliminadas o pendientes se excluyen porque no puedes actuar sobre ellas. La lista abarca todas las reglas activas de la organización, sin importar lo que diga el selector de repositorio: los conteos siguen al selector, por lo que una regla de otro repositorio aparece como **Stale** mientras hay un repositorio seleccionado. Las memorias activas también se listan, como **Stale**, porque nunca se disparan.
+Cómo se está desempeñando cada Kody Rule en el período. Columnas: **Rule**, **Scope** (Global, Repo o Folder), **Triggers**, **Impl. rate**, **👍 / 👎** y **Status**. Los botones **All / Healthy / Noisy / Ignored / Stale** filtran la tabla, y el cuadro de búsqueda encuentra una regla por nombre. La tabla muestra todas las reglas activas de la organización. El selector de repositorio filtra los conteos de disparos, así que una regla fuera del repositorio seleccionado puede aparecer como **Stale**. Las memorias activas también pueden aparecer como **Stale**, ya que no generan disparos de reglas. Comprueba el alcance de la regla y quita el filtro de repositorio antes de usar este estado para decidir si conviene conservarla.
 
 Hacer clic en una fila abre las sugerencias que produjo esa regla.
 

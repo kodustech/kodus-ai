@@ -66,7 +66,7 @@ Implementation rate = implemented suggestions ÷ sent suggestions
 
 ## Kody Rules — 健康状况
 
-展示每条 Kody Rule 在该周期内的表现。列：**Rule**、**Scope**（Global、Repo 或 Folder）、**Triggers**、**Impl. rate**、**👍 / 👎** 和 **Status**。**All / Healthy / Noisy / Ignored / Stale** 标签可筛选该表，搜索框可按名称查找规则。此处仅显示激活的规则；已暂停、已删除或待处理的规则会被排除，因为您无法对它们采取行动。该列表涵盖组织中的每一条激活规则，无论仓库选择器如何设置：计数跟随选择器，因此当选中某个仓库时，另一个仓库的规则会显示为 **Stale**。激活的 memory 也会被列出，同样显示为 **Stale**，因为它们从不触发。
+展示每条 Kody Rule 在该周期内的表现。列：**Rule**、**Scope**（Global、Repo 或 Folder）、**Triggers**、**Impl. rate**、**👍 / 👎** 和 **Status**。**All / Healthy / Noisy / Ignored / Stale** 标签可筛选该表，搜索框可按名称查找规则。表格列出组织中所有激活的规则。仓库选择器会筛选触发次数，因此不属于所选仓库的规则也可能显示为 **Stale**。激活的 memory 不会产生规则触发，也可能显示为 **Stale**。根据该状态决定是否保留规则前，请检查规则的作用域并清除仓库筛选。
 
 点击某一行会打开该规则产生的建议。
 

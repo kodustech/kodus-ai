@@ -176,7 +176,7 @@ The **Moonshot** tile uses the Developer API's Anthropic-compatible endpoint (`h
     | **Kimi Code Plan** | `https://api.kimi.ai/coding/v1` (international)<br />`https://api.kimi.com/coding/v1` (China) | [kimi.com/code](https://www.kimi.com/code) | Subscription with a dedicated coding endpoint |
 
     <Info>
-      For Kimi Code Plan, start with a low cap and adjust it for your account. See [Tuning concurrency](/en/cookbook/moonshot#tuning-concurrency). Always-reasoning Kimi variants (e.g. `kimi-k2p7-code`, `kimi-k3`) lock temperature to `1` and can't turn reasoning off — see [Temperature](/en/how_to_use/byok/model_settings#temperature).
+      For Kimi Code Plan, start with a low cap and adjust it for your account. See [Tuning concurrency](/en/cookbook/moonshot#tuning-concurrency). Kimi K2.7 Code always reasons. Kodus hides its temperature field and omits temperature from requests. See [Temperature](/en/how_to_use/byok/model_settings#temperature).
     </Info>
   </Tab>
 
