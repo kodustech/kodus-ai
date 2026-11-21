@@ -858,6 +858,8 @@ describe('losses the run records (#2066)', () => {
         await newAgent().execute(makeInput({ changedFiles }));
 
         expect(runChunkedMock).toHaveBeenCalled();
+        const [chunkedInput] = runChunkedMock.mock.calls[0];
+        expect([...chunkedInput.fileTiers.values()]).toContain('optional');
     });
 
     it('records nothing for a PR that fits', async () => {
