@@ -171,6 +171,24 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         await expect(list(service)).rejects.toMatchObject({ status: 502 });
     });
 
+    // `error` is the response body: a proxy's 429 or 502 often has none.
+    it.each([429, 502, 503])(
+        'lets a %i with an empty body through on the listing, not as an empty page',
+        async (status) => {
+            repoGetPullRequestFiles.mockResolvedValue(
+                Object.assign(
+                    new Error(`Request failed with status code ${status}`),
+                    { response: { status }, error: '' },
+                ),
+            );
+            const { service } = makeService();
+
+            await expect(list(service)).rejects.toMatchObject({
+                response: { status },
+            });
+        },
+    );
+
     it('lets a server error on the diff through instead of empty patches', async () => {
         repoDownloadPullDiffOrPatch.mockResolvedValue(httpError(503));
         const { service } = makeService();

@@ -65,7 +65,8 @@ const config = {
 
 /** A token endpoint whose refresh tokens work once (RFC 6749 §10.4 rotation). */
 function rotatingTokenEndpoint() {
-    let live = 'r1';
+    // Refresh tokens that still work; each is spent by its first use.
+    const live = new Set(['r1', 'other-r1']);
     let issued = 1;
     // sameAccess: the endpoint hands back the access token it already issued
     // and rotates only the refresh token.
@@ -87,17 +88,17 @@ function rotatingTokenEndpoint() {
             setTimeout(async () => {
                 await during;
                 res.setHeader('Content-Type', 'application/json');
-                if (state.refuseAll || presented !== live) {
+                if (state.refuseAll || !live.delete(presented ?? '')) {
                     res.statusCode = 400;
                     res.end(JSON.stringify({ error: 'invalid_grant' }));
                     return;
                 }
                 issued++;
-                live = `r${issued}`;
+                live.add(`r${issued}`);
                 res.end(
                     JSON.stringify({
                         access_token: state.sameAccess ? 'a1' : `a${issued}`,
-                        refresh_token: live,
+                        refresh_token: `r${issued}`,
                         expires_in: 3600,
                     }),
                 );
@@ -128,12 +129,13 @@ const skip = process.env.SKIP_INTEGRATION === 'true';
         let endpoint: ReturnType<typeof rotatingTokenEndpoint>;
         let tokenUrl: string;
 
-        const pod = async () => {
+        const pod = async (poolMax?: number) => {
             const ds = new DataSource({
                 type: 'postgres',
                 ...PG,
                 database: TEST_DB,
                 entities: [MCPIntegrationOAuthEntity, MCPConnectionEntity],
+                ...(poolMax ? { extra: { max: poolMax } } : {}),
             });
             await ds.initialize();
             pods.push(ds);
@@ -372,6 +374,47 @@ const skip = process.env.SKIP_INTEGRATION === 'true';
                 refreshToken: 'reconnected-refresh',
             });
         });
+
+        it('as many grants refreshing at once as the pool has connections all finish', async () => {
+            if (!admin) return;
+            const a = await pod(2);
+            await seed(a, { expiresAt: Date.now() + 60_000 });
+            await a.oauth.saveOAuthState(
+                ORG,
+                'other-integration',
+                MCPIntegrationOAuthStatus.ACTIVE,
+                {
+                    clientId: 'client-it',
+                    redirectUri: 'https://app.example.test/callback',
+                    asMetadata: { token_endpoint: tokenUrl },
+                    tokens: {
+                        accessToken: 'other-a1',
+                        refreshToken: 'other-r1',
+                        expiresIn: 3600,
+                        expiresAt: Date.now() + 60_000,
+                    },
+                } as any,
+            );
+
+            const headers = await Promise.race([
+                Promise.all([
+                    a.oauth.resolveManagedAuthHeaders(ORG, INT),
+                    a.oauth.resolveManagedAuthHeaders(ORG, 'other-integration'),
+                ]),
+                new Promise((_, reject) =>
+                    setTimeout(
+                        () => reject(new Error('the pool deadlocked')),
+                        10_000,
+                    ),
+                ),
+            ]);
+
+            expect(headers).toEqual([
+                { Authorization: expect.stringMatching(/^Bearer a\d$/) },
+                { Authorization: expect.stringMatching(/^Bearer a\d$/) },
+            ]);
+            expect(endpoint.state.calls).toBe(2);
+        }, 20_000);
 
         it('a grant the token endpoint refuses expires its connection', async () => {
             if (!admin) return;

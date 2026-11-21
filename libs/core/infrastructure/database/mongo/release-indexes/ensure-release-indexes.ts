@@ -18,8 +18,8 @@ export type { ReleaseIndex };
 // duplicate-key message carries the colliding document's values.
 const REFUSALS: Record<number, string> = {
     11000: 'existing documents break this unique index; deduplicate them',
-    85: 'the same key is indexed under another name',
-    86: 'an index with this name exists with another key or options',
+    85: 'an equivalent index exists with other options (a TTL, for one) or under another name',
+    86: 'an index with this name exists with another key or another unique/partial filter',
 };
 
 export interface EnsureReleaseIndexesResult {

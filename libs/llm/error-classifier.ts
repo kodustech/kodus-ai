@@ -410,13 +410,6 @@ function matchByHttpStatus(
  * BOTH directions -- the wording it must catch, and the neighbouring
  * temporary wording it must leave on RATE_LIMIT.
  */
-/** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */
-function namesASpentCap(lower: string): boolean {
-    return /\b(?:key|usage|spend(?:ing)?|credit|monthly|weekly|daily|quota)[-\s](?:limit|cap)s?\b/.test(
-        lower,
-    );
-}
-
 function looksLikeQuota(lower: string): boolean {
     // A per-minute quota is a rate limit that clears on its own, not a spent
     // balance. Google words both as "You exceeded your current quota"; only the
@@ -467,6 +460,13 @@ function looksLikeQuota(lower: string): boolean {
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
+    );
+}
+
+/** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */
+function namesASpentCap(lower: string): boolean {
+    return /\b(?:key|usage|spend(?:ing)?|credit|monthly|weekly|daily|quota)[-\s](?:limit|cap)s?\b/.test(
+        lower,
     );
 }
 

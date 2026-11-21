@@ -69,6 +69,8 @@ const REFRESH_LOCK_POLL_MS = 200;
 const sameTokens = (a?: TokenData, b?: TokenData) =>
     a?.accessToken === b?.accessToken && a?.refreshToken === b?.refreshToken;
 
+type OAuthRepository = Repository<MCPIntegrationOAuthEntity>;
+
 const bearerFingerprint = (accessToken: string) =>
     credentialFingerprint({ Authorization: `Bearer ${accessToken}` });
 
@@ -238,6 +240,7 @@ export class IntegrationOAuthService {
         if (expiredForGood) {
             return (
                 await this.markGrantLost(
+                    this.integrationOAuthRepository,
                     organizationId,
                     integrationId,
                     oauthState,
@@ -253,8 +256,9 @@ export class IntegrationOAuthService {
             const result = await this.withRefreshLock(
                 organizationId,
                 integrationId,
-                () =>
+                (repository) =>
                     this.refreshLocked(
+                        repository,
                         organizationId,
                         integrationId,
                         oauthState,
@@ -288,7 +292,7 @@ export class IntegrationOAuthService {
     private async withRefreshLock<T>(
         organizationId: string,
         integrationId: string,
-        work: () => Promise<T>,
+        work: (repository: OAuthRepository) => Promise<T>,
     ): Promise<T> {
         const key = `mcp-oauth-refresh:${organizationId}:${integrationId}`;
         const deadline = Date.now() + REFRESH_LOCK_WAIT_MS;
@@ -301,7 +305,18 @@ export class IntegrationOAuthService {
                             [key],
                         );
                         if (!row?.locked) return { locked: false as const };
-                        return { locked: true as const, value: await work() };
+                        return {
+                            locked: true as const,
+                            // Every read and write under the lock goes
+                            // through this transaction's connection: a second
+                            // pooled one per holder deadlocks a pool full of
+                            // holders.
+                            value: await work(
+                                manager.getRepository(
+                                    MCPIntegrationOAuthEntity,
+                                ),
+                            ),
+                        };
                     },
                 );
             if (attempt.locked) return attempt.value;
@@ -323,13 +338,14 @@ export class IntegrationOAuthService {
      * counts) it returns those without calling the token endpoint.
      */
     private async refreshLocked(
+        repository: OAuthRepository,
         organizationId: string,
         integrationId: string,
         oauthState: IntegrationOAuthState,
         force?: boolean,
     ): Promise<RefreshResult> {
         const current = oauthState.tokens as TokenData;
-        const row = await this.integrationOAuthRepository.findOne({
+        const row = await repository.findOne({
             where: { integrationId, organizationId },
         });
         const storedTokens = this.decryptAndParse<IntegrationOAuthState>(
@@ -361,7 +377,7 @@ export class IntegrationOAuthService {
             const next = { ...oauthState, tokens: newTokens };
             // Only over the row read above: a reconnect saved while the token
             // endpoint answered (it does not take this lock) is kept.
-            const written = await this.integrationOAuthRepository.update(
+            const written = await repository.update(
                 { id: row.id, auth: row.auth },
                 {
                     status: MCPIntegrationOAuthStatus.ACTIVE,
@@ -369,7 +385,8 @@ export class IntegrationOAuthService {
                 },
             );
             if (!written.affected) {
-                const now = await this.getOAuthState(
+                const now = await this.readState(
+                    repository,
                     organizationId,
                     integrationId,
                 );
@@ -382,6 +399,7 @@ export class IntegrationOAuthService {
         } catch (error) {
             if (error instanceof OAuthGrantRejectedError) {
                 const lost = await this.markGrantLost(
+                    repository,
                     organizationId,
                     integrationId,
                     oauthState,
@@ -458,8 +476,9 @@ export class IntegrationOAuthService {
             return await this.withRefreshLock(
                 organizationId,
                 integrationId,
-                () =>
+                (repository) =>
                     this.refreshRejectedGrant(
+                        repository,
                         organizationId,
                         integrationId,
                         rejectedFingerprint,
@@ -477,13 +496,15 @@ export class IntegrationOAuthService {
 
     /** The OAuth half of handleRejectedCredential, under the refresh lock. */
     private async refreshRejectedGrant(
+        repository: OAuthRepository,
         organizationId: string,
         integrationId: string,
         rejectedFingerprint: string,
     ): Promise<RejectedCredentialOutcome> {
         // Re-read under the lock: a report of the same refusal from another
         // pod may have refreshed the grant while this one waited.
-        const oauthState = await this.getOAuthState(
+        const oauthState = await this.readState(
+            repository,
             organizationId,
             integrationId,
         );
@@ -503,6 +524,7 @@ export class IntegrationOAuthService {
             !!oauthState.clientId;
         if (!canRefresh) {
             const lost = await this.markGrantLost(
+                repository,
                 organizationId,
                 integrationId,
                 oauthState,
@@ -512,6 +534,7 @@ export class IntegrationOAuthService {
         }
 
         const result = await this.refreshLocked(
+            repository,
             organizationId,
             integrationId,
             oauthState,
@@ -526,6 +549,7 @@ export class IntegrationOAuthService {
                 // The provider handed back the very token the MCP server
                 // refused: sending it again fails the same way.
                 const lost = await this.markGrantLost(
+                    repository,
                     organizationId,
                     integrationId,
                     result.state,
@@ -553,12 +577,13 @@ export class IntegrationOAuthService {
      * with `lost: false`.
      */
     private async markGrantLost(
+        repository: OAuthRepository,
         organizationId: string,
         integrationId: string,
         oauthState: IntegrationOAuthState,
         reason = 'access token expired and there is no refresh token',
     ): Promise<{ lost: boolean; state: IntegrationOAuthState }> {
-        const row = await this.integrationOAuthRepository.findOne({
+        const row = await repository.findOne({
             where: { integrationId, organizationId },
         });
         const storedTokens = this.decryptAndParse<IntegrationOAuthState>(
@@ -581,7 +606,7 @@ export class IntegrationOAuthService {
         // Drop the tokens too: other read paths (custom integrations'
         // getValidAccessToken) read the stored state without its status.
         const lost = { ...oauthState, tokens: undefined };
-        const written = await this.integrationOAuthRepository.update(
+        const written = await repository.update(
             { id: row.id, auth: row.auth },
             {
                 status: MCPIntegrationOAuthStatus.INACTIVE,
@@ -589,7 +614,11 @@ export class IntegrationOAuthService {
             },
         );
         if (!written.affected) {
-            const now = await this.getOAuthState(organizationId, integrationId);
+            const now = await this.readState(
+                repository,
+                organizationId,
+                integrationId,
+            );
             return {
                 lost: false,
                 state: { ...oauthState, tokens: now?.tokens },
@@ -605,6 +634,22 @@ export class IntegrationOAuthService {
             },
         );
         return { lost: true, state: lost };
+    }
+
+    /** The stored OAuth state, read through `repository`. */
+    private async readState(
+        repository: OAuthRepository,
+        organizationId: string,
+        integrationId: string,
+    ): Promise<IntegrationOAuthState | null> {
+        const row = await repository.findOne({
+            where: { integrationId, organizationId },
+        });
+        if (!row?.auth) return null;
+        return this.decryptAndParse<IntegrationOAuthState>(
+            row.auth,
+            {} as IntegrationOAuthState,
+        );
     }
 
     async refreshIntegrationOAuthIfNeeded(

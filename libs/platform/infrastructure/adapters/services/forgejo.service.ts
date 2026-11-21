@@ -187,7 +187,14 @@ function throwIfForgejoFailed(result: {
     code?: unknown;
     message?: unknown;
 }): void {
-    if (!result?.error) {
+    // `error` is the response body, and a proxy's 429 or 502 often has none
+    // (`error === ""`): the status, or the result being the axios error
+    // itself, is what says the request failed.
+    const failed =
+        result instanceof Error ||
+        (result?.response?.status ?? 0) >= 400 ||
+        !!result?.error;
+    if (!failed) {
         return;
     }
 
