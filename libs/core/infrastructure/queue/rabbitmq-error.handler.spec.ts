@@ -307,6 +307,46 @@ describe('RabbitMQErrorHandler', () => {
             );
             expect(amqpConnection.publish.mock.calls[0][0]).not.toMatch(/dlx$/);
         });
+
+        it('gives stopped work back to the broker instead of a delayed copy', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 0 });
+            const channel = { ack: jest.fn(), nack: jest.fn() };
+            const msg = makeMessage({ 'x-retry-count': 99 });
+
+            await handler.handle(
+                channel,
+                msg,
+                new ClaimConflictError('slice aborted', undefined, {
+                    returnToQueue: true,
+                }),
+                { dlqRoutingKey: 'workflow.job.failed' },
+            );
+
+            expect(channel.nack).toHaveBeenCalledWith(msg, false, true);
+            expect(channel.ack).not.toHaveBeenCalled();
+            expect(amqpConnection.publish).not.toHaveBeenCalled();
+        });
+
+        it('finishes without raising when the channel is gone before the nack', async () => {
+            const { handler } = makeHandler();
+            const channel = {
+                ack: jest.fn(),
+                nack: jest.fn(() => {
+                    throw new Error('Channel closed');
+                }),
+            };
+
+            await expect(
+                handler.handle(
+                    channel,
+                    makeMessage(),
+                    new ClaimConflictError('slice aborted', undefined, {
+                        returnToQueue: true,
+                    }),
+                ),
+            ).resolves.toBeUndefined();
+            expect(channel.ack).not.toHaveBeenCalled();
+        });
     });
 
     it('nacks without requeue when the singleton handler is unavailable', () => {

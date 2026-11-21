@@ -56,11 +56,19 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
         }
     }
 
+    /**
+     * A stopped slice goes back to the queue on the broker, not through
+     * the delayed exchange: the scan stays RUNNING and only this delivery
+     * can continue it. A redelivery to a worker that no longer holds the
+     * claim meets the held claim and waits like any other.
+     */
     private sliceAbortedError(abortReason?: string): ClaimConflictError {
         return new ClaimConflictError(
             abortReason
                 ? `Security-scan slice aborted: ${abortReason}`
                 : 'Security-scan slice aborted: inbox claim lost or parent shutting down',
+            undefined,
+            { returnToQueue: true },
         );
     }
 

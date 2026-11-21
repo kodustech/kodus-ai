@@ -13,14 +13,23 @@ export const CLAIM_CONFLICT_REQUEUE_DELAY_MS = 20_000;
 export class ClaimConflictError extends Error {
     readonly errorClassification = CLAIM_CONFLICT_CLASSIFICATION;
     readonly requeueDelayMs: number;
+    /**
+     * Give the delivery back to the broker (nack with requeue) instead of
+     * republishing a delayed copy: for work this worker started and was
+     * stopped, so nothing but the broker's own requeue stands between the
+     * message and the next worker.
+     */
+    readonly returnToQueue: boolean;
 
     constructor(
         message = 'Message already claimed but not finished',
         requeueDelayMs: number = CLAIM_CONFLICT_REQUEUE_DELAY_MS,
+        options: { returnToQueue?: boolean } = {},
     ) {
         super(message);
         this.name = 'ClaimConflictError';
         this.requeueDelayMs = requeueDelayMs;
+        this.returnToQueue = options.returnToQueue === true;
     }
 }
 

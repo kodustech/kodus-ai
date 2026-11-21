@@ -126,7 +126,10 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
                 { jobId: 'job-1' },
                 amqpMsg('msg-1'),
             ),
-        ).rejects.toBeInstanceOf(ClaimConflictError);
+        ).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: false,
+        });
 
         expect(jobRepository.update).not.toHaveBeenCalled();
     });
@@ -250,14 +253,45 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
             { jobId: 'job-1' },
             amqpMsg('msg-1'),
         );
-        const assertion =
-            expect(done).rejects.toBeInstanceOf(ClaimConflictError);
+        const assertion = expect(done).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: true,
+        });
         await jest.advanceTimersByTimeAsync(30_000);
         await assertion;
 
         expect(jobRepository.update).not.toHaveBeenCalled();
         expect(inboxRepository.releaseIfHeldBy).toHaveBeenCalled();
         expect(inboxRepository.completeIfHeldBy).not.toHaveBeenCalled();
+    });
+
+    it('returns a slice stopped by shutdown to its queue', async () => {
+        runChild.mockImplementation(
+            (_jobId, options) =>
+                new Promise((_resolve, reject) => {
+                    options?.abortSignal?.addEventListener('abort', () => {
+                        reject(childExit(SECURITY_SCAN_SLICE_EXIT_PREEMPTED));
+                    });
+                }),
+        );
+        const { consumer, inboxRepository, jobRepository } = makeScanConsumer();
+
+        const done = (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        (consumer as any).abortInFlightWork();
+
+        await expect(done).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: true,
+        });
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+        expect(inboxRepository.releaseIfHeldBy).toHaveBeenCalled();
     });
 
     it('does not overwrite the child job FAILED on a numeric exit', async () => {
@@ -347,7 +381,10 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
                 { jobId: 'job-1' },
                 amqpMsg('msg-1'),
             ),
-        ).rejects.toBeInstanceOf(ClaimConflictError);
+        ).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: true,
+        });
 
         expect(jobRepository.update).not.toHaveBeenCalled();
         expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();

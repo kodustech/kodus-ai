@@ -109,6 +109,11 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         // handler, so a throw only becomes an unhandled rejection. The broker
         // owns redelivery of any delivery left unacked.
         try {
+            if (isClaimConflictError(error) && error.returnToQueue) {
+                this.returnToQueue(channel, msg, error);
+                return;
+            }
+
             if (isClaimConflictError(error)) {
                 await this.requeueHeldClaim(
                     msg,
@@ -163,6 +168,35 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                 metadata,
             });
         }
+    }
+
+    /**
+     * Work this worker started was stopped (a deep-scan slice preempted by
+     * a deploy, or by a lost claim). Nack with requeue keeps the delivery
+     * in its queue for the next consumer; this one's consumer is already
+     * cancelled when it is shutting down. A delayed republish acked the
+     * original once the copy was published, and a copy the delayed
+     * exchange never delivered left the scan running with no slice. A nack
+     * the closing channel cannot send is requeued by the broker all the same.
+     */
+    private returnToQueue(
+        channel: any,
+        msg: ConsumeMessage,
+        error: { message?: string },
+    ): void {
+        this.logger.warn({
+            message: 'Stopped work returned to its queue',
+            context: RabbitMQErrorHandler.name,
+            metadata: {
+                messageId: msg.properties.messageId,
+                routingKey: msg.fields.routingKey,
+                retryCount:
+                    msg.properties.headers?.[this.RETRY_COUNT_HEADER] || 0,
+                error: error?.message,
+            },
+        });
+
+        channel.nack(msg, false, true);
     }
 
     /**
