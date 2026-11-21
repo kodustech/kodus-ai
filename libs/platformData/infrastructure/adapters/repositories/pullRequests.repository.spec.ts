@@ -496,6 +496,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(match.$or).toEqual([
                 { 'repository.id': 'repo-a', 'number': 84 },
                 { 'repository.id': 'repo-b', 'number': 84 },
+                // A document persisted without a repository id is reachable
+                // only by number; it cannot be confused with repo-a or repo-b.
+                { 'repository.id': { $in: ['', null] }, 'number': 84 },
             ]);
         });
 
@@ -507,6 +510,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
             expect(match.$or).toEqual([
                 { 'repository.id': 'repo-a', 'number': 7 },
+                { 'repository.id': { $in: ['', null] }, 'number': 7 },
             ]);
         });
 
@@ -519,8 +523,23 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
             expect(match.$or).toEqual([
                 { 'repository.id': 'repo-a', 'number': 7 },
+                { 'repository.id': { $in: ['', null] }, 'number': 7 },
                 { number: { $in: [8] } },
             ]);
+        });
+
+        it('reads a legacy document that carries no repository id', async () => {
+            // Documents written before the id was captured store `''`, and the
+            // pair clause alone would make them unreachable - the sync would
+            // silently stop collecting their reactions.
+            const match = await matchFor([
+                { repositoryId: 'repo-a', pullRequestNumber: 12 },
+            ]);
+
+            expect(match.$or).toContainEqual({
+                'repository.id': { $in: ['', null] },
+                'number': 12,
+            });
         });
 
         it('does not query when it has nothing to match', async () => {

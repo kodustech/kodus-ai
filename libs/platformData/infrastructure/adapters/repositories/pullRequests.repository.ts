@@ -1883,6 +1883,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             string,
             { 'repository.id': string; 'number': number }
         >();
+        const pairedNumbers = new Set<number>();
         const numbersWithoutRepository = new Set<number>();
 
         for (const ref of prRefs ?? []) {
@@ -1891,6 +1892,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             }
 
             if (ref.repositoryId) {
+                pairedNumbers.add(ref.pullRequestNumber);
                 pairs.set(`${ref.repositoryId}:${ref.pullRequestNumber}`, {
                     'repository.id': ref.repositoryId,
                     'number': ref.pullRequestNumber,
@@ -1901,6 +1903,18 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         }
 
         const clauses: Record<string, any>[] = [...pairs.values()];
+
+        // Documents written before the repository id was captured carry an
+        // empty (or absent) `repository.id`: the pair clause cannot reach
+        // them, and the sync used to read them by number. They keep that read,
+        // bounded by the unique (organizationId, repository.id, number) index,
+        // which allows at most one such document per number.
+        for (const number of pairedNumbers) {
+            clauses.push({
+                'repository.id': { $in: ['', null] },
+                'number': number,
+            });
+        }
 
         if (numbersWithoutRepository.size) {
             clauses.push({ number: { $in: [...numbersWithoutRepository] } });

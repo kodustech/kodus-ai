@@ -72,6 +72,8 @@ describeMongo('delivered suggestions are read per repository', () => {
             delivered(84, 'repo-c'),
             delivered(7, 'repo-a'),
             delivered(7, 'repo-b'),
+            // A document written before the repository id was captured.
+            delivered(55, ''),
         ] as any);
     });
 
@@ -109,6 +111,18 @@ describeMongo('delivered suggestions are read per repository', () => {
         expect(
             found.map((pr) => `${pr.repository.id}:${pr.number}`).sort(),
         ).toEqual(['repo-a:84', 'repo-b:84', 'repo-c:84']);
+    });
+
+    it('keeps a document stored before the repository id was captured', async () => {
+        // Such a row stores `repository.id: ''`, and the pair clause alone
+        // would make it unreachable: its reactions would stop being synced.
+        const found = await read([
+            { repositoryId: 'repo-a', pullRequestNumber: 55 },
+        ]);
+
+        expect(found.map((pr) => `${pr.repository.id}:${pr.number}`)).toEqual([
+            ':55',
+        ]);
     });
 
     it('asks nothing of the database when it has no reference', async () => {

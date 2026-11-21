@@ -223,4 +223,34 @@ describe('CodeReviewFeedbackCronProvider', () => {
             }),
         );
     });
+
+    it('drops a bare number once a pair covers it', async () => {
+        // One row kept its repository, the other did not. Publishing both would
+        // send `{ pullRequestNumber: 12 }`, which matches every repository of
+        // the organization - the amplification this change exists to stop.
+        const { cron, messageBroker } = makeCron([
+            {
+                pullRequestNumber: 12,
+                repositoryId: 'repo-a',
+                dataExecution: {},
+            },
+            {
+                dataExecution: { pullRequestNumber: 12 },
+            },
+        ]);
+
+        await cron.handleCron();
+
+        expect(
+            messageBroker.transformMessageToMessageBroker,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.objectContaining({
+                    pullRequestRefs: [
+                        { repositoryId: 'repo-a', pullRequestNumber: 12 },
+                    ],
+                }),
+            }),
+        );
+    });
 });

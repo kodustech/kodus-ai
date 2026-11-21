@@ -173,6 +173,8 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
      * it was published with.
      */
     private resolvePullRequestRefs(payload: {
+        organizationId?: string;
+        teamId?: string;
         automationExecutionsPRs?: number[];
         pullRequestRefs?: IPullRequestRef[];
     }): IPullRequestRef[] {
@@ -184,6 +186,8 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
             message: 'Reaction sync read a message without pull request refs',
             context: SaveCodeReviewFeedbackUseCase.name,
             metadata: {
+                organizationId: payload.organizationId,
+                teamId: payload.teamId,
                 prNumbers: payload.automationExecutionsPRs?.length ?? 0,
             },
         });
