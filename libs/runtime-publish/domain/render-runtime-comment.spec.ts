@@ -1141,3 +1141,80 @@ describe('what a partly tested check concludes on the PR (owner decisions of 202
         expect(out.summary).toContain('not a regression');
     });
 });
+
+describe('a finding on an array field names its undescribed leaf (docs/runtime/monorepo-speed-and-targeting.md section 3)', () => {
+    const route = 'GET /.well-known/association';
+    const leaf = { path: 'applinks.details[0].paths[0]', kind: 'changed' as const, base: '"/share/*"', pr: '"/shares/*"' };
+    const finding = (over: Partial<ReportPath> = {}): ReportPath => ({
+        entryPoint: route,
+        probeId: 'p1',
+        verdict: 'finding',
+        findingKind: 'behavior_change',
+        intent: 'unintended',
+        base: { status: 200 },
+        pr: { status: 200 },
+        differingFields: ['json.applinks.details'],
+        leafChanges: { undescribed: [leaf], undescribedCount: 1, describedCount: 1, mentions: ['applinks.details[0].appIDs'] },
+        ...over,
+    });
+    const intent = { state: 'checked' as const, assertions: 1, held: 1, mismatches: [], described: [] };
+    const run = (path: ReportPath, withIntent = true) => renderReportComment(report({ paths: [path], uncovered: [], ...(withIntent ? { intent } : {}) }), links);
+
+    it('says which leaf changed, from what to what, and what the description mentions, in place of the field name', () => {
+        const body = run(finding());
+        expect(body).toContain(
+            `- **Regression** \`${route}\`: \`applinks.details[0].paths[0]\` changed from \`"/share/*"\` to \`"/shares/*"\`. The description only mentions \`appIDs\`. (1 other change matches what the PR describes.) [Command and output](${RUN_URL})`,
+        );
+        expect(body).not.toContain('differs in');
+    });
+
+    it('does not say the assertion explains the finding: it held on the fields it reads', () => {
+        const body = run(finding());
+        expect(body).toContain('1 of 1 assertion from what the PR describes held on the fields they read.');
+        expect(body).not.toContain('1 of 1 assertion from what the PR describes held.');
+    });
+
+    it('lists at most 3 leaves and counts the rest', () => {
+        const many = Array.from({ length: 5 }, (_, i) => ({ ...leaf, path: `a[${i}]` }));
+        const body = run(finding({ leafChanges: { undescribed: many, undescribedCount: 8, describedCount: 0, mentions: [] } }));
+        expect(body).toContain('`a[0]` changed from `"/share/*"` to `"/shares/*"`; `a[1]` changed from `"/share/*"` to `"/shares/*"`; `a[2]` changed from `"/share/*"` to `"/shares/*"` (+5 more on the Run page).');
+        expect(body).not.toContain('`a[3]`');
+        expect(body).not.toContain('The description only mentions');
+    });
+
+    it('words added, removed and reordered leaves', () => {
+        const body = run(
+            finding({
+                leafChanges: {
+                    undescribed: [
+                        { path: 'x[1]', kind: 'added', pr: '2' },
+                        { path: 'y', kind: 'removed', base: '"k"' },
+                        { path: 'z', kind: 'reordered', base: '[1,2]', pr: '[2,1]' },
+                    ],
+                    undescribedCount: 3,
+                    describedCount: 0,
+                    mentions: [],
+                },
+            }),
+        );
+        expect(body).toContain('`x[1]` was added as `2`; `y` was removed (it was `"k"`); `z` was reordered.');
+    });
+
+    it('a secret-looking leaf prints [redacted] and the report schema accepts the path', () => {
+        const redacted = finding({ leafChanges: { undescribed: [{ path: 'auth.apiToken', kind: 'changed', base: '[redacted]', pr: '[redacted]' }], undescribedCount: 1, describedCount: 0, mentions: [] } });
+        expect(RuntimeRunReportSchema.parse(report({ paths: [redacted] }))).toBeTruthy();
+        expect(run(redacted)).toContain('`auth.apiToken` changed from `[redacted]` to `[redacted]`.');
+    });
+
+    it('without leaves the old line and the old held sentence are unchanged', () => {
+        const plain = finding({ leafChanges: undefined });
+        const body = run(plain);
+        expect(body).toContain(`- **Regression** \`${route}\`: 200 on main, 200 on this PR, differs in \`json.applinks.details\`. [Command and output](${RUN_URL})`);
+        expect(body).toContain('1 of 1 assertion from what the PR describes held.');
+    });
+
+    it('a status that differs keeps the old line: the leaves speak only for an answer of the same status', () => {
+        const body = run(finding({ base: { status: 200 }, pr: { status: 500 } }));
+        expect(body).not.toContain('changed from `"/share/*"`');
+    });
+});

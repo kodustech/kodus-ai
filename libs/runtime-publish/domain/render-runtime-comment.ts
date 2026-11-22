@@ -588,6 +588,38 @@ const browserPathLine = (p: ReportPath, links: RuntimeLinks) => {
     return `${shownPath(p)}: ${parts.join('; ')}${differs}. ${evidenceLink(p, links)}`;
 };
 
+const MAX_LEAVES_SHOWN = 3;
+
+/** The key a read path ends in, without its array indexes: `applinks.details[0].appIDs` is `appIDs`. */
+const lastKeyOf = (path: string): string => path.replace(/\[\d+\]/g, '').split('.').pop() || path;
+
+const leafText = (l: NonNullable<ReportPath['leafChanges']>['undescribed'][number]) => {
+    switch (l.kind) {
+        case 'added':
+            return `${code(l.path)} was added as ${code(l.pr ?? '')}`;
+        case 'removed':
+            return `${code(l.path)} was removed (it was ${code(l.base ?? '')})`;
+        case 'reordered':
+            return `${code(l.path)} was reordered`;
+        default:
+            return `${code(l.path)} changed from ${code(l.base ?? '')} to ${code(l.pr ?? '')}`;
+    }
+};
+
+/**
+ * What a finding on an object or array field is about, leaf by leaf, built from
+ * the leaves the Run kept and the paths the passed assertions read, never from
+ * the PR's text (docs/runtime/monorepo-speed-and-targeting.md section 3).
+ */
+const leafSentence = (set: NonNullable<ReportPath['leafChanges']>): string => {
+    const shown = set.undescribed.slice(0, MAX_LEAVES_SHOWN).map(leafText).join('; ');
+    const more = set.undescribedCount - Math.min(set.undescribed.length, MAX_LEAVES_SHOWN);
+    const names = [...new Set(set.mentions.map(lastKeyOf))].slice(0, 3);
+    const mentions = names.length ? ` The description only mentions ${names.map(code).join(', ')}.` : '';
+    const rest = set.describedCount > 0 ? ` (${set.describedCount} other ${set.describedCount === 1 ? 'change matches' : 'changes match'} what the PR describes.)` : '';
+    return `${shown}${more > 0 ? ` (+${more} more on the Run page)` : ''}.${mentions}${rest}`;
+};
+
 const pathLine = (p: ReportPath, links: RuntimeLinks, all: readonly ReportPath[] = []) => {
     // Two probes of one route read apart by their case, as in the outcomes table.
     const where = `${shownPath(p)}${sharesRoute(p, all) ? ` · ${code(p.probeId)}` : ''}`;
@@ -600,6 +632,7 @@ const pathLine = (p: ReportPath, links: RuntimeLinks, all: readonly ReportPath[]
         return `${where}: no such route on main (${base}), ${pr} on this PR. ${link('Command and output', links.run)}`;
     }
     if (isBrowserPath(p)) return browserPathLine(p, links);
+    if (p.leafChanges && base === pr) return `${where}: ${leafSentence(p.leafChanges)} ${link('Command and output', links.run)}`;
     const differs =
         p.differingFields?.length && base === pr
             ? `, differs in ${p.differingFields.map(code).join(', ')}`
@@ -1014,7 +1047,9 @@ function intentLines(report: RuntimeRunReport): string[] {
         for (const d of intent.described) lines.push(`- ${code(d.entryPoint)}: differs from main as ${sourceWords(d.source)} says: ${quoteSpan(d.quote)}`);
     }
     if (intent.assertions > 0) {
-        lines.push('', `${intent.held} of ${plural(intent.assertions, 'assertion')} from what the PR describes held.`);
+        // A finding that names leaves its description does not read: the assertions held on the fields they read, not on the whole answer.
+        const onFields = report.paths.some((p) => p.verdict === 'finding' && p.leafChanges) ? ' on the fields they read' : '';
+        lines.push('', `${intent.held} of ${plural(intent.assertions, 'assertion')} from what the PR describes held${onFields}.`);
     } else {
         lines.push('', "This pull request's description and linked tasks describe no behavior Kody can check, so only the comparison with main ran.");
     }
