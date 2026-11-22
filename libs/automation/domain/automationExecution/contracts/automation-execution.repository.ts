@@ -83,6 +83,12 @@ export interface IAutomationExecutionRepository {
     findLatestExecutionByFilters(
         filters?: Partial<any>,
     ): Promise<AutomationExecutionEntity | null>;
+    hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean>;
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,
