@@ -30,7 +30,9 @@ export function normalizeHost(
 
 /** The host of an SSH remote such as `git@host:group/repo.git`. */
 function sshRemoteHost(value: string): string | undefined {
-    return /^[^@/\s]+@([^:/\s]+):/.exec(value.trim())?.[1]?.toLowerCase();
+    return /^[^@/\s]+@(\[[^\]\s]+\]|[^:/\s]+):/
+        .exec(value.trim())?.[1]
+        ?.toLowerCase();
 }
 
 /**

@@ -34,6 +34,10 @@ describe('normalizeHost', () => {
         expect(normalizeHost('git@GitLab-B.example:acme/api.git')).toBe(
             'gitlab-b.example',
         );
+        // The same spelling `new URL` gives an IPv6 host.
+        expect(normalizeHost('git@[2001:DB8::1]:acme/api.git')).toBe(
+            normalizeHost('https://[2001:db8::1]/acme/api.git'),
+        );
     });
 
     it('is undefined for an empty value', () => {
