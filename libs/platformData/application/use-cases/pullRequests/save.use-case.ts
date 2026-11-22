@@ -1,7 +1,9 @@
 import { createLogger } from '@libs/core/log/logger';
 import {
-    forgejoConfigsForWebhook,
     getMappedPlatform,
+    githubWebhookSource,
+    gitlabWebhookSource,
+    webhookConfigsOfInstance,
 } from '@libs/common/utils/webhooks';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -37,6 +39,11 @@ export class SavePullRequestUseCase {
         payload: any;
         platformType: PlatformType;
         event: string;
+        /**
+         * The workspace the handler's webhook context resolved. When given,
+         * the PR is saved there, so it lands with the team that reviews it.
+         */
+        organizationAndTeamData?: OrganizationAndTeamData;
     }): Promise<IPullRequests | null> {
         const { payload, platformType, event } = params;
 
@@ -70,47 +77,64 @@ export class SavePullRequestUseCase {
                 return;
             }
 
-            let organizationAndTeamData: OrganizationAndTeamData | null = null;
+            let organizationAndTeamData: OrganizationAndTeamData | null =
+                params.organizationAndTeamData ?? null;
 
             try {
-                const foundConfigs =
-                    await this.integrationConfigService.findIntegrationConfigWithTeams(
-                        IntegrationConfigKey.REPOSITORIES,
-                        repository.id,
+                if (!organizationAndTeamData) {
+                    const foundConfigs =
+                        await this.integrationConfigService.findIntegrationConfigWithTeams(
+                            IntegrationConfigKey.REPOSITORIES,
+                            repository.id,
+                            platformType,
+                        );
+                    // GitLab, Forgejo and GitHub Enterprise Server repository
+                    // ids are per instance: keep the integrations of the
+                    // instance that sent the webhook. The first config found
+                    // used to take a project of another server with that id.
+                    const instanceSource =
+                        platformType === PlatformType.GITLAB
+                            ? gitlabWebhookSource(sanitizedPayload)
+                            : platformType === PlatformType.GITHUB
+                              ? githubWebhookSource(sanitizedPayload)
+                              : undefined;
+                    const configs = webhookConfigsOfInstance(
                         platformType,
+                        foundConfigs,
+                        instanceSource
+                            ? {
+                                  ...instanceSource,
+                                  repositoryId: repository.id,
+                              }
+                            : {
+                                  host: repository.url,
+                                  repositoryId: repository.id,
+                                  repositoryFullName: repository.fullName,
+                              },
                     );
-                // Forgejo repository ids are per instance: keep the
-                // integrations of the instance that sent the webhook.
-                const configs =
-                    platformType === PlatformType.FORGEJO
-                        ? forgejoConfigsForWebhook(foundConfigs, {
-                              host: repository.url,
-                              repositoryId: repository.id,
-                              repositoryFullName: repository.fullName,
-                          })
-                        : foundConfigs;
 
-                if (!configs || !configs.length) {
-                    this.logger.warn({
-                        message: `No repository configuration found for repository ${repository?.name}`,
-                        context: SavePullRequestUseCase.name,
-                        metadata: {
-                            repositoryName: repository?.name,
-                            pullRequestNumber: pullRequest?.number,
-                        },
-                    });
+                    if (!configs || !configs.length) {
+                        this.logger.warn({
+                            message: `No repository configuration found for repository ${repository?.name}`,
+                            context: SavePullRequestUseCase.name,
+                            metadata: {
+                                repositoryName: repository?.name,
+                                pullRequestNumber: pullRequest?.number,
+                            },
+                        });
 
-                    return null;
+                        return null;
+                    }
+
+                    const organizationAndTeamDataList: OrganizationAndTeamData[] =
+                        configs.map((config) => ({
+                            organizationId: config.team.organization.uuid,
+                            teamId: config.team.uuid,
+                        }));
+
+                    organizationAndTeamData =
+                        organizationAndTeamDataList[0] ?? null;
                 }
-
-                const organizationAndTeamDataList: OrganizationAndTeamData[] =
-                    configs.map((config) => ({
-                        organizationId: config.team.organization.uuid,
-                        teamId: config.team.uuid,
-                    }));
-
-                organizationAndTeamData =
-                    organizationAndTeamDataList[0] ?? null;
 
                 const relevantUsers = mappedPlatform.mapUsers({
                     payload: sanitizedPayload,
