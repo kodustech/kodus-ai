@@ -442,8 +442,12 @@ describe('GitHubPullRequestHandler', () => {
                 },
                 prNumber: 42,
             });
-            // Saved as the event it is; only the review job is a command.
-            expect(savePullRequestUseCase.execute).toHaveBeenCalledWith(params);
+            // Saved as the event it is, with the team the context resolved;
+            // only the review job is a command.
+            expect(savePullRequestUseCase.execute).toHaveBeenCalledWith({
+                ...params,
+                organizationAndTeamData,
+            });
             expect(enqueueCodeReviewJobUseCase.execute).toHaveBeenCalledTimes(
                 1,
             );

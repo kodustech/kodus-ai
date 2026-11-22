@@ -306,6 +306,49 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
             ).not.toHaveBeenCalled();
         });
 
+        it("generates the issues for the team the handler's context resolved", async () => {
+            // The same project connected in two workspaces on one server: the
+            // review ran for the second team, so its issues belong there.
+            const listedHere = (team: string, org: string) => ({
+                team: { uuid: team, organization: { uuid: org } },
+                configValue: [
+                    {
+                        id: '999',
+                        http_url: 'https://gitlab.example.com/org/repo.git',
+                    },
+                ],
+            });
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedHere('first-team', 'first-org'),
+                    listedHere('team-uuid', 'org-uuid'),
+                ],
+            );
+
+            await useCase.execute({
+                payload: gitlabMergePayload,
+                platformType: PlatformType.GITLAB,
+                organizationAndTeamData: {
+                    organizationId: 'org-uuid',
+                    teamId: 'team-uuid',
+                },
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                    repository: expect.objectContaining({
+                        host: 'gitlab.example.com',
+                    }),
+                }),
+            );
+        });
+
         it("resolves the project's server when its mapped URL is the SSH remote", async () => {
             // The most recent config is another server's project 999.
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(

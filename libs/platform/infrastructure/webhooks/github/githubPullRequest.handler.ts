@@ -233,7 +233,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
 
         // Saved as the event it is: a faked `synchronize` would refetch the
         // PR's files and commits, and nothing was pushed.
-        await this.savePullRequestUseCase.execute(params);
+        await this.savePullRequestUseCase.execute({
+            ...params,
+            organizationAndTeamData: context?.organizationAndTeamData,
+        });
         const jobId = await this.enqueueCodeReviewJobUseCase.execute({
             codeManagementPayload: {
                 ...payload,
@@ -299,7 +302,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         }
 
         try {
-            await this.savePullRequestUseCase.execute(params);
+            await this.savePullRequestUseCase.execute({
+                ...params,
+                organizationAndTeamData: context?.organizationAndTeamData,
+            });
 
             if (this.enqueueCodeReviewJobUseCase) {
                 this.enqueueCodeReviewJobUseCase
@@ -429,7 +435,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             }
 
             if (payload?.action === 'closed') {
-                this.generateIssuesFromPrClosedUseCase.execute(params);
+                this.generateIssuesFromPrClosedUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
@@ -720,6 +729,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     // Prepare params for the use cases
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',

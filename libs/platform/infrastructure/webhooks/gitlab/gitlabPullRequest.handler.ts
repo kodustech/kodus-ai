@@ -218,7 +218,10 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
         try {
             // Check if we should trigger code review based on the MR action
             if (this.shouldTriggerCodeReviewForGitLab(payload)) {
-                await this.savePullRequestUseCase.execute(params);
+                await this.savePullRequestUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 if (
                     this.enqueueCodeReviewJobUseCase &&
@@ -307,9 +310,11 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
                 if (payload?.object_attributes?.action === 'merge') {
                     try {
-                        await this.generateIssuesFromPrClosedUseCase.execute(
-                            params,
-                        );
+                        await this.generateIssuesFromPrClosedUseCase.execute({
+                            ...params,
+                            organizationAndTeamData:
+                                context?.organizationAndTeamData,
+                        });
                     } catch (error) {
                         this.logger.error({
                             message: 'Failed to generate issues from merged MR',
@@ -481,11 +486,18 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                 payload?.object_attributes?.action === 'update'
             ) {
                 // For closed or merged MRs, just save the state without triggering automation
-                await this.savePullRequestUseCase.execute(params);
+                await this.savePullRequestUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 if (payload?.object_attributes?.action === 'merge') {
                     this.generateIssuesFromPrClosedUseCase
-                        .execute(params)
+                        .execute({
+                            ...params,
+                            organizationAndTeamData:
+                                context?.organizationAndTeamData,
+                        })
                         .catch((error) => {
                             this.logger.error({
                                 message:
@@ -612,6 +624,8 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     // Prepare params for use cases
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',

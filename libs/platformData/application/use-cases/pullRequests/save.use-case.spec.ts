@@ -481,7 +481,12 @@ describe('SavePullRequestUseCase on GitLab saves under the instance that sent th
             pullRequestsService as any,
             codeManagement as any,
         );
-        return { useCase, codeManagement, pullRequestsService };
+        return {
+            useCase,
+            codeManagement,
+            pullRequestsService,
+            integrationConfigService,
+        };
     };
 
     it('saves under the organization whose config is on the sending server, even when another server is found first', async () => {
@@ -499,6 +504,36 @@ describe('SavePullRequestUseCase on GitLab saves under the instance that sent th
         expect(
             pullRequestsService.aggregateAndSaveDataStructure.mock.calls[0][6],
         ).toEqual({ organizationId: 'org-b', teamId: 'team-b' });
+    });
+
+    it("saves under the team the handler's context resolved, not the first config", async () => {
+        // The same project connected in two workspaces: the review runs for
+        // the team with an active code review automation, which is not the
+        // most recently updated config.
+        const alsoB = gitlabConfig(
+            'b2',
+            'https://gitlab-b.example/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const { useCase, pullRequestsService, integrationConfigService } =
+            makeUseCase([fromB, alsoB]);
+
+        await useCase.execute({
+            payload: updatedPayload,
+            platformType: PlatformType.GITLAB,
+            event: 'Merge Request Hook',
+            organizationAndTeamData: {
+                organizationId: 'org-b2',
+                teamId: 'team-b2',
+            },
+        });
+
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure.mock.calls[0][6],
+        ).toEqual({ organizationId: 'org-b2', teamId: 'team-b2' });
+        expect(
+            integrationConfigService.findIntegrationConfigWithTeams,
+        ).not.toHaveBeenCalled();
     });
 
     it('saves nothing when only another server has the project id', async () => {

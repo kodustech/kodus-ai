@@ -169,6 +169,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         repository: IMappedRepository;
         platformType: PlatformType;
         instanceSource?: WebhookSource;
+        resolved?: OrganizationAndTeamData;
     } | null> {
         const { payload, platformType } = params;
 
@@ -241,6 +242,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
             ...(platformType === PlatformType.GITLAB
                 ? { instanceSource: gitlabWebhookSource(sanitizedPayload) }
                 : {}),
+            resolved: params?.organizationAndTeamData,
         };
     }
 
@@ -259,6 +261,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 params?.repository,
                 platformType,
                 params?.instanceSource,
+                params?.resolved,
             );
 
         return {
@@ -283,6 +286,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         repository: IRepositoryToIssues,
         platformType: PlatformType,
         instanceSource?: WebhookSource,
+        resolved?: OrganizationAndTeamData,
     ): Promise<{
         organizationAndTeamData: OrganizationAndTeamData | null;
         host?: string;
@@ -296,7 +300,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         // GitLab and Forgejo repository ids are per instance: keep the
         // integrations of the instance that sent the webhook, so a project
         // of another server that reached the same id never takes its issues.
-        const configs = webhookConfigsOfInstance(
+        const instanceConfigs = webhookConfigsOfInstance(
             platformType,
             foundConfigs,
             instanceSource
@@ -307,6 +311,13 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                       repositoryFullName: repository.full_name,
                   },
         );
+        // The handler's webhook context already chose the team that reviews
+        // the PR: its issues land with that team, not with the first config.
+        const configs = resolved
+            ? instanceConfigs.filter(
+                  (config) => config?.team?.uuid === resolved.teamId,
+              )
+            : instanceConfigs;
 
         if (!configs || !configs.length) {
             this.logger.warn({
