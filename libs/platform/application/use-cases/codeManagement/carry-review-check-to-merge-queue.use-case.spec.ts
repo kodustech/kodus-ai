@@ -36,6 +36,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                 id: 999,
                 name: 'service',
                 full_name: 'acme/service',
+                html_url: 'https://ghe-b.example/acme/service',
             },
             ...overrides,
         },
@@ -82,9 +83,12 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
             conclusion: 'success',
         });
 
+        // Resolved on the server that pushed: GitHub Enterprise Server
+        // numbers repositories per server.
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.GITHUB,
             '999',
+            { host: 'ghe-b.example', repositoryFullName: 'acme/service' },
         );
         expect(checks.findLatestCompletedCheckRun).toHaveBeenCalledWith({
             organizationAndTeamData,
