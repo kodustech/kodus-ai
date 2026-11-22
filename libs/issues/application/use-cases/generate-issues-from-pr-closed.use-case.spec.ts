@@ -307,8 +307,22 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
         });
 
         it("resolves the project's server when its mapped URL is the SSH remote", async () => {
+            // The most recent config is another server's project 999.
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [
+                    {
+                        team: {
+                            uuid: 'other-team',
+                            organization: { uuid: 'other-org' },
+                        },
+                        configValue: [
+                            {
+                                id: '999',
+                                http_url:
+                                    'https://gitlab-b.example/group/repo.git',
+                            },
+                        ],
+                    },
                     {
                         ...mockIntegrationConfig,
                         configValue: [
@@ -343,6 +357,9 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                         organizationId: 'org-uuid',
                         teamId: 'team-uuid',
                     },
+                    repository: expect.objectContaining({
+                        host: 'gitlab.example.com',
+                    }),
                 }),
             );
         });

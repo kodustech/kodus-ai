@@ -174,6 +174,17 @@ describe('gitlabWebhookSource', () => {
             repositoryFullName: 'globex/billing-api',
         });
     });
+
+    it('reads the instance from an SSH remote when the payload has no HTTP URL', () => {
+        expect(
+            gitlabWebhookSource({
+                project: {
+                    path_with_namespace: 'globex/billing-api',
+                    url: 'git@GitLab-B.example:globex/billing-api.git',
+                },
+            }).host,
+        ).toBe('gitlab-b.example');
+    });
 });
 
 describe('instanceConfigsForWebhook on GitLab', () => {

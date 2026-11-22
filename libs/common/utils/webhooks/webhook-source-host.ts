@@ -14,10 +14,9 @@ export function normalizeHost(
     if (!trimmed) {
         return undefined;
     }
-    // An SSH remote: git@host:group/repo.git
-    const sshRemote = /^[^@/\s]+@([^:/\s]+):/.exec(trimmed);
-    if (sshRemote) {
-        return sshRemote[1].toLowerCase();
+    const sshHost = sshRemoteHost(trimmed);
+    if (sshHost) {
+        return sshHost;
     }
     try {
         const url = new URL(
@@ -27,6 +26,11 @@ export function normalizeHost(
     } catch {
         return trimmed.toLowerCase().replace(/\/.*$/, '');
     }
+}
+
+/** The host of an SSH remote such as `git@host:group/repo.git`. */
+function sshRemoteHost(value: string): string | undefined {
+    return /^[^@/\s]+@([^:/\s]+):/.exec(value.trim())?.[1]?.toLowerCase();
 }
 
 /**
@@ -74,7 +78,8 @@ export function gitlabWebhookSource(payload: any): WebhookSource {
     for (const source of sources) {
         if (typeof source !== 'string' || !source) continue;
         try {
-            host = new URL(source).hostname.toLowerCase();
+            host =
+                sshRemoteHost(source) ?? new URL(source).hostname.toLowerCase();
             break;
         } catch {
             continue;
