@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { MachineSizeSchema } from '@libs/runtime/contracts/machine-size';
 import { SandboxOpCheckedSchema, type SandboxResult } from '@libs/runtime/protocol/sandbox';
-import { sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema } from '@libs/runtime/protocol/messages';
+import { MAX_TOOL_LAYERS, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema, ToolLayerPlanSchema } from '@libs/runtime/protocol/messages';
 
 // The product's door to a code sandbox on a cell (docs/runtime/sandbox.md):
 // the runtime-sandbox provider (libs/sandbox) calls the runtime-worker's
@@ -39,9 +39,17 @@ export const SandboxOpenSchema = z.strictObject({
     // prepares is not here: a template is made only through SANDBOX_ROUTES.template.
     templateKey: SnapshotKeySchema.optional(),
     resumeFrom: SnapshotIdSchema.optional(),
+    // Tool layers (docs/runtime/persistent-state.md section 4): the CLI installs the caller plans, each by its id
+    // (which becomes /opt/kcli/<id>). egressAllow still carries the registry hosts those installs need, as it always
+    // did. The hub finds out per layer whether the cell it chose holds it (the view's toolLayers) and takes the
+    // registry host of a held layer out of the sandbox's egress again; a layer that is not held is installed as before.
+    toolLayers: z.array(ToolLayerPlanSchema).min(1).max(MAX_TOOL_LAYERS).optional(),
 }).refine((b) => sandboxSnapshotError(b.secrets ? { ...b, secrets: ['asked'] } : { ...b, secrets: undefined }) === undefined, {
     message: 'resumeFrom goes with no templateKey',
     path: ['resumeFrom'],
+}).refine((b) => new Set((b.toolLayers ?? []).map((l) => l.id)).size === (b.toolLayers ?? []).length, {
+    message: 'a tool layer id is named once',
+    path: ['toolLayers'],
 });
 export type SandboxOpen = z.infer<typeof SandboxOpenSchema>;
 
@@ -93,6 +101,20 @@ export interface SandboxView {
     leaseExpiresAt?: string;
     hardExpiresAt?: string;
     blockers?: { kind: string; signature: string; message: string }[];
+    /**
+     * One entry per planned tool layer when the cell keeps layers: hit means the layer is mounted
+     * read-only at /opt/kcli/<id> and binaryPath and interpreter say where its CLI is and what runs it;
+     * miss means the caller installs it as before (the sandbox's egress then allows the registry).
+     * Absent: the cell keeps no layers, every plan is a miss.
+     */
+    toolLayers?: SandboxToolLayerView[];
+}
+
+export interface SandboxToolLayerView {
+    id: string;
+    state: 'hit' | 'miss';
+    binaryPath?: string;
+    interpreter?: string;
 }
 
 export type SandboxOpView = SandboxResult;

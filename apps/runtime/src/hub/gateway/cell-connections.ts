@@ -45,6 +45,9 @@ export class CellConnection {
     /** What the hello said (set when it is accepted): the capacity gauges' labels and the features frames may use. */
     isolation?: string;
     driver?: string;
+    /** What the hello said of the sandbox image (feature toolLayers): the digest a tool layer is built for, and the arch its key names. */
+    sandboxImageDigest?: string;
+    arch?: string;
     features: readonly string[] = [];
     /** The protocol version the hello ack chose: every frame of this session is sent in it. */
     version?: number;

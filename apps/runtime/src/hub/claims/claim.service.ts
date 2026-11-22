@@ -1,7 +1,7 @@
 import { type ClaimState, isClaimStateIn, isFinalClaimState, LIVE_CLAIM_STATES, MACHINE_HOLDING_CLAIM_STATES, OPEN_CLAIM_STATES } from '@libs/runtime/contracts/enums';
 import { type AcquireRequest, type Blocked, type Claim, claimCeilingSeconds, isolationUnavailable, machineMinutesExhausted, readyTimeoutMinutes } from '@libs/runtime/environment';
 import { isolationSatisfies } from '@libs/runtime/contracts/isolation';
-import { type ClaimRepo, type ClaimRunIdentity, type ClaimSecret, type Envelope, MAX_SHARED_IMAGES, type MessageBody, type RepoRef, type SharedImage } from '@libs/runtime/protocol';
+import { type ClaimRepo, type ClaimRunIdentity, type ClaimSecret, type Envelope, type LayerBuild, MAX_SHARED_IMAGES, type MessageBody, type RepoRef, SANDBOX_ENVIRONMENT_ID, type SharedImage, type ToolLayerPlan } from '@libs/runtime/protocol';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { bootOutputOf } from '@libs/runtime/run/boot-failure';
 import { memberAliasOfReason } from '@libs/runtime/run/run-workspace';
@@ -23,6 +23,7 @@ import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-c
 import type { TicketService } from './ticket.service';
 import type { MachineMinuteBudget } from './machine-minutes';
 import type { OrgSecretRefs } from './org-secret-refs';
+import { type BuilderAcquire, ToolLayerService } from './tool-layers';
 
 // The claim lifecycle on the hub: acquire (with rebind on a retry), the
 // claim.ready / claim.failed outcome and release. The egress policy of a
@@ -52,6 +53,13 @@ export type AcquireInput = AcquireRequest & { expose: Claim['manifest']['expose'
      * of templateKey, or resumes the session resumeFrom.
      */
     sandboxSnapshot?: { prepares?: boolean; templateKey?: string; resumeFrom?: string };
+    /**
+     * A sandbox claim's planned tool layers (feature toolLayers): the CLI installs its caller would run. The hub
+     * keys them for the cell it chose and the claim's Claim says which the cell held (tool-layers.ts).
+     */
+    sandboxToolLayers?: ToolLayerPlan[];
+    /** A layer builder claim (feature toolLayers): the cell runs this install itself and no caller gets an op on it. */
+    sandboxLayerBuild?: LayerBuild;
     admission?: PhysicalAdmissionTicket;
     /**
      * The other repositories of a multi-repository environment, each at the
@@ -189,6 +197,8 @@ export class ClaimService {
     readonly memory = new CellMemoryBook();
     /** The environment's approved egress hosts, to the claims that may have them. */
     readonly egress: ClaimEgressService;
+    /** Tool layers: what a review's acquire carries and answers, and the builders the cell asks for. */
+    readonly layers: ToolLayerService;
 
     constructor(
         private readonly store: HubStore,
@@ -199,6 +209,7 @@ export class ClaimService {
         private readonly opts: { readyTimeoutMs?: number; now: () => Date; machineMinutes?: MachineMinuteBudget; secrets?: OrgSecretRefs; sandboxMemoryMb?: number },
     ) {
         this.egress = new ClaimEgressService(store, connections, log, () => this.opts.now());
+        this.layers = new ToolLayerService(store, this.egress, connections, log, () => this.opts.now(), (cellId, req) => this.acquireBuilder(cellId, req), (ref) => this.release(ref));
     }
 
     private get now() {
@@ -358,6 +369,20 @@ export class ClaimService {
         return round;
     }
 
+    /** A layer builder: a sandbox claim with only its layerBuild, on the cell that asked for the build. */
+    private acquireBuilder(cellId: string, req: BuilderAcquire): Promise<Claim | Blocked> {
+        return this.acquire(cellId, {
+            organizationId: req.organizationId,
+            environmentId: SANDBOX_ENVIRONMENT_ID,
+            imageId: 'sandbox',
+            ref: { side: 'pr', sha: '0'.repeat(40) },
+            consumer: 'sandbox',
+            idempotencyKey: req.idempotencyKey,
+            expose: [],
+            sandboxLayerBuild: req.sandboxLayerBuild,
+        });
+    }
+
     /**
      * One acquire round: the checks before anything is taken, the cell's
      * memory, this round recorded (a retry rebinds the claim), then the
@@ -472,6 +497,11 @@ export class ClaimService {
             // Nothing was sent or recorded: the worker picks a cell that names it.
             this.log('warn', 'claim.sandbox_unsupported', ids);
             return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'sandbox_unsupported', message: 'this cell runs no code sandboxes' }] };
+        }
+        if (req.sandboxLayerBuild && !supports(session, 'toolLayers')) {
+            // Nothing was sent or recorded: only a cell that named toolLayers is asked to build one.
+            this.log('warn', 'claim.tool_layers_unsupported', ids);
+            return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'tool_layers_unsupported', message: 'this cell keeps no tool layers' }] };
         }
         if (req.consumer === 'preview' && !supports(session, 'preview')) {
             // Nothing was sent or recorded: a cell without the feature never routes the preview.
@@ -588,7 +618,14 @@ export class ClaimService {
         // of a fork: the claim starts on the base list, and the push after ready (or a later approval)
         // still reaches a claim that may have them.
         const approvals = receivesApprovedHosts({ side: req.ref.side, forkPullRequest: req.forkPullRequest });
-        const egress = req.consumer === 'sandbox'
+        // Tool layers: keyed for this cell, or undefined (the cell keeps no layers, or none are planned). The caller's
+        // egressAllow carries the registry hosts its installs need, as it always did; once claim.ready says which layers
+        // are held, the host of a held layer is taken out again (ToolLayerService.settle), since a hit needs no network.
+        const layers = req.consumer === 'sandbox' ? this.layers.keyed(session, conn, req) : undefined;
+        const egress = req.sandboxLayerBuild
+            // A builder reaches its one registry host (plus the cell's own platform lists) and nothing the org approved.
+            ? { allow: [req.sandboxLayerBuild.registry.toLowerCase()], inspect: [] }
+            : req.consumer === 'sandbox'
             ? await this.egress.sandboxEgressOf(req.organizationId, req.sandboxEgress ?? [], ids)
             : approvals && supports(session, 'egressAllow') ? await this.egress.approvedEgressOf(req.organizationId, req.environmentId, ids) : { allow: [], inspect: [] };
         const egressAllow = egress.allow;
@@ -626,6 +663,8 @@ export class ClaimService {
                           ...(req.size ? { size: { memoryMb: req.size.memoryMb, cpus: req.size.cpus } } : {}),
                           ...(secrets.length ? { secrets } : {}),
                           ...sandboxSnapshotFields(req.sandboxSnapshot, supports(session, 'snapshots')),
+                          ...(layers ? { toolLayers: layers.map((l) => ({ key: l.key, id: l.plan.id })) } : {}),
+                          ...(req.sandboxLayerBuild ? { layerBuild: req.sandboxLayerBuild } : {}),
                       },
                       claimId,
                   )
@@ -673,7 +712,11 @@ export class ClaimService {
             this.memory.forget(cellId, claimId);
         }
         if (reply.type === 'blocked' || reply.type === 'nack') return this.refusedAcquire(ids, req, reply);
-        return this.readyOutcome(session, ids, req, at, deadlines, hold, approvals, await ready);
+        const outcome = await ready;
+        const result = await this.readyOutcome(session, ids, req, at, deadlines, hold, approvals, outcome);
+        if (!layers || 'status' in result) return result;
+        const toolLayers = await this.layers.settle({ ids: { cellId, claimId, orgId: req.organizationId }, layers, asked: req.sandboxEgress ?? [], states: outcome.type === 'ready' ? outcome.body.toolLayers : undefined, build: true });
+        return { ...result, toolLayers };
     }
 
     /**

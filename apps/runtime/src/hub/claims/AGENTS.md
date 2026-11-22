@@ -10,6 +10,7 @@ Everything the runtime-hub does with a claim: acquire, the cell's outcome, relea
 - Lease renewal: `claim-lease.ts` `ClaimLeaseService.renew`, only for `RENEWABLE_CLAIM_STATES` (`bound`), never past the hard ceiling.
 - Approved egress hosts: `claim-egress.service.ts` `ClaimEgressService`, `receivesApprovedHosts`, `egressBodyFor`.
 - Bakes, pool targets and session forgets: `claim-image.service.ts` `ClaimImageService`.
+- Tool layers (feature `toolLayers`): `tool-layers.ts` `ToolLayerService` (`keyed`: the keys of a review's planned CLIs, computed with `computeToolLayerKey` from the chosen cell's image digest and arch, only for a cell that names the feature and sent a digest; `settle`: hit or miss per layer from `claim.ready`, the registry host of a held layer taken out of the sandbox's egress, the `tool_layers` audit row with keys and states and never a path) and `ToolLayerBuilds` (the builders a cell asks for with `build: true`: single-flight per org, cell and key, one per cell and two per org, queued behind reviews with a capacity retry, failures remembered 10 minutes, the cell's `unknown_claim` on the release of a builder that ended itself is normal).
 - Preview routes: `claim-preview.service.ts` `ClaimPreviewService` (`route`, `unroute`, the tunnel ticket).
 - Steps at most once per `stepId`: `step-dispatcher.ts` `StepDispatcher` (`probe`, `exec`, `reset`, `exploreBrowser`, `sandboxOp`, `snapshot`, `upload` (a cell's `not_implemented`/`not_supported` answer is `upload_unavailable`, not a lost transport; a nonzero exec in its result is `upload_failed`; the command hash leaves out each file's read grant `url`), `onStepReply`, `onStepFrame`).
 - Boot progress for the setup view: `claim-progress.ts` `ClaimProgressBook`.
@@ -45,7 +46,7 @@ Everything the runtime-hub does with a claim: acquire, the cell's outcome, relea
 
 ## Module map
 
-Files (13, tests apart): `cell-memory.ts`, `claim-deadlines.ts`, `claim-egress.service.ts`, `claim-image.service.ts`, `claim-lease.ts`, `claim-preview.service.ts`, `claim-progress.ts`, `claim.service.ts`, `machine-minutes.ts`, `org-secret-refs.ts`, `pg-machine-minutes.store.ts`, `step-dispatcher.ts`, `ticket.service.ts`
+Files (14, tests apart): `cell-memory.ts`, `claim-deadlines.ts`, `claim-egress.service.ts`, `claim-image.service.ts`, `claim-lease.ts`, `claim-preview.service.ts`, `claim-progress.ts`, `claim.service.ts`, `machine-minutes.ts`, `org-secret-refs.ts`, `pg-machine-minutes.store.ts`, `step-dispatcher.ts`, `ticket.service.ts`, `tool-layers.ts`
 
 Imports these Runtime modules:
 

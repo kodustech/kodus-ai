@@ -24,6 +24,24 @@ describe('hub HTTP', () => {
         expect(new InternalController(hub).health()).toEqual({ ok: true, cells: ['cell-a', 'cell-b'] });
     });
 
+    it('hands a sandbox its planned tool layers, and refuses a plan that names a key or repeats an id', async () => {
+        const acquireSandbox = jest.fn(async () => ({ status: 'blocked', blockers: [] }));
+        const c = new InternalController({ acquireSandbox } as any);
+        const plan = { id: 'kcliabc', installer: 'npm', argv: ['npm', 'install', '-g', 'x@1.0.0'], binary: 'x', registry: 'registry.npmjs.org' };
+        await c.acquireSandbox('cell-a', { organizationId: 'org', idempotencyKey: 'sandbox:1', toolLayers: [plan] });
+        expect(acquireSandbox).toHaveBeenCalledWith('cell-a', { organizationId: 'org', idempotencyKey: 'sandbox:1', toolLayers: [plan] });
+        expect(await status(c.acquireSandbox('cell-a', { organizationId: 'org', idempotencyKey: 'sandbox:1', toolLayers: [{ ...plan, key: 'a'.repeat(64) }] }))).toBe(400);
+        expect(await status(c.acquireSandbox('cell-a', { organizationId: 'org', idempotencyKey: 'sandbox:1', toolLayers: [plan, plan] }))).toBe(400);
+        expect(acquireSandbox).toHaveBeenCalledTimes(1);
+    });
+
+    it("the org purge's cell leg answers how many of this replica's cells acknowledged", async () => {
+        const purgeOrganizationData = jest.fn(async () => ({ cells: 2, purged: 1, pending: 1 }));
+        const c = new InternalController({ purgeOrganizationData } as any);
+        expect(await c.purgeCellData('org-a')).toEqual({ cells: 2, purged: 1, pending: 1 });
+        expect(purgeOrganizationData).toHaveBeenCalledWith('org-a');
+    });
+
     it('validates physical ticket bodies and rejects cross-cell redemption before the service', async () => {
         const ticket = {
             organizationId: 'org',

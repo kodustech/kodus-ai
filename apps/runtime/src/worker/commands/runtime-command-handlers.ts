@@ -8,7 +8,7 @@ import { EVIDENCE_STORE } from '../evidence/evidence.service';
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { DistributedLocks } from '../../shared/persistence/locks';
 import { ORGANIZATION_PURGE_STORE, type OrganizationPurgeStore } from '../../shared/persistence/organization-purge';
-import type { ClaimReleaser } from '../run/ports';
+import type { CellDataPurger, ClaimReleaser } from '../run/ports';
 import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import { RunEngineService } from '../dbos/run-engine.service';
 import { PREVIEW_SERVICE } from '../preview/preview.service';
@@ -46,6 +46,7 @@ export const PR_SESSIONS = Symbol('PR_SESSIONS');
 export const POOL_TARGET_SENDER = Symbol('POOL_TARGET_SENDER');
 /** Ends a claim through the hub (HubClaimReleaser): the organization purge releases the claims it finds live. */
 export const CLAIM_RELEASER = Symbol('CLAIM_RELEASER');
+export const CELL_DATA_PURGER = Symbol('CELL_DATA_PURGER');
 /** The cluster-wide PR lock (Postgres advisory locks in production). */
 export const CONSUMER_LOCKS = Symbol('CONSUMER_LOCKS');
 
@@ -70,7 +71,7 @@ export interface CommandHandlerDeps {
     previews?: PullRequestPreviews;
     prSessions?: Pick<PullRequestSessions, 'forget'>;
     /** The organization purge: without its store and releaser that command is not handled (the consumer dead-letters it). */
-    organizationPurge?: { store: OrganizationPurgeStore; releaser: ClaimReleaser; evidence: Pick<EvidenceStore, 'deletePrefix'> | null };
+    organizationPurge?: { store: OrganizationPurgeStore; releaser: ClaimReleaser; evidence: Pick<EvidenceStore, 'deletePrefix'> | null; cells?: CellDataPurger | null };
     warn?: (msg: string, meta: Record<string, unknown>) => void;
 }
 
@@ -92,7 +93,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
         new CellTokenRevokedHandler(commands),
         new CellRevokeRequestedHandler(commands),
         new LessonUpdateRequestedHandler(deps.lessons),
-        ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence)] : []),
+        ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence, deps.organizationPurge.cells ?? null)] : []),
     ];
 }
 
@@ -119,6 +120,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         ORGANIZATION_PURGE_STORE,
         CLAIM_RELEASER,
         EVIDENCE_STORE,
+        CELL_DATA_PURGER,
     ],
     useFactory: (
         engine: RunEngine,
@@ -137,6 +139,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         purgeStore: OrganizationPurgeStore,
         releaser: ClaimReleaser,
         evidence: EvidenceStore | null,
+        cells: CellDataPurger,
     ) => {
         const logger = new Logger('RuntimeCommandConsumer');
         return runtimeCommandHandlers({
@@ -153,7 +156,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
             healthPath: config.setup.healthPath,
             previews,
             prSessions,
-            organizationPurge: { store: purgeStore, releaser, evidence },
+            organizationPurge: { store: purgeStore, releaser, evidence, cells },
             warn: (msg, meta) => logger.warn({ msg, ...meta }),
         });
     },

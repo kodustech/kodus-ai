@@ -91,12 +91,13 @@ export class SandboxService {
                 ...(req.prepares ? { prepares: true } : {}),
                 ...(req.templateKey ? { templateKey: req.templateKey } : {}),
                 ...(req.resumeFrom ? { resumeFrom: req.resumeFrom } : {}),
+                ...(req.toolLayers?.length ? { toolLayers: req.toolLayers } : {}),
             },
             `sandbox:${req.sandboxId}`,
             ACQUIRE_TIMEOUT_MS,
         );
         if ('status' in out) return blockedView(req.sandboxId, out);
-        return { sandboxId: req.sandboxId, state: 'ready', cellId: out.cellId, leaseExpiresAt: out.leaseExpiresAt, hardExpiresAt: out.hardExpiresAt };
+        return { sandboxId: req.sandboxId, state: 'ready', cellId: out.cellId, leaseExpiresAt: out.leaseExpiresAt, hardExpiresAt: out.hardExpiresAt, ...(out.toolLayers?.length ? { toolLayers: out.toolLayers } : {}) };
     }
 
     async op(req: SandboxOpRequest): Promise<SandboxResult> {

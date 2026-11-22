@@ -100,6 +100,11 @@ export interface Claim {
     buildStateEvictedAt?: string;
     /** How long the claim took on the cell (claim.ready.timing), in ms; absent from a cell that does not send it. */
     timing?: { prepareMs: number; bootMs?: number; buildMs?: number; upMs?: number; seedMs?: number; readyMs?: number; snapshotMs?: number; buildSteps?: BuildSteps; phases?: BootPhases };
+    /**
+     * A sandbox claim that planned tool layers on a cell that keeps them: what the cell held of each
+     * (hit: mounted read-only, with where its CLI is; miss: the caller installs). Never content.
+     */
+    toolLayers?: { id: string; state: 'hit' | 'miss'; binaryPath?: string; interpreter?: string }[];
 }
 
 /** A claim's claim.ready.timing: the cell agent's prepare time and the driver's boot phases, in ms. */

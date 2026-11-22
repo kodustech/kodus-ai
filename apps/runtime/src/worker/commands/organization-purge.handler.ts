@@ -5,17 +5,18 @@ import type { RunProjectionStore } from '@libs/runtime/run';
 
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { OrganizationPurgeStore } from '../../shared/persistence/organization-purge';
-import type { ClaimReleaser } from '../run/ports';
+import type { CellDataPurger, ClaimReleaser } from '../run/ports';
 import type { CommandHandler } from './command-handlers';
 import type { RunEngine } from './run-engine.port';
 
-/** The organization still has a live Run or a claim that was not released: the broker retries the command with a delay. */
+/** The organization still has a live Run or a claim that was not released, or a cell that has not removed its data yet: the broker retries the command with a delay. */
 export class OrganizationPurgeNotReadyError extends Error {
     constructor(
         readonly liveRuns: number,
         readonly liveClaims: number,
+        readonly cellsPending: number = 0,
     ) {
-        super(`organization purge waits for ${liveRuns} live Runs and ${liveClaims} live claims`);
+        super(`organization purge waits for ${liveRuns} live Runs, ${liveClaims} live claims and ${cellsPending} cells`);
     }
 }
 
@@ -28,6 +29,10 @@ export class OrganizationPurgeNotReadyError extends Error {
  *   The finalization (and the hub's release) ends the claims within seconds, so the first delivery usually finds
  *   them still live and throws: the control lane retries with a growing delay, and the retry finds them ended.
  * - Nothing is deleted while a machine may still run: a row the reaper or the hub needs to end it would be gone.
+ * - Then the cells holding data of the organization at rest are asked to remove it (CellDataPurger) and the command
+ *   waits for every one that is connected; the evidence and the rows go only after, so a cell that refused (a claim
+ *   still live on it) is asked again by the retry. A cell that is offline is not waited for and is logged
+ *   (`cellsUnreached`); reaching it when it returns needs the hub's per-cell purge record, which is not built.
  * - Idempotent: a second command, or a retry after a partial delete, finds the rest (the evidence and every
  *   statement are deletes by prefix or by the organization).
  * - The summary names the organization and counts only.
@@ -43,6 +48,8 @@ export class OrganizationPurgeRequestedHandler implements CommandHandler {
         private readonly releaser: ClaimReleaser,
         /** Null when no evidence store is configured: there is no object to delete. */
         private readonly evidence: Pick<EvidenceStore, 'deletePrefix'> | null,
+        /** Null when the worker has no hub to ask (no cell holds anything). */
+        private readonly cells: CellDataPurger | null = null,
     ) {}
 
     async handle(body: Record<string, unknown>) {
@@ -72,11 +79,18 @@ export class OrganizationPurgeRequestedHandler implements CommandHandler {
             throw new OrganizationPurgeNotReadyError(liveRuns, liveClaims);
         }
 
+        // Data at rest on the cells goes before the rows that find them; a pending cell retries the whole command.
+        const cellData = this.cells ? await this.cells.purge(organizationId) : { cellsPending: 0, cellsPurged: 0 };
+        if (cellData.cellsPending) {
+            this.logger.warn({ msg: 'organization_purge.waiting_cells', organizationId, reason: p.data.reason, cellsPending: cellData.cellsPending, cellsPurged: cellData.cellsPurged });
+            throw new OrganizationPurgeNotReadyError(0, 0, cellData.cellsPending);
+        }
+
         // The evidence first: a failure retries the command with every row still in place.
         const evidenceObjects = this.evidence ? await this.evidence.deletePrefix(`${organizationId}/`) : 0;
         const { deleted, hostsKept } = await this.purge.deleteOrganization(organizationId);
         const rows = Object.values(deleted).reduce((a, b) => a + b, 0);
-        this.logger.log({ msg: 'organization_purge.done', organizationId, reason: p.data.reason, rows, tables: deleted, evidenceObjects, poolsCordoned: cordoned, hostsKept });
+        this.logger.log({ msg: 'organization_purge.done', organizationId, reason: p.data.reason, rows, tables: deleted, evidenceObjects, poolsCordoned: cordoned, hostsKept, cellsPurged: cellData.cellsPurged });
         if (hostsKept) this.logger.warn({ msg: 'organization_purge.hosts_kept', organizationId, hostsKept });
     }
 }

@@ -55,6 +55,16 @@ export interface RunClaims {
     hardExpiryOf?(organizationId: string, claimId: string): Promise<string | undefined>;
 }
 
+/**
+ * The cell leg of the purge (docs/runtime/persistent-state.md D13): every connected cell that may hold data of the
+ * organization at rest (tool layers today, a preview's kept state later) is asked to remove it, and says so.
+ * cellsPending counts the cells that have not yet: asked now and not answered, refused while a claim of the
+ * organization is live on them, or unreachable. Idempotent: a cell that already acknowledged is not asked again.
+ */
+export interface CellDataPurger {
+    purge(organizationId: string): Promise<{ cellsPending: number; cellsPurged: number }>;
+}
+
 /** Ends a claim through the hub (no Run context needed: the reaper uses it too). */
 export interface ClaimReleaser {
     release(ref: { claimId: string; organizationId: string; runId?: string | null }, correlationId?: string): Promise<void>;

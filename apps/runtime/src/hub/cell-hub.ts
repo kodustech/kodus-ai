@@ -1,7 +1,7 @@
 import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import type { BakeOutcome, BakeRequest, Blocked, Claim, Consumer, EnvError, ExecRequest, LeaseRenewal, ProbeOutcome, StepResult } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, type ExercisedRequest, type ExercisedResult, helloVersionRefusal, HUB_CELL_PROTOCOLS, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
+import { cellProtocolOf, decodeFrame, Envelope, type EvidenceRequest, type ExercisedRequest, type ExercisedResult, helloVersionRefusal, HUB_CELL_PROTOCOLS, hubAccepts, type MachineSize, MessageBody, MessageType, MIN_CELL_PROTOCOL_VERSION, PROTOCOL_VERSION, SANDBOX_ENVIRONMENT_ID, SUPPORTED_VERSIONS, type SandboxOp, type SandboxResult, type SnapshotPurpose, type ToolLayerPlan } from '@libs/runtime/protocol';
 import type { RunStreamEvent, RunStreamStore } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -15,6 +15,7 @@ import { ClaimImageService } from './claims/claim-image.service';
 import { StepDispatcher } from './claims/step-dispatcher';
 import { CellIdentityService } from './enrollment/cell-identity.service';
 import { CellConnection, CellConnectionRegistry } from './gateway/cell-connections';
+import { type OrgDataPurgeStatus, OrgDataPurges } from './gateway/org-data-purges';
 import type { CellSession, HubStore } from './hub-store';
 import { CellCredential, ClaimRef, HubLog, HubLogLine, HubMetrics, IssuedIdentity, PeerCert, SocketLike } from './hub-types';
 import { ClaimProgressBook, type ClaimProgressView } from './claims/claim-progress';
@@ -40,7 +41,7 @@ export { CELL_CERT_HOURS } from './enrollment/cell-identity.service';
 export { CellUnavailableError, ClaimScopeError } from './hub-types';
 export type { CellCredential, ClaimRef, HubLogLine, IssuedIdentity, PeerCert, SocketLike } from './hub-types';
 
-const CELL_TO_HUB: ReadonlySet<MessageType> = new Set(['hello', 'heartbeat', 'claim.ready', 'claim.failed', 'claim.progress', 'step.result', 'step.stream', 'blocked', 'egress.blocked', 'image.shared', 'ack', 'nack']);
+const CELL_TO_HUB: ReadonlySet<MessageType> = new Set(['hello', 'heartbeat', 'claim.ready', 'claim.failed', 'claim.progress', 'step.result', 'step.stream', 'blocked', 'egress.blocked', 'image.shared', 'toollayer.built', 'toollayer.failed', 'org.purged', 'ack', 'nack']);
 
 /** How often a heartbeat's memory is written to the cell's session when only committed moved. */
 const MEMORY_PERSIST_MS = 5 * 60_000;
@@ -82,6 +83,8 @@ export class CellHub {
     /** Bakes and pool targets: never from a claim that ran PR code. */
     readonly images: ClaimImageService;
     readonly leases: ClaimLeaseService;
+    /** The org purge's cell leg: org.purge to the cells that hold data of an org, org.purged back. */
+    readonly orgPurges: OrgDataPurges;
     readonly steps: StepDispatcher;
     /** Preview routes on preview claims (docs/runtime/preview-urls.md). */
     readonly previews: ClaimPreviewService;
@@ -126,6 +129,7 @@ export class CellHub {
             );
             this.claims.tickets = this.tickets;
         }
+        this.orgPurges = new OrgDataPurges(this.connections, this.log);
         this.leases = new ClaimLeaseService(this.claims, store, this.connections, this.hubMetrics, this.log, now);
         this.previews = new ClaimPreviewService(this.claims, this.connections, opts.preview?.tickets, opts.preview?.tunnelUrl, this.log, now);
         this.steps = new StepDispatcher(
@@ -330,6 +334,19 @@ export class CellHub {
                 this.connections.ack(conn, msg.id);
                 return;
             }
+            case 'toollayer.built':
+            case 'toollayer.failed': {
+                const result = this.claims.layers.builds.onResult(conn, msg as Envelope<'toollayer.built'> | Envelope<'toollayer.failed'>);
+                if (result === 'unknown') return this.connections.nack(conn, msg.id, 'unknown_claim', 'claim is not a layer builder of this cell');
+                this.connections.ack(conn, msg.id);
+                return;
+            }
+            case 'org.purged': {
+                // Acknowledged only for an (org, cell) this hub asked; a frame nobody asked for is refused, as any unsolicited one.
+                if (this.orgPurges.onPurged(conn, msg as Envelope<'org.purged'>) === 'unasked') return this.connections.nack(conn, msg.id, 'unknown_org_purge', 'no org.purge was asked of this cell for that organization');
+                this.connections.ack(conn, msg.id);
+                return;
+            }
             case 'egress.blocked': {
                 const body = msg.body as MessageBody<'egress.blocked'>;
                 const claim = msg.claimId ? await this.store.claim(msg.claimId) : null;
@@ -449,6 +466,9 @@ export class CellHub {
         conn.isolation = body.isolation;
         conn.driver = body.driver;
         conn.features = caps.features;
+        // A tool layer is keyed by the image it is built for and the arch it runs on: only a cell that names the feature has one.
+        conn.sandboxImageDigest = caps.features.includes('toolLayers') ? body.capabilities?.sandboxImageDigest : undefined;
+        conn.arch = body.capabilities?.arch;
         // A new session: the cell's next heartbeat says what it holds.
         this.claims.memory.reset(conn.cred.cellId, conn.sessionEpoch);
         this.metrics.cellConnectedDelta(1, { owner: conn.cred.owner });
@@ -570,10 +590,15 @@ export class CellHub {
     exec(ref: ClaimRef, req: ExecRequest): Promise<StepResult | EnvError> {
         return this.steps.exec(ref, req);
     }
+    /** Asks the cells of this replica that may hold data of the org to purge it; the status says who has acknowledged (org.purged). */
+    purgeOrganizationData(orgId: string): Promise<OrgDataPurgeStatus> {
+        return this.orgPurges.request(orgId);
+    }
+
     /** A code sandbox on the cell (sandbox.acquire): one tool machine, no repository, no Run. */
     acquireSandbox(
         cellId: string,
-        req: { organizationId: string; idempotencyKey: string; egressAllow?: string[]; size?: MachineSize; secrets?: boolean; prepares?: boolean; templateKey?: string; resumeFrom?: string },
+        req: { organizationId: string; idempotencyKey: string; egressAllow?: string[]; size?: MachineSize; secrets?: boolean; prepares?: boolean; templateKey?: string; resumeFrom?: string; toolLayers?: ToolLayerPlan[] },
     ): Promise<Claim | Blocked> {
         return this.acquire(cellId, {
             organizationId: req.organizationId,
@@ -586,6 +611,7 @@ export class CellHub {
             ...(req.egressAllow?.length ? { sandboxEgress: req.egressAllow } : {}),
             ...(req.size ? { size: req.size } : {}),
             ...(req.secrets ? { sandboxSecrets: true } : {}),
+            ...(req.toolLayers?.length ? { sandboxToolLayers: req.toolLayers } : {}),
             ...(req.prepares || req.templateKey || req.resumeFrom
                 ? { sandboxSnapshot: { ...(req.prepares ? { prepares: true } : {}), ...(req.templateKey ? { templateKey: req.templateKey } : {}), ...(req.resumeFrom ? { resumeFrom: req.resumeFrom } : {}) } }
                 : {}),

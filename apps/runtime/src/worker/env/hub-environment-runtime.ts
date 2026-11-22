@@ -22,7 +22,7 @@ import { claimIdFor, isSetupChildSuffix } from '../../shared/claim-id';
 import { CellUnavailableError, HubRefused, HubUnreachableError, MemberCleanupPendingError, NoCellConnectedError } from '../../shared/errors';
 export { HubRefused } from '../../shared/errors';
 import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
-import type { ClaimReleaser, RunEventSink } from '../run/ports';
+import type { CellDataPurger, ClaimReleaser, RunEventSink } from '../run/ports';
 import { evidenceReadUrl, type EvidenceUploads } from '../run/run-evidence';
 import { canonicalEvidenceKey } from '../../shared/evidence/file-evidence-store';
 import type { SecretOpener } from '../secrets/sealed-tokens';
@@ -690,6 +690,33 @@ export class HubClaimReleaser implements ClaimReleaser {
         const url = (await this.hub.replicaForClaim(ref.claimId)) ?? this.hub.hubBaseUrl;
         const { claimId, ...tenant } = ref;
         await this.hub.post(url, `/internal/claims/${encodeURIComponent(claimId)}/release`, tenant, correlationId);
+    }
+}
+
+/**
+ * The organization purge's cell leg (CellDataPurger): the hub replicas that hold a connected cell each get the
+ * request and answer how many of their cells have acknowledged. A replica that cannot be reached counts as one
+ * pending cell, so the purge waits and asks again rather than deleting the rows that find the data.
+ */
+export class HubCellDataPurger implements CellDataPurger {
+    constructor(
+        private readonly hub: HubClient,
+        private readonly connectedReplicas: () => Promise<string[]>,
+    ) {}
+
+    async purge(organizationId: string): Promise<{ cellsPending: number; cellsPurged: number }> {
+        let cellsPending = 0;
+        let cellsPurged = 0;
+        for (const url of new Set(await this.connectedReplicas())) {
+            try {
+                const r = await this.hub.post<{ pending: number; purged: number }>(url, `/internal/organizations/${encodeURIComponent(organizationId)}/cell-data-purge`, {});
+                cellsPending += r.pending;
+                cellsPurged += r.purged;
+            } catch {
+                cellsPending += 1;
+            }
+        }
+        return { cellsPending, cellsPurged };
     }
 }
 

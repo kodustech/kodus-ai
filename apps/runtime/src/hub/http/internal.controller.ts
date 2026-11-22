@@ -4,7 +4,7 @@ import { Body, Controller, Get, HttpCode, HttpException, Inject, NotFoundExcepti
 import { z } from 'zod';
 
 import { ProbeSchema } from '@libs/runtime/probe';
-import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, ClaimRunIdentitySchema, claimReposError, EvidenceRequestSchema, ExercisedRequestSchema, MachineSizeSchema, MessageBodySchemas, RepoRefSchema, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema } from '@libs/runtime/protocol';
+import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, ClaimRunIdentitySchema, claimReposError, EvidenceRequestSchema, ExercisedRequestSchema, MachineSizeSchema, MessageBodySchemas, RepoRefSchema, MAX_TOOL_LAYERS, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema, ToolLayerPlanSchema } from '@libs/runtime/protocol';
 import { CLAIM_CONSUMERS } from '@libs/runtime/contracts/enums';
 import { IsolationMinimumSchema } from '@libs/runtime/contracts/isolation';
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '@libs/runtime/protocol/recipe';
@@ -69,9 +69,14 @@ const SandboxAcquireBody = z.strictObject({
     prepares: z.boolean().optional(),
     templateKey: SnapshotKeySchema.optional(),
     resumeFrom: SnapshotIdSchema.optional(),
+    // The CLI installs the caller plans (SandboxOpen.toolLayers); their registry hosts stay in egressAllow, as an install needs them.
+    toolLayers: z.array(ToolLayerPlanSchema).min(1).max(MAX_TOOL_LAYERS).optional(),
 }).refine((b) => sandboxSnapshotError({ ...b, secrets: b.secrets ? ['asked'] : undefined }) === undefined, {
     message: 'prepares needs a templateKey and no secrets; resumeFrom goes with neither',
     path: ['prepares'],
+}).refine((b) => new Set((b.toolLayers ?? []).map((l) => l.id)).size === (b.toolLayers ?? []).length, {
+    message: 'a tool layer id is named once',
+    path: ['toolLayers'],
 });
 const EventBody = z.strictObject({
     organizationId: Id,
@@ -171,6 +176,17 @@ export class InternalController {
     async egressPolicy(@Param('environmentId') environmentId: string, @Body() body: unknown) {
         const { organizationId, allow } = parseBody(z.strictObject({ organizationId: Id, allow: z.array(z.string().min(1).max(253)).max(256) }), body);
         return { claims: await this.hub.pushEgressPolicy(organizationId, environmentId, allow) };
+    }
+
+    /**
+     * The org purge's cell leg (docs/runtime/persistent-state.md D13): org.purge to the cells of this replica that
+     * may hold data of the organization, and how many have acknowledged. The worker calls every replica and
+     * asks again until none is pending.
+     */
+    @Post('organizations/:organizationId/cell-data-purge')
+    @HttpCode(200)
+    async purgeCellData(@Param('organizationId') organizationId: string) {
+        return this.hub.purgeOrganizationData(parseBody(Id, organizationId));
     }
 
     @Post('cells/:cellId/acquire')

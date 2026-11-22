@@ -7,6 +7,7 @@ The runtime-hub's live connections: one WebSocket per cell on this replica, and 
 - `cell-connections.ts` `CellConnectionRegistry`: `add` (a new connection replaces the old one), `send` (backpressure), `request` (ack, nack or blocked within `ACK_TIMEOUT_MS`), `answer`, `ack`, `nack`, `drop`, `closed` (ends the session row only if still ours), `evict` (revocation), `silentSince`, `views` (capacity gauges).
 - `CELL_CONNECTION_LIMITS`: 4 MiB buffered, 128 pending requests, 256 in-flight steps; frames over `MAX_FRAME_BYTES` are never written.
 - `CELL_INBOUND_LIMITS` (`admitInbound`, `inboundHandled`): frames read and not handled yet. Reading pauses at 64 frames or 4 MiB and resumes at 16; past 256 frames or 16 MiB the connection is closed (`reason=inbound`).
+- `org-data-purges.ts` `OrgDataPurges`: the cell leg of the org purge (`org.purge` to every connected cell naming `toolLayers` that may hold the org's data, `org.purged` back, acknowledgements kept in memory per org and cell, so a repeat asks only the pending ones).
 - `peer-cert.ts` `peerCert`: the verified client certificate of a TLS socket as the hub reads it.
 - The `traceparent` on claim frames to a cell that named `traceContext`.
 
@@ -31,7 +32,7 @@ The runtime-hub's live connections: one WebSocket per cell on this replica, and 
 
 ## Module map
 
-Files (2, tests apart): `cell-connections.ts`, `peer-cert.ts`
+Files (3, tests apart): `cell-connections.ts`, `org-data-purges.ts`, `peer-cert.ts`
 
 Imports these Runtime modules:
 

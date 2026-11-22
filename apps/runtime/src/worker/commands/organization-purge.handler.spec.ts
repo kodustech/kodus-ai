@@ -95,6 +95,64 @@ describe('OrganizationPurgeRequestedHandler', () => {
         expect(purge.rows.get('org-a')).toEqual({ runtime_runs: 1 });
     });
 
+    describe('the cells holding data at rest (D13)', () => {
+        const withCells = (answers: Array<{ cellsPending: number; cellsPurged: number }>) => {
+            const t = setup();
+            const calls: string[] = [];
+            const cells = {
+                purge: jest.fn(async (org: string) => {
+                    calls.push(`cells:${org}:rows=${t.purge.deleteCalls}:evidence=${t.evidence.objects.size}`);
+                    return answers.shift() ?? { cellsPending: 0, cellsPurged: 1 };
+                }),
+            };
+            const handler = new OrganizationPurgeRequestedHandler(t.engine, t.projection, t.purge, t.releaser, t.evidence, cells);
+            return { ...t, cells, calls, handler };
+        };
+
+        it('asks the cells after the claims are released and before the evidence and the rows go', async () => {
+            const { purge, evidence, handler, calls } = withCells([{ cellsPending: 0, cellsPurged: 2 }]);
+            await evidence.put(key('org-a', 'run-1'), '{}', 'application/json');
+            purge.rows.set('org-a', { runtime_runs: 1 });
+            await handler.handle(command());
+            // Asked while the rows and the evidence still stood: they are how the data is found again.
+            expect(calls).toEqual(['cells:org-a:rows=0:evidence=1']);
+            expect(purge.deleteCalls).toBe(1);
+            expect(evidence.objects.size).toBe(0);
+        });
+
+        it('deletes nothing and fails the delivery while a cell has not acknowledged, so the broker asks again', async () => {
+            const { purge, evidence, handler } = withCells([{ cellsPending: 1, cellsPurged: 1 }, { cellsPending: 0, cellsPurged: 2 }]);
+            await evidence.put(key('org-a', 'run-1'), '{}', 'application/json');
+            purge.rows.set('org-a', { runtime_runs: 1 });
+            await expect(handler.handle(command())).rejects.toMatchObject({ cellsPending: 1, liveRuns: 0, liveClaims: 0 });
+            expect(purge.deleteCalls).toBe(0);
+            expect(purge.rows.get('org-a')).toEqual({ runtime_runs: 1 });
+            expect(evidence.objects.size).toBe(1);
+            // The retry: every cell has acknowledged now.
+            await expect(handler.handle(command())).resolves.toBeUndefined();
+            expect(purge.rows.get('org-a')).toBeUndefined();
+        });
+
+        it('does not ask a cell while a Run or a claim of the organization is still live', async () => {
+            const { projection, purge, engine, releaser, evidence } = setup();
+            const cells = { purge: jest.fn(async () => ({ cellsPending: 0, cellsPurged: 0 })) };
+            engine.stop.mockImplementation(async () => 'stop');
+            releaser.release.mockRejectedValue(new Error('hub unavailable'));
+            await projection.upsert('run-a', live('run-a', 'org-a'));
+            purge.claims.set('org-a', [{ claimId: 'claim-1', runId: 'run-a' }]);
+            const handler = new OrganizationPurgeRequestedHandler(engine, projection, purge, releaser, evidence, cells);
+            await expect(handler.handle(command())).rejects.toMatchObject({ liveRuns: 1, liveClaims: 1 });
+            expect(cells.purge).not.toHaveBeenCalled();
+        });
+
+        it('works without a cell leg (a worker with no hub to ask)', async () => {
+            const { purge, handler } = setup();
+            purge.rows.set('org-a', { runtime_runs: 1 });
+            await handler.handle(command());
+            expect(purge.rows.get('org-a')).toBeUndefined();
+        });
+    });
+
     it('is idempotent: a second command finds nothing and ends', async () => {
         const { purge, handler } = setup();
         purge.rows.set('org-a', { runtime_runs: 1 });
@@ -119,7 +177,7 @@ describe('OrganizationPurgeRequestedHandler', () => {
         purge.rows.set('org-a', { runtime_runs: 2, runtime_run_events: 7 });
         await handler.handle(command());
         expect(logs).toEqual([
-            { msg: 'organization_purge.done', organizationId: 'org-a', reason: 'organization_deleted', rows: 9, tables: { runtime_runs: 2, runtime_run_events: 7 }, evidenceObjects: 1, poolsCordoned: 1, hostsKept: 0 },
+            { msg: 'organization_purge.done', organizationId: 'org-a', reason: 'organization_deleted', rows: 9, tables: { runtime_runs: 2, runtime_run_events: 7 }, evidenceObjects: 1, poolsCordoned: 1, hostsKept: 0, cellsPurged: 0 },
         ]);
     });
 

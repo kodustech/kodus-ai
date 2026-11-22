@@ -63,6 +63,12 @@ export class PgRunClaims implements RunClaims, HardExpiredClaims {
         return r.rows.map((x) => ({ claimId: x.claim_id as string, cellId: x.cell_id as string, orgId: x.org_id as string, runId: (x.run_id as string | null) ?? null }));
     }
 
+    /** The hub replicas that hold a connected cell: where an org's cell data purge goes. */
+    async connectedReplicas(): Promise<string[]> {
+        const r = await this.pool.query(`SELECT DISTINCT replica_url FROM runtime.runtime_cell_sessions WHERE disconnected_at IS NULL`);
+        return r.rows.map((x) => x.replica_url as string);
+    }
+
     /** The hub replicas that hold a live claim of the environment (where an approved egress host goes); of any environment for the org list. */
     async replicasOfEnvironment(organizationId: string, environmentId: string): Promise<string[]> {
         const r = await this.pool.query(

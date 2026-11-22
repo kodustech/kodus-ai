@@ -35,7 +35,7 @@ import { StepPastPlans } from './run/plan-reuse';
 import { HmacCanaryVault } from './canary/canary';
 import { RecordedLlmGateway } from './agent/llm-gateway';
 import { RuntimeCommandConsumer } from './consumer/run-request.consumer';
-import { CLAIM_RELEASER, CONSUMER_LOCKS, EGRESS_POLICY_PUSHER, POOL_TARGET_SENDER, PR_SESSIONS, runtimeCommandHandlersProvider } from './commands/runtime-command-handlers';
+import { CELL_DATA_PURGER, CLAIM_RELEASER, CONSUMER_LOCKS, EGRESS_POLICY_PUSHER, POOL_TARGET_SENDER, PR_SESSIONS, runtimeCommandHandlersProvider } from './commands/runtime-command-handlers';
 import { RUNTIME_RUN_RETRY_EXCHANGE } from '@libs/runtime/run/run-messages';
 import { RuntimeRunRetry } from './consumer/runtime-run-retry';
 import { canaryKeyFrom, hubEnvironments, loadRecordedTurns, poolCellOf, RUN_DEPS_FACTORY, RunDependenciesFactory } from './dbos/run-deps.factory';
@@ -43,7 +43,7 @@ import { RUN_ENGINE_LOCKS, RUN_ENGINE_RETENTION, RUN_ENGINE_STUCK, RUN_ENGINE_WO
 import { PgStuckSource, StuckDetector } from './maintenance/stuck-detector';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator } from './dbos/admission-coordinator';
 import { HubPhysicalAdmissionClient } from './env/physical-admission-client';
-import { HubClaimReleaser, HubClient, HubEgressPolicyPusher, HubPoolTargetSender, HubRunEventSink } from './env/hub-environment-runtime';
+import { HubCellDataPurger, HubClaimReleaser, HubClient, HubEgressPolicyPusher, HubPoolTargetSender, HubRunEventSink } from './env/hub-environment-runtime';
 import { EVIDENCE_CONFIG, EVIDENCE_STORE, RuntimeEvidenceService } from './evidence/evidence.service';
 import { PgRunClaims } from './persistence/pg-run-claims';
 import { PgStabilityHistory } from './run/pg-stability-history';
@@ -290,6 +290,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                 },
                 { provide: ORGANIZATION_PURGE_STORE, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgOrganizationPurgeStore(pool) },
                 { provide: CLAIM_RELEASER, inject: [HUB_CLIENT], useFactory: (hub: HubClient) => new HubClaimReleaser(hub) },
+                { provide: CELL_DATA_PURGER, inject: [HUB_CLIENT, RUNTIME_PG_POOL], useFactory: (hub: HubClient, pool: Pool) => new HubCellDataPurger(hub, () => new PgRunClaims(pool).connectedReplicas()) },
                 { provide: COMMAND_STORE, inject: [RUNTIME_PG_POOL, LOCK_SCOPED_PG], useFactory: (pool: Pool, sql: LockScopedPg) => new PgCommandStore(pool, sql) },
                 {
                     provide: EGRESS_POLICY_PUSHER,

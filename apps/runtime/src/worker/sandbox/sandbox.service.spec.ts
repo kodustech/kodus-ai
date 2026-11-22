@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import type { AddressInfo } from 'net';
 
 import { ENV_SESSION_SIGNATURE_HEADER, signEnvSessionRequest } from '@libs/runtime/contracts/env-session';
-import { SANDBOX_ROUTES } from '@libs/runtime/contracts/sandbox';
+import { SANDBOX_ROUTES, SandboxOpenSchema } from '@libs/runtime/contracts/sandbox';
 
 import { claimIdFor } from '../../shared/claim-id';
 import { startEnvSessionServer } from '../env-session/env-session-server';
@@ -47,6 +47,33 @@ describe('code sandbox on the worker', () => {
         const stepId = randomUUID();
         expect(await s.op({ organizationId: 'org-a', sandboxId, stepId, op: { op: 'stat' } })).toEqual({ ok: true, size: 3 });
         expect(posts[1]).toEqual({ url: 'http://hub-1', path: `/internal/claims/${encodeURIComponent(claimId)}/sandbox-op`, body: { organizationId: 'org-a', runId: null, stepId, op: { op: 'stat' } } });
+    });
+
+    it('hands the planned tool layers to the hub and returns what the cell held of each', async () => {
+        const plan = { id: 'kcliabc', installer: 'npm' as const, argv: ['npm', 'install', '-g', 'x@1.0.0'], binary: 'x', registry: 'registry.npmjs.org' };
+        const toolLayers = [{ id: 'kcliabc', state: 'hit', binaryPath: '/opt/kcli/kcliabc/.local/bin/x', interpreter: 'node' }];
+        const { hub, posts } = fakeHub({ '/sandbox': { claimId, cellId: 'cell-a', leaseExpiresAt: 'L', hardExpiresAt: 'H', manifest: {}, observer: {}, toolLayers } });
+        const view = await new SandboxService({ hub, isStopped: async () => false }).open({ organizationId: 'org-a', sandboxId, egressAllow: ['github.com', 'registry.npmjs.org'], toolLayers: [plan] });
+        expect(posts[0].body).toMatchObject({ egressAllow: ['github.com', 'registry.npmjs.org'], toolLayers: [plan] });
+        expect(view).toMatchObject({ state: 'ready', toolLayers });
+    });
+
+    it('a view without layers (a cell that keeps none) carries no toolLayers field', async () => {
+        const { hub } = fakeHub({ '/sandbox': { claimId, cellId: 'cell-a', leaseExpiresAt: 'L', hardExpiresAt: 'H', manifest: {}, observer: {} } });
+        const view = await new SandboxService({ hub, isStopped: async () => false }).open({ organizationId: 'org-a', sandboxId });
+        expect(view).not.toHaveProperty('toolLayers');
+    });
+
+    describe('SandboxOpen toolLayers', () => {
+        const ref = { organizationId: 'org-a', sandboxId: randomUUID() };
+        const plan = { id: 'kcliabc', installer: 'npm', argv: ['npm', 'install', '-g', 'x@1.0.0'], binary: 'x', registry: 'registry.npmjs.org' };
+        it('accepts a plan, and refuses a duplicate id, a key of the caller, a bad installer and an id that is a path', () => {
+            expect(SandboxOpenSchema.safeParse({ ...ref, toolLayers: [plan] }).success).toBe(true);
+            expect(SandboxOpenSchema.safeParse({ ...ref, toolLayers: [plan, plan] }).success).toBe(false);
+            expect(SandboxOpenSchema.safeParse({ ...ref, toolLayers: [{ ...plan, key: 'a'.repeat(64) }] }).success).toBe(false);
+            expect(SandboxOpenSchema.safeParse({ ...ref, toolLayers: [{ ...plan, installer: 'pip' }] }).success).toBe(false);
+            expect(SandboxOpenSchema.safeParse({ ...ref, toolLayers: [{ ...plan, id: '../x' }] }).success).toBe(false);
+        });
     });
 
     it('a sandbox the cell could not boot comes back blocked, and an ended one answers not found', async () => {

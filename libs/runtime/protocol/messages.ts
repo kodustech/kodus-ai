@@ -503,6 +503,15 @@ export const LayerBuildSchema = z.strictObject({
 });
 export type LayerBuild = z.infer<typeof LayerBuildSchema>;
 
+/**
+ * One CLI install a caller plans (the custom agent's provider): what a layer
+ * would be built from, before any cell is chosen. The key needs the chosen
+ * cell's image digest and arch, so the hub computes it (computeToolLayerKey)
+ * and the cell is sent {key, id}; the same plan is the layerBuild of a builder.
+ */
+export const ToolLayerPlanSchema = LayerBuildSchema.omit({ key: true });
+export type ToolLayerPlan = z.infer<typeof ToolLayerPlanSchema>;
+
 /** The cell's answer for one requested layer in claim.ready. */
 export const ToolLayerStateSchema = z.strictObject({
     id: ToolLayerIdSchema,
