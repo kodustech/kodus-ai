@@ -207,6 +207,14 @@ describe('renderReportComment (screen 7)', () => {
         expect(renderReportComment(report(), links)).toMatchSnapshot();
     });
 
+    it('a stack with no dashboard URL ends a finding line at its sentence, with no bare evidence label', () => {
+        const body = renderReportComment(report(), runtimeLinks(undefined, { runId: RUN, repositoryId: 'repo-1' }));
+        expect(body).toContain('- **Regression** `POST /orders`: 400 on main, 500 on this PR.\n');
+        expect(body).not.toContain('Command and output');
+        const reply = renderSuggestionReply(report().paths[0], {});
+        expect(reply).toBe('**Ran it: confirmed.** I sent `POST /orders` to main and to this pull request: 400 on main, 500 here.');
+    });
+
     it('a regression line says main and PR results and links to the evidence', () => {
         const body = renderReportComment(report(), links);
         expect(body.startsWith('### Kody Runtime · 1 regression\n')).toBe(true);

@@ -536,8 +536,14 @@ const sharesRoute = (p: ReportPath, all: readonly ReportPath[]) => all.some((q) 
 const isBrowserPath = (p: ReportPath) =>
     !!(p.base?.browser || p.pr?.browser || p.browserStep || p.pixelDiffPercent !== undefined);
 
+/** The link to a path's evidence on the Run page; nothing when the comment has no dashboard URL, as a bare label reads as part of the sentence. */
 const evidenceLink = (p: ReportPath, links: RuntimeLinks) =>
-    link(isBrowserPath(p) ? 'Screenshots and video' : 'Command and output', links.run);
+    links.run ? link(isBrowserPath(p) ? 'Screenshots and video' : 'Command and output', links.run) : '';
+
+const withEvidence = (sentence: string, p: ReportPath, links: RuntimeLinks) => {
+    const evidence = evidenceLink(p, links);
+    return evidence ? `${sentence} ${evidence}` : sentence;
+};
 
 const BROWSER_STEP_DIFFERENCE: Record<NonNullable<ReportPath['browserStep']>['outcome'], string> = {
     fails_on_pr: 'fails on this PR',
@@ -585,7 +591,7 @@ const browserPathLine = (p: ReportPath, links: RuntimeLinks) => {
         ...(p.pixelDiffPercent !== undefined ? [pixelText(p.pixelDiffPercent)] : []),
     ];
     const differs = rest.length ? `, ${parts.length > 1 ? 'also ' : ''}differs in ${rest.map(browserFieldLabel).join(', ')}` : '';
-    return `${shownPath(p)}: ${parts.join('; ')}${differs}. ${evidenceLink(p, links)}`;
+    return withEvidence(`${shownPath(p)}: ${parts.join('; ')}${differs}.`, p, links);
 };
 
 const MAX_LEAVES_SHOWN = 3;
@@ -626,18 +632,18 @@ const pathLine = (p: ReportPath, links: RuntimeLinks, all: readonly ReportPath[]
     const base = formatObserved(p.base);
     const pr = formatObserved(p.pr);
     if (p.findingKind === 'pr_destabilizes_machine') {
-        return `${where}: the machine fails on this PR (${pr}) and stays up on main. ${evidenceLink(p, links)}`;
+        return withEvidence(`${where}: the machine fails on this PR (${pr}) and stays up on main.`, p, links);
     }
     if (isNewEndpointError(p) || isNewEndpoint(p)) {
-        return `${where}: no such route on main (${base}), ${pr} on this PR. ${link('Command and output', links.run)}`;
+        return withEvidence(`${where}: no such route on main (${base}), ${pr} on this PR.`, p, links);
     }
     if (isBrowserPath(p)) return browserPathLine(p, links);
-    if (p.leafChanges && base === pr) return `${where}: ${leafSentence(p.leafChanges)} ${link('Command and output', links.run)}`;
+    if (p.leafChanges && base === pr) return withEvidence(`${where}: ${leafSentence(p.leafChanges)}`, p, links);
     const differs =
         p.differingFields?.length && base === pr
             ? `, differs in ${p.differingFields.map(code).join(', ')}`
             : '';
-    return `${where}: ${base} on main, ${pr} on this PR${differs}. ${link('Command and output', links.run)}`;
+    return withEvidence(`${where}: ${base} on main, ${pr} on this PR${differs}.`, p, links);
 };
 
 /** Existing typed fields suffice; no page text or agent claim becomes a question. */
