@@ -34,9 +34,12 @@ describe('normalizeHost', () => {
         expect(normalizeHost('git@GitLab-B.example:acme/api.git')).toBe(
             'gitlab-b.example',
         );
-        // The same spelling `new URL` gives an IPv6 host.
+        // Bracketed, as `new URL` spells an IPv6 hostname.
         expect(normalizeHost('git@[2001:DB8::1]:acme/api.git')).toBe(
-            normalizeHost('https://[2001:db8::1]/acme/api.git'),
+            '[2001:db8::1]',
+        );
+        expect(normalizeHost('https://[2001:db8::1]/acme/api.git')).toBe(
+            '[2001:db8::1]',
         );
     });
 
