@@ -1297,6 +1297,85 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
+    // ─── Test 9c: single-use release stops compute now (#2626) ────────────
+
+    async function acquireAndReleaseWith(idleMs: number) {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:202';
+
+        leaseRepo.upsertAcquire.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'READY',
+            sandboxId: '',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const result = await manager.acquire(prKey, 'graph-build');
+
+        leaseRepo.decrementLease.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 0,
+            state: 'READY',
+            sandboxId: 'graph-sandbox',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const before = Date.now();
+        await manager.release(result.leaseId, { idleMs });
+
+        return { prKey, before };
+    }
+
+    it('release with idleMs 0 kills the single-use sandbox now and drops the lease', async () => {
+        const { prKey, before } = await acquireAndReleaseWith(0);
+
+        // The cron fallback still gets a killAt, written before the kill.
+        expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
+        const [calledPrKey, calledKillAt] = (leaseRepo.setKillAt as jest.Mock)
+            .mock.calls[0];
+        expect(calledPrKey).toBe(prKey);
+        expect(calledKillAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(calledKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
+
+        expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+        // No idle window to defend: the provider timeout is not what stops it.
+        expect(Sandbox.setTimeout).not.toHaveBeenCalled();
+    });
+
+    it('release with idleMs 0 keeps the lease for the cron when the kill fails', async () => {
+        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+            new Error('provider unavailable'),
+        );
+
+        const { prKey } = await acquireAndReleaseWith(0);
+
+        // The kill is still attempted; only its failure is tolerated.
+        expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
+        expect(leaseRepo.retire).not.toHaveBeenCalled();
+        expect(
+            (
+                (leaseRepo.setKillAt as jest.Mock).mock.calls[0][1] as Date
+            ).getTime(),
+        ).toBeLessThanOrEqual(Date.now() + 50);
+        expect(prKey).toBeTruthy();
+    });
+
     // ─── Test 9d: acquire clears killAt atomically (warm reuse) ───────────
 
     it('acquire clears killAt on the lease doc so any worker preserves warm reuse', async () => {
@@ -1462,7 +1541,9 @@ describe('SandboxLeaseManager', () => {
                 "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
             ),
             expect.objectContaining({
-                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+                envs: expect.objectContaining({
+                    GIT_AUTH_HEADER: expect.any(String),
+                }),
             }),
         );
     });

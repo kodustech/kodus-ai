@@ -642,6 +642,42 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             // E2B path: existing idle-kill logic (unchanged)
             const idleMs = opts?.idleMs ?? IDLE_TIMEOUT_MS;
+
+            // A single-use sandbox (the graph jobs, whose key carries the
+            // jobId) is never joined again: the last release stops compute now
+            // instead of paying the five-minute default idle window. killAt is
+            // written first, so if this process dies before the kill lands the
+            // idle-kill cron still finishes the job.
+            if (idleMs <= 0) {
+                const killAt = new Date();
+                await this.leaseRepo.setKillAt(prKey, killAt);
+                const apiKey = this.configService.get<string>('API_E2B_KEY');
+                if (!apiKey) {
+                    return;
+                }
+                try {
+                    await Sandbox.kill(updated.sandboxId, { apiKey });
+                    await this.leaseRepo.delete(prKey);
+                    this.logger.log({
+                        message: `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: {
+                            prKey,
+                            sandboxId: updated.sandboxId,
+                            idleTimeoutMs: 0,
+                        },
+                    });
+                } catch (err) {
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        error: err as Error,
+                        metadata: { prKey, sandboxId: updated.sandboxId },
+                    });
+                }
+                return;
+            }
+
             const killAt = new Date(Date.now() + idleMs);
             await this.leaseRepo.setKillAt(prKey, killAt);
 
