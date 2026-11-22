@@ -128,10 +128,16 @@ export class BitbucketService implements Omit<
         params: any,
     ): Promise<IntegrationConfigEntity | null> {
         try {
+            // Scoped to this platform's active integrations, as GitHub's
+            // is: the id alone also matches repositories of other platforms.
             const integrationConfig =
                 await this.integrationConfigService.findOne({
                     configKey: IntegrationConfigKey.REPOSITORIES,
                     configValue: [{ id: params?.repository?.id?.toString() }],
+                    integration: {
+                        status: true,
+                        platform: PlatformType.BITBUCKET,
+                    },
                 });
 
             return integrationConfig &&

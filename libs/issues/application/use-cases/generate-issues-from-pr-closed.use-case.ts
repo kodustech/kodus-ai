@@ -11,7 +11,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
-    forgejoConfigsForWebhook,
+    webhookConfigsOfInstance,
     getMappedPlatform,
 } from '@libs/common/utils/webhooks';
 import {
@@ -283,16 +283,19 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 repository.id,
                 platformType,
             );
-        // Forgejo repository ids are per instance: keep the integrations of
-        // the instance that sent the webhook.
-        const configs =
-            platformType === PlatformType.FORGEJO
-                ? forgejoConfigsForWebhook(foundConfigs, {
-                              host: repository.url,
-                              repositoryId: repository.id,
-                              repositoryFullName: repository.full_name,
-                          })
-                : foundConfigs;
+        // GitLab and Forgejo repository ids are per instance: keep the
+        // integrations of the instance that sent the webhook, so a project
+        // of another server that reached the same id never takes its issues.
+        const configs = webhookConfigsOfInstance(platformType, foundConfigs, {
+            host: repository.url,
+            repositoryId: repository.id,
+            repositoryFullName:
+                platformType === PlatformType.GITLAB
+                    ? ((repository as { path_with_namespace?: string })
+                          ?.path_with_namespace ??
+                      (repository as { fullName?: string })?.fullName)
+                    : repository.full_name,
+        });
 
         if (!configs || !configs.length) {
             this.logger.warn({

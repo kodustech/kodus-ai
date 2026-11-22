@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -3227,20 +3228,37 @@ export class GitlabService implements Omit<
         );
     }
 
-    async findTeamAndOrganizationIdByConfigKey(
-        params: any,
-    ): Promise<IntegrationConfigEntity | null> {
+    /**
+     * The repositories config of `repository` on the GitLab instance that
+     * sent the webhook (`host`, or the same `group/project` under that id).
+     * GitLab numbers projects per instance, so the id alone matches projects
+     * of other connected instances, and of other platforms.
+     */
+    async findTeamAndOrganizationIdByConfigKey(params: {
+        repository: { id?: string | number; name?: string };
+        host?: string;
+        repositoryFullName?: string;
+    }): Promise<IntegrationConfigEntity | null> {
         try {
-            const integrationConfig =
-                await this.integrationConfigService.findOne({
-                    configKey: IntegrationConfigKey.REPOSITORIES,
-                    configValue: [{ id: params?.repository?.id?.toString() }],
-                });
+            const repositoryId = String(params?.repository?.id ?? '');
+            if (!repositoryId) {
+                return null;
+            }
 
-            return integrationConfig &&
-                integrationConfig?.configValue?.length > 0
-                ? integrationConfig
-                : null;
+            const configs =
+                await this.integrationConfigService.findIntegrationConfigWithTeams(
+                    IntegrationConfigKey.REPOSITORIES,
+                    repositoryId,
+                    PlatformType.GITLAB,
+                );
+
+            return (
+                instanceConfigsForWebhook(configs, {
+                    host: params.host,
+                    repositoryId,
+                    repositoryFullName: params.repositoryFullName,
+                })[0] ?? null
+            );
         } catch (err) {
             throw new BadRequestException(err);
         }

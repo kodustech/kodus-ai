@@ -1,7 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
 import {
-    forgejoConfigsForWebhook,
     getMappedPlatform,
+    gitlabWebhookSource,
+    webhookConfigsOfInstance,
 } from '@libs/common/utils/webhooks';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -79,16 +80,24 @@ export class SavePullRequestUseCase {
                         repository.id,
                         platformType,
                     );
-                // Forgejo repository ids are per instance: keep the
-                // integrations of the instance that sent the webhook.
-                const configs =
-                    platformType === PlatformType.FORGEJO
-                        ? forgejoConfigsForWebhook(foundConfigs, {
+                // GitLab and Forgejo repository ids are per instance: keep
+                // the integrations of the instance that sent the webhook. The
+                // first config found used to take a project of another
+                // GitLab server that reached the same id.
+                const configs = webhookConfigsOfInstance(
+                    platformType,
+                    foundConfigs,
+                    platformType === PlatformType.GITLAB
+                        ? {
+                              ...gitlabWebhookSource(sanitizedPayload),
+                              repositoryId: repository.id,
+                          }
+                        : {
                               host: repository.url,
                               repositoryId: repository.id,
                               repositoryFullName: repository.fullName,
-                          })
-                        : foundConfigs;
+                          },
+                );
 
                 if (!configs || !configs.length) {
                     this.logger.warn({

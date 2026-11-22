@@ -1,7 +1,11 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     forgejoConfigsForWebhook,
     forgejoWebhookHost,
     forgejoWebhookSource,
+    gitlabWebhookSource,
+    instanceConfigsForWebhook,
+    webhookConfigsOfInstance,
     normalizeHost,
 } from './webhook-source-host';
 
@@ -144,5 +148,121 @@ describe('forgejoConfigsForWebhook', () => {
                 fromBeta,
             ),
         ).toEqual([]);
+    });
+});
+
+describe('gitlabWebhookSource', () => {
+    it('reads the instance and the group/project of a merge request hook', () => {
+        expect(
+            gitlabWebhookSource({
+                project: {
+                    id: 9,
+                    path_with_namespace: 'globex/billing-api',
+                    git_http_url:
+                        'https://GitLab-B.example/globex/billing-api.git',
+                    web_url: 'https://gitlab-b.example/globex/billing-api',
+                },
+            }),
+        ).toEqual({
+            host: 'gitlab-b.example',
+            repositoryFullName: 'globex/billing-api',
+        });
+    });
+});
+
+describe('instanceConfigsForWebhook on GitLab', () => {
+    // GitLab numbers projects per instance: project 9 is acme/web-shop on
+    // gitlab-a.example and globex/billing-api on gitlab-b.example. GitLab
+    // configs list each project with its http_url; an OAuth integration may
+    // store no host.
+    const listed = (
+        org: string,
+        httpUrl: string,
+        name: string,
+        host?: string,
+    ) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        integration: { authIntegration: { authDetails: host ? { host } : {} } },
+        configValue: [{ id: '9', name, http_url: httpUrl }],
+    });
+    const a = listed(
+        'a',
+        'https://gitlab-a.example/acme/web-shop.git',
+        'acme/web-shop',
+    );
+    const b = listed(
+        'b',
+        'https://gitlab-b.example/globex/billing-api.git',
+        'globex/billing-api',
+    );
+    const fromB = {
+        host: 'gitlab-b.example',
+        repositoryFullName: 'globex/billing-api',
+        repositoryId: 9,
+    };
+
+    it('keeps the config whose listed project is on the sending server', () => {
+        expect(instanceConfigsForWebhook([a, b], fromB)).toEqual([b]);
+    });
+
+    it('never keeps the only config when it is on another server', () => {
+        expect(instanceConfigsForWebhook([a], fromB)).toEqual([]);
+    });
+
+    it('keeps every organization connected to the same project on that server', () => {
+        const alsoB = listed(
+            'b2',
+            'https://gitlab-b.example/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        expect(instanceConfigsForWebhook([a, b, alsoB], fromB)).toEqual([
+            b,
+            alsoB,
+        ]);
+    });
+
+    it('refuses a config that stores no host when another candidate is on a known server', () => {
+        const unknown = {
+            ...listed('legacy', '', 'legacy/app'),
+            configValue: [{ id: '9', name: 'legacy/app' }],
+        };
+        expect(instanceConfigsForWebhook([unknown, a], fromB)).toEqual([]);
+    });
+
+    it('keeps the candidates when none stores any host (legacy data)', () => {
+        const unknown = {
+            ...listed('legacy', '', 'legacy/app'),
+            configValue: [{ id: '9', name: 'legacy/app' }],
+        };
+        expect(instanceConfigsForWebhook([unknown], fromB)).toEqual([unknown]);
+    });
+});
+
+describe('webhookConfigsOfInstance', () => {
+    const elsewhere = {
+        team: { uuid: 't', organization: { uuid: 'o' } },
+        configValue: [
+            {
+                id: '9',
+                name: 'x/y',
+                http_url: 'https://gitlab-a.example/x/y.git',
+            },
+        ],
+    };
+    const source = { host: 'gitlab-b.example', repositoryId: 9 };
+
+    it('filters GitLab and Forgejo configs by the sending instance', () => {
+        expect(
+            webhookConfigsOfInstance(PlatformType.GITLAB, [elsewhere], source),
+        ).toEqual([]);
+        expect(
+            webhookConfigsOfInstance(PlatformType.FORGEJO, [elsewhere], source),
+        ).toEqual([]);
+    });
+
+    it('leaves the configs of platforms with one id per repository as they are', () => {
+        expect(
+            webhookConfigsOfInstance(PlatformType.GITHUB, [elsewhere], source),
+        ).toEqual([elsewhere]);
     });
 });

@@ -1342,6 +1342,7 @@ export class ForgejoService implements Omit<
     async findTeamAndOrganizationIdByConfigKey(params: {
         repository: { id?: string | number; name?: string };
         host?: string;
+        repositoryFullName?: string;
     }): Promise<IntegrationConfigEntity | null> {
         try {
             const repositoryId = String(params?.repository?.id ?? '');
@@ -1360,7 +1361,8 @@ export class ForgejoService implements Omit<
                 forgejoConfigsForWebhook(configs, {
                     host: params.host,
                     repositoryId,
-                    repositoryFullName: params.repository.name,
+                    repositoryFullName:
+                        params.repositoryFullName ?? params.repository.name,
                 })[0] ?? null
             );
         } catch (error) {

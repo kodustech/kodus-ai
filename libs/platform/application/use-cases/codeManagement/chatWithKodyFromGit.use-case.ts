@@ -1,5 +1,9 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
-import { forgejoWebhookSource } from '@libs/common/utils/webhooks/webhook-source-host';
+import {
+    forgejoWebhookSource,
+    gitlabWebhookSource,
+    type WebhookSource,
+} from '@libs/common/utils/webhooks/webhook-source-host';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -287,16 +291,18 @@ export class ChatWithKodyFromGitUseCase {
             claim = delivery.claim;
 
             const repository = this.getRepository(params);
-            // Forgejo repository ids are per instance: resolve the team on
-            // the instance that sent the comment.
+            // GitLab and Forgejo repository ids are per instance: resolve
+            // the team on the instance that sent the comment.
             const source =
                 params.platformType === PlatformType.FORGEJO
                     ? forgejoWebhookSource(params.payload)
-                    : undefined;
+                    : params.platformType === PlatformType.GITLAB
+                      ? gitlabWebhookSource(params.payload)
+                      : undefined;
             const integrationConfig = await this.getIntegrationConfig(
                 params.platformType,
                 repository,
-                source?.host,
+                source,
             );
 
             // A repository connected in more than one organization: answer as
@@ -1665,10 +1671,16 @@ export class ChatWithKodyFromGitUseCase {
     private async getIntegrationConfig(
         platformType: PlatformType,
         repository: Repository,
-        host?: string,
+        source?: WebhookSource,
     ): Promise<IntegrationConfigEntity> {
         return await this.codeManagementService.findTeamAndOrganizationIdByConfigKey(
-            host ? { repository, host } : { repository },
+            source
+                ? {
+                      repository,
+                      host: source.host,
+                      repositoryFullName: source.repositoryFullName,
+                  }
+                : { repository },
             platformType,
         );
     }
