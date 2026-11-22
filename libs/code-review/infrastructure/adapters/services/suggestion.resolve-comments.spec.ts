@@ -23,14 +23,23 @@ describe('SuggestionService - resolveImplementedSuggestionsOnPlatform', () => {
             SuggestionService.prototype,
         ) as SuggestionService;
         const codeManagementService = {
-            getPullRequestReviewComments: jest.fn().mockResolvedValue([
-                {
-                    id: 1001,
-                    threadId: 'disc-kody',
-                    body: '## Code Review Completed! 🔥',
-                    isResolved: false,
-                },
-            ]),
+            // Mirrors the adapters: Kody's own comment only comes back when
+            // the caller asks for it, so a dropped flag shows up as "nothing
+            // to resolve" rather than as a comment handed over anyway.
+            getPullRequestReviewComments: jest.fn((request: any) =>
+                Promise.resolve(
+                    request?.includeKodyComments === true
+                        ? [
+                              {
+                                  id: 1001,
+                                  threadId: 'disc-kody',
+                                  body: '## Code Review Completed! 🔥',
+                                  isResolved: false,
+                              },
+                          ]
+                        : [],
+                ),
+            ),
             markReviewCommentAsResolved: jest.fn().mockResolvedValue({}),
         };
         Object.assign(service as any, {
