@@ -454,11 +454,17 @@ export class RuntimeSandboxService implements ISandboxProvider {
         // Tool layers of the cell: the installs it could already hold. The registry hosts stay in egressAllow, as an
         // install needs them; the hub takes a held layer's host out again once the cell says which it holds.
         const layerPlans = toolLayerPlans(params.cliInstalls, host);
-        const view = await this.client.open({
-            ...ref,
-            ...(egressAllow.length ? { egressAllow } : {}),
-            ...(layerPlans.length ? { toolLayers: layerPlans } : {}),
-        });
+        const base = { ...ref, ...(egressAllow.length ? { egressAllow } : {}) };
+        const view = layerPlans.length
+            ? await this.client.open({ ...base, toolLayers: layerPlans }).catch((e: unknown) => {
+                  // A runtime older than this API refuses the unknown field (its body is strict): open
+                  // as before and install every CLI, so a deploy in either order keeps reviews working.
+                  if (e instanceof RuntimeSandboxError && e.status === 400 && e.code === 'invalid_body') {
+                      return this.client.open(base);
+                  }
+                  throw e;
+              })
+            : await this.client.open(base);
         if (view.state !== 'ready') {
             const why =
                 (view.blockers ?? [])

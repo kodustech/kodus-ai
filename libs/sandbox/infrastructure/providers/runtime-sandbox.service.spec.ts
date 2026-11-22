@@ -580,6 +580,29 @@ describe('team CLIs from tool layers of the cell (docs/runtime/persistent-state.
         expect(sandbox.cliInstalls!.kclimiss.prefix).toBeUndefined();
     });
 
+    it('opens again without toolLayers when an older runtime refuses the field, and installs as today', async () => {
+        const { client, installs } = make(undefined);
+        client.open
+            .mockImplementationOnce(async () => {
+                throw new RuntimeSandboxError(400, 'invalid_body', 'The runtime answered 400');
+            });
+        const sandbox = await create(client, params('kcliabc'));
+        expect(client.open).toHaveBeenCalledTimes(2);
+        expect((client.open.mock.calls[1][0] as any).toolLayers).toBeUndefined();
+        expect((client.open.mock.calls[1][0] as any).egressAllow).toEqual(['github.com', 'registry.npmjs.org']);
+        expect(installs()).toHaveLength(1);
+        expect(sandbox.cliInstalls!.kcliabc.binaryPath).toBe('/workspace/.kcli/kcliabc/node_modules/.bin/kcliabc');
+    });
+
+    it('does not open again when a body without toolLayers is refused', async () => {
+        const { client } = make(undefined);
+        client.open.mockImplementation(async () => {
+            throw new RuntimeSandboxError(400, 'invalid_body', 'The runtime answered 400');
+        });
+        await expect(create(client, { ...params(), cliInstalls: [] })).rejects.toThrow('400');
+        expect(client.open).toHaveBeenCalledTimes(1);
+    });
+
     it('installs everything as today when the cell answers no layer (an older cell or no digest)', async () => {
         const { client, installs } = make(undefined);
         const sandbox = await create(client, params('kcliabc'));
