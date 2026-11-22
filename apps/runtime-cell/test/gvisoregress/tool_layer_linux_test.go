@@ -167,7 +167,8 @@ func TestAToolLayerIsBuiltCleanAndMountedReadOnly(t *testing.T) {
 	if r := run("touch " + prefix + "/x 2>&1"); r.ExitCode == 0 {
 		t.Fatalf("a write to the layer succeeded: %q", r.Stdout+r.Stderr)
 	}
-	if r := run("chmod u+w " + st.BinaryPath + " 2>&1"); r.ExitCode == 0 || !strings.Contains(r.Stdout+r.Stderr, "Read-only file system") {
+	// EPERM when the cell's user is not the sandbox user (the files are not its own), EROFS when it is.
+	if r := run("chmod u+w " + st.BinaryPath + " 2>&1"); r.ExitCode == 0 || !(strings.Contains(r.Stdout+r.Stderr, "Read-only file system") || strings.Contains(r.Stdout+r.Stderr, "Operation not permitted")) {
 		t.Fatalf("chmod on the layer: exit %d %q", r.ExitCode, r.Stdout+r.Stderr)
 	}
 	if r := run("test ! -x " + st.BinaryPath + " && test -r " + st.BinaryPath); r.ExitCode != 0 {
