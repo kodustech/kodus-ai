@@ -6,6 +6,7 @@ import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
 import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
 import { EXERCISED_LANGUAGES, EXERCISED_LINES_LIMITS, ExercisedResultSchema } from '@libs/runtime/protocol/messages';
 
+import { LEAF_CHANGE_KINDS } from './leaf-changes';
 import { RUN_STATES } from './run-state';
 
 export { BLOCKER_KINDS, RUN_TRIGGERS };
@@ -108,6 +109,33 @@ export const ReportIntentSchema = z.strictObject({
 });
 export type ReportIntent = z.infer<typeof ReportIntentSchema>;
 
+/**
+ * What a finding on an object or array field is about, leaf by leaf
+ * (gate/leaf-changes.ts): the leaves no passed assertion reads (at most 5, the
+ * rest counted), how many leaves a passed assertion does read, and the paths
+ * those assertions read (`mentions`), so the comment can say what the
+ * description covers without quoting it. Values are cleaned and cut to 200
+ * characters, a secret-looking key is `[redacted]`. ADR-052: the comment
+ * carries these few leaves, not the Response tab.
+ */
+export const ReportLeafChangesSchema = z.strictObject({
+    undescribed: z
+        .array(
+            z.strictObject({
+                path: z.string().min(1).max(256),
+                kind: z.enum(LEAF_CHANGE_KINDS),
+                base: z.string().max(200).optional(),
+                pr: z.string().max(200).optional(),
+            }),
+        )
+        .min(1)
+        .max(5),
+    undescribedCount: z.number().int().min(1).max(10_000),
+    describedCount: z.number().int().min(0).max(10_000),
+    mentions: z.array(z.string().min(1).max(256)).max(5),
+});
+export type ReportLeafChanges = z.infer<typeof ReportLeafChangesSchema>;
+
 /** One tested path: an entry point of the diff, the probe that exercised it and what each side did. */
 export const ReportPathSchema = z.strictObject({
     entryPoint: label,
@@ -124,6 +152,8 @@ export const ReportPathSchema = z.strictObject({
     base: ObservedSchema.optional(),
     pr: ObservedSchema.optional(),
     differingFields: z.array(z.string().min(1).max(128)).max(5).optional(),
+    /** A finding on an object or array field: the leaves that differ, split by what the description reads. */
+    leafChanges: ReportLeafChangesSchema.optional(),
     /** A browser probe: the first step where main and the PR part, when the gate's difference rests on a step. */
     browserStep: ReportBrowserStepSchema.optional(),
     /** A browser probe: the largest share of a screenshot's pixels that changed on the PR against main's, in percent with one decimal. Absent under the gate's threshold. */

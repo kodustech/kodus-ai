@@ -12,7 +12,7 @@ import type { Probe, ProbeResult } from '@libs/runtime/probe/probe.schema';
 
 import type { FindingKind, GateStep, Verdict } from './gate';
 import { LATEST_IMAGE } from './gate';
-import { isPathUnder, type LeafChange, type LeafChangeSet, leafChanges, LEAF_MENTIONS_MAX, leafPathOf } from './leaf-changes';
+import { isPathUnder, type LeafChange, type LeafChangeSet, leafChanges, LEAF_MENTIONS_MAX, leafPathOf } from '@libs/runtime/run/leaf-changes';
 
 // The intent oracle's verdict (docs/runtime/intent-oracle.md §7, §8): what the
 // PR says it does, as closed assertions the intent author quoted from its
@@ -220,6 +220,7 @@ function leafSetOf(
     steps: readonly GateStep[],
     reads: readonly string[],
     masked: readonly string[],
+    clean?: (text: string) => string,
 ): LeafChangeSet | undefined {
     const unread = differing.filter((f) => !fieldRead(f) && !masked.includes(f));
     if (!unread.length || !differing.every(isJsonField)) return undefined;
@@ -233,7 +234,7 @@ function leafSetOf(
     for (const f of unread) {
         const prefix = f === 'json' ? '' : f.slice('json.'.length);
         const exclude = bases.slice(1).flatMap((b) => leafChanges(bases[0].fields[f], b.fields[f], { prefix }).leaves.map((l) => l.path));
-        const out = leafChanges(bases[0].fields[f], pr.fields[f], { prefix, exclude });
+        const out = leafChanges(bases[0].fields[f], pr.fields[f], { prefix, exclude, ...(clean ? { clean } : {}) });
         leaves.push(...out.leaves);
         truncated ||= out.truncated;
     }
@@ -252,9 +253,9 @@ function leafSetOf(
  * `details[0].paths[0]` and not only `json.applinks.details`. Undefined for
  * anything else, and when its fields are not JSON.
  */
-export function leavesOfFinding(decision: VerdictLike, steps: readonly GateStep[]): LeafChangeSet | undefined {
+export function leavesOfFinding(decision: VerdictLike, steps: readonly GateStep[], clean?: (text: string) => string): LeafChangeSet | undefined {
     if (decision.verdict !== 'finding' || decision.findingKind !== 'behavior_change') return undefined;
-    return leafSetOf(decision.differingFields ?? [], () => false, steps, [], decision.maskedFields ?? []);
+    return leafSetOf(decision.differingFields ?? [], () => false, steps, [], decision.maskedFields ?? [], clean);
 }
 
 const keysOnly = (p: readonly unknown[]): p is string[] => p.every((s) => typeof s === 'string');
@@ -338,7 +339,7 @@ export function decideStatedIntent<D extends VerdictLike>(
     decision: D,
     steps: GateStep[],
     checks: readonly StatedIntentCheck[],
-    opts: { mismatch: boolean; pinnedImageId: string; requestBody?: string },
+    opts: { mismatch: boolean; pinnedImageId: string; requestBody?: string; clean?: (text: string) => string },
 ): { decision: D; statedIntents: StatedIntentResult[]; leaves?: LeafChangeSet } {
     const rounds = prRounds(steps, opts.pinnedImageId);
     if (!rounds.length || !checks.length) return { decision, statedIntents: [] };
@@ -369,7 +370,7 @@ export function decideStatedIntent<D extends VerdictLike>(
     }
     if (!isFinding || differing.length === 0 || reordered.length > 0) return { decision, statedIntents };
     // The fields are compared whole: a path through an array index reads one leaf of one, so the leaves decide.
-    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(kept), decision.maskedFields ?? []);
+    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(kept), decision.maskedFields ?? [], opts.clean);
     if (!leaves) return { decision, statedIntents };
     if (!leaves.undescribed.length && !leaves.truncated) {
         return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };

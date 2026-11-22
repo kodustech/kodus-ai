@@ -2,7 +2,10 @@
 // "Response" tab): from the first healthy round of each side, the compared
 // JSON fields whose values differ, or the first differing line of a body that
 // is not JSON. Shown only: the gate already decided from its own fields, and
-// nothing here reaches the PR comment (ADR-052).
+// nothing here reaches the PR comment (ADR-052). Amended for one case: the few
+// cleaned leaves a finding on an object or array field names (gate/leaf-changes.ts,
+// report `leafChanges`) do reach the comment, because the PR author needs the
+// leaf, not the field. The full table stays on the Run page.
 //
 // Every value is text the app under test chose. The cell redacted it with the
 // claim's redactor (S-51); `clean` runs again (token patterns and the Run's

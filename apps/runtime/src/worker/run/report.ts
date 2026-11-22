@@ -18,6 +18,25 @@ import type { RuntimeRunProjection } from '@libs/runtime/run/run-projection';
 const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max) : s);
 
 /** What one side answered on its first round: the normalized status, the exit code, or a browser probe's steps passed. */
+/** A finding's leaves as the report keeps them: at most 5 undescribed, the rest counted (ReportLeafChangesSchema). */
+export function leafChangesReportOf(p: ProbeVerdict): { leafChanges?: NonNullable<ReportPath['leafChanges']> } {
+    const set = p.leafChanges;
+    if (p.verdict !== 'finding' || !set?.undescribed.length) return {};
+    return {
+        leafChanges: {
+            undescribed: set.undescribed.slice(0, 5).map((l) => ({
+                path: clip(l.path, 256),
+                kind: l.kind,
+                ...(l.base !== undefined ? { base: clip(l.base, 200) } : {}),
+                ...(l.pr !== undefined ? { pr: clip(l.pr, 200) } : {}),
+            })),
+            undescribedCount: set.undescribed.length,
+            describedCount: set.described.length,
+            mentions: set.mentions.slice(0, 5).map((m) => clip(m, 256)),
+        },
+    };
+}
+
 export function observedOf(steps: GateStep[], stepIds: string[] | undefined): Observed | undefined {
     const step = steps.find((s) => stepIds?.includes(s.stepId));
     if (!step) return undefined;
@@ -137,6 +156,7 @@ export function buildReport(args: {
         ...withSide('base', observedOf(args.steps, p.baseStepIds)),
         ...withSide('pr', observedOf(args.steps, p.prStepIds)),
         ...(p.differingFields?.length ? { differingFields: p.differingFields.slice(0, 5).map((f) => clip(f, 128)) } : {}),
+        ...leafChangesReportOf(p),
         ...browserFindingOf(p),
         ...(p.suggestionId && SUGGESTION_ID.test(p.suggestionId) ? { suggestionId: p.suggestionId } : {}),
         ...(p.source === KEPT_CHECK_SOURCE && p.keptCheckId ? { source: KEPT_CHECK_SOURCE, keptCheckId: p.keptCheckId } : {}),

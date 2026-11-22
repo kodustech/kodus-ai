@@ -1,6 +1,7 @@
 import { type BlockerKind, type CheckConclusion as SharedCheckConclusion, DEFAULT_PARTLY_TESTED_CHECK, type FindingIntent, type FindingKind, type PartlyTestedCheck, type Verdict } from '@libs/runtime/contracts/enums';
 
 import { type ExercisedSummary, exercisedShortfall } from './exercised-lines';
+import type { LeafChangeSet } from './leaf-changes';
 import type { ReplayLanes } from './replay-lanes';
 import type { ResponseDiff } from './response-diff';
 
@@ -165,10 +166,19 @@ export interface ProbeVerdict {
     /**
      * What the two sides answered, field by field, on the first healthy round
      * of each (response-diff.ts): values JSON-stringified, redacted, cut to 200
-     * characters. Shown on the Run page only: never in the PR comment, and no
+     * characters. Shown on the Run page only: never in the PR comment (ADR-052; amended
+     * only for `leafChanges`, the few cleaned leaves of a finding on an object or
+     * array field, which the comment names), and no
      * verdict reads it.
      */
     responseDiff?: ResponseDiff;
+    /**
+     * A `behavior_change` finding on an object or array field, leaf by leaf
+     * (gate/leaf-changes.ts): what differs inside the field and which leaves a
+     * passed assertion of the PR's text reads. The gate's fields and names are
+     * unchanged; this is computed after the gate from the two stored values.
+     */
+    leafChanges?: LeafChangeSet;
     /**
      * The changed file this probe's entry point comes from (its `via`, or the
      * file the extractor matched) and the first added line of that file's

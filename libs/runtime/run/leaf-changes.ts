@@ -1,4 +1,4 @@
-import { clip, maskNested, REDACTED, SECRET_KEY } from '@libs/runtime/run/response-diff';
+import { clip, maskNested, REDACTED, SECRET_KEY } from './response-diff';
 
 // The leaves that differ between two whole-value JSON strings the gate stores
 // for one compared field (docs/runtime/monorepo-speed-and-targeting.md §3).

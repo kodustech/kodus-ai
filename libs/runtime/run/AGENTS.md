@@ -6,7 +6,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 - Outbox messages: `run-messages.ts` (`RuntimeRunRequestedSchema`, `RuntimeRunCancelRequestedSchema`, `RuntimePullRequestObservedSchema`, `RuntimePublishRequestedSchema`, the exchange, queues and routing keys, `runtimeOutboxMessage`, `MAX_DIFF_BYTES`).
 - The Run's states and verdict: `run-state.ts` `canTransition`, `assertTransition`, `decideRunVerdict`, `checkConclusionFor`.
 - Which changed lines ran: `exercised-lines.ts` `exercisedSummaryOf` (measured files summed, unknown ones in neither count), `exercisedShortfall` ("N of M changed lines ran" below the threshold: a green Run becomes partly tested in `decideRunVerdict`, nothing else changes), `exercisedFact`; the report's `exercised` (`ReportExercisedSchema`).
-- What the product shows: `run-report.ts` (`RuntimeRunReportSchema`, `RuntimeRunProgressSchema`), `replay-lanes.ts` `replayLanesOf`, `response-diff.ts` `responseDiffOf`, `boot-failure.ts` `bootFailureOf`, `reproduction.ts` `reproductionFor`, `reproductionManifest`.
+- What the product shows: `run-report.ts` (`RuntimeRunReportSchema`, `RuntimeRunProgressSchema`), `replay-lanes.ts` `replayLanesOf`, `response-diff.ts` `responseDiffOf`, `leaf-changes.ts` `leafChanges` (the leaves that differ inside an object or array field of a finding, computed after the gate from its two stored values: cleaned, secret keys redacted, 200 leaves and depth 16 at most; a pure reorder is one change), `boot-failure.ts` `bootFailureOf`, `reproduction.ts` `reproductionFor`, `reproductionManifest`.
 - The projection and stream contracts: `run-projection.ts` (`RunProjectionReader`, `RunProjectionStore`, `LIVE_RUN_STATES`), `run-stream.ts` (`RunStreamStore`, opaque offsets).
 - The PR title a Run keeps for display: `pr-title.ts` `displayPrTitle` (one line, no control or bidi characters, at most 256 characters; the projection's `prTitle`, in `report`).
 - Sealed tokens: `sealed-secret.ts` `sealSecret`, `openSecret`, `isSealedSecret`, `sealingKeyFrom` (AES-256-GCM, bound by AAD to the Run id or the setup command key).
@@ -39,7 +39,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 
 ## Module map
 
-Files (20, tests apart): `boot-failure.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`
+Files (21, tests apart): `boot-failure.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `leaf-changes.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`
 
 Imports these Runtime modules:
 
@@ -87,6 +87,7 @@ Imported by:
 - [`libs/runtime/blockers`](../blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../contracts/AGENTS.md)
 - [`libs/runtime/contracts/views`](../contracts/views/AGENTS.md)
+- [`libs/runtime/gate`](../gate/AGENTS.md)
 - [`libs/runtime/health`](../health/AGENTS.md)
 - [`libs/runtime/planner`](../planner/AGENTS.md)
 - [`libs/runtime/run/adapters`](adapters/AGENTS.md)

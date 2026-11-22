@@ -15,6 +15,7 @@ import {
     decideNewEndpoint,
     decideStatedIntent,
     GateStep,
+    leavesOfFinding,
     sameHttpRequest,
     statedIntentChecksFor,
     LATEST_IMAGE,
@@ -53,6 +54,7 @@ import {
 } from '@libs/runtime/run';
 import { bootFailureOf, deniedHostsBootFailureOf, type RunBootFailure } from '@libs/runtime/run/boot-failure';
 import { prOnlyDeniedHosts } from '@libs/runtime/blockers/catalog';
+import type { LeafChangeSet } from '@libs/runtime/run/leaf-changes';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { ATTR, withRunSpan } from '@libs/runtime/telemetry';
 import { safeFailure } from '@libs/runtime/telemetry/failure';
@@ -1505,6 +1507,7 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
             prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
             ...(lanes ? { lanes } : {}),
             ...(responseDiff ? { responseDiff } : {}),
+            ...leafChangesOf(leavesOfFinding(decision, steps, (text) => redactCanaries(redactPatterns(text).text, canaries))),
             ...diffRefFor(entryPoint, planned.via && entryPoint === planned.entryPoint ? planned.via : undefined),
         });
         deps.metrics.recordVerdict(decision.verdict, { orgId: req.organizationId });
@@ -1678,9 +1681,11 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
         const added = decideNewEndpoint(replayed.decision, steps, { addedByDiff: t.entryPoints.some((e) => e.id === entryPoint && e.added === true) });
         const intended = decideIntendedChange(added, steps, { diff: req.diff, reachableFiles: routeFilesOf(t.entryPoints, entryPoint) });
         const skewed = skewedByIdentity(intended, ip.probe, ready.identityMismatch);
-        const { decision, statedIntents } = decideStatedIntent(skewed, steps, [check], {
+        const cleanLeaf = (text: string) => redactCanaries(redactPatterns(text).text, canaries);
+        const { decision, statedIntents, leaves } = decideStatedIntent(skewed, steps, [check], {
             mismatch: true,
             pinnedImageId: ready.pinnedImageId,
+            clean: cleanLeaf,
             ...(probe.spec.kind === 'http' && probe.spec.body ? { requestBody: probe.spec.body } : {}),
         });
         const intendedChange = decision.intendedChange?.map((c) => ({ ...c, base: redactPatterns(c.base).text, pr: redactPatterns(c.pr).text }));
@@ -1701,6 +1706,7 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
             prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
             ...(lanes ? { lanes } : {}),
             ...(responseDiff ? { responseDiff } : {}),
+            ...leafChangesOf(leaves ?? leavesOfFinding(decision, steps, cleanLeaf)),
             source: 'intent',
             ...(statedIntents.length ? { statedIntents: cleanStatedIntents(statedIntents, intentRequestOf(ip.probe)) } : {}),
         });
@@ -1715,23 +1721,28 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
         if (!checks.length) continue;
         const ids = new Set([...(v.baseStepIds ?? []), ...(v.prStepIds ?? [])]);
         const steps = t.allSteps.filter((s) => ids.has(s.stepId));
-        const { decision, statedIntents } = decideStatedIntent(v, steps, checks, {
+        const { decision, statedIntents, leaves } = decideStatedIntent(v, steps, checks, {
             mismatch: false,
             pinnedImageId: ready.pinnedImageId,
+            clean: (text) => redactCanaries(redactPatterns(text).text, canaries),
             ...(planned.probe.spec.kind === 'http' && planned.probe.spec.body ? { requestBody: planned.probe.spec.body } : {}),
         });
         const explained = decision.verdict === 'described_change';
         if (explainOnly && !explained) continue;
-        const { intendedChange: _ic, findingKind: _fk, intent: _in, ...rest } = v;
+        const { intendedChange: _ic, findingKind: _fk, intent: _in, leafChanges: _lc, ...rest } = v;
         t.verdicts[index] = {
             ...(explained ? rest : v),
             verdict: decision.verdict,
             reason: decision.reason,
+            ...(leaves ? { leafChanges: leaves } : {}),
             ...(statedIntents.length ? { statedIntents: cleanStatedIntents(statedIntents, intentRequestOf(planned.probe)) } : {}),
         };
         if (explained) deps.metrics.recordVerdict(decision.verdict, { orgId: req.organizationId });
     }
 }
+
+/** A verdict's leaves, when it has any (values were redacted by the gate's `clean`, the Run's canaries included). */
+const leafChangesOf = (set: LeafChangeSet | undefined) => (set ? { leafChanges: set } : {});
 
 /** A finding the diff already explains is intended: no classifier turn is spent on it. */
 const needsIntent = (v: ProbeVerdict) => v.verdict === 'finding' && v.intent !== 'intended';
