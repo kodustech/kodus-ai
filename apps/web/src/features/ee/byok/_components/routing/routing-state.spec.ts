@@ -15,34 +15,23 @@ const slot = (
     }) as LLMConfigStatus["models"][number];
 
 describe("routingModelLabels", () => {
-    it("names a pinned model and its alias on one provider by their ids", () => {
+    it("names a pinned model and its alias by id, and the same id on two connections by connection", () => {
         const labels = routingModelLabels([
-            slot("a", "deepseek-ai/DeepSeek-V4.1-Flash"),
-            slot("b", "deepseek-ai/DeepSeek-V4.1-Flash-1017"),
+            slot("alias", "deepseek-ai/DeepSeek-V4.1-Flash"),
+            slot("pin", "deepseek-ai/DeepSeek-V4.1-Flash-1017"),
+            slot("openai", "gpt-5.4", { providerId: "openai" }),
+            slot("openrouter", "gpt-5.4", { providerId: "openrouter" }),
+            slot("env", "gpt-5.4-2026-03-05", { managed: true }),
         ]);
-        expect(labels.get("a")).toBe(
+
+        expect(labels.get("alias")).toBe(
             "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash)",
         );
-        expect(labels.get("b")).toBe(
+        expect(labels.get("pin")).toBe(
             "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)",
         );
-    });
-
-    it("still names the connection when one id is on two providers", () => {
-        const labels = routingModelLabels([
-            slot("a", "gpt-5.4", { providerId: "openai" }),
-            slot("b", "gpt-5.4", { providerId: "openrouter" }),
-        ]);
-        expect(labels.get("a")).toMatch(/^GPT 5\.4 · /);
-        expect(labels.get("a")).not.toBe(labels.get("b"));
-    });
-
-    it("leaves the managed default plain", () => {
-        const labels = routingModelLabels([
-            slot("env", "gpt-5.4-2026-03-05", { managed: true }),
-            slot("a", "gpt-5.4"),
-        ]);
+        expect(labels.get("openai")).toMatch(/^GPT 5\.4 · /);
+        expect(labels.get("openai")).not.toBe(labels.get("openrouter"));
         expect(labels.get("env")).toBe("GPT 5.4");
-        expect(labels.get("a")).toBe("GPT 5.4");
     });
 });
