@@ -5,7 +5,7 @@ import { computeToolLayerKey, type ToolLayerKeyInput, ToolLayerKeyError } from '
 
 // The Go cell runs the same file in key_parity_test.go: both sides must
 // produce these keys byte for byte and refuse the same inputs.
-const file = join(__dirname, 'tool-layer-key.json');
+const file = join(__dirname, 'tool-layer-key-cases.json');
 const fixture = JSON.parse(readFileSync(file, 'utf8')) as {
     cases: { name: string; input: ToolLayerKeyInput; key: string }[];
     refused: { name: string; input: ToolLayerKeyInput; refusal: string }[];
@@ -13,7 +13,7 @@ const fixture = JSON.parse(readFileSync(file, 'utf8')) as {
 
 describe('tool layer key parity with the Go cell', () => {
     it('is the same file the cell reads', () => {
-        const copy = join(__dirname, '../../../apps/runtime-cell/internal/drivers/dockergvisor/toollayer/tool-layer-key.json');
+        const copy = join(__dirname, '../../../apps/runtime-cell/internal/drivers/dockergvisor/toollayer/tool-layer-key-cases.json');
         expect(readFileSync(copy, 'utf8')).toBe(readFileSync(file, 'utf8'));
     });
 

@@ -9,7 +9,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/toollayer"
 )
 
-// tool-layer-key.json is byte-identical to libs/runtime/protocol/tool-layer-key.json,
+// tool-layer-key-cases.json is byte-identical to libs/runtime/protocol/tool-layer-key-cases.json,
 // which the TS computeToolLayerKey is tested against: the hub computes the key
 // in TS, the cell in Go, and a layer is found only when they agree.
 type parityInput struct {
@@ -26,7 +26,7 @@ func (p parityInput) keyInput() toollayer.KeyInput {
 }
 
 func TestKeysMatchTheSharedFixtureTheHubComputesFrom(t *testing.T) {
-	raw, err := os.ReadFile("tool-layer-key.json")
+	raw, err := os.ReadFile("tool-layer-key-cases.json")
 	if err != nil {
 		t.Fatal(err)
 	}

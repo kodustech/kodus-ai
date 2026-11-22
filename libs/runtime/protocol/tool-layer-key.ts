@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 // The key of a tool layer (docs/runtime/persistent-state.md 4.1): sha256 of a
 // canonical record, the same bytes the Go cell's toollayer.ComputeKey hashes
 // (apps/runtime-cell/internal/drivers/dockergvisor/toollayer/key.go). The two
-// are held to each other by tool-layer-key.json, run by both suites. The org
+// are held to each other by tool-layer-key-cases.json, run by both suites. The org
 // is not in the key: it is the directory the cell stores the layer in.
 
 /** Part of every key: a change in how layers are made starts new keys (Go: LayerFormat). */

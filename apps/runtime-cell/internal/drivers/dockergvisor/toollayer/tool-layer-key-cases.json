@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared by the TS computeToolLayerKey (libs/runtime/protocol/tool-layer-key.ts) and the Go ComputeKey; byte-identical copy at apps/runtime-cell/internal/drivers/dockergvisor/toollayer/tool-layer-key.json. Keys were produced by Go.",
+  "_comment": "Shared by the TS computeToolLayerKey (libs/runtime/protocol/tool-layer-key.ts) and the Go ComputeKey; byte-identical copy at apps/runtime-cell/internal/drivers/dockergvisor/toollayer/tool-layer-key-cases.json. Keys were produced by Go.",
   "cases": [
     {
       "name": "npm global pinned",
