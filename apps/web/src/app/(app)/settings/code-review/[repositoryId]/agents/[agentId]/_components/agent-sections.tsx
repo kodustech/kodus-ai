@@ -487,6 +487,7 @@ export const useByokModels = () => {
                 model: entry.model,
                 providerId: credential?.provider,
                 baseUrl: typeof baseURL === "string" ? baseURL : undefined,
+                managed: credential?.managed,
             } as LLMConfigStatus["models"][number];
         }),
     );

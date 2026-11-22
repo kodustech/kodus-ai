@@ -159,6 +159,7 @@ describe("CommentsAndModel", () => {
             credentials: [
                 { id: "c-openai", provider: "openai" },
                 { id: "c-openrouter", provider: "openrouter" },
+                { id: "c-env", provider: "openai", managed: true },
             ],
             models: [
                 { id: "m-openai", credentialId: "c-openai", model: "gpt-5.4" },
@@ -166,6 +167,13 @@ describe("CommentsAndModel", () => {
                     id: "m-openrouter",
                     credentialId: "c-openrouter",
                     model: "gpt-5.4",
+                },
+                // The Kodus default runs the same id; Routing leaves it out of
+                // the comparison, so the pin's label must not change for it.
+                {
+                    id: "m-env",
+                    credentialId: "c-env",
+                    model: "gpt-5.4-2026-03-05",
                 },
                 {
                     id: "m-pin",
