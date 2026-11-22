@@ -2,7 +2,9 @@ import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/gene
 
 /**
  * Merges Kody Rule findings deterministically by rule UUID, without a model:
- * the UUID says which rule each finding belongs to.
+ * the UUID says which rule each finding belongs to. For a rule decomposed
+ * into atoms, by atom: the atoms share the rule's UUID but are different
+ * violations, each with its own explanation (#2656).
  *
  *   - PR-level (no relevantFile): keep the most detailed finding, drop the
  *     rest. A PR-level rule is broken once per PR.
@@ -28,7 +30,7 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
         return suggestions;
     }
 
-    const groupsByRuleUuid = new Map<string, T[]>();
+    const groupsByUnit = new Map<string, T[]>();
     const passthrough: T[] = [];
 
     for (const s of suggestions) {
@@ -37,16 +39,20 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
             passthrough.push(s);
             continue;
         }
-        const group = groupsByRuleUuid.get(ruleUuid) || [];
+        const unitKey = s.kodyRuleUnitId
+            ? `${ruleUuid}\u0000${s.kodyRuleUnitId}`
+            : ruleUuid;
+        const group = groupsByUnit.get(unitKey) || [];
         group.push(s);
-        groupsByRuleUuid.set(ruleUuid, group);
+        groupsByUnit.set(unitKey, group);
     }
 
     const result: T[] = [...passthrough];
     const byDetail = (a: T, b: T) =>
         (b.suggestionContent?.length || 0) - (a.suggestionContent?.length || 0);
 
-    for (const [ruleUuid, group] of groupsByRuleUuid) {
+    for (const group of groupsByUnit.values()) {
+        const ruleUuid = group[0].brokenKodyRulesIds![0];
         if (group.length === 1) {
             result.push(group[0]);
             continue;

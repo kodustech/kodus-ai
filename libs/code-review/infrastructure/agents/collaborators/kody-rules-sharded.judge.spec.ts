@@ -355,6 +355,37 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         ]);
     });
 
+    // #2656: atoms of one rule share its uuid, so the violation carries the
+    // atom it was judged under to keep two atoms' findings apart downstream.
+    it('tags each violation with the atom unit its ruleId points at', async () => {
+        const { run } = fakeJudge({
+            'src/a.ts': [{ ruleId: 1 }, { ruleId: 2 }, { ruleId: 'parent' }],
+        });
+        const atom = (reviewUnitId: string, title: string) => ({
+            uuid: 'parent',
+            reviewUnitId,
+            parentTitle: 'Parent rule',
+            title,
+            rule: title,
+            path: '**/*.rb',
+        });
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +puts x')],
+            rules: [
+                { ...atom('parent-atom-1', 'no puts'), path: '**/*.ts' },
+                { ...atom('parent-atom-2', 'no pry'), path: '**/*.ts' },
+            ],
+            runJudge: run,
+        });
+        expect(res.violations.map((v) => [v.ruleUuid, v.reviewUnitId])).toEqual(
+            [
+                ['parent', 'parent-atom-1'],
+                ['parent', 'parent-atom-2'],
+                ['parent', undefined],
+            ],
+        );
+    });
+
     it('applies the path filter: a file that matches no rule path is not sharded', async () => {
         const { run, calls } = fakeJudge({});
         const res = await judgeKodyRulesSharded({

@@ -242,6 +242,12 @@ export type CodeSuggestion = {
      * list, so executeStage renders it after the formatter runs.
      */
     kodyRuleOtherLocations?: string[];
+    /**
+     * The atom of a decomposed Kody Rule the finding broke. Atoms share the
+     * rule's uuid in `brokenKodyRulesIds`, so findings are merged per atom
+     * by this id instead (#2656). Unset for a rule that was not decomposed.
+     */
+    kodyRuleUnitId?: string;
     /** Merged finding locations, rendered after the content formatter. */
     alsoFoundIn?: string[];
     /** The custom agent that produced the finding (#2172); drives its tag. */

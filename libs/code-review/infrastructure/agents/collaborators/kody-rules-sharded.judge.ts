@@ -324,6 +324,12 @@ export interface RawShardViolation {
 /** A resolved violation for a (file, rule) pair — `ruleId` mapped to a UUID. */
 export interface ShardViolation {
     ruleUuid: string;
+    /**
+     * The atom unit the violation was judged under, when the rule was
+     * decomposed: atoms share `ruleUuid`, so this is what tells two of them
+     * apart when findings are merged (#2656).
+     */
+    reviewUnitId?: string;
     relevantFile?: string;
     relevantLinesStart?: number;
     relevantLinesEnd?: number;
@@ -1395,6 +1401,7 @@ function citesAnAddedLine(
 function resolveShardViolations(
     vs: RawShardViolation[],
     orderedUuids: string[],
+    orderedUnits: Array<Partial<IKodyRule>> = [],
 ): ShardViolation[] {
     const known = new Set(orderedUuids.filter(Boolean));
     const kept: ShardViolation[] = [];
@@ -1403,15 +1410,38 @@ function resolveShardViolations(
         if (!ruleUuid) {
             continue;
         }
+        const reviewUnitId = unitIdForRuleId(v.ruleId, orderedUnits);
         const { ruleId: _ruleId, ...rest } = v;
         // Strict-schema providers emit `null` for required-but-inapplicable
         // keys; downstream (line snapping, mapping) expects them absent.
         const normalized = Object.fromEntries(
             Object.entries(rest).filter(([, value]) => value !== null),
         ) as Omit<RawShardViolation, 'ruleId'>;
-        kept.push({ ...normalized, ruleUuid });
+        kept.push({
+            ...normalized,
+            ruleUuid,
+            ...(reviewUnitId && { reviewUnitId }),
+        });
     }
     return kept;
+}
+
+/**
+ * The atom unit a `ruleId` index points at, if that unit is an atom. A uuid
+ * echoed back instead of an index names the rule, not one of its atoms.
+ */
+function unitIdForRuleId(
+    ruleId: unknown,
+    orderedUnits: Array<Partial<IKodyRule>>,
+): string | undefined {
+    const asIndex =
+        typeof ruleId === 'number'
+            ? ruleId
+            : typeof ruleId === 'string' && /^\d+$/.test(ruleId.trim())
+              ? Number(ruleId.trim())
+              : NaN;
+    if (!Number.isInteger(asIndex) || asIndex < 1) return undefined;
+    return orderedUnits[asIndex - 1]?.reviewUnitId;
 }
 
 /**
@@ -1565,7 +1595,11 @@ export async function judgeKodyRulesSharded(
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
-                const resolved = resolveShardViolations(vs, ruleUuids);
+                const resolved = resolveShardViolations(
+                    vs,
+                    ruleUuids,
+                    applicable,
+                );
                 const proposing = resolved.filter(proposesAChange);
                 if (proposing.length < resolved.length) {
                     logger?.warn({
@@ -1651,7 +1685,7 @@ export async function judgeKodyRulesSharded(
                 verifyRepositoryFacts: true,
             });
             // PR-level violations carry no relevantFile by design
-            for (const v of resolveShardViolations(vs, ruleUuids))
+            for (const v of resolveShardViolations(vs, ruleUuids, prRules))
                 violations.push(v);
         } catch (err) {
             shardsErrored++;

@@ -283,6 +283,28 @@ describe('mapAgentFindings', () => {
         expect(r.suggestions[0].brokenKodyRulesIds).toEqual(['rule-1']);
     });
 
+    it('kody-rules: keeps the atom unit a finding was judged under (#2656)', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        {
+                            suggestionContent: 'x',
+                            relevantFile: 'src/a.ts',
+                            ruleUuid: 'rule-1',
+                            reviewUnitId: 'rule-1-atom-2',
+                        },
+                    ],
+                },
+            },
+            ctx({ isKodyRules: true, kodyRules: [{ uuid: 'rule-1' } as any] }),
+        );
+        expect(r.suggestions[0]).toMatchObject({
+            brokenKodyRulesIds: ['rule-1'],
+            kodyRuleUnitId: 'rule-1-atom-2',
+        });
+    });
+
     it('kody-rules: still drops a uuid-less suggestion when multiple rules are candidates (ambiguous)', () => {
         const r = mapAgentFindings(
             {

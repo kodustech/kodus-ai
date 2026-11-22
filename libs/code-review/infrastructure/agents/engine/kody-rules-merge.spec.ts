@@ -28,6 +28,73 @@ describe('mergeKodyRuleFindings', () => {
 
         expect(kept.kodyRuleOtherLocations).toEqual(['b.ts:3-4']);
     });
+
+    // #2656: atoms of one decomposed rule share its uuid but are different
+    // violations, so one must not become another's "Also found in".
+    it('keeps the findings of different atoms of one rule apart', () => {
+        const merged = mergeKodyRuleFindings([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                kodyRuleUnitId: 'rule-1-atom-puts',
+                relevantFile: 'report_service.rb',
+                relevantLinesStart: 8,
+                relevantLinesEnd: 8,
+                suggestionContent: 'Console write bypasses Rails.logger.',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                kodyRuleUnitId: 'rule-1-atom-pry',
+                relevantFile: 'export_job.rb',
+                relevantLinesStart: 4,
+                relevantLinesEnd: 4,
+                suggestionContent: 'binding.pry left in.',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                kodyRuleUnitId: 'rule-1-atom-puts',
+                relevantFile: 'export_job.rb',
+                relevantLinesStart: 9,
+                relevantLinesEnd: 9,
+                suggestionContent: 'puts here too.',
+            },
+        ]);
+
+        expect(
+            merged.map((s) => [
+                s.relevantFile,
+                s.relevantLinesStart,
+                s.kodyRuleOtherLocations,
+            ]),
+        ).toEqual([
+            ['report_service.rb', 8, ['export_job.rb:9-9']],
+            ['export_job.rb', 4, undefined],
+        ]);
+    });
+
+    it('keeps one finding per atom of a PR-level rule', () => {
+        const merged = mergeKodyRuleFindings([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                kodyRuleUnitId: 'rule-1-atom-a',
+                suggestionContent: 'Atom a, detailed.',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                kodyRuleUnitId: 'rule-1-atom-a',
+                suggestionContent: 'Atom a.',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                kodyRuleUnitId: 'rule-1-atom-b',
+                suggestionContent: 'Atom b.',
+            },
+        ]);
+
+        expect(merged.map((s) => s.suggestionContent)).toEqual([
+            'Atom a, detailed.',
+            'Atom b.',
+        ]);
+    });
 });
 
 describe('otherLocationsToRender', () => {
