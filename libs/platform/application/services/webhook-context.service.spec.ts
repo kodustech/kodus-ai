@@ -273,6 +273,44 @@ describe('WebhookContextService', () => {
             expect(result).toBeNull();
         });
 
+        it('routes the event to the same server listed under another name', async () => {
+            // The integration and repository list devops.gitlab.acme.com; the
+            // server sends its events as gitlab.acme.com (custom clone URL).
+            const alias = {
+                ...buildConfig(
+                    'org-a',
+                    'team-a',
+                    'https://devops.gitlab.acme.com',
+                ),
+                configValue: [
+                    {
+                        id: '9',
+                        name: 'acme/api',
+                        http_url: 'https://devops.gitlab.acme.com/acme/api.git',
+                    },
+                ],
+            };
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedAt(
+                        'org-other',
+                        'https://gitlab.other.example/web/shop.git',
+                        'web/shop',
+                    ),
+                    alias,
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITLAB, '9', {
+                host: 'gitlab.acme.com',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-a',
+            );
+        });
+
         it('keeps a legacy config that stores no host beside a config on another server', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [

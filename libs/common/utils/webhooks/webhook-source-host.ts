@@ -159,11 +159,14 @@ export function webhookConfigsOfInstance<T>(
  * integration. Renaming or moving the repository keeps the host. A config
  * whose listed repository URL is on another host is on another instance,
  * since the instance builds that URL, and never takes it, even when it is
- * the only one with that id. Its integration host alone does not tell:
- * Kodus may reach the instance at another address, such as a docker service
- * name or an IP. Among the configs that list no repository URL, one that
- * keeps the same `owner/repo` under that id takes it, and otherwise those
- * that store no host at all, as before.
+ * the only one with that id, unless it keeps the same `owner/repo` under
+ * that id on a host of the same site: the same server under another name,
+ * such as a custom HTTP clone URL (`devops.gitlab.acme.com` listed, events
+ * from `gitlab.acme.com`). Its integration host alone does not tell: Kodus
+ * may reach the instance at another address, such as a docker service name
+ * or an IP. Among the configs that list no repository URL, one that keeps
+ * the same `owner/repo` under that id takes it, and otherwise those that
+ * store no host at all, as before.
  */
 export function instanceConfigsForWebhook<T>(
     configs: T[] | null | undefined,
@@ -182,23 +185,38 @@ export function instanceConfigsForWebhook<T>(
         return onHost;
     }
 
+    const fullName = normalizeFullName(source?.repositoryFullName);
+    const listsSameRepository = (config: T) => {
+        const listed = listedRepositoryOf(config, repositoryId);
+        return (
+            !!fullName &&
+            !!listed &&
+            normalizeFullName(
+                listed?.fullName ?? listed?.full_name ?? listed?.name,
+            ) === fullName
+        );
+    };
+
+    const site = host ? siteOf(host) : undefined;
+    const sameServer = site
+        ? candidates.filter(
+              (config) =>
+                  configHostsOf(config, repositoryId).some(
+                      (configHost) => siteOf(configHost) === site,
+                  ) && listsSameRepository(config),
+          )
+        : [];
+    if (sameServer.length) {
+        return sameServer;
+    }
+
     const unlisted = candidates.filter(
         (config) => !listedHostOf(config, repositoryId),
     );
 
-    const fullName = normalizeFullName(source?.repositoryFullName);
-    const sameRepository =
-        fullName && repositoryId
-            ? unlisted.filter((config) => {
-                  const listed = listedRepositoryOf(config, repositoryId);
-                  return (
-                      !!listed &&
-                      normalizeFullName(
-                          listed?.fullName ?? listed?.full_name ?? listed?.name,
-                      ) === fullName
-                  );
-              })
-            : [];
+    const sameRepository = repositoryId
+        ? unlisted.filter(listsSameRepository)
+        : [];
     if (sameRepository.length) {
         return sameRepository;
     }
@@ -272,6 +290,36 @@ function configHostsOf(config: any, repositoryId: string): string[] {
         normalizeHost(storedHostOf(config)),
     ].filter((host): host is string => !!host);
 }
+
+/**
+ * The site a host belongs to: its registrable domain (`gitlab.acme.com` and
+ * `devops.gitlab.acme.com` → `acme.com`; `git.acme.com.br` → `acme.com.br`).
+ * An IP address is its own site.
+ */
+function siteOf(host: string): string {
+    if (/^[\d.]+$/.test(host) || host.includes(':')) {
+        return host;
+    }
+    const labels = host.split('.');
+    const keep =
+        labels.length > 2 &&
+        labels[labels.length - 1].length === 2 &&
+        SECOND_LEVEL_LABELS.has(labels[labels.length - 2])
+            ? 3
+            : 2;
+    return labels.slice(-keep).join('.');
+}
+
+/** Second-level labels under a country code (`com.br`, `co.uk`). */
+const SECOND_LEVEL_LABELS = new Set([
+    'com',
+    'net',
+    'org',
+    'gov',
+    'edu',
+    'co',
+    'ac',
+]);
 
 /** The host of the repository URL a config lists under that id. */
 function listedHostOf(config: any, repositoryId: string): string | undefined {
