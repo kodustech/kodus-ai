@@ -5502,6 +5502,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeKodyComments?: boolean;
     }): Promise<PullRequestReviewComment[] | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -5534,7 +5535,8 @@ export class GitlabService implements Omit<
                     const firstDiscussionComment = discussion.notes[0];
                     return (
                         firstDiscussionComment.resolvable &&
-                        !hasKodyMarker(firstDiscussionComment.body)
+                        (params.includeKodyComments === true ||
+                            !hasKodyMarker(firstDiscussionComment.body))
                     );
                 })
                 .map((discussion) => {

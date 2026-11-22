@@ -5100,6 +5100,7 @@ export class BitbucketCloudService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeKodyComments?: boolean;
     }): Promise<PullRequestReviewComment[] | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -5137,7 +5138,8 @@ export class BitbucketCloudService implements Omit<
                 .filter(
                     (comment) =>
                         comment?.deleted !== true &&
-                        !hasKodyMarker(comment?.content?.raw),
+                        (params.includeKodyComments === true ||
+                            !hasKodyMarker(comment?.content?.raw)),
                 )
                 .map((comment) => {
                     const mappedComment: PullRequestReviewComment = {

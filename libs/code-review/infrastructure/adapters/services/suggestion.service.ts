@@ -2639,7 +2639,13 @@ export class SuggestionService implements ISuggestionService {
             } else {
                 reviewComments =
                     await this.codeManagementService.getPullRequestReviewComments(
-                        codeManagementRequestData,
+                        {
+                            ...codeManagementRequestData,
+                            // The stored ids are Kody's own comments; adapters
+                            // hide them by default, which left nothing to
+                            // resolve on GitLab, Bitbucket and Azure (#2443).
+                            includeKodyComments: true,
+                        },
                     );
             }
 

@@ -361,6 +361,15 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        /**
+         * Include the review comments Kody posted itself. Adapters hide them
+         * by default: the approval guards only ask whether a finding is still
+         * open, and a comment that is absent already reads as open there.
+         * Reading Kody's own threads back - resolving the suggestions a user
+         * marked implemented - needs them, otherwise the match by comment id
+         * finds nothing and the threads never close.
+         */
+        includeKodyComments?: boolean;
     }): Promise<PullRequestReviewComment[] | null>;
     getPullRequestsByRepository(params: {
         organizationAndTeamData: OrganizationAndTeamData;

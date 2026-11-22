@@ -2467,6 +2467,7 @@ export class AzureReposService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeKodyComments?: boolean;
     }): Promise<PullRequestReviewComment[] | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -2507,7 +2508,11 @@ export class AzureReposService implements Omit<
                         },
                     })),
                 )
-                .filter((comment) => !hasKodyMarker(comment.body))
+                .filter(
+                    (comment) =>
+                        params.includeKodyComments === true ||
+                        !hasKodyMarker(comment.body),
+                )
                 .sort(
                     (a, b) =>
                         new Date(b.createdAt).getTime() -
