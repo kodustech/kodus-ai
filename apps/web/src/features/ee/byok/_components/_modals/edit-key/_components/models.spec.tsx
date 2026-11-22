@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
@@ -38,7 +39,13 @@ jest.mock("@services/organizationParameters/hooks", () => ({
     useLLMProviderModelsPreview: (...args: unknown[]) => mockPreview(...args),
 }));
 
-function Harness({ lockedInUse }: { lockedInUse: boolean }) {
+function Harness({
+    lockedInUse,
+    knownModelIds,
+}: {
+    lockedInUse: boolean;
+    knownModelIds?: string[];
+}) {
     const form = useForm({
         defaultValues: {
             provider: "novita",
@@ -47,7 +54,11 @@ function Harness({ lockedInUse }: { lockedInUse: boolean }) {
     });
     return (
         <FormProvider {...form}>
-            <ByokModelSelect lockedInUse={lockedInUse} credentialStored />
+            <ByokModelSelect
+                lockedInUse={lockedInUse}
+                knownModelIds={knownModelIds}
+                credentialStored
+            />
         </FormProvider>
     );
 }
@@ -76,7 +87,11 @@ function LivePickerHarness({
 
 beforeEach(() => {
     mockPreview.mockReset();
-    mockPreview.mockReturnValue({ data: [], isFetching: false, isError: false });
+    mockPreview.mockReturnValue({
+        data: [],
+        isFetching: false,
+        isError: false,
+    });
 });
 
 describe("ByokModelSelect — lock when the model is in use in Routing", () => {
@@ -96,9 +111,26 @@ describe("ByokModelSelect — lock when the model is in use in Routing", () => {
         ).not.toBeInTheDocument();
     });
 
+    it("locked: a model whose label another saved model shares shows its id", () => {
+        render(
+            <Harness
+                lockedInUse
+                knownModelIds={[
+                    "deepseek/deepseek-v4-pro",
+                    "deepseek/deepseek-v4-pro-1017",
+                ]}
+            />,
+        );
+        expect(
+            screen.getByText("Deepseek V4 Pro (deepseek/deepseek-v4-pro)"),
+        ).toBeInTheDocument();
+    });
+
     it("unlocked: renders the editable picker, not the lock hint", () => {
         render(<Harness lockedInUse={false} />);
-        expect(screen.queryByText(/in use in routing/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/in use in routing/i),
+        ).not.toBeInTheDocument();
     });
 });
 
@@ -284,6 +316,34 @@ describe("ByokModelSelect — custom endpoint (openai_compatible)", () => {
         );
         expect(screen.getByText("Deepseek V4.1")).toBeInTheDocument();
         expect(screen.queryByText(/select a model/i)).not.toBeInTheDocument();
+    });
+
+    it("a saved model the endpoint does not list, whose label a listed one shares, shows its id", () => {
+        mockPreview.mockReturnValue({
+            data: [
+                {
+                    id: "accounts/fireworks/models/deepseek-v4p1",
+                    name: "Deepseek V4.1",
+                },
+            ],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "accounts/fireworks/models/deepseek-v4p1-0731",
+                    baseURL: FIREWORKS,
+                }}
+            />,
+        );
+        expect(
+            screen.getByText(
+                "Deepseek V4.1 (accounts/fireworks/models/deepseek-v4p1-0731)",
+            ),
+        ).toBeInTheDocument();
     });
 
     it("typed key + base URL on a fresh connect: lists live", () => {

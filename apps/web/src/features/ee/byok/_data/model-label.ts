@@ -17,7 +17,16 @@
  * (`-0731`); both are the same model everyone else calls "5.3" / "K2.7", so the
  * label reads them that way.
  */
-const ACRONYMS = new Set(["gpt", "glm", "llm", "ai", "api", "sdk", "ui", "ocr"]);
+const ACRONYMS = new Set([
+    "gpt",
+    "glm",
+    "llm",
+    "ai",
+    "api",
+    "sdk",
+    "ui",
+    "ocr",
+]);
 
 export function formatModelLabel(id: string): string {
     if (!id) return id;
@@ -36,7 +45,10 @@ export function formatModelLabel(id: string): string {
         tokens.splice(-3);
     }
     // A trailing MMDD snapshot date is a pin, not a name (`-0731`, `-0813`).
-    if (tokens.length > 1 && /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(tokens[tokens.length - 1])) {
+    if (
+        tokens.length > 1 &&
+        /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(tokens[tokens.length - 1])
+    ) {
         tokens.pop();
     }
     // Anthropic spells a version with hyphens (`claude-sonnet-4-6`): two bare
@@ -62,4 +74,28 @@ export function formatModelLabel(id: string): string {
                 : tok.charAt(0).toUpperCase() + tok.slice(1),
         )
         .join(" ");
+}
+
+/**
+ * The label drops a snapshot pin, so a pinned id and its alias read the same
+ * ("Deepseek V4.1 Flash" for both `deepseek-v4.1-flash` and
+ * `deepseek-v4.1-flash-1017`). Labels another id in `ids` shares carry the id
+ * too; labels nobody else has are unchanged.
+ */
+export function modelLabeler(ids: Iterable<string | undefined | null>) {
+    const idsByLabel = new Map<string, Set<string>>();
+    for (const id of ids) {
+        if (!id) continue;
+        const label = formatModelLabel(id);
+        let group = idsByLabel.get(label);
+        if (!group) idsByLabel.set(label, (group = new Set()));
+        group.add(id);
+    }
+    return (id: string): string => {
+        const label = formatModelLabel(id);
+        const group = idsByLabel.get(label);
+        const shared =
+            !!group && (group.size > 1 || (group.size === 1 && !group.has(id)));
+        return shared ? `${label} (${id})` : label;
+    };
 }

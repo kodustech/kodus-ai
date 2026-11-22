@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { formatModelLabel } from "../_data/model-label";
+import { modelLabeler } from "../_data/model-label";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type {
     BYOKConfig,
@@ -127,7 +127,9 @@ export function ModelRow({
      *  the list price the org is billed at. Absent for other providers. */
     catalog?: { name: string; pricing?: CatalogPricing };
 }) {
-    const displayName = catalog?.name ?? formatModelLabel(model.model);
+    const displayName =
+        catalog?.name ??
+        modelLabeler((config?.models ?? []).map((m) => m.model))(model.model);
     const thinking = formatThinking(model.reasoningEffort);
 
     const credential = (config?.credentials ?? []).find(

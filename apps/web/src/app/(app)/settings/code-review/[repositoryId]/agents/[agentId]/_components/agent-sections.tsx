@@ -28,7 +28,7 @@ import type {
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "src/core/utils/components";
-import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
+import { modelLabeler } from "src/features/ee/byok/_data/model-label";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { Choice, Field, Section } from "./field";
@@ -470,6 +470,7 @@ export const useByokModels = () => {
         retry: false,
     });
     const models = byok.data?.models ?? [];
+    const labelOf = modelLabeler(models.map((entry) => entry.model));
     return {
         models,
         routing: byok.data?.routing,
@@ -477,7 +478,7 @@ export const useByokModels = () => {
         /** A model's readable name, never its raw id. */
         nameOf: (id?: string) => {
             const model = models.find((entry) => entry.id === id)?.model;
-            return model ? formatModelLabel(model) : undefined;
+            return model ? labelOf(model) : undefined;
         },
     };
 };
@@ -522,7 +523,7 @@ export const ModelsFields = ({
                 </SelectItem>
                 {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
-                        {formatModelLabel(model.model)}
+                        {labelOf(model.id)}
                     </SelectItem>
                 ))}
             </SelectContent>

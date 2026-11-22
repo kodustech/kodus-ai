@@ -28,7 +28,7 @@ import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import { formatModelLabel } from "../../../../_data/model-label";
+import { modelLabeler } from "../../../../_data/model-label";
 
 /** "$2 in · $10 out / 1M" — only for a catalog that is also a price list. */
 const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
@@ -42,6 +42,7 @@ export const ByokModelSelect = ({
     credentialStored = false,
     credentialId,
     lockedInUse = false,
+    knownModelIds = [],
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
      *  provider, so "Add model" never offers a duplicate. */
@@ -58,6 +59,9 @@ export const ByokModelSelect = ({
      *  fallback / a per-agent override). Swapping its id would silently change
      *  what runs, so the model field is read-only — tuning stays editable. */
     lockedInUse?: boolean;
+    /** Ids of the organization's saved models, so a locked model whose label
+     *  another one shares reads with its id. */
+    knownModelIds?: string[];
 } = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
@@ -99,7 +103,7 @@ export const ByokModelSelect = ({
     // In use in Routing → the model identity is frozen. Show it read-only with a
     // hint pointing at where to change it, instead of the editable picker.
     if (lockedInUse) {
-        return <ModelLockedField />;
+        return <ModelLockedField knownModelIds={knownModelIds} />;
     }
 
     if (manual) {
@@ -137,12 +141,11 @@ export const ByokManualModelInput = () => <ModelInput />;
  * surface the current model with a lock affordance and tell the user where to
  * change it. Tuning fields around it stay editable.
  */
-const ModelLockedField = () => {
+const ModelLockedField = ({ knownModelIds }: { knownModelIds: string[] }) => {
     const form = useFormContext<EditKeyForm>();
     const model = form.watch("model");
-    // Show the friendly label (derived from the id) — never the raw id — to match
-    // the dropdown and the page title.
-    const label = formatModelLabel(model);
+    // The friendly label, as the dropdown and the page title show it.
+    const label = modelLabeler([...knownModelIds, model])(model);
 
     return (
         <FormControl.Root>
@@ -295,7 +298,10 @@ const ModelPickerPopover = ({
                                         // A saved model the endpoint does not
                                         // list is still the selected one.
                                         (field.value
-                                            ? formatModelLabel(field.value)
+                                            ? modelLabeler([
+                                                  ...allModels.map((m) => m.id),
+                                                  field.value,
+                                              ])(field.value)
                                             : undefined) ?? (
                                             <span className="font-normal">
                                                 Select a model
@@ -513,9 +519,7 @@ const ModelSelectLive = ({
     const urlSettled = (typedBaseURL ?? "") === rawBaseURL;
 
     const typedAwsBearerRaw = (form.watch("awsBearerToken") ?? "").trim();
-    const typedAwsAccessKeyIdRaw = (
-        form.watch("awsAccessKeyId") ?? ""
-    ).trim();
+    const typedAwsAccessKeyIdRaw = (form.watch("awsAccessKeyId") ?? "").trim();
     const typedAwsSecretRaw = (form.watch("awsSecretAccessKey") ?? "").trim();
     const typedAwsRegionRaw = (form.watch("awsRegion") ?? "").trim();
     const typedAwsBearer = useDebouncedValue(typedAwsBearerRaw, 700);

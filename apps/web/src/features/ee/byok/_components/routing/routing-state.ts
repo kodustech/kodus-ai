@@ -1,7 +1,7 @@
 import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
 
-import { formatModelLabel } from "../../_data/model-label";
+import { formatModelLabel, modelLabeler } from "../../_data/model-label";
 import { PROVIDER_LABELS } from "../../_data/provider-labels";
 import type { BYOKRouting, LlmTask } from "../../_types";
 import { capabilityGate } from "./capability-gate";
@@ -19,9 +19,19 @@ export function routingModelLabels(models: LLMConfigStatus["models"]) {
         string,
         Map<string | undefined, { count: number; hosts: Map<string, number> }>
     >();
+    // A pinned id and its alias share a label; the id tells them apart. The
+    // same id on two connections still needs the connection below.
+    const labelOf = modelLabeler(
+        models
+            .filter((model) => !model.managed)
+            .map((model) => model.model ?? model.modelId),
+    );
     const entries = models.map((model) => ({
         ...model,
-        label: formatModelLabel(model.model ?? model.modelId) || model.modelId,
+        label:
+            (model.managed
+                ? formatModelLabel(model.model ?? model.modelId)
+                : labelOf(model.model ?? model.modelId)) || model.modelId,
         host: hostOf(model.baseUrl),
     }));
     const labelCounts = new Map<string, number>();

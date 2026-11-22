@@ -8,7 +8,7 @@ import { deleteBYOK } from "@services/organizationParameters/fetch";
 import { AlertTriangleIcon } from "lucide-react";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 
-import { formatModelLabel } from "../_data/model-label";
+import { modelLabeler } from "../_data/model-label";
 import type { BYOKConfig, BYOKModelConfig } from "../_types";
 import { groupModelsByProvider } from "../_utils";
 
@@ -179,7 +179,9 @@ export function useDeleteModel({
 }): { confirmAndDelete: () => void; rejectionReasons: string[] } {
     const [rejectionReasons, setRejectionReasons] = useState<string[]>([]);
 
-    const name = formatModelLabel(model.model);
+    const name = modelLabeler((config?.models ?? []).map((m) => m.model))(
+        model.model,
+    );
     const copy = deleteConfirmCopy(isLastModel(config, model.id), name);
 
     const confirmAndDelete = () => {
