@@ -97,6 +97,7 @@ function setup(fx: Fixture) {
             scope?: string;
             model?: string;
             sandbox?: string;
+            superseded?: boolean;
         }>,
         sandboxes: [] as string[],
         released: [] as string[],
@@ -138,6 +139,7 @@ function setup(fx: Fixture) {
                 scope: pass.scope,
                 model: pass.model?.modelId,
                 sandbox: (ctx as any).sandboxHandle?.id,
+                ...((ctx as any).runSuperseded && { superseded: true }),
             });
             calls.abandonSignals[key] = pass.abandoned;
             const plan = fx.passes[key];
@@ -792,8 +794,32 @@ describe('executeUltraReview', () => {
                 superseded: ['ultra-1', 'ultra-2', 'ultra-3'],
             });
             const out = await executeUltraReview(context, host, LIMITS);
+            // Each run reviews with no sandbox, marked moot.
+            expect(
+                calls.passes
+                    .filter((p) => p.scope === 'native')
+                    .map((p) => [p.model, p.sandbox, p.superseded]),
+            ).toEqual([
+                ['a', undefined, true],
+                ['b', undefined, true],
+                ['c', undefined, true],
+            ]);
+            expect(
+                out.ultra?.runs?.map((r) => [
+                    r.modelId,
+                    r.status,
+                    r.replacedBy,
+                ]),
+            ).toEqual([
+                ['a', 'completed', undefined],
+                ['b', 'completed', undefined],
+                ['c', 'completed', undefined],
+            ]);
+            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
+                'a1',
+                'c2',
+            ]);
             expect(out.ultra?.outcome).toBe('success');
-            expect(calls.passes.some((p) => p.scope === 'native')).toBe(true);
             expect(out.errors).toEqual([]);
         });
 
