@@ -554,6 +554,20 @@ it('keeps an Ultra default mode as the risk-found route when only the no-risk ro
     ).toMatchObject({ noRisk: 'balanced', riskFound: 'ultra' });
 });
 
+it('an Ultra default mode does not overwrite a risk-found route the scope inherits', async () => {
+    const { run, save, stored } = setup(true);
+    Object.assign(stored.configs, {
+        riskReviewRouting: { riskFound: 'balanced' },
+    });
+    stored.repositories[0].configs = { reviewMode: 'ultra' };
+    await run(
+        { riskReviewRouting: { noRisk: 'heavy' } },
+        { repositoryId: 'repo' },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    expect(saved.riskReviewRouting).toEqual({ noRisk: 'heavy' });
+});
+
 it.each(['edit', 'restore'])(
     'preserves an inherited canonical route when migrating the other legacy route: %s',
     async (action) => {

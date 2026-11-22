@@ -1306,9 +1306,11 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                               oldConfig.reviewMode === 'ultra'
                                   ? oldConfig.reviewMode
                                   : ('balanced' as const),
-                          ...(oldConfig.reviewMode === 'ultra' && {
-                              riskFound: 'ultra' as const,
-                          }),
+                          // A risk-found route the scope inherits stays.
+                          ...(oldConfig.reviewMode === 'ultra' &&
+                              ancestorRouting?.riskFound === undefined && {
+                                  riskFound: 'ultra' as const,
+                              }),
                       },
                   }
                 : oldConfig;
