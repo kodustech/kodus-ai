@@ -328,6 +328,8 @@ export type RunExercised = {
         threshold: number;
         language?: "node" | "unsupported";
         measured: boolean;
+        /** Not measured because the coverage mapped back to no source. */
+        reason?: "no_source_map";
     };
     files: RunExercisedFile[];
 };

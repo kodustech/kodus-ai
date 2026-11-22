@@ -72,6 +72,10 @@ base/PR comparison is unaffected. The flush is one signal and a bounded wait; ma
   and sends it in the request. Changing the setting later does not change a Run already asked.
 - Unknown files count in neither N nor M. Nothing measured (all unknown, an unsupported language, a cell without the
   `exercised_lines` feature): the verdict is unchanged and the fact reads "not measured for <language>".
+- Nothing attributed: when no changed line was attributed to its source (every measured file ran 0) and some changed
+  file could not be mapped (`not_loaded_unproven`, `unmapped_source`; a production build with no source maps), the
+  summary is not measured with `reason: no_source_map` and the fact reads "not measured (no source map)", never
+  "0 of N". A real 0 (every file mapped, lines not hit) still reads "0 of N".
 - The rule never upgrades a verdict and never changes `regressions` or a halted Run.
 
 ## 8. Order of the full plan

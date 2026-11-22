@@ -19,9 +19,14 @@ export interface ExercisedSummary {
     threshold: number;
     /** Absent when the cell did not answer (no exercisedLines feature, or no answer). */
     language?: ExercisedLanguage;
-    /** At least one file was measured. */
+    /** At least one file was measured, and some of the changed lines were attributed to the source. */
     measured: boolean;
+    /** Why it is not measured when the changed files' coverage could not be attributed to source (no mapping). */
+    reason?: 'no_source_map';
 }
+
+/** Reasons a changed file's coverage could not be attributed to its source. */
+const UNATTRIBUTED: ReadonlySet<string> = new Set(['not_loaded_unproven', 'unmapped_source']);
 
 /** The measured files summed; `result` absent means the cell gave no answer. */
 export function exercisedSummaryOf(result: Pick<ExercisedResult, 'language' | 'files'> | undefined, threshold: number): ExercisedSummary {
@@ -29,6 +34,10 @@ export function exercisedSummaryOf(result: Pick<ExercisedResult, 'language' | 'f
     const files = result.files.filter((f) => f.status === 'measured' && f.exercisedLines !== null);
     const changed = files.reduce((n, f) => n + f.changedLines, 0);
     const exercised = files.reduce((n, f) => n + Math.min(f.exercisedLines ?? 0, f.changedLines), 0);
+    // A file the cell could not map, and nothing attributed to any other: a production build with no source maps
+    // ran the changed code, but "0 of N" would say it did not. Not measured. A real 0 (every file mapped) still shows.
+    const unattributed = result.files.some((f) => f.status === 'unknown' && f.reason !== undefined && UNATTRIBUTED.has(f.reason));
+    if (unattributed && exercised === 0) return { exercised: 0, changed: 0, threshold, language: result.language, measured: false, reason: 'no_source_map' };
     return { exercised, changed, threshold, language: result.language, measured: files.length > 0 };
 }
 
@@ -48,5 +57,6 @@ export function exercisedShortfall(s: ExercisedSummary | undefined): string | un
 export function exercisedFact(s: ExercisedSummary | undefined): string | undefined {
     if (!s) return undefined;
     if (s.measured) return `Changed lines exercised: ${s.exercised} of ${s.changed}`;
+    if (s.reason === 'no_source_map') return 'Changed lines exercised: not measured (no source map)';
     return s.language ? `Changed lines exercised: not measured for ${s.language}` : 'Changed lines exercised: not measured';
 }

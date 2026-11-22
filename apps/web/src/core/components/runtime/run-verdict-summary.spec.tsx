@@ -388,6 +388,20 @@ describe("RunVerdictSummary", () => {
             },
         );
 
+        it("says it was not measured, never 0 of N, when the coverage mapped to no source", () => {
+            const run = partlyTestedRun({
+                exercised: exercised({
+                    language: "node",
+                    measured: false,
+                    reason: "no_source_map",
+                }),
+            });
+            render(<RunVerdictSummary {...props(run)} />);
+            expect(fact()).toHaveTextContent(
+                /^Changed lines exercised: not measured \(no source map\)\.$/,
+            );
+        });
+
         it("says it was not measured when the language is unknown", () => {
             const run = partlyTestedRun({
                 exercised: exercised({ measured: false }),

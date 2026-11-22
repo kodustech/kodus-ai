@@ -149,6 +149,8 @@ const exercisedSentence = (
             `Changed lines exercised: ${exercised.exercised} of ${exercised.changed}${below ? `, below the ${Math.round(exercised.threshold * 100)}% this repo asks` : ""}.`,
         ];
     }
+    if (exercised.reason === "no_source_map")
+        return ["Changed lines exercised: not measured (no source map)."];
     return [
         exercised.language
             ? `Changed lines exercised: not measured for ${exercised.language}.`

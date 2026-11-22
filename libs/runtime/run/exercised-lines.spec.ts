@@ -76,11 +76,41 @@ describe('the exercised-lines rule in decideRunVerdict', () => {
     });
 });
 
+// A production build whose coverage maps back to no changed file (a Nuxt build with no source maps) ran the
+// changed endpoint, but the lines cannot be attributed: that is "not measured", never "0 of N".
+describe('coverage that could not be attributed to the changed files', () => {
+    it('is not measured, with the reason, when no changed file mapped', () => {
+        const s = exercisedSummaryOf({ language: 'node', files: [unknown('server/api/orders.ts', 2)] }, 0.5);
+        expect(s).toMatchObject({ measured: false, reason: 'no_source_map' });
+        expect(exercisedFact(s)).toBe('Changed lines exercised: not measured (no source map)');
+        expect(exercisedShortfall(s)).toBeUndefined();
+    });
+
+    it('is not measured when the files that count as measured ran nothing and others could not be mapped', () => {
+        const s = exercisedSummaryOf({ language: 'node', files: [measured('a.ts', 1, 0), unknown('server/api/orders.ts', 2)] }, 0.5);
+        expect(s).toMatchObject({ measured: false, reason: 'no_source_map' });
+        expect(green(s).verdictState).toBe('no_regressions');
+    });
+
+    it('still reports 0 of N when coverage is present and the lines were not hit', () => {
+        const s = exercisedSummaryOf({ language: 'node', files: [measured('a.ts', 2, 0)] }, 0.5);
+        expect(s).toMatchObject({ measured: true, exercised: 0, changed: 2 });
+        expect(exercisedFact(s)).toBe('Changed lines exercised: 0 of 2');
+        expect(green(s).verdictState).toBe('partly_tested');
+    });
+
+    it('keeps the numbers when some lines were attributed and a file could not be mapped', () => {
+        const s = exercisedSummaryOf({ language: 'node', files: [measured('a.ts', 4, 3), unknown('b.ts', 2)] }, 0.5);
+        expect(s).toMatchObject({ measured: true, exercised: 3, changed: 4 });
+        expect(s.reason).toBeUndefined();
+    });
+});
+
 describe('exercisedShortfall and exercisedFact', () => {
     it('words the fact for measured, unmeasured with a language, and unmeasured without one', () => {
         expect(exercisedFact(exercisedSummaryOf({ language: 'node', files: [measured('a.ts', 10, 7)] }, 0.5))).toBe('Changed lines exercised: 7 of 10');
         expect(exercisedFact(exercisedSummaryOf({ language: 'unsupported', files: [] }, 0.5))).toBe('Changed lines exercised: not measured for unsupported');
-        expect(exercisedFact(exercisedSummaryOf({ language: 'node', files: [unknown('a.ts', 3)] }, 0.5))).toBe('Changed lines exercised: not measured for node');
+        expect(exercisedFact(exercisedSummaryOf({ language: 'node', files: [{ ...unknown('a.ts', 3), reason: 'no_coverage_written' as const }] }, 0.5))).toBe('Changed lines exercised: not measured for node');
         expect(exercisedFact(exercisedSummaryOf(undefined, 0.5))).toBe('Changed lines exercised: not measured');
         expect(exercisedFact(undefined)).toBeUndefined();
         expect(exercisedShortfall(exercisedSummaryOf({ language: 'node', files: [measured('a.ts', 10, 7)] }, 0.5))).toBeUndefined();

@@ -179,6 +179,8 @@ export const ReportExercisedSchema = z.strictObject({
         threshold: z.number().min(0).max(1),
         language: z.enum(EXERCISED_LANGUAGES).optional(),
         measured: z.boolean(),
+        /** Not measured because the changed files' coverage mapped back to no source. */
+        reason: z.literal('no_source_map').optional(),
     }),
     files: ExercisedResultSchema.shape.files,
 });
