@@ -465,7 +465,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 	transfer := TransferTarball
 	if d.registryMode() {
 		m := d.peek(ref.MachineID)
-		at := time.Now()
+		at := d.clock.Now()
 		var err error
 		switch reg, err = d.registries.Start(ctx, ref, b.Service, network, subnet, m.setup && m.seeds); {
 		case errors.Is(err, registry.ErrUnseeded):
@@ -480,7 +480,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 				*late = append(*late, since(PhaseStopReg, at))
 			}()
 			transfer = TransferRegistry
-			extra = append(extra, buildprogress.Phase{Name: "start registry", Ms: time.Since(at).Milliseconds()})
+			extra = append(extra, since("start registry", at))
 		}
 	}
 	a, err := d.buildOnce(ctx, ref, b, tag, network, resolv, subnet, secrets, out, true, reg)
@@ -547,7 +547,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 	loadAttempted := err == nil
 	phase := "docker load"
 	if err == nil {
-		at := time.Now()
+		at := d.clock.Now()
 		if reg != nil {
 			phase = "pull image"
 			if err = checkBuildOutput(out, d.maxImageBytes()); err == nil {
@@ -565,7 +565,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 				err = d.d.LoadImage(ctx, dockercli.ImageLoad{Tarball: tarball, Tag: tag, MaxBytes: d.maxImageBytes()})
 			}
 		}
-		loaded = time.Since(at)
+		loaded = d.clock.Now().Sub(at)
 		outcome = "load_failed"
 		extra = append(extra, buildprogress.Phase{Name: phase, Ms: loaded.Milliseconds()})
 	}
