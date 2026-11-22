@@ -13,7 +13,7 @@ only, never its code. Everything below is fitted to this repository.
 ## 0. Answer first
 
 - **A:** at sleep the cell stops the preview's services, copies each compose project volume (and, if the spike in 6.1
-  passes, each container's gVisor rootfs delta) into a host directory under its work dir, and removes the machines
+  passes, each container's gVisor rootfs delta; dropped by U1) into a host directory under its work dir, and removes the machines
   (0 CPU, 0 RAM). Wake boots a new claim on the same cell from the bake as today, but puts the kept data where the
   bake's data would go. State is pinned to the cell, per preview, per org, expires with the record (7 days), and goes
   with the org purge. A cell that is gone, a full disk or a corrupt copy means a cold wake that says so. No memory is
@@ -465,6 +465,16 @@ API directly, not another org.
 - **S2 (B): the mount.** In a sandbox of the cell's shape: a `-v host:ctr:ro` of a 0555 tree of 0444 files, user 1000:
   read works, write is `EROFS`, `execve` of a script fails, `node script.js` works; whether Docker can add `noexec` to
   the bind; hash-all time for 256 MiB cold and warm; hard links in the tree across the bind. 1 day.
+
+  **S2 result (2026-11-22, runsc with `--oci-seccomp`, the sandbox image, user 1000, 4 vCPU host):** `node
+  /opt/kcli/a/bin/cli.js` works and its `require` of a sibling file works; creating or touching a file is denied;
+  `execve` of the 0444 script fails with 126 (`Permission denied`); `chmod` inside fails with `Read-only file system`;
+  hard links cross the bind (link count 2 seen inside). Docker refuses `noexec` on a bind (`invalid mode: ro,noexec`),
+  so D11's mode-bit parity is the control, as planned. Hashing 256 MiB takes 1.53 s cold and 0.92 s warm, a stat of
+  the same files takes no measurable time: this is why U8 verifies by fingerprint per mount. Finding: on a host where
+  the cell's user is uid 1000, the files show inside as owned by the sandbox user; the read-only mount still blocks
+  every write and `chmod`, so the control is the mount, not the owner. The store still sets owner to the cell's user
+  and the installer should keep the cell's user off uid 1000.
 
 ## 7. Deletion and the org purge
 
