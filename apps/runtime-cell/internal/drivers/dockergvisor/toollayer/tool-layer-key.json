@@ -1,0 +1,317 @@
+{
+  "_comment": "Shared by the TS computeToolLayerKey (libs/runtime/protocol/tool-layer-key.ts) and the Go ComputeKey; byte-identical copy at apps/runtime-cell/internal/drivers/dockergvisor/toollayer/tool-layer-key.json. Keys were produced by Go.",
+  "cases": [
+    {
+      "name": "npm global pinned",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "93ecc2a0858a201eb314c3883d23f371d3819124af32663dc3a013c41df7e536"
+    },
+    {
+      "name": "npm without ignore-scripts",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "1ffc83c5690662a9e57ee0f365ab93e4eb974b3d8945c1ae6777e0db9140fac0"
+    },
+    {
+      "name": "scoped package",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "-g",
+          "@scope/foo@1.2.3"
+        ],
+        "binary": "foo-cli",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "194e43b2da568f182f1d7a82cf15a5470ce520431f606b9b94bd3e25e667f906"
+    },
+    {
+      "name": "pnpm on x86_64",
+      "input": {
+        "installer": "pnpm",
+        "argv": [
+          "pnpm",
+          "add",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "arch": "x86_64",
+        "registry": "registry.example.com"
+      },
+      "key": "0c4ba1bcb8f1959a995b08eba8bee80d7eac58a4169a26df57d02d65cb4d2f4a"
+    },
+    {
+      "name": "html and separator characters in an argument",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "a<b>&c",
+          "x\u2028y\u2029z"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "337fd8ac4d0487b0c2bca28802e543afbcbf49bce550558aafda8b7dd936d6ed"
+    },
+    {
+      "name": "quotes, backslash and controls in an argument",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "q\"b\\s",
+          "t\tn\nr\rb\bf\f\u0001"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "c6b0627022fc51d5b727eefb9f8856f8f5cf4910a543e0bd3abb2940670246b4"
+    },
+    {
+      "name": "non ASCII and an emoji",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "caf\u00e9",
+          "\ud83d\ude00"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "e543fd2b0d605b1e6a507fb99567e0507b39a1a0f0c1705c8e0403edf0481a14"
+    },
+    {
+      "name": "argument boundaries",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "a b",
+          "c"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "e1f0679ce7d7f8aa586ac36e7b8bfc6adca575dc02d704c19c806feab161a0d4"
+    },
+    {
+      "name": "argument boundaries, moved",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "a",
+          "b c"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "key": "9c15e53f7615ce77a9426f9ebb26c84dc342d61f9a769988a39d6a6ffee163c7"
+    }
+  ],
+  "refused": [
+    {
+      "name": "no image digest",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "no_image_digest"
+    },
+    {
+      "name": "a tag instead of a digest",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "latest",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "no_image_digest"
+    },
+    {
+      "name": "an upper case digest",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "no_image_digest"
+    },
+    {
+      "name": "a short digest",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:abc",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "no_image_digest"
+    },
+    {
+      "name": "no installer",
+      "input": {
+        "installer": "",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "incomplete"
+    },
+    {
+      "name": "no argv",
+      "input": {
+        "installer": "npm",
+        "argv": [],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "incomplete"
+    },
+    {
+      "name": "no binary",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "incomplete"
+    },
+    {
+      "name": "no arch",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "",
+        "registry": "registry.npmjs.org"
+      },
+      "refusal": "incomplete"
+    },
+    {
+      "name": "no registry",
+      "input": {
+        "installer": "npm",
+        "argv": [
+          "npm",
+          "install",
+          "--ignore-scripts",
+          "-g",
+          "foo@1.2.3"
+        ],
+        "binary": "foo",
+        "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "arch": "arm64",
+        "registry": ""
+      },
+      "refusal": "incomplete"
+    }
+  ]
+}

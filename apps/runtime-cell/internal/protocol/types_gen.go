@@ -41,6 +41,8 @@ const (
 	MessageTypeImageShared     MessageType = "image.shared"
 	MessageTypeToollayerBuilt  MessageType = "toollayer.built"
 	MessageTypeToollayerFailed MessageType = "toollayer.failed"
+	MessageTypeOrgPurge        MessageType = "org.purge"
+	MessageTypeOrgPurged       MessageType = "org.purged"
 	MessageTypeSnapshotForget  MessageType = "snapshot.forget"
 	MessageTypePoolTarget      MessageType = "pool.target"
 	MessageTypeBlocked         MessageType = "blocked"
@@ -1296,6 +1298,21 @@ type ToollayerFailedBody struct {
 	Reason string `json:"reason"`
 }
 
+type OrgPurgeBody struct {
+	OrgID string `json:"orgId"`
+}
+
+type OrgPurgedBodyPurgedItem string
+
+const (
+	OrgPurgedBodyPurgedItemToolLayers OrgPurgedBodyPurgedItem = "toolLayers"
+)
+
+type OrgPurgedBody struct {
+	OrgID  string                    `json:"orgId"`
+	Purged []OrgPurgedBodyPurgedItem `json:"purged"`
+}
+
 type SnapshotForgetBody struct {
 	OrgID       string   `json:"orgId"`
 	SnapshotIds []string `json:"snapshotIds"`
@@ -1441,6 +1458,10 @@ func newBody(t MessageType) (any, bool) {
 		return new(ToollayerBuiltBody), true
 	case MessageTypeToollayerFailed:
 		return new(ToollayerFailedBody), true
+	case MessageTypeOrgPurge:
+		return new(OrgPurgeBody), true
+	case MessageTypeOrgPurged:
+		return new(OrgPurgedBody), true
 	case MessageTypeSnapshotForget:
 		return new(SnapshotForgetBody), true
 	case MessageTypePoolTarget:
@@ -1520,6 +1541,10 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeToollayerBuilt, true
 	case ToollayerFailedBody, *ToollayerFailedBody:
 		return MessageTypeToollayerFailed, true
+	case OrgPurgeBody, *OrgPurgeBody:
+		return MessageTypeOrgPurge, true
+	case OrgPurgedBody, *OrgPurgedBody:
+		return MessageTypeOrgPurged, true
 	case SnapshotForgetBody, *SnapshotForgetBody:
 		return MessageTypeSnapshotForget, true
 	case PoolTargetBody, *PoolTargetBody:

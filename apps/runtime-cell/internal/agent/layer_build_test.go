@@ -76,6 +76,8 @@ type layerFake struct {
 	checkErr  error
 	admit     error
 	ends      []bool
+	purged    []string
+	purgeErr  error
 	exec      func(cmd string) protocol.SandboxExecResult
 	commands  []string
 	// answers to the next sandbox of each kind
@@ -140,7 +142,12 @@ func (l *layerFake) Ingest(_ context.Context, _ string, _ driver.MachineRef, _ d
 	}
 	return driver.ToolLayerBuilt{Digest: layerDigest, Bytes: 4096, Unsigned: in.SignaturesMissing}, nil
 }
-func (l *layerFake) PurgeOrg(string) error { return nil }
+func (l *layerFake) PurgeOrg(org string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.purged = append(l.purged, org)
+	return l.purgeErr
+}
 
 func (l *layerFake) endsSeen() []bool {
 	l.mu.Lock()

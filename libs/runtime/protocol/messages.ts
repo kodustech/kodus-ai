@@ -541,6 +541,9 @@ export function sandboxSnapshotError(b: { prepares?: boolean; templateKey?: stri
     return undefined;
 }
 
+/** What a cell keeps at rest for an org that org.purge removes (a kind is added with the feature that stores it). */
+export const ORG_PURGE_DATA_KINDS = ['toolLayers'] as const;
+
 const CellFeatureNameSchema = z.string().regex(/^[a-z][A-Za-z0-9]{0,63}$/);
 
 /** The features of a hello this hub knows, once each; a name it does not know is a newer cell's, ignored. */
@@ -1172,6 +1175,17 @@ export const MessageBodySchemas = {
         id: ToolLayerIdSchema,
         reason: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
     }),
+    // Hub to cell (feature toolLayers, the cell-held data of an org: the tool
+    // layers today, a preview's kept state later): remove everything the cell
+    // keeps at rest for the org. The cell acks the request at once and sends
+    // org.purged when the data is gone; it refuses while a claim of the org is
+    // live on it. Idempotent: a second one finds nothing and is answered the
+    // same way.
+    'org.purge': z.strictObject({ orgId: id }),
+    // Cell to hub: the org's data at rest on this cell is gone (docs/runtime/persistent-state.md D13).
+    // purged names the kinds of data the cell removed, so the hub's ack
+    // tracking and a log line say what went; today only the tool layers.
+    'org.purged': z.strictObject({ orgId: id, purged: z.array(z.enum(ORG_PURGE_DATA_KINDS)).max(8) }),
     // The org's sessions to remove at once (their PR closed or merged); a
     // template or a round is not one, and the cell refuses those.
     'snapshot.forget': z.strictObject({

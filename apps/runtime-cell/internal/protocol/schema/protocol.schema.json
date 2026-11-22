@@ -63,6 +63,8 @@
             "image.shared",
             "toollayer.built",
             "toollayer.failed",
+            "org.purge",
+            "org.purged",
             "snapshot.forget",
             "pool.target",
             "blocked",
@@ -4360,6 +4362,47 @@
         "key",
         "id",
         "reason"
+      ],
+      "additionalProperties": false
+    },
+    "org.purge": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "orgId"
+      ],
+      "additionalProperties": false
+    },
+    "org.purged": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "purged": {
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "toolLayers"
+            ]
+          }
+        }
+      },
+      "required": [
+        "orgId",
+        "purged"
       ],
       "additionalProperties": false
     },
