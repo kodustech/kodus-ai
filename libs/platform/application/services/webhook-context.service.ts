@@ -25,14 +25,15 @@ import {
 export type WebhookDisambiguator = {
     /**
      * Host of the instance that sent the webhook (e.g. `gitlab-c.example`).
-     * GitLab and Forgejo number repositories per instance, so only a config
-     * on this host may take the webhook (`webhookConfigsOfInstance`).
+     * GitLab, Forgejo and GitHub Enterprise Server number repositories per
+     * instance, so only a config on this host may take the webhook
+     * (`webhookConfigsOfInstance`).
      */
     host?: string;
     /**
-     * `owner/repo` the webhook names. GitLab and Forgejo: resolves the
-     * repository when the integration stores another address for the
-     * instance than the one in the payload.
+     * `owner/repo` the webhook names. Resolves the repository when a config
+     * lists no repository URL and Kodus reaches the instance at another
+     * address than the one in the payload.
      */
     repositoryFullName?: string;
 };
@@ -75,7 +76,8 @@ export class WebhookContextService {
 
         const candidates =
             platformType === PlatformType.FORGEJO ||
-            platformType === PlatformType.GITLAB
+            platformType === PlatformType.GITLAB ||
+            platformType === PlatformType.GITHUB
                 ? webhookConfigsOfInstance(platformType, configs, {
                       ...disambiguator,
                       repositoryId,

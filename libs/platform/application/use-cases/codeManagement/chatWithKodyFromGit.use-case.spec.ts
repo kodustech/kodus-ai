@@ -343,7 +343,12 @@ describe('ChatWithKodyFromGitUseCase', () => {
             platformType: PlatformType.GITHUB,
             payload: {
                 action: 'created',
-                repository: { id: 'repo-1', name: 'kodus-extension' },
+                repository: {
+                    id: 'repo-1',
+                    name: 'kodus-extension',
+                    full_name: 'kodus/kodus-extension',
+                    html_url: 'https://github.com/kodus/kodus-extension',
+                },
                 issue: {
                     id: 456,
                     body: 'PR description body',
@@ -356,10 +361,15 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
+        // Resolved on the server that sent the comment (per server on GitHub
+        // Enterprise Server).
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.GITHUB,
             'repo-1',
-            undefined,
+            {
+                host: 'github.com',
+                repositoryFullName: 'kodus/kodus-extension',
+            },
         );
         expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({

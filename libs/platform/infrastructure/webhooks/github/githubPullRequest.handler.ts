@@ -13,7 +13,10 @@ import {
     parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    getMappedPlatform,
+    githubWebhookSource,
+} from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
@@ -186,6 +189,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.GITHUB,
             repository.id,
+            githubWebhookSource(payload),
         );
         if (!context?.organizationAndTeamData) {
             return;
@@ -285,6 +289,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.GITHUB,
             String(payload?.repository?.id),
+            githubWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -653,6 +658,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     const context = await this.webhookContextService.getContext(
                         PlatformType.GITHUB,
                         String(repository.id),
+                        githubWebhookSource(payload),
                     );
 
                     if (!context?.organizationAndTeamData) {

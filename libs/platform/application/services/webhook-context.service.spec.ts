@@ -316,6 +316,45 @@ describe('WebhookContextService', () => {
         });
     });
 
+    describe('GitHub Enterprise Server', () => {
+        // Two Enterprise Servers each have a repository 9.
+        const listedAt = (org: string, htmlUrl: string) => ({
+            ...buildConfig(org, `team-${org}`),
+            configValue: [{ id: '9', name: 'acme/api', http_url: htmlUrl }],
+        });
+
+        it('routes the event to the config on the server that sent it', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedAt('org-a', 'https://ghe-a.example/acme/api'),
+                    listedAt('org-b', 'https://ghe-b.example/acme/api'),
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITHUB, '9', {
+                host: 'ghe-b.example',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-b',
+            );
+        });
+
+        it('ignores the event when only another server has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [listedAt('org-a', 'https://ghe-a.example/acme/api')],
+            );
+
+            const result = await service.getContext(PlatformType.GITHUB, '9', {
+                host: 'ghe-b.example',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result).toBeNull();
+        });
+    });
+
     describe('Forgejo', () => {
         // Forgejo numbers repositories per instance: repository 26 is
         // alpha/app on git.alpha.example and beta/api on

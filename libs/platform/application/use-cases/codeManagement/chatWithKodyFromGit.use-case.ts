@@ -1,6 +1,7 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
 import {
     forgejoWebhookSource,
+    githubWebhookSource,
     gitlabWebhookSource,
     type WebhookSource,
 } from '@libs/common/utils/webhooks/webhook-source-host';
@@ -291,14 +292,17 @@ export class ChatWithKodyFromGitUseCase {
             claim = delivery.claim;
 
             const repository = this.getRepository(params);
-            // GitLab and Forgejo repository ids are per instance: resolve
-            // the team on the instance that sent the comment.
+            // GitLab, Forgejo and GitHub Enterprise Server repository ids are
+            // per instance: resolve the team on the instance that sent the
+            // comment.
             const source =
                 params.platformType === PlatformType.FORGEJO
                     ? forgejoWebhookSource(params.payload)
                     : params.platformType === PlatformType.GITLAB
                       ? gitlabWebhookSource(params.payload)
-                      : undefined;
+                      : params.platformType === PlatformType.GITHUB
+                        ? githubWebhookSource(params.payload)
+                        : undefined;
             const integrationConfig = await this.getIntegrationConfig(
                 params.platformType,
                 repository,

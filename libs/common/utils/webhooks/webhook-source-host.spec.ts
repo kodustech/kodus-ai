@@ -3,6 +3,7 @@ import {
     forgejoConfigsForWebhook,
     forgejoWebhookHost,
     forgejoWebhookSource,
+    githubWebhookSource,
     gitlabWebhookSource,
     instanceConfigsForWebhook,
     webhookConfigsOfInstance,
@@ -296,18 +297,86 @@ describe('webhookConfigsOfInstance', () => {
     };
     const source = { host: 'gitlab-b.example', repositoryId: 9 };
 
-    it('filters GitLab and Forgejo configs by the sending instance', () => {
+    it('filters GitLab, Forgejo and GitHub configs by the sending instance', () => {
         expect(
             webhookConfigsOfInstance(PlatformType.GITLAB, [elsewhere], source),
         ).toEqual([]);
         expect(
             webhookConfigsOfInstance(PlatformType.FORGEJO, [elsewhere], source),
         ).toEqual([]);
+        expect(
+            webhookConfigsOfInstance(PlatformType.GITHUB, [elsewhere], source),
+        ).toEqual([]);
     });
 
     it('leaves the configs of platforms with one id per repository as they are', () => {
         expect(
-            webhookConfigsOfInstance(PlatformType.GITHUB, [elsewhere], source),
+            webhookConfigsOfInstance(
+                PlatformType.AZURE_REPOS,
+                [elsewhere],
+                source,
+            ),
         ).toEqual([elsewhere]);
+    });
+
+    describe('on GitHub', () => {
+        // GitHub Enterprise Server numbers repositories per server.
+        const listedAt = (org: string, htmlUrl: string) => ({
+            team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+            configValue: [{ id: '9', name: 'acme/api', http_url: htmlUrl }],
+        });
+        const onA = listedAt('a', 'https://ghe-a.example/acme/api');
+        const onB = listedAt('b', 'https://ghe-b.example/acme/api');
+        const dotCom = listedAt('c', 'https://github.com/acme/api');
+
+        it('keeps the config on the Enterprise Server that sent the event', () => {
+            expect(
+                webhookConfigsOfInstance(PlatformType.GITHUB, [onA, onB], {
+                    host: 'ghe-b.example',
+                    repositoryId: 9,
+                    repositoryFullName: 'acme/api',
+                }),
+            ).toEqual([onB]);
+        });
+
+        it('keeps the github.com configs for a github.com event', () => {
+            expect(
+                webhookConfigsOfInstance(PlatformType.GITHUB, [dotCom, onA], {
+                    host: 'github.com',
+                    repositoryId: 9,
+                }),
+            ).toEqual([dotCom]);
+        });
+
+        it('keeps every config when the event names no server', () => {
+            expect(
+                webhookConfigsOfInstance(PlatformType.GITHUB, [dotCom, onA], {
+                    repositoryId: 9,
+                }),
+            ).toEqual([dotCom, onA]);
+        });
+    });
+});
+
+describe('githubWebhookSource', () => {
+    it('reads the server from the web URL, not the API URL', () => {
+        expect(
+            githubWebhookSource({
+                repository: {
+                    id: 9,
+                    full_name: 'acme/api',
+                    url: 'https://api.github.com/repos/acme/api',
+                    html_url: 'https://GitHub.com/acme/api',
+                },
+            }),
+        ).toEqual({ host: 'github.com', repositoryFullName: 'acme/api' });
+        expect(
+            githubWebhookSource({
+                repository: {
+                    url: 'https://ghe-b.example/api/v3/repos/acme/api',
+                    html_url: 'https://ghe-b.example/acme/api',
+                },
+            }).host,
+        ).toBe('ghe-b.example');
     });
 });

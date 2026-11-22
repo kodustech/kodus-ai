@@ -94,6 +94,22 @@ export function gitlabWebhookSource(payload: any): WebhookSource {
 }
 
 /**
+ * Host of the GitHub server that sent a webhook, and the repository's
+ * `owner/repo`. GitHub Enterprise Server numbers repositories per server, so
+ * `repository.id` alone matches the repositories of every connected server.
+ * `repository.url` is the API address (api.github.com on github.com), so the
+ * host comes from the web and clone URLs only.
+ */
+export function githubWebhookSource(payload: any): WebhookSource {
+    return {
+        host: normalizeHost(
+            payload?.repository?.html_url || payload?.repository?.clone_url,
+        ),
+        repositoryFullName: payload?.repository?.full_name,
+    };
+}
+
+/**
  * Platforms whose repository ids are numbered per instance, so the same id
  * names unrelated repositories on two servers. Their webhooks are resolved
  * on the instance that sent them; elsewhere an id names one repository.
@@ -101,21 +117,28 @@ export function gitlabWebhookSource(payload: any): WebhookSource {
 const PER_INSTANCE_REPOSITORY_IDS = new Set<PlatformType | string>([
     PlatformType.GITLAB,
     PlatformType.FORGEJO,
+    PlatformType.GITHUB,
 ]);
 
 /**
- * The configs that may take a webhook: on GitLab and Forgejo, only those on
- * the instance that sent it (`instanceConfigsForWebhook`); on the other
- * platforms, every config of the repository id.
+ * The configs that may take a webhook: on GitLab, Forgejo and GitHub, only
+ * those on the instance that sent it (`instanceConfigsForWebhook`); on the
+ * other platforms, every config of the repository id.
  */
 export function webhookConfigsOfInstance<T>(
     platformType: PlatformType | string,
     configs: T[] | null | undefined,
     source: WebhookSource & { repositoryId?: string | number },
 ): T[] {
-    return PER_INSTANCE_REPOSITORY_IDS.has(platformType)
-        ? instanceConfigsForWebhook(configs, source)
-        : (configs ?? []);
+    if (!PER_INSTANCE_REPOSITORY_IDS.has(platformType)) {
+        return configs ?? [];
+    }
+    // github.com ids are global: a GitHub payload that names no server keeps
+    // every config rather than dropping the webhook.
+    if (platformType === PlatformType.GITHUB && !normalizeHost(source?.host)) {
+        return configs ?? [];
+    }
+    return instanceConfigsForWebhook(configs, source);
 }
 
 /**

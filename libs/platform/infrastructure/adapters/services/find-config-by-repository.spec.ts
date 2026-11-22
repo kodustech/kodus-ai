@@ -3,6 +3,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { AzureReposService } from './azureRepos/azureRepos.service';
 import { BitbucketService } from './bitbucket.service';
+import { GithubService } from './github/github.service';
 import { GitlabService } from './gitlab.service';
 
 /** A service with only the collaborators the lookup touches. */
@@ -99,6 +100,69 @@ describe('GitlabService — findTeamAndOrganizationIdByConfigKey resolves the pr
                 repositoryFullName: 'globex/billing-api',
             }),
         ).resolves.toBeNull();
+    });
+});
+
+describe('GithubService — findTeamAndOrganizationIdByConfigKey', () => {
+    // Two GitHub Enterprise Servers each have a repository 9.
+    const listedAt = (org: string, htmlUrl: string) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        configValue: [{ id: '9', name: 'acme/api', http_url: htmlUrl }],
+    });
+    const onA = listedAt('a', 'https://ghe-a.example/acme/api');
+    const onB = listedAt('b', 'https://ghe-b.example/acme/api');
+
+    const make = (configs: unknown[]) => {
+        const findIntegrationConfigWithTeams = jest
+            .fn()
+            .mockResolvedValue(configs);
+        // The id-only lookup: the first config listing the id.
+        const findOne = jest.fn().mockResolvedValue(configs[0] ?? null);
+        const service = serviceOf<GithubService>(GithubService.prototype, {
+            findIntegrationConfigWithTeams,
+            findOne,
+        });
+        return { service, findOne };
+    };
+
+    it('returns the config on the sending server', async () => {
+        const { service, findOne } = make([onA, onB]);
+
+        await expect(
+            service.findTeamAndOrganizationIdByConfigKey({
+                repository: { id: 9 },
+                host: 'ghe-b.example',
+                repositoryFullName: 'acme/api',
+            }),
+        ).resolves.toBe(onB);
+        expect(findOne).not.toHaveBeenCalled();
+    });
+
+    it('returns nothing when only another server has the repository id', async () => {
+        const { service } = make([onA]);
+
+        await expect(
+            service.findTeamAndOrganizationIdByConfigKey({
+                repository: { id: 9 },
+                host: 'ghe-b.example',
+                repositoryFullName: 'acme/api',
+            }),
+        ).resolves.toBeNull();
+    });
+
+    it('keeps the id lookup when the caller names no server', async () => {
+        const { service, findOne } = make([onA]);
+
+        await expect(
+            service.findTeamAndOrganizationIdByConfigKey({
+                repository: { id: 9 },
+            }),
+        ).resolves.toBe(onA);
+        expect(findOne).toHaveBeenCalledWith({
+            configKey: IntegrationConfigKey.REPOSITORIES,
+            configValue: [{ id: '9' }],
+            integration: { status: true, platform: PlatformType.GITHUB },
+        });
     });
 });
 
