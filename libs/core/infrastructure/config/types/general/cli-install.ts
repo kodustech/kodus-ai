@@ -89,7 +89,10 @@ export function checkCliInstallCommand(
 
     const argv = command.split(/\s+/);
     const [installer, sub] = argv;
-    const subcommands = INSTALLERS[installer];
+    // Own keys only: `constructor` or `__proto__` must be refused, not crash.
+    const subcommands = Object.hasOwn(INSTALLERS, installer)
+        ? INSTALLERS[installer]
+        : undefined;
     if (!subcommands) {
         return {
             ok: false,

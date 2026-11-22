@@ -21,6 +21,7 @@ The single source of the hub↔cell protocol (docs §1b, ADR-051) and of the rec
 - Every object is strict, so TS and Go read a frame the same way. Patterns compile in RE2 (no lookaround). A `.refine` does not reach the JSON Schema: mirror it in the Go codec with the same code, and cover it with a fixture.
 - A constant the cell needs comes from `scripts/go-constants.ts`, never a literal copied into Go.
 - `egress-lists.json` is byte-identical to `apps/runtime-cell/internal/netguard/egress-lists.json`, and `recipe-control-env.json` to `apps/runtime-cell/internal/recipe/recipe-control-env.json`; change both copies in one PR.
+- `cli-install-commands.json` is byte-identical to `apps/runtime-cell/internal/drivers/dockergvisor/toollayer/cli-install-commands.json`; both validators (`checkCliInstallCommand`, the cell's `CheckInstall`) answer it the same way.
 - Every YAML load of repository or model text uses `UNTRUSTED_YAML`.
 - The `hello` envelope and body, and the `nack` body, are how two protocol versions meet: never change them in a way an older peer's strict decoder refuses. Raising `PROTOCOL_VERSION` keeps `MIN_CELL_PROTOCOL_VERSION` at the old version only while the hub still sends that version's bodies to a session that chose it.
 
