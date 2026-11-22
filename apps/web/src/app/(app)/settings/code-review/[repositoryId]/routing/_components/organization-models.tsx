@@ -6,6 +6,7 @@ import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { Spinner } from "@components/ui/spinner";
 import { ChevronsUpDownIcon } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ProviderAvatar } from "src/features/ee/byok/_components/provider-avatar";
 import {
     ModelCombobox,
@@ -13,8 +14,6 @@ import {
     TaskOverrideGrid,
 } from "src/features/ee/byok/_components/routing/task-override-grid";
 import type { LlmTask } from "src/features/ee/byok/_types";
-
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 
 import type { OrganizationRoutingController } from "./use-organization-routing";
 
@@ -121,7 +120,15 @@ export function OrganizationModels({
                                                             defaultModel?.provider
                                                         }
                                                     />
-                                                    <span className="truncate">
+                                                    <span
+                                                        dir="rtl"
+                                                        title={
+                                                            defaultModel?.label
+                                                        }
+                                                        style={{
+                                                            textAlign: "left",
+                                                        }}
+                                                        className="truncate">
                                                         {defaultModel?.label ??
                                                             "Select a connected model"}
                                                     </span>
@@ -181,7 +188,15 @@ export function OrganizationModels({
                                                             fallbackModel?.provider
                                                         }
                                                     />
-                                                    <span className="truncate">
+                                                    <span
+                                                        dir="rtl"
+                                                        title={
+                                                            fallbackModel?.label
+                                                        }
+                                                        style={{
+                                                            textAlign: "left",
+                                                        }}
+                                                        className="truncate">
                                                         {fallbackModel?.label ??
                                                             (routing.fallbackModelId
                                                                 ? "Unavailable model"
