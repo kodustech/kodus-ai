@@ -1,3 +1,4 @@
+import { shouldIncludeReviewComment } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
@@ -18,26 +19,32 @@ describe('SuggestionService - resolveImplementedSuggestionsOnPlatform', () => {
         platformType: PlatformType.GITLAB,
     };
 
+    const hostComments = [
+        {
+            id: 1001,
+            threadId: 'disc-kody',
+            body: '## Code Review Completed! 🔥',
+            isResolved: false,
+        },
+    ];
+
     const makeService = () => {
         const service = Object.create(
             SuggestionService.prototype,
         ) as SuggestionService;
         const codeManagementService = {
-            // Mirrors the adapters: Kody's own comment only comes back when
-            // the caller asks for it, so a dropped flag shows up as "nothing
-            // to resolve" rather than as a comment handed over anyway.
+            // Mirrors the adapters through the same predicate they use, so
+            // the double cannot drift from the policy it imitates: a dropped
+            // flag reads as "nothing to resolve", not as a comment handed over
+            // anyway.
             getPullRequestReviewComments: jest.fn((request: any) =>
                 Promise.resolve(
-                    request?.includeKodyComments === true
-                        ? [
-                              {
-                                  id: 1001,
-                                  threadId: 'disc-kody',
-                                  body: '## Code Review Completed! 🔥',
-                                  isResolved: false,
-                              },
-                          ]
-                        : [],
+                    hostComments.filter((comment) =>
+                        shouldIncludeReviewComment(
+                            comment.body,
+                            request?.includeKodyComments,
+                        ),
+                    ),
                 ),
             ),
             markReviewCommentAsResolved: jest.fn().mockResolvedValue({}),
