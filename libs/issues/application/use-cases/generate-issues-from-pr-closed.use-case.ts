@@ -13,6 +13,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import {
     webhookConfigsOfInstance,
     getMappedPlatform,
+    githubWebhookSource,
     gitlabWebhookSource,
     type WebhookSource,
 } from '@libs/common/utils/webhooks';
@@ -237,11 +238,14 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
             pullRequest,
             repository,
             platformType,
-            // GitLab's mapped repository URL can be the SSH remote: the
-            // instance comes from the payload's project, as the handlers read it.
+            // The mapped repository URL can be GitLab's SSH remote or
+            // GitHub's API address: the instance comes from the payload, as
+            // the handlers read it.
             ...(platformType === PlatformType.GITLAB
                 ? { instanceSource: gitlabWebhookSource(sanitizedPayload) }
-                : {}),
+                : platformType === PlatformType.GITHUB
+                  ? { instanceSource: githubWebhookSource(sanitizedPayload) }
+                  : {}),
             resolved: params?.organizationAndTeamData,
         };
     }

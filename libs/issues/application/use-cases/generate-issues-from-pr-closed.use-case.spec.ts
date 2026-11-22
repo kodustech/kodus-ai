@@ -444,6 +444,48 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
             );
         });
 
+        it('resolves the GitHub server from the web URL, not the API address', async () => {
+            // A payload whose repository has no html_url: the mapped URL falls
+            // back to the API address, which is no server a config lists.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    {
+                        ...mockIntegrationConfig,
+                        configValue: [
+                            {
+                                id: '888',
+                                http_url: 'https://github.com/org/repo',
+                            },
+                        ],
+                    },
+                ],
+            );
+
+            await useCase.execute({
+                payload: {
+                    ...githubMergePayload,
+                    repository: {
+                        ...githubMergePayload.repository,
+                        html_url: undefined,
+                        url: 'https://api.github.com/repos/org/repo',
+                        clone_url: 'https://github.com/org/repo.git',
+                    },
+                },
+                platformType: PlatformType.GITHUB,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                }),
+            );
+        });
+
         it('should call processClosedPr with correct params when GitHub PR is closed/merged', async () => {
             await useCase.execute({
                 payload: githubMergePayload,

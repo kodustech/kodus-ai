@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import {
     getMappedPlatform,
+    githubWebhookSource,
     gitlabWebhookSource,
     webhookConfigsOfInstance,
 } from '@libs/common/utils/webhooks';
@@ -87,16 +88,22 @@ export class SavePullRequestUseCase {
                             repository.id,
                             platformType,
                         );
-                    // GitLab and Forgejo repository ids are per instance: keep
-                    // the integrations of the instance that sent the webhook. The
-                    // first config found used to take a project of another
-                    // GitLab server that reached the same id.
+                    // GitLab, Forgejo and GitHub Enterprise Server repository
+                    // ids are per instance: keep the integrations of the
+                    // instance that sent the webhook. The first config found
+                    // used to take a project of another server with that id.
+                    const instanceSource =
+                        platformType === PlatformType.GITLAB
+                            ? gitlabWebhookSource(sanitizedPayload)
+                            : platformType === PlatformType.GITHUB
+                              ? githubWebhookSource(sanitizedPayload)
+                              : undefined;
                     const configs = webhookConfigsOfInstance(
                         platformType,
                         foundConfigs,
-                        platformType === PlatformType.GITLAB
+                        instanceSource
                             ? {
-                                  ...gitlabWebhookSource(sanitizedPayload),
+                                  ...instanceSource,
                                   repositoryId: repository.id,
                               }
                             : {
