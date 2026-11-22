@@ -159,9 +159,16 @@ func TestAToolLayerIsBuiltCleanAndMountedReadOnly(t *testing.T) {
 	if r := run(st.Interpreter + " " + st.BinaryPath + " -i minor 1.2.3"); r.ExitCode != 0 || strings.TrimSpace(r.Stdout) != "1.3.0" {
 		t.Fatalf("the CLI: exit %d stdout %q stderr %q", r.ExitCode, r.Stdout, r.Stderr)
 	}
-	// Read-only: a write is EROFS, and the script has no exec bit (execve gives EACCES, as on the noexec workspace).
-	if r := run("touch " + prefix + "/x 2>&1"); r.ExitCode == 0 || !strings.Contains(r.Stdout+r.Stderr, "Read-only file system") {
-		t.Fatalf("a write to the layer: exit %d %q", r.ExitCode, r.Stdout+r.Stderr)
+	// Read-only: the mount is ro, so no write lands even where the 0555 mode bits answer first
+	// (a new file in a directory gets EACCES before EROFS); chmod reaches the mount and gets EROFS.
+	if r := run("grep -E ' " + prefix + " [^ ]+ ro[, ]' /proc/mounts"); r.ExitCode != 0 {
+		t.Fatalf("the layer is not mounted read-only: %q", r.Stdout+r.Stderr)
+	}
+	if r := run("touch " + prefix + "/x 2>&1"); r.ExitCode == 0 {
+		t.Fatalf("a write to the layer succeeded: %q", r.Stdout+r.Stderr)
+	}
+	if r := run("chmod u+w " + st.BinaryPath + " 2>&1"); r.ExitCode == 0 || !strings.Contains(r.Stdout+r.Stderr, "Read-only file system") {
+		t.Fatalf("chmod on the layer: exit %d %q", r.ExitCode, r.Stdout+r.Stderr)
 	}
 	if r := run("test ! -x " + st.BinaryPath + " && test -r " + st.BinaryPath); r.ExitCode != 0 {
 		t.Fatalf("the script has an exec bit or is unreadable: %+v", r)
