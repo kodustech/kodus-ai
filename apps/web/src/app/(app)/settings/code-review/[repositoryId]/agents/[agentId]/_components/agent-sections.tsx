@@ -25,10 +25,13 @@ import type {
     CustomAgentUnfollowedCitation,
     KnowledgeItem,
 } from "@services/custom-agents/types";
-import { getBYOK } from "@services/organizationParameters/fetch";
+import {
+    getBYOK,
+    type LLMConfigStatus,
+} from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "src/core/utils/components";
-import { modelLabeler } from "src/features/ee/byok/_data/model-label";
+import { routingModelLabels } from "src/features/ee/byok/_components/routing/routing-state";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { Choice, Field, Section } from "./field";
@@ -470,16 +473,29 @@ export const useByokModels = () => {
         retry: false,
     });
     const models = byok.data?.models ?? [];
-    const labelOf = modelLabeler(models.map((entry) => entry.model));
+    const credentials = byok.data?.credentials ?? [];
+    // Named as Routing names them: a pin and its alias by id, one id on two
+    // connections by connection.
+    const labels = routingModelLabels(
+        models.map((entry) => {
+            const credential = credentials.find(
+                (c) => c.id === entry.credentialId,
+            );
+            const baseURL = credential?.settings?.baseURL;
+            return {
+                modelId: entry.id,
+                model: entry.model,
+                providerId: credential?.provider,
+                baseUrl: typeof baseURL === "string" ? baseURL : undefined,
+            } as LLMConfigStatus["models"][number];
+        }),
+    );
     return {
         models,
         routing: byok.data?.routing,
         isLoading: byok.isLoading,
         /** A model's readable name, never its raw id. */
-        nameOf: (id?: string) => {
-            const model = models.find((entry) => entry.id === id)?.model;
-            return model ? labelOf(model) : undefined;
-        },
+        nameOf: (id?: string) => (id ? labels.get(id) : undefined),
     };
 };
 
@@ -519,7 +535,7 @@ export const ModelsFields = ({
             <SelectContent>
                 <SelectItem value={ROUTING_DEFAULT}>
                     Routing default
-                    {routed ? ` (${routed})` : ""}
+                    {routed ? ` · ${routed}` : ""}
                 </SelectItem>
                 {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>

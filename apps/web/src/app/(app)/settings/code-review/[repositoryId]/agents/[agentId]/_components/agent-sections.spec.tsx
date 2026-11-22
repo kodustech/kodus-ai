@@ -149,8 +149,50 @@ describe("CommentsAndModel", () => {
         await waitFor(() =>
             expect(
                 screen.getByRole("combobox", { name: "Model" }),
-            ).toHaveTextContent("Routing default (GLM 5.3 Flash)"),
+            ).toHaveTextContent("Routing default · GLM 5.3 Flash"),
         );
         expect(screen.queryByText(/accounts\/fireworks/)).toBeNull();
+    });
+
+    it("tells apart a pin, its alias, and one id on two connections", async () => {
+        (getBYOK as jest.Mock).mockResolvedValue({
+            credentials: [
+                { id: "c-openai", provider: "openai" },
+                { id: "c-openrouter", provider: "openrouter" },
+            ],
+            models: [
+                { id: "m-openai", credentialId: "c-openai", model: "gpt-5.4" },
+                {
+                    id: "m-openrouter",
+                    credentialId: "c-openrouter",
+                    model: "gpt-5.4",
+                },
+                {
+                    id: "m-pin",
+                    credentialId: "c-openai",
+                    model: "gpt-5.4-2026-03-05",
+                },
+            ],
+            routing: { defaultModelId: "m-pin" },
+        });
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <CommentsAndModel agent={agent} canEdit onChange={jest.fn()} />
+            </QueryClientProvider>,
+        );
+        const trigger = screen.getByRole("combobox", { name: "Model" });
+        await waitFor(() =>
+            expect(trigger).toHaveTextContent(
+                "Routing default · GPT 5.4 (gpt-5.4-2026-03-05)",
+            ),
+        );
+        // Radix Select scrolls the picked option into view; jsdom has no layout.
+        Element.prototype.scrollIntoView = jest.fn();
+        fireEvent.click(trigger);
+        const options = (await screen.findAllByRole("option")).map(
+            (o) => o.textContent,
+        );
+        expect(new Set(options).size).toBe(options.length);
+        expect(options).toContain("GPT 5.4 (gpt-5.4-2026-03-05)");
     });
 });
