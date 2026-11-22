@@ -257,6 +257,64 @@ describe('instanceConfigsForWebhook on GitLab', () => {
         expect(instanceConfigsForWebhook([samePathOnA], fromB)).toEqual([]);
     });
 
+    it('keeps a config listing the same path on another name of the same server', () => {
+        // A custom HTTP clone URL: the configs list devops.gitlab.acme.com,
+        // the events come from gitlab.acme.com.
+        const alias = listed(
+            'b',
+            'https://devops.gitlab.acme.com/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        expect(
+            instanceConfigsForWebhook([a, alias], {
+                ...fromB,
+                host: 'gitlab.acme.com',
+            }),
+        ).toEqual([alias]);
+    });
+
+    it('keeps only the same path on the same server, never a sibling host or another path', () => {
+        const fromAcme = { ...fromB, host: 'gitlab.acme.com' };
+        const alias = listed(
+            'b',
+            'https://devops.gitlab.acme.com/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const otherPath = listed(
+            'c',
+            'https://devops.gitlab.acme.com/acme/web-shop.git',
+            'acme/web-shop',
+        );
+        // A separate server on a sibling host of the same domain.
+        const sibling = listed(
+            'd',
+            'https://gitlab-eu.acme.com/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        expect(
+            instanceConfigsForWebhook([otherPath, sibling, alias], fromAcme),
+        ).toEqual([alias]);
+        expect(instanceConfigsForWebhook([sibling], fromAcme)).toEqual([]);
+    });
+
+    it('keeps the same server beside a config that lists the same path and no URL', () => {
+        const alias = listed(
+            'b',
+            'https://devops.gitlab.acme.com/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const internal = {
+            ...listed('b2', '', 'globex/billing-api', 'http://10.0.0.5:8080'),
+            configValue: [{ id: '9', name: 'globex/billing-api' }],
+        };
+        expect(
+            instanceConfigsForWebhook([alias, internal], {
+                ...fromB,
+                host: 'gitlab.acme.com',
+            }),
+        ).toEqual([alias, internal]);
+    });
+
     it('keeps by path a config that lists no URL, whatever the address Kodus reaches it at', () => {
         const internal = {
             ...listed('b', '', 'globex/billing-api', 'http://10.0.0.5:8080'),
