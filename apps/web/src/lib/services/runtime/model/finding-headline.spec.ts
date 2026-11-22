@@ -1,5 +1,5 @@
 import { hunkAround } from "./diff-hunk";
-import { findingHeadline, findingProof } from "./finding-headline";
+import { findingHeadline, findingProof, leafSentence } from "./finding-headline";
 import type { Finding } from "./findings";
 
 const side = (answer: string, status?: number): Finding["base"] => ({
@@ -118,5 +118,52 @@ describe("hunkAround", () => {
     it("is undefined when the patch lacks the line", () => {
         expect(hunkAround(patch, 99)).toBeUndefined();
         expect(hunkAround(undefined, 2)).toBeUndefined();
+    });
+});
+
+describe("a finding on an array field names its leaf", () => {
+    const leaf = {
+        path: "applinks.details[0].paths[0]",
+        kind: "changed" as const,
+        base: '"/share/*"',
+        pr: '"/shares/*"',
+    };
+    const same = { pr: { ...side("200", 200), side: "pr" as const }, base: side("200", 200) };
+    const f = finding({
+        ...same,
+        entryPoint: "GET /association",
+        route: "GET /association",
+        differingFields: ["json.applinks.details"],
+        leafChanges: {
+            undescribed: [leaf],
+            described: [{ path: "applinks.details[0].appIDs[0]", kind: "changed", base: '"A"', pr: '"B"' }],
+            mentions: ["applinks.details[0].appIDs"],
+            truncated: false,
+        },
+    });
+
+    it("the headline names the leaf in place of the field", () => {
+        expect(findingHeadline(f)).toBe(
+            "GET /association returns a different applinks.details[0].paths[0]",
+        );
+    });
+
+    it("the sentence says what changed and what the description only mentions", () => {
+        expect(leafSentence(f)).toBe(
+            'applinks.details[0].paths[0] changed from "/share/*" to "/shares/*". The description only mentions appIDs. (1 other change matches what the PR describes.)',
+        );
+    });
+
+    it("a finding without leaves keeps the old headline and has no sentence", () => {
+        const plain = { ...f, leafChanges: undefined };
+        expect(findingHeadline(plain)).toBe("GET /association returns a different json.applinks.details");
+        expect(leafSentence(plain)).toBeUndefined();
+    });
+
+    it("counts leaves past the third", () => {
+        const many = Array.from({ length: 5 }, (_, i) => ({ ...leaf, path: `a[${i}]` }));
+        const text = leafSentence({ leafChanges: { undescribed: many, described: [], mentions: [], truncated: false } });
+        expect(text).toContain("(+2 more below).");
+        expect(text).not.toContain("a[3]");
     });
 });

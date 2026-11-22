@@ -19,6 +19,7 @@ import { hunkAround, type HunkLine } from "@services/runtime/model/diff-hunk";
 import {
     findingHeadline,
     findingProof,
+    leafSentence,
 } from "@services/runtime/model/finding-headline";
 import type { Finding, FindingSide } from "@services/runtime/model/findings";
 import { hasLaneEvents } from "@services/runtime/model/replay-lanes";
@@ -404,6 +405,29 @@ export const FindingCard = ({
                                 </span>
                             ))}
                         </p>
+                    )}
+                    {leafSentence(finding) && (
+                        <div className="flex flex-col gap-2">
+                            <p className="text-text-secondary text-sm leading-6">
+                                {leafSentence(finding)}
+                            </p>
+                            <ul className="bg-card-lv2 flex flex-col gap-1 rounded-xl p-4 font-mono text-xs">
+                                {[
+                                    ...(finding.leafChanges?.undescribed ?? []).map((l) => ({ l, described: false })),
+                                    ...(finding.leafChanges?.described ?? []).map((l) => ({ l, described: true })),
+                                ].map(({ l, described }) => (
+                                    <li key={`${described}-${l.path}`} className="break-all">
+                                        <span className="text-text-primary">{l.path}</span>{" "}
+                                        <span className="text-text-secondary">
+                                            {l.base ?? "—"} → {l.pr ?? "—"}
+                                        </span>{" "}
+                                        <span className="text-text-tertiary font-sans">
+                                            {described ? "described" : "not described"}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     )}
                     {!finding.boot && (
                         <>

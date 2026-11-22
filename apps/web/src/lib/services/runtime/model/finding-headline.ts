@@ -56,6 +56,16 @@ export const findingHeadline = (f: Finding): string => {
         return pr >= 500
             ? `${route} now fails with ${pr} instead of ${base}`
             : `${route} now returns ${pr} instead of ${base}`;
+    const leaf = f.leafChanges?.undescribed[0];
+    if (leaf) {
+        const more = f.leafChanges!.undescribed.length - 1;
+        const tail = more > 0 ? ` (and ${more} more)` : "";
+        if (leaf.kind === "removed")
+            return `${route} no longer returns ${leaf.path}${tail}`;
+        if (leaf.kind === "added")
+            return `${route} now also returns ${leaf.path}${tail}`;
+        return `${route} returns a different ${leaf.path}${tail}`;
+    }
     const row = buildResponseDiff(f.responseDiff)?.rows[0];
     if (row) {
         const name = field(row.path);
@@ -67,6 +77,41 @@ export const findingHeadline = (f: Finding): string => {
     const [first] = f.differingFields.filter((x) => x !== "status");
     if (first) return `${route} returns a different ${field(first)}`;
     return `${route} behaves differently on this PR`;
+};
+
+/** The key a read path ends in, without its array indexes: `applinks.details[0].appIDs` is `appIDs`. */
+const lastKeyOf = (path: string) =>
+    path.replace(/\[\d+\]/g, "").split(".").pop() || path;
+
+const MAX_LEAVES_SENTENCE = 3;
+
+type Leaf = NonNullable<Finding["leafChanges"]>["undescribed"][number];
+
+const leafPhrase = (l: Leaf) =>
+    l.kind === "added"
+        ? `${l.path} was added as ${l.pr ?? ""}`
+        : l.kind === "removed"
+          ? `${l.path} was removed (it was ${l.base ?? ""})`
+          : l.kind === "reordered"
+            ? `${l.path} was reordered`
+            : `${l.path} changed from ${l.base ?? ""} to ${l.pr ?? ""}`;
+
+/**
+ * What the finding is about, leaf by leaf: the leaves the PR's description
+ * does not read and which paths it does read. Built from the recorded leaves
+ * only, the same sentence the PR comment carries.
+ */
+export const leafSentence = (f: Pick<Finding, "leafChanges">): string | undefined => {
+    const set = f.leafChanges;
+    if (!set?.undescribed.length) return undefined;
+    const shown = set.undescribed.slice(0, MAX_LEAVES_SENTENCE).map(leafPhrase).join("; ");
+    const more = set.undescribed.length - MAX_LEAVES_SENTENCE;
+    const names = [...new Set(set.mentions.map(lastKeyOf))].slice(0, 3);
+    const mentions = names.length ? ` The description only mentions ${names.join(", ")}.` : "";
+    const rest = set.described.length
+        ? ` (${set.described.length} other ${set.described.length === 1 ? "change matches" : "changes match"} what the PR describes.)`
+        : "";
+    return `${shown}${more > 0 ? ` (+${more} more below)` : ""}.${mentions}${rest}`;
 };
 
 const ERROR_FIELD = /(^|\.)(error|message|detail|reason)$/i;

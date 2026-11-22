@@ -83,6 +83,8 @@ export type Finding = {
     lanes?: ReplayLanes;
     /** The answer's fields that differ, with both values (absent on older Runs). */
     responseDiff?: ResponseDiff;
+    /** A finding on an object or array field, leaf by leaf: what differs inside it and which leaves the PR's description reads. */
+    leafChanges?: NonNullable<ProbeVerdict["leafChanges"]>;
     /** Where the diff changes the code this probe reaches. */
     diffRef?: DiffRef;
     /** What shows an intended finding is intended: the PR's diff spells it out, or a test that existed on main expects it. */
@@ -304,6 +306,12 @@ export const buildFindings = (
                 ),
                 ...optional("lanes", p.lanes),
                 ...optional("responseDiff", p.responseDiff),
+                ...optional(
+                    "leafChanges",
+                    p.leafChanges?.undescribed.length
+                        ? p.leafChanges
+                        : undefined,
+                ),
                 ...optional("diffRef", p.diffRef),
                 ...(p.intent === "intended"
                     ? {

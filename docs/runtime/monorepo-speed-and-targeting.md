@@ -557,6 +557,18 @@ for Runs in flight.
    not tested.
 9. The leaf diff is a pure function over the gate's stored field values, not a new flattening; no LLM; described
    against assertions by whole path segments.
+10. ADR-052 is amended: the Response tab's values still never reach the PR comment, except the few cleaned leaves a
+    finding on an object or array field names (path, main's value, the PR's value, at most 3, secret keys
+    `[redacted]`). Recorded where the rule lives, `libs/runtime/run/response-diff.ts` and `run-state.ts`.
+
+### Built (section 3)
+
+`gate/leaf-changes.ts`, `stated-intent.ts` (`leavesOfFinding`, `decideStatedIntent` returns `leaves`), the verdict's
+`leafChanges`, the report's `ReportPath.leafChanges`, the comment line and the Run page sentence. Differences from the
+text above: the report keeps the undescribed leaves (at most 5) and **counts** of the rest and of the described ones, not
+an array of described leaves; the diff-spelled string rule (`intended-change.ts`) is not applied per leaf yet, so a leaf
+only the diff explains stays undescribed (never weaker than today); the leaf diff reads the first healthy round of each
+side and leaves out a leaf the base's own rounds disagree on, in place of a per-leaf `maskedFields`.
 
 ## Open (needs the user)
 
@@ -573,8 +585,7 @@ for Runs in flight.
    measured. Accept as the first values, or give others.
 5. **Lockfile changes as global** (capped at 3 apps) is the conservative first version. Worth a per-package lockfile
    reading later?
-6. **ADR-052** says the Response tab's values never reach the PR comment. Section 3 puts the cleaned undescribed leaf in
-   the comment. Confirm that this amends it.
+6. ~~ADR-052 and the cleaned leaf in the comment~~ Decided, see Decided 10.
 7. **Where the customer sits in the modes:** if they are on `rules` with `runOnNewPushes`, section 1.4 D only adds the
    debounce for them; if `on_request`, they must opt into `prebuildOnPush`. Which are they?
 8. **Nuxt, Vite and Nx cache paths** were not read from a primary source; read them before the author's rule ships.
