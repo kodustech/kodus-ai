@@ -447,8 +447,21 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
         it('resolves the GitHub server from the web URL, not the API address', async () => {
             // A payload whose repository has no html_url: the mapped URL falls
             // back to the API address, which is no server a config lists.
+            // The most recent config is a GitHub Enterprise Server's repo 888.
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [
+                    {
+                        team: {
+                            uuid: 'other-team',
+                            organization: { uuid: 'other-org' },
+                        },
+                        configValue: [
+                            {
+                                id: '888',
+                                http_url: 'https://ghe-b.example/org/repo',
+                            },
+                        ],
+                    },
                     {
                         ...mockIntegrationConfig,
                         configValue: [
