@@ -166,6 +166,34 @@ describe('GithubService — findTeamAndOrganizationIdByConfigKey', () => {
     });
 });
 
+describe('BitbucketService — findTeamAndOrganizationIdByConfigKey on Data Center', () => {
+    const listed = (org: string, name: string, workspaceId: string) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        configValue: [{ id: '84', name, workspaceId }],
+    });
+    const onA = listed('a', 'billing', 'FIN');
+    const onB = listed('b', 'portal', 'WEB');
+
+    it('returns the config with the same project key and slug, never the first by id', async () => {
+        const findIntegrationConfigWithTeams = jest
+            .fn()
+            .mockResolvedValue([onA, onB]);
+        const findOne = jest.fn().mockResolvedValue(onA);
+        const service = serviceOf<BitbucketService>(
+            BitbucketService.prototype,
+            { findIntegrationConfigWithTeams, findOne },
+        );
+
+        await expect(
+            service.findTeamAndOrganizationIdByConfigKey({
+                repository: { id: 84 },
+                dataCenterRepository: { projectKey: 'WEB', slug: 'portal' },
+            }),
+        ).resolves.toBe(onB);
+        expect(findOne).not.toHaveBeenCalled();
+    });
+});
+
 describe.each([
     ['BitbucketService', BitbucketService.prototype, PlatformType.BITBUCKET],
     [

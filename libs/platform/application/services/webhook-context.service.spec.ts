@@ -355,6 +355,66 @@ describe('WebhookContextService', () => {
         });
     });
 
+    describe('Bitbucket Data Center', () => {
+        // Two Data Center servers each have a repository 84; the payload
+        // carries no URL.
+        const listed = (org: string, name: string, workspaceId: string) => ({
+            ...buildConfig(org, `team-${org}`),
+            configValue: [{ id: '84', name, workspaceId }],
+        });
+        const fromWeb = {
+            dataCenterRepository: { projectKey: 'WEB', slug: 'portal' },
+        };
+
+        it('routes the event to the config with the same project key and slug', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listed('org-a', 'billing', 'FIN'),
+                    listed('org-b', 'portal', 'WEB'),
+                ],
+            );
+
+            const result = await service.getContext(
+                PlatformType.BITBUCKET,
+                '84',
+                fromWeb,
+            );
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-b',
+            );
+        });
+
+        it('ignores the event when only another server has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [listed('org-a', 'billing', 'FIN')],
+            );
+
+            const result = await service.getContext(
+                PlatformType.BITBUCKET,
+                '84',
+                fromWeb,
+            );
+
+            expect(result).toBeNull();
+        });
+
+        it('leaves Bitbucket Cloud events as they were', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [listed('org-a', 'billing', 'FIN')],
+            );
+
+            const result = await service.getContext(
+                PlatformType.BITBUCKET,
+                '84',
+            );
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-a',
+            );
+        });
+    });
+
     describe('Forgejo', () => {
         // Forgejo numbers repositories per instance: repository 26 is
         // alpha/app on git.alpha.example and beta/api on

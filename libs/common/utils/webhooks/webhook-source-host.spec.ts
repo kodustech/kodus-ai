@@ -1,5 +1,7 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
+    bitbucketWebhookSource,
+    dataCenterConfigsForWebhook,
     forgejoConfigsForWebhook,
     forgejoWebhookHost,
     forgejoWebhookSource,
@@ -378,5 +380,68 @@ describe('githubWebhookSource', () => {
                 },
             }).host,
         ).toBe('ghe-b.example');
+    });
+});
+
+describe('Bitbucket Data Center', () => {
+    // Two Data Center servers each have a repository 84.
+    const listed = (org: string, entry: Record<string, unknown>) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        configValue: [{ id: '84', ...entry }],
+    });
+    const onA = listed('a', { name: 'billing', workspaceId: 'FIN' });
+    const onB = listed('b', { name: 'portal', workspaceId: 'WEB' });
+    const fromB = {
+        repositoryId: 84,
+        projectKey: 'WEB',
+        slug: 'portal',
+        name: 'Portal',
+    };
+
+    it('keeps the config listing the id under the same project key and slug', () => {
+        expect(dataCenterConfigsForWebhook([onA, onB], fromB)).toEqual([onB]);
+    });
+
+    it('never keeps another server whose repository has that id', () => {
+        expect(dataCenterConfigsForWebhook([onA], fromB)).toEqual([]);
+    });
+
+    it('never keeps the same slug under another project key', () => {
+        const sameSlug = listed('a', { name: 'portal', workspaceId: 'OPS' });
+        expect(dataCenterConfigsForWebhook([sameSlug], fromB)).toEqual([]);
+    });
+
+    it('matches an older config that stores the name and no project key', () => {
+        const older = listed('b', { name: 'Portal' });
+        expect(dataCenterConfigsForWebhook([onA, older], fromB)).toEqual([
+            older,
+        ]);
+    });
+
+    it('reads the project key and slug of a Data Center payload, nothing for Cloud', () => {
+        expect(
+            bitbucketWebhookSource({
+                isDataCenterEvent: true,
+                pullrequest: {
+                    toRef: {
+                        repository: {
+                            id: 84,
+                            slug: 'portal',
+                            name: 'Portal',
+                            project: { key: 'WEB' },
+                        },
+                    },
+                },
+            }),
+        ).toEqual({
+            dataCenterRepository: {
+                projectKey: 'WEB',
+                slug: 'portal',
+                name: 'Portal',
+            },
+        });
+        expect(
+            bitbucketWebhookSource({ isDataCenterEvent: false }),
+        ).toBeUndefined();
     });
 });

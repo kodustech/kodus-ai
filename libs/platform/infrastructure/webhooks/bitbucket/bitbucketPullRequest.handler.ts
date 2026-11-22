@@ -21,7 +21,10 @@ import {
     parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    bitbucketWebhookSource,
+    getMappedPlatform,
+} from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
@@ -172,6 +175,7 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.BITBUCKET,
             String(repository.id),
+            bitbucketWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -507,6 +511,7 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.BITBUCKET,
             String(repository.id),
+            bitbucketWebhookSource(payload),
         );
 
         try {
@@ -640,6 +645,7 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             platformType,
             repoId,
+            bitbucketWebhookSource(payload),
         );
 
         const organizationAndTeamData = context?.organizationAndTeamData;

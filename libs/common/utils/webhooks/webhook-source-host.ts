@@ -50,6 +50,17 @@ export function forgejoWebhookHost(payload: any): string | undefined {
 export type WebhookSource = {
     host?: string;
     repositoryFullName?: string;
+    /**
+     * Bitbucket Data Center only: its payloads carry no URL, so the
+     * repository is told apart by its project key and slug.
+     */
+    dataCenterRepository?: DataCenterRepository;
+};
+
+export type DataCenterRepository = {
+    projectKey?: string;
+    slug?: string;
+    name?: string;
 };
 
 /** Forgejo's name for `WebhookSource`. */
@@ -201,6 +212,58 @@ export function instanceConfigsForWebhook<T>(
 
 /** Forgejo's name for `instanceConfigsForWebhook`. */
 export const forgejoConfigsForWebhook = instanceConfigsForWebhook;
+
+/**
+ * The project key, slug and name of the Bitbucket Data Center repository a
+ * webhook comes from; nothing for Bitbucket Cloud, whose ids are global.
+ */
+export function bitbucketWebhookSource(
+    payload: any,
+): WebhookSource | undefined {
+    if (payload?.isDataCenterEvent !== true) {
+        return undefined;
+    }
+    const repository = payload?.pullrequest?.toRef?.repository;
+    return {
+        dataCenterRepository: {
+            projectKey: repository?.project?.key,
+            slug: repository?.slug,
+            name: repository?.name,
+        },
+    };
+}
+
+/**
+ * The configs that hold the Bitbucket Data Center repository a webhook comes
+ * from. Data Center numbers repositories per server and its payloads carry
+ * no URL, so a config takes the webhook only when it lists that id under
+ * the same slug (`name`; older configs keep the repository's name there)
+ * and, when it stores one, the same project key (`workspaceId`).
+ */
+export function dataCenterConfigsForWebhook<T>(
+    configs: T[] | null | undefined,
+    source: DataCenterRepository & { repositoryId?: string | number },
+): T[] {
+    const repositoryId = String(source?.repositoryId ?? '');
+    const names = [source?.slug, source?.name]
+        .map((value) => String(value ?? '').toLowerCase())
+        .filter(Boolean);
+    if (!repositoryId || !names.length) {
+        return [];
+    }
+    const projectKey = String(source?.projectKey ?? '').toLowerCase();
+
+    return (configs ?? []).filter((config) => {
+        const listed = listedRepositoryOf(config, repositoryId);
+        if (!names.includes(String(listed?.name ?? '').toLowerCase())) {
+            return false;
+        }
+        const listedKey = String(
+            listed?.workspaceId ?? listed?.organizationName ?? '',
+        ).toLowerCase();
+        return !listedKey || !projectKey || listedKey === projectKey;
+    });
+}
 
 /** The hosts a config is known to be on, for the repository `repositoryId`. */
 function configHostsOf(config: any, repositoryId: string): string[] {

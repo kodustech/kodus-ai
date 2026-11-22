@@ -1,6 +1,7 @@
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
+import { dataCenterConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -128,6 +129,24 @@ export class BitbucketService implements Omit<
         params: any,
     ): Promise<IntegrationConfigEntity | null> {
         try {
+            // Bitbucket Data Center numbers repositories per server: a
+            // config takes the event only with the same project key and slug.
+            if (params?.dataCenterRepository) {
+                const repositoryId = String(params?.repository?.id ?? '');
+                const configs =
+                    await this.integrationConfigService.findIntegrationConfigWithTeams(
+                        IntegrationConfigKey.REPOSITORIES,
+                        repositoryId,
+                        PlatformType.BITBUCKET,
+                    );
+                return (
+                    dataCenterConfigsForWebhook(configs, {
+                        ...params.dataCenterRepository,
+                        repositoryId,
+                    })[0] ?? null
+                );
+            }
+
             // Scoped to this platform's active integrations, as GitHub's
             // is: the id alone also matches repositories of other platforms.
             const integrationConfig =

@@ -17,6 +17,8 @@ import {
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import {
+    dataCenterConfigsForWebhook,
+    type DataCenterRepository,
     normalizeHost,
     storedHostOf,
     webhookConfigsOfInstance,
@@ -36,6 +38,11 @@ export type WebhookDisambiguator = {
      * address than the one in the payload.
      */
     repositoryFullName?: string;
+    /**
+     * Bitbucket Data Center's project key and slug: its payloads carry no
+     * URL, and it numbers repositories per server.
+     */
+    dataCenterRepository?: DataCenterRepository;
 };
 
 @Injectable()
@@ -82,7 +89,13 @@ export class WebhookContextService {
                       ...disambiguator,
                       repositoryId,
                   })
-                : this.disambiguateConfigs(configs, disambiguator);
+                : platformType === PlatformType.BITBUCKET &&
+                    disambiguator?.dataCenterRepository
+                  ? dataCenterConfigsForWebhook(configs, {
+                        ...disambiguator.dataCenterRepository,
+                        repositoryId,
+                    })
+                  : this.disambiguateConfigs(configs, disambiguator);
 
         if (!candidates.length) {
             // GitLab and Forgejo repository ids are per instance: no config
