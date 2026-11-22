@@ -83,7 +83,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 		if err := e.push.Push(ctx, policy.ClaimPolicy{
 			ClaimID: id, OrgID: org, Phase: policy.PhaseBuild,
 			Sources: append([]string{ref.PrivateAddress}, n.Sources...), Allow: buildHosts,
-			SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+			SteerTo: n.EgressAddress, ImagePins: buildImagePins, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("push policy: %v", err)
 		}
@@ -99,7 +99,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 
 	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
 		CellID: cell, HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage,
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage, MirrorRegistry: buildMirror,
 	})
 	if err != nil {
 		t.Fatal(err)

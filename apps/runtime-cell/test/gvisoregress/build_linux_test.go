@@ -21,9 +21,20 @@ import (
 // builderImage is rootless BuildKit v0.34.0 by digest.
 const builderImage = "moby/buildkit@sha256:65eca3c01cd1180c8f64565c4e3c5983af5145818b0e6fa863385d099eb73855"
 
-// What a build needs from the internet: the registry for its base image
-// and the package mirror its RUN steps use.
-var buildHosts = []string{"registry-1.docker.io", "auth.docker.io", "production.cloudfront.docker.com", allowed}
+// What a build needs from the internet: the package mirror its RUN steps
+// use. Base images are not on the list: as in production, BuildKit pulls
+// them through the cell's OCI mirror (buildMirror), which follows Docker
+// Hub's redirect to object storage on the platform's side; the netguard
+// denies every S3 endpoint to a claim on purpose.
+var buildHosts = []string{allowed}
+
+// buildMirror is the cell's registry mirror as a claim's builder names it
+// (the driver's -gvisor-mirror-registry); startEgress serves it on :8080.
+const buildMirror = policy.MirrorHost + ":8080"
+
+// buildImagePins are the Docker Hub images the tests' Dockerfiles name,
+// as the cell's checkout scan would pin them for the claim's policy.
+var buildImagePins = []string{"library/alpine:3.20", "library/node:22-alpine", "library/python:3.12-alpine"}
 
 // A project with a build section boots: the Dockerfile builds under gVisor
 // on the claim network, fetching through the cell, and its image runs. A
@@ -45,7 +56,7 @@ func TestABuildRunsInTheSandboxAndFetchesOnlyThroughTheCell(t *testing.T) {
 			ctx := context.Background()
 			d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
 				CellID: "cell-e2e", HolderImage: "alpine:3.20",
-				WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage,
+				WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage, MirrorRegistry: buildMirror,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -66,7 +77,7 @@ func TestABuildRunsInTheSandboxAndFetchesOnlyThroughTheCell(t *testing.T) {
 			pol := policy.ClaimPolicy{
 				ClaimID: "claim-build", OrgID: "org-e2e", Phase: policy.PhaseBuild,
 				Sources: append([]string{ref.PrivateAddress}, n.Sources...), Allow: append(append([]string{}, buildHosts...), "pastebin.com"),
-				SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+				SteerTo: n.EgressAddress, ImagePins: buildImagePins, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
 			}
 			if err := e.push.Push(ctx, pol); err != nil {
 				t.Fatalf("push policy: %v", err)

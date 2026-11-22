@@ -205,7 +205,7 @@ func startEgress(t *testing.T, dir, name string, extra ...string) egress {
 		"run", "-d", "--name", name, "-v", dir + ":/e:ro", "alpine:3.20", "/e/egress",
 		"-listen-tls", ":443", "-listen-http", ":80", "-dns-listen", ":53", "-control", ":9443",
 		"-cert", "/e/cert.pem", "-key", "/e/key.pem", "-ca", "/e/ca.pem", "-agent-pub", "/e/agent.pub.pem",
-		"-upstream-dns", "1.1.1.1:53", "-transparent=false",
+		"-upstream-dns", "1.1.1.1:53", "-transparent=false", "-mirror-listen", ":8080",
 	}, extra...)...)
 	return egress{name: name, push: control2(t, ca, agent, priv, ipOn(t, name, "bridge"))}
 }

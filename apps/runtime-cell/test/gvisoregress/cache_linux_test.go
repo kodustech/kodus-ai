@@ -43,11 +43,12 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 	write("Dockerfile", "FROM alpine:3.20\nRUN apk add --no-cache curl\nCOPY app.txt /app.txt\nCMD [\"sleep\", \"300\"]\n")
 	write("app.txt", "default branch\n")
 	compose := []byte("services:\n  api:\n    build: ./app\n")
-	registryOnly := []string{"registry-1.docker.io", "auth.docker.io", "production.cloudfront.docker.com"}
+	// Base images come through the cell's mirror, so these claims need no host.
+	registryOnly := []string{}
 
 	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
 		CellID: cell, HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage,
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage, MirrorRegistry: buildMirror,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +71,7 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 		if err := e.push.Push(ctx, policy.ClaimPolicy{
 			ClaimID: id, OrgID: org, Phase: policy.PhaseBuild,
 			Sources: append([]string{ref.PrivateAddress}, n.Sources...), Allow: allow,
-			SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+			SteerTo: n.EgressAddress, ImagePins: buildImagePins, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("push policy: %v", err)
 		}
