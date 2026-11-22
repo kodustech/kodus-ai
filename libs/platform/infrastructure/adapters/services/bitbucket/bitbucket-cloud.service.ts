@@ -16,7 +16,7 @@ import {
     recordRateLimited,
     runWithRateGate,
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
-import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { shouldIncludeReviewComment } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
 import {
@@ -5138,8 +5138,10 @@ export class BitbucketCloudService implements Omit<
                 .filter(
                     (comment) =>
                         comment?.deleted !== true &&
-                        (params.includeKodyComments === true ||
-                            !hasKodyMarker(comment?.content?.raw)),
+                        shouldIncludeReviewComment(
+                            comment?.content?.raw,
+                            params.includeKodyComments,
+                        ),
                 )
                 .map((comment) => {
                     const mappedComment: PullRequestReviewComment = {

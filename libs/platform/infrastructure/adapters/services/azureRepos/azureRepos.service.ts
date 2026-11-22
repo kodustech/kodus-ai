@@ -60,7 +60,7 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 import { createLogger } from '@libs/core/log/logger';
-import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { shouldIncludeReviewComment } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
@@ -2508,10 +2508,11 @@ export class AzureReposService implements Omit<
                         },
                     })),
                 )
-                .filter(
-                    (comment) =>
-                        params.includeKodyComments === true ||
-                        !hasKodyMarker(comment.body),
+                .filter((comment) =>
+                    shouldIncludeReviewComment(
+                        comment.body,
+                        params.includeKodyComments,
+                    ),
                 )
                 .sort(
                     (a, b) =>

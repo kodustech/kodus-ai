@@ -66,7 +66,7 @@ import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 
 import { createLogger } from '@libs/core/log/logger';
-import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { shouldIncludeReviewComment } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
@@ -5535,8 +5535,10 @@ export class GitlabService implements Omit<
                     const firstDiscussionComment = discussion.notes[0];
                     return (
                         firstDiscussionComment.resolvable &&
-                        (params.includeKodyComments === true ||
-                            !hasKodyMarker(firstDiscussionComment.body))
+                        shouldIncludeReviewComment(
+                            firstDiscussionComment.body,
+                            params.includeKodyComments,
+                        )
                     );
                 })
                 .map((discussion) => {

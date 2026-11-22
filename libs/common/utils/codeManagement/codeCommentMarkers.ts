@@ -401,3 +401,14 @@ export const parseCustomAgentCommand = (
     const slug = match[1].toLowerCase();
     return RESERVED_VALIDATION_TARGETS.has(slug) ? undefined : slug;
 };
+
+/**
+ * Whether a review comment should reach the caller. Adapters hide the
+ * comments Kody posted itself unless the caller explicitly asks for them:
+ * the approval guards already read a missing comment as open, while
+ * resolving an implemented suggestion needs to find Kody's own thread (#2443).
+ */
+export const shouldIncludeReviewComment = (
+    body: string | undefined | null,
+    includeKodyComments?: boolean,
+): boolean => includeKodyComments === true || !hasKodyMarker(body);

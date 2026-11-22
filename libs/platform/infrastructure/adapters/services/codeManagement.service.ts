@@ -1485,6 +1485,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: Partial<Repository>;
             prNumber: number;
+            includeKodyComments?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequestReviewComment[] | null> {

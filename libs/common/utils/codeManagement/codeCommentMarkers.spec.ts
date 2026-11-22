@@ -16,6 +16,7 @@ import {
     isHeavyReviewCommand,
     isKodyMentionNonReview,
     requestedReviewModeOf,
+    shouldIncludeReviewComment,
 } from './codeCommentMarkers';
 
 describe('isReviewCommand', () => {
@@ -531,5 +532,27 @@ describe('--ultra', () => {
             parseReviewDirective('@kody review --ultra --force the auth flow'),
         ).toBe('the auth flow');
         expect(isForceReviewCommand('@kody review --ultra --force')).toBe(true);
+    });
+});
+
+describe('shouldIncludeReviewComment', () => {
+    const kodyBody = '## Code Review Completed! 🔥\n\nFindings below.';
+
+    it('hides a comment Kody wrote unless the caller asks for it', () => {
+        expect(shouldIncludeReviewComment(kodyBody, false)).toBe(false);
+        expect(shouldIncludeReviewComment(kodyBody, undefined)).toBe(false);
+        expect(shouldIncludeReviewComment('@kody review', false)).toBe(false);
+    });
+
+    it('returns Kody’s own comment when the caller asks for it', () => {
+        expect(shouldIncludeReviewComment(kodyBody, true)).toBe(true);
+        expect(shouldIncludeReviewComment('@kody review', true)).toBe(true);
+    });
+
+    it('always returns a comment that carries no Kody marker', () => {
+        expect(shouldIncludeReviewComment('Could this be shared?', false)).toBe(
+            true,
+        );
+        expect(shouldIncludeReviewComment(undefined, false)).toBe(true);
     });
 });
