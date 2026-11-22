@@ -7,6 +7,7 @@ import {
     failureWords,
     fieldWords,
     mainRunOf,
+    firstRegressionOfFinding,
     otherEnvironmentsOf,
     otherEnvironmentWords,
     prRuntimeCell,
@@ -207,6 +208,32 @@ describe("the regression in plain words", () => {
         expect(sentence).toContain("empty");
         expect(sentence).toContain("2 on main");
         expect(sentence).not.toMatch(/GET|POST|\/|items\[0\]/);
+    });
+
+    it("leads with the status change, then the body difference", () => {
+        const sentence = regressionSentence(
+            {
+                ...quantity,
+                field: { path: "id", base: "3" },
+                differingFields: ["status", "body.id"],
+                status: { base: 201, pr: 400 },
+            },
+            "main",
+        );
+        expect(sentence).toBe(
+            "Orders page: 201 on main, 400 on this commit; Id is missing on this commit, 3 on main.",
+        );
+        expect(sentence.indexOf("201")).toBeLessThan(sentence.indexOf("Id"));
+    });
+
+    it("builds the status change from the finding's rounds, and only when the statuses differ", () => {
+        const rounds = (status: number) => ({ rounds: [{ status }] });
+        expect(
+            firstRegressionOfFinding({ base: rounds(201), pr: rounds(400) }),
+        ).toMatchObject({ status: { base: 201, pr: 400 } });
+        expect(
+            firstRegressionOfFinding({ base: rounds(200), pr: rounds(200) }),
+        ).not.toHaveProperty("status");
     });
 
     it("names the PR's base branch, and never guesses one when the Run recorded none", () => {

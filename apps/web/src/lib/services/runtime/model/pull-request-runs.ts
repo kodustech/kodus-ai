@@ -16,6 +16,8 @@ export type PrRunFirstRegression = {
     title?: string;
     field?: PrRunDifferingField;
     differingFields: string[];
+    /** The HTTP status of each side when they differ: the change a reader should see first. */
+    status?: { base: number; pr: number };
     /** This PR does not boot while main does. */
     boot: boolean;
     /** The machine itself failed on this PR. */
@@ -479,17 +481,25 @@ export const regressionSentence = (
     if (first.destabilizes)
         return `${title}: the machine failed on this commit, stayed up on ${baseLabel}.`;
     const field = first.field;
-    if (field) {
-        const name = fieldWords(field.path);
-        if (field.base !== undefined && field.pr === undefined)
-            return `${title}: ${name} is missing on this commit, ${valueWords(field.base)} on ${baseLabel}.`;
-        if (field.base === undefined && field.pr !== undefined)
-            return `${title}: ${name} is new on this commit (${valueWords(field.pr)}).`;
-        return `${title}: ${name} is ${valueWords(field.pr)} on this commit, ${valueWords(field.base)} on ${baseLabel}.`;
-    }
-    const fields = first.differingFields.filter((f) => f !== "status");
-    if (fields.length)
-        return `${title}: ${fieldWords(fields[0])} differs from ${baseLabel}${fields.length > 1 ? ` (and ${fields.length - 1} more)` : ""}.`;
+    const body = (() => {
+        if (field) {
+            const name = fieldWords(field.path);
+            if (field.base !== undefined && field.pr === undefined)
+                return `${name} is missing on this commit, ${valueWords(field.base)} on ${baseLabel}`;
+            if (field.base === undefined && field.pr !== undefined)
+                return `${name} is new on this commit (${valueWords(field.pr)})`;
+            return `${name} is ${valueWords(field.pr)} on this commit, ${valueWords(field.base)} on ${baseLabel}`;
+        }
+        const fields = first.differingFields.filter((f) => f !== "status");
+        if (fields.length)
+            return `${fieldWords(fields[0])} differs from ${baseLabel}${fields.length > 1 ? ` (and ${fields.length - 1} more)` : ""}`;
+        return undefined;
+    })();
+    // A status that changed leads: it is the difference a reader weighs first; the body comes after.
+    const status = first.status;
+    if (status && status.base !== status.pr)
+        return `${title}: ${status.base} on ${baseLabel}, ${status.pr} on this commit${body ? `; ${body}` : ""}.`;
+    if (body) return `${title}: ${body}.`;
     return `${title}: answers differently than on ${baseLabel}.`;
 };
 
@@ -503,9 +513,13 @@ export const firstRegressionOfFinding = (finding: {
     purpose?: string;
     responseDiff?: ResponseDiff;
     differingFields?: readonly string[];
+    base?: { rounds: readonly { status?: number }[] };
+    pr?: { rounds: readonly { status?: number }[] };
     boot?: boolean;
     destabilizes?: boolean;
 }): PrRunFirstRegression => {
+    const baseStatus = finding.base?.rounds.find((r) => r.status !== undefined)?.status;
+    const prStatus = finding.pr?.rounds.find((r) => r.status !== undefined)?.status;
     const title = finding.purpose?.trim();
     const field = finding.responseDiff?.fields.find(
         (f) => typeof f?.path === "string" && f.path !== "",
@@ -524,6 +538,7 @@ export const firstRegressionOfFinding = (finding: {
               }
             : {}),
         differingFields: [...(finding.differingFields ?? [])],
+        ...(baseStatus !== undefined && prStatus !== undefined && baseStatus !== prStatus ? { status: { base: baseStatus, pr: prStatus } } : {}),
         boot: !!finding.boot,
         destabilizes: !!finding.destabilizes,
     };

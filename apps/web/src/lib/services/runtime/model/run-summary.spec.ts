@@ -261,6 +261,8 @@ describe("runSummary", () => {
                     title: "health check reports the service status",
                     field: { path: "json.status", base: '"ok"', pr: '"degraded"' },
                     differingFields: ["json.status"],
+                    // The fixture rounds answered 201 on main and 500 on this PR: the status leads.
+                    status: { base: 201, pr: 500 },
                     boot: false,
                     destabilizes: false,
                 },
