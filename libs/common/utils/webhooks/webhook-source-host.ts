@@ -1,3 +1,5 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+
 /**
  * Lowercased hostname of a host or URL (`https://Git.Example.com/x` and
  * `git.example.com` both give `git.example.com`), or undefined when empty.
@@ -12,6 +14,10 @@ export function normalizeHost(
     if (!trimmed) {
         return undefined;
     }
+    const sshHost = sshRemoteHost(trimmed);
+    if (sshHost) {
+        return sshHost;
+    }
     try {
         const url = new URL(
             trimmed.includes('://') ? trimmed : `https://${trimmed}`,
@@ -20,6 +26,13 @@ export function normalizeHost(
     } catch {
         return trimmed.toLowerCase().replace(/\/.*$/, '');
     }
+}
+
+/** The host of an SSH remote such as `git@host:group/repo.git`. */
+function sshRemoteHost(value: string): string | undefined {
+    return /^[^@/\s]+@(\[[^\]\s]+\]|[^:/\s]+):/
+        .exec(value.trim())?.[1]
+        ?.toLowerCase();
 }
 
 /**
@@ -33,13 +46,27 @@ export function forgejoWebhookHost(payload: any): string | undefined {
     );
 }
 
-/** The instance and the `owner/repo` a Forgejo webhook comes from. */
-export type ForgejoWebhookSource = {
+/** The instance and the `owner/repo` a webhook comes from. */
+export type WebhookSource = {
     host?: string;
     repositoryFullName?: string;
+    /**
+     * Bitbucket Data Center only: its payloads carry no URL, so the
+     * repository is told apart by its project key and slug.
+     */
+    dataCenterRepository?: DataCenterRepository;
 };
 
-export function forgejoWebhookSource(payload: any): ForgejoWebhookSource {
+export type DataCenterRepository = {
+    projectKey?: string;
+    slug?: string;
+    name?: string;
+};
+
+/** Forgejo's name for `WebhookSource`. */
+export type ForgejoWebhookSource = WebhookSource;
+
+export function forgejoWebhookSource(payload: any): WebhookSource {
     return {
         host: forgejoWebhookHost(payload),
         repositoryFullName: payload?.repository?.full_name,
@@ -47,47 +74,219 @@ export function forgejoWebhookSource(payload: any): ForgejoWebhookSource {
 }
 
 /**
- * The configs that hold the repository a Forgejo webhook comes from. A
- * config on the sending host takes it; renaming or moving the repository
- * keeps the host. When none is on that host, a config that keeps the same
- * `owner/repo` under that id takes it: Kodus may reach the instance at
- * another address than the one Forgejo builds its URLs from (`ROOT_URL`),
- * such as a docker service name or an IP. None otherwise: a config of
- * another instance must never take the webhook.
+ * Host of the GitLab instance that sent a webhook, and the project's
+ * `group/project`. GitLab numbers projects per instance, so `project.id`
+ * alone matches the projects of every connected instance that reached the
+ * same number.
  */
-export function forgejoConfigsForWebhook<T>(
+export function gitlabWebhookSource(payload: any): WebhookSource {
+    const sources = [
+        payload?.project?.git_http_url,
+        payload?.project?.web_url,
+        payload?.project?.url,
+        payload?.repository?.url,
+        payload?.repository?.homepage,
+    ];
+    let host: string | undefined;
+    for (const source of sources) {
+        if (typeof source !== 'string' || !source) continue;
+        try {
+            host =
+                sshRemoteHost(source) ?? new URL(source).hostname.toLowerCase();
+            break;
+        } catch {
+            continue;
+        }
+    }
+    return {
+        host,
+        repositoryFullName: payload?.project?.path_with_namespace,
+    };
+}
+
+/**
+ * Host of the GitHub server that sent a webhook, and the repository's
+ * `owner/repo`. GitHub Enterprise Server numbers repositories per server, so
+ * `repository.id` alone matches the repositories of every connected server.
+ * `repository.url` is the API address (api.github.com on github.com), so the
+ * host comes from the web and clone URLs only.
+ */
+export function githubWebhookSource(payload: any): WebhookSource {
+    return {
+        host: normalizeHost(
+            payload?.repository?.html_url || payload?.repository?.clone_url,
+        ),
+        repositoryFullName: payload?.repository?.full_name,
+    };
+}
+
+/**
+ * Platforms whose repository ids are numbered per instance, so the same id
+ * names unrelated repositories on two servers. Their webhooks are resolved
+ * on the instance that sent them; elsewhere an id names one repository.
+ */
+const PER_INSTANCE_REPOSITORY_IDS = new Set<PlatformType | string>([
+    PlatformType.GITLAB,
+    PlatformType.FORGEJO,
+    PlatformType.GITHUB,
+]);
+
+/**
+ * The configs that may take a webhook: on GitLab, Forgejo and GitHub, only
+ * those on the instance that sent it (`instanceConfigsForWebhook`); on the
+ * other platforms, every config of the repository id.
+ */
+export function webhookConfigsOfInstance<T>(
+    platformType: PlatformType | string,
     configs: T[] | null | undefined,
-    source: ForgejoWebhookSource & { repositoryId?: string | number },
+    source: WebhookSource & { repositoryId?: string | number },
+): T[] {
+    if (!PER_INSTANCE_REPOSITORY_IDS.has(platformType)) {
+        return configs ?? [];
+    }
+    // github.com ids are global: a GitHub payload that names no server keeps
+    // every config rather than dropping the webhook.
+    if (platformType === PlatformType.GITHUB && !normalizeHost(source?.host)) {
+        return configs ?? [];
+    }
+    return instanceConfigsForWebhook(configs, source);
+}
+
+/**
+ * The configs that hold the repository a webhook comes from, on a platform
+ * that numbers repositories per instance. A config on the sending host takes
+ * it: the host of the repository it lists under that id, or of its
+ * integration. Renaming or moving the repository keeps the host. A config
+ * whose listed repository URL is on another host is on another instance,
+ * since the instance builds that URL, and never takes it, even when it is
+ * the only one with that id. Its integration host alone does not tell:
+ * Kodus may reach the instance at another address, such as a docker service
+ * name or an IP. Among the configs that list no repository URL, one that
+ * keeps the same `owner/repo` under that id takes it, and otherwise those
+ * that store no host at all, as before.
+ */
+export function instanceConfigsForWebhook<T>(
+    configs: T[] | null | undefined,
+    source: WebhookSource & { repositoryId?: string | number },
 ): T[] {
     const candidates = configs ?? [];
+    const repositoryId = String(source?.repositoryId ?? '');
 
     const host = normalizeHost(source?.host);
     const onHost = host
-        ? candidates.filter(
-              (config) => normalizeHost(storedHostOf(config)) === host,
+        ? candidates.filter((config) =>
+              configHostsOf(config, repositoryId).includes(host),
           )
         : [];
     if (onHost.length) {
         return onHost;
     }
 
+    const unlisted = candidates.filter(
+        (config) => !listedHostOf(config, repositoryId),
+    );
+
     const fullName = normalizeFullName(source?.repositoryFullName);
-    const repositoryId = String(source?.repositoryId ?? '');
-    if (!fullName || !repositoryId) {
-        return [];
+    const sameRepository =
+        fullName && repositoryId
+            ? unlisted.filter((config) => {
+                  const listed = listedRepositoryOf(config, repositoryId);
+                  return (
+                      !!listed &&
+                      normalizeFullName(
+                          listed?.fullName ?? listed?.full_name ?? listed?.name,
+                      ) === fullName
+                  );
+              })
+            : [];
+    if (sameRepository.length) {
+        return sameRepository;
     }
 
-    return candidates.filter((config: any) =>
-        (Array.isArray(config?.configValue) ? config.configValue : []).some(
-            (repository: any) =>
-                String(repository?.id) === repositoryId &&
-                normalizeFullName(repository?.fullName ?? repository?.name) ===
-                    fullName,
-        ),
+    // Data written before configs stored any host: nothing tells them
+    // apart, as before.
+    return unlisted.filter(
+        (config) => configHostsOf(config, repositoryId).length === 0,
     );
 }
 
-/** The instance host stored on a config's Forgejo integration. */
+/** Forgejo's name for `instanceConfigsForWebhook`. */
+export const forgejoConfigsForWebhook = instanceConfigsForWebhook;
+
+/**
+ * The project key, slug and name of the Bitbucket Data Center repository a
+ * webhook comes from; nothing for Bitbucket Cloud, whose ids are global.
+ */
+export function bitbucketWebhookSource(
+    payload: any,
+): WebhookSource | undefined {
+    if (payload?.isDataCenterEvent !== true) {
+        return undefined;
+    }
+    const repository = payload?.pullrequest?.toRef?.repository;
+    return {
+        dataCenterRepository: {
+            projectKey: repository?.project?.key,
+            slug: repository?.slug,
+            name: repository?.name,
+        },
+    };
+}
+
+/**
+ * The configs that hold the Bitbucket Data Center repository a webhook comes
+ * from. Data Center numbers repositories per server and its payloads carry
+ * no URL, so a config takes the webhook only when it lists that id under
+ * the same slug (`name`; older configs keep the repository's name there)
+ * and, when it stores one, the same project key (`workspaceId`).
+ */
+export function dataCenterConfigsForWebhook<T>(
+    configs: T[] | null | undefined,
+    source: DataCenterRepository & { repositoryId?: string | number },
+): T[] {
+    const repositoryId = String(source?.repositoryId ?? '');
+    const names = [source?.slug, source?.name]
+        .map((value) => String(value ?? '').toLowerCase())
+        .filter(Boolean);
+    if (!repositoryId || !names.length) {
+        return [];
+    }
+    const projectKey = String(source?.projectKey ?? '').toLowerCase();
+
+    return (configs ?? []).filter((config) => {
+        const listed = listedRepositoryOf(config, repositoryId);
+        if (!names.includes(String(listed?.name ?? '').toLowerCase())) {
+            return false;
+        }
+        const listedKey = String(
+            listed?.workspaceId ?? listed?.organizationName ?? '',
+        ).toLowerCase();
+        return !listedKey || !projectKey || listedKey === projectKey;
+    });
+}
+
+/** The hosts a config is known to be on, for the repository `repositoryId`. */
+function configHostsOf(config: any, repositoryId: string): string[] {
+    return [
+        listedHostOf(config, repositoryId),
+        normalizeHost(storedHostOf(config)),
+    ].filter((host): host is string => !!host);
+}
+
+/** The host of the repository URL a config lists under that id. */
+function listedHostOf(config: any, repositoryId: string): string | undefined {
+    const listed = listedRepositoryOf(config, repositoryId);
+    return normalizeHost(listed?.http_url ?? listed?.web_url ?? listed?.url);
+}
+
+function listedRepositoryOf(config: any, repositoryId: string): any {
+    if (!repositoryId) return undefined;
+    return (Array.isArray(config?.configValue) ? config.configValue : []).find(
+        (repository: any) => String(repository?.id) === repositoryId,
+    );
+}
+
+/** The instance host stored on a config's integration. */
 export function storedHostOf(config: any): string | undefined {
     return config?.integration?.authIntegration?.authDetails?.host;
 }

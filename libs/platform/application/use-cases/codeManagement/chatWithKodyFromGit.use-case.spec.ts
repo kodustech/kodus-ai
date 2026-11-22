@@ -243,6 +243,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     owner: 'beta',
                 },
                 host: 'git.beta.example',
+                repositoryFullName: 'beta/api',
             },
             PlatformType.FORGEJO,
         );
@@ -250,6 +251,67 @@ describe('ChatWithKodyFromGitUseCase', () => {
             PlatformType.FORGEJO,
             '26',
             { host: 'git.beta.example', repositoryFullName: 'beta/api' },
+        );
+    });
+
+    it('resolves a GitLab comment on the server that sent it', async () => {
+        // GitLab numbers projects per instance: project 9 of gitlab-b.example
+        // must not be answered as another server's project 9.
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue(null),
+        };
+        const gitlab = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await gitlab.execute({
+            event: 'Note Hook',
+            platformType: PlatformType.GITLAB,
+            payload: {
+                object_kind: 'note',
+                user: { id: 7, username: 'bob' },
+                project: {
+                    id: 9,
+                    name: 'billing-api',
+                    path_with_namespace: 'globex/billing-api',
+                    web_url: 'https://gitlab-b.example/globex/billing-api',
+                    git_http_url:
+                        'https://gitlab-b.example/globex/billing-api.git',
+                },
+                object_attributes: {
+                    id: 123,
+                    note: '@kody what does this do?',
+                    noteable_type: 'MergeRequest',
+                },
+                merge_request: { iid: 21, description: 'PR description' },
+            },
+        } as any);
+
+        expect(
+            codeManagementService.findTeamAndOrganizationIdByConfigKey,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                host: 'gitlab-b.example',
+                repositoryFullName: 'globex/billing-api',
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.GITLAB,
+            '9',
+            {
+                host: 'gitlab-b.example',
+                repositoryFullName: 'globex/billing-api',
+            },
         );
     });
 
@@ -281,7 +343,12 @@ describe('ChatWithKodyFromGitUseCase', () => {
             platformType: PlatformType.GITHUB,
             payload: {
                 action: 'created',
-                repository: { id: 'repo-1', name: 'kodus-extension' },
+                repository: {
+                    id: 'repo-1',
+                    name: 'kodus-extension',
+                    full_name: 'kodus/kodus-extension',
+                    html_url: 'https://github.com/kodus/kodus-extension',
+                },
                 issue: {
                     id: 456,
                     body: 'PR description body',
@@ -294,10 +361,15 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
+        // Resolved on the server that sent the comment (per server on GitHub
+        // Enterprise Server).
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.GITHUB,
             'repo-1',
-            undefined,
+            {
+                host: 'github.com',
+                repositoryFullName: 'kodus/kodus-extension',
+            },
         );
         expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
