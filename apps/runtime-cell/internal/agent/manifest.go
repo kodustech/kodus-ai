@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"time"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
@@ -142,7 +144,44 @@ func (a *Agent) bootPhases(c *claims.Claim) []protocol.BootPhase {
 		}
 		own = append(own, ph)
 	}
-	return protocolPhases(driver.MergePhases(driver.MaxPhases, booted, own), a.claimRedactor(c))
+	all := driver.MergePhases(-1, booted, own)
+	if rest := a.unmeasured(c, all); rest.Ms > 0 {
+		all = driver.MergePhases(-1, all, []driver.BootPhase{rest})
+	}
+	return protocolPhases(driver.MergePhases(driver.MaxPhases, all), a.claimRedactor(c))
+}
+
+// PhaseNotMeasured is the part of a claim's preparation that no phase
+// covers: its time, minus every phase's. It is a phase of its own so the Run
+// shows it; a regression (a step nobody timed, or one that got slow) is then
+// a number on the page, not a gap.
+const PhaseNotMeasured = "not measured"
+
+// minUnmeasured is the remainder below which nothing is said: a few
+// milliseconds between steps are not a step nobody timed.
+const minUnmeasured = time.Second
+
+// unmeasured is the claim's preparation time (from its acquire to its bound,
+// or to now while it runs) minus the sum of all its phases (one still running
+// counts until now, as it does in the phase). Phases that ran
+// side by side (BuildKit's steps) add up to more than the wall time, so this
+// is a lower bound on the time outside every phase; never negative.
+func (a *Agent) unmeasured(c *claims.Claim, phases []driver.BootPhase) driver.BootPhase {
+	if c.AcquiredAt.IsZero() {
+		return driver.BootPhase{}
+	}
+	end := c.BoundAt()
+	if end.IsZero() {
+		end = a.clock.Now()
+	}
+	rest := end.Sub(c.AcquiredAt)
+	for _, p := range phases {
+		rest -= time.Duration(p.Ms) * time.Millisecond
+	}
+	if rest < minUnmeasured {
+		return driver.BootPhase{}
+	}
+	return driver.BootPhase{Name: PhaseNotMeasured, Ms: rest.Milliseconds()}
 }
 
 // protocolPhases are phases as the protocol carries them, within its bounds.

@@ -93,3 +93,48 @@ func TestABootPhaseNeverCarriesAClaimSecret(t *testing.T) {
 		}
 	}
 }
+
+// The customer's PR side took 22 minutes of which the named phases added up to
+// under 4: the rest is a phase of its own, "not measured", so a part nobody
+// timed (or one that got slow) is a number on the Run. A boot whose phases
+// cover its time says nothing of the kind.
+func TestTheBootSaysHowMuchOfItsTimeNoPhaseCovers(t *testing.T) {
+	drv := bootPhaser{phases: []driver.BootPhase{{Name: "yarn install", Ms: 150_000}, {Name: "compose up", Ms: 78_000}}}
+	h := newHarness(t, func(c *Config) { c.Parts.BootTimes, c.Parts.BootPhases = drv, drv })
+	h.a.accepts = protocol.Accepted(&protocol.AckBody{Accepts: []string{protocol.FeatureBootPhases}})
+	c := claims.New("claim-1", protocol.ClaimAcquireBody{ImageID: "img-acq", Expose: []protocol.Expose{}}, h.a.log, h.clk.Now())
+	h.clk.Advance(22 * time.Minute)
+
+	phases := h.a.bootPhases(c)
+	if got := phases[0]; got.Name != PhaseNotMeasured || got.Ms != (22*time.Minute).Milliseconds()-228_000 {
+		t.Fatalf("phases %+v: want %q first with the 22 min minus the 228 s named", phases, PhaseNotMeasured)
+	}
+
+	// Covered: nothing is left over.
+	covered := bootPhaser{phases: []driver.BootPhase{{Name: "yarn install", Ms: 21 * 60_000}, {Name: "compose up", Ms: 60_000}}}
+	h = newHarness(t, func(c *Config) { c.Parts.BootTimes, c.Parts.BootPhases = covered, covered })
+	h.a.accepts = protocol.Accepted(&protocol.AckBody{Accepts: []string{protocol.FeatureBootPhases}})
+	c = claims.New("claim-1", protocol.ClaimAcquireBody{ImageID: "img-acq", Expose: []protocol.Expose{}}, h.a.log, h.clk.Now())
+	h.clk.Advance(22 * time.Minute)
+	for _, p := range h.a.bootPhases(c) {
+		if p.Name == PhaseNotMeasured {
+			t.Fatalf("a covered boot reports %+v", p)
+		}
+	}
+}
+
+// Phases that ran side by side add up to more than the boot took: the
+// remainder is never negative.
+func TestTheUnmeasuredRemainderIsNeverNegative(t *testing.T) {
+	drv := bootPhaser{phases: []driver.BootPhase{{Name: "a", Ms: 90_000}, {Name: "b", Ms: 90_000, Running: true}}}
+	h := newHarness(t, func(c *Config) { c.Parts.BootTimes, c.Parts.BootPhases = drv, drv })
+	c := claims.New("claim-1", protocol.ClaimAcquireBody{ImageID: "img-acq", Expose: []protocol.Expose{}}, h.a.log, h.clk.Now())
+	h.clk.Advance(2 * time.Minute)
+	if p := h.a.unmeasured(c, drv.phases); p.Name != "" {
+		t.Fatalf("overlapping phases left %+v", p)
+	}
+	h.clk.Advance(5 * time.Minute)
+	if p := h.a.unmeasured(c, drv.phases); p.Name != PhaseNotMeasured || p.Ms != 7*60_000-180_000 {
+		t.Fatalf("remainder %+v", p)
+	}
+}

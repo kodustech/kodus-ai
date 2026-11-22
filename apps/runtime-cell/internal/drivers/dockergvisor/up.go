@@ -46,15 +46,15 @@ func (d *Driver) upProject(ctx context.Context, req driver.UpRequest, sp *spareS
 	}
 	defer b.finish()
 	for _, step := range []func() error{
-		b.sandbox,  // the claim's network, limits and decoy: what compose is rewritten with
-		b.build,    // the project's images, and which data volumes it has
-		b.coverage, // a Run's built services that run Node, instrumented
-		b.render,   // the cell's compose file, checked against what compose will run
-		b.pull,     // the images the cell did not build, pulled by the cell, never by compose
-		b.data,     // the data the app starts on: a golden copy, the bake's, or fresh
-		b.announce, // a spare's addresses, for the claim's egress, before any starts
-		b.up,       // compose up, and what came up
-		b.record,   // timing, and what the machine now runs
+		b.timed(PhaseSandbox, b.sandbox),   // the claim's network, limits and decoy: what compose is rewritten with
+		b.build,                            // the project's images, and which data volumes it has (timed by its builds' phases)
+		b.timed(PhaseCoverage, b.coverage), // a Run's built services that run Node, instrumented
+		b.timed(PhaseRender, b.render),     // the cell's compose file, checked against what compose will run
+		b.timed(PhasePull, b.pull),         // the images the cell did not build, pulled by the cell, never by compose
+		b.data,                             // the data the app starts on: a golden copy, the bake's, or fresh
+		b.announce,                         // a spare's addresses, for the claim's egress, before any starts
+		b.up,                               // compose up, and what came up
+		b.record,                           // timing, and what the machine now runs
 	} {
 		if err := step(); err != nil {
 			// Where the time went until it stopped (a build the claim's
@@ -66,6 +66,26 @@ func (d *Driver) upProject(ctx context.Context, req driver.UpRequest, sp *spareS
 		}
 	}
 	return b.sources, nil
+}
+
+// Phase names of the boot's own steps (the builds' are in build.go).
+const (
+	PhaseSandbox  = "claim sandbox"
+	PhaseCoverage = "coverage setup"
+	PhaseRender   = "render compose"
+	PhasePull     = "pull images"
+)
+
+// timed is step, its time kept as a phase of the boot: every step between
+// the claim asking to boot and the app answering is named, so the time
+// outside every phase is what nobody measured.
+func (b *projectBoot) timed(name string, step func() error) func() error {
+	return func() error {
+		at := b.d.clock.Now()
+		err := step()
+		b.own = append(b.own, driver.BootPhase{Name: name, Ms: b.d.clock.Now().Sub(at).Milliseconds()})
+		return err
+	}
 }
 
 // phases is the boot in words: its builds' phases and, once compose ran,
@@ -87,7 +107,9 @@ func (b *projectBoot) phases(t *driver.BootTiming) []driver.BootPhase {
 		// compose up was running when the boot stopped.
 		own = []driver.BootPhase{{Name: "compose up", Ms: b.d.clock.Now().Sub(b.upAt).Milliseconds(), Running: true}}
 	}
-	return driver.MergePhases(driver.MaxPhases, b.steps.Phases, own)
+	// All of them, slowest first: the agent adds its own and bounds the list
+	// after it has measured what none of them cover (BootTiming.Phases).
+	return driver.MergePhases(-1, b.steps.Phases, b.own, own)
 }
 
 // keepPhases records the boot's phases for the claim it booted for.
@@ -128,6 +150,8 @@ type projectBoot struct {
 	opts            sandbox.Options
 
 	started time.Time
+	// own are the boot's own steps' phases (timed).
+	own     []driver.BootPhase
 	steps   driver.BuildSteps
 	buildMs int64
 	// keys are the project's data volumes; abs its directory.

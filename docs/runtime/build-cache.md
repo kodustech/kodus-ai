@@ -168,3 +168,27 @@ the pull time on calcom. Those are the first numbers to take with the flag on.
 - Cache mounts stay on the cell: a cold state still recompiles what a cache mount held.
 - The hub matches an eviction to the cell of the environment's last setup; with several cells, a Run placed on another
   cell builds from that cell's own state and is not flagged.
+
+## 5. Where a boot's time is named
+
+A boot's time is one list of phases (claim.ready `timing.phases`, claim.failed and claim.progress `phases`; the Run page lists
+one line each), and every part between the claim asking to boot and the app answering is in it. BuildKit's own steps
+(`buildprogress`) keep their names; the cell adds the parts BuildKit cannot see (`build.go`, `up.go`):
+
+| Phase | What it times |
+|---|---|
+| `build slot` | waiting for one of the cell's build slots (still running when the claim's ceiling cut it) |
+| `cache state` | taking the environment's BuildKit state view |
+| `cache pull` | pulling the exported cache from off the cell |
+| `builder start` | the builder's container and buildkitd, until BuildKit prints its first line |
+| `pull shared image` | taking another cell's baked image |
+| `start registry`, `pull image` / `docker load`, `stop registry` | the image's way into Docker |
+| `cache promote` | a seeding setup moving its export into the environment's cache |
+| `release cache`, `clean output` | giving back the cache input and removing the build's output after it |
+| `claim sandbox`, `coverage setup`, `render compose`, `pull images` | Up's own steps |
+| `compose up`, `first healthy` | as before |
+
+The agent then adds `not measured`: the claim's time from acquire to ready (or to now) minus every phase, when it is a
+second or more. BuildKit steps that ran side by side add up to more than the wall time, so it is a lower bound; it
+is never negative. A Run whose `not measured` grows has a step nobody times: name it here. The claim.* frames still carry
+at most 8 phases (slowest first), taken after the remainder is added, so it shows when it is among the slowest.

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
@@ -137,7 +138,9 @@ func (d *Driver) build(ctx context.Context, ref driver.MachineRef, builds []sand
 		fromShare := false
 		if !reused && fp != "" {
 			if digest := sharedDigest(shared, fp); digest != "" {
+				at := d.clock.Now()
 				fromShare = d.takeShared(ctx, ref, b.Service, fp, digest, tag, shared)
+				steps.Phases = driver.MergePhases(-1, steps.Phases, []driver.BootPhase{{Name: PhasePullShared, Ms: d.clock.Now().Sub(at).Milliseconds()}})
 				reused = fromShare
 			}
 		}
@@ -295,7 +298,11 @@ func askedSecrets(claim, asked map[string]string) map[string]string {
 // of its own to write). release gives back what it holds, after the build.
 // useState false leaves the environment's state out, for the build that runs
 // again after one failed on it.
-func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b sandbox.Build, run *dockercli.BuildRun, useState bool) (seeds bool, cacheInput string, release func(), err error) {
+func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b sandbox.Build, run *dockercli.BuildRun, useState bool, prep *[]buildprogress.Phase) (seeds bool, cacheInput string, release func(), err error) {
+	// note records how long a part of getting the cache ready took.
+	note := func(name string, since time.Time) {
+		*prep = append(*prep, buildprogress.Phase{Name: name, Ms: d.clock.Now().Sub(since).Milliseconds()})
+	}
 	m := d.peek(ref.MachineID)
 	setup := m.setup
 	seeds = m.seeds
@@ -309,7 +316,9 @@ func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b s
 	var st buildstate.State
 	held := false
 	if useState {
+		at := d.clock.Now()
 		st, held = d.states.Acquire(ctx, req)
+		note(PhaseCacheState, at)
 	}
 	org, env := ref.Tags[driver.TagOrg], ref.Tags[driver.TagEnv]
 	cacheDir := d.envCacheDir(org, env, b.Service)
@@ -329,7 +338,9 @@ func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b s
 				pulled := false
 				if gen == "" && d.remote != nil {
 					releaseCache()
+					at := d.clock.Now()
 					pulled = d.pullRemote(ctx, ref.MachineID, org, env, b.Service)
+					note(PhaseCachePull, at)
 					gen, releaseCache = d.caches.Acquire(cacheDir)
 				}
 				if gen != "" {
@@ -361,7 +372,9 @@ func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b s
 			// Neither the state nor an exported cache on this cell: the
 			// environment's cache off the cell, when its setup pushed one.
 			releaseCache()
+			at := d.clock.Now()
 			pulled = d.pullRemote(ctx, ref.MachineID, org, env, b.Service)
+			note(PhaseCachePull, at)
 			gen, releaseCache = d.caches.Acquire(cacheDir)
 		}
 		release = releaseCache
@@ -388,29 +401,67 @@ func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b s
 // tag. It reads the environment's build cache, and a setup machine's build
 // writes its own (returned), for a bake to make the environment's.
 func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.Build, tag, network, resolv string, subnet netip.Prefix, secrets map[string]string) (string, buildprogress.Summary, error) {
+	// late are the phases of what runs after the build's result is known (the
+	// registry's stop, the cache's release, the output's removal): they end in
+	// defers, so the inner call cannot return them.
+	var late []buildprogress.Phase
+	cache, ran, err := d.runBuildPhases(ctx, ref, b, tag, network, resolv, subnet, secrets, &late)
+	return cache, withPhases(ran, late...), err
+}
+
+// Phase names the cell's own parts of a build carry, next to BuildKit's
+// (buildprogress): the time between a claim asking for a build and the image
+// being in Docker that no BuildKit step names. Short and stable, the Run
+// page lists them as they are.
+const (
+	PhaseBuildSlot   = "build slot"
+	PhaseCacheState  = "cache state"
+	PhaseCachePull   = "cache pull"
+	PhaseBuilderBoot = "builder start"
+	PhaseCachePromo  = "cache promote"
+	PhaseStopReg     = "stop registry"
+	PhaseReleaseHold = "release cache"
+	PhaseCleanOut    = "clean output"
+	PhasePullShared  = "pull shared image"
+)
+
+func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sandbox.Build, tag, network, resolv string, subnet netip.Prefix, secrets map[string]string, late *[]buildprogress.Phase) (string, buildprogress.Summary, error) {
 	var none buildprogress.Summary
 	if d.cfg.BuilderImage == "" {
 		return "", none, ErrNoBuilder
 	}
+	// since adds a phase that ended now.
+	since := func(name string, at time.Time) buildprogress.Phase {
+		return buildprogress.Phase{Name: name, Ms: d.clock.Now().Sub(at).Milliseconds()}
+	}
+	var extra []buildprogress.Phase
 	waitAt := time.Now()
+	slotAt := d.clock.Now()
 	freeSlot, err := d.waitBuildSlot(ctx)
 	if err != nil {
-		return "", none, err
+		// The claim's ceiling stopped it waiting: this is where it was.
+		p := since(PhaseBuildSlot, slotAt)
+		p.Running = true
+		return "", withPhases(none, p), err
 	}
 	defer freeSlot()
+	extra = append(extra, since(PhaseBuildSlot, slotAt))
 	if waited := time.Since(waitAt); waited > time.Second {
 		d.log().Info("build.slot.waited", "machine", ref.MachineID, "service", b.Service, "waitedMs", waited.Milliseconds(), "slots", cap(d.buildSlots))
 	}
 	// The builder's alone (hostdirs.go): the cell loads the image it finds
 	// there, so nobody else may write it.
 	out := filepath.Join(d.workDir(), "builds", ref.MachineID, b.Service)
-	defer func() { _ = os.RemoveAll(out) }()
+	defer func() {
+		at := d.clock.Now()
+		_ = os.RemoveAll(out)
+		*late = append(*late, since(PhaseCleanOut, at))
+	}()
 	// The registry path (registry.go): the build pushes to a registry of its
 	// own, which this Docker pulls from by digest, instead of a tarball.
 	// A build that would not seed the environment's registry and finds it never
 	// seeded sends a tarball instead (registry.ErrUnseeded).
 	var reg *registry.Registry
-	var extra []buildprogress.Phase
 	transfer := TransferTarball
 	if d.registryMode() {
 		m := d.peek(ref.MachineID)
@@ -423,7 +474,11 @@ func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.
 		case err != nil:
 			return "", none, err
 		default:
-			defer reg.Stop(ctx)
+			defer func() {
+				at := d.clock.Now()
+				reg.Stop(ctx)
+				*late = append(*late, since(PhaseStopReg, at))
+			}()
 			transfer = TransferRegistry
 			extra = append(extra, buildprogress.Phase{Name: "start registry", Ms: time.Since(at).Milliseconds()})
 		}
@@ -434,7 +489,11 @@ func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.
 	}
 	// Held for the whole build, whichever it is.
 	release := a.release
-	defer func() { release() }()
+	defer func() {
+		at := d.clock.Now()
+		release()
+		*late = append(*late, since(PhaseReleaseHold, at))
+	}()
 	built := a.took
 	// The environment's state read through an overlay is a cache: it may make
 	// a build faster, never decide how it ends. A build that fails in a way the
@@ -461,6 +520,8 @@ func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.
 				return "", withPhases(first.ran, extra...), err
 			}
 			release = a.release
+			// What the failed try spent getting its cache ready is time too.
+			extra = append(extra, first.prep...)
 			stateFallback = true
 			built += a.took
 			// The try on the state was time spent too: it is a phase of its own.
@@ -547,7 +608,10 @@ func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.
 		// setup that fails after this (boot, health, its ceiling), or a state the
 		// disk floor evicts, leaves the next build warm. Nothing is left for a
 		// bake to promote.
-		if err := d.promoteCache(a.run.CacheTo, org, env, b.Service); err != nil {
+		promoteAt := d.clock.Now()
+		err := d.promoteCache(a.run.CacheTo, org, env, b.Service)
+		ran = withPhases(ran, since(PhaseCachePromo, promoteAt))
+		if err != nil {
 			d.log().Warn("build.cache.promote.failed", "machine", ref.MachineID, "service", b.Service, "err", err)
 			return a.run.CacheTo, ran, nil
 		}
@@ -591,6 +655,10 @@ type buildAttempt struct {
 	took       time.Duration
 	// started is when it began on the driver's clock (overlayRetry).
 	started time.Time
+	// prep are the cell's own phases of the attempt (the cache's state and
+	// pull, the builder's start): already in ran, kept apart for the try that
+	// ran again.
+	prep []buildprogress.Phase
 	// err is the builder's own failure; oom that it passed its memory limit;
 	// overDisk that the cell stopped it for writing past the image bound
 	// (watchBuildDisk), err then saying so.
@@ -621,7 +689,7 @@ func (d *Driver) buildOnce(ctx context.Context, ref driver.MachineRef, b sandbox
 		return nil, err
 	}
 	a := &buildAttempt{run: run, mem: mem}
-	if a.seeds, a.cacheInput, a.release, err = d.buildCacheInput(ctx, ref, b, &a.run, useState); err != nil {
+	if a.seeds, a.cacheInput, a.release, err = d.buildCacheInput(ctx, ref, b, &a.run, useState, &a.prep); err != nil {
 		return nil, err
 	}
 	// A cache input need not contain a matching layer or compiler cache.
@@ -638,13 +706,21 @@ func (d *Driver) buildOnce(ctx context.Context, ref driver.MachineRef, b sandbox
 	a.started = d.clock.Now()
 	a.steps = buildprogress.New()
 	bctx, unwatch := d.watchBuildDisk(ctx, out, reg, a.run.StateDir)
-	a.err = d.d.RunBuild(dockercli.WithOutput(bctx, alsoTo(dockercli.OutputFrom(ctx), a.steps.Line)), a.run)
+	// The builder's container and buildkitd start before BuildKit prints a
+	// line: the time to the first one is the builder's start.
+	var firstLine atomic.Int64
+	bootAt := d.clock.Now()
+	mark := func(string) { firstLine.CompareAndSwap(0, d.clock.Now().UnixNano()) }
+	a.err = d.d.RunBuild(dockercli.WithOutput(bctx, alsoTo(alsoTo(dockercli.OutputFrom(ctx), a.steps.Line), mark)), a.run)
 	if over := unwatch(); over != nil {
 		a.err, a.overDisk = over, true
 		d.log().Warn("build.disk.stopped", "machine", ref.MachineID, "service", b.Service, "err", over)
 	}
 	a.took = time.Since(at)
-	a.ran = a.steps.Summary(slowestSteps)
+	if n := firstLine.Load(); n != 0 {
+		a.prep = append(a.prep, buildprogress.Phase{Name: PhaseBuilderBoot, Ms: max(n-bootAt.UnixNano(), 0) / int64(time.Millisecond)})
+	}
+	a.ran = withPhases(a.steps.Summary(slowestSteps), a.prep...)
 	d.logBuildSteps(ref.MachineID, b.Service, a.ran, a.err)
 	a.daemon = d.logBuilderLog(ref.MachineID, b.Service, out, a.err)
 	a.oom = a.err != nil && !a.overDisk && ctx.Err() == nil && killedAtMemoryLimit(a.err)

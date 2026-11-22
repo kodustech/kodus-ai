@@ -123,7 +123,9 @@ type BootTiming struct {
 	// BuildSteps is where the boot's image builds spent their time; nil
 	// when nothing was built or the driver does not measure it.
 	BuildSteps *BuildSteps
-	// Phases is the whole boot in words, slowest first, at most MaxPhases:
+	// Phases is the whole boot in words, slowest first, all of them (the
+	// agent bounds the list to MaxPhases once it has added its own and what
+	// none measured):
 	// each build's base image pull, RUN, COPY and export parts, moving the
 	// image into Docker, compose up and the services' first healthy answer
 	// (MergePhases). Nil when the driver does not measure them.
