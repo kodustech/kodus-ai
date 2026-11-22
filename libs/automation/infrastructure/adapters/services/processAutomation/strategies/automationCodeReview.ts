@@ -925,6 +925,12 @@ export class AutomationCodeReviewService implements Omit<
             });
         }
 
+        if (result.licenseNoticePostedAt) {
+            Object.assign(baseData, {
+                licenseNoticePostedAt: result.licenseNoticePostedAt,
+            });
+        }
+
         if (result.orphanedBaseCommit) {
             Object.assign(baseData, {
                 orphanedBaseCommit: result.orphanedBaseCommit,
