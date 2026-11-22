@@ -30,6 +30,12 @@ describe('normalizeHost', () => {
         );
     });
 
+    it('reads the host of an SSH remote', () => {
+        expect(normalizeHost('git@GitLab-B.example:acme/api.git')).toBe(
+            'gitlab-b.example',
+        );
+    });
+
     it('is undefined for an empty value', () => {
         expect(normalizeHost(undefined)).toBeUndefined();
         expect(normalizeHost('  ')).toBeUndefined();
@@ -221,12 +227,33 @@ describe('instanceConfigsForWebhook on GitLab', () => {
         ]);
     });
 
-    it('refuses a config that stores no host when another candidate is on a known server', () => {
+    it('never keeps a config listed on another server, even with the same path', () => {
+        const samePathOnA = listed(
+            'a',
+            'https://gitlab-a.example/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        expect(instanceConfigsForWebhook([samePathOnA], fromB)).toEqual([]);
+    });
+
+    it('keeps by path a config that lists no URL, whatever the address Kodus reaches it at', () => {
+        const internal = {
+            ...listed('b', '', 'globex/billing-api', 'http://10.0.0.5:8080'),
+            configValue: [{ id: '9', name: 'globex/billing-api' }],
+        };
+        expect(instanceConfigsForWebhook([a, internal], fromB)).toEqual([
+            internal,
+        ]);
+    });
+
+    it('keeps a config that stores no host beside a candidate on another server', () => {
         const unknown = {
             ...listed('legacy', '', 'legacy/app'),
             configValue: [{ id: '9', name: 'legacy/app' }],
         };
-        expect(instanceConfigsForWebhook([unknown, a], fromB)).toEqual([]);
+        expect(instanceConfigsForWebhook([unknown, a], fromB)).toEqual([
+            unknown,
+        ]);
     });
 
     it('keeps the candidates when none stores any host (legacy data)', () => {

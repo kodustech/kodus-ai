@@ -40,7 +40,9 @@ describe('GitlabService — findTeamAndOrganizationIdByConfigKey resolves the pr
         const findIntegrationConfigWithTeams = jest
             .fn()
             .mockResolvedValue(configs);
-        const findOne = jest.fn();
+        // The id-only lookup the method used to run: it finds the first
+        // config listing the id, whatever its server.
+        const findOne = jest.fn().mockResolvedValue(configs[0] ?? null);
         const service = serviceOf<GitlabService>(GitlabService.prototype, {
             findIntegrationConfigWithTeams,
             findOne,
@@ -70,7 +72,25 @@ describe('GitlabService — findTeamAndOrganizationIdByConfigKey resolves the pr
     });
 
     it('returns nothing when only another server has the project id', async () => {
-        const { service } = make([a]);
+        const { service, findOne } = make([a]);
+
+        await expect(
+            service.findTeamAndOrganizationIdByConfigKey({
+                repository: { id: 9, name: 'billing-api' },
+                host: 'gitlab-b.example',
+                repositoryFullName: 'globex/billing-api',
+            }),
+        ).resolves.toBeNull();
+        expect(findOne).not.toHaveBeenCalled();
+    });
+
+    it('returns nothing when another server has the same path under the same id', async () => {
+        const sameOnA = listed(
+            'a',
+            'https://gitlab-a.example/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const { service } = make([sameOnA]);
 
         await expect(
             service.findTeamAndOrganizationIdByConfigKey({

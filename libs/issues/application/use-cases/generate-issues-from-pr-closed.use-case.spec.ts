@@ -242,25 +242,32 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                 undefined,
             ],
         ])('carries, for a payload with no URL, %s', async (_, urls, host) => {
-            // No URL to tell the server: the configs keep the same
-            // group/project under that id, so they still hold the repository.
+            // Bitbucket Data Center's payload names no URL to tell the server.
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 urls.map((http_url) => ({
                     ...mockIntegrationConfig,
-                    configValue: [{ id: '999', name: 'org/repo', http_url }],
+                    configValue: [{ id: '999', http_url }],
                 })),
             );
 
             await useCase.execute({
                 payload: {
-                    ...gitlabMergePayload,
-                    project: {
-                        ...gitlabMergePayload.project,
-                        web_url: '',
-                        url: '',
+                    isDataCenterEvent: true,
+                    pullrequest: {
+                        id: 42,
+                        title: 'Fix bug in auth',
+                        author: { user: { id: 101, name: 'dev-user' } },
+                        toRef: {
+                            displayId: 'main',
+                            repository: { id: 999, name: 'repo' },
+                        },
+                        fromRef: {
+                            displayId: 'fix/auth',
+                            repository: { id: 999, name: 'repo' },
+                        },
                     },
                 },
-                platformType: PlatformType.GITLAB,
+                platformType: PlatformType.BITBUCKET,
             });
 
             const [context] =
@@ -297,6 +304,47 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
             expect(
                 kodyIssuesManagementServiceMock.processClosedPr,
             ).not.toHaveBeenCalled();
+        });
+
+        it("resolves the project's server when its mapped URL is the SSH remote", async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    {
+                        ...mockIntegrationConfig,
+                        configValue: [
+                            {
+                                id: '999',
+                                http_url:
+                                    'https://gitlab.example.com/org/repo.git',
+                            },
+                        ],
+                    },
+                ],
+            );
+
+            await useCase.execute({
+                payload: {
+                    ...gitlabMergePayload,
+                    project: {
+                        ...gitlabMergePayload.project,
+                        web_url: undefined,
+                        url: 'git@gitlab.example.com:org/repo.git',
+                        git_http_url: 'https://gitlab.example.com/org/repo.git',
+                    },
+                },
+                platformType: PlatformType.GITLAB,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                }),
+            );
         });
 
         it('should clear issues cache after processing', async () => {
