@@ -102,7 +102,23 @@ async function isPostgresReachable() {
     }
 }
 
+/**
+ * git writes the refs being pushed to the hook's stdin. Read it all first: a
+ * test process that inherited the pipe and closed it left git writing to a
+ * closed pipe, so the push died of SIGPIPE (exit 141) after every test passed.
+ */
+function drainStdin() {
+    if (process.stdin.isTTY) return Promise.resolve();
+    return new Promise((resolve) => {
+        process.stdin.on('data', () => {});
+        process.stdin.on('end', resolve);
+        process.stdin.on('error', resolve);
+        setTimeout(resolve, 5_000).unref();
+    });
+}
+
 async function main() {
+    await drainStdin();
     const startTime = Date.now();
     const jestArgs = [];
     let full = true;
@@ -183,7 +199,8 @@ async function main() {
 function runTests(jestArgs, env) {
     return new Promise((resolve) => {
         const child = spawn('pnpm', ['run', 'test', ...jestArgs], {
-            stdio: 'inherit',
+            // Never the hook's stdin (git's refs pipe): see drainStdin.
+            stdio: ['ignore', 'inherit', 'inherit'],
             shell: process.platform === 'win32',
             env,
         });
