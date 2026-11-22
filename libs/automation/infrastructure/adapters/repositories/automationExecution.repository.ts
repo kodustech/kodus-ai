@@ -897,9 +897,8 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         pullRequestNumber: number;
         key: string;
     }): Promise<boolean> {
-        const row = await this.automationExecutionRepository
+        return this.automationExecutionRepository
             .createQueryBuilder('automation_execution')
-            .select('1')
             .where(
                 'automation_execution.team_automation_id = :teamAutomationId',
                 { teamAutomationId: params.teamAutomationId },
@@ -915,10 +914,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 `"automation_execution"."dataExecution"->>:key IS NOT NULL`,
                 { key: params.key },
             )
-            .limit(1)
-            .getRawOne();
-
-        return !!row;
+            .getExists();
     }
 
     async findByPeriodAndTeamAutomationId(

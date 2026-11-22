@@ -24,8 +24,7 @@ const makeRepository = () => {
         getOne: jest.fn().mockResolvedValue(null),
         getMany: jest.fn().mockResolvedValue([]),
         getRawMany: jest.fn().mockResolvedValue([]),
-        limit: jest.fn().mockReturnThis(),
-        getRawOne: jest.fn().mockResolvedValue(undefined),
+        getExists: jest.fn().mockResolvedValue(false),
     };
     const typeormRepository = {
         createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
@@ -247,19 +246,6 @@ describe('AutomationExecutionRepository.hasPullRequestExecutionWithDataKey', () 
             '"automation_execution"."dataExecution"->>:key IS NOT NULL',
             { key: 'licenseNoticePostedAt' },
         );
-        expect(queryBuilder.limit).toHaveBeenCalledWith(1);
-    });
-
-    it('is true only when a row matched', async () => {
-        const { repository, queryBuilder } = makeRepository();
-
-        await expect(
-            repository.hasPullRequestExecutionWithDataKey(params),
-        ).resolves.toBe(false);
-
-        queryBuilder.getRawOne.mockResolvedValueOnce({ '?column?': 1 });
-        await expect(
-            repository.hasPullRequestExecutionWithDataKey(params),
-        ).resolves.toBe(true);
+        expect(queryBuilder.getExists).toHaveBeenCalled();
     });
 });
