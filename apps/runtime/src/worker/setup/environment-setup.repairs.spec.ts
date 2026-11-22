@@ -182,6 +182,32 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         expect(rec.boots?.map((b) => b.outcome)).toEqual(['failed', 'ready']);
     });
 
+    // A repo whose docker-compose.yml points at a Dockerfile that is not there gets a recipe inferred from it; the cell
+    // refuses it in seconds. The recipe was Kodus's guess, not the customer's, so Kody writes one from scratch.
+    it('an inferred recipe the cell refuses before booting is replaced by one Kody writes from scratch', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env, calls } = fakeEnv({ first: blockedOn('toolchain', 'compose_refused', 'compose_refused: dockerfile .kodus/Dockerfile not found'), second: 'ok' });
+        const a = author(store, submitted(SECOND));
+        const rec = await service(store, env, { author: a.client }).run(cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' } }));
+
+        expect(rec.state).toBe('active');
+        expect(rec.recipe).toMatchObject({ origin: 'authored', content: SECOND });
+        expect(a.calls).toHaveLength(1);
+        expect(a.calls[0]).toMatchObject({ attempt: 'repair-1', sha: SHA });
+        expect(a.calls[0].last).toBeUndefined();
+        expect(calls.filter((c) => c.startsWith('acquire'))).toEqual([`acquire setup:${KEY}`, `acquire setup:${KEY}:repair-1`]);
+        expect(rec.repairs).toHaveLength(1);
+    });
+
+    it('an inferred recipe is repaired no more than the cap', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env } = fakeEnv({ first: 'not_ready', second: 'not_ready', third: 'not_ready' });
+        const a = author(store, submitted(SECOND), submitted(THIRD));
+        const rec = await service(store, env, { author: a.client, authorRepairs: 1 }).run(cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' } }));
+        expect(a.calls).toHaveLength(1);
+        expect(rec.state).toBe('blocked');
+    });
+
     it('releases the claim of a boot whose app did not answer before the rewrite boots', async () => {
         const store = new InMemoryEnvironmentSetupStore();
         const { env, calls } = fakeEnv({ first: 'not_ready' });
@@ -264,11 +290,9 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
             return { rec, a };
         };
 
-        it('for a recipe Kody did not write (the repository, or Kodus)', async () => {
+        it('for a recipe the customer committed', async () => {
             const repo = await noRepair('not_ready', { recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST } });
             expect(repo.a.calls).toHaveLength(0);
-            const inferred = await noRepair('not_ready', { recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' } });
-            expect(inferred.a.calls).toHaveLength(0);
         });
 
         it.each([
@@ -385,7 +409,6 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
             [blockedOn('platform', 'builder_failed'), {}],
             [blockedOn('resources', 'boot_timeout'), {}],
             ['not_ready', { recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST } }],
-            ['not_ready', { recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' as const } }],
         ] as const) {
             expect(await run(boot, 2, over)).toBe(await run(boot, 0, over));
         }
@@ -468,7 +491,10 @@ describe('repairFailureOf', () => {
         const b = { kind: 'toolchain', signature: 'compose_up', message: 'boom' };
         expect(repairFailureOf(blocked(b, { state: 'active' }))).toBeUndefined();
         expect(repairFailureOf(blocked(b, { refSource: 'dev_override' }))).toBeUndefined();
-        expect(repairFailureOf(blocked(b, { recipe: { path: '.kodus/workspace.yaml', sha: SHA, state: 'found', origin: 'inferred', content: FIRST, digest: 'sha256:x' } }))).toBeUndefined();
+        // The customer's own committed recipe (no origin on the record) is theirs to fix.
+        expect(repairFailureOf(blocked(b, { recipe: { path: '.kodus/workspace.yaml', sha: SHA, state: 'found', content: FIRST, digest: 'sha256:x' } }))).toBeUndefined();
+        // An inferred one is Kodus's own guess: Kody writes another.
+        expect(repairFailureOf(blocked(b, { recipe: { path: '.kodus/workspace.yaml', sha: SHA, state: 'found', origin: 'inferred', content: FIRST, digest: 'sha256:x' } }))).toBeDefined();
     });
 });
 

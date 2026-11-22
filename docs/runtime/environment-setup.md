@@ -200,12 +200,12 @@ boots the rewrite. Default 2, max 5, 0 turns it off (`libs/runtime/run/environme
 `apps/runtime/src/shared/config.ts:307`).
 
 It runs only when all of these hold (`repairFailureOf`, `environment-setup.service.ts:191-200`; `repair`, `:661-667`):
-the setup is blocked; it booted the default branch; the recipe was written by Kody; the first blocker is a recipe
+the setup is blocked; it booted the default branch; the recipe was written by Kody or inferred by Kodus (an inferred recipe goes to Kody with no `last`, so Kody writes one from scratch); the first blocker is a recipe
 failure, not the platform, no cell or a capacity refusal (`environment-setup.ts:245-248`), and the catalog does not
 read it as the platform (`environment-setup.service.ts:166-174`); the worker has the author client and the setup
 carries its LLM token; no diagnostic hold.
 
-It never runs for a committed or inferred recipe, a `security_violation`, `boot_timeout` or `out_of_memory`
+It never runs for a recipe the customer committed (it is theirs), a `security_violation`, `boot_timeout` or `out_of_memory`
 (`:182`), an `external_service:egress:*` blocker (a host an admin approves), or a claim that failed (lease lost,
 capacity) (`:738`).
 

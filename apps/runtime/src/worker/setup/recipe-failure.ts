@@ -73,13 +73,13 @@ const NOT_REPAIRABLE_SIGNATURES: ReadonlySet<string> = new Set(['boot_timeout', 
 /**
  * The failure a repair inside this setup sends back to Kody, or undefined
  * when there is none to make: only a blocked default-branch setup booting a
- * recipe Kody wrote, whose boot failed on the recipe's account
+ * recipe Kody wrote or Kodus inferred (never one the customer committed), whose boot failed on the recipe's account
  * (recipeFailureOf), never on a credential sent out, the machine's memory,
  * a host to approve, or a timeout the recipe's build did not cause.
  */
 export function repairFailureOf(rec: EnvironmentSetupRecord): ReturnType<typeof recipeFailureOf> {
     const r = rec.recipe;
-    if (rec.state !== 'blocked' || rec.refSource !== 'default_branch' || r?.origin !== 'authored' || r.state !== 'found' || !r.content || !r.digest) return undefined;
+    if (rec.state !== 'blocked' || rec.refSource !== 'default_branch' || (r?.origin !== 'authored' && r?.origin !== 'inferred') || r.state !== 'found' || !r.content || !r.digest) return undefined;
     const failed = withBuildTimeout(rec, recipeFailureOf(rec.blockers[0], rec.failureBundle));
     if (!failed || failed.kind === 'security_violation') return undefined;
     const sig = failed.failure.signature;
