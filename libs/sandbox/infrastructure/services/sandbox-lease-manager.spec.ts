@@ -1346,23 +1346,21 @@ describe('SandboxLeaseManager', () => {
         return { prKey, before };
     }
 
-    it('release with idleMs 0 claims the lease, kills the sandbox and completes cleanup', async () => {
+    it('release with idleMs 0 claims the lease with killAt, kills and completes cleanup', async () => {
         const { prKey, before } = await acquireAndReleaseWith(0);
 
-        // The claim wins only while leaseCount is still 0.
-        expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
-            prKey,
-            'graph-sandbox',
-            true,
-        );
-
-        // The cron fallback still gets a killAt, written after the claim.
-        expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
-        const [calledPrKey, calledKillAt] = (leaseRepo.setKillAt as jest.Mock)
-            .mock.calls[0];
-        expect(calledPrKey).toBe(prKey);
-        expect(calledKillAt.getTime()).toBeGreaterThanOrEqual(before);
-        expect(calledKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
+        // Claim and killAt are one write, and the claim only wins while
+        // leaseCount is still 0.
+        expect(leaseRepo.claimCleanup).toHaveBeenCalledTimes(1);
+        const [claimedKey, claimedSandbox, requireZero, claimedKillAt] = (
+            leaseRepo.claimCleanup as jest.Mock
+        ).mock.calls[0];
+        expect(claimedKey).toBe(prKey);
+        expect(claimedSandbox).toBe('graph-sandbox');
+        expect(requireZero).toBe(true);
+        expect(claimedKillAt).toBeInstanceOf(Date);
+        expect(claimedKillAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(claimedKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
 
         expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
             apiKey: 'test-e2b-key',
@@ -1375,29 +1373,26 @@ describe('SandboxLeaseManager', () => {
         expect(Sandbox.setTimeout).not.toHaveBeenCalled();
     });
 
-    it('release with idleMs 0 keeps the lease for the cron when the kill fails', async () => {
+    it('release with idleMs 0 keeps the claim and killAt when the kill fails', async () => {
         (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
             new Error('provider unavailable'),
         );
 
-        const { prKey } = await acquireAndReleaseWith(0);
+        await acquireAndReleaseWith(0);
 
-        // The kill is still attempted; only its failure is tolerated.
+        // The kill is attempted; the lease stays for the cron to retry.
         expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
             apiKey: 'test-e2b-key',
         });
         expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
-        expect(leaseRepo.failCleanup).toHaveBeenCalledWith(
-            prKey,
-            'graph-sandbox',
-            'provider unavailable',
-        );
-        expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
-        expect(
-            (
-                (leaseRepo.setKillAt as jest.Mock).mock.calls[0][1] as Date
-            ).getTime(),
-        ).toBeLessThanOrEqual(Date.now() + 50);
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).not.toHaveBeenCalled();
+        // FAILED is the local-cleanup marker; stamping it would reject every
+        // later acquire for the key.
+        expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+        const [, , , claimedKillAt] = (leaseRepo.claimCleanup as jest.Mock).mock
+            .calls[0];
+        expect(claimedKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
     });
 
     it('release with idleMs 0 leaves the sandbox alone when it loses the cleanup claim', async () => {
@@ -1409,11 +1404,12 @@ describe('SandboxLeaseManager', () => {
             prKey,
             'graph-sandbox',
             true,
+            expect.any(Date),
         );
         expect(Sandbox.kill).not.toHaveBeenCalled();
-        expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
         expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
         expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
     // ─── Test 9d: acquire clears killAt atomically (warm reuse) ───────────
