@@ -185,7 +185,7 @@ func (b *Backend) Create(ctx context.Context, s isolation.Spec) (isolation.Machi
 		c, err := run.RunSandbox(ctx, dockercli.SandboxSpec{
 			HolderSpec: b.holderSpec(s),
 			User:       s.User, Memory: s.Memory, CPUs: s.CPUs,
-			WorkspaceSize: s.WorkspaceSize, TmpSize: s.TmpSize,
+			WorkspaceSize: s.WorkspaceSize, TmpSize: s.TmpSize, Tmpfs: tmpfsOf(s.Tmpfs),
 		})
 		if err != nil {
 			return isolation.Machine{}, err
@@ -260,6 +260,25 @@ func destroy(ctx context.Context, engine EndingEngine, name string, opts isolati
 		err = errors.Join(err, rerr)
 	}
 	return err
+}
+
+func tmpfsOf(in []isolation.Tmpfs) []dockercli.Tmpfs {
+	var out []dockercli.Tmpfs
+	for _, t := range in {
+		out = append(out, dockercli.Tmpfs{Dir: t.Dir, Size: t.Size})
+	}
+	return out
+}
+
+// ExecStream runs argv in the machine as its user with stdin and stdout as a
+// byte stream (docker exec -i): how the cell reads a builder's layer out,
+// with no shell on the host. The caller closes it.
+func (b *Backend) ExecStream(ctx context.Context, name string, argv ...string) (io.ReadWriteCloser, error) {
+	run, ok := b.engine.(SandboxEngine)
+	if !ok {
+		return nil, ErrNoSandboxes
+	}
+	return run.ExecStream(ctx, name, GuestUser, argv...)
 }
 
 // DialGuest starts the guest agent in the machine on a docker exec -i stream.

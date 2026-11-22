@@ -256,6 +256,14 @@ type settings struct {
 	// booted while a round runs, so the next reset is a swap (dockergvisor
 	// spare.go); off by default.
 	GVisorWarmForkReset bool
+	// GVisorToolLayer keeps tool layers (dockergvisor toollayers.go,
+	// docs/runtime/persistent-state.md section 4): a custom agent's CLI built
+	// once per org in a clean builder and mounted read-only into its reviews.
+	// The limits are one layer, one org and the whole store; off by default.
+	GVisorToolLayer         bool
+	GVisorToolLayerMaxMB    int
+	GVisorToolLayerOrgGB    int
+	GVisorToolLayerBudgetGB int
 	// MemoryAdmission takes a claim only when its memory fits what the cell
 	// may commit (ADR-070): MemoryAllocatableMB, else the host's memory less
 	// MemoryReserveMB. Only for a driver whose claims share the host
@@ -401,6 +409,10 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.StringVar(&s.GVisorMemMax, "gvisor-mem-max", "", "docker-gvisor: the most memory one claim may ask for its builds and services (an environment's machine size), as docker takes it (empty: the memory the host lets the cell commit, MemTotal less -memory-reserve-mb, never below -gvisor-mem-limit); a claim that asks more is refused with size_unavailable")
 	fs.BoolVar(&s.GVisorGoldenData, "gvisor-golden-data", true, "docker-gvisor: a round reset gives postgres a copy of the machine's first-boot data instead of a new initdb and seed, where nothing of the app ran before it (false: recreate every round)")
 	fs.BoolVar(&s.GVisorWarmForkReset, "gvisor-warm-fork-reset", false, "docker-gvisor: while a Run's round runs, boot a second copy of its compose project (a warm spare: the machine's images, the bake's and golden data) beside it, so the next reset swaps it in instead of starting every service again; a spare boots only when the memory admission has room for the claim's memory again and is dropped the moment a claim needs it; any failure resets as before and keeps that machine's resets that way; needs -memory-admission and -gvisor-claim-limits off")
+	fs.BoolVar(&s.GVisorToolLayer, "gvisor-toollayer", false, "docker-gvisor: keep tool layers: a custom agent's CLI is built once per org in a clean builder sandbox (no PR code, no secret, one registry host) and mounted read-only at /opt/kcli/<id> into that org's review sandboxes, which then skip the install; any miss or error installs as before. Needs -gvisor-sandbox-image, and announces toolLayers only when the cell can read that image's content digest")
+	fs.IntVar(&s.GVisorToolLayerMaxMB, "gvisor-toollayer-max-mb", 256, "docker-gvisor with -gvisor-toollayer: the most one layer may hold, in MB; also the size of a builder's /opt/kcli tmpfs, in the builder's memory")
+	fs.IntVar(&s.GVisorToolLayerOrgGB, "gvisor-toollayer-org-gb", 2, "docker-gvisor with -gvisor-toollayer: the most one org's layers may hold on the cell, in GB (the least recently mounted goes first)")
+	fs.IntVar(&s.GVisorToolLayerBudgetGB, "gvisor-toollayer-budget-gb", 20, "docker-gvisor with -gvisor-toollayer: the most every org's layers may hold on the cell, in GB")
 	fs.DurationVar(&s.GVisorHealthStart, "gvisor-health-start-interval", 0, "docker-gvisor: how often a starting service's healthcheck runs until it first passes, on every boot and round reset (0: 200ms; negative: as the compose file says)")
 	fs.StringVar(&s.GVisorMemReady, "gvisor-mem-ready", "", "docker-gvisor under -gvisor-claim-limits: the least ceiling a ready claim keeps once its ceiling settles, as docker takes it (2g when empty, never above the claim's own memory); without claim limits a claim is counted at its memory, which its services share")
 	fs.BoolVar(&s.MemoryAdmission, "memory-admission", true, "docker-gvisor and firecracker: take a claim only when its memory fits what the cell may commit (docker-gvisor: a claim at its memory, which its services share, settled lower once ready under claim limits; firecracker: a booting claim at its VMMs' memory.max, a ready one at its guests' and VMMs' memory); a claim that does not fit waits in the worker (ADR-070)")

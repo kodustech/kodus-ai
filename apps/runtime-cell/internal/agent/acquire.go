@@ -32,11 +32,11 @@ func hardCeiling(c protocol.Consumer) time.Duration {
 }
 
 func (a *Agent) acquire(tctx context.Context, claimID string, acq protocol.ClaimAcquireBody) error {
-	return a.acquireWith(tctx, claimID, acq, claims.SnapshotPlan{})
+	return a.acquireWith(tctx, claimID, acq, claims.SnapshotPlan{}, claims.LayerPlan{})
 }
 
 // acquireWith is acquire with what the claim asks of memory snapshots.
-func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.ClaimAcquireBody, plan claims.SnapshotPlan) error {
+func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.ClaimAcquireBody, plan claims.SnapshotPlan, layers claims.LayerPlan) error {
 	generation, available := a.alertAdmissionSnapshot()
 	if !available || !a.deadman.Accepting() {
 		return nack("not_accepting", "cell cannot accept work")
@@ -83,7 +83,7 @@ func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.C
 	// nack as the claim's failure, not a wait, so it keeps the old behavior.
 	need, counted := 0, false
 	if a.mem != nil {
-		need = a.claimMemoryNeed(acq, a.hasPoolMachine(acq, hard))
+		need = a.claimMemoryNeed(acq, a.hasPoolMachine(acq, hard) && !layers.Any())
 		ok, fresh, free := a.mem.Admit(claimID, need, a.cfg.RequireMemoryAdmission || a.hubAccepts(protocol.FeatureCellMemory))
 		if !ok {
 			a.log.Info("claim.no_capacity", "claim", claimID, "run", run, "side", acq.Side, "needMb", need, "freeMb", free, "allocatableMb", a.mem.Allocatable())
@@ -114,6 +114,7 @@ func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.C
 	}
 	c.OrgSecrets = secrets
 	c.Snapshot = plan
+	c.Layers = layers
 	switch err := a.claims.Add(c); {
 	case errors.Is(err, claims.ErrExists):
 		if counted {

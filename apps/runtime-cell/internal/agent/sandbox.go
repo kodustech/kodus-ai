@@ -48,7 +48,23 @@ func (a *Agent) sandboxAcquire(trace context.Context, claimID string, b protocol
 	if (plan.Prepares || plan.ResumeFrom != "") && a.cfg.Parts.Snapshots == nil {
 		return nack("snapshot_unsupported", "this cell's %s driver keeps no memory snapshot", a.cfg.Driver.Kind())
 	}
-	return a.acquireWith(trace, claimID, sandboxClaim(b), plan)
+	layers, err := a.layerPlanOf(claimID, b)
+	if err != nil {
+		return err
+	}
+	acq := sandboxClaim(b)
+	if layers.Build != nil {
+		// A builder reaches its registry host and nothing else, and holds no
+		// secret whatever the frame said; the cell seals it after the install.
+		acq.EgressAllow, acq.EgressInspect, acq.EgressRecommended, acq.Secrets = []string{layers.Build.Registry}, nil, nil, nil
+	}
+	if err := a.acquireWith(trace, claimID, acq, plan, layers); err != nil {
+		if layers.EndBuild != nil {
+			layers.EndBuild(false) // refused before any build ran: no failure to remember
+		}
+		return err
+	}
+	return nil
 }
 
 // refusedOnSandbox is the nack for a frame a sandbox claim never takes (a
@@ -213,7 +229,7 @@ func (a *Agent) prepareSandbox(ctx context.Context, c *claims.Claim, hard time.T
 	// no claim to end it.
 	var m pooledSandbox
 	pooled := false
-	if !fromOK && !c.Snapshot.Prepares {
+	if !fromOK && !c.Snapshot.Prepares && !c.Layers.Any() {
 		m, pooled = a.takeBlankSandbox(c, size, hard)
 	}
 	if pooled {
@@ -274,6 +290,9 @@ func (a *Agent) prepareSandbox(ctx context.Context, c *claims.Claim, hard time.T
 			return blockerErr(protocol.BlockerKindResources, "create_workload", err)
 		}
 		c.SetWorkload(ref)
+		if tl := a.cfg.Parts.ToolLayers; tl != nil && len(c.Layers.Mount) > 0 {
+			c.SetLayerStates(tl.States(ref))
+		}
 		if !c.Snapshot.Prepares {
 			a.origin.Taint(ref.MachineID)
 		}
@@ -315,6 +334,7 @@ func (a *Agent) sandboxReadyBody(c *claims.Claim) *protocol.ClaimReadyBody {
 		Observer: protocol.ObserverState{ID: m.Workload.MachineID, State: protocol.ObserverPhaseReady},
 		Timing:   a.readyTiming(c),
 	}
+	body.ToolLayers = layerItems(c)
 	// template and session are values only a hub that accepts snapshots knows.
 	if start := protocol.ClaimReadyBodyStart(c.Start()); start != "" && a.hubAccepts(protocol.FeatureReadyStart) &&
 		(a.hubAccepts(protocol.FeatureSnapshots) || (start != protocol.ClaimReadyBodyStartTemplate && start != protocol.ClaimReadyBodyStartSession)) {
@@ -335,6 +355,10 @@ func (a *Agent) sandboxOpFrame(trace context.Context, claimID string, b *protoco
 	c, ok := a.claims.Get(claimID)
 	if ok && !isSandbox(c) {
 		return nack("not_supported", "sandbox.op runs on a sandbox claim only")
+	}
+	if ok && c.Layers.Build != nil {
+		// The cell runs the builder's install itself; no caller gets a shell in it.
+		return nack("not_supported", "a layer builder takes no sandbox.op")
 	}
 	// The wire to the guest agent takes the claim's secrets on top of the
 	// caller's env; the caller itself keeps the hub's bound.

@@ -75,8 +75,12 @@ type Claim struct {
 	// Snapshot is what the claim asked of memory snapshots (sandbox.acquire
 	// prepares, templateKey, resumeFrom), fixed before the claim is added.
 	Snapshot SnapshotPlan
+	// Layers is what a sandbox claim asked of tool layers (sandbox.acquire
+	// toolLayers, layerBuild), fixed before the claim is added.
+	Layers LayerPlan
 
 	mu            sync.Mutex
+	layerStates   []driver.ToolLayerState
 	state         State
 	settled       chan struct{} // closed when Acquiring ends
 	prepared      chan struct{} // closed when the preparation returned
@@ -289,6 +293,43 @@ type SnapshotPlan struct {
 	TemplateKey string
 	// ResumeFrom is a session snapshot the claim restores, once.
 	ResumeFrom string
+}
+
+// LayerPlan is what a sandbox claim asked of tool layers.
+type LayerPlan struct {
+	// Mount are the layers a review asks to mount read-only.
+	Mount []driver.ToolLayerRef
+	// Build makes the claim a layer builder: the cell runs the install itself
+	// and no caller gets sandbox.op on it. EndBuild is the admission's end
+	// (driver.ToolLayers.BeginBuild); the first call wins.
+	Build    *driver.ToolLayerBuild
+	EndBuild func(failed bool)
+}
+
+// Any says the plan asks for layers: such a claim never takes a blank pool
+// sandbox, which was made before it asked.
+func (p LayerPlan) Any() bool { return len(p.Mount) > 0 || p.Build != nil }
+
+// EndBuild ends the claim's build admission as a failure unless it already
+// ended: a builder that is cleaned up before its result went out did not build.
+func (c *Claim) EndBuild() {
+	if c.Layers.EndBuild != nil {
+		c.Layers.EndBuild(true)
+	}
+}
+
+// SetLayerStates records what the driver decided for the layers the sandbox
+// asked to mount; LayerStates reads them for claim.ready.
+func (c *Claim) SetLayerStates(s []driver.ToolLayerState) {
+	c.mu.Lock()
+	c.layerStates = slices.Clone(s)
+	c.mu.Unlock()
+}
+
+func (c *Claim) LayerStates() []driver.ToolLayerState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.layerStates)
 }
 
 // SetRound records the claim's round snapshot.

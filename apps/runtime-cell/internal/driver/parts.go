@@ -33,6 +33,9 @@ type Parts struct {
 	Pooler Pooler
 	// Sandboxes boots code sandboxes (sandbox.acquire).
 	Sandboxes Sandboxer
+	// ToolLayers keeps tool layers (sandbox.acquire toolLayers and
+	// layerBuild); nil: the cell announces no toolLayers feature.
+	ToolLayers ToolLayers
 	// Snapshots keeps machines as memory snapshots; non-nil is what hello
 	// capabilities.snapshotMemory says. Sessions forgets an org's session
 	// snapshot at once (snapshot.forget).

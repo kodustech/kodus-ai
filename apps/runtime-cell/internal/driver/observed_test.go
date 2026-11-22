@@ -93,6 +93,7 @@ type everyPart struct {
 	driver.RecipeRunner
 	driver.Pooler
 	driver.Sandboxer
+	driver.ToolLayers
 	driver.Snapshotter
 	driver.SessionForgetter
 	driver.MemoryBudget

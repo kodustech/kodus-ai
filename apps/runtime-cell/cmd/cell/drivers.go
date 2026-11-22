@@ -246,7 +246,29 @@ func validateDockerGVisor(st settings) error {
 	if st.BrowserExplore && st.GVisorBrowserImage == "" {
 		return errors.New("browser exploration requires a compatible pinned browser image (-gvisor-browser-image)")
 	}
+	if err := validateToolLayers(st); err != nil {
+		return err
+	}
 	return validateBakeShare(st)
+}
+
+// validateToolLayers refuses tool layers with no sandbox image to build them
+// for, or limits that do not nest (a layer fits its org, an org the cell).
+func validateToolLayers(st settings) error {
+	if !st.GVisorToolLayer {
+		return nil
+	}
+	switch {
+	case st.Sandbox.Image == "":
+		return errors.New("-gvisor-toollayer needs -gvisor-sandbox-image: a layer is built for that image")
+	case st.GVisorToolLayerMaxMB < 1 || st.GVisorToolLayerOrgGB < 1 || st.GVisorToolLayerBudgetGB < 1:
+		return errors.New("-gvisor-toollayer-max-mb, -gvisor-toollayer-org-gb and -gvisor-toollayer-budget-gb are positive")
+	case st.GVisorToolLayerMaxMB > st.GVisorToolLayerOrgGB<<10:
+		return errors.New("-gvisor-toollayer-max-mb is more than -gvisor-toollayer-org-gb: no layer would fit")
+	case st.GVisorToolLayerOrgGB > st.GVisorToolLayerBudgetGB:
+		return errors.New("-gvisor-toollayer-org-gb is more than -gvisor-toollayer-budget-gb")
+	}
+	return nil
 }
 
 // pinnedImageRE is a pinned image: repo@sha256:<64 hex> or an image id,

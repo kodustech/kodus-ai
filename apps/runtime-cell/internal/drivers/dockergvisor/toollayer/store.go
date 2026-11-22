@@ -107,6 +107,9 @@ func New(cfg Config) (*Store, error) {
 	return s, nil
 }
 
+// Root is the store's directory, absolute.
+func (s *Store) Root() string { return s.cfg.Root }
+
 // OrgDir is the org's directory. It is a function of the org id alone.
 func (s *Store) OrgDir(org string) string {
 	sum := sha256.Sum256([]byte(org))

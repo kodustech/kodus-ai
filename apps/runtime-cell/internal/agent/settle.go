@@ -54,8 +54,12 @@ func (a *Agent) bringUp(ctx context.Context, c *claims.Claim, hard time.Time) {
 				// The hub no longer waits for this claim (it timed out, the
 				// connection it went out on dropped): nothing will use it.
 				a.cleanup(ctx, c, "ready_nacked")
+				return
 			}
+			return
 		}
+		// A layer builder has no caller: the cell runs its install itself.
+		a.startLayerBuild(c, hard)
 		return
 	}
 	c.Log.Error("claim.failed", "err", err, "prepareMs", a.clock.Now().Sub(c.AcquiredAt).Milliseconds())

@@ -14,6 +14,7 @@ The cell's driver for self-hosted Linux hosts (`-driver docker-gvisor`, the defa
 - The warm pool (`pool.go` `PoolCreate`, `Adopt`), code sandboxes (`sandbox.go`), exec in a service (`exec.go`, `workspace_exec.go`), recipe steps (`recipe_steps.go`), a Run's decoy file (`decoy.go`), the observer's targets and SQL account (`observer.go`, `observer_sql.go`), the browser runner (`browser.go`, `browser_explore.go`).
 - Expiry and cleanup: `sweep.go` `SweepExpired`, `Sweep`, `ReclaimDisk`; orphans `orphans.go`; the independent reaper `reap.go` `NewForReaper`; background work and its end `lifetime.go` `Shutdown`, `Close`.
 - Diagnosis: `diagnose.go`, `service_logs.go`.
+- Tool layers (`toollayers.go`, `Config.ToolLayers`, subpackage `toollayer`): the sandbox image resolved to its content digest at start (no digest, no layers), a verified layer bound read-only at `/opt/kcli/<id>` into a review sandbox and held until it ends (label `kodus.tool-layers`), the tmpfs of a layer builder, the tar stream that carries a builder's layer into the store, and the sweep that releases vanished sandboxes' holds and collects the store. `PurgeOrg` is on the part; the cell has no org purge frame yet to call it.
 
 ## Does not own
 - The compose allowlist: `internal/compose/sandbox`. The docker binary and compose argv: `internal/dockercli`, `internal/composecmd`.
@@ -41,7 +42,7 @@ The cell's driver for self-hosted Linux hosts (`-driver docker-gvisor`, the defa
 
 ## Module map
 
-Files (42, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `coverage.go`, `data.go`, `decoy.go`, `diagnose.go`, `diskfloor.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `helper_image.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, `share.go`, `size.go`, `spare.go`, `sweep.go`, … and 2 more
+Files (43, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `coverage.go`, `data.go`, `decoy.go`, `diagnose.go`, `diskfloor.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `helper_image.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, `share.go`, `size.go`, `spare.go`, `sweep.go`, … and 3 more
 
 Imports these Runtime modules:
 
@@ -62,6 +63,7 @@ Imports these Runtime modules:
 - [`apps/runtime-cell/internal/drivers/dockergvisor/buildstate`](buildstate/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/dockergvisor/registry`](registry/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/dockergvisor/remotecache`](remotecache/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/dockergvisor/toollayer`](toollayer/AGENTS.md)
 - [`apps/runtime-cell/internal/isolation`](../../isolation/AGENTS.md)
 - [`apps/runtime-cell/internal/isolation/gvisor`](../../isolation/gvisor/AGENTS.md)
 - [`apps/runtime-cell/internal/kodyexec`](../../kodyexec/AGENTS.md)
@@ -71,6 +73,7 @@ Imports these Runtime modules:
 - [`apps/runtime-cell/internal/observerauth`](../../observerauth/AGENTS.md)
 - [`apps/runtime-cell/internal/placement`](../../placement/AGENTS.md)
 - [`apps/runtime-cell/internal/placement/docker`](../../placement/docker/AGENTS.md)
+- [`apps/runtime-cell/internal/protocol`](../../protocol/AGENTS.md)
 - [`apps/runtime-cell/internal/recipe`](../../recipe/AGENTS.md)
 - [`apps/runtime-cell/internal/redact`](../../redact/AGENTS.md)
 

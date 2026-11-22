@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
@@ -119,6 +120,29 @@ func TestTheGuestAgentRunsAsTheToolUserRootedAtTheWorkspace(t *testing.T) {
 	if len(got) < 5 || got[0] != "1000:1000" || got[1] != "/usr/local/bin/kody-guest" || got[3] != "-root" || got[4] != "/workspace" {
 		t.Fatalf("streamed %v", got)
 	}
+}
+
+// The cell reads a builder's layer out with the tool user's own tar, never a
+// shell on the host.
+func TestAnExecStreamRunsTheGivenArgvAsTheToolUser(t *testing.T) {
+	s := sandboxEngine{engine: newEngine("runsc"), streamed: map[string][]string{}}
+	b, _ := New(context.Background(), s, "")
+	rw, err := b.ExecStream(context.Background(), "kodus-c1-workload", "tar", "-cf", "-", "-C", "/opt/kcli/a", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = rw.Close()
+	if got := strings.Join(s.streamed["kodus-c1-workload"], " "); got != "1000:1000 tar -cf - -C /opt/kcli/a ." {
+		t.Fatalf("streamed %q", got)
+	}
+	if _, err := mustPlain().ExecStream(context.Background(), "x", "tar"); !errors.Is(err, ErrNoSandboxes) {
+		t.Fatalf("a plain engine streamed: %v", err)
+	}
+}
+
+func mustPlain() *Backend {
+	b, _ := New(context.Background(), newEngine("runsc"), "")
+	return b
 }
 
 func TestDestroyEndsTheMachineAndItsVolumesUnlessABakeKeepsThem(t *testing.T) {

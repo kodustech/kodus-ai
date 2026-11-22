@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
@@ -38,6 +39,10 @@ func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (
 	spec := req.Spec
 	if !d.SandboxesEnabled() {
 		return driver.MachineRef{}, ErrNoSandboxImage
+	}
+	if req.Build != nil && req.CellTrust {
+		// A builder reaches one registry host and holds nothing of an org's.
+		return driver.MachineRef{}, fmt.Errorf("%w: a layer builder takes no secret and no trust files", driver.ErrToolLayerRequest)
 	}
 	if req.CellTrust && !d.cfg.Trust.Set() {
 		return driver.MachineRef{}, fmt.Errorf("%w: dockergvisor: the sandbox needs the cell's trust files and this cell has none", driver.ErrUnsupported)
@@ -77,8 +82,18 @@ func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (
 	if req.CellTrust {
 		mounts = d.cfg.Trust.SandboxMounts()
 	}
+	// The layers a review asks for, as read-only binds of trees the cell
+	// verified, or the tmpfs a layer builder installs into (toollayers.go).
+	layers, err := d.prepareToolLayers(ctx, spec.OrgID, req)
+	if err != nil {
+		return driver.MachineRef{}, err
+	}
+	if len(layers.digests) > 0 {
+		labels[labelToolLayers] = strings.Join(layers.digests, ",")
+	}
+	mounts = append(mounts, layers.mounts...)
 	c, err := d.backend.Create(ctx, isolation.Spec{
-		Shape: isolation.ShapeSandbox, Name: name, Image: d.cfg.SandboxImage, Network: spec.ClaimGroupID, Mounts: mounts,
+		Shape: isolation.ShapeSandbox, Name: name, Image: d.cfg.SandboxImage, Network: spec.ClaimGroupID, Mounts: mounts, Tmpfs: layers.tmpfs,
 		PidsLimit: d.cfg.PidsLimit, Labels: labels, Resolv: resolv, CgroupParent: g.parent, DiskSize: d.cfg.ContainerDiskSize,
 		User: gvisor.GuestUser, Memory: mem, CPUs: cpus,
 		// What the commands write lives in the sandbox's memory: half of it
@@ -87,10 +102,12 @@ func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (
 		Rates: d.ratesFor(spec.ClaimSize),
 	})
 	if err != nil {
+		layers.release()
 		return driver.MachineRef{}, err
 	}
 	if d.cfg.ClaimLimits != nil {
 		if err := d.cfg.ClaimLimits.Verify(g.key, c.PID); err != nil {
+			layers.release()
 			cleanup, cancel := cleanupContext(ctx)
 			defer cancel()
 			return driver.MachineRef{}, errors.Join(ErrResourceEnforcement, err, d.backend.Discard(cleanup, name))
@@ -99,6 +116,7 @@ func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (
 	d.mu.Lock()
 	m := d.machineLocked(name)
 	m.expires, m.size = spec.ExpiresAt, spec.ClaimSize
+	m.layerStates, m.layerRelease, m.builder = layers.states, layers.releases, layers.builder
 	d.mu.Unlock()
 	return driver.MachineRef{MachineID: name, DriverRef: c.ID, PrivateAddress: c.IP(spec.ClaimGroupID), ImageID: spec.ImageID, Tags: tags}, nil
 }

@@ -142,6 +142,7 @@
     "cell_sandbox_ops_total": { "producer": "cell", "instrument": "counter", "unit": "{op}", "labels": ["op", "outcome"], "meaning": "Sandbox operations the guest agent ran (op: the sandbox.op kind; outcome: ok, refused, failed)." },
     "cell_sandbox_op_milliseconds_total": { "producer": "cell", "instrument": "counter", "unit": "ms", "labels": ["op"], "meaning": "Time in sandbox operations; divide by cell_sandbox_ops_total for the mean." },
     "cell_egress_seals_total": { "producer": "cell", "instrument": "counter", "unit": "{seal}", "labels": ["outcome"], "meaning": "Sandbox egress seals (egress.policy sealed): the policy pushed to the enforcers allows nothing (outcome: ok, failed)." },
+    "cell_tool_layer_builds_total": { "producer": "cell", "instrument": "counter", "unit": "{build}", "labels": ["outcome"], "meaning": "Tool layer builds the cell ran in a clean builder sandbox (outcome: built, failed)." },
     "cell_image_bakes_total": { "producer": "cell", "instrument": "counter", "unit": "{bake}", "labels": ["outcome"], "meaning": "Image bakes, by outcome." },
     "cell_exfiltration_alerts_total": { "producer": "cell", "instrument": "counter", "unit": "{alert}", "labels": ["kind"], "meaning": "Injector alerts the agent acted on: a claim's credential or bait left for a host it was not for." },
     "cell_alert_source_available": { "producer": "cell", "instrument": "gauge", "unit": "1", "labels": [], "meaning": "Whether the configured alert sources have verified continuity; zero until negotiated or while unavailable." },

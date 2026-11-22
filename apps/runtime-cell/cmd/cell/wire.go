@@ -96,7 +96,7 @@ func wireDockerGVisor(ctx context.Context, w wiring, cfg *agent.Config) (opened,
 		ServiceLogMaxSize: st.GVisorServiceLogMaxSize, ServiceLogMaxFile: st.GVisorServiceLogMaxFile,
 		ImageTransfer: st.GVisorImageTransfer, RegistryImage: st.GVisorRegistryImage, RegistryKeepBytes: int64(st.GVisorRegistryKeepGB) << 30,
 		ObserverImage: st.GVisorObserverImage, ObserverTLSDir: st.GVisorObserverTLS, CellImages: []string{st.GVisorBrowserImage}, Log: log.With("driver", dockergvisor.Kind),
-		Trust: w.trust,
+		Trust: w.trust, ToolLayers: toolLayerConfig(st),
 	})
 	if err != nil {
 		_ = closeAll(ctx)
@@ -282,4 +282,12 @@ func httpObserversOf(st settings, remap func(agent.ClaimInfo, []observer.Target)
 	}
 	f := httpObservers(hc, remap, sqlProviders...)
 	return f, httpPreviewUpstreams(f, hc.Transport), nil
+}
+
+// toolLayerConfig is the driver's tool layer settings (-gvisor-toollayer*).
+func toolLayerConfig(st settings) dockergvisor.ToolLayerConfig {
+	return dockergvisor.ToolLayerConfig{
+		Enabled:       st.GVisorToolLayer,
+		MaxLayerBytes: int64(st.GVisorToolLayerMaxMB) << 20, MaxOrgBytes: int64(st.GVisorToolLayerOrgGB) << 30, MaxCellBytes: int64(st.GVisorToolLayerBudgetGB) << 30,
+	}
 }

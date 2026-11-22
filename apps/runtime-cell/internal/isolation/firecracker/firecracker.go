@@ -532,6 +532,9 @@ func sizeMB(s string, def int) (int, error) {
 // of the base for its shape, then the jailer, and returns once the VMM's
 // API says it runs. What it made is undone when a step fails.
 func (b *Backend) Create(ctx context.Context, spec isolation.Spec) (m isolation.Machine, err error) {
+	if len(spec.Tmpfs) > 0 {
+		return isolation.Machine{}, fmt.Errorf("%w: a microVM sandbox takes no extra tmpfs", driver.ErrUnsupported)
+	}
 	profile := guestinit.Sandbox
 	switch spec.Shape {
 	case isolation.ShapeSandbox:

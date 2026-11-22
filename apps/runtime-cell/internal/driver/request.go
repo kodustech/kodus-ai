@@ -83,4 +83,11 @@ type SandboxRequest struct {
 	// A driver whose Capabilities say SandboxCellTrust false refuses it with
 	// ErrUnsupported; never asked for a blank pool sandbox.
 	CellTrust bool
+	// ToolLayers are the layers a review asks to mount read-only at
+	// /opt/kcli/<id> (Parts.ToolLayers decides each: a hit is mounted, a
+	// miss is recorded; never an error). Build makes the sandbox a layer
+	// builder instead: a tmpfs at /opt/kcli/<id> and nothing mounted. They
+	// exclude each other.
+	ToolLayers []ToolLayerRef
+	Build      *ToolLayerBuild
 }

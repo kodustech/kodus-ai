@@ -92,6 +92,7 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 		a.cfg.Keys.Forget(c.ID)
 	}
 	a.guests.close(c.ID)
+	c.EndBuild() // a builder cleaned up before its result went out did not build
 	if a.cfg.Parts.SQLObservers != nil {
 		a.cfg.Parts.SQLObservers.ForgetObserverSQL(c.Machines().Workload.MachineID)
 	}

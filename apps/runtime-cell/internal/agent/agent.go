@@ -338,6 +338,11 @@ func (a *Agent) hello(trim bool) *protocol.HelloBody {
 		if feature == protocol.FeatureSandbox && a.cfg.Parts.Sandboxes == nil {
 			continue
 		}
+		// A layer is keyed on the sandbox image's content digest (U6): a cell
+		// that has none announces no layers and the hub sends it no field.
+		if feature == protocol.FeatureToolLayers && !a.toolLayersOn() {
+			continue
+		}
 		if (feature == protocol.FeatureBuildStateEvicted || feature == protocol.FeatureBuildStateRebuildCost) && a.cfg.Parts.BuildStates == nil {
 			continue
 		}
@@ -392,8 +397,24 @@ func (a *Agent) helloCapabilities(caps driver.Capabilities, parts driver.Parts) 
 		Backends: backends, SnapshotMemory: parts.SnapshotsMemory(), NestedDocker: caps.NestedContainers, Kvm: caps.KVM,
 		Arch: protocol.MachineArch(arch), MaxSize: protocol.MaxClaimSize(int64(caps.MaxClaimSize.MemoryMB), int64(caps.MaxClaimSize.CPUs)),
 		DefaultSize: protocol.MaxClaimSize(int64(caps.DefaultClaimSize.MemoryMB), int64(caps.DefaultClaimSize.CPUs)),
-		SandboxSize: a.helloSandboxSize(),
+		SandboxSize: a.helloSandboxSize(), SandboxImageDigest: a.helloImageDigest(),
 	}
+}
+
+// toolLayersOn says the cell keeps tool layers and knows the digest of its
+// sandbox image.
+func (a *Agent) toolLayersOn() bool {
+	return a.cfg.Parts.Sandboxes != nil && a.cfg.Parts.ToolLayers != nil && a.cfg.Parts.ToolLayers.ImageDigest() != ""
+}
+
+// helloImageDigest is hello capabilities.sandboxImageDigest: nil unless the
+// cell announces toolLayers.
+func (a *Agent) helloImageDigest() *string {
+	if !a.toolLayersOn() {
+		return nil
+	}
+	d := a.cfg.Parts.ToolLayers.ImageDigest()
+	return &d
 }
 
 // helloSandboxSize is hello capabilities.sandboxSize: nil on a cell that runs

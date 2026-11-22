@@ -88,6 +88,12 @@ type machineState struct {
 	// the copy the last swap ended is down (nil: none went down).
 	swapping bool
 	draining chan struct{}
+	// layerStates are what CreateSandbox decided for the layers the sandbox
+	// asked for; layerRelease ends the holds on the ones it mounts
+	// (toollayers.go); builder is the layer id of a layer builder's tmpfs.
+	layerStates  []driver.ToolLayerState
+	layerRelease []func()
+	builder      string
 }
 
 type pendingReset struct {
@@ -130,7 +136,13 @@ func (d *Driver) peek(id string) machineState {
 // forget drops everything the driver knows of the machine (Destroy).
 func (d *Driver) forget(id string) {
 	d.mu.Lock()
+	var holds []func()
+	if m := d.machines[id]; m != nil {
+		holds = m.layerRelease
+	}
 	delete(d.machines, id)
 	d.mu.Unlock()
+	// The sandbox is gone: its layers may be collected again.
+	releaseLayers(holds)
 	d.ForgetObserverSQL(id)
 }

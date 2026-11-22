@@ -100,6 +100,9 @@ type Spec struct {
 	// /workspace and /tmp.
 	User, Memory, CPUs     string
 	WorkspaceSize, TmpSize string
+	// Tmpfs are more bounded in-memory directories of a sandbox (a layer
+	// builder's /opt/kcli/<id>); a backend that cannot give one refuses.
+	Tmpfs []Tmpfs
 	// Org is the org the machine belongs to: a snapshot of it is that org's
 	// and restores only into a machine of the same org. Claim is its claim:
 	// a round snapshot restores only into that claim's same machine.
@@ -116,6 +119,9 @@ type Spec struct {
 	// machine exists.
 	Taints []Taint
 }
+
+// Tmpfs is one in-memory directory of a sandbox, by path and size ("256m").
+type Tmpfs struct{ Dir, Size string }
 
 // Machine is one machine a backend made.
 type Machine struct {

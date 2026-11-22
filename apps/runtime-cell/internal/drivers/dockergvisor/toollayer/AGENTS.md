@@ -6,10 +6,10 @@ The cell's store of tool layers ([`docs/runtime/persistent-state.md`](../../../.
 - `key.go` `ComputeKey`: sha256 of the canonical record; refuses without an image digest (U6).
 - `install.go` `CheckInstall`: the Go twin of `checkCliInstallCommand` for npm and pnpm, held to the same answers by `cli-install-commands.json`.
 - `extract.go`, `entry.go`: the only door into the store (tar to blobs, every refusal of section 4.3, the entry script and its shebang).
-- `store.go` `Store`: `Ingest`, `Lookup` (returns a held, verified `Hit`), `Hold`, `PurgeOrg`, limits and LRU eviction. `verify.go`: stat fingerprint per mount, full sha256 at the first mount after a start, every 24 h and on a fingerprint difference (U8). `miss.go`: build on the second miss within 7 days (U9). `gc.go`: `GC`.
+- `store.go` `Store`: `Ingest`, `Lookup` (returns a held, verified `Hit`), `Hold`, `PurgeOrg`, limits and LRU eviction. `verify.go`: stat fingerprint per mount, full sha256 at the first mount after a start, every 24 h and on a fingerprint difference (U8). `miss.go`: build on the second miss within 7 days (U9). `builds.go` `Builds`: the admission of builds, one per key at a time, one per cell and two per org, no retry for 10 minutes after a failure. `gc.go`: `GC`.
 
 ## Does not own
-- Running the builder, the tar stream's transport, the mounts, the label, the flags: the driver and the hub (a later change).
+- Running the builder (the agent's `layer_build.go`), the tar stream's transport, the mounts, the label, the flags: the driver (`../toollayers.go`) and `cmd/cell`.
 - Whether a layer is wanted at all: the provider's key plan in `libs/sandbox`.
 
 ## Rules and limits
@@ -26,7 +26,7 @@ The cell's store of tool layers ([`docs/runtime/persistent-state.md`](../../../.
 
 ## Module map
 
-Files (12, tests apart): `entry.go`, `extract.go`, `gc.go`, `install.go`, `key.go`, `miss.go`, `stat_darwin.go`, `stat_linux.go`, `stat_other.go`, `store.go`, `types.go`, `verify.go`
+Files (13, tests apart): `builds.go`, `entry.go`, `extract.go`, `gc.go`, `install.go`, `key.go`, `miss.go`, `stat_darwin.go`, `stat_linux.go`, `stat_other.go`, `store.go`, `types.go`, `verify.go`
 
 Imports these Runtime modules:
 
@@ -34,6 +34,6 @@ Imports these Runtime modules:
 
 Imported by:
 
-- none
+- [`apps/runtime-cell/internal/drivers/dockergvisor`](../AGENTS.md)
 
 <!-- module-map:end -->

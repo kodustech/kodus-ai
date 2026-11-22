@@ -65,7 +65,8 @@ func (d *Driver) SweepExpired(ctx context.Context, now time.Time) ([]string, err
 		}
 		gone = append(gone, g.name)
 	}
-	return gone, errors.Join(append(errs, d.releaseIdleNetworks(ctx, rp, now))...)
+	errs = append(errs, d.releaseIdleNetworks(ctx, rp, now), d.sweepToolLayers(ctx, now))
+	return gone, errors.Join(errs...)
 }
 
 // releaseIdleNetworks releases the claim networks no machine is left on

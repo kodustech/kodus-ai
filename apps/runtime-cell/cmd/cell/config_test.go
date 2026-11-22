@@ -395,3 +395,38 @@ func TestWarmForkResetIsOffByDefaultAndDockerGVisorsAlone(t *testing.T) {
 		t.Fatal("fake took -gvisor-warm-fork-reset")
 	}
 }
+
+// Tool layers are off unless asked, need the sandbox image they are built
+// for, take limits that nest, and only docker-gvisor reads the flags.
+func TestToolLayersAreOffByDefaultNeedTheSandboxImageAndTakeNestedLimits(t *testing.T) {
+	st, err := parse(t)
+	if err != nil || st.GVisorToolLayer || st.GVisorToolLayerMaxMB != 256 || st.GVisorToolLayerOrgGB != 2 || st.GVisorToolLayerBudgetGB != 20 {
+		t.Fatalf("default: %v, %+v", err, st)
+	}
+	cfg := toolLayerConfig(st)
+	if cfg.Enabled || cfg.MaxLayerBytes != 256<<20 || cfg.MaxOrgBytes != 2<<30 || cfg.MaxCellBytes != 20<<30 {
+		t.Fatalf("config %+v", cfg)
+	}
+	img := "s@sha256:" + strings.Repeat("3", 64)
+	if st, err = parse(t, "-gvisor-toollayer", "-gvisor-sandbox-image", img, "-gvisor-toollayer-max-mb", "64", "-gvisor-toollayer-org-gb", "1", "-gvisor-toollayer-budget-gb", "4"); err != nil || !st.GVisorToolLayer {
+		t.Fatalf("on: %v", err)
+	}
+	if err := validateToolLayers(st); err != nil {
+		t.Fatalf("valid limits: %v", err)
+	}
+	for name, edit := range map[string]func(*settings){
+		"no sandbox image": func(s *settings) { s.Sandbox.Image = "" },
+		"zero":             func(s *settings) { s.GVisorToolLayerMaxMB = 0 },
+		"layer over org":   func(s *settings) { s.GVisorToolLayerMaxMB = 2048 },
+		"org over cell":    func(s *settings) { s.GVisorToolLayerOrgGB = 8 },
+	} {
+		bad := st
+		edit(&bad)
+		if err := validateToolLayers(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if _, err := startOn(t, "", "-driver", "fake", "-dev", "-gvisor-toollayer"); err == nil {
+		t.Fatal("fake took -gvisor-toollayer")
+	}
+}

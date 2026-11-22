@@ -82,6 +82,9 @@ type inventoryPort interface {
 	ImageRefs(ctx context.Context, repo string) ([]string, error)
 	ImageLabels(ctx context.Context, ref string) (map[string]string, error)
 	ImageConfig(ctx context.Context, ref string) (dockercli.ImageConfig, error)
+	// ImageID is a local image's content id (sha256:<64 hex>), what tool
+	// layers are keyed on (toollayers.go).
+	ImageID(ctx context.Context, ref string) (string, error)
 }
 
 // dataPort is what copies and removes a claim's data volumes (data.go,

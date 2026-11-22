@@ -29,7 +29,16 @@ type SandboxSpec struct {
 	Memory, CPUs string
 	// WorkspaceSize and TmpSize cap /workspace and /tmp ("8g"); empty: docker's default.
 	WorkspaceSize, TmpSize string
+	// Tmpfs are more bounded in-memory directories of the sandbox's user,
+	// beside /workspace and /tmp (a layer builder's /opt/kcli/<id>).
+	Tmpfs []Tmpfs
 }
+
+// Tmpfs is one extra in-memory directory: an absolute path of safe
+// characters under /opt/ and a size ("256m").
+type Tmpfs struct{ Dir, Size string }
+
+var tmpfsDir = regexp.MustCompile(`^/opt/[a-z][a-z0-9-]{0,31}/[a-z][a-z0-9-]{0,31}$`)
 
 var (
 	sandboxUser = regexp.MustCompile(`^[0-9]{1,10}:[0-9]{1,10}$`)
@@ -56,6 +65,11 @@ func SandboxArgs(s SandboxSpec) ([]string, error) {
 	case s.CPUs != "" && !sandboxCPUs.MatchString(s.CPUs):
 		return nil, fmt.Errorf("dockercli: sandbox cpus %q", s.CPUs)
 	}
+	for _, t := range s.Tmpfs {
+		if !tmpfsDir.MatchString(t.Dir) || !sandboxMem.MatchString(t.Size) {
+			return nil, fmt.Errorf("dockercli: sandbox tmpfs %q size %q is not /opt/<name>/<name> and <n>[k|m|g]", t.Dir, t.Size)
+		}
+	}
 	if err := ValidateCgroupParent(s.CgroupParent); err != nil {
 		return nil, err
 	}
@@ -74,6 +88,9 @@ func SandboxArgs(s SandboxSpec) ([]string, error) {
 		// A command runs as PID 1's user and can write to its stdout: with a
 		// log driver that is a file on the host's disk with no bound.
 		"--log-driver", "none",
+	}
+	for _, t := range s.Tmpfs {
+		args = append(args, "--tmpfs", tmpfsOpt(t.Dir, t.Size, s.User))
 	}
 	if s.Memory != "" {
 		args = append(args, "--memory", s.Memory, "--memory-swap", s.Memory)

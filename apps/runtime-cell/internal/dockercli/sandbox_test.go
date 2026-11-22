@@ -88,3 +88,27 @@ func TestASandboxMountsTheCellsFilesReadOnly(t *testing.T) {
 		t.Fatalf("binds %v, want %v", binds, want)
 	}
 }
+
+// A layer builder's /opt/kcli/<id> is a bounded in-memory directory of the
+// sandbox's user, and nothing else may be asked for.
+func TestASandboxTakesBoundedTmpfsUnderOptOnly(t *testing.T) {
+	s := sandboxSpec()
+	s.Tmpfs = []Tmpfs{{Dir: "/opt/kcli/claude-code", Size: "256m"}}
+	args, err := SandboxArgs(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(args, "/opt/kcli/claude-code:rw,nosuid,nodev,mode=0755,uid=1000,gid=1000,size=256m") {
+		t.Fatalf("no tmpfs for the layer: %s", strings.Join(args, " "))
+	}
+	for _, bad := range []Tmpfs{
+		{Dir: "/opt/kcli/../etc", Size: "1m"}, {Dir: "/etc", Size: "1m"}, {Dir: "/opt/kcli/a,exec", Size: "1m"},
+		{Dir: "/opt/kcli/a", Size: "1g,exec"}, {Dir: "/opt/kcli/a", Size: ""}, {Dir: "/opt/kcli/a/b", Size: "1m"},
+	} {
+		s := sandboxSpec()
+		s.Tmpfs = []Tmpfs{bad}
+		if _, err := SandboxArgs(s); err == nil {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
+}

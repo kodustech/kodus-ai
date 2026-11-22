@@ -60,7 +60,9 @@ type memDocker struct {
 	ups         []string  // every compose up's project, in order
 	// imageConfigs are what ImageConfig answers, by image reference.
 	imageConfigs map[string]dockercli.ImageConfig
-	execAnswer   kodyexec.Result
+	// imageIDs are what ImageID answers, by image reference.
+	imageIDs   map[string]string
+	execAnswer kodyexec.Result
 	// execFor, when set, answers each exec instead of execAnswer.
 	execFor func(memExec) kodyexec.Result
 	inputs  []memInput // every exec with input, in order
@@ -706,6 +708,16 @@ func (m *memDocker) ImageConfig(_ context.Context, ref string) (dockercli.ImageC
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.imageConfigs[ref], nil
+}
+
+// ImageID answers the id planted for ref in imageIDs.
+func (m *memDocker) ImageID(_ context.Context, ref string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id, ok := m.imageIDs[ref]; ok {
+		return id, nil
+	}
+	return "", errors.New("no such image")
 }
 
 func (m *memDocker) ImageLabels(context.Context, string) (map[string]string, error) {

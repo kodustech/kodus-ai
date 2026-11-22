@@ -138,7 +138,7 @@ func (a *Agent) cellTrustFor(c *claims.Claim, mounts bool) bool {
 // passthrough instead of failing on a CA it never got.
 func (a *Agent) sandboxRequest(c *claims.Claim, spec driver.MachineSpec) driver.SandboxRequest {
 	mounts := a.cfg.CellTrust && a.cfg.Driver.Capabilities().SandboxCellTrust
-	return driver.SandboxRequest{Spec: spec, CellTrust: a.cellTrustFor(c, mounts)}
+	return driver.SandboxRequest{Spec: spec, CellTrust: a.cellTrustFor(c, mounts), ToolLayers: c.Layers.Mount, Build: c.Layers.Build}
 }
 
 // policySecrets are the claim's secrets as its signed policy carries them.

@@ -240,6 +240,11 @@ type Config struct {
 	// SandboxImage is the code sandbox's tool image, by digest, with the
 	// guest agent at /usr/local/bin/kody-guest (sandbox.go). Empty: no sandboxes.
 	SandboxImage string
+	// ToolLayers turns on tool layers (toollayers.go, docs/runtime/persistent-state.md
+	// section 4): the store under WorkDir, the sandbox image's content digest
+	// resolved at start, and the mounts and builds that follow. Needs
+	// SandboxImage. Off by default.
+	ToolLayers ToolLayerConfig
 	// CellImages are the cell's images this config does not name (the
 	// browser runner). With the ones it does, they may have been pulled
 	// with the cell's own login: a service that names one of their
@@ -324,6 +329,8 @@ type Driver struct {
 	// registries is the registry image transfer (package registry); nil
 	// on the tarball transfer.
 	registries *registry.Registries
+	// layers is the tool layer store; nil when Config.ToolLayers is off.
+	layers *layerKeeper
 	// hooks are the seams only tests set (export_test.go); nil in production.
 	hooks *testHooks
 }
@@ -503,6 +510,11 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 	}
 	clk := clock.Or(cfg.Clock)
 	dr.clock = clk
+	if cfg.ToolLayers.Enabled {
+		if err := dr.openToolLayers(ctx); err != nil {
+			return nil, err
+		}
+	}
 	dr.healthEvery = dr.healthStartInterval(ctx)
 	dr.caches = buildcache.New(filepath.Join(dr.workDir(), "cache", "env"), filepath.Join(dr.workDir(), "cache", "trash"), clk)
 	if cfg.BuildCacheRemote != "" {
@@ -621,6 +633,9 @@ func (d *Driver) Parts() driver.Parts {
 	}
 	if d.SandboxesEnabled() {
 		p.Sandboxes = d
+		if d.layers != nil {
+			p.ToolLayers = toolLayerPart{d}
+		}
 	}
 	if d.cfg.WarmForkReset {
 		p.Spares = d
