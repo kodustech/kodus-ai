@@ -56,3 +56,31 @@ func TestTheDevCellHandsTheEgressTheInjectorThatTrustsIt(t *testing.T) {
 		t.Fatalf("the egress dials %s; the injector joins the enforcers' network as %s", addr, injectorIP)
 	}
 }
+
+// A dev cell keeps each environment's BuildKit state unless the operator turns
+// it off (off sends every Run down the slow cache path), runs the cell
+// binaries from a root-owned directory under /usr/local/lib (the extractor
+// runs as another user and cannot exec a binary under the operator's home),
+// and says what to do when the builder image cannot be pulled.
+func TestTheDevCellDefaults(t *testing.T) {
+	b, err := os.ReadFile("../../scripts/dev-gvisor-cell.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		`BUILD_STATE="${BUILD_STATE-1}"`,              // on unless the operator sets it empty or 0
+		`BIN_INSTALL="${BIN_INSTALL:-/usr/local/lib/`, // not the user's home
+		`install -d -m 0755 "$BIN_INSTALL"`,           // readable by the extractor's user
+		`BUILDER_TRUST=1`,                             // the message names the flag
+		`docker buildx bake runtime-builder`,          // and how to build it locally
+		`-gvisor-builder-trust`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("dev-gvisor-cell.sh lacks %q", want)
+		}
+	}
+	if strings.Contains(s, `exec_cell=("$BIN/cell"`) && !strings.Contains(s, `BIN="$BIN_INSTALL"`) {
+		t.Error("the cell must run from the installed directory, not the operator's bin dir")
+	}
+}

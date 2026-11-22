@@ -14,7 +14,11 @@
 #   cell.pem, cell.key, cell-id. The dev CA also issues the egress, injector
 #   and observer server certificates here; production gives the observers a
 #   CA of their own.
-# bin-dir: cell, egress, injector, observer built for this host (static).
+# bin-dir: cell, egress, injector, observer built for this host (static). The
+#   script installs them under BIN_INSTALL (/usr/local/lib/kodus-cell-dev by
+#   default, root-owned, 0755) and runs the cell from there: the extractor runs
+#   as another user and fails with `fork/exec ... permission denied` on a
+#   binary under the operator's home.
 # Env: HUB_URL (wss://host.orb.internal:3410/cells), GIT_API
 # (http://host.orb.internal:3499), EGRESS_ALLOW (hosts every claim may
 # reach: the registry, npm and the Debian, Ubuntu and Alpine package
@@ -23,7 +27,8 @@
 # default size), MEM_MAX and CPUS_MAX (the largest size one claim may ask),
 # BROWSER_IMAGE (the browser runner, browser-runner/, by digest: browser
 # probes run only with it, ADR-071), BUILD_STATE (keep each environment's
-# BuildKit state) and BUILD_STATE_KEEP (what its GC keeps, 20GB by default:
+# BuildKit state: on by default, because off sends every Run down the slow
+# cache path; BUILD_STATE=0 or BUILD_STATE= turns it off) and BUILD_STATE_KEEP (what its GC keeps, 20GB by default:
 # a Go monorepo's module and build caches pass that). A pull request's
 # build reads that state through a reflink clone when $STATE/work is on a
 # filesystem that has them (XFS, btrfs); on ext4 it reads it through the
@@ -32,7 +37,9 @@
 # digest cmd/cell/config.go pins): the stock rootless BuildKit walks the whole
 # tree for every layer it exports under gVisor. A host that cannot pull it from
 # GHCR builds it (docker buildx bake runtime-builder) into a registry of its
-# own and passes that name with the same digest.
+# own and passes that name with the same digest. The script pulls the image
+# first when this Docker does not have it, and stops with the way out when the
+# pull fails (build it locally, pass BUILDER_IMAGE, and set BUILDER_TRUST=1).
 # BUILDER_TRUST=1 says a local build of builder-image/ under another digest
 # (an arm64 build of the same revision) is the cell's own builder too, so its
 # RUN steps get the cell's trust bundle (-gvisor-builder-trust).
@@ -67,6 +74,10 @@
 set -euo pipefail
 CERTS="$(cd "${1:?certs dir}" && pwd)"
 BIN="$(cd "${2:?bin dir}" && pwd)"
+# Kept on unless the operator sets it to 0 or to nothing.
+BUILD_STATE="${BUILD_STATE-1}"
+[ "$BUILD_STATE" = 0 ] && BUILD_STATE=
+BIN_INSTALL="${BIN_INSTALL:-/usr/local/lib/kodus-cell-dev}"
 HUB_URL="${HUB_URL:-wss://host.orb.internal:3410/cells}"
 GIT_API="${GIT_API:-http://host.orb.internal:3499}"
 # The registries a build installs from: the image registry, npm, and the
@@ -88,6 +99,31 @@ EGRESS_ENFORCER_IP="${EGRESS_ENFORCER_IP:-10.214.0.2}"
 INJECTOR_ENFORCER_IP="${INJECTOR_ENFORCER_IP:-10.214.0.3}"
 [ "$(id -u)" = 0 ] || { echo "run as root: the cell drives Docker and runsc" >&2; exit 1; }
 docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}' | grep -qw runsc || { echo "runsc is not a Docker runtime here" >&2; exit 1; }
+
+# The binaries run from a root-owned directory that every user can read and
+# enter: the extractor runs as another user, and a binary under the operator's
+# home (mode 0700 on most hosts) fails with `fork/exec ... permission denied`.
+install -d -m 0755 "$BIN_INSTALL"
+for b in cell egress injector observer; do
+  install -m 0755 "$BIN/$b" "$BIN_INSTALL/$b"
+done
+BIN="$BIN_INSTALL"
+
+# The builder image comes first, so a host that cannot reach GHCR says so now
+# instead of hanging in the first build.
+if ! docker image inspect "$BUILDER_IMAGE" >/dev/null 2>&1; then
+  PULL_LIMIT=()
+  command -v timeout >/dev/null && PULL_LIMIT=(timeout 300)
+  if ! "${PULL_LIMIT[@]}" docker pull "$BUILDER_IMAGE"; then
+    {
+      echo "could not pull the builder image $BUILDER_IMAGE"
+      echo "build it on this host (docker buildx bake runtime-builder, from builder-image/), then run again with"
+      echo "BUILDER_IMAGE=<the name you built> and BUILDER_TRUST=1: BUILDER_TRUST=1 tells the cell a local build under"
+      echo "another digest is its own builder (-gvisor-builder-trust)."
+    } >&2
+    exit 1
+  fi
+fi
 
 # Keys stay on this host's own disk, root-owned and 0600; never printed.
 umask 077
