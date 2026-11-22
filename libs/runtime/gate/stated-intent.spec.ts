@@ -3,7 +3,7 @@ import type { Probe, ProbeResult } from '@libs/runtime/probe/probe.schema';
 
 import { decideNewEndpoint, decideProbe, type GateDecision, type GateStep } from './gate';
 import { expectedHolds, normalizeFields } from './probe-fields';
-import { decideStatedIntent, type StatedIntentCheck, statedIntentChecksFor } from './stated-intent';
+import { decideStatedIntent, leavesOfFinding, type StatedIntentCheck, statedIntentChecksFor } from './stated-intent';
 
 // The kr-shop pairs of docs/runtime/intent-oracle.md, 2026-11-18: each feature
 // as a PR with a planted bug and as a correct PR with the same description.
@@ -480,5 +480,60 @@ describe("a rule lent from another value's example never flags (kr-shop #16 on r
         const { decision, steps } = replay(planned, { status: 404, body: { error: 'not found' } }, { status: 200, body: { item: 'keyboard', quantity: 10, subtotal: 500, discount: 25, total: 475 } }, { added: true });
         const out = decideStatedIntent(decision, steps, checks, { mismatch: false, pinnedImageId: IMAGE });
         expect(out.statedIntents.map((r) => [r.probeId, r.failures.length])).toEqual([['intent-2', 0]]);
+    });
+});
+
+describe('described and undescribed leaves of one array field (an association file, appIDs and paths)', () => {
+    const p = probe('intent-1', 'GET', '/.well-known/association');
+    const entry = (appIDs: string[], paths: string[]) => ({ status: 200, body: { applinks: { apps: [], details: [{ appIDs, paths }] } } });
+    const base = entry(['TEAM.app.one'], ['/share/*']);
+    const said = check('intent-1', 'the association lists the new app id', { kind: 'equals', path: '$.applinks.details[0].appIDs', value: ['TEAM.app.two'] });
+    const run = (pr: ReturnType<typeof entry>, checks: StatedIntentCheck[] = [said]) => {
+        const { decision, steps } = replay(p, base, pr);
+        expect(decision).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change', differingFields: ['json.applinks.details'] });
+        return decideStatedIntent(decision, steps, checks, { mismatch: true, pinnedImageId: IMAGE });
+    };
+
+    it('the description reads appIDs and the PR also changed a path: the finding stays and names the path as undescribed', () => {
+        const out = run(entry(['TEAM.app.two'], ['/shares/*']));
+        expect(out.decision).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        expect(out.leaves?.undescribed).toEqual([{ path: 'applinks.details[0].paths[0]', kind: 'changed', base: '"/share/*"', pr: '"/shares/*"' }]);
+        expect(out.leaves?.described.map((l) => l.path)).toEqual(['applinks.details[0].appIDs[0]']);
+        expect(out.leaves?.mentions).toEqual(['applinks.details[0].appIDs']);
+    });
+
+    it('only the leaf the description reads changed: a described change, though the field is a whole array', () => {
+        const out = run(entry(['TEAM.app.two'], ['/share/*']));
+        expect(out.decision.verdict).toBe('described_change');
+    });
+
+    it('a path is read by whole segments: appIDs does not describe appIDsExtra', () => {
+        const { decision, steps } = replay(p, { status: 200, body: { details: [{ appIDs: 'b', appIDsExtra: 'a' }] } }, { status: 200, body: { details: [{ appIDs: 'b', appIDsExtra: 'b' }] } });
+        const reads = check('intent-1', 'appIDs', { kind: 'equals', path: '$.details[0].appIDs', value: 'b' });
+        const out = decideStatedIntent(decision, steps, [reads], { mismatch: true, pinnedImageId: IMAGE });
+        expect(out.decision.verdict).toBe('finding');
+        expect(out.leaves?.undescribed.map((l) => l.path)).toEqual(['details[0].appIDsExtra']);
+    });
+
+    it('a leaf under a field the base varied on is not walked', () => {
+        const wobble = (n: string, v: string) => ({ status: 200, body: { details: [{ nonce: n, paths: [v] }] } });
+        const { steps } = replay(p, wobble('n1', '/share/*'), wobble('n1', '/shares/*'));
+        const stepsWithVariance = steps.map((s) => (s.side === 'base' && s.round === 2 ? { ...s, fields: { ...s.fields, 'json.details': JSON.stringify([{ nonce: 'n2', paths: ['/share/*'] }]) } } : s));
+        const finding = { kind: 'verdict' as const, verdict: 'finding' as const, findingKind: 'behavior_change' as const, reason: 'x', differingFields: ['json.details'], maskedFields: [] };
+        const set = leavesOfFinding(finding, stepsWithVariance);
+        expect(set?.undescribed.map((l) => l.path)).toEqual(['details[0].paths[0]']);
+    });
+
+    it('without any stated intent the finding still names its leaves, all undescribed', () => {
+        const { decision, steps } = replay(p, base, entry(['TEAM.app.one'], ['/shares/*']));
+        const set = leavesOfFinding(decision as never, steps);
+        expect(set?.undescribed.map((l) => l.path)).toEqual(['applinks.details[0].paths[0]']);
+        expect(set?.described).toEqual([]);
+        expect(set?.mentions).toEqual([]);
+    });
+
+    it('a finding whose fields are scalars has no leaves: its field-level line stands', () => {
+        const { decision, steps } = replay(probe('p', 'GET', '/x'), { status: 200, body: { name: 'a' } }, { status: 200, body: { name: 'b' } });
+        expect(leavesOfFinding(decision as never, steps)).toBeUndefined();
     });
 });

@@ -12,6 +12,7 @@ import type { Probe, ProbeResult } from '@libs/runtime/probe/probe.schema';
 
 import type { FindingKind, GateStep, Verdict } from './gate';
 import { LATEST_IMAGE } from './gate';
+import { isPathUnder, type LeafChange, type LeafChangeSet, leafChanges, LEAF_MENTIONS_MAX, leafPathOf } from './leaf-changes';
 
 // The intent oracle's verdict (docs/runtime/intent-oracle.md §7, §8): what the
 // PR says it does, as closed assertions the intent author quoted from its
@@ -45,7 +46,7 @@ export interface StatedIntentResult {
     failures: Array<{ assertion: string; expected: string; received: string }>;
 }
 
-type VerdictLike = { verdict: Verdict; reason: string; findingKind?: FindingKind; differingFields?: string[]; intendedChange?: unknown };
+type VerdictLike = { verdict: Verdict; reason: string; findingKind?: FindingKind; differingFields?: string[]; maskedFields?: string[]; intendedChange?: unknown };
 
 /** A value of the answer, as the comment can carry it. */
 const VALUE_CHARS = 200;
@@ -159,12 +160,13 @@ function evaluate(check: StatedIntentCheck, answers: IntentAnswer[]): StatedInte
 const isBodyField = (f: string) => f === 'json' || f.startsWith('json.') || f.startsWith('html.') || f.startsWith('body.');
 
 /**
- * Whether passed assertions read every field that differs. A status that
+ * Whether a field that differs is read by a passed assertion. A status that
  * changed as asserted carries its body with it: the PR answers another
  * outcome, whose body says nothing next to main's (kr-shop #14, 201 → 400).
- * A path through an array index reads one element, never the whole array.
+ * A path through an array index reads one element, never the whole array: it
+ * reads no field here, and `describedLeaf` reads it for the leaf it names.
  */
-function readsEveryDifference(differing: string[], checks: readonly StatedIntentCheck[]): boolean {
+function fieldReader(differing: string[], checks: readonly StatedIntentCheck[]): (field: string) => boolean {
     const reads = checks.flatMap((c) => c.assertions.map(intentAssertionReads));
     const status = reads.some((r) => r.status);
     const statusChanged = differing.includes('status');
@@ -175,9 +177,84 @@ function readsEveryDifference(differing: string[], checks: readonly StatedIntent
             .map((p) => ['json', ...p].join('.')),
         ...explainedArrays(checks),
     ];
-    const read = (f: string) =>
-        f === 'status' ? status : isBodyField(f) && ((status && statusChanged) || fields.some((p) => f === p || f.startsWith(`${p}.`)));
+    return (f) => (f === 'status' ? status : isBodyField(f) && ((status && statusChanged) || fields.some((p) => f === p || f.startsWith(`${p}.`))));
+}
+
+function readsEveryDifference(differing: string[], checks: readonly StatedIntentCheck[]): boolean {
+    const read = fieldReader(differing, checks);
     return differing.length > 0 && differing.every(read);
+}
+
+/**
+ * Every path the passed assertions read, array indexes included, in the
+ * leaves' spelling (`applinks.details[0].appIDs`), and the arrays an `every`
+ * with a length or "only" explains whole. Never a substring: a leaf is read
+ * when it is such a path or below it by whole segments.
+ */
+function readPathsOf(checks: readonly StatedIntentCheck[]): string[] {
+    const paths = checks.flatMap((c) => c.assertions.flatMap((a) => intentAssertionReads(a).paths)).map((p) => leafPathOf(p));
+    const arrays = explainedArrays(checks).map((f) => (f === 'json' ? '$' : f.slice('json.'.length)));
+    return [...new Set([...paths, ...arrays])];
+}
+
+const isDescribed = (leaf: LeafChange, reads: readonly string[]) => reads.some((p) => p === '$' || isPathUnder(leaf.path, p));
+
+const isJsonField = (f: string) => f === 'json' || f.startsWith('json.');
+const isContainer = (text: string | undefined) => {
+    const v = text === undefined ? { ok: false as const } : parsed(text);
+    return v.ok && v.value !== null && typeof v.value === 'object';
+};
+
+/**
+ * The leaves behind a finding's differing JSON fields (leaf-changes.ts), split
+ * by what the passed assertions read. Only when every differing field is a
+ * JSON field and one of them holds an object or an array; else undefined (the
+ * finding keeps its field-level line). `fieldRead` fields are described whole
+ * and are not walked. The leaves come from the first healthy observer round of
+ * each side, the ones the Response tab reads; a leaf the base's own rounds
+ * disagree on is left out.
+ */
+function leafSetOf(
+    differing: readonly string[],
+    fieldRead: (f: string) => boolean,
+    steps: readonly GateStep[],
+    reads: readonly string[],
+    masked: readonly string[],
+): LeafChangeSet | undefined {
+    const unread = differing.filter((f) => !fieldRead(f) && !masked.includes(f));
+    if (!unread.length || !differing.every(isJsonField)) return undefined;
+    const observer = steps.filter((s) => s.executor === 'observer' && s.transport === 'ok' && s.vmHealth === 'ok' && !s.timedOut).sort((a, b) => a.round - b.round);
+    const bases = observer.filter((s) => s.side === 'base');
+    const pr = observer.find((s) => s.side === 'pr');
+    if (!bases.length || !pr) return undefined;
+    if (!unread.some((f) => isContainer(bases[0].fields[f]) || isContainer(pr.fields[f]))) return undefined;
+    const leaves: LeafChange[] = [];
+    let truncated = false;
+    for (const f of unread) {
+        const prefix = f === 'json' ? '' : f.slice('json.'.length);
+        const exclude = bases.slice(1).flatMap((b) => leafChanges(bases[0].fields[f], b.fields[f], { prefix }).leaves.map((l) => l.path));
+        const out = leafChanges(bases[0].fields[f], pr.fields[f], { prefix, exclude });
+        leaves.push(...out.leaves);
+        truncated ||= out.truncated;
+    }
+    if (!leaves.length) return undefined;
+    return {
+        undescribed: leaves.filter((l) => !isDescribed(l, reads)),
+        described: leaves.filter((l) => isDescribed(l, reads)),
+        mentions: reads.slice(0, LEAF_MENTIONS_MAX),
+        truncated,
+    };
+}
+
+/**
+ * The leaves of a `behavior_change` finding that no assertion decided on (no
+ * stated intent, or one that failed): all undescribed, so the finding names
+ * `details[0].paths[0]` and not only `json.applinks.details`. Undefined for
+ * anything else, and when its fields are not JSON.
+ */
+export function leavesOfFinding(decision: VerdictLike, steps: readonly GateStep[]): LeafChangeSet | undefined {
+    if (decision.verdict !== 'finding' || decision.findingKind !== 'behavior_change') return undefined;
+    return leafSetOf(decision.differingFields ?? [], () => false, steps, [], decision.maskedFields ?? []);
 }
 
 const keysOnly = (p: readonly unknown[]): p is string[] => p.every((s) => typeof s === 'string');
@@ -262,7 +339,7 @@ export function decideStatedIntent<D extends VerdictLike>(
     steps: GateStep[],
     checks: readonly StatedIntentCheck[],
     opts: { mismatch: boolean; pinnedImageId: string; requestBody?: string },
-): { decision: D; statedIntents: StatedIntentResult[] } {
+): { decision: D; statedIntents: StatedIntentResult[]; leaves?: LeafChangeSet } {
     const rounds = prRounds(steps, opts.pinnedImageId);
     if (!rounds.length || !checks.length) return { decision, statedIntents: [] };
     const answers = rounds.map((s) => intentAnswerOfFields(s.fields, opts.requestBody));
@@ -284,11 +361,20 @@ export function decideStatedIntent<D extends VerdictLike>(
     const allHeld = statedIntents.every((r) => r.inconclusive === 0);
     const reordered = reorderedAsStated(differing, steps, rounds, kept);
     const notReordered = differing.filter((f) => !reordered.includes(f));
-    const explains = differing.length > 0 && (notReordered.length === 0 || readsEveryDifference(notReordered, kept));
-    if (decision.verdict === 'finding' && decision.findingKind === 'behavior_change' && !pr5xx && allHeld && explains) {
+    const fieldRead = fieldReader(notReordered, kept);
+    const explains = differing.length > 0 && (notReordered.length === 0 || notReordered.every(fieldRead));
+    const isFinding = decision.verdict === 'finding' && decision.findingKind === 'behavior_change' && !pr5xx && allHeld;
+    if (isFinding && explains) {
         return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };
     }
-    return { decision, statedIntents };
+    if (!isFinding || differing.length === 0 || reordered.length > 0) return { decision, statedIntents };
+    // The fields are compared whole: a path through an array index reads one leaf of one, so the leaves decide.
+    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(kept), decision.maskedFields ?? []);
+    if (!leaves) return { decision, statedIntents };
+    if (!leaves.undescribed.length && !leaves.truncated) {
+        return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };
+    }
+    return { decision, statedIntents, leaves };
 }
 
 const sortedKeys = (v: unknown): unknown =>

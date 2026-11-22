@@ -35,17 +35,17 @@ export interface ResponseSample {
 }
 
 export const REDACTED = '[redacted]';
-const SECRET_KEY = /password|passwd|token|secret|key|authorization|cookie|header|credential|session/i;
+export const SECRET_KEY = /password|passwd|token|secret|key|authorization|cookie|header|credential|session/i;
 
 const isJsonField = (k: string) => k === 'json' || k.startsWith('json.');
 const isSecretPath = (path: string) => path.split('.').slice(1).some((seg) => SECRET_KEY.test(seg));
 
-function clip(s: string): string {
+export function clip(s: string): string {
     return s.length > RESPONSE_DIFF_VALUE_MAX ? `${s.slice(0, RESPONSE_DIFF_VALUE_MAX - 1)}…` : s;
 }
 
 /** A value with every secret-looking key below it masked, when it is a JSON object or array. */
-function maskNested(value: string): string {
+export function maskNested(value: string): string {
     let parsed: unknown;
     try {
         parsed = JSON.parse(value);
