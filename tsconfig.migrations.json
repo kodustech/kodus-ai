@@ -30,5 +30,11 @@
         "libs/ee/analytics-warehouse/migrations/**/*",
         "libs/ee/analytics-warehouse/entities/**/*.entity.ts",
         "scripts/analytics/ensure-schema.cli.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "**/*.spec.ts",
+        "**/*.test.ts"
     ]
 }
