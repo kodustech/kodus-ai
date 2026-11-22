@@ -1091,21 +1091,28 @@ describe('ValidatePrerequisitesStage', () => {
             expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
         });
 
-        it('keeps the reaction but posts no second notice on the same PR', async () => {
+        it('posts the notice on the first skip only, keeping the reaction on later runs', async () => {
             failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const first = await stage.execute(makeContext());
+            expect(first.licenseNoticePostedAt).toEqual(expect.any(String));
+
+            // The next run finds the notice the first one persisted.
             mockAutomationExecutionService.hasPullRequestExecutionWithDataKey.mockResolvedValue(
                 true,
             );
+            const second = await stage.execute(makeContext());
 
-            const result = await stage.execute(makeContext());
-
-            expect(
-                mockCodeManagementService.addReactionToPR,
-            ).toHaveBeenCalled();
             expect(
                 mockCodeManagementService.createIssueComment,
-            ).not.toHaveBeenCalled();
-            expect(result.licenseNoticePostedAt).toBeUndefined();
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).toHaveBeenCalledTimes(2);
+            expect(second.licenseNoticePostedAt).toBeUndefined();
         });
 
         it.each([PlatformType.AZURE_REPOS, PlatformType.BITBUCKET])(
