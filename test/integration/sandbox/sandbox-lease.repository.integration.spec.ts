@@ -58,12 +58,15 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate(
         });
 
         afterAll(async () => {
-            await model.deleteMany({});
+            // Scoped to this suite's key: CI points TEST_MONGODB_URI at a full
+            // connection string, so the gate's dbName is ignored and the
+            // collection may be shared with other integration suites.
+            await model.deleteMany({ _id: PR_KEY });
             await moduleRef.close();
         });
 
         beforeEach(async () => {
-            await model.deleteMany({});
+            await model.deleteMany({ _id: PR_KEY });
             await model.create({
                 _id: PR_KEY,
                 state: 'READY',
@@ -99,34 +102,39 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate(
             expect(doc.cleanupAttempts).toBe(1);
         });
 
-        it('refuses the claim while a lease holder remains, and writes nothing', async () => {
+        it('refuses the claim while a holder remains, then claims once it drains', async () => {
             await model.updateOne({ _id: PR_KEY }, { $set: { leaseCount: 1 } });
             const killAt = new Date('2026-11-22T12:00:00.000Z');
 
+            const refused = await repository.claimCleanup(
+                PR_KEY,
+                'sbx-1',
+                true,
+                killAt,
+            );
+            expect(refused).toBeNull();
+
+            const untouched = await stored();
+            expect(untouched.cleanupStatus).toBeUndefined();
+            expect(untouched.killAt).toBeUndefined();
+
+            // Drain the last holder: the same call must now win and persist
+            // killAt with the claim. Fails on the pre-fix write, which never
+            // stores killAt.
+            await model.updateOne({ _id: PR_KEY }, { $set: { leaseCount: 0 } });
             const claimed = await repository.claimCleanup(
                 PR_KEY,
                 'sbx-1',
                 true,
                 killAt,
             );
-            expect(claimed).toBeNull();
+            expect(claimed).not.toBeNull();
 
             const doc = await stored();
-            expect(doc.cleanupStatus).toBeUndefined();
-            expect(doc.killAt).toBeUndefined();
-        });
-
-        it('refuses a second claim while the first is in progress', async () => {
-            await repository.claimCleanup(PR_KEY, 'sbx-1', true, new Date());
-
-            const second = await repository.claimCleanup(
-                PR_KEY,
-                'sbx-1',
-                true,
-                new Date(),
+            expect(doc.cleanupStatus).toBe(
+                SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
             );
-
-            expect(second).toBeNull();
+            expect(doc.killAt).toEqual(killAt);
         });
     },
 );
