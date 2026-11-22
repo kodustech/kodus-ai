@@ -186,6 +186,7 @@ export async function executeRunCli(
     const command = onRuntime
         ? buildRuntimeRunCommand({
               home: entry.home!,
+              prefix: entry.prefix,
               binaryPath: entry.binaryPath,
               interpreter: entry.interpreter,
               args,

@@ -13,6 +13,7 @@ import {
     RuntimeSandbox,
     RuntimeSandboxService,
     toGuestPath,
+    toolLayerPlans,
 } from '@libs/sandbox/infrastructure/providers/runtime-sandbox.service';
 import {
     deleteImmediateSandbox,
@@ -481,5 +482,161 @@ describe('team CLIs installed into a runtime sandbox before its seal', () => {
             cliInstalls: undefined,
         });
         expect(client.open.mock.calls[0][0].egressAllow).toEqual(['github.com']);
+    });
+});
+
+describe('team CLIs from tool layers of the cell (docs/runtime/persistent-state.md section 4)', () => {
+    const install = (id: string, over: Record<string, unknown> = {}) => ({
+        id,
+        argv: ['npm', 'install', '--ignore-scripts', '-g', `${id}@1.2.3`],
+        binary: id,
+        egressAllow: ['registry.npmjs.org'],
+        ...over,
+    });
+    const params = (...ids: string[]) =>
+        ({
+            organizationId: 'org-a',
+            cloneUrl: 'https://github.com/acme/app.git',
+            branch: 'main',
+            platform: 'github',
+            cliInstalls: ids.map((id) => install(id)),
+        }) as any;
+    const hit = (id: string, over: Record<string, unknown> = {}) => ({
+        id,
+        state: 'hit',
+        binaryPath: `/opt/kcli/${id}/.local/bin/${id}`,
+        interpreter: 'node',
+        ...over,
+    });
+    const miss = (id: string) => ({ id, state: 'miss' });
+    /** A client whose open answers `toolLayers`; the install script prints a binary under the workspace prefix. */
+    const make = (toolLayers?: unknown[], opts: { mkdirExit?: number } = {}) => {
+        const commands: string[] = [];
+        const client = {
+            configured: true,
+            open: jest.fn(async () => ({ state: 'ready', ...(toolLayers ? { toolLayers } : {}) })),
+            op: jest.fn(async (_r: unknown, _s: string, op: any) => {
+                if (op.op !== 'exec') return { ok: true, content: '', eof: true };
+                commands.push(op.command);
+                if (op.command.includes('KODUS_CLI_BINARY')) {
+                    const id = /\/workspace\/\.kcli\/([a-z0-9]+)/.exec(op.command)![1];
+                    const home = `/workspace/.kcli/${id}`;
+                    return { ok: true, exec: { stdout: `KODUS_CLI_BINARY=${home}/node_modules/.bin/${id}\nKODUS_CLI_INTERPRETER=node\n`, stderr: '', exitCode: 0 } };
+                }
+                if (op.command.includes("mkdir -p '/workspace/.kcli/")) return { ok: true, exec: { stdout: '', stderr: '', exitCode: opts.mkdirExit ?? 0 } };
+                return { ok: true, exec: { stdout: '', stderr: '', exitCode: 0 } };
+            }),
+            renew: jest.fn(async () => undefined),
+            release: jest.fn(async () => undefined),
+            seal: jest.fn(async () => ({ sealed: true })),
+        };
+        const installs = () => commands.filter((c) => c.includes('KODUS_CLI_BINARY'));
+        return { client, commands, installs };
+    };
+    const create = (client: unknown, p: unknown) => new RuntimeSandboxService(conf({}), client as any).createSandboxWithRepo(p as any);
+
+    it('plans the npm and pnpm installs of one registry and asks the sandbox for them, the registry still in egressAllow', async () => {
+        const { client } = make();
+        await create(client, params('kcliabc'));
+        const open = client.open.mock.calls[0][0] as any;
+        expect(open.toolLayers).toEqual([{ id: 'kcliabc', installer: 'npm', argv: ['npm', 'install', '--ignore-scripts', '-g', 'kcliabc@1.2.3'], binary: 'kcliabc', registry: 'registry.npmjs.org' }]);
+        // The hub takes a held layer's registry out of the egress; the provider asks for it as it always did.
+        expect(open.egressAllow).toEqual(['github.com', 'registry.npmjs.org']);
+    });
+
+    it('skips the install of a held layer and runs its CLI from the mount, with a throwaway home', async () => {
+        const { client, installs, commands } = make([hit('kcliabc')]);
+        const sandbox = await create(client, params('kcliabc'));
+        expect(installs()).toEqual([]);
+        expect(commands.some((c) => c.includes("mkdir -p '/workspace/.kcli/kcliabc/.cache/npm'"))).toBe(true);
+        expect(client.seal).toHaveBeenCalledTimes(1);
+        expect(sandbox.cliInstalls).toEqual({
+            kcliabc: {
+                home: '/workspace/.kcli/kcliabc',
+                prefix: '/opt/kcli/kcliabc',
+                binaryPath: '/opt/kcli/kcliabc/.local/bin/kcliabc',
+                interpreter: 'node',
+            },
+        });
+    });
+
+    it('installs a layer that missed exactly as today, into the workspace prefix', async () => {
+        const { client, installs } = make([miss('kcliabc')]);
+        const sandbox = await create(client, params('kcliabc'));
+        expect(installs()).toHaveLength(1);
+        expect(sandbox.cliInstalls).toEqual({
+            kcliabc: { home: '/workspace/.kcli/kcliabc', binaryPath: '/workspace/.kcli/kcliabc/node_modules/.bin/kcliabc', interpreter: 'node' },
+        });
+        expect(sandbox.cliInstalls!.kcliabc.prefix).toBeUndefined();
+    });
+
+    it('works per CLI: a held one is mounted and the one that missed is installed', async () => {
+        const { client, installs } = make([hit('kclihit'), miss('kclimiss')]);
+        const sandbox = await create(client, params('kclihit', 'kclimiss'));
+        expect(installs()).toHaveLength(1);
+        expect(installs()[0]).toContain('kclimiss@1.2.3');
+        expect(installs()[0]).not.toContain('kclihit@1.2.3');
+        expect(sandbox.cliInstalls!.kclihit.prefix).toBe('/opt/kcli/kclihit');
+        expect(sandbox.cliInstalls!.kclimiss.prefix).toBeUndefined();
+    });
+
+    it('installs everything as today when the cell answers no layer (an older cell or no digest)', async () => {
+        const { client, installs } = make(undefined);
+        const sandbox = await create(client, params('kcliabc'));
+        expect(installs()).toHaveLength(1);
+        expect(sandbox.cliInstalls!.kcliabc.binaryPath).toBe('/workspace/.kcli/kcliabc/node_modules/.bin/kcliabc');
+    });
+
+    it.each([
+        ['a path outside its own mount', hit('kcliabc', { binaryPath: '/opt/kcli/other/bin/x' })],
+        ['a path that climbs out of it', hit('kcliabc', { binaryPath: '/opt/kcli/kcliabc/../x' })],
+        ['an interpreter it does not know', hit('kcliabc', { interpreter: 'perl' })],
+        ['no path', hit('kcliabc', { binaryPath: undefined })],
+    ])('does not trust a hit with %s, so the CLI is installed', async (_name, answer) => {
+        const { client, installs } = make([answer]);
+        const sandbox = await create(client, params('kcliabc'));
+        expect(installs()).toHaveLength(1);
+        expect(sandbox.cliInstalls!.kcliabc.prefix).toBeUndefined();
+    });
+
+    it('installs the CLI when the throwaway home cannot be made', async () => {
+        const { client, installs } = make([hit('kcliabc')], { mkdirExit: 1 });
+        const sandbox = await create(client, params('kcliabc'));
+        expect(installs()).toHaveLength(1);
+        expect(sandbox.cliInstalls!.kcliabc.prefix).toBeUndefined();
+    });
+
+    it('seals after a held layer, as after an install', async () => {
+        const { client } = make([hit('kcliabc')]);
+        await create(client, params('kcliabc'));
+        expect(client.seal).toHaveBeenCalledTimes(1);
+    });
+
+    describe('toolLayerPlans', () => {
+        it('plans only what a layer can hold: npm or pnpm, one registry, not the git host, a valid mount name', () => {
+            const plans = toolLayerPlans(
+                [
+                    install('kcliok'),
+                    install('kclipnpm', { argv: ['pnpm', 'add', '-g', 'x@1.0.0'] }),
+                    install('kclipip', { argv: ['pip', 'install', 'x==1.0.0'] }),
+                    install('kcliso', { egressAllow: ['a.example.com', 'b.example.com'] }),
+                    install('kclino', { egressAllow: [] }),
+                    install('kcligit', { egressAllow: ['github.com'] }),
+                    install('Bad_Id'),
+                    install('kcliok'),
+                ],
+                'github.com',
+            );
+            expect(plans.map((p) => `${p.id}:${p.installer}`)).toEqual(['kcliok:npm', 'kclipnpm:pnpm']);
+        });
+
+        it('plans at most the layers one sandbox mounts', () => {
+            const many = Array.from({ length: 12 }, (_, i) => install(`kcli${i}`));
+            expect(toolLayerPlans(many, 'github.com')).toHaveLength(8);
+        });
+
+        it('plans nothing without installs', () => {
+            expect(toolLayerPlans(undefined, 'github.com')).toEqual([]);
+        });
     });
 });

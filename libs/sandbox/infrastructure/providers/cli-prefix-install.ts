@@ -20,21 +20,38 @@ export function cliPrefixHome(id: string): string {
     return `${CLI_PREFIX_ROOT}/${id}`;
 }
 
-/** The environment every package manager needs to stay inside the prefix. */
-export function cliPrefixEnv(home: string): string[] {
+/**
+ * Where a tool layer of the cell is mounted, read-only, in a review sandbox
+ * (docs/runtime/persistent-state.md D11): the same absolute path the layer was
+ * built at, so what the install wrote into the prefix still resolves.
+ */
+export const CLI_LAYER_ROOT = '/opt/kcli';
+
+export function cliLayerPrefix(id: string): string {
+    return `${CLI_LAYER_ROOT}/${id}`;
+}
+
+/**
+ * The environment every package manager needs to stay inside the prefix. The
+ * prefix holds what the CLI is installed in (read-only when it is a tool layer);
+ * HOME and the package manager's cache are the throwaway home, which stays
+ * writable. An install into the workspace has both in one directory.
+ */
+export function cliPrefixEnv(dirs: { prefix: string; home: string }): string[] {
+    const { prefix, home } = dirs;
     return [
         `HOME=${home}`,
-        `PATH=${home}/.local/bin:${home}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin`,
-        `NPM_CONFIG_PREFIX=${home}/.local`,
+        `PATH=${prefix}/.local/bin:${prefix}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin`,
+        `NPM_CONFIG_PREFIX=${prefix}/.local`,
         `NPM_CONFIG_CACHE=${home}/.cache/npm`,
-        `PNPM_HOME=${home}/.local/bin`,
+        `PNPM_HOME=${prefix}/.local/bin`,
         'PIP_USER=1',
         'PIP_BREAK_SYSTEM_PACKAGES=1',
-        `PYTHONUSERBASE=${home}/.local`,
-        `PIPX_HOME=${home}/.local/pipx`,
-        `PIPX_BIN_DIR=${home}/.local/bin`,
-        `UV_TOOL_DIR=${home}/.local/uv`,
-        `UV_TOOL_BIN_DIR=${home}/.local/bin`,
+        `PYTHONUSERBASE=${prefix}/.local`,
+        `PIPX_HOME=${prefix}/.local/pipx`,
+        `PIPX_BIN_DIR=${prefix}/.local/bin`,
+        `UV_TOOL_DIR=${prefix}/.local/uv`,
+        `UV_TOOL_BIN_DIR=${prefix}/.local/bin`,
     ];
 }
 
@@ -44,7 +61,7 @@ export function buildCliPrefixInstallScript(params: {
     binary: string;
 }): string {
     const home = cliPrefixHome(params.id);
-    const env = cliPrefixEnv(home).map(q).join(' ');
+    const env = cliPrefixEnv({ prefix: home, home }).map(q).join(' ');
     const dirs = [`${home}/.local/bin`, `${home}/node_modules/.bin`]
         .map(q)
         .join(' ');
@@ -117,4 +134,25 @@ export function parseCliPrefixInstall(
         return undefined;
     }
     return { binaryPath, interpreter: interpreter as CliPrefixInterpreter };
+}
+
+/**
+ * What the cell answered for a tool layer it holds (claim.ready, through the
+ * hub): the CLI's path and interpreter, trusted only when the path is under the
+ * layer's own mount and the interpreter is one we know, whatever the answer says.
+ */
+export function parseToolLayerHit(
+    id: string,
+    hit: { binaryPath?: string; interpreter?: string },
+): ParsedCliPrefixInstall | undefined {
+    const prefix = cliLayerPrefix(id);
+    if (
+        !hit.binaryPath ||
+        !hit.binaryPath.startsWith(`${prefix}/`) ||
+        hit.binaryPath.includes('..') ||
+        !(CLI_PREFIX_INTERPRETERS as readonly string[]).includes(hit.interpreter ?? '')
+    ) {
+        return undefined;
+    }
+    return { binaryPath: hit.binaryPath, interpreter: hit.interpreter as CliPrefixInterpreter };
 }

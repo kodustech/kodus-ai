@@ -6,7 +6,8 @@ import { ConfigService } from '@nestjs/config';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createLogger } from '@libs/core/log/logger';
-import type { SandboxRef } from '@libs/runtime/contracts/sandbox';
+import type { SandboxRef, SandboxView } from '@libs/runtime/contracts/sandbox';
+import { MAX_TOOL_LAYERS, type ToolLayerPlan, TOOL_LAYER_ID_PATTERN, TOOL_LAYER_INSTALLERS } from '@libs/runtime/protocol';
 import {
     SANDBOX_FILE_CHUNK_BYTES,
     type SandboxOp,
@@ -24,9 +25,11 @@ import {
 import { resolvePrRefspec } from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
 import {
     buildCliPrefixInstallScript,
+    cliLayerPrefix,
     cliPrefixHome,
     CLI_PREFIX_INSTALL_TIMEOUT_SEC,
     parseCliPrefixInstall,
+    parseToolLayerHit,
 } from '@libs/sandbox/infrastructure/providers/cli-prefix-install';
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
 import { sedLineRange } from '@libs/sandbox/infrastructure/providers/read-within-root';
@@ -107,6 +110,39 @@ export function cloneHost(cloneUrl: string): string | undefined {
     } catch {
         return undefined;
     }
+}
+
+/**
+ * The installs the cell could hold as tool layers: an npm or pnpm install of one registry host that is not the git host
+ * (the hub takes a held layer's registry out of the egress, which the clone must not lose), with an id that is a
+ * valid mount name. The rest is installed as it always was. At most the most layers one sandbox mounts.
+ */
+export function toolLayerPlans(
+    cliInstalls: CreateSandboxParams['cliInstalls'],
+    gitHost: string | undefined,
+): ToolLayerPlan[] {
+    const plans: ToolLayerPlan[] = [];
+    for (const install of cliInstalls ?? []) {
+        const installer = install.argv[0];
+        const registry = install.egressAllow.length === 1 ? install.egressAllow[0] : undefined;
+        if (
+            !registry ||
+            registry === gitHost ||
+            !(TOOL_LAYER_INSTALLERS as readonly string[]).includes(installer) ||
+            !TOOL_LAYER_ID_PATTERN.test(install.id) ||
+            plans.some((p) => p.id === install.id)
+        )
+            continue;
+        plans.push({
+            id: install.id,
+            installer: installer as ToolLayerPlan['installer'],
+            argv: install.argv,
+            binary: install.binary,
+            registry,
+        });
+        if (plans.length >= MAX_TOOL_LAYERS) break;
+    }
+    return plans;
 }
 
 /** An absolute sandbox path, or one relative to the root, as the guest agent's root-relative path. */
@@ -415,9 +451,13 @@ export class RuntimeSandboxService implements ISandboxProvider {
             ]),
         ];
         const started = Date.now();
+        // Tool layers of the cell: the installs it could already hold. The registry hosts stay in egressAllow, as an
+        // install needs them; the hub takes a held layer's host out again once the cell says which it holds.
+        const layerPlans = toolLayerPlans(params.cliInstalls, host);
         const view = await this.client.open({
             ...ref,
             ...(egressAllow.length ? { egressAllow } : {}),
+            ...(layerPlans.length ? { toolLayers: layerPlans } : {}),
         });
         if (view.state !== 'ready') {
             const why =
@@ -482,7 +522,14 @@ export class RuntimeSandboxService implements ISandboxProvider {
                 authHeader,
             );
             await this.fetchSubmodules(sandbox, params, authHeader, baseBranch);
-            const cliInstalls = await this.installClis(sandbox, params);
+            // A held layer is mounted already: only the rest is installed, as it always was.
+            const held = await this.heldLayers(sandbox, params, layerPlans, view);
+            const installed = await this.installClis(
+                sandbox,
+                params.cliInstalls?.filter((i) => !held[i.id]),
+            );
+            const cliInstalls =
+                params.cliInstalls?.length ? { ...held, ...installed } : undefined;
             // The checkout is complete, and the git host is the only network
             // the sandbox needed. From here it runs attacker-controlled PR
             // code and model-chosen commands, so its egress is closed for
@@ -536,11 +583,10 @@ export class RuntimeSandboxService implements ISandboxProvider {
      */
     private async installClis(
         sandbox: RuntimeSandbox,
-        params: CreateSandboxParams,
-    ): Promise<Record<string, PreSealCliInstallResult> | undefined> {
-        if (!params.cliInstalls?.length) return undefined;
+        cliInstalls: CreateSandboxParams['cliInstalls'],
+    ): Promise<Record<string, PreSealCliInstallResult>> {
         const out: Record<string, PreSealCliInstallResult> = {};
-        for (const install of params.cliInstalls) {
+        for (const install of cliInstalls ?? []) {
             const home = cliPrefixHome(install.id);
             try {
                 const run = await sandbox.run(
@@ -566,6 +612,33 @@ export class RuntimeSandboxService implements ISandboxProvider {
                     error: `install failed: ${error instanceof Error ? error.message : String(error)}`,
                 };
             }
+        }
+        return out;
+    }
+
+    /**
+     * The CLIs the cell mounted as tool layers (docs/runtime/persistent-state.md section 4): per planned install
+     * the answer in the sandbox view, trusted only for a path under the layer's own mount. The CLI's HOME is a
+     * throwaway directory of the workspace (the layer is read-only). A layer that is not held, an answer that does
+     * not hold up, or a home that cannot be made is not held: that install runs as today, with its registry open.
+     */
+    private async heldLayers(
+        sandbox: RuntimeSandbox,
+        params: CreateSandboxParams,
+        plans: ToolLayerPlan[],
+        view: SandboxView,
+    ): Promise<Record<string, PreSealCliInstallResult>> {
+        const out: Record<string, PreSealCliInstallResult> = {};
+        for (const plan of plans) {
+            const state = view.toolLayers?.find((l) => l.id === plan.id);
+            const hit = state?.state === 'hit' ? parseToolLayerHit(plan.id, state) : undefined;
+            if (!hit) continue;
+            const home = cliPrefixHome(plan.id);
+            const made = await sandbox
+                .run(`mkdir -p ${shSingleQuote(`${home}/.cache/npm`)}`, { timeoutMs: TIMEOUTS.COMMAND_SHORT_MS })
+                .catch(() => ({ exitCode: -1 }));
+            if (made.exitCode !== 0) continue;
+            out[plan.id] = { home, prefix: cliLayerPrefix(plan.id), ...hit };
         }
         return out;
     }

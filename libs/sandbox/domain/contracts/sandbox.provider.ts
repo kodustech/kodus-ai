@@ -58,8 +58,14 @@ export interface PreSealCliInstallResult {
     binaryPath?: string;
     /** Runs the binary: the workspace is noexec, so it is `<interpreter> <binaryPath>`. */
     interpreter?: string;
-    /** The prefix the CLI runs with as HOME. */
+    /** The prefix the CLI runs with as HOME (the workspace prefix, or the throwaway home when `prefix` is set). */
     home: string;
+    /**
+     * Set when the CLI came from a tool layer of the cell: the read-only mount
+     * (/opt/kcli/<id>) the CLI's files are under, while `home` is a throwaway
+     * writable directory. Absent: the CLI was installed into `home` itself.
+     */
+    prefix?: string;
     error?: string;
 }
 

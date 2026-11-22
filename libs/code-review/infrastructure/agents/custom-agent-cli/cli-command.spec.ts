@@ -359,6 +359,22 @@ describe('runtime sandbox (noexec workspace)', () => {
         );
     });
 
+    it('runs a CLI from a read-only tool layer with the prefix in the layer and HOME in the throwaway home', () => {
+        const command = buildRuntimeRunCommand({
+            home: '/workspace/.kcli/u1',
+            prefix: '/opt/kcli/u1',
+            binaryPath: '/opt/kcli/u1/node_modules/cowsay/cli.js',
+            interpreter: 'node',
+            args: ['hi'],
+            repoDir: '/workspace/repo',
+            timeoutSec: 30,
+        });
+        expect(command).toContain("'HOME=/workspace/.kcli/u1'");
+        expect(command).toContain("'NPM_CONFIG_PREFIX=/opt/kcli/u1/.local'");
+        expect(command).toContain("'NPM_CONFIG_CACHE=/workspace/.kcli/u1/.cache/npm'");
+        expect(command).toContain("'node' '/opt/kcli/u1/node_modules/cowsay/cli.js' 'hi'");
+    });
+
     it('marks pip-family installers unsupported, with the reason', () => {
         for (const install of [
             'pip install lintkit==2.4.1',

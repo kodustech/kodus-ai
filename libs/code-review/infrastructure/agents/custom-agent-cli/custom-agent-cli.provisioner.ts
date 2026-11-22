@@ -75,6 +75,8 @@ export interface InstalledCustomAgentCli {
     interpreter?: string;
     /** Runtime sandbox only: the user prefix the CLI runs with as HOME. */
     home?: string;
+    /** Runtime sandbox only: the read-only tool layer the CLI's files are in, when it came from one (`home` is then a throwaway directory). */
+    prefix?: string;
 }
 
 export interface CustomAgentCliProvisioning {
@@ -330,6 +332,7 @@ export async function provisionCustomAgentClis(params: {
                     binaryPath: done.binaryPath,
                     interpreter: done.interpreter,
                     home: done.home,
+                    ...(done.prefix ? { prefix: done.prefix } : {}),
                 });
             }
         }

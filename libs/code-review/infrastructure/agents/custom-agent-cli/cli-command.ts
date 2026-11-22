@@ -575,6 +575,8 @@ export function planRuntimeCliInstall(
  *  clean environment (no network exists to protect, no secret to pass). */
 export function buildRuntimeRunCommand(params: {
     home: string;
+    /** The read-only tool layer the CLI is installed in; absent: it is installed in `home`. */
+    prefix?: string;
     binaryPath: string;
     /** Set on the runtime sandbox, where the workspace is noexec: the CLI
      *  runs as `<interpreter> <binaryPath>`. */
@@ -583,7 +585,7 @@ export function buildRuntimeRunCommand(params: {
     repoDir: string;
     timeoutSec: number;
 }): string {
-    const env = cliPrefixEnv(params.home);
+    const env = cliPrefixEnv({ prefix: params.prefix ?? params.home, home: params.home });
     return [
         `cd ${shSingleQuote(params.repoDir)} || exit 125`,
         `exec /usr/bin/env -i ${shellJoin(env)} /usr/bin/timeout -k 5 ${params.timeoutSec} ${shellJoin([...(params.interpreter ? [params.interpreter] : []), params.binaryPath, ...params.args])}`,
