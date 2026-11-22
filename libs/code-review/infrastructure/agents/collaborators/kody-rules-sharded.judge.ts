@@ -1410,7 +1410,7 @@ function resolveShardViolations(
         if (!ruleUuid) {
             continue;
         }
-        const reviewUnitId = unitIdForRuleId(v.ruleId, orderedUnits);
+        const reviewUnitId = unitIdForRuleId(v.ruleId, ruleUuid, orderedUnits);
         const { ruleId: _ruleId, ...rest } = v;
         // Strict-schema providers emit `null` for required-but-inapplicable
         // keys; downstream (line snapping, mapping) expects them absent.
@@ -1428,10 +1428,12 @@ function resolveShardViolations(
 
 /**
  * The atom unit a `ruleId` index points at, if that unit is an atom. A uuid
- * echoed back instead of an index names the rule, not one of its atoms.
+ * echoed back instead of an index names the rule, so it names an atom only
+ * when the shard holds exactly one atom of that rule.
  */
 function unitIdForRuleId(
     ruleId: unknown,
+    ruleUuid: string,
     orderedUnits: Array<Partial<IKodyRule>>,
 ): string | undefined {
     const asIndex =
@@ -1440,8 +1442,13 @@ function unitIdForRuleId(
             : typeof ruleId === 'string' && /^\d+$/.test(ruleId.trim())
               ? Number(ruleId.trim())
               : NaN;
-    if (!Number.isInteger(asIndex) || asIndex < 1) return undefined;
-    return orderedUnits[asIndex - 1]?.reviewUnitId;
+    if (Number.isInteger(asIndex) && asIndex >= 1) {
+        return orderedUnits[asIndex - 1]?.reviewUnitId;
+    }
+    const atoms = orderedUnits.filter(
+        (unit) => unit.uuid === ruleUuid && unit.reviewUnitId,
+    );
+    return atoms.length === 1 ? atoms[0].reviewUnitId : undefined;
 }
 
 /**

@@ -386,6 +386,41 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         );
     });
 
+    it('tags a uuid echo with the atom when the shard holds only one atom of the rule', async () => {
+        const { run } = fakeJudge({
+            'src/a.ts': [{ ruleId: 1 }, { ruleId: 'parent' }],
+        });
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +puts x')],
+            rules: [
+                {
+                    uuid: 'parent',
+                    reviewUnitId: 'parent-atom-1',
+                    parentTitle: 'Parent rule',
+                    title: 'no puts',
+                    rule: 'no puts',
+                    path: '**/*.ts',
+                },
+                // The rule's other atom does not apply to this file.
+                {
+                    uuid: 'parent',
+                    reviewUnitId: 'parent-atom-2',
+                    parentTitle: 'Parent rule',
+                    title: 'no pry',
+                    rule: 'no pry',
+                    path: '**/*.rb',
+                },
+            ],
+            runJudge: run,
+        });
+        expect(res.violations.map((v) => [v.ruleUuid, v.reviewUnitId])).toEqual(
+            [
+                ['parent', 'parent-atom-1'],
+                ['parent', 'parent-atom-1'],
+            ],
+        );
+    });
+
     it('applies the path filter: a file that matches no rule path is not sharded', async () => {
         const { run, calls } = fakeJudge({});
         const res = await judgeKodyRulesSharded({
