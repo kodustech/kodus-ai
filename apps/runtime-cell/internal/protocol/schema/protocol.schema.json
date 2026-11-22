@@ -61,6 +61,8 @@
             "step.stream",
             "image.bake",
             "image.shared",
+            "toollayer.built",
+            "toollayer.failed",
             "snapshot.forget",
             "pool.target",
             "blocked",
@@ -243,6 +245,10 @@
                 "cpus"
               ],
               "additionalProperties": false
+            },
+            "sandboxImageDigest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
             }
           },
           "required": [
@@ -1011,6 +1017,78 @@
         "resumeFrom": {
           "type": "string",
           "pattern": "^ksn-[0-9a-f]{32}$"
+        },
+        "toolLayers": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,31}$"
+              }
+            },
+            "required": [
+              "key",
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "layerBuild": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$"
+            },
+            "installer": {
+              "type": "string",
+              "enum": [
+                "npm",
+                "pnpm"
+              ]
+            },
+            "argv": {
+              "minItems": 1,
+              "maxItems": 64,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            },
+            "binary": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "registry": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            }
+          },
+          "required": [
+            "key",
+            "id",
+            "installer",
+            "argv",
+            "binary",
+            "registry"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1137,6 +1215,54 @@
             "template",
             "session"
           ]
+        },
+        "toolLayers": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,31}$"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "hit",
+                  "miss"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              },
+              "build": {
+                "type": "boolean",
+                "const": true
+              },
+              "binaryPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "interpreter": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "additionalProperties": false
+          }
         },
         "timing": {
           "type": "object",
@@ -4175,6 +4301,65 @@
         "recipeSha",
         "sha",
         "images"
+      ],
+      "additionalProperties": false
+    },
+    "toollayer.built": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,31}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unsigned": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "key",
+        "id",
+        "digest",
+        "bytes"
+      ],
+      "additionalProperties": false
+    },
+    "toollayer.failed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,31}$"
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        }
+      },
+      "required": [
+        "key",
+        "id",
+        "reason"
       ],
       "additionalProperties": false
     },

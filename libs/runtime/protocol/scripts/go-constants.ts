@@ -34,8 +34,11 @@ import {
     MAX_CELL_MEMORY_MB,
     MAX_CLAIM_SECRETS,
     MAX_SHARED_IMAGES,
+    MAX_TOOL_LAYERS,
     STEP_EXEC_OUTPUT_MAX,
     STEP_STREAM_CHUNK_MAX,
+    TOOL_LAYER_ID_PATTERN,
+    TOOL_LAYER_KEY_PATTERN,
 } from '../messages';
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '../recipe';
 import {
@@ -117,6 +120,9 @@ export function goConstants(): GoConstant[] {
         { go: 'MaxExercisedLinesPerFile', from: `EXERCISED_LINES_LIMITS.linesPerFile (${MESSAGES})`, doc: 'the most changed lines one file of a claim.exercised names', value: EXERCISED_LINES_LIMITS.linesPerFile },
         { go: 'MaxClaimSecrets', from: `MAX_CLAIM_SECRETS (${MESSAGES})`, doc: 'the most org secrets one claim carries', value: MAX_CLAIM_SECRETS },
         { go: 'MaxSharedImages', from: `MAX_SHARED_IMAGES (${MESSAGES})`, doc: 'the most images one image.shared or claim.acquire sharedImages names', value: MAX_SHARED_IMAGES },
+        { go: 'MaxToolLayers', from: `MAX_TOOL_LAYERS (${MESSAGES})`, doc: 'the most tool layers one sandbox.acquire mounts', value: MAX_TOOL_LAYERS },
+        { go: 'ToolLayerIDPattern', from: `TOOL_LAYER_ID_PATTERN (${MESSAGES})`, doc: 'a tool layer id, which becomes the mount path /opt/kcli/<id>', pattern: TOOL_LAYER_ID_PATTERN },
+        { go: 'ToolLayerKeyPattern', from: `TOOL_LAYER_KEY_PATTERN (${MESSAGES})`, doc: 'a tool layer key or digest, sha256 in hex', pattern: TOOL_LAYER_KEY_PATTERN },
         { go: 'MaxHealthTimeoutSeconds', from: 'MAX_HEALTH_TIMEOUT_SECONDS (libs/runtime/protocol/recipe.ts)', doc: 'the most a boot waits for the app, in seconds', value: MAX_HEALTH_TIMEOUT_SECONDS },
         { go: 'MaxRecipeNeeds', from: `MAX_RECIPE_NEEDS (${WORKSPACE})`, doc: 'the other repositories one recipe may boot beside its own (services.needs)', value: MAX_RECIPE_NEEDS },
         { go: 'RepositoryAliasPattern', from: `REPOSITORY_ALIAS_PATTERN (${WORKSPACE})`, doc: "a repository's directory in the workspace", pattern: REPOSITORY_ALIAS_PATTERN },

@@ -106,6 +106,8 @@ export const CLAIM_SCOPED_TYPES: ReadonlySet<MessageType> = new Set<MessageType>
     'preview.unroute',
     'claim.snapshot',
     'claim.exercised',
+    'toollayer.built',
+    'toollayer.failed',
 ]);
 
 /** Types that answer another message: the envelope must name it (re). */

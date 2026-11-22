@@ -50,6 +50,7 @@ Imported by:
 - [`apps/runtime-cell/internal/agent/outbox`](../agent/outbox/AGENTS.md)
 - [`apps/runtime-cell/internal/agent/pool`](../agent/pool/AGENTS.md)
 - [`apps/runtime-cell/internal/browser`](../browser/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/dockergvisor`](../drivers/dockergvisor/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/localdocker`](../drivers/localdocker/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/microvm`](../drivers/microvm/AGENTS.md)
 - [`apps/runtime-cell/internal/gitsource`](../gitsource/AGENTS.md)

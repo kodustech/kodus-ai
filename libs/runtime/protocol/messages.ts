@@ -359,6 +359,15 @@ export const CELL_FEATURES = [
     // a hub whose hello ack accepts it; a cell without a pool does not name it.
     // Like bakeShare, only while the hello stays within HELLO_FEATURES_OLDER_HUB_MAX.
     'sandboxPool',
+    // Tool layers (docs/runtime/persistent-state.md section 4): sandbox.acquire
+    // toolLayers and layerBuild, claim.ready toolLayers, hello capabilities
+    // sandboxImageDigest, and the builder's toollayer.built and
+    // toollayer.failed. The hub sends the fields only to a cell that names it
+    // and the cell sends the results only for a layerBuild it was asked. A
+    // cell names it only with a content digest for its sandbox image (U6),
+    // and, like sandboxPool, only while the hello stays within
+    // HELLO_FEATURES_OLDER_HUB_MAX.
+    'toolLayers',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -458,6 +467,71 @@ export type SnapshotPurpose = (typeof SNAPSHOT_PURPOSES)[number];
 export const SnapshotIdSchema = z.string().regex(/^ksn-[0-9a-f]{32}$/);
 /** What a template is kept under for its org (a repository, a tool set): the newest one of a key replaces the others. */
 export const SnapshotKeySchema = z.string().regex(/^[a-z0-9][a-z0-9._:-]{0,127}$/);
+
+/**
+ * Tool layers (feature toolLayers). The id becomes the mount path
+ * /opt/kcli/<id> inside a sandbox, so it is a short safe name: lower case
+ * letters, digits and hyphens, starting with a letter, no dot, no slash.
+ */
+export const TOOL_LAYER_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
+export const TOOL_LAYER_KEY_PATTERN = /^[a-f0-9]{64}$/;
+/** The most layers one review mounts. */
+export const MAX_TOOL_LAYERS = 8;
+/** The most argv words of a layer build's install command, and the longest one. */
+export const MAX_LAYER_BUILD_ARGV = 64;
+export const MAX_LAYER_BUILD_ARG = 512;
+export const TOOL_LAYER_INSTALLERS = ['npm', 'pnpm'] as const;
+const ToolLayerIdSchema = z.string().regex(TOOL_LAYER_ID_PATTERN);
+const ToolLayerKeySchema = z.string().regex(TOOL_LAYER_KEY_PATTERN);
+
+/** One layer a review asks to mount: the key the provider computed and the id it mounts under. */
+export const ToolLayerRefSchema = z.strictObject({ key: ToolLayerKeySchema, id: ToolLayerIdSchema });
+export type ToolLayerRef = z.infer<typeof ToolLayerRefSchema>;
+
+/**
+ * What a builder claim runs: the API's install plan (the cell validates it
+ * again, in Go), the binary the layer must hold and the one registry host the
+ * builder may reach.
+ */
+export const LayerBuildSchema = z.strictObject({
+    key: ToolLayerKeySchema,
+    id: ToolLayerIdSchema,
+    installer: z.enum(TOOL_LAYER_INSTALLERS),
+    argv: z.array(z.string().min(1).max(MAX_LAYER_BUILD_ARG)).min(1).max(MAX_LAYER_BUILD_ARGV),
+    binary: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/),
+    registry: hostname,
+});
+export type LayerBuild = z.infer<typeof LayerBuildSchema>;
+
+/** The cell's answer for one requested layer in claim.ready. */
+export const ToolLayerStateSchema = z.strictObject({
+    id: ToolLayerIdSchema,
+    state: z.enum(['hit', 'miss']),
+    // Why a miss (no_key, corrupt, evicted, disabled, no_image_digest...): a short code, never text.
+    reason: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).optional(),
+    // Only on a miss: the cell asks for a builder claim for this key (its second miss within 7 days, U9).
+    build: z.literal(true).optional(),
+    // Only on a hit: where the CLI is under /opt/kcli/<id>, its interpreter and the layer's digest.
+    binaryPath: z.string().min(1).max(1_024).optional(),
+    interpreter: z.string().min(1).max(256).optional(),
+    digest: ToolLayerKeySchema.optional(),
+});
+export type ToolLayerState = z.infer<typeof ToolLayerStateSchema>;
+
+/** Why a sandbox.acquire's layer fields do not go together, or undefined (the Go cell's refine says the same). */
+export function sandboxToolLayerError(b: { toolLayers?: { id: string; key: string }[]; layerBuild?: unknown; prepares?: boolean; templateKey?: string; resumeFrom?: string; secrets?: unknown[] }): string | undefined {
+    if (b.layerBuild !== undefined) {
+        if (b.secrets?.length) return 'a layer builder is handed no secret';
+        if (b.templateKey || b.resumeFrom || b.prepares) return 'a layer builder neither prepares, starts from a template nor resumes a session';
+        if (b.toolLayers?.length) return 'a layer builder mounts no layer';
+    }
+    const ids = new Set<string>();
+    for (const l of b.toolLayers ?? []) {
+        if (ids.has(l.id)) return `layer id ${l.id} twice`;
+        ids.add(l.id);
+    }
+    return undefined;
+}
 
 /** Why a sandbox.acquire's snapshot fields do not go together, or undefined (the Go cell's refine says the same). */
 export function sandboxSnapshotError(b: { prepares?: boolean; templateKey?: string; resumeFrom?: string; secrets?: unknown[] }): string | undefined {
@@ -706,6 +780,8 @@ export type HeartbeatHost = z.infer<typeof HeartbeatHostSchema>;
  *     counted at (its blank pool sandboxes are of it), within maxSize; absent
  *     from a cell that runs no sandboxes or is older than it. The hub admits
  *     such a sandbox at it, never at defaultSize (a Run's).
+ *   - sandboxImageDigest: the sandbox image's content digest (feature
+ *     toolLayers); a layer is built for and mounted only into that image.
  * Placement reads hello isolation; these say what a cell could offer next.
  */
 export const HelloCapabilitiesSchema = z.strictObject({
@@ -717,6 +793,9 @@ export const HelloCapabilitiesSchema = z.strictObject({
     maxSize: MachineSizeSchema.optional(),
     defaultSize: MachineSizeSchema.optional(),
     sandboxSize: MachineSizeSchema.optional(),
+    // The content digest of the sandbox image (feature toolLayers): what a
+    // layer key is computed against. Absent: no layers on this cell.
+    sandboxImageDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
 });
 export type HelloCapabilities = z.infer<typeof HelloCapabilitiesSchema>;
 
@@ -880,12 +959,22 @@ export const MessageBodySchemas = {
         prepares: z.boolean().optional(),
         templateKey: SnapshotKeySchema.optional(),
         resumeFrom: SnapshotIdSchema.optional(),
+        // Feature toolLayers. toolLayers: a review asks to mount these tool
+        // layers read-only at /opt/kcli/<id>; claim.ready answers hit or miss
+        // for each. layerBuild: a builder claim, which runs one CLI install
+        // and hands the result to the cell's store; no caller gets sandbox.op
+        // on it, and it takes no secret, template or session.
+        toolLayers: z.array(ToolLayerRefSchema).min(1).max(MAX_TOOL_LAYERS).optional(),
+        layerBuild: LayerBuildSchema.optional(),
     }).refine((b) => claimSecretsError(b.secrets) === undefined, {
         message: 'each secret once, its id the lower case of its name',
         path: ['secrets'],
     }).refine((b) => sandboxSnapshotError(b) === undefined, {
         message: 'prepares needs a templateKey and no secrets; resumeFrom goes with neither',
         path: ['prepares'],
+    }).refine((b) => sandboxToolLayerError(b) === undefined, {
+        message: 'a layer builder takes no secret, template, session or layer; a layer id is named once',
+        path: ['layerBuild'],
     }),
     // The claim's machines are up, the code is in and the observer answers.
     // The hub only marks a claim bound on this message, never on the ack of
@@ -902,6 +991,8 @@ export const MessageBodySchemas = {
         // pool machine adopted (pool), or a base booted from a bake this cell made
         // (bake). Only to a hub whose hello ack accepts readyStart.
         start: z.enum(CLAIM_STARTS).optional(),
+        // Feature toolLayers: one entry per layer the sandbox.acquire asked for.
+        toolLayers: z.array(ToolLayerStateSchema).min(1).max(MAX_TOOL_LAYERS).optional(),
         // How long the claim took on the cell, in ms. prepareMs is the cell
         // agent's wall time from the ack of claim.acquire to this message
         // (network, machines, code, boot, egress); the rest are the driver's
@@ -1064,6 +1155,22 @@ export const MessageBodySchemas = {
         sha: z.string().regex(/^[0-9a-f]{40}$/),
         refsDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
         images: z.array(SharedImageSchema).min(1).max(MAX_SHARED_IMAGES),
+    }),
+    // Cell to hub, on a layerBuild claim (feature toolLayers): the layer the
+    // cell stored (its digest and size), or why it did not. Never content, and
+    // the reason is a short code. The hub releases the builder claim after it.
+    'toollayer.built': z.strictObject({
+        key: ToolLayerKeySchema,
+        id: ToolLayerIdSchema,
+        digest: ToolLayerKeySchema,
+        bytes: z.number().int().min(0),
+        // Packages the builder found without a registry signature (U5), recorded and allowed.
+        unsigned: z.number().int().min(0).optional(),
+    }),
+    'toollayer.failed': z.strictObject({
+        key: ToolLayerKeySchema,
+        id: ToolLayerIdSchema,
+        reason: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
     }),
     // The org's sessions to remove at once (their PR closed or merged); a
     // template or a round is not one, and the cell refuses those.

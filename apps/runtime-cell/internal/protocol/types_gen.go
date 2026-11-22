@@ -17,40 +17,42 @@ const (
 type MessageType string
 
 const (
-	MessageTypeHello          MessageType = "hello"
-	MessageTypeHeartbeat      MessageType = "heartbeat"
-	MessageTypeClaimAcquire   MessageType = "claim.acquire"
-	MessageTypeSandboxAcquire MessageType = "sandbox.acquire"
-	MessageTypeClaimReady     MessageType = "claim.ready"
-	MessageTypeClaimFailed    MessageType = "claim.failed"
-	MessageTypeClaimRenew     MessageType = "claim.renew"
-	MessageTypeClaimRelease   MessageType = "claim.release"
-	MessageTypeBrowserExplore MessageType = "browser.explore"
-	MessageTypeProbeRun       MessageType = "probe.run"
-	MessageTypeExec           MessageType = "exec"
-	MessageTypeUpload         MessageType = "upload"
-	MessageTypeExecCancel     MessageType = "exec.cancel"
-	MessageTypeSandboxOp      MessageType = "sandbox.op"
-	MessageTypeGuestResult    MessageType = "guest.result"
-	MessageTypeMachineReset   MessageType = "machine.reset"
-	MessageTypeClaimSnapshot  MessageType = "claim.snapshot"
-	MessageTypeClaimExercised MessageType = "claim.exercised"
-	MessageTypeStepResult     MessageType = "step.result"
-	MessageTypeStepStream     MessageType = "step.stream"
-	MessageTypeImageBake      MessageType = "image.bake"
-	MessageTypeImageShared    MessageType = "image.shared"
-	MessageTypeSnapshotForget MessageType = "snapshot.forget"
-	MessageTypePoolTarget     MessageType = "pool.target"
-	MessageTypeBlocked        MessageType = "blocked"
-	MessageTypeEgressBlocked  MessageType = "egress.blocked"
-	MessageTypeClaimProgress  MessageType = "claim.progress"
-	MessageTypeEgressPolicy   MessageType = "egress.policy"
-	MessageTypePreviewTunnel  MessageType = "preview.tunnel"
-	MessageTypePreviewRoute   MessageType = "preview.route"
-	MessageTypePreviewUnroute MessageType = "preview.unroute"
-	MessageTypeCellRevoked    MessageType = "cell.revoked"
-	MessageTypeAck            MessageType = "ack"
-	MessageTypeNack           MessageType = "nack"
+	MessageTypeHello           MessageType = "hello"
+	MessageTypeHeartbeat       MessageType = "heartbeat"
+	MessageTypeClaimAcquire    MessageType = "claim.acquire"
+	MessageTypeSandboxAcquire  MessageType = "sandbox.acquire"
+	MessageTypeClaimReady      MessageType = "claim.ready"
+	MessageTypeClaimFailed     MessageType = "claim.failed"
+	MessageTypeClaimRenew      MessageType = "claim.renew"
+	MessageTypeClaimRelease    MessageType = "claim.release"
+	MessageTypeBrowserExplore  MessageType = "browser.explore"
+	MessageTypeProbeRun        MessageType = "probe.run"
+	MessageTypeExec            MessageType = "exec"
+	MessageTypeUpload          MessageType = "upload"
+	MessageTypeExecCancel      MessageType = "exec.cancel"
+	MessageTypeSandboxOp       MessageType = "sandbox.op"
+	MessageTypeGuestResult     MessageType = "guest.result"
+	MessageTypeMachineReset    MessageType = "machine.reset"
+	MessageTypeClaimSnapshot   MessageType = "claim.snapshot"
+	MessageTypeClaimExercised  MessageType = "claim.exercised"
+	MessageTypeStepResult      MessageType = "step.result"
+	MessageTypeStepStream      MessageType = "step.stream"
+	MessageTypeImageBake       MessageType = "image.bake"
+	MessageTypeImageShared     MessageType = "image.shared"
+	MessageTypeToollayerBuilt  MessageType = "toollayer.built"
+	MessageTypeToollayerFailed MessageType = "toollayer.failed"
+	MessageTypeSnapshotForget  MessageType = "snapshot.forget"
+	MessageTypePoolTarget      MessageType = "pool.target"
+	MessageTypeBlocked         MessageType = "blocked"
+	MessageTypeEgressBlocked   MessageType = "egress.blocked"
+	MessageTypeClaimProgress   MessageType = "claim.progress"
+	MessageTypeEgressPolicy    MessageType = "egress.policy"
+	MessageTypePreviewTunnel   MessageType = "preview.tunnel"
+	MessageTypePreviewRoute    MessageType = "preview.route"
+	MessageTypePreviewUnroute  MessageType = "preview.unroute"
+	MessageTypeCellRevoked     MessageType = "cell.revoked"
+	MessageTypeAck             MessageType = "ack"
+	MessageTypeNack            MessageType = "nack"
 )
 
 type Envelope struct {
@@ -93,14 +95,15 @@ const (
 )
 
 type HelloCapabilities struct {
-	Backends       []string     `json:"backends"`
-	SnapshotMemory bool         `json:"snapshotMemory"`
-	NestedDocker   bool         `json:"nestedDocker"`
-	Kvm            bool         `json:"kvm"`
-	Arch           MachineArch  `json:"arch"`
-	MaxSize        *MachineSize `json:"maxSize,omitempty"`
-	DefaultSize    *MachineSize `json:"defaultSize,omitempty"`
-	SandboxSize    *MachineSize `json:"sandboxSize,omitempty"`
+	Backends           []string     `json:"backends"`
+	SnapshotMemory     bool         `json:"snapshotMemory"`
+	NestedDocker       bool         `json:"nestedDocker"`
+	Kvm                bool         `json:"kvm"`
+	Arch               MachineArch  `json:"arch"`
+	MaxSize            *MachineSize `json:"maxSize,omitempty"`
+	DefaultSize        *MachineSize `json:"defaultSize,omitempty"`
+	SandboxSize        *MachineSize `json:"sandboxSize,omitempty"`
+	SandboxImageDigest *string      `json:"sandboxImageDigest,omitempty"`
 }
 
 type HelloBody struct {
@@ -302,6 +305,27 @@ type ClaimAcquireBody struct {
 	SharedImages      []ClaimAcquireBodySharedImagesItem  `json:"sharedImages,omitempty"`
 }
 
+type SandboxAcquireBodyToolLayersItem struct {
+	Key string `json:"key"`
+	ID  string `json:"id"`
+}
+
+type SandboxAcquireBodyLayerBuildInstaller string
+
+const (
+	SandboxAcquireBodyLayerBuildInstallerNpm  SandboxAcquireBodyLayerBuildInstaller = "npm"
+	SandboxAcquireBodyLayerBuildInstallerPnpm SandboxAcquireBodyLayerBuildInstaller = "pnpm"
+)
+
+type SandboxAcquireBodyLayerBuild struct {
+	Key       string                                `json:"key"`
+	ID        string                                `json:"id"`
+	Installer SandboxAcquireBodyLayerBuildInstaller `json:"installer"`
+	Argv      []string                              `json:"argv"`
+	Binary    string                                `json:"binary"`
+	Registry  string                                `json:"registry"`
+}
+
 type SandboxAcquireBody struct {
 	OrgID             string                              `json:"orgId"`
 	HardExpiresAt     string                              `json:"hardExpiresAt"`
@@ -314,6 +338,8 @@ type SandboxAcquireBody struct {
 	Prepares          *bool                               `json:"prepares,omitempty"`
 	TemplateKey       *string                             `json:"templateKey,omitempty"`
 	ResumeFrom        *string                             `json:"resumeFrom,omitempty"`
+	ToolLayers        []SandboxAcquireBodyToolLayersItem  `json:"toolLayers,omitempty"`
+	LayerBuild        *SandboxAcquireBodyLayerBuild       `json:"layerBuild,omitempty"`
 }
 
 type ServiceHealth string
@@ -358,6 +384,23 @@ const (
 	ClaimReadyBodyStartSession  ClaimReadyBodyStart = "session"
 )
 
+type ClaimReadyBodyToolLayersItemState string
+
+const (
+	ClaimReadyBodyToolLayersItemStateHit  ClaimReadyBodyToolLayersItemState = "hit"
+	ClaimReadyBodyToolLayersItemStateMiss ClaimReadyBodyToolLayersItemState = "miss"
+)
+
+type ClaimReadyBodyToolLayersItem struct {
+	ID          string                            `json:"id"`
+	State       ClaimReadyBodyToolLayersItemState `json:"state"`
+	Reason      *string                           `json:"reason,omitempty"`
+	Build       *bool                             `json:"build,omitempty"`
+	BinaryPath  *string                           `json:"binaryPath,omitempty"`
+	Interpreter *string                           `json:"interpreter,omitempty"`
+	Digest      *string                           `json:"digest,omitempty"`
+}
+
 type ReadyTimingBuildStepsSlowestItem struct {
 	Service string `json:"service"`
 	Name    string `json:"name"`
@@ -391,10 +434,11 @@ type ReadyTiming struct {
 }
 
 type ClaimReadyBody struct {
-	Manifest Manifest             `json:"manifest"`
-	Observer ObserverState        `json:"observer"`
-	Start    *ClaimReadyBodyStart `json:"start,omitempty"`
-	Timing   *ReadyTiming         `json:"timing,omitempty"`
+	Manifest   Manifest                       `json:"manifest"`
+	Observer   ObserverState                  `json:"observer"`
+	Start      *ClaimReadyBodyStart           `json:"start,omitempty"`
+	ToolLayers []ClaimReadyBodyToolLayersItem `json:"toolLayers,omitempty"`
+	Timing     *ReadyTiming                   `json:"timing,omitempty"`
 }
 
 type BlockerKind string
@@ -1238,6 +1282,20 @@ type ImageSharedBody struct {
 	Images        []ClaimAcquireBodySharedImagesItem `json:"images"`
 }
 
+type ToollayerBuiltBody struct {
+	Key      string `json:"key"`
+	ID       string `json:"id"`
+	Digest   string `json:"digest"`
+	Bytes    int64  `json:"bytes"`
+	Unsigned *int64 `json:"unsigned,omitempty"`
+}
+
+type ToollayerFailedBody struct {
+	Key    string `json:"key"`
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
 type SnapshotForgetBody struct {
 	OrgID       string   `json:"orgId"`
 	SnapshotIds []string `json:"snapshotIds"`
@@ -1379,6 +1437,10 @@ func newBody(t MessageType) (any, bool) {
 		return new(ImageBakeBody), true
 	case MessageTypeImageShared:
 		return new(ImageSharedBody), true
+	case MessageTypeToollayerBuilt:
+		return new(ToollayerBuiltBody), true
+	case MessageTypeToollayerFailed:
+		return new(ToollayerFailedBody), true
 	case MessageTypeSnapshotForget:
 		return new(SnapshotForgetBody), true
 	case MessageTypePoolTarget:
@@ -1454,6 +1516,10 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeImageBake, true
 	case ImageSharedBody, *ImageSharedBody:
 		return MessageTypeImageShared, true
+	case ToollayerBuiltBody, *ToollayerBuiltBody:
+		return MessageTypeToollayerBuilt, true
+	case ToollayerFailedBody, *ToollayerFailedBody:
+		return MessageTypeToollayerFailed, true
 	case SnapshotForgetBody, *SnapshotForgetBody:
 		return MessageTypeSnapshotForget, true
 	case PoolTargetBody, *PoolTargetBody:

@@ -40,6 +40,7 @@ const (
 	FeatureExercisedLines        = "exercisedLines"
 	FeatureBakeShare             = "bakeShare"
 	FeatureSandboxPool           = "sandboxPool"
+	FeatureToolLayers            = "toolLayers"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -79,6 +80,7 @@ var CellFeatures = []string{
 	FeatureExercisedLines,
 	FeatureBakeShare,
 	FeatureSandboxPool,
+	FeatureToolLayers,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):
@@ -125,6 +127,8 @@ var ClaimScopedTypeNames = []string{
 	"sandbox.op",
 	"step.result",
 	"step.stream",
+	"toollayer.built",
+	"toollayer.failed",
 	"upload",
 }
 
@@ -217,6 +221,15 @@ const MaxClaimSecrets = 100
 
 // MaxSharedImages is MAX_SHARED_IMAGES (libs/runtime/protocol/messages.ts): the most images one image.shared or claim.acquire sharedImages names.
 const MaxSharedImages = 64
+
+// MaxToolLayers is MAX_TOOL_LAYERS (libs/runtime/protocol/messages.ts): the most tool layers one sandbox.acquire mounts.
+const MaxToolLayers = 8
+
+// ToolLayerIDPattern is TOOL_LAYER_ID_PATTERN (libs/runtime/protocol/messages.ts): a tool layer id, which becomes the mount path /opt/kcli/<id>.
+const ToolLayerIDPattern = `^[a-z][a-z0-9-]{0,31}$`
+
+// ToolLayerKeyPattern is TOOL_LAYER_KEY_PATTERN (libs/runtime/protocol/messages.ts): a tool layer key or digest, sha256 in hex.
+const ToolLayerKeyPattern = `^[a-f0-9]{64}$`
 
 // MaxHealthTimeoutSeconds is MAX_HEALTH_TIMEOUT_SECONDS (libs/runtime/protocol/recipe.ts): the most a boot waits for the app, in seconds.
 const MaxHealthTimeoutSeconds = 900

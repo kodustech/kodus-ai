@@ -213,7 +213,10 @@ func refine(body any) error {
 		if err := refineSecrets(b.Secrets); err != nil {
 			return err
 		}
-		return refineSandboxSnapshot(b)
+		if err := refineSandboxSnapshot(b); err != nil {
+			return err
+		}
+		return refineSandboxToolLayers(b)
 	case *StepResultBody:
 		return checkStepResult(b)
 	case *EgressPolicyBody:
@@ -274,6 +277,30 @@ func refineSandboxSnapshot(b *SandboxAcquireBody) error {
 		return fmt.Errorf("prepares: a sandbox that prepares a template is handed no secret")
 	case b.ResumeFrom != nil && (prepares || b.TemplateKey != nil):
 		return fmt.Errorf("prepares: a sandbox resumes a session or starts from a template, not both")
+	}
+	return nil
+}
+
+// refineSandboxToolLayers mirrors sandboxToolLayerError: a layer builder is
+// handed no secret, template, session or layer, and a layer id is named once
+// (it is the mount path).
+func refineSandboxToolLayers(b *SandboxAcquireBody) error {
+	if b.LayerBuild != nil {
+		switch {
+		case len(b.Secrets) > 0:
+			return fmt.Errorf("layerBuild: a layer builder is handed no secret")
+		case b.TemplateKey != nil || b.ResumeFrom != nil || (b.Prepares != nil && *b.Prepares):
+			return fmt.Errorf("layerBuild: a layer builder neither prepares, starts from a template nor resumes a session")
+		case len(b.ToolLayers) > 0:
+			return fmt.Errorf("layerBuild: a layer builder mounts no layer")
+		}
+	}
+	seen := map[string]bool{}
+	for _, l := range b.ToolLayers {
+		if seen[l.ID] {
+			return fmt.Errorf("toolLayers: layer id %s twice", l.ID)
+		}
+		seen[l.ID] = true
 	}
 	return nil
 }
