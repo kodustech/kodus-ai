@@ -560,26 +560,20 @@ then run the org purge and see the layer tree gone.
 | D12 | Lifecycle scripts run in the builder as today's install does (parity), contained there | The layer must equal what the review would install |
 | D13 | One `org.purge` for both features, acknowledged per cell, the org purge waits for it | One place that knows where an org's data at rest is |
 
-### Open (need the user)
+### Decided with the user (2026-11-22): performance, security, low cost
 
-1. **Is the rootfs delta worth a second runtime and a host flag?** S1 decides if it can ship; if it can, it needs
-   `runsc-restore` in every host's `daemon.json` (installer, preflight, docs). Volumes-only is simpler and covers
-   databases and uploads. Recommendation: ship volumes first inside the same work, enable the rootfs delta only if S1
-   shows it is clean.
-2. **Default retention of a sleeping preview's data**: 7 days (the record's) is the plan. Shorter (for example 48 h)
-   lowers the at-rest exposure and the disk. Recommendation: keep 7 days, make it an owner setting later only if asked.
-3. **Should Kodus Cloud meter kept data?** The plan shows bytes and charges nothing. A GB-month price would follow
-   [cost-metering.md](cost-metering.md).
-4. **Run lifecycle scripts in tool-layer builds?** Parity (D12) keeps CLIs that need a postinstall working. Forcing
-   `--ignore-scripts` unless the CLI says it needs scripts is safer and may break some. Needs a product call, and a
-   count of installs that rely on scripts.
-5. **Verify package provenance in the builder** (`npm audit signatures`, registry signatures) and refuse a layer whose
-   packages fail it? Cheap to add, may reject legitimate unsigned packages.
-6. **Where the cell gets the image digest for the key**: today `-gvisor-sandbox-image` may be a tag. Layers need a
-   digest; either the flag is required to be a digest (like the helper image) or the cell resolves and records it.
-   Recommendation: resolve at start and fail closed when it cannot.
-7. **Native addons in a layer** are not promised (parity with the noexec workspace). If a customer's CLI needs one,
-   the answer is a noexec-less mount and a separate review of that.
+| # | Decision | Reason |
+|---|---|---|
+| U1 | **A is volumes-only.** No rootfs delta, no second runsc runtime, no host `daemon.json` change; S1 is dropped | Volumes hold what a reviewer cares about (database, uploads); a second runtime on every host is cost and attack surface for little gain. A service that writes state outside a volume wakes without it, and the card says so |
+| U2 | **A's data is kept 72 h after the preview goes to sleep**, never past the record's `expiresAt`. After 72 h asleep the state is deleted and the next wake is cold, with a reason | Covers a weekend; halves the at-rest exposure and the disk of the 7 day plan |
+| U3 | **Kept data is shown (bytes per preview, per org) and not charged.** The caps of 3.5 bound the cost | No billing surface to build; the caps keep the disk small |
+| U4 | **B runs lifecycle scripts in the builder** (D12) | The builder has no secret, no PR code and one registry host: running them there is strictly safer than today's install inside the review |
+| U5 | **B checks package integrity and signatures in the builder.** npm's `integrity` (sha512) is always enforced; `npm audit signatures` runs after the install and an *invalid* signature refuses the layer; an unsigned package is allowed and recorded in `layer.json` | Cheap, catches a tampered registry answer; refusing unsigned packages would break legitimate CLIs |
+| U6 | **The image digest is resolved at cell start; no digest, no layers** (fail closed to today's install) | A layer must never meet an image it was not built for |
+| U7 | **Native binaries keep today's parity**: an ELF entry is refused, exec bits are stripped | Today's install already refuses them on the noexec workspace, so nothing regresses; allowing exec from a layer is a separate review |
+| U8 | **Mount-time verification is a stat fingerprint, the full rehash is periodic.** At build the cell records, per file, `(inode, size, mtime, ctime)`; each mount compares that fingerprint (microseconds for thousands of files). The full sha256 of the tree runs at the first mount after a cell start, every 24 h per layer, and whenever the fingerprint differs | Rehashing up to 256 MiB on every review costs CPU and latency on the hot path. Changing a 0444 file owned by the cell needs the cell's user or root on the host, which already owns every sandbox; the periodic rehash still catches bit rot |
+| U9 | **A layer is built on the second miss of the same key within 7 days**, not the first | The first miss already pays one install inside the review; building in parallel would double the cost for a CLI used once. A CLI used twice pays one build and then saves every later install |
+| U10 | **A's copies are compressed with zstd level 1** | Database volumes compress well; level 1 costs little CPU at sleep and wake |
 
 ## 10. Effort and order
 
@@ -588,7 +582,7 @@ deferred to a later phase.
 
 | Work | Days |
 |---|---|
-| S1, S2 spikes | 2 |
+| S2 spike (S1 dropped, U1) | 1 |
 | **B** protocol, fixtures, hub fields and builder admission | 2 |
 | **B** cell: store, key, extractor, verifier, GC, Go validator, mounts, builder path | 5 |
 | **B** provider, env split, provisioner, org purge hook, audit | 2 |
@@ -598,10 +592,9 @@ deferred to a later phase.
 | **A** cell: `previewstate`, helper calls, `Hibernate`, `Up` restore step, sweep, budget, eviction, reaper | 6 |
 | **A** hub pinning, hibernating state, inventory, purges table; worker; migration | 4 |
 | **A** API, web, settings, copy | 2 |
-| **A** rootfs delta and the second runtime (if S1 passes) | 2 |
 | **A** gVisor suite and product validation | 2 |
-| **A subtotal** | 18 |
-| **Total with spikes** | 31 |
+| **A subtotal** | 16 |
+| **Total with the spike** | 28 |
 
 Order: S1 and S2 first (one day each, they can run in parallel with the protocol work). **B before A**: B is smaller,
 it is security-sensitive so it gets the most review time, it pays on every review rather than on some previews, and it
