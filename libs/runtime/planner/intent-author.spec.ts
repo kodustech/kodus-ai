@@ -39,6 +39,20 @@ describe('hasStatedIntent', () => {
     it('a linked task alone is a stated intent', () => {
         expect(hasStatedIntent(input({ description: '', linkedTasks: [{ source: 'jira', id: 'KR-12', body: 'Refuse 11 units with 400.' }] }))).toBe(true);
     });
+
+    // kr-shop #18 on release v1l: Kody's PR summary had replaced the author's text.
+    // The summary is written from the diff, so on a bug PR it describes the bug.
+    const SUMMARY = ['<!-- kody-pr-summary:start -->', '## Summary', '', 'Omitted quantities are treated as `1`.', '<!-- kody-pr-summary:end -->'].join('\n');
+
+    it("a description that is only Kody's PR summary states nothing", () => {
+        expect(hasStatedIntent(input({ description: SUMMARY }))).toBe(false);
+    });
+
+    it("the author reads the author's text around Kody's PR summary, never the summary", () => {
+        const [, user] = intentAuthorMessages(input({ description: `${COUPON}\n\n---\n${SUMMARY}` }));
+        expect(user.content).toContain('so it must equal `total`');
+        expect(user.content).not.toContain('Omitted quantities');
+    });
 });
 
 describe('intentAuthorMessages', () => {

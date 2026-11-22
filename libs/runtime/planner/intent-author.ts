@@ -97,10 +97,30 @@ export function requestTemplatesOf(planned: readonly PlannedProbe[], routes: rea
     return out;
 }
 
-/** Each text an assertion may quote, by the source it cites. The title is read, never quoted. */
+const SUMMARY_START = '<!-- kody-pr-summary:start -->';
+const SUMMARY_END = '<!-- kody-pr-summary:end -->';
+
+/**
+ * The description without the PR summary Kody writes into it. The summary is
+ * written from the diff, so on a bug PR it states the bug as intended
+ * (kr-shop #18). A start with no end is left as it is.
+ */
+function withoutKodySummary(body: string): string {
+    let out = '';
+    let at = 0;
+    for (;;) {
+        const start = body.indexOf(SUMMARY_START, at);
+        const end = start < 0 ? -1 : body.indexOf(SUMMARY_END, start + SUMMARY_START.length);
+        if (end < 0) return out + body.slice(at);
+        out += body.slice(at, start);
+        at = end + SUMMARY_END.length;
+    }
+}
+
+/** Each text an assertion may quote, by the source it cites. The title is read, never quoted; Kody's own PR summary is never read. */
 export function statedIntentSources(input: Pick<IntentAuthorInput, 'description' | 'linkedTasks'>): Array<{ source: StatedIntent['source']; text: string }> {
     const sources: Array<{ source: StatedIntent['source']; text: string }> = [];
-    const description = (input.description ?? '').slice(0, INTENT_AUTHOR_LIMITS.sourceChars);
+    const description = withoutKodySummary(input.description ?? '').slice(0, INTENT_AUTHOR_LIMITS.sourceChars);
     if (description.trim()) sources.push({ source: 'description', text: description });
     for (const t of input.linkedTasks ?? []) {
         const text = [t.title ?? '', t.body].filter((s) => s.trim()).join('\n').slice(0, INTENT_AUTHOR_LIMITS.sourceChars);
