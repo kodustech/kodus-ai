@@ -273,29 +273,46 @@ describe('instanceConfigsForWebhook on GitLab', () => {
         ).toEqual([alias]);
     });
 
-    it('never keeps another site, or another path on the same site', () => {
-        const otherPath = listed(
+    it('keeps only the same path on the same server, never a sibling host or another path', () => {
+        const fromAcme = { ...fromB, host: 'gitlab.acme.com' };
+        const alias = listed(
             'b',
+            'https://devops.gitlab.acme.com/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const otherPath = listed(
+            'c',
             'https://devops.gitlab.acme.com/acme/web-shop.git',
             'acme/web-shop',
         );
-        expect(
-            instanceConfigsForWebhook([otherPath], {
-                ...fromB,
-                host: 'gitlab.acme.com',
-            }),
-        ).toEqual([]);
-        const otherCompany = listed(
-            'b',
-            'https://git.beta.com.br/globex/billing-api.git',
+        // A separate server on a sibling host of the same domain.
+        const sibling = listed(
+            'd',
+            'https://gitlab-eu.acme.com/globex/billing-api.git',
             'globex/billing-api',
         );
         expect(
-            instanceConfigsForWebhook([otherCompany], {
+            instanceConfigsForWebhook([otherPath, sibling, alias], fromAcme),
+        ).toEqual([alias]);
+        expect(instanceConfigsForWebhook([sibling], fromAcme)).toEqual([]);
+    });
+
+    it('keeps the same server beside a config that lists the same path and no URL', () => {
+        const alias = listed(
+            'b',
+            'https://devops.gitlab.acme.com/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const internal = {
+            ...listed('b2', '', 'globex/billing-api', 'http://10.0.0.5:8080'),
+            configValue: [{ id: '9', name: 'globex/billing-api' }],
+        };
+        expect(
+            instanceConfigsForWebhook([alias, internal], {
                 ...fromB,
-                host: 'git.alpha.com.br',
+                host: 'gitlab.acme.com',
             }),
-        ).toEqual([]);
+        ).toEqual([alias, internal]);
     });
 
     it('keeps by path a config that lists no URL, whatever the address Kodus reaches it at', () => {

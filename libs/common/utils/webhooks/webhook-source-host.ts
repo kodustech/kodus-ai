@@ -160,9 +160,9 @@ export function webhookConfigsOfInstance<T>(
  * whose listed repository URL is on another host is on another instance,
  * since the instance builds that URL, and never takes it, even when it is
  * the only one with that id, unless it keeps the same `owner/repo` under
- * that id on a host of the same site: the same server under another name,
- * such as a custom HTTP clone URL (`devops.gitlab.acme.com` listed, events
- * from `gitlab.acme.com`). Its integration host alone does not tell: Kodus
+ * that id on a host the sending one is under, or under it: the same server
+ * under another name, such as a custom HTTP clone URL
+ * (`devops.gitlab.acme.com` listed, events from `gitlab.acme.com`). Its integration host alone does not tell: Kodus
  * may reach the instance at another address, such as a docker service name
  * or an IP. Among the configs that list no repository URL, one that keeps
  * the same `owner/repo` under that id takes it, and otherwise those that
@@ -197,28 +197,30 @@ export function instanceConfigsForWebhook<T>(
         );
     };
 
-    const site = host ? siteOf(host) : undefined;
-    const sameServer = site
+    // The same server under another name: a config that keeps the same
+    // owner/repo on a host the sending one is under, or that is under it.
+    const sameServer = host
         ? candidates.filter(
               (config) =>
-                  configHostsOf(config, repositoryId).some(
-                      (configHost) => siteOf(configHost) === site,
+                  configHostsOf(config, repositoryId).some((configHost) =>
+                      sameServerName(configHost, host),
                   ) && listsSameRepository(config),
           )
         : [];
-    if (sameServer.length) {
-        return sameServer;
-    }
 
     const unlisted = candidates.filter(
         (config) => !listedHostOf(config, repositoryId),
     );
-
     const sameRepository = repositoryId
         ? unlisted.filter(listsSameRepository)
         : [];
-    if (sameRepository.length) {
-        return sameRepository;
+
+    const matched = [
+        ...sameServer,
+        ...sameRepository.filter((config) => !sameServer.includes(config)),
+    ];
+    if (matched.length) {
+        return matched;
     }
 
     // Data written before configs stored any host: nothing tells them
@@ -292,34 +294,14 @@ function configHostsOf(config: any, repositoryId: string): string[] {
 }
 
 /**
- * The site a host belongs to: its registrable domain (`gitlab.acme.com` and
- * `devops.gitlab.acme.com` → `acme.com`; `git.acme.com.br` → `acme.com.br`).
- * An IP address is its own site.
+ * Whether two hosts can name the same server: the same host, or one under
+ * the other (`devops.gitlab.acme.com` and `gitlab.acme.com`). Sibling hosts
+ * (`gitlab-a.acme.com`, `gitlab-b.acme.com`) are separate servers, as are
+ * tenants of one hosting domain.
  */
-function siteOf(host: string): string {
-    if (/^[\d.]+$/.test(host) || host.includes(':')) {
-        return host;
-    }
-    const labels = host.split('.');
-    const keep =
-        labels.length > 2 &&
-        labels[labels.length - 1].length === 2 &&
-        SECOND_LEVEL_LABELS.has(labels[labels.length - 2])
-            ? 3
-            : 2;
-    return labels.slice(-keep).join('.');
+function sameServerName(a: string, b: string): boolean {
+    return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
 }
-
-/** Second-level labels under a country code (`com.br`, `co.uk`). */
-const SECOND_LEVEL_LABELS = new Set([
-    'com',
-    'net',
-    'org',
-    'gov',
-    'edu',
-    'co',
-    'ac',
-]);
 
 /** The host of the repository URL a config lists under that id. */
 function listedHostOf(config: any, repositoryId: string): string | undefined {
