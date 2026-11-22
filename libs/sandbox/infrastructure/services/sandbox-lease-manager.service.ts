@@ -645,19 +645,48 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             // A single-use sandbox (the graph jobs, whose key carries the
             // jobId) is never joined again: the last release stops compute now
-            // instead of paying the five-minute default idle window. killAt is
-            // written first, so if this process dies before the kill lands the
-            // idle-kill cron still finishes the job.
+            // instead of paying the five-minute default idle window.
+            //
+            // Claim the doc before killing, exactly as the local path does:
+            // between the decrement above and the kill a concurrent acquire
+            // could join this sandbox, and killing it under the new holder
+            // would also drop its lease doc. claimCleanup only wins when
+            // leaseCount is still <= 0, and a joiner that sees the claim waits
+            // for it to settle.
             if (idleMs <= 0) {
-                const killAt = new Date();
-                await this.leaseRepo.setKillAt(prKey, killAt);
+                const claimed = await this.leaseRepo.claimCleanup(
+                    prKey,
+                    updated.sandboxId,
+                    true,
+                );
+                if (!claimed) {
+                    this.logger.log({
+                        message: `SandboxLeaseManager: single-use release lost the cleanup claim, leaving the sandbox to its holder prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: { prKey, sandboxId: updated.sandboxId },
+                    });
+                    return;
+                }
+
+                // killAt is the safety net: if this process dies before the
+                // kill lands, the idle-kill cron still finishes the job.
+                await this.leaseRepo.setKillAt(prKey, new Date());
+
                 const apiKey = this.configService.get<string>('API_E2B_KEY');
                 if (!apiKey) {
+                    await this.leaseRepo.failCleanup(
+                        prKey,
+                        updated.sandboxId,
+                        'API_E2B_KEY is not configured',
+                    );
                     return;
                 }
                 try {
                     await Sandbox.kill(updated.sandboxId, { apiKey });
-                    await this.leaseRepo.delete(prKey);
+                    await this.leaseRepo.completeCleanup(
+                        prKey,
+                        updated.sandboxId,
+                    );
                     this.logger.log({
                         message: `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
@@ -668,6 +697,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         },
                     });
                 } catch (err) {
+                    await this.leaseRepo.failCleanup(
+                        prKey,
+                        updated.sandboxId,
+                        (err as Error).message,
+                    );
                     this.logger.warn({
                         message: `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
