@@ -50,7 +50,8 @@ Everything below is inside these four.
 ### 2.2 Step by step: a PR
 
 1. A PR event (or `@kody runtime`, or CI mode's trigger) creates a `SuiteRun{mode, prSha, mergeBase}`.
-2. The engine plans shards from the stored durations of the environment's specs.
+2. The engine selects the specs the change can reach (section 6.1, whole suite when the safety net says so) and plans
+   shards from their stored durations.
 3. The fleet starts N perRun hosts from the template (bound key per shard, section 5). Each host boots, the cell
    registers, and the shard **builds the PR side** (the template holds main's build, the PR needs its own; section 15.1
    says what this costs and what contradicts the shape).
@@ -159,6 +160,82 @@ The engine lists the spec files at the PR sha (`git ls-tree`, matched against `s
    spec list cannot be listed; without `fullyParallel` it shards per file, so uneven files give uneven shards
    ([Playwright sharding](https://playwright.dev/docs/test-sharding)).
 5. The plan is stored in the suite run (`shards[i].specs[]`), so a re-run of a shard uses the same list.
+
+### 6.1 Cost optimizations: run only the specs a change can reach
+
+Part of the full plan, not a later phase. Three mechanisms (select, re-push, order) on one stored map, plus a proof.
+
+**The coverage map.** The baseline (which always runs the whole suite) also records, per spec, the source files that
+spec exercises. Two collectors, both only on the baseline so a PR run pays nothing:
+
+- **Browser side**: Cypress or Playwright with istanbul or V8 coverage of the app bundle, mapped to source files
+  through source maps. Collected per spec (the runner resets the coverage object at the spec start).
+- **Server side**: Node V8 coverage of the environment's services (`NODE_V8_COVERAGE` set in the service env during the
+  baseline only), so a spec that only calls an API still maps to its handlers. Split per spec by spec boundaries: the
+  shard driver flushes coverage (a `v8.takeCoverage()` hook, no restart, D10) at each
+  spec start and end and attributes the delta to the spec; the fallback is the spec's start and end timestamps against
+  timestamped coverage dumps. Concurrent specs on one service pollute each other, so a baseline shard runs one spec at
+  a time against a service (the baseline already pays 10 min a shard; D11 measures the slowdown).
+
+Stored as `runtime_suite_coverage_maps(environment, mainSha, suiteDigest, spec, files[])`, `suiteDigest` being the hash
+of the `suite` block and the spec file list, so a changed suite never reuses an old map. Retention: the newest complete
+map per environment plus the one before.
+
+**Selection on a PR.** `changed = diff(mergeBase, prSha)`. The selected specs are those whose stored files intersect
+`changed`, widened by what the map cannot see:
+
+- *Reverse deps of a changed file that no spec covers directly*: walked with the planner's import graph, `reverseEdges`
+  (`libs/runtime/planner/import-graph/reach.ts:323`) and the importer walk (`reach.ts:336`, `routesReaching` at
+  `reach.ts:368`), bounded by `IMPORT_GRAPH_LIMITS` (`reach.ts:21`). A file with an importer some spec covers selects
+  that spec.
+- *Workspace closure*: a changed file in a workspace selects the specs of every app that depends on it, from the
+  workspace graph of `monorepo-speed-and-targeting.md` section 2.3 (manifests only, reverse closure).
+- *Line-level narrowing is not used*: the unit is the file. The exercised-lines measure
+  (`exercisedSummaryOf`, `libs/runtime/run/exercised-lines.ts:32`) already says per file how much a run touched; the
+  map reuses its file list format and the same per-file threshold idea, not its line numbers.
+
+**Safety net: run the whole suite when any of these holds** (the unknown is never skipped):
+
+1. a dependency manifest or lockfile changed (`package.json`, `pnpm-lock.yaml`, `yarn.lock`, `go.mod`, ...);
+2. build or test configuration changed: the cypress or playwright config, a `Dockerfile`, compose files, `.kodus/`, the
+   env schema, the suite block's own files;
+3. shared routing or global setup files changed (the router entry, the support or global-setup files of the runner);
+4. **any changed source file that no spec covers in the map and that has no covering importer** (unknown means run
+   all, never none), except files proven non-runtime by pattern (docs, `*.md`, tests of other layers, assets the app
+   does not bundle), listed in the recipe's `suite.ignore`;
+5. the map is missing, older than `N` main commits (D12), or has another `suiteDigest`.
+
+The full suite always runs on main (baseline), and a PR run is also forced full when the PR turns ready for review (D13),
+so a draft that iterated on selections still gets one full pass before a human merges. The check says why:
+"selected 6 of 74 specs: covers the 9 changed files" or "full suite: package.json changed".
+
+**Shard count** follows the selected specs' stored durations with the 6 rule (`targetShardMs` 8 min): 6 specs of 30 s
+is one host, one boot, one PR build. That is the whole saving, since a shard's fixed cost is boot plus build.
+
+**Re-push on the same PR.** The previous run's selection and results are stored (`runtime_suite_runs`). A new push
+runs `failedBefore` (specs red on the previous push, after classification, minus `pre_existing`) plus
+`select(previousPrSha -> newPrSha)`. If the previous run was full and green and the delta selects nothing, no spec runs
+and the check says "no spec covers this change; last full run green (sha ...)". If the previous run was selected, not
+full, the union rule holds: the stored map decides on the delta, but a delta that falls in the safety net escalates to
+full. A push that changes the merge base (a rebase) resets to a normal selection from the new merge base.
+
+**Risk-first order and fail fast.** Inside each shard the order is: `failedBefore`, then diff-covering specs (more
+changed files covered first), then the rest by duration. Balancing (6) still decides which shard a spec goes to; the
+order only applies inside the bin. If the first spec batch (the first `max(5, 10%)` specs of the run) already fails over
+25%, the engine stops the first pass, marks the remaining as `not_run`, and the classifier sees a mass failure (9.4)
+instead of paying the full wall time.
+
+**The classifier is unchanged**: it runs on whatever failed (a re-run only of what failed, on the PR and on main).
+Selection decides what runs; classification decides what a red means.
+
+**Proof.** (a) A seeded fixture set of PRs with known regressions (a UI-only change, an API-only change, a shared
+util, a CSS-only change, a config change, a change in a file no spec covers, a rename): selected and full run side by
+side. **The selection must miss zero seeded regressions** (recall 100% on the fixture), and the report states the
+reduction in host-minutes and wall time. (b) In production, a **shadow run**: 1 in `S` selected PR runs (D14) also runs
+the full suite in the background and compares; a spec the full run fails and the selection did not run is a selection
+miss, stored with the changed files. One miss switches that environment to full for the next `M` PRs and raises an
+alert; two misses in ten shadows turn selection off until a person re-enables it (the brake of
+`incremental-pr-side.md`, its shadow check and brake at lines 239 and 253 and its step 7 at line 396).
 
 ## 7. Result model and storage
 
@@ -399,6 +476,18 @@ re-run host 0.3 + 3 = about 4 host-min. A red PR costs about 7 host-min more (ab
 extra. Baseline: 3 shards x (0.3 + 10) = 31 host-min per main commit, no build. At 20 main commits a day: 620 host-min,
 $0.74 a day.
 
+With selection (6.1) the formula is unchanged and only its inputs shrink: `shards` is computed from the selected specs,
+and a selected run on one host is `boot 0.3 + build 7.1 + suite (selected)`.
+
+| PR shape | Host-min | Note |
+|---|---|---|
+| Small PR, a few specs selected, 1 host | about 5 to 10 | 0.3 + 7.1 + about 1 to 3 of specs; was about 52 |
+| Re-push fixing a test | about 3 to 5 | failed specs plus delta only; the PR build is rebuilt once, incremental |
+| Re-push, last full run green, delta selects nothing | about 0 | no host started |
+| Dependency, config, shared-routing or unknown-file PR | about 52 | full suite, as above |
+| Baseline per main commit | about 31 | unchanged; coverage collection adds its slowdown (D11) |
+| Shadow full run (1 in S PRs) | about 52 in the background | adds 52 / S per selected PR on average |
+
 The numbers are estimates until the fixture run (section 16).
 
 ### 12.3 Where it is shown
@@ -457,6 +546,7 @@ reason, like `MachineMinutesChanged`.
 | Publish | `libs/runtime-publish` (suite check slot and key, annotations in `ChecksPort`, `render-runtime-comment.ts` suite section, `runtime-publication.ts` model) |
 | API and web | `libs/runtime/api` (suite use cases: list, retry a shard, rerun failed, enable CI mode in settings, usage line), `apps/web/src/app/(app)/runtime/runs/[runId]` (E2E suite tab), new `runtime/suites/[suiteRunId]`, settings: suite on/off, mode, gate |
 | Cost | `libs/runtime/api/application/run-cost.service.ts`, `domain/usage-report.ts`, usage CSV, org ceiling |
+| Coverage and selection | new `libs/runtime/suite/select` (pure: map, changed files, safety net, re-push, order, no I/O), `apps/runtime/src/worker/suite/` coverage collector on the baseline shard driver (browser coverage flag, `NODE_V8_COVERAGE` for services, per-spec flush), `runtime_suite_coverage_maps` store, import graph and workspace graph reused read-only (`libs/runtime/planner/import-graph/reach.ts`, `libs/runtime/planner/workspace-graph`), shadow comparer, recipe `suite.ignore` and `suite.coverage` keys in `libs/runtime/protocol/recipe.ts` |
 | Docs | `docs/runtime/glossary.md`, `architecture.md` |
 
 ### 15.1 Contradictions with the decided shape (found in the code)
@@ -498,9 +588,12 @@ real customer-shaped run:
 | Balance | slowest shard at most 1.25x the mean | per-shard time |
 | Baseline reuse | 100% of PRs on a base with a baseline run no full main run | counter of main hosts per PR |
 | Flake false-block rate | 0 PRs failed by a `flaky` | counter |
+| Selection recall | 100% of seeded regressions run by the selection (0 misses), safety net triggers on the seeded config and unknown-file PRs | fixture PR set, selected vs full side by side (6.1) |
+| Selection saving | small PR at most 10 host-min; re-push fixing a test at most 5; reported against the full run | `runtime_claims` by phase, both runs on the fixture |
+| Production selection misses | 0 in shadow runs; one miss switches the environment to full | `runtime.suite.selection_miss`, shadow compare |
 
 Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_ms`, `runtime.suite.classified{class}`,
-`runtime.suite.host_minutes{phase}`, closed labels (`apps/runtime/AGENTS.md`).
+`runtime.suite.host_minutes{phase}`, `runtime.suite.selected{mode}` (`selected|full_safety_net|full_stale|none`), closed labels (`apps/runtime/AGENTS.md`).
 
 ## 17. Build plan (the whole plan, in order; each step starts with a failing test)
 
@@ -524,13 +617,36 @@ Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_m
 8. **Engine re-run**: PR re-run on the shard host, main re-run on a template host, rules end to end on the seeded
    fixture's fake runner (regression, pre-existing, flaky, infra).
 9. **Baseline trigger**: a template turning `ready` enqueues a baseline, coalesced; the PR run uses it per 9.5.
-10. **Publish**: check slot, summary, annotations (over 50 paged), conclusion rules; the Run finding `e2e_regression`
-    and verdict states (`partly_tested` when unclassified).
-11. **Run orchestrator stage and CI mode trigger**; one engine, both modes' publish differences tested.
-12. **API, web, usage**: suite tab and page, settings, usage line, org ceiling.
-13. **Evidence**: `suite-artifact` upload type, budget, redaction and canary specs; failed-only retention.
-14. **Live validation** (through the product, `verify-runtime`): the seeded fixture on the dev stack with a boat pool
-    for Kodus's org; measure section 16; then the customer-shaped repository, reading its data only.
+10. **Coverage on the baseline**. Test first: a fixture app with 3 specs, two touching different files and one an API
+    call only; the baseline stores a per-spec file list that differs per spec, with server files present for the API-only
+    spec; a PR run collects no coverage (no `NODE_V8_COVERAGE`, no slowdown); two specs never run concurrently against
+    one service in a baseline shard.
+11. **The map store**. Test first: a map is stored per (environment, main sha, `suiteDigest`); a changed spec list gives
+    another digest and the old map is not reused; retention keeps the newest complete map and the one before.
+12. **Selection and the safety net**, pure. Test first, table-driven: a changed covered file selects exactly its specs;
+    a reverse-dependency file selects through the import graph; a workspace dependency selects the dependent app's
+    specs; each safety-net row (manifest, lockfile, config, shared routing, uncovered file, missing map, stale map, other
+    digest) returns `full` with its reason; an ignored doc file selects nothing; unknown never returns an empty
+    selection. Shard count from the selected durations (one host for 6 short specs).
+13. **Re-push mode**. Test first: previous red spec plus delta specs run; previous full green plus an empty delta runs
+    none and the check text says so; a delta in the safety net escalates to full; a rebase resets to selection from the
+    new merge base; a `pre_existing` earlier failure is not forced in.
+14. **Risk-first order and fail fast**. Test first: within a bin, failed-before then diff-covering then the rest by
+    duration; balance unchanged; 3 of the first 10 specs failing (over 25%) stops the first pass and marks the rest
+    `not_run`, 2 of 10 does not.
+15. **Publish**: check slot, summary (with the selection reason), annotations (over 50 paged), conclusion rules; the Run
+    finding `e2e_regression` and verdict states (`partly_tested` when unclassified).
+16. **Run orchestrator stage and CI mode trigger**; one engine, both modes' publish differences tested.
+17. **API, web, usage**: suite tab and page (selected vs full, why), settings, usage line (`baseline | pr | rerun |
+    shadow`), org ceiling.
+18. **Evidence**: `suite-artifact` upload type, budget, redaction and canary specs; failed-only retention.
+19. **Shadow check**. Test first: every `S`th selected run also enqueues a full background run; a seeded spec the
+    selection skipped and the full run fails stores a `selection_miss` with the changed files and switches the
+    environment to full for `M` PRs; two misses in ten shadows turn selection off; the shadow run never publishes or
+    blocks the PR check.
+20. **Live validation** (through the product, `verify-runtime`): the seeded fixture on the dev stack with a boat pool
+    for Kodus's org; the seeded PR set selected vs full (recall 100%, saving reported); measure section 16; then the
+    customer-shaped repository, reading its data only.
 
 ## 18. Open decisions (with a recommendation)
 
@@ -545,6 +661,13 @@ Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_m
 | D7 | Customer orgs on boat | wait for legal; meanwhile run for Kodus's org and build the AWS `perRun` adapter if a customer is first |
 | D8 | Videos | off by default, failed specs only when enabled |
 | D9 | Suite in Run mode in parallel with probes, or after | in parallel when the PR claim has CPU for both; otherwise after the probes (the verdict is faster) |
+| D10 | Server coverage method per spec | `v8.takeCoverage()` flushed through a small hook the baseline injects (`NODE_OPTIONS` preload) at spec boundaries; fall back to timestamps against periodic dumps; no APM agent |
+| D11 | Baseline slowdown from coverage and one-spec-per-service | measure on the fixture; accept up to +30% on the baseline (it is off the PR path); if over, collect server coverage on a sample of baselines and keep the last complete map |
+| D12 | Map staleness `N` | 20 main commits or 3 days, whichever first; a stale map means full, not a guess |
+| D13 | Periodic full PR run | one full run when the PR turns ready for review, plus the main baseline; no timer on drafts |
+| D14 | Shadow ratio `S` and switch window `M` | `S` = 5 for the first 50 selected runs of an environment, then 10; one miss means full for the next 10 PRs; two misses in ten shadows turn selection off |
+| D15 | Specs that cover everything (a login-in-every-spec file) | files covered by over 50% of specs are dropped from the map as noise (they would select all) and a change to them is a safety-net full run |
+| D16 | Selection for a repository with no coverable bundle (minified, no source maps) | browser side off, server side only; if neither is available the environment stays full and says so |
 
 ## 19. Sources
 
