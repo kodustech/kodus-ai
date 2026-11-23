@@ -1327,6 +1327,19 @@ describe('blockerMessage', () => {
         expect(out.endsWith('exit code: 1')).toBe(true);
     });
 
+    // Release v1l: kr-n8n, kr-novu and kr-nocodb were blocked by a download the build cannot make,
+    // and the card read only "pnpm install --frozen-lockfile failed … did not complete".
+    it('takes a download the build could not make for the cause: the host and the network code', () => {
+        expect(causeLine('step failed:\n  .../node_modules/@vscode/ripgrep postinstall: Error: getaddrinfo ENOTFOUND api.github.com\n  more')).toBe(
+            '.../node_modules/@vscode/ripgrep postinstall: Error: getaddrinfo ENOTFOUND api.github.com',
+        );
+        expect(causeLine('step failed:\n  [WARN] GET https://npm.taskforce.sh/@taskforcesh/bullmq-pro/-/bullmq-pro-6.11.0.tgz error (ENOTFOUND). Will retry in 10 seconds.')).toBe(
+            '[WARN] GET https://npm.taskforce.sh/@taskforcesh/bullmq-pro/-/bullmq-pro-6.11.0.tgz error (ENOTFOUND). Will retry in 10 seconds.',
+        );
+        expect(causeLine('step failed:\n  WARN  GET https://nodejs.org/download/release/v24.14.0/SHASUMS256.txt error (ECONNRESET). Will retry')).toContain('nodejs.org');
+        expect(causeLine('Progress: resolved 10, reused 0, downloaded 2')).toBeUndefined();
+    });
+
     it('takes no generic docker line for the cause', () => {
         expect(causeLine('step failed\nerror: failed to solve: process "/bin/sh -c x" did not complete successfully: exit code: 2')).toBeUndefined();
         expect(causeLine('#5 1.2 npm ERR! code E404\nmore')).toBe('npm ERR! code E404');

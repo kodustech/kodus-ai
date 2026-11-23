@@ -29,12 +29,15 @@ export function blockerMessage(text: string, max = BLOCKER_MESSAGE_MAX): string 
 /** Docker's and the shell's generic failure lines: they say a step failed, not why. */
 const GENERIC_FAILURE = /^(error|ERROR): (process "|failed to solve)|did not complete successfully/;
 
-/** The first line in a failure that names its cause: an error code (ERR_PNPM_…, E404) or an `Error: …` line. */
+/** A download the build could not make: the network error code names the host on the same line (kr-n8n, kr-novu, kr-nocodb). */
+const NETWORK_FAILURE = /\b(ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH)\b/;
+
+/** The first line in a failure that names its cause: an error code (ERR_PNPM_…, E404), an `Error: …` line, or a network error. */
 export function causeLine(text: string): string | undefined {
     for (const raw of text.split('\n')) {
         const line = raw.replace(/^#\d+\s+[\d.]+\s+/, '').trim();
         if (!line || GENERIC_FAILURE.test(line)) continue;
-        if (/\bERR_[A-Z0-9_]{3,}\b/.test(line) || /^(npm ERR!|error|Error|ERROR|fatal|FATAL)[: !]/.test(line)) return line;
+        if (/\bERR_[A-Z0-9_]{3,}\b/.test(line) || /^(npm ERR!|error|Error|ERROR|fatal|FATAL)[: !]/.test(line) || NETWORK_FAILURE.test(line)) return line;
     }
     return undefined;
 }
