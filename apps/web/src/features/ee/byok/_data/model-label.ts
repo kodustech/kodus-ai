@@ -79,23 +79,32 @@ export function formatModelLabel(id: string): string {
 /**
  * The label drops a snapshot pin, so a pinned id and its alias read the same
  * ("Deepseek V4.1 Flash" for both `deepseek-v4.1-flash` and
- * `deepseek-v4.1-flash-1017`). Labels another id in `ids` shares carry the id
- * too; labels nobody else has are unchanged.
+ * `deepseek-v4.1-flash-1017`). An id whose label another name in `ids` shares
+ * carries the id too; labels nobody else has are unchanged. Names compare by
+ * the last path segment, as the label reads it: the same model on two
+ * providers (`gpt-5.4`, `openai/gpt-5.4`) is not a collision, the connection
+ * tells those apart. `nameOf` swaps in another label, such as a provider's own
+ * listing name.
  */
-export function modelLabeler(ids: Iterable<string | undefined | null>) {
-    const idsByLabel = new Map<string, Set<string>>();
+export function modelLabeler(
+    ids: Iterable<string | undefined | null>,
+    nameOf: (id: string) => string = formatModelLabel,
+) {
+    const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
+    const namesByLabel = new Map<string, Set<string>>();
     for (const id of ids) {
         if (!id) continue;
-        const label = formatModelLabel(id);
-        let group = idsByLabel.get(label);
-        if (!group) idsByLabel.set(label, (group = new Set()));
-        group.add(id);
+        const label = nameOf(id);
+        let names = namesByLabel.get(label);
+        if (!names) namesByLabel.set(label, (names = new Set()));
+        names.add(lastSegment(id));
     }
-    return (id: string): string => {
-        const label = formatModelLabel(id);
-        const group = idsByLabel.get(label);
-        const shared =
-            !!group && (group.size > 1 || (group.size === 1 && !group.has(id)));
-        return shared ? `${label} (${id})` : label;
+    const shares = (id: string) => {
+        const names = new Set(namesByLabel.get(nameOf(id)));
+        names.add(lastSegment(id));
+        return names.size > 1;
     };
+    const labelOf = (id: string): string =>
+        shares(id) ? `${nameOf(id)} (${id})` : nameOf(id);
+    return Object.assign(labelOf, { shares });
 }

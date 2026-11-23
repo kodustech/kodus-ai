@@ -20,7 +20,7 @@ describe("routingModelLabels", () => {
             slot("alias", "deepseek-ai/DeepSeek-V4.1-Flash"),
             slot("pin", "deepseek-ai/DeepSeek-V4.1-Flash-1017"),
             slot("openai", "gpt-5.4", { providerId: "openai" }),
-            slot("openrouter", "gpt-5.4", { providerId: "openrouter" }),
+            slot("openrouter", "openai/gpt-5.4", { providerId: "openrouter" }),
             slot("env", "gpt-5.4-2026-03-05", { managed: true }),
         ]);
 
@@ -30,8 +30,8 @@ describe("routingModelLabels", () => {
         expect(labels.get("pin")).toBe(
             "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)",
         );
-        expect(labels.get("openai")).toMatch(/^GPT 5\.4 · /);
-        expect(labels.get("openai")).not.toBe(labels.get("openrouter"));
+        expect(labels.get("openai")).toBe("GPT 5.4 · OpenAI");
+        expect(labels.get("openrouter")).toBe("GPT 5.4 · OpenRouter");
         expect(labels.get("env")).toBe("GPT 5.4");
     });
 });
