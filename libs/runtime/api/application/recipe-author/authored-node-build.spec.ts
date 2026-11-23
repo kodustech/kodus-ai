@@ -300,3 +300,38 @@ describe('Node build rules in the submission', () => {
         ]);
     });
 });
+
+// kr-nocodb on release v1l: three recipes on node:22, each build stopped on pnpm downloading Node 24.14.0
+// from nodejs.org, which a build never reaches. pnpm downloads nothing when the image runs that very Node.
+describe("Node build: the Node release the repository's .npmrc pins", () => {
+    const NOCODB = {
+        'package.json': JSON.stringify({ name: 'root', engines: { node: '>=18' } }),
+        'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n",
+        'pnpm-lock.yaml': "lockfileVersion: '9.0'\n",
+        '.npmrc': 'engine-strict=true\nshamefully-hoist=true\nuse-node-version=24.14.0\n',
+    };
+    const build = (from: string) => `FROM ${from}\nWORKDIR /app\n${PINNED_PNPM}COPY --parents package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc packages/*/package.json ./\nRUN pnpm install --frozen-lockfile\nCOPY . .\n`;
+
+    it('reads use-node-version from .npmrc', async () => {
+        expect(await factsOf(NOCODB)).toMatchObject({ useNodeVersion: '24.14.0' });
+        expect((await factsOf(PNPM_MONOREPO)).useNodeVersion).toBeUndefined();
+    });
+
+    it('refuses a node image of another release, naming the image to build from', async () => {
+        const errors = await lint(NOCODB, build('node:22.22.1-bookworm'));
+        expect(errors).toEqual([expect.stringContaining('use-node-version=24.14.0')]);
+        expect(errors[0]).toContain('FROM node:24.14.0-bookworm-slim');
+        expect(errors[0]).toContain('nodejs.org');
+    });
+
+    it('accepts the very release, with any variant, or the setting overridden to the image release', async () => {
+        expect(await lint(NOCODB, build('node:24.14.0-bookworm-slim'))).toEqual([]);
+        expect(await lint(NOCODB, build('node:24.14.0'))).toEqual([]);
+        expect(await lint(NOCODB, `ENV npm_config_use_node_version=22.22.1\n${build('node:22.22.1-bookworm')}`.replace(/^ENV.*\n(FROM.*\n)/, '$1ENV npm_config_use_node_version=22.22.1\n'))).toEqual([]);
+    });
+
+    it('never speaks of a repository that pins no Node, nor of a stage that is no node image', async () => {
+        expect(await lint(PNPM_MONOREPO, build('node:22-bookworm'))).not.toEqual(expect.arrayContaining([expect.stringContaining('use-node-version')]));
+        expect(await lint(NOCODB, `FROM nginx:1.27 AS web\n${build('node:24.14.0-bookworm-slim')}`)).toEqual([]);
+    });
+});

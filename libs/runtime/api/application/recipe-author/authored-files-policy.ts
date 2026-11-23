@@ -383,6 +383,8 @@ export interface NodeBuildFacts {
     nx: boolean;
     /** The root package.json scripts, for a RUN that calls one. */
     scripts: Record<string, string>;
+    /** .npmrc use-node-version: pnpm runs scripts on that Node release, downloaded from nodejs.org unless it is the one running. */
+    useNodeVersion?: string;
 }
 
 const LOCKFILE_NAMES = ['pnpm-lock.yaml', 'yarn.lock', 'package-lock.json', 'npm-shrinkwrap.json', 'bun.lock', 'bun.lockb'];
@@ -419,10 +421,12 @@ export async function nodeBuildFacts(read: (path: string) => Promise<string | nu
     let globs = plain(Array.isArray(pkg.workspaces) ? pkg.workspaces : pkg.workspaces?.packages);
     const installFiles: string[] = [];
     let pnpmWorkspace: Record<string, unknown> | null = null;
+    let useNodeVersion: string | undefined;
     for (const f of INSTALL_FILE_NAMES) {
         const t = await text(f);
         if (t === null) continue;
         installFiles.push(f);
+        if (f === '.npmrc') useNodeVersion = /^[ \t]*use-node-version[ \t]*=[ \t]*v?(\d+\.\d+\.\d+)[ \t]*$/m.exec(t)?.[1];
         if (f === 'pnpm-workspace.yaml') {
             try {
                 const doc = yaml.load(t, UNTRUSTED_YAML);
@@ -470,6 +474,7 @@ export async function nodeBuildFacts(read: (path: string) => Promise<string | nu
         installFiles,
         nx,
         scripts,
+        ...(useNodeVersion ? { useNodeVersion } : {}),
     };
 }
 
@@ -794,6 +799,20 @@ export function checkNodeBuild(path: string, content: string, facts: NodeBuildFa
     const envSet = (name: string, value: (v: string) => boolean) =>
         instructions.some((i) => (i.keyword === 'ENV' || i.keyword === 'ARG') && assignmentsOf(flagsOf(i.args).rest, i.keyword === 'ENV').some((a) => a.name === name && value(a.value))) ||
         runs.some((r) => r.commands.some((c) => value(c.env.get(name) ?? '\0')));
+
+    // The Node release .npmrc pins (kr-nocodb): pnpm downloads it from nodejs.org unless the image runs it.
+    const pinned = facts.useNodeVersion;
+    const overridden = ['npm_config_use_node_version', 'pnpm_config_use_node_version'].some((n) => envSet(n, (v) => /^\d+\.\d+\.\d+$/.test(v)));
+    if (pinned && !overridden) {
+        for (const i of instructions.filter((x) => x.keyword === 'FROM')) {
+            const image = flagsOf(i.args).rest.trim().split(/\s+/)[0] ?? '';
+            const m = /^(?:(?:docker\.io\/)?library\/)?node:([^@\s]+)/.exec(image);
+            if (!m || m[1] === pinned || m[1].startsWith(`${pinned}-`)) continue;
+            errors.push(
+                `${path}:${i.line} FROM ${image} runs another Node release than the repository's .npmrc pins (use-node-version=${pinned}): pnpm then downloads Node ${pinned} from nodejs.org before every script, which a build never reaches. Build FROM node:${pinned}-bookworm-slim (or another variant of node:${pinned}): pnpm runs that Node as it is and downloads nothing.`,
+            );
+        }
+    }
 
     // The package manager's release: pinned, and not one that breaks the lockfile.
     let pinnedPnpm = false;
