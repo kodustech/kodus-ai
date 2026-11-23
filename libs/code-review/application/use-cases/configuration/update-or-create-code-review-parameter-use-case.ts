@@ -303,6 +303,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 configValue,
                 body.actor?.source,
                 { repositoryId, directoryId, directoryPaths: resolvedPaths },
+                body.inheritFields,
             );
 
             if (!body.skipAuthorization) {
@@ -874,8 +875,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
      * risk routes. The trio is checked only on a mode the save changes to:
      * a field sent with the Ultra this scope already runs leaves the other
      * settings free to save while a model is unavailable. The plan is checked
-     * on every one. A save from the web or the API is refused with the reason (400);
-     * a kodus-config.yml sync leaves the locked fields out and saves the rest.
+     * on every one. A field the save inherits is not checked: nothing is
+     * stored for it. A save from the web or the API is refused with the
+     * reason (400); a kodus-config.yml sync leaves the locked fields out and
+     * saves the rest.
      */
     private async leaveHeavyOutIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -887,12 +890,21 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directoryId?: string;
             directoryPaths?: string[];
         },
+        inheritFields: string[] = [],
     ): Promise<void> {
         if (!configValue) return;
+        const own = (field: string, mode: string | undefined) =>
+            inheritFields.includes(field) ? undefined : mode;
         const sent = [
-            configValue.reviewMode,
-            configValue.riskReviewRouting?.noRisk,
-            configValue.riskReviewRouting?.riskFound,
+            own('reviewMode', configValue.reviewMode),
+            own(
+                'riskReviewRouting.noRisk',
+                configValue.riskReviewRouting?.noRisk,
+            ),
+            own(
+                'riskReviewRouting.riskFound',
+                configValue.riskReviewRouting?.riskFound,
+            ),
         ];
         if (!sent.some((mode) => mode === 'heavy' || mode === 'ultra')) {
             return;
@@ -917,17 +929,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             clear: () => void;
         }> => [
             {
-                mode: configValue.reviewMode,
+                mode: own('reviewMode', configValue.reviewMode),
                 current: current((c) => c?.reviewMode),
                 clear: () => delete configValue.reviewMode,
             },
             {
-                mode: configValue.riskReviewRouting?.noRisk,
+                mode: own(
+                    'riskReviewRouting.noRisk',
+                    configValue.riskReviewRouting?.noRisk,
+                ),
                 current: current((c) => c?.riskReviewRouting?.noRisk),
                 clear: () => delete configValue.riskReviewRouting!.noRisk,
             },
             {
-                mode: configValue.riskReviewRouting?.riskFound,
+                mode: own(
+                    'riskReviewRouting.riskFound',
+                    configValue.riskReviewRouting?.riskFound,
+                ),
                 current: current((c) => c?.riskReviewRouting?.riskFound),
                 clear: () => delete configValue.riskReviewRouting!.riskFound,
             },
@@ -1294,25 +1312,29 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                           ? [repository!.configs ?? {}]
                           : []),
                   ).riskReviewRouting;
-        const oldReviewConfig =
-            ownsLegacyMode &&
-            editsRouting &&
-            ancestorRouting?.noRisk === undefined
+        // Each route is seeded with what the legacy mode ran on it, unless
+        // an ancestor sets that route: the scope inherits that one.
+        const seededRouting =
+            ownsLegacyMode && editsRouting
                 ? {
-                      ...oldConfig,
-                      riskReviewRouting: {
+                      ...(ancestorRouting?.noRisk === undefined && {
                           noRisk:
                               oldConfig.reviewMode === 'heavy' ||
                               oldConfig.reviewMode === 'ultra'
                                   ? oldConfig.reviewMode
                                   : ('balanced' as const),
-                          // A risk-found route the scope inherits stays.
-                          ...(oldConfig.reviewMode === 'ultra' &&
-                              ancestorRouting?.riskFound === undefined && {
-                                  riskFound: 'ultra' as const,
-                              }),
-                      },
+                      }),
+                      ...(ancestorRouting?.riskFound === undefined && {
+                          riskFound:
+                              oldConfig.reviewMode === 'ultra'
+                                  ? ('ultra' as const)
+                                  : ('heavy' as const),
+                      }),
                   }
+                : undefined;
+        const oldReviewConfig =
+            seededRouting && Object.keys(seededRouting).length
+                ? { ...oldConfig, riskReviewRouting: seededRouting }
                 : oldConfig;
         const mergeOldConfig = this.withoutInheritedReviewOverrides(
             oldReviewConfig,

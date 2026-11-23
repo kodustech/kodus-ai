@@ -766,6 +766,20 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
         ).rejects.toThrow('three different models set under Ultra models');
     });
 
+    it('on free, an undo of a risk route that sends the inherited Heavy saves: nothing is stored for it', async () => {
+        const configs = await buildUseCase(
+            { riskReviewRouting: { riskFound: 'balanced' } },
+            { license: FREE },
+        ).save(
+            { riskReviewRouting: { riskFound: 'heavy' } },
+            {
+                source: 'web',
+                inheritFields: ['riskReviewRouting.riskFound'],
+            },
+        );
+        expect(configs.riskReviewRouting?.riskFound).toBeUndefined();
+    });
+
     it('refuses heavy on free when it comes through a risk route too', async () => {
         await expect(
             buildUseCase({}, { license: FREE }).save(
