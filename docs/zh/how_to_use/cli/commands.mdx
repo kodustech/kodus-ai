@@ -20,7 +20,7 @@ description: "Kodus CLI 所有命令、标志和选项的完整参考。"
 
 使用 `--fail-on` 时,触发门禁的 `kodus review --agent` 会在第一个信封之后再打印第二个信封,其中 `ok: false` 且 `error.code` 为 `INTERNAL_ERROR`。请读取退出码,或只读取第一个信封。
 
-结果和提示信息写入 stdout。进度指示、警告和错误写入 stderr。要在自动化中保存 JSON 审查结果，请使用 `kodus review --format json --output review.json`。使用 `--fail-on` 时，请单独读取退出码。触发门禁的审查会在 stdout 中额外输出一行。
+结果和提示信息写入 stdout。进度指示、警告和错误写入 stderr。要在自动化中保存 JSON 审查结果，请使用 `kodus review --format json --output review.json`。使用 `--fail-on` 时，请单独读取退出码。触发门禁的审查会在 stderr 中额外输出一行（`--quiet` 会隐藏它），因此 stdout 上的 `--format json` 仍是有效的 JSON。
 
 ---
 

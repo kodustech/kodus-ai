@@ -20,7 +20,7 @@ Essas flags estão disponíveis em todos os comandos:
 
 Com `--fail-on`, um `kodus review --agent` que dispara o gate imprime um segundo envelope depois do primeiro, com `ok: false` e `error.code` `INTERNAL_ERROR`. Leia o código de saída, ou leia apenas o primeiro envelope.
 
-Os resultados e as mensagens informativas vão para o stdout. Indicadores de progresso, avisos e erros vão para o stderr. Para salvar a revisão em JSON em uma automação, use `kodus review --format json --output review.json`. Com `--fail-on`, leia o código de saída separadamente. Uma revisão que aciona o bloqueio imprime uma linha extra no stdout.
+Os resultados e as mensagens informativas vão para o stdout. Indicadores de progresso, avisos e erros vão para o stderr. Para salvar a revisão em JSON em uma automação, use `kodus review --format json --output review.json`. Com `--fail-on`, leia o código de saída separadamente. Uma revisão que aciona o bloqueio imprime uma linha extra no stderr, que `--quiet` oculta, então `--format json` no stdout continua sendo JSON válido.
 
 ---
 

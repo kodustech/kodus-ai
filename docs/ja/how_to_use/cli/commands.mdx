@@ -20,7 +20,7 @@ description: "Kodus CLI のすべてのコマンド、フラグ、オプショ�
 
 `--fail-on` を指定した場合、ゲートに引っかかった `kodus review --agent` は、最初のエンベロープの後に 2 つ目のエンベロープを出力します。そこでは `ok: false`、`error.code` は `INTERNAL_ERROR` になります。終了コードを読むか、最初のエンベロープのみを読んでください。
 
-結果と情報メッセージは stdout に出力されます。進捗インジケーター、警告、エラーは stderr に出力されます。自動化でレビューを JSON に保存するには、`kodus review --format json --output review.json` を使ってください。`--fail-on` を使う場合は、終了コードを別途確認してください。ゲートに引っかかったレビューは、stdout に追加で 1 行出力されます。
+結果と情報メッセージは stdout に出力されます。進捗インジケーター、警告、エラーは stderr に出力されます。自動化でレビューを JSON に保存するには、`kodus review --format json --output review.json` を使ってください。`--fail-on` を使う場合は、終了コードを別途確認してください。ゲートに引っかかったレビューは、stderr に追加で 1 行出力されます（`--quiet` で非表示になります）。そのため、stdout の `--format json` は有効な JSON のままです。
 
 ---
 
