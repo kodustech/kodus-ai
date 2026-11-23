@@ -120,7 +120,7 @@ describe('the Runtime usage report of a month', () => {
             ],
         });
 
-        expect(r.counts).toEqual({ runs: 3, runsListed: 3, setups: 1, sandboxSessions: 1, sandboxOperations: null, claimsTruncated: false });
+        expect(r.counts).toEqual({ runs: 3, runsListed: 3, prs: 1, setups: 1, sandboxSessions: 1, sandboxOperations: null, claimsTruncated: false });
         // A live Run has no wall time yet: 12 and 30 minutes.
         expect(r.wallTime.runs).toEqual({ count: 2, p50Minutes: 12, p95Minutes: 30, totalMinutes: 42 });
         expect(r.wallTime.setups).toMatchObject({ count: 1, totalMinutes: 15 });
@@ -293,6 +293,53 @@ describe('the Runtime usage report of a month', () => {
         // A sandbox serves no repository, and an audit this deployment cannot read is no figure, never a zero.
         expect(report({ sandboxOperations: ops, filters: { repositoryId: REPO } }).counts.sandboxOperations).toBeNull();
         expect(report({}).counts.sandboxOperations).toBeNull();
+    });
+});
+
+describe('the usage report price basis and PR counts', () => {
+    it('counts the distinct pull requests the Runs belong to, a retry on the same PR counting once, and a Run with no PR not at all', () => {
+        const r = report({
+            runs: [
+                runRecord({ runId: 'a', prNumber: 7 }),
+                runRecord({ runId: 'b', prNumber: 7 }),
+                runRecord({ runId: 'c', prNumber: 8 }),
+                runRecord({ runId: 'd', prNumber: 7, repositoryId: 'other-repo' }),
+                runRecord({ runId: 'e', prNumber: null }),
+            ],
+            claims: [],
+        });
+        expect(r.counts.prs).toBe(3);
+        expect(r.counts.runs).toBe(5);
+    });
+
+    it('names the Kodus host the Runs were priced on, with its list price per hour, and the effective US$ per GB·h held', () => {
+        const r = report({});
+        expect(r.pricing.hosts).toEqual([{ instanceType: 't4g.xlarge', usdPerHour: 0.1344, region: 'us-east-2' }]);
+        // 20 GB·min of 2 GB over 10 min = 1/3 GB·h; the Run paid (20480 / 14745) × (0.1344 / 60) US$.
+        const usd = (20_480 / 14_745) * (0.1344 / 60);
+        expect(r.pricing.effectiveUsdPerGbHour).toBeCloseTo(usd / (20 / 60), 5);
+    });
+
+    it('has no host and no effective rate when no Run was priced on a list price, never a zero', () => {
+        const r = report({ runs: [runRecord()], claims: [] });
+        expect(r.pricing.hosts).toEqual([]);
+        expect(r.pricing.effectiveUsdPerGbHour).toBeNull();
+    });
+
+    it('lists the models the org used with what it paid per 1M tokens, managed and own key apart, tier tokens kept, and no price for an unpriced model', () => {
+        const r = report({
+            spend: [
+                spendRow({ model: 'model-a', totalTokens: 2_000_000, inputTokens: 1_900_000, outputTokens: 100_000, usd: 4, aboveBaseTierTokens: 500_000 }),
+                spendRow({ model: 'model-a', paidBy: 'customer', totalTokens: 1_000_000, usd: 1 }),
+                spendRow({ model: 'in-house', totalTokens: 10, usd: null }),
+            ],
+        });
+        expect(r.pricing.llmModels).toEqual([
+            expect.objectContaining({ model: 'model-a', paidBy: 'kodus', totalTokens: 2_000_000, aboveBaseTierTokens: 500_000, usdPerMillionTokens: 2 }),
+            expect.objectContaining({ model: 'model-a', paidBy: 'customer', usdPerMillionTokens: 1 }),
+            expect.objectContaining({ model: 'in-house', usdPerMillionTokens: null }),
+        ]);
+        expect(report({ spend: undefined }).pricing.llmModels).toEqual([]);
     });
 });
 

@@ -188,6 +188,11 @@ export interface RuntimeUsageReport {
         runs: number;
         /** Runs in `runs` below; fewer than `runs` when the month has more than USAGE_REPORT_MAX_RUNS. */
         runsListed: number;
+        /**
+         * Distinct pull requests the listed Runs belong to (a retry counts once; a Run with no PR, never).
+         * Counted over `runsListed`, so a lower bound when the month has more Runs than the report lists.
+         */
+        prs: number;
         /** Setup boots (a repair or a learn boot of a setup counts as its own): the Runtime keeps no row per setup. */
         setups: number;
         /** Null under a repository or environment filter: a sandbox serves neither. */
@@ -233,7 +238,39 @@ export interface RuntimeUsageReport {
         /** False when a part is missing from kodusUsd (unpriced claims, unpriced tokens, spans not readable). */
         complete: boolean;
     };
+    pricing: UsagePricingBasis;
     runs: UsageReportRun[];
+}
+
+/** One model the org's Runtime used in the month, and what its tokens cost per 1M. */
+export interface UsagePricingModel {
+    model: string;
+    paidBy: 'kodus' | 'customer';
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    /** Tokens of calls priced at a tier above the base one (a prompt over the model's threshold). */
+    aboveBaseTierTokens: number;
+    /** Null when the price list cannot price the model. */
+    usd: number | null;
+    /** What the tokens cost per 1M, blended over input, output and cache as the month used them; null when unpriced. */
+    usdPerMillionTokens: number | null;
+}
+
+/**
+ * What the month's figures were priced with, read from the same records:
+ * the Kodus hosts at list price, the rate per GB·h that implies, and the
+ * LLM models at what their tokens cost. Nothing here is a price list of
+ * its own; a part with no source is empty or null.
+ */
+export interface UsagePricingBasis {
+    /** The Kodus-managed hosts the Runs' machines were priced on, at list price. */
+    hosts: CellHostPrice[];
+    /** The price per host-hour the org set for its own hosts; null when none set or none used. */
+    ownHostUsdPerHour: number | null;
+    /** Machines US$ over GB·h held, over the Runs priced on a Kodus host; null when none was. */
+    effectiveUsdPerGbHour: number | null;
+    llmModels: UsagePricingModel[];
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -331,6 +368,56 @@ function spendOfPlace(rows: readonly RuntimeLlmSpendRow[], filters: UsageReportF
         return repo && env && (!!r.repositoryId || !!r.environmentId);
     });
 }
+
+/** The hosts the costs were priced on (distinct by type, price and region) and the rate per GB·h they implied. */
+export function pricingBasisOf(
+    costs: ReadonlyMap<string, RuntimeRunCost>,
+    runs: readonly Pick<UsageReportRun, 'runId' | 'machine'>[],
+    spend: readonly RuntimeLlmSpendRow[] | undefined,
+): UsagePricingBasis {
+    const hosts = new Map<string, CellHostPrice>();
+    let ownHostUsdPerHour: number | null = null;
+    for (const c of costs.values()) {
+        const h = c.machines.host;
+        if (h) hosts.set(`${h.instanceType}\u0000${h.usdPerHour}\u0000${h.region}`, { instanceType: h.instanceType, usdPerHour: h.usdPerHour, region: h.region });
+        if (c.machines.ownHostUsdPerHour != null) ownHostUsdPerHour = c.machines.ownHostUsdPerHour;
+    }
+    let usd = 0;
+    let gbMinutes = 0;
+    for (const r of runs) {
+        const c = costs.get(r.runId);
+        if (c?.machines.model !== 'shared_cell' || c.machines.paidBy !== 'kodus' || c.machines.usd === null || !r.machine.gbMinutes) continue;
+        usd += c.machines.usd;
+        gbMinutes += r.machine.gbMinutes;
+    }
+    const groups = new Map<string, RuntimeLlmSpendRow[]>();
+    for (const row of spend ?? []) groups.set(`${row.model}\u0000${row.paidBy}`, [...(groups.get(`${row.model}\u0000${row.paidBy}`) ?? []), row]);
+    const llmModels = [...groups.values()]
+        .map((rows): UsagePricingModel => {
+            const t = sumLlmSpend(rows);
+            return {
+                model: rows[0].model,
+                paidBy: rows[0].paidBy,
+                totalTokens: t.totalTokens,
+                inputTokens: t.inputTokens,
+                outputTokens: t.outputTokens,
+                aboveBaseTierTokens: t.aboveBaseTierTokens,
+                usd: t.usd,
+                usdPerMillionTokens: t.usd !== null && t.totalTokens > 0 ? round6((t.usd / t.totalTokens) * 1e6) : null,
+            };
+        })
+        .sort((a, b) => b.totalTokens - a.totalTokens);
+    return {
+        hosts: [...hosts.values()],
+        ownHostUsdPerHour,
+        effectiveUsdPerGbHour: gbMinutes > 0 ? round6(usd / (gbMinutes / 60)) : null,
+        llmModels,
+    };
+}
+
+/** Distinct pull requests among Runs; a Run with no PR number belongs to none. */
+export const distinctPullRequests = (runs: readonly Pick<UsageRunRecord, 'repositoryId' | 'prNumber'>[]): number =>
+    new Set(runs.filter((r) => r.prNumber !== null).map((r) => `${r.repositoryId ?? ''}\u0000${r.prNumber}`)).size;
 
 export function buildUsageReport(input: {
     organizationId: string;
@@ -447,6 +534,7 @@ export function buildUsageReport(input: {
         counts: {
             runs: input.runsTotal,
             runsListed: runs.length,
+            prs: distinctPullRequests(input.runs),
             setups: setups.length,
             sandboxSessions: filtered ? null : sandboxes.length,
             sandboxOperations:
@@ -468,6 +556,7 @@ export function buildUsageReport(input: {
         machine: { total, byConsumer, unitPrices },
         llm: { source: spend ? 'telemetry' : 'not_measured', total: llmTotal, byAgent },
         cost: { perRun: summarizeRunCosts([...input.costs.values()]), kodusUsd, complete: costComplete },
+        pricing: pricingBasisOf(input.costs, runs, spend),
         runs,
     };
 }

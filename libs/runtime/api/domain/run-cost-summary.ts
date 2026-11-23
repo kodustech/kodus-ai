@@ -18,25 +18,42 @@ export interface RunCostSummary {
     /** Parts with no price: one per Run whose machines, or whose LLM, could not be priced. */
     unpricedParts: { machines: number; llm: number; total: number };
     /** The cost per Run, over the Runs priced in full only; null when none was. */
-    perCompleteRun: { medianUsd: number; maxUsd: number } | null;
+    perCompleteRun: {
+        medianUsd: number;
+        maxUsd: number;
+        /** The median of each part over the same Runs; they need not add up to medianUsd. */
+        medianMachinesUsd: number;
+        medianLlmManagedUsd: number;
+        medianLlmByokUsd: number;
+    } | null;
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
+function median(values: readonly number[]): number {
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return round6(sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
+}
 
 export function summarizeRunCosts(costs: readonly RuntimeRunCost[]): RunCostSummary {
     let pricedUsd = 0;
     let machines = 0;
     let llm = 0;
     const complete: number[] = [];
+    const parts: Array<{ machines: number; managed: number; byok: number }> = [];
     for (const c of costs) {
         // totalUsd is already the sum of the priced parts of one Run.
         pricedUsd += c.totalUsd ?? 0;
         if (c.machines.usd === null) machines++;
         if (c.llm.usd === null) llm++;
-        if (c.complete && c.totalUsd !== null) complete.push(c.totalUsd);
+        if (c.complete && c.totalUsd !== null) {
+            complete.push(c.totalUsd);
+            const byok = c.llm.customerUsd ?? 0;
+            parts.push({ machines: c.machines.usd ?? 0, managed: (c.llm.usd ?? 0) - byok, byok });
+        }
     }
     complete.sort((a, b) => a - b);
-    const mid = Math.floor(complete.length / 2);
     return {
         runs: costs.length,
         completeRuns: complete.length,
@@ -46,8 +63,11 @@ export function summarizeRunCosts(costs: readonly RuntimeRunCost[]): RunCostSumm
             complete.length === 0
                 ? null
                 : {
-                      medianUsd: round6(complete.length % 2 ? complete[mid] : (complete[mid - 1] + complete[mid]) / 2),
+                      medianUsd: median(complete),
                       maxUsd: round6(complete[complete.length - 1]),
+                      medianMachinesUsd: median(parts.map((p) => p.machines)),
+                      medianLlmManagedUsd: median(parts.map((p) => p.managed)),
+                      medianLlmByokUsd: median(parts.map((p) => p.byok)),
                   },
     };
 }
