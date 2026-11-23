@@ -21,7 +21,10 @@ export interface TemplateRow {
 export interface TemplateStore {
     find(organizationId: string, environmentId: string, poolId: string, fingerprint: string): Promise<TemplateRow | null>;
     readyName(organizationId: string, environmentId: string, poolId: string): Promise<string | null>;
-    begin(t: Omit<TemplateRow, 'state'>): Promise<void>;
+    /** Marks the template building on `setupHostId`, the setup host about to be created (written before it exists). */
+    begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }): Promise<void>;
+    /** The setup hosts of the templates building now (recently touched): the orphan pass spares them. */
+    buildingSetupHosts(): Promise<string[]>;
     fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string): Promise<void>;
     /** Marks this template ready and every other ready one of its environment and pool replaced; their names. */
     promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>): Promise<string[]>;
@@ -40,12 +43,21 @@ export class PgTemplateStore implements TemplateStore {
         return (r.rows[0]?.snapshot_name as string | undefined) ?? null;
     }
 
-    async begin(t: Omit<TemplateRow, 'state'>) {
+    async begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }) {
         await this.db.query(
-            `INSERT INTO runtime.runtime_env_templates (org_id, environment_id, pool_id, fingerprint, snapshot_name, state) VALUES ($1, $2, $3, $4, $5, 'building')
-             ON CONFLICT (org_id, environment_id, pool_id, fingerprint) DO UPDATE SET state = 'building', failure = NULL, setup_key = NULL, setup_requested_at = NULL, updated_at = now() WHERE runtime_env_templates.state IN ('failed', 'replaced')`,
-            [t.organizationId, t.environmentId, t.poolId, t.fingerprint, t.name],
+            `INSERT INTO runtime.runtime_env_templates (org_id, environment_id, pool_id, fingerprint, snapshot_name, state, setup_host_id) VALUES ($1, $2, $3, $4, $5, 'building', $6)
+             ON CONFLICT (org_id, environment_id, pool_id, fingerprint) DO UPDATE SET state = 'building', failure = NULL, setup_key = NULL, setup_requested_at = NULL, setup_host_id = EXCLUDED.setup_host_id, updated_at = now() WHERE runtime_env_templates.state IN ('failed', 'replaced')`,
+            [t.organizationId, t.environmentId, t.poolId, t.fingerprint, t.name, t.setupHostId ?? null],
         );
+    }
+
+    async buildingSetupHosts() {
+        // A build waits at most an hour for its bake (runtime-fleet.module.ts poll): an older building row is a dead
+        // build, and its host is an orphan.
+        const r = await this.db.query(
+            `SELECT setup_host_id FROM runtime.runtime_env_templates WHERE state = 'building' AND setup_host_id IS NOT NULL AND updated_at > now() - interval '3 hours'`,
+        );
+        return r.rows.map((x: { setup_host_id: string }) => x.setup_host_id);
     }
 
     async fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string) {

@@ -21,6 +21,8 @@ export interface ReconcileDeps {
     installation: string;
     now(): number;
     log(msg: string, fields: Record<string, unknown>): void;
+    /** The setup hosts of environment templates building now (runtime_env_templates): not in the host rows, never orphans. */
+    templateSetupHosts?(): Promise<string[]>;
 }
 
 export interface ReconcileResult {
@@ -96,7 +98,7 @@ async function destroyOrphans(pools: StoredPool[], d: ReconcileDeps): Promise<st
             continue;
         }
         if (hosts.length === 0) continue;
-        const live = new Set((await d.store.liveHosts()).map((h) => h.hostId));
+        const live = new Set([...(await d.store.liveHosts()).map((h) => h.hostId), ...((await d.templateSetupHosts?.()) ?? [])]);
         for (const h of hosts) {
             if (h.tags.host && live.has(h.tags.host)) continue;
             await provider.destroy(h.providerId);

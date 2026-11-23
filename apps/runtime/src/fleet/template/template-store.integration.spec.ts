@@ -54,4 +54,18 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
             { environment_id: 'env-b', setup_key: null },
         ]);
     });
+
+    it("names the setup host of every template still building, a retry's new host replacing the failed one, and none once it is over", async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = 'e'.repeat(64);
+        const row = { organizationId: 'org-h', environmentId: 'env-h', poolId: 'p', fingerprint: fp, name: templateNameOf('org-h', 'env-h', fp) };
+        await store.begin({ ...row, setupHostId: 'tpl-first' });
+        expect(await store.buildingSetupHosts()).toContain('tpl-first');
+        await store.fail(row, 'build_error');
+        expect(await store.buildingSetupHosts()).not.toContain('tpl-first');
+        await store.begin({ ...row, setupHostId: 'tpl-retry' });
+        expect(await store.buildingSetupHosts()).toContain('tpl-retry');
+        await store.promote(row);
+        expect(await store.buildingSetupHosts()).not.toContain('tpl-retry');
+    });
 });

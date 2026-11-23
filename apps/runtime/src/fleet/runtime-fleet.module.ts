@@ -119,7 +119,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         const engine = this.engine;
         this.reconciler = new FleetReconciler(
             new PgDistributedLocks(this.pool),
-            { store, start: (input) => engine.start(input), providerFor: (k) => this.providers.get(k), installation: c.installation, now: () => Date.now(), log },
+            { store, start: (input) => engine.start(input), providerFor: (k) => this.providers.get(k), installation: c.installation, now: () => Date.now(), log, templateSetupHosts: () => templateStore.buildingSetupHosts() },
             c.reconcileIntervalMs,
             { prune: (now) => pruneFleetHistory(store, now) },
         );

@@ -63,9 +63,10 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     const name = templateNameOf(req.organizationId, req.environmentId, req.fingerprint);
     const key = { organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, fingerprint: req.fingerprint };
     if ((await d.store.find(req.organizationId, req.environmentId, req.poolId, req.fingerprint))?.state === 'ready') return { ok: true, name, reused: true };
-    await d.store.begin({ ...key, name });
     // One host per attempt: the hub enrolls a host id once, so a retry of the same template needs its own.
     const hostId = `tpl-${randomBytes(12).toString('hex')}`;
+    // The row names the setup host before it exists: the orphan pass spares it while the template builds.
+    await d.store.begin({ ...key, name, setupHostId: hostId });
     const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
         await d.store.fail(key, cause ? `${reason}:${cause}` : reason);
         return { ok: false as const, reason, ...(cause ? { cause } : {}) };

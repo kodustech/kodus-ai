@@ -75,6 +75,18 @@ describe('the fleet reconcile pass', () => {
         expect(await w.provider.get(foreign)).not.toBeNull();
     });
 
+    it("never destroys a template's setup host while its template builds, and destroys it as an orphan once nothing builds on it", async () => {
+        const w = world();
+        const building = new Set(['tpl-building']);
+        w.deps.templateSetupHosts = async () => [...building];
+        const tags = { installation: 'it', pool: w.poolId, host: 'tpl-building' };
+        const setupHost = await w.provider.create({ hostId: 'tpl-building', clientToken: 'tpl-building', cls: perRun.hostClass, bootstrap: { hubUrl: 'h', hubCa: 'c', token: 't' }, tags });
+        expect((await reconcileOnce(w.deps, { orphans: true })).destroyed).toEqual([]);
+        expect(await w.provider.get(setupHost.providerId)).not.toBeNull();
+        building.clear();
+        expect((await reconcileOnce(w.deps, { orphans: true })).destroyed).toEqual([setupHost.providerId]);
+    });
+
     it('never destroys a host whose row and machine a workflow on another replica makes while the orphan pass runs', async () => {
         const w = world();
         const tags = { installation: 'it', pool: w.poolId, host: 'host-new' };

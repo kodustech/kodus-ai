@@ -1089,6 +1089,13 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_build_state_evictions ADD COLUMN IF NOT EXISTS free_bytes bigint;
         ALTER TABLE runtime.runtime_build_state_evictions ADD COLUMN IF NOT EXISTS floor_bytes bigint;`,
     },
+    {
+        version: 49,
+        name: 'the setup host a template build boots',
+        // setup_host_id: written with the building row before the setup host is created, so the fleet's orphan pass
+        // (reconcile.ts) spares a host that runtime_hosts does not know while its template builds.
+        sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS setup_host_id text;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

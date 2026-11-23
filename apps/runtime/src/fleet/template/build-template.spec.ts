@@ -118,6 +118,18 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         expect(templateNameOf('a', 'e', FP)).not.toBe(templateNameOf('b', 'e', FP));
     });
 
+    it('records the setup host on the template before the host exists, so no orphan pass destroys it while it builds', async () => {
+        const w = world();
+        let recordedBeforeBoot: string | undefined;
+        const boot = w.hosts.boot.bind(w.hosts);
+        w.hosts.boot = async (req: { hostId: string; base: string }) => {
+            recordedBeforeBoot = w.store.rows[0]?.setupHostId;
+            return boot(req);
+        };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        expect(recordedBeforeBoot).toBe(w.hosts.booted[0]);
+    });
+
     it('a retry of a failed template boots a setup host of its own: the hub never enrolls a host id twice', async () => {
         const w = world();
         w.hosts.bake = { ok: false, reason: 'bake_failed' };
