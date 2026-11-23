@@ -923,7 +923,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         const normalizedContext: Record<string, any> = {
             ...(context || {}),
         };
-        const orgTeam = (context as any)?.organizationAndTeamData;
+        const orgTeam = this.organizationAndTeamDataOf(context);
         if (orgTeam && typeof orgTeam === 'object') {
             if (!normalizedContext.organizationId && orgTeam.organizationId) {
                 normalizedContext.organizationId = orgTeam.organizationId;
@@ -1056,6 +1056,29 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         if (this.logBuffer.length >= this.config.batchSize) {
             void this.flushLogs();
         }
+    }
+
+    /**
+     * The organization/team pair reaches the exporter in one of two shapes.
+     * `SimpleLogger` flattens the log call's `metadata` into the processor
+     * context, so a service that logs `metadata: { params }` arrives here as
+     * `{ params }`; other callers set the pair at the top level. Reading only
+     * the top level stored `organizationId: "unknown"` for 61% of the error
+     * rows, including the ~28,600 Bitbucket Cloud and Azure Repos rows that
+     * carried it inside `params` (#2639).
+     *
+     * The shallowest shape wins, so an explicit pair is never overridden by a
+     * payload.
+     */
+    private organizationAndTeamDataOf(context?: LogContext): any {
+        const candidates = [
+            (context as any)?.organizationAndTeamData,
+            (context as any)?.params?.organizationAndTeamData,
+        ];
+
+        return candidates.find(
+            (candidate) => candidate && typeof candidate === 'object',
+        );
     }
 
     process(
