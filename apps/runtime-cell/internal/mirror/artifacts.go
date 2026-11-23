@@ -37,8 +37,8 @@ func (e ArtifactEntry) matches(name string) bool { return e.Name.MatchString(nam
 // code owner approves (it is part of the egress list's change rule).
 //
 // None is pinned by checksum here: each is addressed by a version the tool
-// asks for, and the tool checks what it downloads (Prisma's .sha256 next to
-// each engine, mongodb-memory-server's .md5/.sha256, firebase-tools' own
+// asks for, and the tool checks what it downloads (Prisma's .gz.sha256 next to
+// each engine, mongodb-memory-server's .md5, firebase-tools' own
 // expected hash per emulator version), as npm's client checks a lockfile's
 // integrity. A hash list here would have to follow every release of three
 // publishers and would break builds the day one ships. What the mirror keeps
@@ -53,17 +53,32 @@ func DefaultArtifacts() []ArtifactEntry {
 		return u
 	}
 	return []ArtifactEntry{
-		// firebase-tools downloads its emulators from this bucket path (jars
-		// and the UI zip). The bucket host is on the deny list on purpose
-		// (writable object storage): this is the one read-only prefix.
+		// firebase-tools (13.35.1 and 14.27.0, lib/emulator/downloadableEmulators.js
+		// and downloadableEmulatorInfo.json) downloads its emulators from this
+		// bucket path: three jars, the UI zip and the Pub/Sub zip, each named
+		// by an exact version. The bucket host is on the deny list on purpose
+		// (writable object storage): this is the one read-only prefix. The UI
+		// "SNAPSHOT" zip (an experiment, no checksum) is not spelled here.
 		{ID: "firebase-emulators", Upstream: mustURL("https://storage.googleapis.com"), PathPrefix: "/firebase-preview-drop/emulator/",
-			Name: nameRE(`[A-Za-z0-9][A-Za-z0-9._-]*\.(?:jar|zip)`), MaxBytes: 256 << 20},
-		// Prisma's engines, by engine commit and platform; PRISMA_ENGINES_MIRROR.
+			Name: nameRE(`(?:firebase-database-emulator-v|cloud-firestore-emulator-v|cloud-storage-rules-runtime-v)[0-9]+\.[0-9]+\.[0-9]+\.jar|(?:ui-v|pubsub-emulator-)[0-9]+\.[0-9]+\.[0-9]+\.zip`), MaxBytes: 256 << 20},
+		// The Data Connect emulator, a Linux binary from a second bucket path:
+		// `-linux-v<ver>` in 13.x, `-linux-amd64-v<ver>` in 14.x (there is no
+		// arm64 build on Linux in either).
+		{ID: "firebase-dataconnect", Upstream: mustURL("https://storage.googleapis.com"), PathPrefix: "/firemat-preview-drop/emulator/",
+			Name: nameRE(`dataconnect-emulator-linux(?:-amd64)?-v[0-9]+\.[0-9]+\.[0-9]+`), MaxBytes: 256 << 20},
+		// Prisma's engines (@prisma/fetch-engine 5.22.0 and 6.19.3, getDownloadUrl):
+		// <PRISMA_ENGINES_MIRROR>/all_commits/<engines commit>/<binary target>/<engine>.gz
+		// and the `.gz.sha256` next to it; nothing else (the `.sig` the
+		// publisher also keeps is never requested). The three engine names
+		// are the BinaryType values; an engine is about 8 MB.
 		{ID: "prisma", Upstream: mustURL("https://binaries.prisma.sh"), PathPrefix: "/all_commits/",
-			Name: nameRE(`[0-9a-f]{40}/[a-z0-9][a-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\.(?:gz|sha256|sig)`), MaxBytes: 256 << 20},
-		// MongoDB server builds for Linux; MONGOMS_DOWNLOAD_MIRROR.
+			Name: nameRE(`[0-9a-f]{40}/(?:(?:debian|rhel)-openssl-[0-9]+\.[0-9]+\.x|linux-(?:musl-)?(?:arm64-)?openssl-[0-9]+\.[0-9]+\.x|linux-musl|linux-static-(?:x64|arm64))/(?:libquery_engine\.so\.node|query-engine|schema-engine)\.gz(?:\.sha256)?`), MaxBytes: 64 << 20},
+		// MongoDB server builds for Linux (mongodb-memory-server-core 9.5.0 and
+		// 10.4.3, MongoBinaryDownloadUrl and MongoBinaryDownload):
+		// <MONGOMS_DOWNLOAD_MIRROR>/linux/mongodb-linux-<x86_64|aarch64>[-<distro>]-<version>.tgz
+		// and the `.tgz.md5` it checks it against (no `.sha256` is requested).
 		{ID: "mongodb", Upstream: mustURL("https://fastdl.mongodb.org"), PathPrefix: "/linux/",
-			Name: nameRE(`mongodb-linux-[A-Za-z0-9._-]+\.tgz(?:\.sha256|\.md5)?`), MaxBytes: 512 << 20},
+			Name: nameRE(`mongodb-linux-(?:x86_64|aarch64)-(?:[a-z]+[0-9]+(?:-clang)?-)?[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?\.tgz(?:\.md5)?`), MaxBytes: 512 << 20},
 	}
 }
 

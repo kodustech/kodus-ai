@@ -683,9 +683,43 @@ URL up to the id.
 
 | Id | Upstream (https) | Path prefix | Name after the prefix, whole | Cap | Used by |
 |---|---|---|---|---|---|
-| `firebase-emulators` | `storage.googleapis.com` | `/firebase-preview-drop/emulator/` | `[A-Za-z0-9][A-Za-z0-9._-]*\.(jar\|zip)` | 256 MiB | firebase-tools (no mirror variable: see below) |
-| `prisma` | `binaries.prisma.sh` | `/all_commits/` | `<40 hex>/<platform>/<file>.(gz\|sha256\|sig)` | 256 MiB | `PRISMA_ENGINES_MIRROR` |
-| `mongodb` | `fastdl.mongodb.org` | `/linux/` | `mongodb-linux-<...>.tgz` with optional `.sha256` or `.md5` | 512 MiB | `MONGOMS_DOWNLOAD_MIRROR` |
+| `firebase-emulators` | `storage.googleapis.com` | `/firebase-preview-drop/emulator/` | `firebase-database-emulator-v<x.y.z>.jar`, `cloud-firestore-emulator-v<x.y.z>.jar`, `cloud-storage-rules-runtime-v<x.y.z>.jar`, `ui-v<x.y.z>.zip`, `pubsub-emulator-<x.y.z>.zip` | 256 MiB | firebase-tools (no mirror variable: see below) |
+| `firebase-dataconnect` | `storage.googleapis.com` | `/firemat-preview-drop/emulator/` | `dataconnect-emulator-linux[-amd64]-v<x.y.z>` | 256 MiB | firebase-tools (same) |
+| `prisma` | `binaries.prisma.sh` | `/all_commits/` | `<40 hex>/<linux target>/(libquery_engine.so.node\|query-engine\|schema-engine).gz`, plus `.gz.sha256` | 64 MiB | `PRISMA_ENGINES_MIRROR` |
+| `mongodb` | `fastdl.mongodb.org` | `/linux/` | `mongodb-linux-(x86_64\|aarch64)[-<distro>]-<x.y.z>[-rcN].tgz`, plus `.tgz.md5` | 512 MiB | `MONGOMS_DOWNLOAD_MIRROR` |
+
+Linux targets the Prisma pattern admits: `debian-openssl-<n.n>.x`, `rhel-openssl-<n.n>.x`,
+`linux-[musl-][arm64-]openssl-<n.n>.x`, `linux-musl`, `linux-static-(x64\|arm64)`.
+
+Verified shapes (read 2026-11-23 from the published npm packages, not run; sizes by `HEAD` on the upstream):
+
+- Prisma: `@prisma/fetch-engine` 5.22.0 and 6.19.3, `getDownloadUrl`:
+  `${PRISMA_BINARIES_MIRROR || PRISMA_ENGINES_MIRROR || "https://binaries.prisma.sh"}/all_commits/<version>/<binaryTarget>/<binaryName>.gz`
+  with `channel` fixed to `all_commits` by the caller; `binaryName` is `libquery_engine.so.node` (from
+  `@prisma/get-platform` `getNodeAPIName`, 5.22.0 and 6.19.3), `query-engine` or `schema-engine` (`BinaryType`). The
+  checksum is `${url}.sha256`, that is `<file>.gz.sha256` (`downloadZip` `fetchChecksum`). A `.sig` exists upstream but
+  nothing requests it, and `.sha256` without `.gz` is not requested either, so neither is served. Target names come
+  from `@prisma/get-platform`'s target list. Each Linux engine is about 8 MB (`schema-engine.gz` 8.06 MB for
+  `debian-openssl-3.0.x`), so the cap went from 256 MiB to 64 MiB.
+- MongoDB: `mongodb-memory-server-core` 9.5.0 and 10.4.3, `MongoBinaryDownloadUrl.getDownloadUrl`:
+  `<MONGOMS_DOWNLOAD_MIRROR or https://fastdl.mongodb.org>/<platform>/<archive>` with platform `linux` and archive
+  `mongodb-linux-<x86_64|aarch64>[-<distro>]-<version>.tgz` (`ubuntu2204`, `debian12`, `rhel80`, `amazon2023`,
+  `suse15`, ...; `-clang` only for `ubuntu1410`). The check is `<url>.md5` (`makeMD5check`); no `.sha256` is requested
+  (it exists upstream, so it was dropped from the entry). `MONGOMS_DOWNLOAD_MIRROR` is the right variable:
+  `MONGOMS_DOWNLOAD_URL` is one whole URL and would need the distro-and-version file name spelled by hand. The tool
+  also needs a non-zero `Content-Length` (the mirror forwards it). `win32`/`osx` use other prefixes and are not served.
+  `mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz` is 84.7 MB, so 512 MiB stays.
+- Firebase: `firebase-tools` 14.27.0 (`lib/emulator/downloadableEmulatorInfo.json`) and 13.35.1
+  (`downloadableEmulators.js`). Database 4.11.2 (34.5 MB), Firestore 1.19.8 (63.6 MB), Storage rules 1.1.3 (52.9 MB),
+  UI 1.15.0 (3.5 MB) and Pub/Sub 0.8.17 (65.2 MB) come from
+  `storage.googleapis.com/firebase-preview-drop/emulator/<name>`; Data Connect comes from a different path,
+  `storage.googleapis.com/firemat-preview-drop/emulator/dataconnect-emulator-linux-amd64-v2.17.3` in 14.x (30.0 MB;
+  `dataconnect-emulator-linux-v1.9.2` in 13.x; no arm64 Linux build in either, a 404 upstream). Each version embeds
+  `expectedSize` and `expectedChecksum` (md5, and `expectedChecksumSHA256` in 14.x); `downloadEmulator` checks both.
+  There is **no environment variable for the download URL**; the overrides are `FIREBASE_EMULATORS_PATH` (cache
+  directory) and `<EMULATOR>_EMULATOR_BINARY_PATH` (use a file already on disk). The `ui-vSNAPSHOT.zip` the
+  `emulatoruisnapshot` experiment fetches has no checksum and is not served. The old `[A-Za-z0-9._-]*.(jar|zip)`
+  pattern let any object of the prefix through; the new ones are the five families above.
 
 What each request must satisfy, all before anything leaves the cell:
 
@@ -711,8 +745,7 @@ names, and would not for an open path. The deny list still denies `storage.googl
 every claim for everything else (`cmd/egress` `TestTheArtifactHostsStayOnTheDenyListForEverythingElse`).
 
 Pinning. Not by checksum in the cell, deliberately. Each artifact is addressed by the version the tool asks for and
-the tool verifies it (Prisma downloads the `.sha256` next to each engine, `mongodb-memory-server` checks `.md5`/
-`.sha256`, firebase-tools compares each emulator with the hash of its release). A hash list in the cell would have to
+the tool verifies it (Prisma downloads the `.gz.sha256` next to each engine, `mongodb-memory-server` checks `.md5`, firebase-tools compares each emulator with the hash of its release). A hash list in the cell would have to
 follow every release of three publishers and would fail a build the day one ships a version. What stays closed is the
 path, the method, the size and the source. A recipe that needs a hard pin pins it in its own Dockerfile (`sha256sum -c`).
 
@@ -725,18 +758,36 @@ How a build or recipe uses it.
   `ARG PRISMA_ENGINES_MIRROR` and `ARG MONGOMS_DOWNLOAD_MIRROR` itself. A project's own value wins.
 - A running service or test step (not a build): set the same variables to the mirror's address in the recipe's
   environment.
-- Firebase: firebase-tools has no variable for the download URL, so a recipe fetches the jar or zip from
-  `http://mirror.cell.internal:<port>/artifacts/firebase-emulators/firebase-preview-drop/emulator/<file>` into the
-  emulators cache (`~/.cache/firebase/emulators/`, or `FIREBASE_EMULATORS_PATH`) under the name firebase-tools
-  expects, before the emulator starts. The file name carries the version (see firebase-tools' download table).
+- Firebase: firebase-tools has no variable for the download URL, so it would try `storage.googleapis.com` directly
+  and be refused. The recipe fetches the files from the mirror before the emulator starts, into the cache firebase-tools
+  looks in (`${FIREBASE_EMULATORS_PATH:-$HOME/.cache/firebase/emulators}`), under the name it expects, which is the
+  upstream file name (`downloadPathRelativeToCacheDir`); a missing file is the only thing that triggers a download
+  (`downloadIfNecessary`). For each emulator the project uses:
+  1. `curl -fsSL http://mirror.cell.internal:<port>/artifacts/firebase-emulators/firebase-preview-drop/emulator/<file> -o "$CACHE/<file>"`
+     (Data Connect: `.../artifacts/firebase-dataconnect/firemat-preview-drop/emulator/dataconnect-emulator-linux-amd64-v<ver>`, saved as
+     `$CACHE/dataconnect-emulator-<ver>` and `chmod +x`).
+  2. Check it against the checksum of the installed firebase-tools (`lib/emulator/downloadableEmulatorInfo.json`,
+     `expectedChecksumSHA256`; 13.x only has the md5 in `downloadableEmulators.js`). The skipped download is also a
+     skipped check, so the recipe does it.
+  3. Jars (database, firestore, storage) need nothing more. `ui` and `pubsub` are zips the tool unpacks itself: unzip
+     `ui-v<ver>.zip` into `$CACHE/ui-v<ver>/` and `pubsub-emulator-<ver>.zip` into `$CACHE/pubsub-emulator-<ver>/`
+     (what `downloadEmulator` does), or the tool downloads them again.
+  The file name carries the version, so it must match the firebase-tools the project installed.
+- MongoDB over the mirror: the mirror is `http://`, and `mongodb-memory-server` requests with `https` unless
+  `MONGOMS_USE_HTTP=1` is set. A step that runs it sets that variable together with `MONGOMS_DOWNLOAD_MIRROR`.
+  **Open gap**: the build-arg list (`mirrorBuildArgs.artifacts`) carries only the mirror variable, not
+  `MONGOMS_USE_HTTP`, so a build-time `mongodb-memory-server` postinstall over the mirror fails the TLS handshake until
+  the Dockerfile sets `ENV MONGOMS_USE_HTTP=1` itself or the list gains that name (a change of `egress-lists.json` in
+  both copies and of `MIRROR_BUILD_ARGS`).
 
-Not covered, on purpose: any other file of those hosts (Firebase's `dataconnect` and other emulator buckets, Prisma's
-non-engine downloads, MongoDB tools and non-Linux builds), and every host not listed here.
+Not covered, on purpose: any other file of those hosts (other emulator buckets and the Data Connect macOS and Windows
+binaries, Prisma's non-engine downloads and `.sig` files, MongoDB tools, `.sha256` files and non-Linux builds), and every
+host not listed here.
 
 Built: `internal/mirror/artifacts.go` and tests; `cmd/egress/main.go` (`/artifacts/`); `internal/buildmirror`;
-`mirrorBuildArgs.artifacts` in both copies of `egress-lists.json`; `egress-catalog.ts`. To verify on a real cell: that
-the Prisma and `mongodb-memory-server` versions in the customer's lockfile build their URLs from the mirror variable as
-documented here (the paths above are the ones their current releases request).
+`mirrorBuildArgs.artifacts` in both copies of `egress-lists.json`; `egress-catalog.ts`. The shapes above were read from the
+releases named in "Verified shapes". To verify on a real cell: that the versions in a customer's lockfile build the same
+URLs (a major release can change them).
 
 ## Sources
 

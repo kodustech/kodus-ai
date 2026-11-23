@@ -177,16 +177,87 @@ func TestTheFixedListIsReviewedShape(t *testing.T) {
 		}
 	}
 	for id, c := range map[string]struct{ host, prefix, ok string }{
-		"firebase-emulators": {"storage.googleapis.com", "/firebase-preview-drop/emulator/", "cloud-firestore-emulator-v1.19.8.jar"},
-		"prisma":             {"binaries.prisma.sh", "/all_commits/", "605197351a3c8bdd595af2d2a9bc3025bca48ea2/debian-openssl-3.0.x/libquery_engine.so.node.gz"},
-		"mongodb":            {"fastdl.mongodb.org", "/linux/", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz"},
+		"firebase-emulators":   {"storage.googleapis.com", "/firebase-preview-drop/emulator/", "cloud-firestore-emulator-v1.19.8.jar"},
+		"firebase-dataconnect": {"storage.googleapis.com", "/firemat-preview-drop/emulator/", "dataconnect-emulator-linux-amd64-v2.17.3"},
+		"prisma":               {"binaries.prisma.sh", "/all_commits/", "605197351a3c8bdd595af2d2a9bc3025bca48ea2/debian-openssl-3.0.x/libquery_engine.so.node.gz"},
+		"mongodb":              {"fastdl.mongodb.org", "/linux/", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz"},
 	} {
 		e, ok := byID[id]
 		if !ok || e.Upstream.Host != c.host || e.PathPrefix != c.prefix || !e.matches(c.ok) {
 			t.Errorf("%s: %+v", id, e)
 		}
 	}
-	if len(list) != len(byID) || len(list) != 3 {
+	if len(list) != len(byID) || len(list) != 4 {
 		t.Fatalf("%d entries", len(list))
+	}
+}
+
+// The real request paths of the tools' own code, read from the published
+// packages (docs/runtime/egress-allowlist.md section 17): every one the list
+// must serve, and the neighbours it must not.
+func TestTheFixedListSpellsWhatTheToolsReallyRequest(t *testing.T) {
+	byID := map[string]ArtifactEntry{}
+	for _, e := range DefaultArtifacts() {
+		byID[e.ID] = e
+	}
+	const commit = "c2990dca591cba766e3b7ef5d9e8a84796e47ab7"
+	serve := map[string][]string{
+		// firebase-tools 14.27.0 downloadableEmulatorInfo.json, 13.35.1 downloadableEmulators.js.
+		"firebase-emulators": {
+			"firebase-database-emulator-v4.11.2.jar", "cloud-firestore-emulator-v1.19.8.jar", "cloud-storage-rules-runtime-v1.1.3.jar",
+			"ui-v1.15.0.zip", "ui-v1.14.0.zip", "pubsub-emulator-0.8.17.zip", "pubsub-emulator-0.8.14.zip",
+		},
+		"firebase-dataconnect": {"dataconnect-emulator-linux-amd64-v2.17.3", "dataconnect-emulator-linux-v1.9.2"},
+		// @prisma/fetch-engine 5.22.0 and 6.19.3 getDownloadUrl, @prisma/get-platform binary targets.
+		"prisma": {
+			commit + "/debian-openssl-3.0.x/libquery_engine.so.node.gz",
+			commit + "/debian-openssl-3.0.x/libquery_engine.so.node.gz.sha256",
+			commit + "/debian-openssl-1.1.x/query-engine.gz",
+			commit + "/debian-openssl-3.0.x/schema-engine.gz",
+			commit + "/debian-openssl-3.0.x/schema-engine.gz.sha256",
+			commit + "/linux-musl-openssl-3.0.x/schema-engine.gz",
+			commit + "/linux-arm64-openssl-3.0.x/libquery_engine.so.node.gz",
+			commit + "/linux-musl-arm64-openssl-3.0.x/query-engine.gz",
+			commit + "/rhel-openssl-3.0.x/schema-engine.gz",
+			commit + "/linux-musl/libquery_engine.so.node.gz",
+		},
+		// mongodb-memory-server-core 9.5.0 and 10.4.3, MongoBinaryDownloadUrl and makeMD5check.
+		"mongodb": {
+			"mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.md5",
+			"mongodb-linux-aarch64-ubuntu2204-7.0.14.tgz", "mongodb-linux-x86_64-debian12-8.0.4.tgz",
+			"mongodb-linux-x86_64-rhel80-6.0.9.tgz", "mongodb-linux-aarch64-amazon2023-7.0.14.tgz", "mongodb-linux-x86_64-4.4.29.tgz",
+		},
+	}
+	refuse := map[string][]string{
+		"firebase-emulators": {
+			"ui-vSNAPSHOT.zip", "firebase-database-emulator-v4.11.2.jar.sha256", "cloud-firestore-emulator-v1.19.8.zip",
+			"ui-v1.15.0.jar", "other-emulator-v1.0.0.jar", "ui-v1.15.zip",
+		},
+		"firebase-dataconnect": {"dataconnect-emulator-macos-amd64-v2.17.3", "dataconnect-emulator-linux-arm64-v2.17.3", "dataconnect-emulator-linux-amd64-v2.17.3.exe", "dataconnect-emulator-linux-v1"},
+		"prisma": {
+			commit + "/debian-openssl-3.0.x/libquery_engine.so.node.gz.sig", commit + "/debian-openssl-3.0.x/libquery_engine.so.node.sha256",
+			commit + "/debian-openssl-3.0.x/libquery_engine.so.node", commit + "/darwin-arm64/schema-engine.gz",
+			commit + "/windows/schema-engine.exe.gz", commit + "/debian-openssl-3.0.x/prisma-fmt.gz", "latest/debian-openssl-3.0.x/schema-engine.gz",
+			commit[:39] + "/debian-openssl-3.0.x/schema-engine.gz", commit + "/debian-openssl-3.0.x/schema-engine.gz/x",
+		},
+		"mongodb": {
+			"mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.sha256", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.sig",
+			"mongodb-osx-ssl-x86_64-4.0.0.tgz", "mongodb-macos-arm64-7.0.14.tgz", "mongodb-windows-x86_64-7.0.14.zip",
+			"mongodb-linux-x86_64-ubuntu2204-latest.tgz", "mongodb-linux-i686-3.0.0.tgz", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.md5.md5",
+		},
+	}
+	for id, names := range serve {
+		for _, n := range names {
+			if !byID[id].matches(n) {
+				t.Errorf("%s: %q is not served", id, n)
+			}
+		}
+	}
+	for id, names := range refuse {
+		for _, n := range names {
+			if byID[id].matches(n) {
+				t.Errorf("%s: %q is served", id, n)
+			}
+		}
 	}
 }
