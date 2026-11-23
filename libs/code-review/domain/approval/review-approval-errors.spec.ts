@@ -1,8 +1,12 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
-import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/constants/error-reasons';
+import {
+    RISK_ASSESSMENT_FAILED_REASON,
+    SUMMARY_GENERATION_FAILED_REASON,
+} from '@libs/code-review/pipeline/constants/error-reasons';
 import {
     partialReviewBlocksApproval,
     reviewErrorsBlockApproval,
+    reviewExecutionAllowsApproval,
 } from './review-approval-errors';
 
 describe('reviewErrorsBlockApproval', () => {
@@ -22,7 +26,7 @@ describe('reviewErrorsBlockApproval', () => {
             reviewErrorsBlockApproval([
                 {
                     severity: 'partial',
-                    metadata: { reason: 'risk_assessment' },
+                    metadata: { reason: RISK_ASSESSMENT_FAILED_REASON },
                 },
             ]),
         ).toBe(true);
@@ -44,7 +48,7 @@ describe('reviewErrorsBlockApproval', () => {
                 },
                 {
                     severity: 'partial',
-                    metadata: { reason: 'risk_assessment' },
+                    metadata: { reason: RISK_ASSESSMENT_FAILED_REASON },
                 },
             ]),
         ).toBe(true);
@@ -97,5 +101,42 @@ describe('partialReviewBlocksApproval', () => {
             }),
         ).toBe(false);
         expect(partialReviewBlocksApproval(null)).toBe(false);
+    });
+});
+
+describe('reviewExecutionAllowsApproval', () => {
+    it('accepts a success', () => {
+        expect(
+            reviewExecutionAllowsApproval({
+                status: AutomationStatus.SUCCESS,
+            }),
+        ).toBe(true);
+    });
+
+    it('accepts a partial review whose only failure was the summary', () => {
+        expect(
+            reviewExecutionAllowsApproval({
+                status: AutomationStatus.PARTIAL_ERROR,
+                dataExecution: { reviewApprovalBlocked: false },
+            }),
+        ).toBe(true);
+    });
+
+    it('refuses a real partial, a markerless partial and an error', () => {
+        expect(
+            reviewExecutionAllowsApproval({
+                status: AutomationStatus.PARTIAL_ERROR,
+                dataExecution: { reviewApprovalBlocked: true },
+            }),
+        ).toBe(false);
+        expect(
+            reviewExecutionAllowsApproval({
+                status: AutomationStatus.PARTIAL_ERROR,
+            }),
+        ).toBe(false);
+        expect(
+            reviewExecutionAllowsApproval({ status: AutomationStatus.ERROR }),
+        ).toBe(false);
+        expect(reviewExecutionAllowsApproval(null)).toBe(false);
     });
 });

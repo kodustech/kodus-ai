@@ -1,4 +1,3 @@
-import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/constants/error-reasons';
 import { AutomationCodeReviewService } from './automationCodeReview';
 
 /**
@@ -29,33 +28,19 @@ describe('AutomationCodeReviewService — reviewApprovalBlocked', () => {
             }
         )._buildExecutionData(payload, result);
 
-    it('records a summary-only partial error as not blocking approval', () => {
-        const data = build({
-            errors: [
-                {
-                    severity: 'partial',
-                    metadata: { reason: SUMMARY_GENERATION_FAILED_REASON },
-                },
-            ],
-        });
+    it('persists the handler’s non-blocking answer', () => {
+        const data = build({ reviewApprovalBlocked: false });
 
         expect(data.reviewApprovalBlocked).toBe(false);
     });
 
-    it('records any other partial error as blocking', () => {
-        const data = build({
-            errors: [
-                {
-                    severity: 'partial',
-                    metadata: { reason: 'risk_assessment' },
-                },
-            ],
-        });
+    it('persists a blocking answer', () => {
+        const data = build({ reviewApprovalBlocked: true });
 
         expect(data.reviewApprovalBlocked).toBe(true);
     });
 
-    it('leaves the marker off a result that carries no errors', () => {
+    it('leaves the marker off a result that does not carry it', () => {
         expect(build({})).not.toHaveProperty('reviewApprovalBlocked');
     });
 });

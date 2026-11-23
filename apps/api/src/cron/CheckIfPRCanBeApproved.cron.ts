@@ -35,7 +35,10 @@ import {
     IAutomationService,
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
-import { partialReviewBlocksApproval } from '@libs/code-review/domain/approval/review-approval-errors';
+import {
+    partialReviewBlocksApproval,
+    reviewExecutionAllowsApproval,
+} from '@libs/code-review/domain/approval/review-approval-errors';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import {
     AUTOMATION_EXECUTION_SERVICE_TOKEN,
@@ -1199,7 +1202,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         repositoryId: pr.repository.id,
                     },
                 );
-            if (latest?.status !== AutomationStatus.SUCCESS)
+            if (!latest || !reviewExecutionAllowsApproval(latest))
                 return hold('The latest review did not complete.');
             const data = latest.dataExecution;
             const reviewed = data?.approvalDecision as

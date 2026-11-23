@@ -30,19 +30,29 @@ export const reviewErrorsBlockApproval = (
                 error?.severity === 'partial'),
     );
 
+export type ReviewExecutionLike =
+    | {
+          status?: AutomationStatus;
+          dataExecution?: { reviewApprovalBlocked?: boolean };
+      }
+    | null
+    | undefined;
+
 /**
- * Whether a stored execution holds approval. Executions written before the
- * marker existed carry `undefined`, which stays blocking: a partial review
+ * Whether a stored execution can back an approval. Executions written before
+ * the marker existed carry `undefined`, which stays blocking: a partial review
  * must not start approving because a field is missing.
  */
+export const reviewExecutionAllowsApproval = (
+    execution: ReviewExecutionLike,
+): boolean =>
+    execution?.status === AutomationStatus.SUCCESS ||
+    (execution?.status === AutomationStatus.PARTIAL_ERROR &&
+        execution?.dataExecution?.reviewApprovalBlocked === false);
+
+/** The same rule from the other side, for the branches that gate on partial. */
 export const partialReviewBlocksApproval = (
-    execution:
-        | {
-              status?: AutomationStatus;
-              dataExecution?: { reviewApprovalBlocked?: boolean };
-          }
-        | null
-        | undefined,
+    execution: ReviewExecutionLike,
 ): boolean =>
     execution?.status === AutomationStatus.PARTIAL_ERROR &&
-    execution?.dataExecution?.reviewApprovalBlocked !== false;
+    !reviewExecutionAllowsApproval(execution);
