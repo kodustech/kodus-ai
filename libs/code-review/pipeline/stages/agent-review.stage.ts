@@ -1863,18 +1863,39 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // comment. `changedFilesByName` (built above for the diff-snap
             // step) tells the two cases apart.
             //
-            // An analyzer finding on a file whose diff the host withheld takes
-            // no line comment either: GitHub rejects it with 422 "diff is too
-            // large". The analyzers read such a file from a hunk they
-            // recovered, so a lockfile advisory would never reach the PR.
+            // A file the PR carries without a patch has no hunk to anchor a
+            // line comment to, and GitHub answers 422 on every attempt. Two
+            // shapes reach this. A diff the host withheld ("diff is too
+            // large") is the first: the analyzers read such a file from a hunk
+            // they recovered, so a lockfile advisory would never reach the PR.
+            // A file moved without a content change is the second: a 100%
+            // similarity rename has no hunks at all, and the host rejects the
+            // comment with "could not be resolved". Route both PR-level,
+            // citing file:line: the first covers analyzer findings, the second
+            // covers anything a model or an analyzer found on that file.
+            const withoutPatch = (f: FileChange) =>
+                Boolean(f.filename) && !f.patch;
+            const allChanges = [
+                ...changedFiles,
+                ...(context.ignoredFileChanges ?? []),
+            ];
             const withheldDiffs = new Set(
-                [...changedFiles, ...(context.ignoredFileChanges ?? [])]
-                    .filter((f) => f.filename && !f.patch)
+                allChanges.filter(withoutPatch).map((f) => f.filename),
+            );
+            const movedWithoutHunks = new Set(
+                allChanges
+                    .filter(
+                        (f) =>
+                            withoutPatch(f) &&
+                            (f.status === 'renamed' || f.status === 'copied'),
+                    )
                     .map((f) => f.filename),
             );
             const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-                (isAnalyzerSuggestion(s) &&
-                    withheldDiffs.has(s.relevantFile)) ||
+                (!!s.relevantFile &&
+                    (isAnalyzerSuggestion(s)
+                        ? withheldDiffs.has(s.relevantFile)
+                        : movedWithoutHunks.has(s.relevantFile))) ||
                 (s.label === 'kody_rules' &&
                     (!s.relevantFile ||
                         s.fileAnchored === true ||
