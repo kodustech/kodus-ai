@@ -31,6 +31,7 @@ import {
     clampMessagesToBudget,
     compressMessages,
     estimateMessagesTokens,
+    type MessageTokenCounts,
     COMPRESSION_THRESHOLD_RATIO,
 } from './context-compressor';
 
@@ -56,6 +57,8 @@ export interface ContextWindowCompressorOptions {
 
 export class ContextWindowCompressor implements Compressor {
     private readonly overheadTokens: number;
+    /** Token counts of this run's messages (see MessageTokenCounts). */
+    private readonly tokenCounts: MessageTokenCounts = new Map();
     private readonly safetyMarginTokens: number;
 
     constructor(
@@ -91,7 +94,7 @@ export class ContextWindowCompressor implements Compressor {
         // tiktoken was here. A slow count is logged with its job.
         const current = timeSync(
             'context compressor token count',
-            () => estimateMessagesTokens(modelMsgs),
+            () => estimateMessagesTokens(modelMsgs, this.tokenCounts),
             () => ({ messages: modelMsgs.length }),
         );
         const usage = current + this.overheadTokens;
@@ -107,14 +110,18 @@ export class ContextWindowCompressor implements Compressor {
 
         // 1. Soft pass: truncate older tool-result text (recap-preserving).
         let compressed = compressMessages(modelMsgs, []);
-        let after = estimateMessagesTokens(compressed);
+        let after = estimateMessagesTokens(compressed, this.tokenCounts);
 
         // 2. Hard clamp: guarantee the messages fit the real budget. This is the
         //    invariant the old "return null on no savings" path violated — an
         //    oversized window was sent verbatim and overflowed the provider.
         if (after > budget) {
-            compressed = clampMessagesToBudget(compressed, budget);
-            after = estimateMessagesTokens(compressed);
+            compressed = clampMessagesToBudget(
+                compressed,
+                budget,
+                this.tokenCounts,
+            );
+            after = estimateMessagesTokens(compressed, this.tokenCounts);
         }
 
         // Nothing to gain AND we were never over budget → leave the window as-is.

@@ -26,10 +26,13 @@ jest.mock('picomatch', () => {
 import picomatch from 'picomatch';
 
 import {
+    _getCompiledListStats,
     _clearMatcherCache,
     _getMatcherCacheSize,
+    createGlobMatcher,
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
+    requiredLiteral,
 } from '@libs/common/utils/glob-utils';
 
 const actualPicomatch = jest.requireActual('picomatch');
@@ -67,6 +70,14 @@ function referenceMatch(
         }
     }
     return false;
+}
+
+/**
+ * A path that holds `literal` (so the prefilter runs the matcher) but
+ * matches no `**\/<literal>/**` pattern: the segment is `<literal>x`.
+ */
+function candidate(literal: string): string {
+    return `src/${literal}x/app.ts`;
 }
 
 /** Paths that hit and miss the default list, in several path shapes. */
@@ -166,13 +177,15 @@ describe('glob-utils with the default ignore list', () => {
     });
 
     it('caches case-sensitive and case-insensitive matchers separately', () => {
-        isFileMatchingGlob('assets/logo.PNG', ['**/*.png']);
-        isFileMatchingGlobCaseInsensitive('assets/logo.PNG', ['**/*.png']);
+        // `.png.PNG` holds the literal both ways, so both matchers compile.
+        const file = 'assets/logo.png.PNG';
+        isFileMatchingGlob(file, ['**/*.png']);
+        isFileMatchingGlobCaseInsensitive(file, ['**/*.png']);
 
-        expect(isFileMatchingGlob('assets/logo.PNG', ['**/*.png'])).toBe(false);
-        expect(
-            isFileMatchingGlobCaseInsensitive('assets/logo.PNG', ['**/*.png']),
-        ).toBe(true);
+        expect(isFileMatchingGlob(file, ['**/*.png'])).toBe(false);
+        expect(isFileMatchingGlobCaseInsensitive(file, ['**/*.png'])).toBe(
+            true,
+        );
         expect(_getMatcherCacheSize()).toEqual({
             caseSensitive: 1,
             caseInsensitive: 1,
@@ -191,9 +204,9 @@ describe('glob-utils cache bound', () => {
             { length: 6_000 },
             (_, i) => `**/generated-${i}/**`,
         );
-        for (const pattern of patterns) {
-            isFileMatchingGlob('src/app.ts', [pattern]);
-        }
+        patterns.forEach((pattern, i) => {
+            isFileMatchingGlob(candidate(`generated-${i}`), [pattern]);
+        });
 
         const size = _getMatcherCacheSize().caseSensitive;
         expect(size).toBeLessThanOrEqual(5_000);
@@ -206,23 +219,37 @@ describe('glob-utils cache bound', () => {
             { length: 5_001 },
             (_, i) => `**/gen-${i}/**`,
         );
-        for (const pattern of patterns) {
-            isFileMatchingGlob('src/app.ts', [pattern]);
-        }
+        patterns.forEach((pattern, i) => {
+            isFileMatchingGlob(candidate(`gen-${i}`), [pattern]);
+        });
+        // A new list of the same patterns reuses no compiled list, so only
+        // the per-pattern matcher cache decides what is compiled again.
         compileSpy.mockClear();
 
         // Most recent pattern is still cached: no recompilation.
-        isFileMatchingGlob('src/app.ts', [patterns[patterns.length - 1]]);
-        expect(compileSpy).not.toHaveBeenCalled();
+        isFileMatchingGlob(candidate(`gen-${patterns.length - 1}`), [
+            patterns[patterns.length - 1],
+            '**/also-new-list-1/**',
+        ]);
+        expect(
+            compileSpy.mock.calls.filter(
+                ([p]) => p === patterns[patterns.length - 1],
+            ),
+        ).toHaveLength(0);
 
         // The very first one was evicted: compiled again.
-        isFileMatchingGlob('src/app.ts', [patterns[0]]);
-        expect(compileSpy).toHaveBeenCalledTimes(1);
+        isFileMatchingGlob(candidate('gen-0'), [
+            patterns[0],
+            '**/also-new-list-2/**',
+        ]);
+        expect(
+            compileSpy.mock.calls.filter(([p]) => p === patterns[0]),
+        ).toHaveLength(1);
     });
 
     it('still returns correct results after evictions', () => {
         for (let i = 0; i < 6_000; i++) {
-            isFileMatchingGlob('src/app.ts', [`**/noise-${i}/**`]);
+            isFileMatchingGlob(candidate(`noise-${i}`), [`**/noise-${i}/**`]);
         }
         expect(isFileMatchingGlob('dist/a.js', ['dist/**'])).toBe(true);
         expect(isFileMatchingGlob('src/a.js', ['dist/**'])).toBe(false);
@@ -233,10 +260,14 @@ describe('glob-utils cache bound', () => {
         // specific globs arrive once. Past the bound, eviction must drop the
         // one-off patterns, not the list in use.
         const hot = DEFAULT_IGNORE_PATHS.slice(0, 50);
+        // Holds every hot pattern's literal, so each hot matcher compiles.
+        const hotPath = candidate(hot.map(requiredLiteral).join('_'));
         for (let i = 0; i < 6_000; i++) {
-            isFileMatchingGlob('src/app.ts', [`**/one-off-${i}/**`]);
+            isFileMatchingGlob(candidate(`one-off-${i}`), [
+                `**/one-off-${i}/**`,
+            ]);
             if (i % 100 === 0) {
-                isFileMatchingGlob('src/app.ts', hot);
+                isFileMatchingGlob(hotPath, hot);
             }
         }
 
@@ -277,4 +308,238 @@ describe('glob-utils invalid patterns (unchanged semantics)', () => {
             );
         },
     );
+});
+
+describe('glob-utils literal prefilter (2026-11-23 stall)', () => {
+    beforeEach(() => {
+        _clearMatcherCache();
+    });
+
+    /**
+     * Near-misses of every default pattern: the pattern's own text with
+     * wildcards filled in, nested, dotted, suffixed, with a trailing slash,
+     * upper- and lower-cased. These are the shapes where a prefilter could
+     * disagree with picomatch (`**\/tmp/**` matching `tmp`, a trailing `/`).
+     */
+    function nearMisses(): string[] {
+        const out: string[] = [];
+        for (const pattern of DEFAULT_IGNORE_PATHS) {
+            const core = pattern
+                .replace(/^\*\*\//, '')
+                .replace(/\/\*\*$/, '')
+                .replace(/^\*/, '')
+                .replace(/\*/g, 'x')
+                .replace(/\?/g, 'y')
+                .replace(/\[([^\]]*)\]/g, (_, g: string) => g[0])
+                .replace(/\{([^}]*)\}/g, (_, g: string) => g.split(',')[0]);
+            out.push(
+                core,
+                `a/${core}`,
+                `.${core}`,
+                `${core}/`,
+                `a/${core}/b`,
+                `${core}x`,
+                `x${core}`,
+                `${core}.y`,
+                core.toUpperCase(),
+                core.toLowerCase(),
+                `a/${core}/b/c.d`,
+                core.replace(/^\./, ''),
+            );
+        }
+        return out.concat([
+            '.',
+            '..',
+            'a//b',
+            'x.tar.gz',
+            'a/.png',
+            '.png',
+            'tmp',
+            'çã/ü.PNG',
+        ]);
+    }
+
+    it.each([false, true])(
+        'agrees with the reference on near-misses of every default pattern (caseInsensitive=%s)',
+        (caseInsensitive) => {
+            const match = caseInsensitive
+                ? isFileMatchingGlobCaseInsensitive
+                : isFileMatchingGlob;
+            const files = nearMisses();
+            const mismatches = files.filter(
+                (file) =>
+                    match(file, DEFAULT_IGNORE_PATHS) !==
+                    referenceMatch(file, DEFAULT_IGNORE_PATHS, caseInsensitive),
+            );
+            expect(mismatches).toEqual([]);
+            // The corpus exercises both outcomes.
+            expect(files.some((f) => match(f, DEFAULT_IGNORE_PATHS))).toBe(
+                true,
+            );
+            expect(files.some((f) => !match(f, DEFAULT_IGNORE_PATHS))).toBe(
+                true,
+            );
+        },
+    );
+
+    it.each([
+        ['**/*.png', '.png'],
+        ['**/[Dd]ebug/**', 'ebug'],
+        ['**/*.{js,ts}', '.'],
+        ['**/node_modules/**', 'node_modules'],
+        ['src/**/*.spec.ts', '.spec.ts'],
+        ['!dist/**', ''],
+        ['**/@(a|b).js', ''],
+        ['**/(foo|bar).js', ''],
+        // Nested brace groups: no alternative may survive as required.
+        ['{a,{b}c}', ''],
+        ['**/{dist,{build,out}.map}', ''],
+        ['src/{a,{b,c}}/x.ts', 'x.ts'],
+        ['**/*', ''],
+    ])('requires the literal of %s to be %j', (pattern, literal) => {
+        expect(requiredLiteral(pattern)).toBe(literal);
+    });
+
+    it.each([
+        ['dist/a.js', ['**/{dist,{build,out}.map}/**']],
+        ['build.map/a.js', ['**/{dist,{build,out}.map}/**']],
+        ['a', ['{a,{b}c}']],
+        // A `}` that does not close the group: escaped, or inside [...].
+        ['a}c', ['{a\\},b}c']],
+        ['cd', ['{a[}]b,c}d']],
+    ])(
+        'matches %s against nested brace groups as picomatch does',
+        (file, patterns) => {
+            expect(isFileMatchingGlob(file, patterns)).toBe(
+                referenceMatch(file, patterns, false),
+            );
+            expect(isFileMatchingGlob(file, patterns)).toBe(true);
+        },
+    );
+
+    it('keeps cached lists from pinning matchers past the matcher cache bound', () => {
+        // A cached list must not hold its matchers: once the matcher cache
+        // evicts them, matching the cached list again compiles them again.
+        // When lists pinned their matchers, nothing was recompiled and the
+        // live matchers grew past the cache bound with every cached list.
+        const warm = Array.from({ length: 10 }, (_, j) => `**/warm-${j}/**`);
+        const warmPath = candidate(warm.map(requiredLiteral).join('_'));
+        isFileMatchingGlob(warmPath, warm);
+
+        // Patterns with no required literal always compile: 6,000 of them
+        // overflow the 5,000-entry matcher cache and evict the warm ones.
+        const churn = Array.from(
+            { length: 6_000 },
+            (_, i) => `**/@(churn${i})/**`,
+        );
+        isFileMatchingGlob('src/app.ts', churn);
+
+        compileSpy.mockClear();
+        isFileMatchingGlob(warmPath, warm);
+        const recompiled = compileSpy.mock.calls.filter(([pattern]) =>
+            warm.includes(pattern as string),
+        ).length;
+        expect(recompiled).toBe(warm.length);
+        expect(_getMatcherCacheSize().caseSensitive).toBeLessThanOrEqual(5_000);
+    });
+
+    it('skips the matcher of a pattern whose literal is not in the path', () => {
+        compileSpy.mockClear();
+        isFileMatchingGlob('src/app.ts', ['**/*.png', '**/node_modules/**']);
+        expect(compileSpy).not.toHaveBeenCalled();
+    });
+
+    it('createGlobMatcher answers as isFileMatchingGlob does', () => {
+        const files = samplePaths();
+        const sensitive = createGlobMatcher(DEFAULT_IGNORE_PATHS);
+        const insensitive = createGlobMatcher(DEFAULT_IGNORE_PATHS, {
+            caseInsensitive: true,
+        });
+        for (const file of files) {
+            expect(sensitive(file)).toBe(
+                isFileMatchingGlob(file, DEFAULT_IGNORE_PATHS),
+            );
+            expect(insensitive(file)).toBe(
+                isFileMatchingGlobCaseInsensitive(file, DEFAULT_IGNORE_PATHS),
+            );
+        }
+        expect(createGlobMatcher([])('anything')).toBe(false);
+    });
+
+    it('createGlobMatcher keeps the list it was built with', () => {
+        const patterns = ['**/*.png'];
+        const matcher = createGlobMatcher(patterns);
+        patterns.push('**/*.ts');
+        expect(matcher('src/app.ts')).toBe(false);
+        expect(matcher('logo.png')).toBe(true);
+    });
+});
+
+describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
+    beforeEach(() => {
+        _clearMatcherCache();
+    });
+
+    it.each([
+        ['backslash escape', 'file\\d.txt', 'file1.txt'],
+        ['leading ./', './*', 'Dockerfile'],
+        ['repeated ./', '././*', 'Dockerfile'],
+        ['./ hiding a negation', './!**/*.md', 'src/keep.ts'],
+        ['] first in a class', '[]debug]', 'd'],
+        ['negated ] first', '[^]debug]', 'a'],
+        ['NUL after a class', '[a]\u0000b', 'ab'],
+        ['. in a brace-range pattern', '**/backup.{1..3}', 'backup_2'],
+        ['. before a brace range', '**/*.log.{1..9}', 'app.logx5'],
+        ['. after ***', '***.min.js', 'a.minXjs'],
+        ['NUL in a path pattern', '**/[Dd]\u0000ebug/**', 'src/Debug/app.ts'],
+        ['escaped ] in a class', '[a\\]debug]', 'd'],
+        ['POSIX class', '[[:alpha:]debug]', 'a'],
+        ['double quotes', '**/"node_modules"/**', 'src/node_modules/a.js'],
+        // Unlike double quotes, picomatch keeps these as literal text.
+        ['single quotes', "**/'node_modules'/**", 'src/node_modules/a.js'],
+        [
+            'single quotes, quoted path',
+            "**/'node_modules'/**",
+            "src/'node_modules'/a.js",
+        ],
+        ['backticks', '**/`node_modules`/**', 'src/node_modules/a.js'],
+    ])('matches as picomatch does: %s', (_label, pattern, file) => {
+        for (const caseInsensitive of [false, true]) {
+            _clearMatcherCache();
+            const match = caseInsensitive
+                ? isFileMatchingGlobCaseInsensitive
+                : isFileMatchingGlob;
+            expect(match(file, [pattern])).toBe(
+                referenceMatch(file, [pattern], caseInsensitive),
+            );
+        }
+    });
+
+    it('never lets one cached list answer for a different list', () => {
+        // Joined with NUL, these two lists shared a key.
+        expect(isFileMatchingGlob('zz', ['a\u0000b'])).toBe(false);
+        expect(isFileMatchingGlob('a', ['a', 'b'])).toBe(true);
+        // Joined, [123] and ['123'] shared one too.
+        expect(() =>
+            isFileMatchingGlob('123', [123 as unknown as string]),
+        ).toThrow();
+        expect(isFileMatchingGlob('123', ['123'])).toBe(true);
+    });
+
+    it('does not cache a list larger than the whole budget', () => {
+        // Warmed differently, so each half of the stats is checked on its own.
+        isFileMatchingGlob('src/a.ts', ['**/warm/**']);
+        isFileMatchingGlobCaseInsensitive('src/a.ts', [
+            '**/warm/**',
+            '**/b/**',
+        ]);
+        isFileMatchingGlobCaseInsensitive('src/a.ts', ['**/c/**']);
+        const huge = Array.from({ length: 50_001 }, () => '**/huge/**');
+        expect(isFileMatchingGlob('src/a.ts', huge)).toBe(false);
+        expect(isFileMatchingGlobCaseInsensitive('src/a.ts', huge)).toBe(false);
+        expect(_getCompiledListStats()).toEqual({
+            caseSensitive: { lists: 1, patterns: 1 },
+            caseInsensitive: { lists: 2, patterns: 3 },
+        });
+    });
 });
