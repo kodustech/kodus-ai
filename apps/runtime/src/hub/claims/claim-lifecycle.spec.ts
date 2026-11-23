@@ -397,6 +397,29 @@ describe('a security violation the cell reports unsolicited', () => {
             expect(t.logs.find((l) => l.msg === 'claim.no_capacity')).toMatchObject({ needMb: 14_336, freeMb: 2_457 });
         });
 
+        it('a Run whose two sides cannot fit the cell together is refused at once with what both need and what the cell has', async () => {
+            const t = await harness();
+            await t.h.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, memory: { allocatableMb: 13_000, committedMb: 0, bootMb: 12_288, readyMb: 2_048 } }));
+            const out = await prAcquire(t, 'run-pair');
+            expect(out).toMatchObject({ status: 'blocked', blockers: [{ kind: 'resources', signature: 'memory_unavailable' }] });
+            expect((out as any).blockers[0].message).toBe('the Run needs 14336 MB for its two sides together (12288 MB for the pull request, 2048 for the base) and no cell that may serve this organization can hold both (the largest commits 13000 MB); choose a smaller machine size for the environment');
+            expect((out as any).capacity).toBeUndefined();
+            expect(t.sock.all('claim.acquire')).toHaveLength(0);
+            expect(await t.store.claim(claimIdFor('org-a', 'run-pair:pr:1'))).toBeNull();
+            expect(t.logs.find((l) => l.msg === 'claim.pair_unavailable')).toMatchObject({ needMb: 14_336, allocatableMb: 13_000 });
+        });
+
+        it('a Run that does not fit this cell goes on when another connected cell may hold both sides', async () => {
+            const t = await harness();
+            await t.h.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, memory: { allocatableMb: 13_000, committedMb: 0, bootMb: 12_288, readyMb: 2_048 } }));
+            const a = t.store.sessions.get('cell-a')!;
+            t.store.sessions.set('cell-big', { ...a, cellId: 'cell-big', memory: { allocatableMb: 30_000, committedMb: 0 } } as any);
+            const pending = prAcquire(t, 'run-pair');
+            const req = await t.ackAcquire();
+            await t.ready(req.claimId);
+            expect(await pending).toMatchObject({ claimId: req.claimId, cellId: 'cell-a' });
+        });
+
         it('fits once the cell reports the memory back, and a cell that sends none is admitted as before', async () => {
             const t = await harness();
             await heartbeat(t, 12_288, ['someone-else']);

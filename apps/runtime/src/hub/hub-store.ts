@@ -165,6 +165,12 @@ export interface CellSessionRepository {
         /** The cell's heartbeat sandbox pool, when the hub decided to persist it now (throttled by the caller). */
         sandboxPool?: { target: number; ready: number },
     ): Promise<void>;
+    /**
+     * Whether a connected cell other than `exceptCellId` that may serve the org could commit `needMb` to
+     * claims in all (or reports no memory: one machine per claim). A Run whose two sides fit no cell
+     * ever is refused at once; one that fits another cell is not.
+     */
+    anotherCellMayHold(orgId: string, exceptCellId: string, needMb: number): Promise<boolean>;
     /** Ends the session only if this replica still holds it; the cell row follows only then. */
     disconnect(cellId: string, replicaId: string,
         sessionEpoch?: string): Promise<void>;
@@ -440,6 +446,15 @@ export class PgHubStore implements HubStore {
             cellId,
             replicaId,
             freeSlots, sessionEpoch ?? null, memory?.allocatableMb ?? null, memory?.committedMb ?? null, sandboxPool?.target ?? null, sandboxPool?.ready ?? null]);
+    }
+    async anotherCellMayHold(orgId: string, exceptCellId: string, needMb: number) {
+        const r = await this.pool.query(
+            `SELECT 1 FROM runtime.runtime_cell_sessions
+              WHERE cell_id <> $2 AND disconnected_at IS NULL AND cordoned_at IS NULL AND last_heartbeat_at > now() - interval '30 seconds'
+                AND (owner = 'kodus' OR org_id = $1) AND (memory_allocatable_mb IS NULL OR memory_allocatable_mb >= $3::integer) LIMIT 1`,
+            [orgId, exceptCellId, needMb],
+        );
+        return r.rows.length > 0;
     }
     async disconnect(cellId: string, replicaId: string, sessionEpoch?: string) {
         await this.pool.query(

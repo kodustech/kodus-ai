@@ -59,7 +59,9 @@ export type MemoryAdmission =
     /** Not now: wait and ask again (a sandbox is refused, not kept in the line: see the file comment). */
     | { kind: 'wait'; needMb: number; freeMb: number; allocatableMb: number; ahead: number }
     /** Never on this cell: the claim alone is more than the cell may commit. */
-    | { kind: 'too_large'; needMb: number; allocatableMb: number };
+    | { kind: 'too_large'; needMb: number; allocatableMb: number }
+    /** Never on this cell: a Run's two sides (base at its ready size, PR at its boot size) together are more than the cell may commit, so the second would wait for the first until the Run expired. */
+    | { kind: 'pair_too_large'; needMb: number; allocatableMb: number; ownMb: number; otherMb: number };
 
 type Held = { mb: number; runId?: string; side: string; at: number; listed: boolean };
 type SetAside = { runId: string; side: string; mb: number; at: number };
@@ -171,7 +173,7 @@ export class CellMemoryBook {
     }
 
     /** Admits the claim on the cell if it fits now and nobody who asked first still waits (see the file comment). */
-    admit(cellId: string, c: MemoryClaim, now: number): MemoryAdmission {
+    admit(cellId: string, c: MemoryClaim, now: number, opts: { pairFitsElsewhere?: boolean } = {}): MemoryAdmission {
         const s = this.state(cellId);
         const r = s.report;
         this.prune(s, now);
@@ -222,8 +224,12 @@ export class CellMemoryBook {
         const runHere =
             !!runId && ([...s.held.values()].some((h) => h.runId === runId) || s.setAside.some((x) => x.runId === runId) || !!c.siblingClaimIds?.some((id) => s.listed.has(id)));
         let siblingMb = c.consumer === 'runtime' && runId && other && !runHere ? this.needOf(r, { ...c, side: other, sizeMb: c.sizeMb }) : 0;
-        // A cell too small for both at once still takes them one after the other.
-        if (needMb + siblingMb > r.allocatableMb) siblingMb = 0;
+        // Both sides live at once in a Run: when a cell cannot hold them together the Run is refused here,
+        // unless another cell can (the caller knows), where this one still takes the claim alone.
+        if (needMb + siblingMb > r.allocatableMb) {
+            if (!opts.pairFitsElsewhere) return { kind: 'pair_too_large', needMb: needMb + siblingMb, allocatableMb: r.allocatableMb, ownMb: needMb, otherMb: siblingMb };
+            siblingMb = 0;
+        }
         const freeMb = r.allocatableMb - r.committedMb - this.pendingMb(s);
         const waiter = s.waiters.get(c.claimId);
         const firstAt = waiter?.firstAt ?? now;

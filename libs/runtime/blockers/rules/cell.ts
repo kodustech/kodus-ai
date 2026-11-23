@@ -169,6 +169,28 @@ export const sizeUnavailableRule = bySignature('size_unavailable', ({ input }) =
 }));
 
 /**
+ * The Run's two sides (the base and the pull request, each at the environment's machine size)
+ * cannot be held together by any host that may serve the organization, or one claim is larger
+ * than every host may commit: the Run ends at once instead of waiting for room that never
+ * comes (claim.service.ts pairUnavailable, memoryUnavailable). Nothing was started.
+ */
+export const memoryUnavailableRule = bySignature('memory_unavailable', ({ input }) => ({
+    kind: 'resources',
+    signature: 'memory_unavailable',
+    title: 'The machine size is too large for the host: both sides of a Run must fit together',
+    evidence: evidenceOf({ text: input.message }),
+    fixes: [
+        {
+            ...largerMachine(
+                `Nothing was started and your repository is not the cause. A Run boots the base and the pull request side by side, so the environment's Machine size counts twice. In the environment's Machine size, choose a size whose double fits the host, then run again. ${SELF_HOSTED_MEMORY}`,
+            ),
+            label: 'Choose a smaller machine size',
+        },
+        useOwnCell,
+    ],
+}));
+
+/**
  * The claim asks an isolation (a microVM) no connected cell gives: nothing was sent and
  * nothing booted. It is never run on a lower isolation; a cell that gives it has to connect.
  */

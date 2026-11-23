@@ -197,12 +197,23 @@ describe('CellMemoryBook', () => {
         expect(book.admit('cell', claim('r2', 'base'), 3)).toMatchObject({ kind: 'admitted' });
     });
 
-    it('a claim larger than the cell never waits; a cell too small for a whole Run takes its claims one after the other', () => {
+    it('a claim larger than the cell never waits, and neither does a Run whose two sides cannot fit the cell together', () => {
         const book = new CellMemoryBook();
         book.report('cell', report(0), [], 0);
         expect(book.admit('cell', { claimId: 'huge', side: 'pr', consumer: 'runtime', runId: 'r', sizeMb: 16_384 }, 1)).toEqual({ kind: 'too_large', needMb: 16_384, allocatableMb: 14_745 });
         book.report('cell', { allocatableMb: 13_000, committedMb: 0, bootMb: 12_288, readyMb: 2_048 }, [], 2);
-        expect(book.admit('cell', claim('r1', 'pr'), 3)).toEqual({ kind: 'admitted', needMb: 12_288, siblingMb: 0 });
+        // Its base (2 GB, ready) and its PR build (12 GB) never fit together on 13 GB: the Run would hold one side
+        // and wait for the other until it expired, so it is refused at once with what both need.
+        expect(book.admit('cell', claim('r1', 'pr'), 3)).toEqual({ kind: 'pair_too_large', needMb: 14_336, allocatableMb: 13_000, ownMb: 12_288, otherMb: 2_048 });
+        expect(book.admit('cell', claim('r1', 'base'), 3)).toEqual({ kind: 'pair_too_large', needMb: 14_336, allocatableMb: 13_000, ownMb: 2_048, otherMb: 12_288 });
+        // Nothing was taken by the refusal: a larger cell elsewhere may take the Run, so the caller asks again with that known.
+        expect(book.admit('cell', claim('r1', 'pr'), 4, { pairFitsElsewhere: true })).toEqual({ kind: 'admitted', needMb: 12_288, siblingMb: 0 });
+    });
+
+    it('a Run whose two sides fit the cell but not now still waits for the room', () => {
+        const book = new CellMemoryBook();
+        book.report('cell', report(10_000), [], 0);
+        expect(book.admit('cell', claim('r1', 'base'), 1)).toMatchObject({ kind: 'wait' });
     });
 });
 

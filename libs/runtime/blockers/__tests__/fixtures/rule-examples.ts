@@ -139,6 +139,12 @@ export const RULE_EXAMPLES: RuleExample[] = [
         input: { kind: 'resources', signature: 'size_unavailable', message: 'asked large, the cell grants medium' },
     },
     {
+        rule: 'memory_unavailable',
+        behavior: 'reads a Run whose two sides fit no host together as a smaller machine size to choose',
+        card: { kind: 'resources', signature: 'memory_unavailable', fixes: ['bump_machine', 'use_own_cell'] },
+        input: { kind: 'resources', signature: 'memory_unavailable', message: 'the Run needs 16384 MB for its two sides together' },
+    },
+    {
         rule: 'isolation_unavailable',
         behavior: 'reads an isolation no cell gives as a capacity blocker',
         card: { kind: 'capacity', signature: 'isolation_unavailable', fixes: ['use_own_cell'] },

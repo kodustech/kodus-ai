@@ -187,6 +187,26 @@ function memoryUnavailable(fit: Extract<MemoryAdmission, { kind: 'too_large' }>)
     };
 }
 
+/**
+ * A Run whose two sides cannot be held together by any cell that may serve the
+ * organization: waiting would not change it (the second side would wait for the
+ * first until the Run expired), so it ends now naming what both need, what the
+ * largest cell has and what to change.
+ */
+function pairUnavailable(fit: Extract<MemoryAdmission, { kind: 'pair_too_large' }>, side: string): Blocked {
+    const [pr, base] = side === 'pr' ? [fit.ownMb, fit.otherMb] : [fit.otherMb, fit.ownMb];
+    return {
+        status: 'blocked',
+        blockers: [
+            {
+                kind: 'resources',
+                signature: 'memory_unavailable',
+                message: `the Run needs ${fit.needMb} MB for its two sides together (${pr} MB for the pull request, ${base} for the base) and no cell that may serve this organization can hold both (the largest commits ${fit.allocatableMb} MB); choose a smaller machine size for the environment`,
+            },
+        ],
+    };
+}
+
 export class ClaimService {
     tickets?: TicketService;
     /** claim.ready / claim.failed already taken, by claimId: a resend (the cell lost the ack) is acked again. Bounded. */
@@ -405,7 +425,7 @@ export class ClaimService {
         if (overBudget) return overBudget;
         // Until the claim.acquire goes out, every way out gives the round's minutes back.
         const giveBack = () => this.opts.machineMinutes?.store.cancel(claimId).catch((e: unknown) => this.log('warn', 'claim.machine_minutes_cancel_failed', { ...ids, error: (e as Error).message }));
-        const admitted = this.admitMemory(session, ids, req, at);
+        const admitted = await this.admitMemory(session, ids, req, at);
         if ('status' in admitted) {
             await giveBack();
             return admitted;
@@ -535,15 +555,21 @@ export class ClaimService {
      * between, before anything is recorded or sent; and what this round holds,
      * recorded with it once (the Run's cost is priced from it).
      */
-    private admitMemory(session: CellSession, ids: ClaimIds & { orgId: string }, req: AcquireInput, at: number): Blocked | { metering: ClaimMetering } {
+    private async admitMemory(session: CellSession, ids: ClaimIds & { orgId: string }, req: AcquireInput, at: number): Promise<Blocked | { metering: ClaimMetering }> {
         const { cellId, claimId } = ids;
         const siblingKeys = siblingKeysOf(req.runId, req.idempotencyKey);
         const sizeMb = this.sizeMbOf(session, req);
-        const fit = this.memory.admit(
-            cellId,
-            { claimId, runId: req.runId, side: req.ref.side, consumer: req.consumer, sizeMb, ...(siblingKeys.length ? { siblingClaimIds: siblingKeys.map((k) => claimIdFor(req.organizationId, k)) } : {}) },
-            at,
-        );
+        const memoryClaim = { claimId, runId: req.runId, side: req.ref.side, consumer: req.consumer, sizeMb, ...(siblingKeys.length ? { siblingClaimIds: siblingKeys.map((k) => claimIdFor(req.organizationId, k)) } : {}) };
+        let fit = this.memory.admit(cellId, memoryClaim, at);
+        if (fit.kind === 'pair_too_large') {
+            // This cell cannot hold both sides together; refused only when no other cell that may serve the org can either.
+            const elsewhere = await this.store.anotherCellMayHold(req.organizationId, cellId, fit.needMb);
+            if (!elsewhere) {
+                this.log('warn', 'claim.pair_unavailable', { ...ids, side: req.ref.side, needMb: fit.needMb, allocatableMb: fit.allocatableMb });
+                return pairUnavailable(fit, req.ref.side);
+            }
+            fit = this.memory.admit(cellId, memoryClaim, this.now().getTime(), { pairFitsElsewhere: true });
+        }
         if (fit.kind === 'too_large') {
             this.log('warn', 'claim.memory_unavailable', { ...ids, needMb: fit.needMb, allocatableMb: fit.allocatableMb });
             return memoryUnavailable(fit);

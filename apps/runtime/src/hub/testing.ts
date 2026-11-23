@@ -56,6 +56,11 @@ export class InMemoryHubStore implements HubStore {
         const c = this.cells.get(cellId);
         if (c?.status === 'connected') c.status = 'disconnected';
     }
+    async anotherCellMayHold(orgId: string, exceptCellId: string, needMb: number) {
+        return [...this.sessions.values()].some(
+            (s) => s.connected && s.cellId !== exceptCellId && (s.owner === 'kodus' || s.orgId === orgId) && (((s as any).memory?.allocatableMb ?? Infinity) >= needMb),
+        );
+    }
     async reserveCell(orgId: string) {
         const ok = [...this.sessions.values()].filter((s) => s.connected && (s.owner === 'kodus' || s.orgId === orgId));
         // As reserveCellRow: the org's own cells, then where the org holds fewer live claims, then the most free slots.
