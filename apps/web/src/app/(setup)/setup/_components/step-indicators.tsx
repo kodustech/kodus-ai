@@ -17,7 +17,7 @@ const StepIndicatorItem = ({
     return (
         <div
             className={cn(
-                "aspect-[5] h-2 rounded-full",
+                "h-2 w-10 min-w-0 shrink rounded-full",
                 status === "active" && "bg-primary-light",
                 status === "completed" && "bg-primary-light/20",
                 status === "error" && "bg-danger",

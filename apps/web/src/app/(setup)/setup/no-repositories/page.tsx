@@ -23,7 +23,7 @@ export default function App() {
 
     return (
         <Page.Root className="mx-auto flex min-h-full w-full flex-row p-6">
-            <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
+            <div className="bg-card-lv1 hidden flex-10 flex-col justify-center gap-10 rounded-3xl p-12 md:flex">
                 <div className="text-text-secondary flex flex-1 flex-col justify-center gap-8 text-[15px]">
                     <div className="flex flex-col gap-4">
                         <svg
@@ -71,8 +71,8 @@ export default function App() {
                 </div>
             </div>
 
-            <div className="flex flex-14 flex-col items-center justify-center gap-10 p-10">
-                <div className="flex max-w-96 flex-1 flex-col justify-center gap-10">
+            <div className="flex min-w-0 flex-14 flex-col items-center justify-center gap-10 py-6 md:p-10">
+                <div className="flex w-full max-w-96 flex-1 flex-col justify-center gap-10">
                     <StepIndicators.Auto errorStepIndex={3} />
 
                     <div className="flex flex-col gap-8">
