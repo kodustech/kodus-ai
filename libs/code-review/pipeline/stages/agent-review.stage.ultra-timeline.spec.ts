@@ -71,11 +71,7 @@ describe('AgentReviewStage — the Ultra merge entry on the timeline', () => {
 });
 
 describe('AgentReviewStage — the context of an Ultra run', () => {
-    const runContext = (
-        parentSuperseded: boolean,
-        sandbox?: any,
-        superseded?: boolean,
-    ) =>
+    const runContext = (parentSuperseded: boolean, sandbox?: any) =>
         (makeStage({}) as any).ultraReviewHost().runContext(
             {
                 sandboxSuperseded: parentSuperseded || undefined,
@@ -84,19 +80,15 @@ describe('AgentReviewStage — the context of an Ultra run', () => {
             { slot: {} },
             sandbox,
             new AbortController().signal,
-            superseded,
-        ).sandboxSuperseded;
+        );
 
-    it('keeps a moot review moot for a run with no sandbox', () => {
-        expect(runContext(true)).toBe(true);
+    it("reviews on the sandbox it is given, the PR's", () => {
+        const sandbox = { id: 'pr' };
+        expect(runContext(false, sandbox).sandboxHandle).toBe(sandbox);
     });
 
-    it('marks the run moot when its own join was superseded', () => {
-        expect(runContext(false, undefined, true)).toBe(true);
-    });
-
-    it('a run that got a sandbox is not moot', () => {
-        expect(runContext(true, { id: 's' })).toBeUndefined();
-        expect(runContext(false)).toBeUndefined();
+    it('keeps a moot review moot, so its runs add no sandbox warning', () => {
+        expect(runContext(true).sandboxSuperseded).toBe(true);
+        expect(runContext(false).sandboxSuperseded).toBeUndefined();
     });
 });

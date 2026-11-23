@@ -189,7 +189,6 @@ import {
     type UltraReviewHost,
 } from '@libs/ee/ultra-review/ultra-review.executor';
 import type { UltraModel } from '@libs/code-review/domain/ultra-review-state';
-import { CreateSandboxStage } from './create-sandbox.stage';
 
 /**
  * Extract valid line ranges from a unified diff patch.
@@ -522,10 +521,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         @Optional()
         @Inject(CUSTOM_AGENT_RUN_LOG_TOKEN)
         private readonly customAgentRunLog?: ICustomAgentRunLog,
-        // Optional so specs that construct the stage manually still compile;
-        // without it an Ultra review's models run without a checkout.
-        @Optional()
-        private readonly createSandboxStage?: CreateSandboxStage,
     ) {
         super();
     }
@@ -534,20 +529,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     private ultraReviewHost(): UltraReviewHost {
         return {
             reviewPass: (context, pass) => this.reviewPass(context, pass),
-            acquireRunSandbox: async (context, suffix, leaseTtlMs, signal) =>
-                this.createSandboxStage?.acquireRunSandbox(
-                    context,
-                    suffix,
-                    leaseTtlMs,
-                    signal,
-                ),
-            runContext: (context, model, sandbox, signal, superseded) =>
+            runContext: (context, model, sandbox, signal) =>
                 this.updateContext(context, (draft) => {
                     draft.parentSignal = signal;
                     draft.sandboxHandle = sandbox;
-                    // A run with no sandbox on a moot review keeps it moot.
-                    if (sandbox) draft.sandboxSuperseded = undefined;
-                    else if (superseded) draft.sandboxSuperseded = true;
                     // Every later step of the run (dedup, severity,
                     // enrichment, formatter) calls the run's model.
                     draft.codeReviewConfig.byokConfig = model.slot;

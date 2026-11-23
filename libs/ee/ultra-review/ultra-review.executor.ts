@@ -73,7 +73,7 @@ export const ULTRA_REVIEW_LIMITS: UltraReviewLimits = {
     crossDedupDeadlineMs: 6 * 60 * 1000,
 };
 
-/** A run's sandbox outlives the longest the run can take. */
+/** The PR's sandbox lease in an Ultra review outlives the longest its runs can take. */
 export const ULTRA_RUN_LEASE_TTL_MS =
     ULTRA_REVIEW_LIMITS.runsWindowMs + 5 * 60 * 1000;
 
@@ -123,18 +123,6 @@ export interface UltraReviewHost {
         pass: ReviewPass,
     ): Promise<CodeReviewPipelineContext>;
     /**
-     * A hold on the PR's sandbox for the run; 'superseded' when the PR was
-     * closed or force-pushed (the review is moot), or undefined when it
-     * could not be had. Either way the run goes without one.
-     */
-    acquireRunSandbox(
-        context: CodeReviewPipelineContext,
-        suffix: string,
-        leaseTtlMs: number,
-        /** Stops waiting for a sandbox slot: the run's deadline. */
-        signal: AbortSignal,
-    ): Promise<SandboxInstance | 'superseded' | undefined>;
-    /**
      * The context a model's run reviews in: its sandbox, its model, and the
      * signal that stops its review loop.
      */
@@ -143,8 +131,6 @@ export interface UltraReviewHost {
         model: UltraModel,
         sandbox: SandboxInstance | undefined,
         signal: AbortSignal,
-        /** The run's sandbox was superseded: it is not reported as missing. */
-        superseded?: boolean,
     ): CodeReviewPipelineContext;
     update(
         context: CodeReviewPipelineContext,
@@ -413,9 +399,9 @@ export async function executeUltraReview(
             ),
         );
 
-    // Kody Rules and the custom agents, once, on the PR's sandbox; each model
-    // holds the same sandbox for its own run. They
-    // stop with the models; past the window the review goes on without them.
+    // Kody Rules and the custom agents, once, on the PR's sandbox, which each
+    // model reviews on too. They stop with the models; past the window the
+    // review goes on without them.
     let auxiliary = emptyCollected();
     const releaseFailed = (sandbox: string) => (error: unknown) =>
         logger.warn({
@@ -426,9 +412,6 @@ export async function executeUltraReview(
         });
     const releaseBase = () =>
         context.sandboxHandle?.cleanup?.().catch(releaseFailed('PR'));
-    // The PR's own review had a checkout: a model's run without one did
-    // not review the repository and does not count as complete.
-    const checkoutExpected = !!context.sandboxHandle;
     let auxiliaryRun: Promise<CodeReviewPipelineContext> =
         Promise.resolve(context);
     // Kody Rules and custom agents that did not finish: the review is not
@@ -493,36 +476,7 @@ export async function executeUltraReview(
                         'No time was left in the job for its review.',
                 };
             }
-            const startedAt = Date.now();
-            // The deadline covers the wait for a sandbox slot too: a run
-            // that waits past it reviews with what time is left, or none.
             const stop = deadlineSignal(context.parentSignal, window);
-            // A review a later push superseded takes no new sandboxes.
-            const acquired = context.sandboxSuperseded
-                ? 'superseded'
-                : await host.acquireRunSandbox(
-                      context,
-                      tag,
-                      ULTRA_RUN_LEASE_TTL_MS,
-                      stop.signal,
-                  );
-            const superseded = acquired === 'superseded';
-            const sandbox = superseded ? undefined : acquired;
-            const release = () =>
-                sandbox?.cleanup?.().catch(releaseFailed(tag));
-            const left = Math.max(0, window - (Date.now() - startedAt));
-            // The deadline came while the run waited for a slot: it reviewed
-            // nothing, and no review starts with no time left.
-            if (stop.signal.aborted) {
-                stop.clear();
-                void release();
-                return {
-                    completed: false,
-                    failureReason: context.parentSignal?.aborted
-                        ? 'The review was cancelled.'
-                        : `No sandbox was free within ${minutes(window)} minutes.`,
-                };
-            }
             // Whether the deadline stopped the review loop. Read when the loop
             // ends: the later steps have the grace, and a deadline that fires
             // during them stops nothing.
@@ -537,9 +491,8 @@ export async function executeUltraReview(
                     host.runContext(
                         context,
                         model,
-                        sandbox,
+                        context.sandboxHandle,
                         stop.signal,
-                        superseded,
                     ),
                     {
                         scope: 'native',
@@ -557,15 +510,11 @@ export async function executeUltraReview(
                         },
                     },
                 )
-                .finally(() => {
-                    stop.clear();
-                    void release();
-                });
-            const result = await withDeadline(pass, left + limits.runGraceMs);
+                .finally(() => stop.clear());
+            const result = await withDeadline(pass, window + limits.runGraceMs);
             if (result === TIMED_OUT) {
                 abandoned = true;
                 leftBehind.abort();
-                void release();
                 logger.warn({
                     message: `[ULTRA] PR#${prNumber}: ${model.modelName} did not finish in time; left behind`,
                     context: 'UltraReview',
@@ -592,15 +541,10 @@ export async function executeUltraReview(
             const timedOut =
                 loopStopped ??
                 (stop.signal.aborted && !context.parentSignal?.aborted);
-            // A moot review's run did not lose its checkout.
-            const withoutCheckout = checkoutExpected && !sandbox && !superseded;
-            const completed =
-                collected.completion.completed && !timedOut && !withoutCheckout;
+            const completed = collected.completion.completed && !timedOut;
             const failureReason = timedOut
                 ? `Its review was stopped after ${minutes(window)} minutes.`
-                : withoutCheckout && collected.completion.completed
-                  ? 'Its sandbox could not be created, so it reviewed the diff without the repository.'
-                  : collected.completion.failureReason;
+                : collected.completion.failureReason;
             logger.log({
                 message: `[ULTRA] PR#${prNumber}: ${model.modelName} ${completed ? 'completed' : 'failed'} with ${collected.findings.length} findings`,
                 context: 'UltraReview',
@@ -622,10 +566,13 @@ export async function executeUltraReview(
         },
     });
 
-    let main = await auxiliaryRun;
-    // The models share the PR's sandbox: its own hold goes only now, so the
-    // sandbox is never left with no holder (and set to shut down) between a
-    // run ending and the fallback joining.
+    // The auxiliary pass returns the context it ran on, whose signal is its
+    // window: the steps after the runs go back to the job's.
+    let main = host.update(await auxiliaryRun, (draft) => {
+        draft.parentSignal = context.parentSignal;
+    });
+    // The models review on the PR's sandbox, held by the PR's lease alone: it
+    // is released only now, after every run, the fallback's included.
     void releaseBase();
 
     const nativeFindings = outputs.flatMap((o) => o.output.findings);

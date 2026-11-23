@@ -14,7 +14,6 @@ import {
     executeUltraReview,
     ULTRA_REVIEW_DEGRADED_REASON,
     ULTRA_REVIEW_LIMITS,
-    ULTRA_RUN_LEASE_TTL_MS,
     type UltraReviewHost,
     type UltraReviewLimits,
 } from './ultra-review.executor';
@@ -80,12 +79,6 @@ type PassPlan =
 interface Fixture {
     passes: Record<string, PassPlan>;
     merge?: Record<string, 'ok' | 'fail' | 'throw' | 'hang'>;
-    /** Runs whose sandbox could not be created. */
-    noSandbox?: string[];
-    /** Runs whose join found the PR closed or force-pushed. */
-    superseded?: string[];
-    /** Runs that wait for a sandbox slot until their deadline stops them. */
-    waitForSlot?: string[];
     crossDedupHangs?: boolean;
     context?: Partial<CodeReviewPipelineContext>;
     state?: Partial<UltraReviewState>;
@@ -99,9 +92,9 @@ function setup(fx: Fixture) {
             sandbox?: string;
             superseded?: boolean;
         }>,
-        sandboxes: [] as string[],
         released: [] as string[],
-        leaseTtls: [] as number[],
+        /** Passes ending and the PR's release, in order. */
+        order: [] as string[],
         merges: [] as string[],
         mergeSignals: {} as Record<string, AbortSignal | undefined>,
         crossDedupSignal: undefined as AbortSignal | undefined,
@@ -112,6 +105,7 @@ function setup(fx: Fixture) {
     };
     const baseCleanup = jest.fn(async () => {
         calls.released.push('base');
+        calls.order.push('base');
     });
     const state: UltraReviewState = {
         models: [model(1, 'a'), model(2, 'b'), model(3, 'c')],
@@ -125,7 +119,7 @@ function setup(fx: Fixture) {
         repository: { id: 'r', name: 'repo' },
         changedFiles: [{ filename: 'a.ts' }],
         codeReviewConfig: { kodyRules: [{ uuid: 'r1' }] },
-        sandboxHandle: { cleanup: baseCleanup },
+        sandboxHandle: { id: 'pr', cleanup: baseCleanup },
         pipelineMetadata: { pipelineId: 'Pipe-42' },
         ultra: state,
         errors: [],
@@ -139,7 +133,7 @@ function setup(fx: Fixture) {
                 scope: pass.scope,
                 model: pass.model?.modelId,
                 sandbox: (ctx as any).sandboxHandle?.id,
-                ...((ctx as any).runSuperseded && { superseded: true }),
+                ...((ctx as any).sandboxSuperseded && { superseded: true }),
             });
             calls.abandonSignals[key] = pass.abandoned;
             const plan = fx.passes[key];
@@ -172,6 +166,7 @@ function setup(fx: Fixture) {
                 result = plan as ReviewPassCollected | undefined;
             }
             if (result) pass.collect?.(result);
+            calls.order.push(`done:${key}`);
             return {
                 ...ctx,
                 ...(pass.model &&
@@ -181,30 +176,10 @@ function setup(fx: Fixture) {
                     }),
             } as any;
         },
-        acquireRunSandbox: async (_ctx, run, leaseTtlMs, signal) => {
-            calls.sandboxes.push(run);
-            calls.leaseTtls.push(leaseTtlMs);
-            if (fx.waitForSlot?.includes(run)) {
-                // The lease manager gives up when the signal fires.
-                await new Promise((resolve) =>
-                    signal.addEventListener('abort', resolve),
-                );
-                return undefined;
-            }
-            if (fx.noSandbox?.includes(run)) return undefined;
-            if (fx.superseded?.includes(run)) return 'superseded';
-            return {
-                id: run,
-                cleanup: async () => {
-                    calls.released.push(run);
-                },
-            } as any;
-        },
-        runContext: (ctx, m, sandbox, signal, superseded) =>
+        runContext: (ctx, m, sandbox, signal) =>
             ({
                 ...ctx,
                 sandboxHandle: sandbox,
-                runSuperseded: superseded,
                 model: m.modelId,
                 parentSignal: signal,
             }) as any,
@@ -223,6 +198,8 @@ function setup(fx: Fixture) {
         mergeFindings: async (findings, _pr, slot, _ctx, signal) => {
             calls.merges.push(slot.model);
             calls.mergeSignals[slot.model] = signal;
+            // As the dedup does before each model call.
+            signal?.throwIfAborted();
             const plan = fx.merge?.[slot.model] ?? 'ok';
             if (plan === 'throw') throw new Error('merge threw');
             if (plan === 'hang') return new Promise(() => undefined);
@@ -264,7 +241,7 @@ function setup(fx: Fixture) {
 }
 
 describe('executeUltraReview', () => {
-    it('runs each model natively in its own sandbox, the rules once, then merges and publishes', async () => {
+    it("runs each model natively on the PR's sandbox, the rules once, then merges and publishes", async () => {
         const { calls, context, host } = setup({
             passes: {
                 a: collected(['a1', 'a2']),
@@ -278,23 +255,15 @@ describe('executeUltraReview', () => {
 
         const native = calls.passes.filter((p) => p.scope === 'native');
         expect(native.map((p) => [p.model, p.sandbox])).toEqual([
-            ['a', 'ultra-1'],
-            ['b', 'ultra-2'],
-            ['c', 'ultra-3'],
+            ['a', 'pr'],
+            ['b', 'pr'],
+            ['c', 'pr'],
         ]);
         expect(
             calls.passes.filter((p) => p.scope === 'auxiliary'),
         ).toHaveLength(1);
-        // Each run's sandbox is released, and the PR's own once the rules ran.
-        expect(calls.released.sort()).toEqual(
-            ['base', 'ultra-1', 'ultra-2', 'ultra-3'].sort(),
-        );
-        // A run's lease outlives the longest the run can take.
-        expect(calls.leaseTtls).toEqual([
-            ULTRA_RUN_LEASE_TTL_MS,
-            ULTRA_RUN_LEASE_TTL_MS,
-            ULTRA_RUN_LEASE_TTL_MS,
-        ]);
+        // Only the PR's own lease is released: the runs take none.
+        expect(calls.released).toEqual(['base']);
         // The merge runs on the merge model only, over every model's list.
         expect(calls.merges).toEqual(['b']);
         expect(calls.crossDedup.rules.map((r: any) => r.id)).toEqual(['rule1']);
@@ -342,7 +311,7 @@ describe('executeUltraReview', () => {
             },
         });
         const out = await executeUltraReview(context, host, LIMITS);
-        expect(calls.sandboxes).toContain('ultra-fallback');
+        expect(calls.passes.map((p) => p.model)).toContain('f');
         expect(out.ultra?.outcome).toBe('success');
         expect(out.ultra?.runs?.find((r) => r.modelId === 'b')).toMatchObject({
             status: 'failed',
@@ -437,15 +406,8 @@ describe('executeUltraReview', () => {
         expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
             'rule1',
         ]);
-        // Every sandbox released, the thrown run's included.
-        expect(calls.released).toEqual(
-            expect.arrayContaining([
-                'ultra-1',
-                'ultra-2',
-                'ultra-3',
-                'ultra-fallback',
-            ]),
-        );
+        // The PR's sandbox is released though a run threw.
+        expect(calls.released).toEqual(['base']);
     });
 
     it('with only ignored files changed, runs the single review (the custom agents) instead', async () => {
@@ -455,7 +417,7 @@ describe('executeUltraReview', () => {
         });
         await executeUltraReview(context, host, LIMITS);
         expect(calls.passes).toEqual([
-            { scope: undefined, model: undefined, sandbox: undefined },
+            { scope: undefined, model: undefined, sandbox: 'pr' },
         ]);
     });
 
@@ -483,8 +445,8 @@ describe('executeUltraReview', () => {
                 status: 'failed',
                 failureReason: expect.stringMatching(/did not finish within/),
             });
-            // Its sandbox is not held for the run it was left behind on.
-            expect(calls.released).toContain('ultra-2');
+            // The PR's sandbox is not held for the run left behind.
+            expect(calls.released).toEqual(['base']);
         });
 
         it('a model whose loop is stopped by the deadline failed, and the fallback replaces it', async () => {
@@ -529,33 +491,6 @@ describe('executeUltraReview', () => {
             expect(out.ultra?.outcome).toBe('success');
         });
 
-        it('a run still waiting for a sandbox slot at its deadline gives up without reviewing, and the others post', async () => {
-            const { calls, context, host } = setup({
-                passes: {
-                    a: collected(['a1']),
-                    b: collected(['b9']),
-                    c: collected(['c2']),
-                    auxiliary: collected([]),
-                },
-                waitForSlot: ['ultra-2'],
-                state: { fallback: undefined },
-            });
-            const out = await executeUltraReview(context, host, LIMITS);
-            expect(
-                out.ultra?.runs?.find((r) => r.modelId === 'b'),
-            ).toMatchObject({
-                status: 'failed',
-                failureReason: expect.stringMatching(/No sandbox was free/),
-            });
-            // No review started for it.
-            expect(calls.passes.some((p) => p.model === 'b')).toBe(false);
-            expect(out.ultra?.outcome).toBe('degraded');
-            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
-                'a1',
-                'c2',
-            ]);
-        });
-
         it('with the production limits, a model that hangs still gets the fallback, with lag in the review', async () => {
             // The production limits at 1 minute = 10 ms.
             const scaled = Object.fromEntries(
@@ -576,7 +511,7 @@ describe('executeUltraReview', () => {
                 context: { pipelineStartedAt: Date.now() } as any,
             });
             const out = await executeUltraReview(context, host, scaled);
-            expect(calls.sandboxes).toContain('ultra-fallback');
+            expect(calls.passes.map((p) => p.model)).toContain('f');
             expect(out.ultra?.outcome).toBe('success');
             // The run left behind is told to stop its later steps.
             expect(calls.abandonSignals.b?.aborted).toBe(true);
@@ -636,7 +571,7 @@ describe('executeUltraReview', () => {
                 ...LIMITS,
                 fallbackMinMs: 10_000,
             });
-            expect(calls.sandboxes).not.toContain('ultra-fallback');
+            expect(calls.passes.map((p) => p.model)).not.toContain('f');
             expect(out.ultra?.outcome).toBe('degraded');
             // With no fallback run, the failed model's partial findings post.
             expect(calls.published.deduped.map((f: any) => f.id)).toContain(
@@ -699,6 +634,23 @@ describe('executeUltraReview', () => {
             ]);
         });
 
+        it('Kody Rules stopped at their window but back in time leave the merge its own deadline', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b1']),
+                    c: collected(['c2']),
+                    auxiliary: { untilStopped: collected(['rule1']) },
+                },
+            });
+            const out = await executeUltraReview(context, host, {
+                ...LIMITS,
+                runDeadlineMs: 100,
+            });
+            expect(out.ultra?.merge?.status).toBe('success');
+            expect(calls.merges).toEqual(['b']);
+        });
+
         it('a stage that starts with no time left in the job starts no review', async () => {
             const { calls, context, host } = setup({
                 passes: {
@@ -713,7 +665,6 @@ describe('executeUltraReview', () => {
             });
             const out = await executeUltraReview(context, host, LIMITS);
             expect(calls.passes).toEqual([]);
-            expect(calls.sandboxes).toEqual([]);
             expect(out.ultra?.outcome).toBe('failed');
             for (const run of out.ultra?.runs ?? []) {
                 expect(run.failureReason).toBe(
@@ -731,27 +682,7 @@ describe('executeUltraReview', () => {
     });
 
     describe('sandboxes', () => {
-        it("each run holds the PR's sandbox for itself and lets go when it ends", async () => {
-            const { calls, context, host } = setup({
-                passes: {
-                    a: collected(['a1']),
-                    b: collected(['b1']),
-                    c: collected(['c2']),
-                    auxiliary: collected([]),
-                },
-            });
-            await executeUltraReview(context, host, LIMITS);
-            expect(calls.sandboxes.sort()).toEqual([
-                'ultra-1',
-                'ultra-2',
-                'ultra-3',
-            ]);
-            expect(calls.released.sort()).toEqual(
-                expect.arrayContaining(['ultra-1', 'ultra-2', 'ultra-3']),
-            );
-        });
-
-        it("keeps the PR's own hold until every run, the fallback's included, has let go", async () => {
+        it("every run reviews on the PR's sandbox and takes no lease of its own", async () => {
             const { calls, context, host } = setup({
                 passes: {
                     a: collected(['a1']),
@@ -762,11 +693,35 @@ describe('executeUltraReview', () => {
                 },
             });
             await executeUltraReview(context, host, LIMITS);
-            expect(calls.released).toContain('ultra-fallback');
-            expect(calls.released[calls.released.length - 1]).toBe('base');
+            expect(
+                calls.passes
+                    .filter((p) => p.scope === 'native')
+                    .map((p) => [p.model, p.sandbox]),
+            ).toEqual([
+                ['a', 'pr'],
+                ['b', 'pr'],
+                ['c', 'pr'],
+                ['f', 'pr'],
+            ]);
+            expect(calls.released).toEqual(['base']);
         });
 
-        it('a review a later push superseded takes no sandbox for its runs', async () => {
+        it("releases the PR's lease only after every run, the fallback's included", async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected(['b9'], false),
+                    c: collected(['c2']),
+                    f: { slowAfterLoop: 50, result: collected(['f3']) },
+                    auxiliary: collected([]),
+                },
+            });
+            await executeUltraReview(context, host, LIMITS);
+            expect(calls.order.indexOf('done:f')).toBeGreaterThan(-1);
+            expect(calls.order[calls.order.length - 1]).toBe('base');
+        });
+
+        it('a review a later push superseded runs with no sandbox, still moot, and no run fails for it', async () => {
             const { calls, context, host } = setup({
                 passes: {
                     a: collected(['a1']),
@@ -779,22 +734,7 @@ describe('executeUltraReview', () => {
                     sandboxHandle: undefined,
                 } as any,
             });
-            await executeUltraReview(context, host, LIMITS);
-            expect(calls.sandboxes).toEqual([]);
-        });
-
-        it('a PR closed or force-pushed while the runs join its sandbox is moot: no run is failed for its checkout', async () => {
-            const { calls, context, host } = setup({
-                passes: {
-                    a: collected(['a1']),
-                    b: collected(['b1']),
-                    c: collected(['c2']),
-                    auxiliary: collected([]),
-                },
-                superseded: ['ultra-1', 'ultra-2', 'ultra-3'],
-            });
             const out = await executeUltraReview(context, host, LIMITS);
-            // Each run reviews with no sandbox, marked moot.
             expect(
                 calls.passes
                     .filter((p) => p.scope === 'native')
@@ -804,73 +744,11 @@ describe('executeUltraReview', () => {
                 ['b', undefined, true],
                 ['c', undefined, true],
             ]);
-            expect(
-                out.ultra?.runs?.map((r) => [
-                    r.modelId,
-                    r.status,
-                    r.replacedBy,
-                ]),
-            ).toEqual([
-                ['a', 'completed', undefined],
-                ['b', 'completed', undefined],
-                ['c', 'completed', undefined],
-            ]);
-            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
-                'a1',
-                'c2',
-            ]);
             expect(out.ultra?.outcome).toBe('success');
             expect(out.errors).toEqual([]);
         });
 
-        it('a run whose sandbox could not be created did not complete: the fallback replaces it', async () => {
-            const { calls, context, host } = setup({
-                passes: {
-                    a: collected(['a1']),
-                    b: collected(['b9']),
-                    c: collected(['c2']),
-                    f: collected(['f3']),
-                    auxiliary: collected([]),
-                },
-                noSandbox: ['ultra-2'],
-            });
-            const out = await executeUltraReview(context, host, LIMITS);
-            expect(
-                out.ultra?.runs?.find((r) => r.modelId === 'b'),
-            ).toMatchObject({
-                status: 'failed',
-                failureReason: expect.stringMatching(
-                    /sandbox could not be created/,
-                ),
-                replacedBy: 'f',
-            });
-            expect(out.ultra?.outcome).toBe('success');
-            expect(calls.published.deduped.map((f: any) => f.id)).toEqual([
-                'a1',
-                'c2',
-                'f3',
-            ]);
-        });
-
-        it("with no fallback, that run's diff-only findings still post, degraded", async () => {
-            const { calls, context, host } = setup({
-                passes: {
-                    a: collected(['a1']),
-                    b: collected(['b9']),
-                    c: collected(['c2']),
-                    auxiliary: collected([]),
-                },
-                noSandbox: ['ultra-2'],
-                state: { fallback: undefined },
-            });
-            const out = await executeUltraReview(context, host, LIMITS);
-            expect(out.ultra?.outcome).toBe('degraded');
-            expect(calls.published.deduped.map((f: any) => f.id)).toContain(
-                'b9',
-            );
-        });
-
-        it('with no sandbox for the PR either (none configured), the runs complete', async () => {
+        it('with no sandbox for the PR (none configured), the runs complete', async () => {
             const { context, host } = setup({
                 passes: {
                     a: collected(['a1']),
@@ -878,7 +756,6 @@ describe('executeUltraReview', () => {
                     c: collected(['c2']),
                     auxiliary: collected([]),
                 },
-                noSandbox: ['ultra-1', 'ultra-2', 'ultra-3'],
                 context: { sandboxHandle: undefined } as any,
             });
             const out = await executeUltraReview(context, host, LIMITS);

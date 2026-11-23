@@ -8,7 +8,6 @@ import { provisionCustomAgentClis } from '@libs/code-review/infrastructure/agent
 import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
 
 import { CreateSandboxStage } from './create-sandbox.stage';
-import { SandboxInvalidatedError } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 const provision = provisionCustomAgentClis as jest.Mock;
@@ -182,33 +181,11 @@ describe('CreateSandboxStage lease on an Ultra review', () => {
         expect(balanced.leaseManager.acquire.mock.calls[0][2]).toBeUndefined();
     });
 
-    it("a run holds the PR's own sandbox key with the lease asked for; zero is no lease asked", async () => {
-        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
-        await stage.acquireRunSandbox(context, 'ultra-2', 1234);
-        expect(leaseManager.acquire.mock.calls[0][0]).toBe('org-1:repo-1:7');
-        expect(leaseManager.acquire.mock.calls[0][2]).toBe(1234);
-        await stage.acquireRunSandbox(context, 'ultra-3', 0);
-        expect(leaseManager.acquire.mock.calls[1][2]).toBeUndefined();
-    });
-
-    it('a run whose join finds the PR closed or force-pushed is told it is superseded', async () => {
-        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
-        leaseManager.acquire.mockRejectedValueOnce(
-            new SandboxInvalidatedError('org-1:repo-1:7'),
-        );
-        await expect(
-            stage.acquireRunSandbox(context, 'ultra-1', 1),
-        ).resolves.toBe('superseded');
-    });
-
     it('a release is never repeated, even after one that threw: a second decrement could free a sandbox in use', async () => {
         const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
         leaseManager.release.mockRejectedValueOnce(new Error('mongo blip'));
-        const sandbox = (await stage.acquireRunSandbox(
-            context,
-            'ultra-1',
-            1,
-        )) as SandboxInstance;
+        const sandbox = (await (stage as any).executeStage(context))
+            .sandboxHandle as SandboxInstance;
         await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
         await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
         expect(leaseManager.release).toHaveBeenCalledTimes(1);
@@ -220,11 +197,8 @@ describe('CreateSandboxStage lease on an Ultra review', () => {
         leaseManager.release.mockReturnValueOnce(
             new Promise<void>((resolve) => (settle = resolve)),
         );
-        const sandbox = (await stage.acquireRunSandbox(
-            context,
-            'ultra-1',
-            1,
-        )) as SandboxInstance;
+        const sandbox = (await (stage as any).executeStage(context))
+            .sandboxHandle as SandboxInstance;
         let secondDone = false;
         void sandbox!.cleanup!();
         const second = sandbox!.cleanup!().then(() => (secondDone = true));
