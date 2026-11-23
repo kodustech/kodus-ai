@@ -261,6 +261,27 @@ describe('resolveTasks', () => {
         expect(result.kind).toBe('tracker_unavailable');
     });
 
+    it('asks a tracker that could not list its keys once per run, however many keys the PR has', async () => {
+        let asked = 0;
+        const linear = {
+            ...tracker('Linear', {}, { down: true }),
+            ownsReference: async () => {
+                asked += 1;
+                throw new Error('Failed to connect to any MCP server');
+            },
+        };
+        const result = await resolveTasks(
+            refs(
+                'Compares opus-5 with fable-5 over round-1 and round-2',
+                'feat(kod-10): sticky notes',
+            ),
+            [linear],
+            context,
+        );
+        expect(asked).toBe(1);
+        expect(result.kind).toBe('tracker_unavailable');
+    });
+
     it('still reports the miss when the typo check cannot list the keys', async () => {
         const linear = {
             ...tracker('Linear', {}),

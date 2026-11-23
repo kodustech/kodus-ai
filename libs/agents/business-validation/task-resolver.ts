@@ -280,29 +280,62 @@ async function withoutStrayKeys(
     trackers: TaskTracker[],
     context: TrackerReadContext,
 ): Promise<TaskReference[]> {
+    // A tracker that failed once fails for every key (a dead connection): it
+    // is asked once per run and logged once, not once per word of the PR
+    // that looks like a key (up to 201 warnings a run in production).
+    const firstAsk = new Map<TaskTracker, Promise<unknown>>();
+    const failed = new Map<TaskTracker, { error: unknown; keys: string[] }>();
+    const owns = async (
+        tracker: TaskTracker,
+        reference: TaskReference,
+    ): Promise<boolean | undefined> => {
+        const earlier = firstAsk.get(tracker);
+        if (earlier) {
+            await earlier;
+        }
+        const failure = failed.get(tracker);
+        if (failure) {
+            failure.keys.push(referenceLabel(reference));
+            return true;
+        }
+        const ask = tracker.ownsReference?.(reference, context);
+        if (!ask) {
+            return undefined;
+        }
+        if (!earlier) {
+            firstAsk.set(
+                tracker,
+                ask.catch(() => undefined),
+            );
+        }
+        return ask.catch((error) => {
+            failed.set(tracker, {
+                error,
+                keys: [referenceLabel(reference)],
+            });
+            return true;
+        });
+    };
     const keep = await Promise.all(
         references.map(async (reference) => {
             if (reference.kind !== 'key' || !reference.loose) {
                 return true;
             }
             for (const tracker of trackers) {
-                const owns = await tracker
-                    .ownsReference?.(reference, context)
-                    .catch((error) => {
-                        warn(
-                            `${tracker.name} could not list its keys for ${referenceLabel(reference)}`,
-                            context,
-                            error,
-                        );
-                        return true;
-                    });
-                if (owns) {
+                if (await owns(tracker, reference)) {
                     return true;
                 }
             }
             return false;
         }),
     );
+    for (const [tracker, { error, keys }] of failed) {
+        warn(
+            `${tracker.name} could not list its keys; kept ${keys.length} unchecked: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ', …' : ''}`,
+            context,
+            error,
+        );
+    }
     return references.filter((_, i) => keep[i]);
 }
 
