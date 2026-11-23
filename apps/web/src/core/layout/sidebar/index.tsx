@@ -517,6 +517,11 @@ const SidebarGroup = ({
     const open = !collapsible || (openByChoice ?? Boolean(active));
     const collapsed = useRail();
     const headingId = useId();
+    const listRef = useRef<HTMLUListElement>(null);
+    // The last group opens below the fold of the scrolling rail: bring what it opened into view.
+    useEffect(() => {
+        if (openByChoice) listRef.current?.scrollIntoView({ block: "nearest" });
+    }, [openByChoice]);
 
     if (collapsed) {
         return (
@@ -561,6 +566,7 @@ const SidebarGroup = ({
             )}
             {open && (
                 <ul
+                    ref={listRef}
                     aria-labelledby={headingId}
                     className="flex flex-col gap-0.5">
                     {children}
