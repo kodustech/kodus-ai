@@ -135,3 +135,19 @@ describe('estimateTextTokens — long runs without whitespace', () => {
         expect(fresh(text)).toBe(exact(text));
     });
 });
+
+describe('estimateTextTokens worstCase', () => {
+    it('counts a run too long to encode at one token per character, for limits that must hold', () => {
+        const run = 'x9'.repeat(5_000);
+        expect(estimateTextTokens(run, { worstCase: true })).toBe(run.length);
+        expect(estimateTextTokens(run)).toBeLessThan(run.length / 2);
+    });
+
+    it('counts ordinary text the same as without it', () => {
+        const text =
+            'export function sum(a: number, b: number) { return a + b; }';
+        expect(estimateTextTokens(text, { worstCase: true })).toBe(
+            estimateTextTokens(text),
+        );
+    });
+});

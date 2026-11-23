@@ -163,3 +163,19 @@ describe("diffFor within the model's window (#2233)", () => {
         expect(sent).toContain('Also changed, not shown here');
     });
 });
+
+describe('fitDiff counts what the tokenizer cannot encode at its worst', () => {
+    it('leaves out an inline base64 image that would slip past the window at three characters per token', () => {
+        const blob = `+<img src="data:image/png;base64,${Buffer.alloc(45_000, 7).toString('base64').replace(/A/g, 'Bq9')}">`;
+        const diff = formatPullRequestDiff([
+            { filename: 'src/a.ts', patch: '+export const a = 1;' },
+            { filename: 'public/logo.html', patch: blob },
+        ]);
+        const { unseenFiles } = fitDiff(diff, {
+            chars: 200_000,
+            tokens: 30_000,
+        });
+        expect(estimateTextTokens(blob)).toBeLessThan(30_000);
+        expect(unseenFiles).toEqual(['public/logo.html']);
+    });
+});

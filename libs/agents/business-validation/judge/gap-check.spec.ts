@@ -429,9 +429,13 @@ describe("createGapCheck within the model's window (#2233)", () => {
             },
         ]).flat();
         const messages = [{ role: 'user', content: 'the prompt' }, ...reads];
-        const directives = spec!.policies
-            .map((p) => p.prepareStep?.({ messages, stepNumber: 10 } as any))
-            .find((d) => d?.messages);
+        const directives = (
+            await Promise.all(
+                spec!.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 10 } as any),
+                ),
+            )
+        ).find((d) => d?.messages);
         expect(directives?.messages).toBeDefined();
         expect(
             estimateTextTokens(JSON.stringify(directives!.messages)),

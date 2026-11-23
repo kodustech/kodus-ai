@@ -1,5 +1,13 @@
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 
+/**
+ * Tokens of diff text, for a budget it must never exceed: what the tokenizer
+ * can't encode (an inline base64 image, a minified line) counts one token per
+ * character instead of three.
+ */
+const diffTokens = (text: string) =>
+    estimateTextTokens(text, { worstCase: true });
+
 /** A changed file as the code hosts return it. */
 export interface ChangedFile {
     filename: string;
@@ -51,10 +59,10 @@ export function fitDiff(
 ): { diff: string; unseenFiles: string[] } {
     const { chars, tokens = Infinity } =
         typeof budget === 'number' ? { chars: budget } : budget;
-    const fits = (text: string, usedTokens = 0) =>
-        tokens === Infinity || usedTokens + estimateTextTokens(text) <= tokens;
+    const tokensOf = (text: string) =>
+        tokens === Infinity ? 0 : diffTokens(text);
 
-    if (diff.length <= chars && fits(diff)) {
+    if (diff.length <= chars && tokensOf(diff) <= tokens) {
         return { diff, unseenFiles: [] };
     }
     const chunks = fileChunks(diff);
@@ -71,12 +79,12 @@ export function fitDiff(
     for (const chunk of chunks) {
         // The character check first: it is free, and it keeps a huge file
         // from being tokenized only to be left out.
-        if (used + chunk.text.length <= chars && fits(chunk.text, usedTokens)) {
+        const withinChars = used + chunk.text.length <= chars;
+        const count = withinChars ? tokensOf(chunk.text) : 0;
+        if (withinChars && usedTokens + count <= tokens) {
             kept.push(chunk.text);
             used += chunk.text.length;
-            if (tokens !== Infinity) {
-                usedTokens += estimateTextTokens(chunk.text);
-            }
+            usedTokens += count;
         } else {
             unseenFiles.push(chunk.file);
         }
@@ -88,13 +96,13 @@ export function fitDiff(
 function cutToTokens(text: string, tokens: number): string {
     let cut = text;
     for (let i = 0; i < 4 && tokens !== Infinity; i++) {
-        const count = estimateTextTokens(cut);
+        const count = diffTokens(cut);
         if (count <= tokens) {
             return cut;
         }
         cut = cut.slice(0, Math.floor((cut.length * tokens * 0.95) / count));
     }
-    return tokens === Infinity || estimateTextTokens(cut) <= tokens ? cut : '';
+    return tokens === Infinity || diffTokens(cut) <= tokens ? cut : '';
 }
 
 /**
@@ -165,16 +173,14 @@ export function diffFor(
     // Shrink the character room until the pick is within the model's tokens:
     // the pick keeps its order and its list of files left out.
     for (let i = 0; i < 4 && tokens !== undefined; i++) {
-        const count = estimateTextTokens(picked);
+        const count = diffTokens(picked);
         if (count <= tokens) {
             return picked;
         }
         room = Math.floor((room * tokens * 0.95) / count);
         picked = room > 0 ? diffWithin(diff, focus, room) : '';
     }
-    return tokens === undefined || estimateTextTokens(picked) <= tokens
-        ? picked
-        : '';
+    return tokens === undefined || diffTokens(picked) <= tokens ? picked : '';
 }
 
 function diffWithin(

@@ -41,6 +41,15 @@ import { get_encoding, type Tiktoken } from 'tiktoken';
  */
 export const FALLBACK_CHARS_PER_TOKEN = 3;
 
+/**
+ * The fallback for a caller whose limit is a hard one (a request that must
+ * fit the model's window): one token per character. Dense text runs far
+ * below 3 characters per token in o200k_base — measured 1.14 for SVG path
+ * data, 1.45 for base64, 1.75 for hex — so the ordinary fallback can let
+ * such a text through at less than half its real size.
+ */
+export const WORST_CASE_CHARS_PER_TOKEN = 1;
+
 let encoder: Tiktoken | null = null;
 let encoderFailed = false;
 
@@ -195,7 +204,11 @@ function isWhitespace(code: number): boolean {
  * linear pass over the text; no regex (a `\S{n,}` scan would itself be
  * O(n·k)).
  */
-function countTokens(enc: Tiktoken, text: string): number {
+function countTokens(
+    enc: Tiktoken,
+    text: string,
+    charsPerToken = FALLBACK_CHARS_PER_TOKEN,
+): number {
     if (text.length <= MAX_ENCODED_RUN_CHARS) {
         return enc.encode_ordinary(text).length;
     }
@@ -216,9 +229,8 @@ function countTokens(enc: Tiktoken, text: string): number {
             ).length;
         }
         tokens += runIsWhitespace
-            ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
-            : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
-              runNonAscii;
+            ? Math.ceil(length / charsPerToken)
+            : Math.ceil((length - runNonAscii) / charsPerToken) + runNonAscii;
         segmentStart = runEnd;
     };
     for (let i = 0; i < text.length; i++) {
@@ -243,12 +255,24 @@ function countTokens(enc: Tiktoken, text: string): number {
 /** Token count of a single string; transient slices can bypass the shared memo. */
 export function estimateTextTokens(
     text: string,
-    options?: { cache?: boolean },
+    options?: {
+        cache?: boolean;
+        /**
+         * Count what the tokenizer can't (it failed to load, or a run too
+         * long to encode) at WORST_CASE_CHARS_PER_TOKEN: for a limit the
+         * text must never exceed. Not memoized, so a cached ordinary count
+         * never answers it.
+         */
+        worstCase?: boolean;
+    },
 ): number {
     if (!text) {
         return 0;
     }
-    const useMemo = options?.cache !== false;
+    const charsPerToken = options?.worstCase
+        ? WORST_CASE_CHARS_PER_TOKEN
+        : FALLBACK_CHARS_PER_TOKEN;
+    const useMemo = options?.cache !== false && !options?.worstCase;
     let hit: number | undefined;
     if (useMemo) {
         hit = text.length > MEMO_MAX_CHARS ? recallLarge(text) : memo.get(text);
@@ -259,11 +283,11 @@ export function estimateTextTokens(
     const enc = getEncoder();
     if (enc) {
         try {
-            const tokens = countTokens(enc, text);
+            const tokens = countTokens(enc, text, charsPerToken);
             return useMemo ? remember(text, tokens) : tokens;
         } catch {
             // fall through to the char estimate
         }
     }
-    return Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
+    return Math.ceil(text.length / charsPerToken);
 }
