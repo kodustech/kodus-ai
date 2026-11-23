@@ -77,7 +77,7 @@ function getEncoder(): Tiktoken | null {
  * so LRU bookkeeping would cost more than it saves.
  */
 const MEMO_MAX_ENTRIES = 512;
-const MEMO_MAX_CHARS = 200_000;
+export const MEMO_MAX_CHARS = 200_000;
 const memo = new Map<string, number>();
 
 /**

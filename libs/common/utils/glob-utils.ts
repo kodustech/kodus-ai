@@ -154,9 +154,11 @@ export function requiredLiteral(pattern: string): string {
     if (
         body.startsWith('!') ||
         /[()|]/.test(body) ||
-        // picomatch hands `\d`, `\s`, `\b` to the regex and drops `"`
-        // quotes, so neither is literal text of the path.
+        // picomatch hands `\d`, `\s`, `\b` to the regex, drops `"` quotes
+        // and can consume a NUL without matching a character, so none of
+        // them is literal text of the path.
         /[\\"]/.test(body) ||
+        body.includes('\u0000') ||
         // A `]` that does not close the class: `[]x]`, `[!]x]`, `[[:alpha:]x]`.
         /\[(?:[!^]?\]|[^\]]*\[:)/.test(body) ||
         // A `}` inside `[...]` does not close a brace group, which

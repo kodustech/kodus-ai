@@ -289,7 +289,8 @@ describe('estimateMessagesTokens — per-run counts bounds', () => {
     const big = (tag: string) =>
         ({
             role: 'user',
-            content: `${tag} ` + 'const value = compute(input);\n'.repeat(7_000),
+            content:
+                `${tag} ` + 'const value = compute(input);\n'.repeat(7_000),
         }) as any;
     const sha256 = (msg: unknown) =>
         createHash('sha256').update(JSON.stringify(msg)).digest('base64');
@@ -312,10 +313,23 @@ describe('estimateMessagesTokens — per-run counts bounds', () => {
         expect(counts.size).toBe(256);
     });
 
-    it('leaves small messages to the shared memo', () => {
+    it('leaves messages up to 200k chars to the shared memo', () => {
         const counts = new Map<string, number>();
-        estimateMessagesTokens([{ role: 'user', content: 'hi' }], counts);
+        const mid = {
+            role: 'user',
+            content: 'const value = compute(input);\n'.repeat(5_000),
+        } as any; // ~150k chars
+        estimateMessagesTokens([{ role: 'user', content: 'hi' }, mid], counts);
         expect(counts.size).toBe(0);
+    });
+
+    it('counts a message whose toJSON gives undefined as the uncached path does', () => {
+        const odd = [
+            { role: 'user', content: 'x', toJSON: () => undefined },
+        ] as any[];
+        expect(estimateMessagesTokens(odd, new Map())).toBe(
+            estimateMessagesTokens(odd),
+        );
     });
 
     it('counts null and non-objects as the uncached path does', () => {

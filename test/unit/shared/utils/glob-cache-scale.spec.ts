@@ -483,8 +483,12 @@ describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
     it.each([
         ['backslash escape', 'file\\d.txt', 'file1.txt'],
         ['leading ./', './*', 'Dockerfile'],
+        ['repeated ./', '././*', 'Dockerfile'],
         ['./ hiding a negation', './!**/*.md', 'src/keep.ts'],
         ['] first in a class', '[]debug]', 'd'],
+        ['negated ] first', '[^]debug]', 'a'],
+        ['NUL after a class', '[a]\u0000b', 'ab'],
+        ['NUL in a path pattern', '**/[Dd]\u0000ebug/**', 'src/Debug/app.ts'],
         ['escaped ] in a class', '[a\\]debug]', 'd'],
         ['POSIX class', '[[:alpha:]debug]', 'a'],
         ['double quotes', '**/"node_modules"/**', 'src/node_modules/a.js'],

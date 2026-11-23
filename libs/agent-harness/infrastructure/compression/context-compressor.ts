@@ -30,7 +30,11 @@
 
 import { createHash } from 'crypto';
 
-import { estimateTextTokens, estimateValueTokens } from './token-estimator';
+import {
+    estimateTextTokens,
+    estimateValueTokens,
+    MEMO_MAX_CHARS,
+} from './token-estimator';
 
 /** Trigger compression when context usage crosses this fraction of the window. */
 export const COMPRESSION_THRESHOLD_RATIO = 0.7;
@@ -90,20 +94,22 @@ export type MessageTokenCounts = Map<string, number>;
 const MAX_RUN_COUNTS = 256;
 /**
  * Only messages above this many serialized chars go in the per-run counts:
- * smaller ones are cheap and already in the shared memo of token-estimate
- * (same bound), and one compression pass can write hundreds of them, which
- * pushed the head out of the map.
+ * one compression pass can write hundreds of smaller ones, which pushed the
+ * head out of the map. Smaller ones count through token-estimate's shared
+ * memo (same bound), as before this cache existed; that memo is global to
+ * the worker, so concurrent runs can evict each other's small messages.
  */
-const RUN_COUNT_MIN_CHARS = 200_000;
+const RUN_COUNT_MIN_CHARS = MEMO_MAX_CHARS;
 
 function countKey(serialized: string): string {
     return createHash('sha256').update(serialized).digest('base64');
 }
 
-function serializeForCount(msg: unknown): string {
+/** `undefined` when JSON has no text for it (a `toJSON()` returning it). */
+function serializeForCount(msg: unknown): string | undefined {
     if (typeof msg === 'string') return msg;
     try {
-        return JSON.stringify(msg) ?? String(msg);
+        return JSON.stringify(msg);
     } catch {
         return String(msg);
     }
@@ -130,6 +136,10 @@ export function estimateMessagesTokens(
         }
         // Same count estimateValueTokens gives: the serialized message.
         const serialized = serializeForCount(msg);
+        if (serialized === undefined) {
+            total += estimateValueTokens(msg);
+            continue;
+        }
         if (serialized.length <= RUN_COUNT_MIN_CHARS) {
             total += estimateTextTokens(serialized);
             continue;
