@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 import { ProviderError } from '@libs/runtime/fleet/provider-error';
 import type { HostProvider } from '@libs/runtime/fleet/host-provider';
 import type { HostPool } from '@libs/runtime/fleet/pool';
@@ -62,7 +64,8 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     const key = { organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, fingerprint: req.fingerprint };
     if ((await d.store.find(req.organizationId, req.environmentId, req.poolId, req.fingerprint))?.state === 'ready') return { ok: true, name, reused: true };
     await d.store.begin({ ...key, name });
-    const hostId = `tpl-${name}`;
+    // One host per attempt: the hub enrolls a host id once, so a retry of the same template needs its own.
+    const hostId = `tpl-${randomBytes(12).toString('hex')}`;
     const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
         await d.store.fail(key, cause ? `${reason}:${cause}` : reason);
         return { ok: false as const, reason, ...(cause ? { cause } : {}) };

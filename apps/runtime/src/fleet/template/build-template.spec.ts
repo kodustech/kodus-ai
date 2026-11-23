@@ -118,6 +118,17 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         expect(templateNameOf('a', 'e', FP)).not.toBe(templateNameOf('b', 'e', FP));
     });
 
+    it('a retry of a failed template boots a setup host of its own: the hub never enrolls a host id twice', async () => {
+        const w = world();
+        w.hosts.bake = { ok: false, reason: 'bake_failed' };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.booted).toHaveLength(2);
+        expect(new Set(w.hosts.booted).size).toBe(2);
+        for (const id of w.hosts.booted) expect(id).toMatch(/^tpl-[a-z0-9-]{1,60}$/);
+    });
+
     it('records why the provider failed (its code, never its message) on the failed template, and still destroys the setup host', async () => {
         const w = world();
         w.hosts.boot = async (req: { hostId: string; base: string }) => {
