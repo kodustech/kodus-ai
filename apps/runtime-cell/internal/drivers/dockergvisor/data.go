@@ -115,7 +115,7 @@ func (d *Driver) pinnedBakeSHA(ref driver.MachineRef) (string, error) {
 	}
 	org, env := ref.Tags[driver.TagOrg], ref.Tags[driver.TagEnv]
 	base := strings.Split(ref.ImageID, ".")[0]
-	if _, ok := bakeRepo(d.cfg.CellID, org, env); !ok || base != bakeImageID(d.cfg.CellID, org, env, sha) {
+	if _, ok := bakeRepo(d.bakeCell(), org, env); !ok || base != bakeImageID(d.bakeCell(), org, env, sha) {
 		return "", ErrBakeDataUnavailable
 	}
 	return sha, nil
@@ -139,7 +139,7 @@ func (d *Driver) bakedVolumes(ctx context.Context, ref driver.MachineRef) (map[s
 		return nil, err
 	}
 	org, env := ref.Tags[driver.TagOrg], ref.Tags[driver.TagEnv]
-	l := envLabels(d.cfg.CellID, org, env)
+	l := envLabels(d.bakeCell(), org, env)
 	l[labelBakeVolume] = ""
 	vols, err := d.d.Volumes(ctx, l)
 	if err != nil {
@@ -150,13 +150,13 @@ func (d *Driver) bakedVolumes(ctx context.Context, ref driver.MachineRef) (map[s
 		if v.Labels[labelBakeSHA] != sha {
 			continue
 		}
-		for k, want := range envLabels(d.cfg.CellID, org, env) {
+		for k, want := range envLabels(d.bakeCell(), org, env) {
 			if v.Labels[k] != want {
 				return nil, driver.ErrNotOwned
 			}
 		}
 		key := v.Labels[labelBakeVolume]
-		if key == "" || v.Name != bakeVolume(d.cfg.CellID, org, env, key, sha) || out[key] != "" {
+		if key == "" || v.Name != bakeVolume(d.bakeCell(), org, env, key, sha) || out[key] != "" {
 			return nil, ErrBakeDataUnavailable
 		}
 		out[key] = v.Name
@@ -282,7 +282,7 @@ func (d *Driver) bakeData(ctx context.Context, spec driver.BakeSpec, keys []stri
 	}
 	for _, k := range keys {
 		name := generationVolume(*generation, k)
-		labels := envLabels(spec.CellID, spec.OrgID, spec.EnvironmentID)
+		labels := envLabels(generation.Cell, spec.OrgID, spec.EnvironmentID)
 		labels[labelBakeVolume], labels[labelBakeSHA] = k, spec.SHA
 		labels[labelBakeGeneration] = generation.Nonce
 		labels["kodus.bake-source"] = machine

@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
@@ -138,6 +139,11 @@ type Config struct {
 	ServiceLogMaxSize string
 	ServiceLogMaxFile int
 	CellID            string
+	// BakeAdoptOrg, set only on a fleet host whose hub told it the org it
+	// serves, lets the cell take over the bake catalog a template left on its
+	// disk (another cell id), keeping that org's generations and retiring the
+	// rest. Empty (every other cell): a catalog of another cell is set aside.
+	BakeAdoptOrg string
 	// Runtime is the gVisor backend's OCI runtime ("runsc" when empty): its
 	// machines' and the cell's helper containers on a claim.
 	Runtime string
@@ -324,6 +330,7 @@ type Driver struct {
 	// clock times boots and resets (BootTiming).
 	clock           clock.Clock
 	catalogMu       sync.Mutex
+	bakeOwnerID     atomic.Value // string: the cell id bakes are named after (see bakeCell)
 	catalog         *bakecatalog.Catalog
 	generationHolds map[string]func()
 	// registries is the registry image transfer (package registry); nil

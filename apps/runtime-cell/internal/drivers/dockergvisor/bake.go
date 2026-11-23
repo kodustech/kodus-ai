@@ -174,7 +174,7 @@ func (d *Driver) newGeneration(spec driver.BakeSpec, pin *pinnedOutput) (bakecat
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return bakecatalog.Generation{}, err
 	}
-	g := bakecatalog.Generation{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, RefsDigest: spec.RefsDigest, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
+	g := bakecatalog.Generation{Cell: d.bakeCell(), Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, RefsDigest: spec.RefsDigest, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
 	g.ID = generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce)
 	for _, image := range pin.images {
 		if image.fp != "" {
@@ -184,7 +184,7 @@ func (d *Driver) newGeneration(spec driver.BakeSpec, pin *pinnedOutput) (bakecat
 	for _, key := range pin.volumes {
 		g.Volumes[key] = generationVolume(g, key)
 	}
-	if len(pin.images) > maxBakeArtifacts || len(pin.volumes) > maxBakeArtifacts || !validGeneration(g, d.cfg.CellID) {
+	if len(pin.images) > maxBakeArtifacts || len(pin.volumes) > maxBakeArtifacts || !validGeneration(g, d.bakeCell()) {
 		return bakecatalog.Generation{}, ErrBakeDataUnavailable
 	}
 	return g, nil

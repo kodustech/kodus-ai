@@ -106,7 +106,7 @@ func TestSameSHABakesHaveDifferentImmutableIdentities(t *testing.T) {
 }
 
 func TestGenerationCatalogRecoversOnlyVerifiedBakes(t *testing.T) {
-	for _, fault := range []string{"none", "missing volume", "surviving holder", "corrupt catalog"} {
+	for _, fault := range []string{"none", "surviving holder"} {
 		t.Run(fault, func(t *testing.T) {
 			d, docker := bakeDriver(t)
 			setup := bakeWithData(t, d, docker, "claim-setup", "seed")
@@ -114,7 +114,6 @@ func TestGenerationCatalogRecoversOnlyVerifiedBakes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			g := generationForTest(t, d, image.ImageID)
 			if err := d.Destroy(context.Background(), setup); err != nil {
 				t.Fatal(err)
 			}
@@ -122,14 +121,8 @@ func TestGenerationCatalogRecoversOnlyVerifiedBakes(t *testing.T) {
 				t.Fatal(err)
 			}
 			switch fault {
-			case "missing volume":
-				delete(docker.volumes, g.Volumes["pgdata"])
 			case "surviving holder":
 				docker.plant(dockercli.Container{Name: "old-holder", Labels: map[string]string{"kodus.cell": "cell-1", labelMachine: "old-holder"}})
-			case "corrupt catalog":
-				if err := os.WriteFile(filepath.Join(d.workDir(), "bake-catalog", bakecatalog.FileName), []byte(`{"version":1,"version":2}`), 0o600); err != nil {
-					t.Fatal(err)
-				}
 			}
 			restarted, err := New(context.Background(), docker, d.cfg)
 			if err != nil {
@@ -388,7 +381,7 @@ func TestUnpublishedCrashArtifactsAreCleanupOnlyAfterRestart(t *testing.T) {
 	}
 }
 
-func TestCatalogRefusesFIFOAndSymlinkWithoutOpeningThem(t *testing.T) {
+func TestCatalogQuarantinesFIFOAndSymlinkWithoutOpeningThem(t *testing.T) {
 	for _, kind := range []string{"fifo", "symlink"} {
 		t.Run(kind, func(t *testing.T) {
 			d, docker := bakeDriver(t)
@@ -414,8 +407,12 @@ func TestCatalogRefusesFIFOAndSymlinkWithoutOpeningThem(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer restarted.Close()
-			if _, err := restarted.RecoverBakes(ctx); err == nil {
-				t.Fatal("unsafe catalog accepted")
+			// Never opened, never fatal: set aside, the cell starts empty.
+			if recovered, err := restarted.RecoverBakes(ctx); err != nil || len(recovered) != 0 {
+				t.Fatalf("an unsafe catalog stopped the cell: %v %v", recovered, err)
+			}
+			if _, err := os.Lstat(filepath.Join(d.workDir(), "bake-catalog", bakecatalog.FileName)); !os.IsNotExist(err) {
+				t.Fatal("the unsafe catalog was left in place")
 			}
 		})
 	}
@@ -555,5 +552,153 @@ func TestParallelBakesKeepManifestMapsImmutableAndHoldsBounded(t *testing.T) {
 	c, _ := d.catalogFor(ctx)
 	if _, _, held := c.Counts(); held != 0 {
 		t.Fatalf("finished bakes leaked %d hold counters", held)
+	}
+}
+
+// A bake whose volume went missing is cleanup work, not a reason for the
+// cell to refuse to start; one still intact is recovered beside it.
+func TestRecoveryRetiresABakeWhoseArtifactsAreGone(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := bakeWithData(t, d, docker, "claim-setup", "seed")
+	image, err := d.Bake(ctx, bakeSpec(setup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := generationForTest(t, d, image.ImageID)
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	delete(docker.volumes, g.Volumes["pgdata"])
+	restarted, err := New(ctx, docker, d.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	recovered, err := restarted.RecoverBakes(ctx)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("a bake with a missing volume was recovered or stopped the cell: %v %v", recovered, err)
+	}
+	if e, r, _ := restarted.catalog.Counts(); e != 0 || r != 0 {
+		t.Fatalf("the unusable generation is still in the catalog: %d eligible, %d retired", e, r)
+	}
+	if refs := bakedRefs(docker, bakeEnv); len(refs) != 0 {
+		t.Fatalf("its images were left: %v", refs)
+	}
+}
+
+// A catalog another cell wrote never stops this cell and is never used.
+func TestACatalogOfAnotherCellIsSetAsideAndNeverUsed(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := bakeWithData(t, d, docker, "claim-setup", "seed")
+	image, err := d.Bake(ctx, bakeSpec(setup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := d.cfg
+	cfg.CellID = "cell-2"
+	other, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	recovered, err := other.RecoverBakes(ctx)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("another cell's catalog: %v %v", recovered, err)
+	}
+	if _, _, err := other.holdGeneration(ctx, driver.MachineRef{ImageID: image.ImageID, Tags: map[string]string{driver.TagOrg: bakeOrg, driver.TagEnv: bakeEnv}}); err == nil {
+		t.Fatal("a cell used a bake made by another cell")
+	}
+	files, _ := filepath.Glob(filepath.Join(other.workDir(), "bake-catalog", bakecatalog.FileName+".foreign-*"))
+	if len(files) != 1 {
+		t.Fatalf("quarantined files: %v", files)
+	}
+}
+
+// A Run host made from a template: a new cell id on the template's disk, told
+// by the hub which org it serves, boots from the template's bake under the
+// names the bake was made with.
+func TestAHostMadeFromATemplateAdoptsTheBakeOfItsOrg(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := bakeWithData(t, d, docker, "claim-setup", "seed")
+	image, err := d.Bake(ctx, bakeSpec(setup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := d.cfg
+	cfg.CellID, cfg.BakeAdoptOrg = "cell-2", bakeOrg
+	host, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	recovered, err := host.RecoverBakes(ctx)
+	if err != nil || len(recovered) != 1 || recovered[0].ImageID != image.ImageID || !recovered[0].Current {
+		t.Fatalf("the template's bake was not recovered: %v %v", recovered, err)
+	}
+	ref := machine("claim-run", bakeEnv)
+	ref.ImageID = image.ImageID
+	if n, err := host.restoreData(ctx, ref, ref.MachineID, []string{"pgdata"}); err != nil || n != 1 {
+		t.Fatalf("the template's data was not restored: %d %v", n, err)
+	}
+	// A new bake on this host stays under the same names, and is valid.
+	again := bakeWithData(t, host, docker, "claim-rebake", "second seed")
+	spec := bakeSpec(again)
+	spec.CellID = "cell-2"
+	if next, err := host.Bake(ctx, spec); err != nil || next.ImageID == image.ImageID {
+		t.Fatalf("rebake on the adopted catalog: %v %v", next, err)
+	}
+}
+
+// The same disk, a host told it serves another org: nothing of the template
+// is usable, and its artifacts are removed.
+func TestAdoptionNeverUsesABakeOfAnotherOrg(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := bakeWithData(t, d, docker, "claim-setup", "seed")
+	image, err := d.Bake(ctx, bakeSpec(setup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := generationForTest(t, d, image.ImageID)
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := d.cfg
+	cfg.CellID, cfg.BakeAdoptOrg = "cell-2", "some-other-org"
+	host, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	recovered, err := host.RecoverBakes(ctx)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("another org's bake was recovered: %v %v", recovered, err)
+	}
+	if _, _, err := host.holdGeneration(ctx, driver.MachineRef{ImageID: image.ImageID, Tags: map[string]string{driver.TagOrg: bakeOrg, driver.TagEnv: bakeEnv}}); err == nil {
+		t.Fatal("a host used a bake of an org it does not serve")
+	}
+	if _, ok := docker.volumes[g.Volumes["pgdata"]]; ok {
+		t.Fatal("the other org's data volume was left on the host")
 	}
 }
