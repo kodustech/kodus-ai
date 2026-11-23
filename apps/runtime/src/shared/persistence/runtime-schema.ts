@@ -1072,6 +1072,15 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
             },
         ],
     },
+    {
+        version: 47,
+        name: 'the setup an environment template build asked for',
+        // setup_key / setup_requested_at: the command key the fleet chose for the setup that bakes a template and when it
+        // asked. The product (read-only on this database) lists building rows with a key and no setup record yet and
+        // issues the setup_requested command, because only it holds the repository and LLM credentials.
+        sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS setup_key text;
+        ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS setup_requested_at timestamptz;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

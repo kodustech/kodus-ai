@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 
 import { ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
 import { isolatedDatabase } from '../../testing/isolated-database';
+import { PgTemplateSetupRequester } from './pg-template-setup-requester';
 import { templateNameOf } from './template-name';
 import { PgTemplateStore, StoreTemplateResolver } from './template-store';
 
@@ -38,5 +39,19 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect(await resolver.resolve({ organizationId: 'org-other', environmentId: 'env-1', poolId: 'boat-eu-perrun' })).toBeNull();
         await store.fail(key(b), 'x');
         expect((await store.find('org-k', 'env-1', 'boat-eu-perrun', b))?.state).toBe('ready');
+    });
+
+    it('the setup request marks only the building row of that environment', async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = 'd'.repeat(64);
+        const row = (env: string) => ({ organizationId: 'org-r', environmentId: env, poolId: 'p', fingerprint: fp, name: templateNameOf('org-r', env, fp) });
+        await store.begin(row('env-a'));
+        await store.begin(row('env-b'));
+        await new PgTemplateSetupRequester(pool).request({ organizationId: 'org-r', environmentId: 'env-a', poolId: 'p', fingerprint: fp, key: 'template:org-r/env-a:tpl-1', boundKey: 'template:org-r/env-a' });
+        const keys = (await pool.query(`SELECT environment_id, setup_key FROM runtime.runtime_env_templates WHERE org_id = 'org-r' ORDER BY environment_id`)).rows;
+        expect(keys).toEqual([
+            { environment_id: 'env-a', setup_key: 'template:org-r/env-a:tpl-1' },
+            { environment_id: 'env-b', setup_key: null },
+        ]);
     });
 });

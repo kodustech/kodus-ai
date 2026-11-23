@@ -124,6 +124,7 @@ import {
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
     RUNTIME_ENVIRONMENT_REPOSITORY_STORE,
     RUNTIME_ENVIRONMENT_SETUP_READER,
+    RUNTIME_TEMPLATE_SETUP_READER,
     RUNTIME_BUILD_STATE_EVICTION_READER,
     RUNTIME_LESSON_READER,
     RUNTIME_ORG_REPOSITORIES,
@@ -192,6 +193,8 @@ import { ExternalFindingsService } from './application/external-findings.service
 import { RUNTIME_EXTERNAL_FINDINGS, RUNTIME_EXTERNAL_FINDINGS_STORE, RUNTIME_EXTERNAL_STOP_READER } from './domain/external-findings';
 import { RuntimeExternalSubmissionModel, RuntimeExternalMessageModel } from './infrastructure/runtime-external-finding.models';
 import { TypeOrmExternalFindingsStore } from './infrastructure/typeorm-external-findings.store';
+import { PgTemplateSetupReader } from './infrastructure/pg-template-setup.reader';
+import { RuntimeTemplateSetupRequests } from './application/template-setup-requests.service';
 import { PgExternalStopReader } from './infrastructure/pg-external-stop.reader';
 import { PgKeptCheckResultsReader } from './infrastructure/pg-kept-check-results.reader';
 import { TypeOrmKeptCheckStore } from './infrastructure/typeorm-kept-checks.store';
@@ -349,6 +352,12 @@ const useCases = [
             inject: [RuntimeReadDb],
             useFactory: (db: RuntimeReadDb) => new PgEnvironmentSetupReader(db),
         },
+        {
+            provide: RUNTIME_TEMPLATE_SETUP_READER,
+            inject: [RuntimeReadDb],
+            useFactory: (db: RuntimeReadDb) => new PgTemplateSetupReader(db),
+        },
+        RuntimeTemplateSetupRequests,
         {
             provide: RUNTIME_BUILD_STATE_EVICTION_READER,
             inject: [RuntimeReadDb],

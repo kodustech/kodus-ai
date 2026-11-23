@@ -52,6 +52,33 @@ describe('RuntimePoolSchedulerCron', () => {
     });
 });
 
+describe('RuntimePoolSchedulerCron template setups', () => {
+    const saved = process.env.RUNTIME_ENABLED;
+    beforeEach(() => {
+        process.env.RUNTIME_ENABLED = 'true';
+    });
+    afterEach(() => {
+        if (saved === undefined) delete process.env.RUNTIME_ENABLED;
+        else process.env.RUNTIME_ENABLED = saved;
+    });
+
+    it('asks for the pending template setups under the same lock, before releasing it, even when the tick failed', async () => {
+        const order: string[] = [];
+        const templates = { run: jest.fn(async () => (order.push('templates'), { pending: 1, requested: 1, skipped: 0, failed: 0 })) };
+        const release = jest.fn(async () => void order.push('release'));
+        const cron = new RuntimePoolSchedulerCron({ tick: async () => Promise.reject(new Error('x')) } as any, { acquire: async () => ({ release }) } as any, { recordTick: () => undefined }, templates as any);
+        await cron.handleCron();
+        expect(order).toEqual(['templates', 'release']);
+    });
+
+    it('does not count a template pass that throws as a failed tick', async () => {
+        const ticks: string[] = [];
+        const cron = new RuntimePoolSchedulerCron({ tick: async () => ({ checked: 0 }) } as any, { acquire: async () => ({ release: async () => undefined }) } as any, { recordTick: (o) => ticks.push(o) }, { run: async () => Promise.reject(new Error('x')) } as any);
+        await cron.handleCron();
+        expect(ticks).toEqual(['ok']);
+    });
+});
+
 describe('OtelPoolSchedulerMetrics', () => {
     it('one counter, labelled by outcome', () => {
         const counter = { add: jest.fn() };

@@ -838,6 +838,24 @@ export interface RuntimeEnvironmentSetupReader {
 
 export const RUNTIME_ENVIRONMENT_SETUP_READER = Symbol.for('RuntimeApi.EnvironmentSetupReader');
 
+/** An environment template build whose setup the fleet asked for and nobody has requested yet. */
+export interface PendingTemplateSetup {
+    organizationId: string;
+    environmentId: string;
+    /** The command key the fleet chose; the setup record that holds it means the setup was requested. */
+    key: string;
+}
+
+/**
+ * Reads runtime_env_templates (written by runtime-fleet): the `building` rows with a setup key asked for in the last
+ * hour and no setup record for that key. Only the product holds the credentials a setup command carries.
+ */
+export interface RuntimeTemplateSetupReader {
+    pending(limit: number): Promise<PendingTemplateSetup[]>;
+}
+
+export const RUNTIME_TEMPLATE_SETUP_READER = Symbol.for('RuntimeApi.TemplateSetupReader');
+
 /**
  * Reads runtime_build_state_evictions (written by the hub from each cell's
  * heartbeat): the cells whose disk floor removed the environment's build

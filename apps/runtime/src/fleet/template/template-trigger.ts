@@ -13,7 +13,7 @@ import type { TemplateStore } from './template-store';
 
 export interface TemplateSetupRequester {
     /** Asks the existing setup request path for the environment's setup, bound to its template host (`boundKey`), under `key`. */
-    request(req: { organizationId: string; environmentId: string; key: string; boundKey: string }): Promise<void>;
+    request(req: { organizationId: string; environmentId: string; poolId: string; fingerprint: string; key: string; boundKey: string }): Promise<void>;
 }
 
 export interface TemplateTriggerDeps {
@@ -96,7 +96,7 @@ export class RequestingSetupHost implements SetupHostPort {
     async boot(req: Parameters<SetupHostPort['boot']>[0]) {
         const host = await this.inner.boot(req);
         // The hub holds the claim until the template cell registers (no cell yet is a retryable wait).
-        await this.requester.request({ organizationId: req.organizationId, environmentId: req.environmentId, key: templateSetupCommandKey(req.organizationId, req.environmentId, req.hostId), boundKey: `template:${req.organizationId}/${req.environmentId}` });
+        await this.requester.request({ organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, fingerprint: req.fingerprint, key: templateSetupCommandKey(req.organizationId, req.environmentId, req.hostId), boundKey: `template:${req.organizationId}/${req.environmentId}` });
         return host;
     }
     waitForBake(req: Parameters<SetupHostPort['waitForBake']>[0]) {

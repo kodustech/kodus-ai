@@ -102,10 +102,14 @@ export class RuntimeSetupRequester {
         private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
-    async request(env: ProductEnvironment, user: Partial<IUser>): Promise<ProductEnvironment> {
+    /**
+     * `opts.key`: the command key chosen by whoever asks (the fleet, for an environment template build); the tokens
+     * are sealed to it. `opts.boundKey`: `template:<org>/<env>`, the setup then runs only on that template's host.
+     */
+    async request(env: ProductEnvironment, user: Partial<IUser>, opts: { key?: string; boundKey?: string } = {}): Promise<ProductEnvironment> {
         const at = this.now();
         const requestedAt = at.toISOString();
-        const key = `${env.environmentId}:${requestedAt}`;
+        const key = opts.key ?? `${env.environmentId}:${requestedAt}`;
         const resolved = await this.resolve(env, key);
         await this.outbox.create(
             runtimeCommandOutboxMessage(
@@ -119,6 +123,7 @@ export class RuntimeSetupRequester {
                     requestedBy: { userId: user.uuid!, ...(user.email ? { email: user.email } : {}) },
                     requestedAt,
                     key,
+                    ...(opts.boundKey ? { boundKey: opts.boundKey } : {}),
                     // The setup's trace, named by its key (the product exports no live span to continue).
                     traceparent: traceparentFor(key),
                     ...resolved,
@@ -138,6 +143,8 @@ export class RuntimeSetupRequester {
                 metadata: { environmentId: env.environmentId, organizationId: env.organizationId, kind: resolved.blocker.kind },
             });
         }
+        // A template build is not the environment's own setup: its product state stays as it is.
+        if (opts.boundKey) return env;
         await this.environments.markSetupRequested(env.organizationId, env.environmentId, at);
         return { ...env, state: 'setup_requested', setupRequestedAt: requestedAt, updatedAt: requestedAt };
     }

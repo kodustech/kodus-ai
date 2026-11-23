@@ -37,7 +37,7 @@ function world(probe: BakeProbe['read'] = async () => ({ state: 'done', fingerpr
 describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', () => {
     it("boots from the cell base with a token bound to the template's environment, not to a Run", async () => {
         const w = world();
-        const { providerId } = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', base: 'kodus-cell-r42-kit7' });
+        const { providerId } = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'kodus-cell-r42-kit7' });
         expect(w.minted).toEqual([{ hostId: 'tpl-1', poolId: 'boat-eu-perrun', boundKey: boundKeyOfTemplate('org-kodus', 'env-shop'), ttlSeconds: expect.any(Number) }]);
         expect(w.provider.hosts.get(providerId)?.from).toBe('kodus-cell-r42-kit7');
         expect(w.provider.hosts.get(providerId)?.tags).toEqual({ installation: 'it', pool: 'boat-eu-perrun', host: 'tpl-1' });
@@ -46,7 +46,7 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
     it('refuses to boot when the hub refuses the token, and creates nothing', async () => {
         const w = world();
         (w.host as any).deps.hub.mint = async () => ({ ok: false, reason: 'unknown_pool' });
-        await expect(w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', base: 'b' })).rejects.toThrow('token_refused');
+        await expect(w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' })).rejects.toThrow('token_refused');
         expect(w.provider.hosts.size).toBe(0);
     });
 
@@ -64,7 +64,7 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
 
     it('seals through the sealer on that provider host, then retires the cell identity at the hub', async () => {
         const w = world();
-        const { providerId } = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', base: 'b' });
+        const { providerId } = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' });
         await w.host.seal('tpl-1');
         expect(w.sealed).toEqual([providerId]);
         expect(w.retired).toEqual(['tpl-1']);
@@ -72,7 +72,7 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
 
     it('destroys the provider host and retires the cell, also after a restart (host found by its tag)', async () => {
         const w = world();
-        const { providerId } = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', base: 'b' });
+        const { providerId } = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' });
         (w.host as any).providerIds.clear();
         await w.host.destroy('tpl-1');
         expect((await w.provider.get(providerId))?.state ?? 'gone').toBe('gone');

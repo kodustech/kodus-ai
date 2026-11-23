@@ -43,7 +43,7 @@ export class PgTemplateStore implements TemplateStore {
     async begin(t: Omit<TemplateRow, 'state'>) {
         await this.db.query(
             `INSERT INTO runtime.runtime_env_templates (org_id, environment_id, pool_id, fingerprint, snapshot_name, state) VALUES ($1, $2, $3, $4, $5, 'building')
-             ON CONFLICT (org_id, environment_id, pool_id, fingerprint) DO UPDATE SET state = 'building', failure = NULL, updated_at = now() WHERE runtime_env_templates.state IN ('failed', 'replaced')`,
+             ON CONFLICT (org_id, environment_id, pool_id, fingerprint) DO UPDATE SET state = 'building', failure = NULL, setup_key = NULL, setup_requested_at = NULL, updated_at = now() WHERE runtime_env_templates.state IN ('failed', 'replaced')`,
             [t.organizationId, t.environmentId, t.poolId, t.fingerprint, t.name],
         );
     }

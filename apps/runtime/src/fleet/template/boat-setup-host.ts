@@ -42,7 +42,7 @@ export class BoatSetupHost implements SetupHostPort {
 
     constructor(private readonly deps: BoatSetupHostDeps) {}
 
-    async boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; base: string }) {
+    async boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; fingerprint: string; base: string }) {
         const d = this.deps;
         const pool = await d.poolOf(req.poolId);
         if (!pool) throw new Error('pool_gone');

@@ -76,7 +76,7 @@ describe('when an environment template is built', () => {
             { boot: async () => (calls.push('boot'), { providerId: 'pid' }), waitForBake: async () => ({ ok: false, reason: 'x' }), seal: async () => undefined, destroy: async () => undefined },
             { request: async (r) => void calls.push(`${r.boundKey}|${r.key}`) },
         );
-        await host.boot({ hostId: 'tpl-1', organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', base: 'b' });
+        await host.boot({ hostId: 'tpl-1', organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, base: 'b' });
         expect(calls).toEqual(['boot', 'template:org-1/env-1|template:org-1/env-1:tpl-1']);
     });
 });

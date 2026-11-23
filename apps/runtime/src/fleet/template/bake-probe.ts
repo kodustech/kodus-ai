@@ -12,8 +12,8 @@ export interface SetupRecordReader {
     get(environmentId: string): Promise<EnvironmentSetupRecord | null>;
 }
 
-/** The command key of the setup that builds an environment's template. */
-export const templateSetupCommandKey = (organizationId: string, environmentId: string, fingerprint: string) => `${boundKeyOfTemplate(organizationId, environmentId)}:${fingerprint}`;
+/** The command key of the setup that builds an environment's template: the bound key and the setup host's id, so it is unique per build. */
+export const templateSetupCommandKey = (organizationId: string, environmentId: string, hostId: string) => `${boundKeyOfTemplate(organizationId, environmentId)}:${hostId}`.slice(0, 256);
 
 /** The bake's fingerprint: the digest of every repository's commit and the recipe when the setup has one, else the cell's image id. */
 export function bakeFingerprintOf(rec: Pick<EnvironmentSetupRecord, 'bakeRefsDigest' | 'imageId'>): string | null {

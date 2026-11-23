@@ -8,6 +8,7 @@ import { kodyRuntimeEnabledInThisProcess } from '@libs/runtime-publish/runtime-f
 import { type DistributedLock, DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
 import { RuntimePoolController } from '../application/pool-controller.service';
+import { RuntimeTemplateSetupRequests } from '../application/template-setup-requests.service';
 
 // Every 5 minutes: a schedule opens or closes within that, a warm-up ends,
 // and the month's usage moves forward for the budget.
@@ -49,6 +50,9 @@ export class RuntimePoolSchedulerCron {
         @Optional()
         @Inject(RUNTIME_POOL_SCHEDULER_METRICS)
         private readonly metrics: PoolSchedulerMetrics = new OtelPoolSchedulerMetrics(),
+        // The fleet's environment template builds wait for their setup command; asked on the same lock and schedule.
+        @Optional()
+        private readonly templateSetups?: RuntimeTemplateSetupRequests,
     ) {}
 
     @GatedCron(RUNTIME_CRON_SCHEDULES.poolScheduler, { name: 'Runtime pool scheduler' })
@@ -83,8 +87,20 @@ export class RuntimePoolSchedulerCron {
                 error: error instanceof Error ? error : undefined,
             });
         } finally {
+            await this.requestTemplateSetups();
             // DistributedLock.release logs its own failure, and the TTL frees the lock anyway.
             await lock.release().catch(() => undefined);
+        }
+    }
+
+    /** Never throws and never counts as a failed tick: the pool's schedule does not wait on a template build. */
+    private async requestTemplateSetups(): Promise<void> {
+        if (!this.templateSetups) return;
+        try {
+            const out = await this.templateSetups.run();
+            if (out.pending) this.logger.log({ message: 'Runtime template setups: pass', context: RuntimePoolSchedulerCron.name, metadata: out });
+        } catch (error) {
+            this.logger.error({ message: 'Runtime template setups: pass failed', context: RuntimePoolSchedulerCron.name, error: error instanceof Error ? error : undefined });
         }
     }
 }

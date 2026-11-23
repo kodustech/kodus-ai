@@ -22,6 +22,7 @@ import { BoatSetupHost, type HostSealer } from './template/boat-setup-host';
 import { HubHostSealer } from './template/hub-host-sealer';
 import { buildEnvironmentTemplate } from './template/build-template';
 import { RequestingSetupHost, TemplateBuildTrigger, type TemplateSetupRequester, TriggeringTemplateResolver } from './template/template-trigger';
+import { PgTemplateSetupRequester } from './template/pg-template-setup-requester';
 import { PgTemplateStore, StoreTemplateResolver } from './template/template-store';
 
 // runtime-fleet (docs/runtime/host-providers.md §4.1): the reconcile loop and
@@ -152,6 +153,7 @@ export class RuntimeFleetModule {
                         return pool;
                     },
                 },
+                { provide: FLEET_TEMPLATE_SETUP_REQUESTER, useFactory: (pool: Pool) => new PgTemplateSetupRequester(pool), inject: [RUNTIME_PG_POOL] },
                 FleetRunner,
             ],
         };

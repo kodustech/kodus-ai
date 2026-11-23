@@ -16,7 +16,7 @@ import type { TemplateStore } from './template-store';
 /** The setup host's life, as runtime-fleet drives it through the hub. Not built live yet. */
 export interface SetupHostPort {
     /** Starts a setup host from the cell base, enrolled with a token bound to the template. */
-    boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; base: string }): Promise<{ providerId: string }>;
+    boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; fingerprint: string; base: string }): Promise<{ providerId: string }>;
     /** Waits for the environment's setup on that host; what it baked, and on which ref. */
     waitForBake(req: { hostId: string; organizationId: string; environmentId: string }): Promise<{ ok: true; fingerprint: string; ref: 'default_branch' } | { ok: false; reason: string }>;
     /** Stops the cell and removes its identity, the token file and /tmp, so the saved disk holds none. */
@@ -58,7 +58,7 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
         return { ok: false as const, reason };
     };
     try {
-        const { providerId } = await d.setupHosts.boot({ hostId, organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, base: d.cellBase });
+        const { providerId } = await d.setupHosts.boot({ hostId, organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, fingerprint: req.fingerprint, base: d.cellBase });
         const bake = await d.setupHosts.waitForBake({ hostId, organizationId: req.organizationId, environmentId: req.environmentId });
         if (bake.ok === false) return await fail('bake_failed');
         if (bake.ref !== 'default_branch') return await fail('not_default_branch');
