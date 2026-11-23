@@ -319,6 +319,11 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
         })
         .refine((r) => !r.inference || r.content === null, { message: 'an inference gap goes with no recipe text' })
         .optional(),
+    /**
+     * `template:<org>/<env>`: this setup builds the environment's template (docs/runtime/host-providers.md §8.2) and
+     * is placed only on the cell bound to that key. Absent: an ordinary setup.
+     */
+    boundKey: z.string().regex(/^template:[^/]+\/[^/]+$/).max(300).optional(),
     /** Set when the product could not resolve what the setup needs; the worker records it and boots nothing. */
     blocker: z.strictObject({ kind: z.enum(SETUP_REQUEST_BLOCKER_KINDS), message: z.string().min(1).max(500) }).optional(),
     /**

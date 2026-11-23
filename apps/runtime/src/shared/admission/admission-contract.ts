@@ -65,6 +65,8 @@ export interface PhysicalAdmissionRequest extends AdmissionIdentity {
     size?: MachineSize;
     /** The least isolation the claims run under (isolation-architecture.md C1): only a cell that satisfies it is reserved. Absent: any. */
     isolation?: IsolationMinimum;
+    /** A template setup (kind 'setup'): placed only on the cell bound to this `template:<org>/<env>` key. */
+    boundKey?: string;
 }
 export interface PhysicalAdmissionTicket extends AdmissionIdentity {
     ticketId: string;

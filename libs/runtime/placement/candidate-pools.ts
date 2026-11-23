@@ -70,3 +70,13 @@ export function candidatePools(pools: readonly PoolView[], ask: PlacementAsk): P
         ...(perRun.length ? { boundKey: boundKeyOfRun(ask.organizationId, ask.runId!) } : {}),
     };
 }
+
+/**
+ * The template key a setup claim may carry (docs/runtime/host-providers.md §8.2): only `template:<org>/<env>` of
+ * the claim's own org. Anything else (a Run's key, another org's template, malformed) is not a template setup.
+ */
+export function templateSetupKey(organizationId: string, key: string | undefined): string | null {
+    if (!key) return null;
+    const prefix = `template:${organizationId}/`;
+    return key.startsWith(prefix) && key.length > prefix.length && !key.slice(prefix.length).includes('/') ? key : null;
+}

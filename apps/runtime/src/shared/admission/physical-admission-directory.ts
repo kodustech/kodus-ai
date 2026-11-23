@@ -17,7 +17,7 @@ import {
     recordPoolDemand,
 } from '../persistence/cell-directory';
 import type { HostPoolReader } from '../persistence/host-pools';
-import { candidatePools } from '@libs/runtime/placement/candidate-pools';
+import { candidatePools, templateSetupKey } from '@libs/runtime/placement/candidate-pools';
 import { isolationsSatisfying } from '@libs/runtime/contracts/isolation';
 
 export interface PhysicalAdmissionDirectory {
@@ -72,10 +72,14 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
             : null;
         // A claim that asks an isolation minimum goes only to a cell whose hello isolation satisfies it (never lower).
         const isolations = req.isolation && req.isolation !== 'any' ? [...isolationsSatisfying(req.isolation)] : null;
+        // A template setup goes only to the cell bound to its key, whatever pool it is in; no other claim reaches that cell.
+        const templateKey = req.kind === 'setup' ? templateSetupKey(req.organizationId, req.boundKey) : null;
         const first = placement?.pools[0];
-        const perRun = !!first && !!placement?.boundKey && placement.perRun.includes(first);
-        const pools = placement ? (perRun ? [first!] : placement.pools.filter((p) => !placement.perRun.includes(p))) : null;
-        const key = perRun ? placement!.boundKey! : null;
+        const perRun = !templateKey && !!first && !!placement?.boundKey && placement.perRun.includes(first);
+        const pools = templateKey ? null : placement ? (perRun ? [first!] : placement.pools.filter((p) => !placement.perRun.includes(p))) : null;
+        const key = templateKey ?? (perRun ? placement!.boundKey! : null);
+        const exactBound = templateKey ? 'bound_key=$9::text' : '(bound_key IS NULL OR bound_key=$9::text)';
+        const exactBound5 = templateKey ? 'bound_key=$5::text' : '(bound_key IS NULL OR bound_key=$5::text)';
         return this.opts.inTransaction(async (db) => {
             await db.query("SET LOCAL lock_timeout = '5s'");
             await db.query("SET LOCAL statement_timeout = '5s'");
@@ -140,7 +144,7 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
                   SELECT cell_id, row_number() OVER (ORDER BY cell_id)-1 AS ordinal, count(*) OVER () AS total
                   FROM runtime.runtime_cell_sessions WHERE disconnected_at IS NULL AND last_heartbeat_at>now()-interval '30 seconds'
                   AND (owner='kodus' OR org_id=$1) AND session_epoch IS NOT NULL AND NOT(cell_id=ANY($2::text[]))
-                  AND cordoned_at IS NULL AND (bound_key IS NULL OR bound_key=$9::text) AND ($10::text[] IS NULL OR pool_id=ANY($10::text[]))
+                  AND cordoned_at IS NULL AND ${exactBound} AND ($10::text[] IS NULL OR pool_id=ANY($10::text[]))
                   AND free_slots >= $3 AND (owner<>'kodus' OR $4::int+$3 <= $5::int)
                   AND ($6::int IS NULL OR (max_claim_memory_mb >= $6 AND max_claim_cpus >= $7))
                   AND ($11::text[] IS NULL OR isolation = ANY($11::text[])))
@@ -170,7 +174,7 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
                             count(*) FILTER (WHERE ($7::text[] IS NULL OR isolation = ANY($7::text[])) AND ($2::int IS NULL OR (max_claim_memory_mb >= $2 AND max_claim_cpus >= $3))) AS granting,
                             count(*) FILTER (WHERE ($7::text[] IS NULL OR isolation = ANY($7::text[])) AND NOT(cell_id=ANY($4::text[]))) AS untried
                        FROM runtime.runtime_cell_sessions WHERE disconnected_at IS NULL AND last_heartbeat_at>now()-interval '30 seconds' AND (owner='kodus' OR org_id=$1) AND session_epoch IS NOT NULL
-                       AND cordoned_at IS NULL AND (bound_key IS NULL OR bound_key=$5::text) AND ($6::text[] IS NULL OR pool_id=ANY($6::text[]))`,
+                       AND cordoned_at IS NULL AND ${exactBound5} AND ($6::text[] IS NULL OR pool_id=ANY($6::text[]))`,
                     [req.organizationId, req.size?.memoryMb ?? null, req.size?.cpus ?? null, excludeCells, key, pools, isolations],
                 );
                 // The Run's host is on its way (the demand above): a wait, like a full cell.

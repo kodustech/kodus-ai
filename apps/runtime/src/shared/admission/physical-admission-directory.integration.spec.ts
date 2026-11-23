@@ -107,6 +107,23 @@ const url = database.url;
             expect((found as any).cell.cellId).not.toBe(gvisor);
         });
 
+        it('places a template setup only on the cell bound to its key, and a template cell takes nothing else', async () => {
+            const req = request('setup');
+            const key = `template:${req.organizationId}/env-1`;
+            const plain = await cell(req.organizationId);
+            const template = await cell(req.organizationId);
+            await pool.query('UPDATE runtime.runtime_cell_sessions SET bound_key=$2 WHERE cell_id=$1', [template, key]);
+            const others = (await pool.query("SELECT cell_id FROM runtime.runtime_cell_sessions WHERE owner='kodus' AND disconnected_at IS NULL")).rows.map((r) => r.cell_id);
+            // Ordinary setup: never the template cell.
+            expect(await directory().reserve(request('setup'), [...others, template])).toMatchObject({ status: 'refused' });
+            const ordinary = { ...req, key: randomUUID() };
+            expect(await directory().reserve(ordinary, others)).toMatchObject({ status: 'located', cell: { cellId: plain } });
+            // The template setup: the bound cell, not the plain one.
+            expect(await directory().reserve({ ...req, key: randomUUID(), members: [{ side: 'setup', idempotencyKey: `setup:${randomUUID()}` }], boundKey: key }, others)).toMatchObject({ status: 'located', cell: { cellId: template } });
+            // Another environment's template key finds no cell.
+            expect(await directory().reserve({ ...req, key: randomUUID(), members: [{ side: 'setup', idempotencyKey: `setup:${randomUUID()}` }], boundKey: `template:${req.organizationId}/env-2` }, others)).toMatchObject({ status: 'refused', reason: 'no_cell' });
+        });
+
         it('rotates across more than two eligible cells as durable generations advance', async () => {
         const req = request(); const available = await Promise.all(Array.from({ length: 4 }, () => cell(req.organizationId, 16)));
         const d = directory(); const selected: string[] = [];

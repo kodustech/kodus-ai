@@ -1,4 +1,4 @@
-import { boundKeyOfRun, boundKeyOfTemplate, candidatePools, type PoolView } from './candidate-pools';
+import { templateSetupKey, boundKeyOfRun, boundKeyOfTemplate, candidatePools, type PoolView } from './candidate-pools';
 
 const pool = (over: Partial<PoolView> & Pick<PoolView, 'poolId'>): PoolView => ({
     scope: 'kodus',
@@ -66,5 +66,14 @@ describe('candidatePools', () => {
     it("binds a template's setup host to its environment alone", () => {
         expect(boundKeyOfTemplate('a', 'e')).toBe('template:a/e');
         expect(boundKeyOfTemplate('a', 'e')).not.toBe(boundKeyOfRun('a', 'e'));
+    });
+
+    it('accepts only the claim org\'s own template key for a template setup', () => {
+        expect(templateSetupKey('a', 'template:a/e')).toBe('template:a/e');
+        expect(templateSetupKey('a', 'template:b/e')).toBeNull();
+        expect(templateSetupKey('a', 'run:a/r1')).toBeNull();
+        expect(templateSetupKey('a', 'template:a/')).toBeNull();
+        expect(templateSetupKey('a', 'template:a/e/x')).toBeNull();
+        expect(templateSetupKey('a', undefined)).toBeNull();
     });
 });
