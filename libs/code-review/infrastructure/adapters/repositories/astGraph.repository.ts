@@ -66,14 +66,12 @@ export class AstGraphRepository {
 
     async deleteAll(repoId: string): Promise<void> {
         await this.dataSource.transaction(async (manager) => {
-            await manager.query(
-                `DELETE FROM ast_edges WHERE repo_id = $1`,
-                [repoId],
-            );
-            await manager.query(
-                `DELETE FROM ast_nodes WHERE repo_id = $1`,
-                [repoId],
-            );
+            await manager.query(`DELETE FROM ast_edges WHERE repo_id = $1`, [
+                repoId,
+            ]);
+            await manager.query(`DELETE FROM ast_nodes WHERE repo_id = $1`, [
+                repoId,
+            ]);
         });
     }
 
@@ -365,7 +363,18 @@ export class AstGraphRepository {
      * Only includes nodes in changed files + their direct neighbors (callers/callees).
      * ~99% reduction vs full export for typical PRs.
      *
-     * Requires index: CREATE INDEX idx_ast_edges_repo_target ON ast_edges (repo_id, target_qualified)
+     * Uses idx_ast_edges_repo_source (repo_id, source_qualified) and
+     * idx_ast_edges_repo_target (repo_id, target_qualified): each endpoint is
+     * its own indexed join, merged with UNION. The previous form,
+     * `source_qualified IN (...) OR target_qualified IN (...)`, cannot use
+     * either index; Postgres read every edge of the repo through the
+     * repo_id-only index and filtered them against both subqueries. Its cost
+     * followed the size of the repo's graph, not the PR: in production
+     * (2026-11-23, 24h) 859 runs over the slow-query threshold, p50 6.6s,
+     * max 29.7s, and 30s statement timeouts on PRs that changed 1 file. On a
+     * local Postgres 16 with a 1.6M-edge repo the same plan read 1,599,993
+     * edges to return 65 (582-802ms); this form returns the same nodes and
+     * edges in 2-21ms.
      */
     async exportSubgraphJsonString(
         repoId: string,
@@ -382,15 +391,20 @@ export class AstGraphRepository {
                 FROM ast_nodes
                 WHERE repo_id = $1 AND file_path = ANY($3::text[])
             ),
-            -- Edges touching changed nodes (direct neighbors)
+            -- Edges touching changed nodes (direct neighbors). One indexed
+            -- join per endpoint: an OR of two IN subqueries cannot use
+            -- idx_ast_edges_repo_source/_target and filters every edge of
+            -- the repo instead (see the method comment).
             touching_edges AS (
                 SELECT e.*
                 FROM ast_edges e
+                JOIN changed_nodes c ON e.source_qualified = c.qualified_name
                 WHERE e.repo_id = $1
-                  AND (
-                      e.source_qualified IN (SELECT qualified_name FROM changed_nodes)
-                      OR e.target_qualified IN (SELECT qualified_name FROM changed_nodes)
-                  )
+                UNION
+                SELECT e.*
+                FROM ast_edges e
+                JOIN changed_nodes c ON e.target_qualified = c.qualified_name
+                WHERE e.repo_id = $1
             ),
             -- Parent classes of changed classes (via INHERITS edges in touching_edges)
             parent_classes AS (
@@ -410,12 +424,15 @@ export class AstGraphRepository {
             sibling_edges AS (
                 SELECT e.*
                 FROM ast_edges e
+                JOIN sibling_classes s ON e.source_qualified = s.qn
                 WHERE e.repo_id = $1
                   AND e.kind IN ('INHERITS', 'CONTAINS')
-                  AND (
-                      e.source_qualified IN (SELECT qn FROM sibling_classes)
-                      OR e.target_qualified IN (SELECT qn FROM sibling_classes)
-                  )
+                UNION
+                SELECT e.*
+                FROM ast_edges e
+                JOIN sibling_classes s ON e.target_qualified = s.qn
+                WHERE e.repo_id = $1
+                  AND e.kind IN ('INHERITS', 'CONTAINS')
             ),
             -- All edges: direct neighbors + sibling relationships
             all_edges AS (
