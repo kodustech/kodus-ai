@@ -194,7 +194,7 @@ describe("settingsStatusLine", () => {
     it("says it works and counts connected cells", () => {
         expect(settingsStatusLine(health())).toEqual({
             ok: true,
-            text: "Working · 1 cell connected",
+            text: "Working · 1 host connected",
         });
     });
     it("names the problem in one line", () => {

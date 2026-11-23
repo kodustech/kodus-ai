@@ -263,7 +263,7 @@ export const cellStatusTone = (status: string): Tone =>
 
 /** Where the machines of a Run or an environment run. */
 export const cellOwnerLabel = (owner: CellOwner | undefined) =>
-    owner === "customer" ? "Your cloud" : "Kodus cloud";
+    owner === "customer" ? "Your own host" : "Kodus cloud";
 
 const SETUP_STEP_LABEL: Record<EnvironmentSetupStepName, string> = {
     requested: "Requested",

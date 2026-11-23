@@ -416,7 +416,7 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                                       : "Open the setup file"}
                             </NextLink>
                         </Fact>
-                        <Fact label="Machine">
+                        <Fact label="Host">
                             {cellOwnerLabel(run.cellOwner)}
                         </Fact>
                     </dl>

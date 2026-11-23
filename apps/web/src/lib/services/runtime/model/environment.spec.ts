@@ -55,7 +55,7 @@ describe("environmentStatus (screens 2 to 4)", () => {
             setup: setup(),
             buildCache: { state: "evicted", evictedAt: "2026-11-13T07:31:31.000Z", cellId: "cell-1", reason: "disk_floor", freeBytes: 8 * GB, floorBytes: 20 * GB },
         });
-        expect(status.detail).toContain("The build cache was not kept: the cell's volume has 8 GB free and it needs 20 GB; the next Run starts cold.");
+        expect(status.detail).toContain("The build cache was not kept: the host's volume has 8 GB free and it needs 20 GB; the next Run starts cold.");
     });
 
     it("says ready, setting up, a missing secret or a boot failure", () => {

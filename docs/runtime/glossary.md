@@ -26,6 +26,8 @@ and the Runtime screens, as Kodus uses them.
 ## Infrastructure
 
 - **Cell**: a machine that runs the cell agent (`apps/runtime-cell`) and Docker with gVisor, and boots claims.
+  The product screens call a cell a **host** (the server), and its isolated workloads **machines**: one host runs
+  many machines, one per side of a Run. "Cell" appears only in code, logs and these docs.
 - **Hub**: the service cells connect to (`apps/runtime`, hub). It hands claims to cells and relays probes, bakes and
   pool targets from the worker.
 - **Claim**: one lease on a cell: its network, the workload machine and the observer. It has a consumer (`runtime`,

@@ -192,8 +192,8 @@ export const SandboxCapacityForm = ({ view }: { view: SandboxCapacityView }) => 
                     )}
                     <span id={CAP_NOTE_ID} className="text-text-tertiary text-xs">
                         {view.suggestedMaxConcurrent !== null
-                            ? `Suggested: ${view.suggestedMaxConcurrent}, from the cell's memory.`
-                            : "No suggestion: this deployment does not report the cell's memory."}
+                            ? `Suggested: ${view.suggestedMaxConcurrent}, from the host's memory.`
+                            : "No suggestion: this deployment does not report the host's memory."}
                     </span>
                     {fieldError ? (
                         <p id={CAP_ALERT_ID} className="text-danger text-sm" role="alert">
@@ -232,7 +232,7 @@ export const SandboxCapacityForm = ({ view }: { view: SandboxCapacityView }) => 
             </div>
 
             <div className="bg-card-lv2 flex flex-col gap-3 rounded-lg p-4">
-                <span className="text-text-secondary text-xs font-medium">Set on the cell host</span>
+                <span className="text-text-secondary text-xs font-medium">Set on the host</span>
                 <dl className="grid gap-4 sm:grid-cols-2">
                     <Fact
                         label="Size of each"

@@ -9,7 +9,7 @@ export const MAX_CONCURRENT_LIMIT = 100;
 export const WAIT_CHOICES_MINUTES = [1, 2, 5, 10, 15, 30, 60] as const;
 
 export const CELL_HOST_HINT =
-    "Set on the cell host (-sandbox-memory-mb, -sandbox-cpus, -sandbox-pool); not editable here.";
+    "Set on the host (-sandbox-memory-mb, -sandbox-cpus, -sandbox-pool); not editable here.";
 
 /** 72_000 -> "1m12s"; 45_000 -> "45s"; 0 -> "0s". */
 export function formatWait(ms: number): string {
@@ -39,7 +39,7 @@ export function parseMaxConcurrent(
 }
 
 /**
- * The cap against the cell's memory: null when it fits (or when the cell is
+ * The cap against the host's memory: null when it fits (or when the cell is
  * not known, or there is no cap), a sentence when it does not.
  */
 export function capacityWarning(
@@ -51,7 +51,7 @@ export function capacityWarning(
     if (!total || !each) return null;
     const needed = maxConcurrent * each;
     if (needed > total) {
-        return `${maxConcurrent} sandboxes of ${each} MB need ${needed} MB, more than the ${total} MB the cell can commit. Reviews would be refused instead of waiting.`;
+        return `${maxConcurrent} sandboxes of ${each} MB need ${needed} MB, more than the ${total} MB the host can commit. Reviews would be refused instead of waiting.`;
     }
     if (total - needed < RUN_CLAIM_MEMORY_MB) {
         return `With ${maxConcurrent} sandboxes in use, only ${total - needed} MB stay free: a 12 GB Run would not fit and would be refused.`;

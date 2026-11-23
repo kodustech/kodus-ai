@@ -90,7 +90,7 @@ describe("the Runtime settings page", () => {
     it("shows one status line and the environments count", () => {
         render(<RuntimeOrgSettingsPage />);
         expect(screen.getByRole("status")).toHaveTextContent(
-            "Working · 1 cell connected",
+            "Working · 1 host connected",
         );
         expect(
             screen.getByRole("link", { name: "2 environments" }),

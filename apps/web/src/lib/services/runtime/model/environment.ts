@@ -50,7 +50,7 @@ export const buildCacheEvictedWords = (
     const when = evictedAtWords(c.evictedAt);
     const disk =
         c.floorBytes && c.floorBytes > 0
-            ? ` The build cache was not kept: the cell's volume has ${gigabytes(c.freeBytes ?? 0)} GB free and it needs ${gigabytes(c.floorBytes)} GB; the next Run starts cold.`
+            ? ` The build cache was not kept: the host's volume has ${gigabytes(c.freeBytes ?? 0)} GB free and it needs ${gigabytes(c.floorBytes)} GB; the next Run starts cold.`
             : "";
     return `The build cache of this environment was removed to free disk${when ? ` on ${when}` : ""}.${disk} Pull requests build with no cache, slower and maybe past their boot's wait, until a new setup restores it. Set up again.`;
 };

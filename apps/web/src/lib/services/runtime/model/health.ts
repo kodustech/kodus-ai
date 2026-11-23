@@ -201,7 +201,7 @@ export function settingsStatusLine(h: RuntimeHealth): {
         ok: true,
         text:
             connected > 0
-                ? `Working · ${plural(connected, "cell")} connected`
+                ? `Working · ${plural(connected, "host")} connected`
                 : "Working",
     };
 }

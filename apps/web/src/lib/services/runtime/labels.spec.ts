@@ -127,7 +127,7 @@ describe("the other enums the screens print", () => {
         expect(blockerKindLabel("no_recipe")).toBe("No setup file");
         expect(blockerKindLabel("brand_new")).toBe("brand_new");
         expect(cellStatusLabel("connected")).toBe("Connected");
-        expect(cellOwnerLabel("customer")).toBe("Your cloud");
+        expect(cellOwnerLabel("customer")).toBe("Your own host");
         expect(cellOwnerLabel(undefined)).toBe("Kodus cloud");
         expect(runtimeModeLabel("on_request")).toBe("On request");
     });
