@@ -109,6 +109,15 @@ describe('Postgres connection settings', () => {
                 }),
             ).toBeUndefined();
         });
+
+        it('refuses a DATABASE_DIRECT_URL that is not a postgres:// URL, naming the variable', () => {
+            expect(() =>
+                resolveDirectConnection({
+                    ...discreteVars,
+                    DATABASE_DIRECT_URL: 'preview-disabled',
+                }),
+            ).toThrow(/DATABASE_DIRECT_URL/);
+        });
     });
 
     it('describes a connection for logs without its credentials', () => {

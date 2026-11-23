@@ -977,7 +977,24 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         // connection is configured (DATABASE_DIRECT_URL /
         // API_PG_DB_DIRECT_HOST), the listener uses it; otherwise it uses the
         // same connection as the app, as before.
-        const direct = resolveDirectConnection();
+        let direct: ReturnType<typeof resolveDirectConnection>;
+        try {
+            direct = resolveDirectConnection();
+        } catch (error) {
+            // A malformed direct connection will not fix itself by retrying:
+            // say so once, and keep delivering through the polling fallback.
+            this.listenHealth = {
+                status: 'unknown',
+                checkedAt: new Date().toISOString(),
+            };
+            this.logger.error({
+                message:
+                    'Cross-process LISTEN disabled: the direct connection setting is invalid. Events still arrive through polling, up to 10s late.',
+                context: CrossProcessEventsBridge.name,
+                error,
+            });
+            return;
+        }
         const target: Record<string, any> = direct
             ? {
                   ...options,

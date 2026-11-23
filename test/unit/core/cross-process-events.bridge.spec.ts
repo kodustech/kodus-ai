@@ -478,6 +478,22 @@ describe('CrossProcessEventsBridge', () => {
         expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
+    it('a malformed direct connection leaves events on polling instead of crashing the process', async () => {
+        const previous = process.env.DATABASE_DIRECT_URL;
+        process.env.DATABASE_DIRECT_URL = 'preview-disabled';
+        try {
+            const { bridge } = makeBridge();
+
+            await expect((bridge as any).connect()).resolves.toBeUndefined();
+            expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                'unknown',
+            );
+        } finally {
+            if (previous === undefined) delete process.env.DATABASE_DIRECT_URL;
+            else process.env.DATABASE_DIRECT_URL = previous;
+        }
+    });
+
     it('inert (duplicate) instance does not forward or start LISTEN', async () => {
         // First bridge claims primary.
         const primary = makeBridge().bridge;

@@ -83,7 +83,7 @@ fi
 count=0
 for key in $KEYS; do
     case "$key" in
-        DATABASE_URL | API_PG_DB_URL | MONGODB_URI | API_MG_DB_URI) value="" ;;
+        DATABASE_URL | API_PG_DB_URL | DATABASE_DIRECT_URL | MONGODB_URI | API_MG_DB_URI) value="" ;;
         NEXTAUTH_SECRET | WEB_NEXTAUTH_SECRET) value="$NEXTAUTH" ;;
         API_LLM_API_KEY) value="" ;;
         *)

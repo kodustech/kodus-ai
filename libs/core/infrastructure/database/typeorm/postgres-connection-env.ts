@@ -112,6 +112,13 @@ export function resolveDirectConnection(
 ): DatabaseConnection | undefined {
     const url = envValue(env, 'DATABASE_DIRECT_URL');
     if (url) {
+        // A placeholder or a host:port here would only surface later as an
+        // opaque connect failure in the migrations or the LISTEN client.
+        if (!/^postgres(ql)?:\/\//i.test(url)) {
+            throw new Error(
+                'DATABASE_DIRECT_URL must be a postgres:// connection string (or unset)',
+            );
+        }
         return { url };
     }
 
