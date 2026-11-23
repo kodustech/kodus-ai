@@ -424,9 +424,29 @@ describe('a status the text gives for one value only (kr-shop #44 on release v1f
         },
     ];
 
-    it('two statuses for the same request shape lend neither: the outcome depends on the value', () => {
-        const planned = probe('unknown-item-rejected', 'POST', '/orders', { item: 'laptop', quantity: 1 });
-        expect(statedIntentChecksFor({ probe: planned, entryPoint: 'POST /orders' }, intents).checks).toEqual([]);
+    // Release v1l: the planner's `laptop` got the very refusal the text gives `sofa`, and stayed a regression.
+    const laptop = probe('unknown-item-rejected', 'POST', '/orders', { item: 'laptop', quantity: 1 });
+    const decide = (planned: typeof laptop, base: unknown, pr: unknown, failed?: ReadonlySet<string>) => {
+        const { checks } = statedIntentChecksFor({ probe: planned, entryPoint: 'POST /orders' }, intents, failed);
+        const { decision, steps } = replay(planned, base, pr);
+        expect(decision).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        return decideStatedIntent(decision, steps, checks, { mismatch: false, pinnedImageId: IMAGE }).decision.verdict;
+    };
+    const accepted = (item: string) => ({ status: 201, body: { id: 3, item, quantity: 1 } });
+
+    it('two statuses for the same request shape: the refusal with its quoted message explains another value refused with that message', () => {
+        expect(decide(laptop, accepted('laptop'), { status: 400, body: { error: 'unknown item' } })).toBe('described_change');
+    });
+
+    it('a refusal with another message, or a status the text gives with no message, explains nothing', () => {
+        expect(decide(laptop, accepted('laptop'), { status: 400, body: { error: 'quantity is required' } })).toBe('finding');
+        expect(decide(laptop, { status: 400, body: { error: 'unknown item' } }, accepted('laptop'))).toBe('finding');
+    });
+
+    it('a sentence of the route that fails on its own request lends nothing: a PR that refuses `keyboard` stays a regression', () => {
+        const keyboardOther = probe('known-item-order', 'POST', '/orders', { item: 'keyboard', quantity: 1 });
+        expect(decide(keyboardOther, accepted('keyboard'), { status: 400, body: { error: 'unknown item' } }, new Set(['intent-2']))).toBe('finding');
+        expect(decide(laptop, accepted('laptop'), { status: 400, body: { error: 'unknown item' } }, new Set(['intent-2']))).toBe('finding');
     });
 
     it('the intent probe of its own request still gives its status', () => {

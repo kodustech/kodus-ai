@@ -429,11 +429,16 @@ function sameRequestShape(a: Probe, b: Probe): boolean {
  * flag it (`explainOnly`). A literal `equals` stays with its own request.
  * A probe with an intent probe of its own request still gets the route's rules
  * of the others: one sentence may read `unitPrice` there and another state
- * `total` for every order (kr-shop #12, release v1f).
+ * `total` for every order (kr-shop #12, release v1f). `failed` holds the intent
+ * probes whose assertions failed on their own request.
  */
-export function statedIntentChecksFor(planned: { probe: Probe; entryPoint: string }, intents: readonly IntentProbeLike[]): { checks: StatedIntentCheck[]; explainOnly: boolean } {
+export function statedIntentChecksFor(
+    planned: { probe: Probe; entryPoint: string },
+    intents: readonly IntentProbeLike[],
+    failed: ReadonlySet<string> = new Set(),
+): { checks: StatedIntentCheck[]; explainOnly: boolean } {
     const twins = intents.filter((ip) => sameHttpRequest(planned.probe, ip.probe));
-    const routeRules = routeRulesFor(planned, intents, twins);
+    const routeRules = routeRulesFor(planned, intents, twins, failed);
     if (twins.length) return { checks: [...twins.map((ip) => checkOf(ip)), ...routeRules], explainOnly: false };
     return { checks: routeRules, explainOnly: true };
 }
@@ -441,11 +446,16 @@ export function statedIntentChecksFor(planned: { probe: Probe; entryPoint: strin
 /**
  * The rules over response fields of the other intent probes of the planned
  * probe's method and route, and their status for the same request shape when
- * the text gives that shape one status: "`sofa` is refused with 400" next to
- * "`keyboard` is still accepted (201)" makes the status depend on the value,
- * so neither speaks for `laptop` (kr-shop #44).
+ * the text gives that shape one status. When it gives several ("`sofa` is
+ * refused with 400 `unknown item`" next to "`keyboard` is still accepted
+ * (201)"), the status depends on the value: a status speaks for another value
+ * only with the message it quotes, so `laptop` refused with `unknown item` is
+ * that refusal (kr-shop #44, release v1l), and a bare status lends nothing.
+ * Lent checks that do not hold on the planned answer are dropped there.
+ * Never when a sentence of the route failed on its own request: a PR that
+ * refuses `keyboard` would answer the refusal's message too.
  */
-function routeRulesFor(planned: { probe: Probe; entryPoint: string }, intents: readonly IntentProbeLike[], twins: readonly IntentProbeLike[]): StatedIntentCheck[] {
+function routeRulesFor(planned: { probe: Probe; entryPoint: string }, intents: readonly IntentProbeLike[], twins: readonly IntentProbeLike[], failed: ReadonlySet<string>): StatedIntentCheck[] {
     if (planned.probe.spec.kind !== 'http' || planned.entryPoint === 'unmapped') return [];
     const route = planned.entryPoint;
     const method = planned.probe.spec.method;
@@ -455,8 +465,13 @@ function routeRulesFor(planned: { probe: Probe; entryPoint: string }, intents: r
     const sameShape = onRoute.filter((ip) => sameRequestShape(planned.probe, ip.probe));
     const statuses = new Set(sameShape.flatMap((ip) => ip.intentAssertions.flatMap((a) => (a.kind === 'status' ? [a.status] : []))));
     const lendStatus = statuses.size === 1;
+    const lendRefusal = statuses.size > 1 && !twins.length && !onRoute.some((ip) => failed.has(ip.probe.id));
+    const refusal = (ip: IntentProbeLike) =>
+        lendRefusal && sameShape.includes(ip) && ip.intentAssertions.some((a) => a.kind === 'status') && ip.intentAssertions.some((a) => a.kind === 'includes');
+    const lent = (ip: IntentProbeLike, a: IntentAssertion) =>
+        isRouteInvariant(a) || (a.kind === 'status' && sameShape.includes(ip) && (lendStatus || refusal(ip))) || (a.kind === 'includes' && refusal(ip));
     return onRoute
         .filter((ip) => !twins.includes(ip))
-        .map((ip) => ({ ...checkOf(ip, ip.intentAssertions.filter((a) => isRouteInvariant(a) || (lendStatus && a.kind === 'status' && sameShape.includes(ip)))), lent: true }))
+        .map((ip) => ({ ...checkOf(ip, ip.intentAssertions.filter((a) => lent(ip, a))), lent: true }))
         .filter((c) => c.assertions.length > 0);
 }

@@ -1714,10 +1714,12 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
     }
     // The planned probes: the plan's verdicts come first, in plan order. Each gets the checks of an intent probe of
     // its request, else the rules over response fields of those of its route, which only ever explain (kr-shop #12).
+    // An intent probe whose assertions failed on its own request: its route lends no value-dependent refusal (kr-shop #44).
+    const failedIntents = new Set(t.verdicts.filter((v) => v.source === 'intent' && v.statedIntents?.some((r) => r.failures.length > 0)).map((v) => v.probeId));
     for (const [index, planned] of t.plan.probes.entries()) {
         const v = t.verdicts[index];
         if (!v || v.probeId !== planned.probe.id) continue;
-        const { checks, explainOnly } = statedIntentChecksFor({ probe: planned.probe, entryPoint: v.entryPoint }, t.intentProbes);
+        const { checks, explainOnly } = statedIntentChecksFor({ probe: planned.probe, entryPoint: v.entryPoint }, t.intentProbes, failedIntents);
         if (!checks.length) continue;
         const ids = new Set([...(v.baseStepIds ?? []), ...(v.prStepIds ?? [])]);
         const steps = t.allSteps.filter((s) => ids.has(s.stepId));
