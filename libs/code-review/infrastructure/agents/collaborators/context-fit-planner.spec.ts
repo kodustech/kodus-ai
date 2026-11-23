@@ -9,7 +9,6 @@ import {
     assertContextWindowFitsOverhead,
     chunkFilesByTokenBudget,
     estimateDiffTokens,
-    estimateHunkHeaderChars,
     estimatePromptTokens,
     extractHunkHeaders,
     normalizeFilenameForTier,
@@ -42,10 +41,6 @@ describe('context-fit-planner', () => {
         const diff = '@@ -1,2 +1,3 @@\n code\n@@ -10,1 +11,2 @@\n more';
         it('extracts each @@ header', () => {
             expect(extractHunkHeaders(diff)).toHaveLength(2);
-        });
-        it('estimates 120 + 60*hunks chars', () => {
-            expect(estimateHunkHeaderChars(diff)).toBe(120 + 60 * 2);
-            expect(estimateHunkHeaderChars('')).toBe(0);
         });
     });
 
@@ -97,12 +92,15 @@ describe('context-fit-planner', () => {
     });
 
     describe('estimatePromptTokens', () => {
-        it('collapses optional-tier files to hunk-header footprint', () => {
+        it('counts an optional-tier file at its full diff, as the prompt sends it', () => {
             const f = file('a.ts', '@@ -1,1 +1,1 @@\n' + 'x'.repeat(4000));
-            const tiers = new Map([['a.ts', 'optional' as const]]);
-            const full = estimatePromptTokens({ changedFiles: [f] });
-            const tiered = estimatePromptTokens({ changedFiles: [f], fileTiers: tiers });
-            expect(tiered).toBeLessThan(full);
+            const tiered = {
+                changedFiles: [f],
+                fileTiers: new Map([['a.ts', 'optional' as const]]),
+            };
+            expect(estimatePromptTokens(tiered)).toBe(
+                estimatePromptTokens({ changedFiles: [f] }),
+            );
         });
     });
 });
