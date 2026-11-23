@@ -957,7 +957,7 @@ function fileShardUser(
         `State what your finding ASSERTS about the repository in "claimKind": "unused" (this symbol is used nowhere else), "missing" (this file or path does not exist), "duplicate" (this already exists elsewhere), or "none" for everything else. Name the target: "claimSymbol" is the identifier the claim is about, "claimPath" the file path; use null for whichever does not apply. A claim is CHECKED against the repository and the finding is dropped if the repository contradicts it, so claim only what you mean.`,
         ...(previousDecisionsSection
             ? [
-                  `When a finding is a DIFFERENT problem that exists because an entry in <PreviousReviewDecisions> was applied, or reverses or narrows one, put that entry's Id in "revisesSuggestionId" and say why in the finding; otherwise null.`,
+                  `When a finding is a DIFFERENT problem that exists because an entry in <PreviousReviewDecisions> was applied, put that entry's Id in "revisesSuggestionId" and say why in the finding; otherwise null.`,
               ]
             : []),
         `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>",${verifyRepositoryFacts ? '"needsRepositoryEvidence":<true|false>,' : ''}"revisesSuggestionId":"<Id or null>"}]}`,
