@@ -414,18 +414,28 @@ describe('glob-utils literal prefilter (2026-11-23 stall)', () => {
     );
 
     it('keeps cached lists from pinning matchers past the matcher cache bound', () => {
-        // Many distinct lists of distinct patterns: the lists stay cached,
-        // their matchers must still be bounded by the matcher cache.
-        for (let i = 0; i < 300; i++) {
-            const list = Array.from(
-                { length: 30 },
-                (_, j) => `**/pin-${i}-${j}/**`,
-            );
-            isFileMatchingGlob(
-                candidate(list.map(requiredLiteral).join('_')),
-                list,
-            );
-        }
+        // A cached list must not hold its matchers: once the matcher cache
+        // evicts them, matching the cached list again compiles them again.
+        // When lists pinned their matchers, nothing was recompiled and the
+        // live matchers grew past the cache bound with every cached list.
+        const warm = Array.from({ length: 10 }, (_, j) => `**/warm-${j}/**`);
+        const warmPath = candidate(warm.map(requiredLiteral).join('_'));
+        isFileMatchingGlob(warmPath, warm);
+
+        // Patterns with no required literal always compile: 6,000 of them
+        // overflow the 5,000-entry matcher cache and evict the warm ones.
+        const churn = Array.from(
+            { length: 6_000 },
+            (_, i) => `**/@(churn${i})/**`,
+        );
+        isFileMatchingGlob('src/app.ts', churn);
+
+        compileSpy.mockClear();
+        isFileMatchingGlob(warmPath, warm);
+        const recompiled = compileSpy.mock.calls.filter(([pattern]) =>
+            warm.includes(pattern as string),
+        ).length;
+        expect(recompiled).toBe(warm.length);
         expect(_getMatcherCacheSize().caseSensitive).toBeLessThanOrEqual(5_000);
     });
 

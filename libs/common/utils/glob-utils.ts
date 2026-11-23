@@ -126,8 +126,7 @@ function normalizeFilename(filename: string): string {
  * alternation). Text inside `{}` and `[]` is a choice, so it never counts
  * as required. Splitting at more characters than strictly needed only
  * shortens the literal, which is still required.
- */
-/**
+ *
  * A list holds pattern strings, not matchers: matchers stay in the bounded
  * per-pattern cache above, so cached lists cannot pin compiled matchers past
  * MAX_CACHE_SIZE.

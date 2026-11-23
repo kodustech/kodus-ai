@@ -64,9 +64,10 @@ const UNREACHABLE = new Set([
 ]);
 
 const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
-// CI fails on an unreachable Postgres instead of skipping; compared as a
-// value, like SKIP_INTEGRATION, so CI=false or CI=0 still skips locally.
-const runningInCi = (process.env.CI ?? '').toLowerCase() === 'true';
+// CI fails on an unreachable Postgres instead of skipping. Any CI marker
+// counts (CI=true, CI=1, ...) except an explicit false or 0.
+const ciMarker = (process.env.CI ?? '').trim().toLowerCase();
+const runningInCi = ciMarker !== '' && ciMarker !== 'false' && ciMarker !== '0';
 
 /** A plan line that filters with an OR of two subplans (the old shape). */
 function hasOrOfSubplans(plan: string): boolean {
