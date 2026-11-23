@@ -157,7 +157,7 @@ export function ModelRow({
     const { confirmAndDelete, rejectionReasons } = useDeleteModel({
         config,
         model,
-        name: label,
+        name: displayName,
         onDeleted,
     });
 
