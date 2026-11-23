@@ -158,6 +158,7 @@ import {
     CodeReviewPipelineContext,
     resolvedModel,
     resolvedProvider,
+    usesOrgOwnedKey,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
 } from '../context/code-review-pipeline.context';
@@ -1178,7 +1179,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 'performance',
             ]);
 
-            for (const failure of result.failures || []) {
+            const failures = result.failures ?? [];
+
+            // Classify against the provider that ANSWERED, not the one
+            // resolved before the run. The friendly sentence names the
+            // provider inline ("the key (openai) appears invalid"), so
+            // classifying with the pre-run slot after a cascade puts one
+            // provider in the prose and another in the facts line — the
+            // same never-co-occurred pair, split across two fields.
+            // A classification already attached by byok-model-wrapper is
+            // anchored to the attempt that raised it, so it is preferred.
+            const classifyFailure = (f: (typeof failures)[number]) =>
+                getClassification(f.error) ??
+                classifyLLMError(f.error, resolvedProvider(context, f.error));
+
+            for (const failure of failures) {
                 // A custom agent is auxiliary, like kody-rules: its failure
                 // leaves the review partial, not failed.
                 const severity = CRITICAL_AGENTS.has(failure.agentName)
@@ -1198,6 +1213,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
+                            errorCategory: classifyFailure(failure).category,
+                            orgOwnedKey: usesOrgOwnedKey(
+                                context,
+                                failure.error,
+                            ),
                             prNumber,
                         },
                     });
@@ -1280,23 +1300,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // context for the message. A critical agent with a mapped (non-
             // UNKNOWN) classification wins; fall back to any critical, then
             // any failure.
-            const failures = result.failures ?? [];
-
             if (failures.length > 0) {
-                // Classify against the provider that ANSWERED, not the one
-                // resolved before the run. The friendly sentence names the
-                // provider inline ("the key (openai) appears invalid"), so
-                // classifying with the pre-run slot after a cascade puts one
-                // provider in the prose and another in the facts line — the
-                // same never-co-occurred pair, split across two fields.
-                // A classification already attached by byok-model-wrapper is
-                // anchored to the attempt that raised it, so it is preferred.
-                const classifyFailure = (f: (typeof failures)[number]) =>
-                    getClassification(f.error) ??
-                    classifyLLMError(
-                        f.error,
-                        resolvedProvider(context, f.error),
-                    );
                 const criticalFailures = failures.filter((f) =>
                     CRITICAL_AGENTS.has(f.agentName),
                 );
@@ -2173,7 +2177,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     stage: this.stageName,
                     error: stageError,
                     severity: 'critical',
-                    metadata: { prNumber, durationMs },
+                    metadata: {
+                        prNumber,
+                        durationMs,
+                        errorCategory: classification.category,
+                        orgOwnedKey: usesOrgOwnedKey(context, stageError),
+                    },
                 });
 
                 if (!draft.lastReviewError) {

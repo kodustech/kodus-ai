@@ -25,6 +25,9 @@ import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
+import { resolveEnvProvider } from '@libs/llm/managed-slot';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { environment } from '@libs/ee/configs/environment';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
@@ -536,4 +539,31 @@ export const resolvedProvider = (
     return typeof provider === 'string' && provider.length > 0
         ? provider
         : undefined;
+};
+
+/**
+ * Whether an exhausted API quota is the org's to fix. True when the key that
+ * failed is the org's own: a BYOK slot (only those carry a `credentialId`), or
+ * on a self-hosted install the env-configured key (the installer owns it).
+ * False for the Kodus-managed default (cloud without BYOK, or self-hosted with
+ * no usable env key, which falls through to Kodus's funded default) and for a
+ * `kodus` credential, which is routed like a BYOK slot but calls Kodus's own
+ * upstream key, so running out there is ours.
+ *
+ * `err` is the failed call's error: after a cascade the provider that failed
+ * is the stamped attempt, not the slot resolved before the run.
+ */
+export const usesOrgOwnedKey = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
+): boolean => {
+    if (isPlatformFundedProvider(resolvedProvider(context, err))) {
+        return false;
+    }
+
+    if (context.codeReviewConfig?.resolvedModelSlot?.credentialId) {
+        return true;
+    }
+
+    return !environment.API_CLOUD_MODE && resolveEnvProvider() !== null;
 };
