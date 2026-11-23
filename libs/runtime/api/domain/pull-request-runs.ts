@@ -60,6 +60,8 @@ export interface FirstRegressionView {
     /** The first field that differs, with both values. */
     field?: DifferingFieldView;
     differingFields: string[];
+    /** The HTTP status of each side when they differ: the change the list leads with. */
+    status?: { base: number; pr: number };
     /** This PR does not boot while main does. */
     boot: boolean;
     /** The machine itself failed on this PR. */
@@ -152,6 +154,7 @@ const firstRegressionOf = (run: PullRequestRunRecord, regressions: Probe[]): Fir
               }
             : {}),
         differingFields: (first.differingFields ?? []).slice(0, 5).map((f) => cut(f, VALUE_MAX)!),
+        ...(first.statusChange ? { status: { base: first.statusChange.base, pr: first.statusChange.pr } } : {}),
         boot: first.entryPoint === 'boot' && first.findingKind === 'pr_destabilizes_machine',
         destabilizes: first.findingKind === 'pr_destabilizes_machine',
     };

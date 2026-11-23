@@ -193,6 +193,15 @@ describe('pull request Run views', () => {
         expect(pullRequestRunView(run({ state: 'no_regressions', findings: [] }))).not.toHaveProperty('firstRegression');
     });
 
+    it('carries the status change of the first regression, so the list leads with it before the body difference', () => {
+        const view = pullRequestRunView(
+            run({
+                findings: [finding({ entryPoint: 'POST /orders', statusChange: { base: 201, pr: 400 }, differingFields: ['status', 'json.id'], responseDiff: { fields: [{ path: 'json.id', base: '3' }], truncated: false } })],
+            }),
+        );
+        expect(view.firstRegression).toMatchObject({ status: { base: 201, pr: 400 }, field: { path: 'json.id', base: '3' } });
+    });
+
     it('counts a 5xx on an endpoint the PR adds as an error on a new endpoint, never as a regression', () => {
         const newEndpoint = finding({ probeId: 'p4', entryPoint: 'POST /orders/preview', findingKind: 'new_endpoint_error' } as any);
         const view = pullRequestRunView(run({ state: 'regression', findings: [newEndpoint], probes: [newEndpoint] }));

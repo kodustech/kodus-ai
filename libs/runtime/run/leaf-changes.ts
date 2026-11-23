@@ -37,10 +37,21 @@ export interface LeafChanges {
 
 type Segment = string | number;
 
-/** A path as leaves spell it: keys joined by dots, indexes in brackets; the root alone is `$`. */
+const PLAIN_KEY = /^[A-Za-z_$][A-Za-z0-9_$-]*$/;
+
+/**
+ * A path as leaves spell it: keys joined by dots, indexes in brackets, a key
+ * that is not a plain name (`/`, `x.y`) quoted in brackets; the root alone is
+ * `$`. The first segment is the field's own prefix (`applinks.details`) and is
+ * kept as given.
+ */
 export function leafPathOf(segments: readonly Segment[]): string {
     if (!segments.length) return '$';
-    return segments.reduce<string>((out, s, i) => (typeof s === 'number' ? `${out}[${s}]` : i === 0 ? s : `${out}.${s}`), '');
+    return segments.reduce<string>((out, s, i) => {
+        if (typeof s === 'number') return `${out}[${s}]`;
+        if (i === 0) return s;
+        return PLAIN_KEY.test(s) ? `${out}.${s}` : `${out}[${JSON.stringify(s)}]`;
+    }, '');
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);

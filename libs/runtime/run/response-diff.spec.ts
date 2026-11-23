@@ -1,4 +1,4 @@
-import { REDACTED, RESPONSE_DIFF_MAX_FIELDS, responseDiffOf, responseTextSample } from './response-diff';
+import { REDACTED, RESPONSE_DIFF_MAX_FIELDS, responseDiffOf, responseTextSample, statusChangeOf } from './response-diff';
 
 const none = (s: string) => s;
 
@@ -67,5 +67,17 @@ describe('responseDiffOf', () => {
     it('names the body when one side answered JSON and the other did not', () => {
         const d = responseDiffOf({ base: { fields: { 'json.ok': 'true' } }, pr: { fields: { json: 'not_json' }, text: { lines: ['', 'Internal Server Error'], truncated: false } }, clean: none });
         expect(d).toEqual({ fields: [{ path: 'body', base: '"JSON body"', pr: '"Internal Server Error"' }], truncated: false });
+    });
+});
+
+describe('statusChangeOf', () => {
+    it('names both statuses when the two sides answered with different HTTP statuses', () => {
+        expect(statusChangeOf({ fields: { status: '201', 'json.id': '3' } }, { fields: { status: '400', 'json.error': '"missing"' } })).toEqual({ base: 201, pr: 400 });
+    });
+
+    it('says nothing when the statuses match, one side has none, or the status is not a number', () => {
+        expect(statusChangeOf({ fields: { status: '200' } }, { fields: { status: '200' } })).toBeUndefined();
+        expect(statusChangeOf({ fields: { 'json.a': '1' } }, { fields: { status: '500' } })).toBeUndefined();
+        expect(statusChangeOf({ fields: { status: 'exit 1' } }, { fields: { status: '500' } })).toBeUndefined();
     });
 });

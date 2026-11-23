@@ -173,6 +173,11 @@ export interface ProbeVerdict {
      */
     responseDiff?: ResponseDiff;
     /**
+     * The HTTP status of each side when they differ (response-diff.ts statusChangeOf):
+     * the change the PR list leads with. Shown only: no verdict reads it.
+     */
+    statusChange?: { base: number; pr: number };
+    /**
      * A `behavior_change` finding on an object or array field, leaf by leaf
      * (gate/leaf-changes.ts): what differs inside the field and which leaves a
      * passed assertion of the PR's text reads. The gate's fields and names are

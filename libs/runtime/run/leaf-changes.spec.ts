@@ -118,4 +118,15 @@ describe('leafPathOf: a path as the leaves spell it', () => {
         expect(leafPathOf(['applinks', 'details', 0, 'appIDs'])).toBe('applinks.details[0].appIDs');
         expect(leafPathOf([])).toBe('$');
     });
+
+    it('writes a key that is not a plain name in brackets with quotes, so a path never reads as two keys', () => {
+        expect(leafPathOf(['applinks.details', 0, 'components', 0, '/'])).toBe('applinks.details[0].components[0]["/"]');
+        expect(leafPathOf(['a', 'x.y', 'b c'])).toBe('a["x.y"]["b c"]');
+    });
+
+    it('names the leaf of an association file whose component key is a slash, with both values', () => {
+        const base = j({ details: [{ components: [{ '/': '/invite/*' }] }] });
+        const pr = j({ details: [{ components: [{ '/': '/invites/*' }] }] });
+        expect(leafChanges(base, pr, { prefix: 'applinks' }).leaves).toEqual([{ path: 'applinks.details[0].components[0]["/"]', kind: 'changed', base: '"/invite/*"', pr: '"/invites/*"' }]);
+    });
 });

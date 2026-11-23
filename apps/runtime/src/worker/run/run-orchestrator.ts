@@ -1456,7 +1456,7 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
                 stability: policy,
             }),
         );
-        const { steps, lanes, responseDiff } = replayed;
+        const { steps, lanes, responseDiff, statusChange } = replayed;
         // A probe sent the base's drawn identity on a Run whose sides do not share one: its result never enters the history.
         const skewed = !!ready.identityMismatch && usesRunIdentity(planned.probe);
         if (key && !skewed) {
@@ -1507,6 +1507,7 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
             prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
             ...(lanes ? { lanes } : {}),
             ...(responseDiff ? { responseDiff } : {}),
+            ...(statusChange ? { statusChange } : {}),
             ...leafChangesOf(leavesOfFinding(decision, steps, (text) => redactCanaries(redactPatterns(text).text, canaries))),
             ...diffRefFor(entryPoint, planned.via && entryPoint === planned.entryPoint ? planned.via : undefined),
         });
@@ -1674,7 +1675,7 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
                 stability: policy,
             }),
         );
-        const { steps, lanes, responseDiff } = replayed;
+        const { steps, lanes, responseDiff, statusChange } = replayed;
         t.allSteps.push(...steps);
         const requestsOf = (side: 'base' | 'pr') => steps.filter((x) => x.side === side).flatMap((x) => x.requests ?? []);
         const entryPoint = coveredEntryPoint(ip.entryPoint, t.verdictEntryPoints, { base: requestsOf('base'), pr: requestsOf('pr') });

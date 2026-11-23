@@ -15,7 +15,7 @@ const RUN_FIELDS = ['runId', 'attempt', 'organizationId', 'repositoryId', 'prNum
  * probes' evidence, lanes, specs and step ids stay in the store.
  */
 export const PULL_REQUEST_REPORT_FIELDS = {
-    findings: ['probeId', 'entryPoint', 'verdict', 'intent', 'findingKind', 'differingFields', 'responseDiff'],
+    findings: ['probeId', 'entryPoint', 'verdict', 'intent', 'findingKind', 'differingFields', 'responseDiff', 'statusChange'],
     probes: ['probeId', 'entryPoint', 'verdict', 'intent', 'findingKind'],
     reproductionProbes: ['probeId', 'purpose'],
     bootFailure: ['side'],

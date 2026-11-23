@@ -4,7 +4,7 @@ import type { ProbeOutcome } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
 import type { ProbeAssertions } from '@libs/runtime/contracts/probe-assertions';
 import { laneOf, type ReplayLane, type ReplayLanes, replayLanesOf } from '@libs/runtime/run/replay-lanes';
-import { type ResponseDiff, responseDiffOf, type ResponseSample, responseTextSample } from '@libs/runtime/run/response-diff';
+import { type ResponseDiff, responseDiffOf, type ResponseSample, statusChangeOf, responseTextSample } from '@libs/runtime/run/response-diff';
 import { redactPatterns } from '@libs/runtime/redaction';
 
 import { Canary, CanaryLeakError, containsCanary, redactCanaries, redactDeep } from '../canary/canary';
@@ -35,6 +35,7 @@ export interface ReplayResult {
     lanes?: ReplayLanes;
     /** What the two answers differ in, field by field, from the same rounds as the lanes; absent when they match or a side has none. */
     responseDiff?: ResponseDiff;
+    statusChange?: { base: number; pr: number };
 }
 
 /** What the cell captures around every probe round (EVIDENCE-CAPTURE-DESIGN); the hub trims it to the cell's features. */
@@ -300,10 +301,11 @@ export async function replayProbe(args: ReplayArgs): Promise<ReplayResult> {
     };
 
     /** Shown only: the verdict is already decided, this never changes it. */
-    function diffOf(differing: string[], masked: string[]): { responseDiff?: ResponseDiff } {
+    function diffOf(differing: string[], masked: string[]): { responseDiff?: ResponseDiff; statusChange?: { base: number; pr: number } } {
         if (!answers.base || !answers.pr) return {};
         const responseDiff = responseDiffOf({ base: answers.base, pr: answers.pr, differing, masked, clean });
-        return responseDiff ? { responseDiff } : {};
+        const statusChange = statusChangeOf(answers.base, answers.pr);
+        return { ...(responseDiff ? { responseDiff } : {}), ...(statusChange ? { statusChange } : {}) };
     }
 
     function lanesOf(differingFields: string[]): { lanes?: ReplayLanes } {

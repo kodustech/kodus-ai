@@ -64,6 +64,18 @@ export function maskNested(value: string): string {
     return JSON.stringify(walk(parsed, 0));
 }
 
+/**
+ * The HTTP status of each side when they differ, from the same first healthy
+ * rounds as the field diff. Shown only: the gate already compares `status`.
+ * Undefined when either side has no numeric status or the two match.
+ */
+export function statusChangeOf(base: ResponseSample, pr: ResponseSample): { base: number; pr: number } | undefined {
+    const code = (s: ResponseSample) => (/^\d{3}$/.test(s.fields.status ?? '') ? Number(s.fields.status) : undefined);
+    const b = code(base);
+    const p = code(pr);
+    return b !== undefined && p !== undefined && b !== p ? { base: b, pr: p } : undefined;
+}
+
 /** The text a body sample keeps: cleaned before it is cut, so a cut never splits a secret out of a pattern. */
 export function responseTextSample(body: string, clean: (text: string) => string): NonNullable<ResponseSample['text']> {
     const all = clean(body).split(/\r?\n/);
