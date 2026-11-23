@@ -323,7 +323,10 @@ esac
 // A Run's workload of a template this cell cannot restore (it holds none of
 // that id, or one of another org, kit or host: the backend refuses it)
 // boots cold, as an environment machine from the claim's checkout; nothing
-// of the template is read. Any other restore failure stays a failure.
+// of the template is read. A restore that fails for another reason (a disk,
+// the VMM) boots cold too: a template is an accelerator, never a dependency
+// (docs/runtime/fork-from-checkpoint.md, step 3). A claim cancelled meanwhile
+// still fails.
 func TestARunsWorkloadOfATemplateNotHereBootsCold(t *testing.T) {
 	d, b, _ := newDriver(t)
 	ctx := context.Background()
@@ -347,8 +350,22 @@ func TestARunsWorkloadOfATemplateNotHereBootsCold(t *testing.T) {
 	}
 	broken := spec("run-2")
 	broken.ImageID = run.ImageID
-	if _, err := d.Create(ctx, broken); err == nil {
-		t.Fatal("a restore that failed for another reason booted cold")
+	ref, err = d.Create(ctx, broken)
+	if err != nil {
+		t.Fatalf("a restore that failed for another reason failed the claim: %v", err)
+	}
+	if b.restored[ref.MachineID] || b.specs[ref.MachineID].Shape != isolation.ShapeEnvironment {
+		t.Fatalf("machine %+v: want a cold environment machine after the failed restore", b.specs[ref.MachineID])
+	}
+	if _, err := d.PrepareClaim(ctx, driver.ClaimNetworkSpec{CellID: cell, OrgID: "org-a", ClaimID: "run-3"}); err != nil {
+		t.Fatal(err)
+	}
+	gone, cancel := context.WithCancel(ctx)
+	cancel()
+	cancelled := spec("run-3")
+	cancelled.ImageID = run.ImageID
+	if _, err := d.Create(gone, cancelled); err == nil {
+		t.Fatal("a claim cancelled during its restore booted cold")
 	}
 }
 

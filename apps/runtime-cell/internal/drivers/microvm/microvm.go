@@ -505,10 +505,21 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 		// from another kit or host, is no image here, and the machine boots
 		// cold from the claim's checkout, as a bake made on another cell does
 		// on a container cell. Nothing of the template is read.
-		if !errors.Is(err, vmsnap.ErrRefused) {
+		// A restore that failed for another reason (the VMM, a disk) boots
+		// cold too: the backend destroyed the half-made machine, and a
+		// template is an accelerator, never a dependency. A tampered or
+		// changed template is a refusal (vmsnap.Store.Open). A claim
+		// cancelled meanwhile fails.
+		switch {
+		case err == nil:
+			return ref, nil
+		case ctx.Err() != nil:
 			return ref, err
+		case errors.Is(err, vmsnap.ErrRefused):
+			d.cfg.Log.Warn("microvm.template.unavailable", "image", spec.ImageID, "claim", spec.ClaimID, "reason", err.Error())
+		default:
+			d.cfg.Log.Warn("microvm.template.restore_failed", "image", spec.ImageID, "claim", spec.ClaimID, "err", err.Error())
 		}
-		d.cfg.Log.Warn("microvm.template.unavailable", "image", spec.ImageID, "claim", spec.ClaimID, "reason", err.Error())
 	}
 	return d.create(ctx, spec, isolation.ShapeEnvironment)
 }
