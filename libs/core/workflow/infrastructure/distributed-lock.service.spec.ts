@@ -3,6 +3,7 @@ import {
     LOCK_LEASE_MS,
     DistributedLockService,
 } from './distributed-lock.service';
+import { TimerLeaseRenewer } from './lease-renewer';
 
 /**
  * Leases with the repository's semantics, on the (fake) wall clock: what
@@ -78,8 +79,11 @@ describe('DistributedLockService', () => {
     beforeEach(() => {
         jest.useFakeTimers();
         leases = new InMemoryLeases();
-        instanceA = new DistributedLockService({} as any, leases);
-        instanceB = new DistributedLockService({} as any, leases);
+        // Renewals on the (fake) main-thread clock; the renewal thread is
+        // proven against a real database in the integration spec.
+        const renewer = new TimerLeaseRenewer(leases);
+        instanceA = new DistributedLockService({} as any, leases, { renewer });
+        instanceB = new DistributedLockService({} as any, leases, { renewer });
     });
 
     afterEach(() => {

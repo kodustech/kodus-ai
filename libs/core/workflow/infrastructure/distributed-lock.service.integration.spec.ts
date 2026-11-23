@@ -18,11 +18,15 @@
 // silently fall back to default credentials and fail to connect.
 require('dotenv').config();
 
+import { fork } from 'node:child_process';
+import { resolve } from 'node:path';
+
 import { DataSource } from 'typeorm';
 
 import { DistributedLockLeases2026112300000000 } from '@libs/core/infrastructure/database/typeorm/migrations/2026112300000000-DistributedLockLeases';
 
 import { DistributedLockService } from './distributed-lock.service';
+import { ThreadLeaseRenewer } from './lease-renewer';
 import { DistributedLockRepository } from './repositories/distributed-lock.repository';
 
 const PG_HOST = process.env.TEST_PG_HOST ?? 'localhost';
@@ -127,6 +131,7 @@ const targets = [
             }, 30_000);
 
             afterAll(async () => {
+                await ThreadLeaseRenewer.stopAll();
                 await Promise.all(sources.map((ds) => ds.destroy()));
             });
 
@@ -243,6 +248,130 @@ const targets = [
 
                 await repository.release(key, 'new');
             });
+
+            /**
+             * Runs a lock holder in a child process and blocks its event
+             * loop, the way a CPU-bound review step blocks a worker, while
+             * this process — another replica — tries to take the key.
+             */
+            const runBlockedHolder = async (
+                key: string,
+                leaseMs: number,
+                blockMs: number,
+                duringBlock: () => Promise<void>,
+            ): Promise<{ lost: boolean | null }> => {
+                const child = fork(
+                    resolve(
+                        __dirname,
+                        '__tests__/blocked-lock-holder.fixture.ts',
+                    ),
+                    [],
+                    {
+                        execArgv: [
+                            '-r',
+                            'ts-node/register/transpile-only',
+                            '-r',
+                            'tsconfig-paths/register',
+                        ],
+                        env: {
+                            ...process.env,
+                            LOCK_IT_HOST: PG_HOST,
+                            LOCK_IT_PORT: String(port),
+                            LOCK_IT_USER: PG_USER,
+                            LOCK_IT_PASSWORD: PG_PASSWORD,
+                            LOCK_IT_DB: PG_DB,
+                        },
+                    },
+                );
+                const messages: any[] = [];
+                const next = () =>
+                    new Promise<any>((done, fail) => {
+                        if (messages.length) return done(messages.shift());
+                        child.once('message', () => done(messages.shift()));
+                        child.once('exit', (code) =>
+                            fail(new Error(`holder exited ${code}`)),
+                        );
+                    });
+                child.on('message', (m) => messages.push(m));
+                try {
+                    child.send({ key, leaseMs, blockMs });
+                    const first = await next();
+                    if (first.error) throw new Error(first.error);
+                    expect(first.acquired).toBe(true);
+                    await duringBlock();
+                    const second = await next();
+                    if (second.error) throw new Error(second.error);
+                    return second;
+                } finally {
+                    if (child.exitCode === null) {
+                        await new Promise((done) => {
+                            child.once('exit', done);
+                            setTimeout(() => child.kill(), 15_000).unref();
+                        });
+                    }
+                }
+            };
+
+            it('a holder whose event loop is blocked longer than its lease keeps the lock', async () => {
+                const key = uniqueKey('blocked-loop');
+                const leaseMs = 2_000;
+                let takenWhileBlocked: unknown = 'not tried';
+
+                const result = await runBlockedHolder(
+                    key,
+                    leaseMs,
+                    8_000,
+                    async () => {
+                        // Well past the lease, while the holder is still blocked.
+                        await new Promise((r) => setTimeout(r, leaseMs * 2));
+                        const lock = await instanceB.acquire(key);
+                        takenWhileBlocked = lock !== null;
+                        await lock?.release();
+                    },
+                );
+
+                expect(takenWhileBlocked).toBe(false);
+                expect(result.lost).toBe(false);
+            }, 60_000);
+
+            it('if the renewal thread dies, a new one takes over the held leases', async () => {
+                const key = uniqueKey('thread-restart');
+                const leaseMs = 2_000;
+                const holder = new DistributedLockService(
+                    sources[0],
+                    undefined,
+                    { leaseMs },
+                );
+                const lock = await holder.acquire(key);
+                expect(lock).not.toBeNull();
+
+                const renewer = (holder as any).renewer;
+                await renewer.worker.terminate();
+                await new Promise((r) => setTimeout(r, leaseMs * 2));
+
+                expect(await instanceB.acquire(key)).toBeNull();
+                expect(lock!.isLost()).toBe(false);
+                await lock!.release();
+            }, 20_000);
+
+            it('a holder whose lease was taken over learns it from the next renewal', async () => {
+                const key = uniqueKey('lost');
+                const holder = new DistributedLockService(
+                    sources[0],
+                    undefined,
+                    { leaseMs: 2_000 },
+                );
+                const lock = await holder.acquire(key);
+                await expireLease(key);
+                const taken = await instanceB.acquire(key);
+                expect(taken).not.toBeNull();
+
+                await new Promise((r) => setTimeout(r, 1_500));
+
+                expect(lock!.isLost()).toBe(true);
+                await taken!.release();
+                await holder.onModuleDestroy();
+            }, 20_000);
 
             it('the sweep deletes leases left by dead holders and keeps live ones', async () => {
                 const dead = uniqueKey('sweep-dead');

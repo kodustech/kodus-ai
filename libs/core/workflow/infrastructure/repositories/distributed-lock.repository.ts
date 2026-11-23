@@ -7,6 +7,24 @@ import { IDistributedLockRepository } from '../../domain/contracts/distributed-l
 export const DISTRIBUTED_LOCKS_TABLE = '"kodus_workflow"."distributed_locks"';
 
 /**
+ * Extends `holder`'s lease by $3 ms, capped by the max hold set on acquire.
+ * Params: [key, holder, leaseMs]. Returns one row `{ held }` while `holder`
+ * still holds the key, none once it was taken over or released.
+ *
+ * Matching on holder is enough: a takeover overwrites holder and a release
+ * deletes the row, so a row still naming us means nobody else has held it
+ * since. Renewing past an expiry nobody claimed is therefore safe; past the
+ * max hold it stays expired. Exported because the lease renewal thread
+ * (lease-renewer.ts) runs this same statement on its own connection.
+ */
+export const RENEW_LEASE_SQL = `UPDATE ${DISTRIBUTED_LOCKS_TABLE}
+    SET expires_at = LEAST(
+            now() + $3::double precision * interval '1 millisecond',
+            COALESCE(max_hold_until, 'infinity'::timestamptz))
+  WHERE lock_key = $1 AND holder = $2
+ RETURNING expires_at > now() AS held`;
+
+/**
  * Single-statement SQL only: each call is its own implicit transaction, so a
  * pooler in transaction mode may run it on any server connection. Every
  * time comparison uses the database clock (`now()`), never the app's, so
@@ -68,19 +86,11 @@ export class DistributedLockRepository implements IDistributedLockRepository {
         holder: string,
         leaseMs: number,
     ): Promise<boolean> {
-        // Matching on holder is enough: a takeover overwrites holder and a
-        // release deletes the row, so a row still naming us means nobody
-        // else has held it since. Renewing past an expiry nobody claimed is
-        // therefore safe; past the max hold it stays expired.
-        const rows = await this.records<{ held: boolean }>(
-            `UPDATE ${DISTRIBUTED_LOCKS_TABLE}
-                SET expires_at = LEAST(
-                        now() + $3::double precision * interval '1 millisecond',
-                        COALESCE(max_hold_until, 'infinity'::timestamptz))
-              WHERE lock_key = $1 AND holder = $2
-             RETURNING expires_at > now() AS held`,
-            [key, holder, leaseMs],
-        );
+        const rows = await this.records<{ held: boolean }>(RENEW_LEASE_SQL, [
+            key,
+            holder,
+            leaseMs,
+        ]);
         return rows.length > 0 && rows[0].held === true;
     }
 

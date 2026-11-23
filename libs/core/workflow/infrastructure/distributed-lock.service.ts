@@ -17,6 +17,11 @@ import {
     DISTRIBUTED_LOCK_REPOSITORY_TOKEN,
     IDistributedLockRepository,
 } from '../domain/contracts/distributed-lock.repository.contract';
+import {
+    LeaseRenewer,
+    ThreadLeaseRenewer,
+    TimerLeaseRenewer,
+} from './lease-renewer';
 import { DistributedLockRepository } from './repositories/distributed-lock.repository';
 
 export interface DistributedLockOptions {
@@ -29,12 +34,21 @@ export interface DistributedLockOptions {
 }
 
 /**
- * How long a lease lasts without a heartbeat. It bounds how long a crashed
- * holder blocks everyone else, and how long a holder whose event loop is
- * stuck keeps the lock before another instance may take it. The heartbeat
- * renews it every third of that.
+ * How long a lease lasts without a renewal: how long a crashed holder blocks
+ * everyone else. Renewals run every third of that on a separate thread
+ * (lease-renewer.ts), so a holder whose main event loop is blocked keeps
+ * the lock for as long as its process lives.
  */
 export const LOCK_LEASE_MS = 60_000;
+
+/** Optional settings; the defaults are what production runs. */
+export const DISTRIBUTED_LOCK_CONFIG_TOKEN = Symbol('DistributedLockConfig');
+export interface DistributedLockConfig {
+    /** Lease length. Only tests shorten it, to observe expiry quickly. */
+    leaseMs?: number;
+    /** Who renews held leases. Defaults to a renewal thread. */
+    renewer?: LeaseRenewer;
+}
 /** Expired leases older than this are deleted by the sweeper. */
 const EXPIRED_LEASE_GRACE_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
@@ -43,10 +57,11 @@ export class DistributedLock {
     private released = false;
     private lost = false;
     private ttlTimer?: NodeJS.Timeout;
-    private heartbeatTimer?: NodeJS.Timeout;
+    private readonly stopRenewing: () => void;
 
     constructor(
         private readonly repository: IDistributedLockRepository,
+        renewer: LeaseRenewer,
         readonly key: string,
         readonly holder: string,
         private readonly leaseMs: number,
@@ -54,13 +69,13 @@ export class DistributedLock {
         private readonly onSettled: (lock: DistributedLock) => void,
         private readonly logger = createLogger(DistributedLock.name),
     ) {
-        this.heartbeatTimer = setInterval(
-            () => void this.heartbeat(),
-            Math.max(1_000, Math.floor(leaseMs / 3)),
+        this.stopRenewing = renewer.track(key, holder, leaseMs, () =>
+            this.markLost(),
         );
-        this.heartbeatTimer.unref?.();
 
         if (ttl) {
+            // The database already ends the lease at the max hold; this
+            // releases it promptly and says so.
             this.ttlTimer = setTimeout(() => {
                 if (!this.released) {
                     this.logger.warn({
@@ -76,52 +91,30 @@ export class DistributedLock {
         }
     }
 
-    private async heartbeat(): Promise<void> {
+    private markLost(): void {
         if (this.released || this.lost) {
             return;
         }
-        try {
-            const held = await this.repository.renew(
-                this.key,
-                this.holder,
-                this.leaseMs,
-            );
-            if (!held && !this.released) {
-                this.lost = true;
-                this.stopTimers();
-                this.onSettled(this);
-                this.logger.warn({
-                    message:
-                        'Distributed lock lease was lost before release — another instance may now hold it',
-                    context: DistributedLock.name,
-                    metadata: {
-                        key: this.key,
-                        holder: this.holder,
-                        leaseMs: this.leaseMs,
-                    },
-                });
-            }
-        } catch (error) {
-            // The lease is still valid until it expires; the next beat
-            // retries. If the database stays down past the lease, the
-            // next successful beat reports the lock as lost.
-            this.logger.warn({
-                message: 'Distributed lock heartbeat failed — will retry',
-                context: DistributedLock.name,
-                error: error instanceof Error ? error : undefined,
-                metadata: { key: this.key, holder: this.holder },
-            });
-        }
+        this.lost = true;
+        this.stopTimers();
+        this.onSettled(this);
+        this.logger.warn({
+            message:
+                'Distributed lock lease was lost before release — another instance may now hold it',
+            context: DistributedLock.name,
+            metadata: {
+                key: this.key,
+                holder: this.holder,
+                leaseMs: this.leaseMs,
+            },
+        });
     }
 
     private stopTimers(): void {
+        this.stopRenewing();
         if (this.ttlTimer) {
             clearTimeout(this.ttlTimer);
             this.ttlTimer = undefined;
-        }
-        if (this.heartbeatTimer) {
-            clearInterval(this.heartbeatTimer);
-            this.heartbeatTimer = undefined;
         }
     }
 
@@ -194,6 +187,7 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = createLogger(DistributedLockService.name);
     private readonly repository: IDistributedLockRepository;
     private readonly leaseMs: number;
+    private readonly renewer: LeaseRenewer;
     private readonly held = new Set<DistributedLock>();
 
     constructor(
@@ -202,13 +196,33 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
         @Optional()
         @Inject(DISTRIBUTED_LOCK_REPOSITORY_TOKEN)
         repository?: IDistributedLockRepository,
+        @Optional()
+        @Inject(DISTRIBUTED_LOCK_CONFIG_TOKEN)
+        config?: DistributedLockConfig,
     ) {
         // Every module that provides this service already resolves the
         // DataSource; building the repository here keeps the SQL in the
         // repository layer without wiring a token into each of them.
         this.repository =
             repository ?? new DistributedLockRepository(dataSource);
-        this.leaseMs = LOCK_LEASE_MS;
+        this.leaseMs = config?.leaseMs ?? LOCK_LEASE_MS;
+        this.renewer = config?.renewer ?? this.defaultRenewer(dataSource);
+    }
+
+    private defaultRenewer(dataSource: DataSource): LeaseRenewer {
+        try {
+            return ThreadLeaseRenewer.for(
+                dataSource.options as Record<string, any>,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not start the distributed lock renewal thread — renewing on the main event loop, where a long block can cost a held lock',
+                context: DistributedLockService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+            return new TimerLeaseRenewer(this.repository);
+        }
     }
 
     onModuleInit(): void {
@@ -277,6 +291,7 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
 
             const lock = new DistributedLock(
                 this.repository,
+                this.renewer,
                 key,
                 holder,
                 this.leaseMs,
