@@ -12,6 +12,11 @@ export type ReviewCommandModesConfig = {
 
 export type BlockableCommandMode = 'heavy' | 'ultra';
 
+const MODE_LABELS: Record<BlockableCommandMode, string> = {
+    heavy: 'Heavy',
+    ultra: 'Ultra',
+};
+
 /** The mode a command asked for when the organization turned it off. */
 export function blockedCommandMode(
     requested: RequestedReviewMode | undefined,
@@ -25,7 +30,7 @@ export function blockedCommandMode(
 export function reviewCommandBlockedMessage(
     mode: BlockableCommandMode,
 ): string {
-    const name = mode === 'heavy' ? 'Heavy' : 'Ultra';
+    const name = MODE_LABELS[mode];
     return `${name} review by command is turned off for this organization, so this pull request was not reviewed. An organization owner can turn it on in General settings.`;
 }
 
@@ -37,7 +42,7 @@ export function reviewCommandAccessMessage(
     mode: BlockableCommandMode,
     access: 'none' | 'unknown',
 ): string {
-    const name = mode === 'heavy' ? 'Heavy' : 'Ultra';
+    const name = MODE_LABELS[mode];
     return access === 'none'
         ? `${name} review by command needs write access to this repository, so this pull request was not reviewed. Someone with write access can ask for it.`
         : `${name} review by command needs write access to this repository, and Kody could not check yours, so this pull request was not reviewed. Try the command again in a moment.`;
