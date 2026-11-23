@@ -28,6 +28,11 @@ export interface AcquireRequest {
     diagnosticHold?: boolean;
     /** A setup of the default branch: its builds' cache becomes the environment's when each build finishes (setup only, never a PR). */
     seedsCache?: boolean;
+    /**
+     * A template's setup (`template:<org>/<env>`, setup only): placement alone reads it, to reserve only the cell
+     * bound to that key. The worker never sends it to the cell or the hub.
+     */
+    boundKey?: string;
     /** The default branch's recipe the cell boots with (content null: there is none), never the checkout's. */
     recipe?: RecipeForClaim;
     /** The environment's machine size for the workload's builds and services; absent: the cell's default. */

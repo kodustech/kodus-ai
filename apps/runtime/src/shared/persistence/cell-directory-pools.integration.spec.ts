@@ -200,4 +200,66 @@ const BOAT = 'boat-eu-perrun';
             const host = await connect(db, s, { poolId: BOAT, boundKey: `run:${org}/${key2}`, epoch: true });
             expect(await physical.reserve(run2)).toMatchObject({ status: 'located', cell: { cellId: host } });
         }));
+
+    describe("a template's setup (host-providers.md §8.2)", () => {
+        const setup = (org: string, boundKey?: string) => ({ claimId: claimIdFor(org, 'setup:s-1:boot'), consumer: 'setup', environmentId: 'env-1', ...(boundKey ? { boundKey } : {}) }) as const;
+
+        it('goes only to the cell bound to its key, whatever pool that cell is in, and records no pool demand', () =>
+            isolated(async (db, s) => {
+                const org = `org-${randomUUID()}`;
+                await boatPool(db, [org]);
+                const shared = await connect(db, s, { slots: 9 });
+                const otherTemplate = await connect(db, s, { poolId: BOAT, boundKey: `template:${org}/env-2` });
+                const host = await connect(db, s, { poolId: 'some-other-pool', boundKey: `template:${org}/env-1` });
+                const cells = directory(db);
+
+                expect(cellOf(await cells.reserveCell(org, setup(org, `template:${org}/env-1`)))).toBe(host);
+                expect(await freeSlots(db, host)).toBe(3);
+                expect(await freeSlots(db, shared)).toBe(9);
+                expect(await freeSlots(db, otherTemplate)).toBe(4);
+                expect((await db.query('SELECT 1 FROM runtime.runtime_pool_demand')).rows).toEqual([]);
+            }));
+
+        it('waits for its host while none is bound to the key: never the shared cell, never another template, and not the no-cell answer that ends the setup', () =>
+            isolated(async (db, s) => {
+                const org = `org-${randomUUID()}`;
+                const shared = await connect(db, s, { slots: 9 });
+                const other = await connect(db, s, { boundKey: `template:${org}/env-2` });
+                const cells = directory(db);
+
+                expect(await cells.reserveCell(org, setup(org, `template:${org}/env-1`))).toEqual({ refused: 'no_capacity', hostStarting: true });
+                expect(await freeSlots(db, shared)).toBe(9);
+                expect(await freeSlots(db, other)).toBe(4);
+                expect((await db.query('SELECT 1 FROM runtime.runtime_pool_demand')).rows).toEqual([]);
+            }));
+
+        it("a key of another org's template is ignored: the setup is an ordinary one, and no template-bound cell takes it", () =>
+            isolated(async (db, s) => {
+                const org = `org-${randomUUID()}`;
+                const shared = await connect(db, s, { slots: 9 });
+                const foreign = await connect(db, s, { boundKey: `template:other-org/env-1` });
+                const cells = directory(db);
+
+                expect(cellOf(await cells.reserveCell(org, setup(org, `template:other-org/env-1`)))).toBe(shared);
+                expect(await freeSlots(db, foreign)).toBe(4);
+            }));
+
+        it('a cell bound to a template takes no other claim: not a Run, not an ordinary setup, not a setup of another template', () =>
+            isolated(async (db, s) => {
+                const org = `org-${randomUUID()}`;
+                const host = await connect(db, s, { poolId: BOAT, boundKey: `template:${org}/env-1` });
+                const cells = directory(db);
+
+                for (const want of [
+                    { claimId: claimIdFor(org, 'r-9:base:1'), consumer: 'runtime', runId: 'r-9' },
+                    { claimId: claimIdFor(org, 'r-9:base:1'), consumer: 'runtime', runId: 'r-9', boundKey: `template:${org}/env-1` },
+                    setup(org),
+                ] as const) {
+                    expect(await cells.reserveCell(org, want)).toBeNull();
+                }
+                expect(await cells.reserveCell(org, setup(org, `template:${org}/env-2`))).toEqual({ refused: 'no_capacity', hostStarting: true });
+                expect(await reserveCellRow(db, org)).toBeNull();
+                expect(await freeSlots(db, host)).toBe(4);
+            }));
+    });
 });

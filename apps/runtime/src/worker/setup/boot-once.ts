@@ -160,6 +160,8 @@ async function acquireBoot(run: SetupRun, b: BootAttempt, again: boolean): Promi
             consumer: 'setup',
             idempotencyKey: bootKey,
             ...(cmd.diagnosticHold ? { diagnosticHold: true } : {}),
+            // A template's setup goes only to the cell bound to its key (host-providers.md §8.2).
+            ...(cmd.boundKey ? { boundKey: cmd.boundKey } : {}),
             // The environment's machine size; the cell refuses one above what it grants.
             ...(cmd.machineSize ? { size: cmd.machineSize } : {}),
             // Only the default branch's builds may leave the environment their cache (S-52), as only they bake.

@@ -64,7 +64,7 @@ function fakeEnv(opts: { blocked?: boolean; status?: number; manifest?: typeof E
     const calls: string[] = [];
     const env: EnvironmentRuntime = {
         acquire: async (req) => {
-            calls.push(`acquire ${req.consumer} ${req.ref.side} ${req.ref.sha.slice(0, 4)}${req.diagnosticHold ? ' hold' : ''}${req.seedsCache ? '' : ' no-seed'}`);
+            calls.push(`acquire ${req.consumer} ${req.ref.side} ${req.ref.sha.slice(0, 4)}${req.diagnosticHold ? ' hold' : ''}${req.seedsCache ? '' : ' no-seed'}${req.boundKey ? ` bound ${req.boundKey}` : ''}`);
             if (opts.held) {
                 return {
                     status: 'blocked',
@@ -331,6 +331,16 @@ describe('EnvironmentSetupService', () => {
         expect(rec).toMatchObject({ state: 'active', sha: dev, refSource: 'dev_override' });
         expect(rec.steps.find((s) => s.name === 'resolve_ref')?.detail).toContain('dev override');
         expect(calls[0]).toBe('acquire setup setup ffff no-seed');
+    });
+
+    it("a template's setup asks its cell by the template key, and an ordinary setup asks for none", async () => {
+        const key = 'template:org-1/env-1';
+        const bound = fakeEnv();
+        await testSetupService({ envForSetup: () => bound.env }, new InMemoryEnvironmentSetupStore(), { devExpose: EXPOSE }).run(cmd({ boundKey: key }));
+        expect(bound.calls[0]).toContain(` bound ${key}`);
+        const plain = fakeEnv();
+        await testSetupService({ envForSetup: () => plain.env }, new InMemoryEnvironmentSetupStore(), { devExpose: EXPOSE }).run(cmd());
+        expect(plain.calls[0]).not.toContain('bound');
     });
 
     it('every I/O is a checkpointed step: a replay after a crash does not boot a second machine', async () => {

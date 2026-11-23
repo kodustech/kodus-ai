@@ -6,7 +6,7 @@ import type { Pool } from 'pg';
 import { LIVE_CLAIM_STATES } from '@libs/runtime/contracts/enums';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
 import { type IsolationMinimum, isolationsSatisfying } from '@libs/runtime/contracts/isolation';
-import { candidatePools, type Placement } from '@libs/runtime/placement/candidate-pools';
+import { candidatePools, templateSetupKey, type Placement } from '@libs/runtime/placement/candidate-pools';
 
 import type { HostPoolReader } from './host-pools';
 
@@ -94,6 +94,11 @@ export interface CellWant {
     environmentId?: string;
     /** The pools the claim may use, in order (libs/runtime/placement); absent: computed by the directory, or none. */
     placement?: Placement;
+    /**
+     * A template's setup (`template:<org>/<env>`, consumer 'setup'): only the cell bound to this key is eligible,
+     * in whatever pool, and no other claim reaches that cell. A key that is not this org's template key is ignored.
+     */
+    boundKey?: string;
 }
 
 export const isCellRefusal = (r: CellLocation | CellRefusal | null): r is CellRefusal => !!r && 'refused' in r;
@@ -116,12 +121,13 @@ export interface CellDirectory {
 export const DEFAULT_ORG_SHARED_CLAIM_CAP = 8;
 
 /**
- * A connected cell that may serve the org ($1), not cordoned, bound to no Run or to this one (the key placeholder),
- * in one of the pools (the pools placeholder, text[]; null: any pool).
+ * A connected cell that may serve the org ($1), not cordoned, bound to the key (the key placeholder) or, unless the
+ * key is a template's, to nothing, in one of the pools (the pools placeholder, text[]; null: any pool). A cell bound
+ * to a template key therefore takes only that template's setup: no unbound claim and no Run's key matches it.
  */
 const eligible = (pools: string, key: string) =>
     `disconnected_at IS NULL AND last_heartbeat_at > now() - interval '30 seconds' AND (owner = 'kodus' OR org_id = $1) AND cordoned_at IS NULL
-     AND (bound_key IS NULL OR bound_key = ${key}::text) AND (${pools}::text[] IS NULL OR pool_id = ANY(${pools}::text[]))`;
+     AND (bound_key = ${key}::text OR (bound_key IS NULL AND COALESCE(${key}::text NOT LIKE 'template:%', true))) AND (${pools}::text[] IS NULL OR pool_id = ANY(${pools}::text[]))`;
 
 /** The cell runs claims under one of the isolations in the placeholder (text[]), or none was asked (null). */
 const isolated = (isolations: string) => `(${isolations}::text[] IS NULL OR isolation = ANY(${isolations}::text[]))`;
@@ -290,10 +296,12 @@ export async function reserveCellFor(
     // The Run's other side, once placed (or reserved), fixes the backend this side may run on.
     const sibling = opts.sameBackendAs?.length ? (await pool.query(SIBLING_BACKEND_SQL, [opts.sameBackendAs, orgId])).rows[0] : undefined;
     const backend = [sibling?.driver ?? null, sibling?.isolation ?? null];
-    const placement = opts.placement;
+    // A template's setup: its bound cell in any pool, no pool's demand (the fleet made the host already).
+    const templateKey = opts.consumer === 'setup' ? templateSetupKey(orgId, opts.boundKey) : null;
+    const placement = templateKey ? undefined : opts.placement;
     // Base and PR never span pools: once a side is placed, its pool is the only candidate.
     let pools: string[] | null = placement ? (sibling?.pool_id ? [sibling.pool_id] : placement.pools) : null;
-    let key: string | null = null;
+    let key: string | null = templateKey;
     const first = pools?.[0];
     const perRun = !!first && !!placement?.boundKey && placement.perRun.includes(first);
     if (perRun) {
@@ -316,6 +324,8 @@ export async function reserveCellFor(
         const c = (await pool.query(CELL_CAPACITY_SQL, [...mine, ...size, isolations, ...scope])).rows[0] ?? { eligible: 0, isolating: 0, granting: 0, free: 0, free_own: 0, shared_open: 0 };
         // No host bound to the Run yet: it is on its way (the demand above), a wait like a full cell.
         if (perRun && !c.eligible) return { refused: 'no_capacity', pool: first!, hostStarting: true };
+        // The template's host is not registered yet: the setup waits for it, as the admission path does.
+        if (templateKey && !c.eligible) return { refused: 'no_capacity', hostStarting: true };
         if (!c.eligible) return { refused: 'no_cell' };
         if (isolations && !c.isolating) return { refused: 'isolation_unavailable', isolation: opts.isolation! };
         if (opts.size && !c.granting) return { refused: 'size_unavailable', size: opts.size, largest: await largestGrant(pool, orgId, isolations, scope) };

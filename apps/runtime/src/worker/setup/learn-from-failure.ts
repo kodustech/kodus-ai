@@ -103,6 +103,7 @@ async function bootAttempt(run: SetupRun, env: EnvironmentRuntime, path: string,
                 idempotencyKey: `setup:${cmd.key}:${label}`,
                 recipe: { path, content: text, digest: recipeDigest(text) },
                 ...(cmd.machineSize ? { size: cmd.machineSize } : {}),
+                ...(cmd.boundKey ? { boundKey: cmd.boundKey } : {}),
             }, cancellationSignal?.(), noCapacityWait),
         );
         if (noCapacityWait && isCapacityWait(claim)) throw new AdmissionCapacityLostError();

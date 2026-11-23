@@ -335,6 +335,12 @@ function refusalBlocker(r: CellRefusal): Blocked['blockers'][number] {
     }
 }
 
+/** The acquire as the hub takes it: placement-only fields (boundKey) stay on the worker. */
+function wireOf(req: AcquireRequest): Omit<AcquireRequest, 'boundKey'> {
+    const { boundKey: _placementOnly, ...wire } = req;
+    return wire;
+}
+
 /**
  * The claim ids of the same Run attempt's other side (its first claim and its
  * renewed one), for a Runtime claim keyed `${runId}:${side}:${attempt}[:renewed]`
@@ -448,7 +454,7 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             const fetch = this.fetchOf(req);
             if ('status' in fetch) return fetch;
             try {
-                const outcome = await this.hub.post<Claim | Blocked>(url, `/internal/cells/${encodeURIComponent(ticket.cellId)}/acquire`, { ...req, admission: ticket, expose: this.run.expose, ...fetch }, this.run.correlationId, timeoutMs);
+                const outcome = await this.hub.post<Claim | Blocked>(url, `/internal/cells/${encodeURIComponent(ticket.cellId)}/acquire`, { ...wireOf(req), admission: ticket, expose: this.run.expose, ...fetch }, this.run.correlationId, timeoutMs);
                 if ('status' in outcome && outcome.status === 'blocked' && outcome.blockers.some((b) => b.signature === 'admission_ticket_invalid' || b.signature === 'admission_ticket_required')) return capacityBlocked({ refused: 'no_capacity' });
                 return outcome;
             } catch (error) {
@@ -472,6 +478,8 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             consumer: req.consumer,
             ...(req.runId ? { runId: req.runId } : {}),
             ...(req.environmentId ? { environmentId: req.environmentId } : {}),
+            // A template's setup: only the cell bound to its key (the directory checks it is this org's).
+            ...(req.consumer === 'setup' && req.boundKey ? { boundKey: req.boundKey } : {}),
         });
         if (!cell) throw new NoCellConnectedError('no cell is connected for this organization');
         if (isCellRefusal(cell)) return capacityBlocked(cell);
@@ -480,7 +488,7 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
         return this.hub.post(
             cell.replicaUrl,
             `/internal/cells/${encodeURIComponent(cell.cellId)}/acquire`,
-            { ...req, expose: this.run.expose, ...fetch },
+            { ...wireOf(req), expose: this.run.expose, ...fetch },
             this.run.correlationId,
             timeoutMs,
         );

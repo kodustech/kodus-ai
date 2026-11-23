@@ -398,6 +398,35 @@ describe('acquire prefers the pool cell', () => {
     });
 });
 
+// A template's setup is placed on the cell bound to its key (host-providers.md §8.2): the key reaches the
+// directory, and never the cell or the hub, whose acquire body does not know it.
+describe("acquire of a template's setup", () => {
+    const key = 'template:org-a/env-1';
+    const run = async (req: Record<string, unknown>) => {
+        const wanted: Array<CellWant | undefined> = [];
+        const bodies: any[] = [];
+        const hub = new HubClient({
+            cellDirectory: { reserveCell: async (_o: string, want?: CellWant) => (wanted.push(want), { cellId: 'cell-a', replicaUrl: 'https://hub-1', owner: 'kodus' as const }), replicaForClaim: async () => null },
+            hubBaseUrl: 'https://hub',
+            postImpl: async (_u, _h, body) => (bodies.push(JSON.parse(body)), { status: 200, text: '{}' }),
+        });
+        await runtime(hub, null).acquire({ organizationId: 'org-a', environmentId: 'env-1', idempotencyKey: 'setup:s-1', ref: { side: 'setup', sha: 'a'.repeat(40) }, ...req } as any).catch(() => undefined);
+        return { wanted, bodies };
+    };
+
+    it('asks the directory for the key and sends the hub an acquire without it', async () => {
+        const { wanted, bodies } = await run({ consumer: 'setup', boundKey: key });
+        expect(wanted[0]).toMatchObject({ consumer: 'setup', boundKey: key });
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]).not.toHaveProperty('boundKey');
+    });
+
+    it('never carries a key for a claim that is not a setup', async () => {
+        const { wanted } = await run({ consumer: 'runtime', runId: 'run-1', boundKey: key });
+        expect(wanted[0]).not.toHaveProperty('boundKey');
+    });
+});
+
 // Cells connected but none may take the claim now: a blocked acquire with its
 // card's signature, sent to no cell, never a full cell or a thrown error.
 describe('acquire when no cell may take the claim', () => {
