@@ -92,7 +92,8 @@ export const GeneralOrganizationSettingsPage = (props: {
     email: string;
     timezone: Timezone;
     autoJoinConfig: OrganizationParametersAutoJoinConfig;
-    reviewCommandModes: Required<OrganizationParametersReviewCommandModesConfig>;
+    /** Undefined when they could not be read: shown unknown, never saved. */
+    reviewCommandModes?: Required<OrganizationParametersReviewCommandModesConfig>;
 }) => {
     const router = useRouter();
     const userDomain = props.email.split("@")[1];
@@ -103,7 +104,10 @@ export const GeneralOrganizationSettingsPage = (props: {
         defaultValues: {
             timezone: props.timezone,
             autoJoinConfig: props.autoJoinConfig,
-            reviewCommandModes: props.reviewCommandModes,
+            reviewCommandModes: props.reviewCommandModes ?? {
+                heavyBlocked: false,
+                ultraBlocked: false,
+            },
         },
     });
 
@@ -140,10 +144,11 @@ export const GeneralOrganizationSettingsPage = (props: {
                 }
 
                 if (
-                    data.reviewCommandModes.heavyBlocked !==
+                    props.reviewCommandModes &&
+                    (data.reviewCommandModes.heavyBlocked !==
                         props.reviewCommandModes.heavyBlocked ||
-                    data.reviewCommandModes.ultraBlocked !==
-                        props.reviewCommandModes.ultraBlocked
+                        data.reviewCommandModes.ultraBlocked !==
+                            props.reviewCommandModes.ultraBlocked)
                 ) {
                     promises.push(
                         createOrUpdateOrganizationParameter(
@@ -345,6 +350,15 @@ export const GeneralOrganizationSettingsPage = (props: {
                                     keep the mode set in Routing.
                                 </FormControl.Helper>
 
+                                {!props.reviewCommandModes && (
+                                    <p
+                                        role="alert"
+                                        className="text-danger mb-3 text-sm">
+                                        These settings could not be loaded.
+                                        Reload the page to try again.
+                                    </p>
+                                )}
+
                                 <div className="flex flex-col gap-3">
                                     {(
                                         [
@@ -360,6 +374,9 @@ export const GeneralOrganizationSettingsPage = (props: {
                                                 <div className="flex items-center gap-3">
                                                     <Switch
                                                         id={field.name}
+                                                        disabled={
+                                                            !props.reviewCommandModes
+                                                        }
                                                         checked={field.value}
                                                         onCheckedChange={
                                                             field.onChange

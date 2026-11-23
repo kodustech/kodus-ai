@@ -29,14 +29,20 @@ global.ResizeObserver = class {
 };
 
 const renderPage = (
-    reviewCommandModes = { heavyBlocked: false, ultraBlocked: false },
+    reviewCommandModes: {
+        heavyBlocked: boolean;
+        ultraBlocked: boolean;
+    } | null = {
+        heavyBlocked: false,
+        ultraBlocked: false,
+    },
 ) =>
     render(
         <GeneralOrganizationSettingsPage
             email="owner@acme.dev"
             timezone={Timezone.NEW_YORK}
             autoJoinConfig={{ enabled: false, domains: ["acme.dev"] }}
-            reviewCommandModes={reviewCommandModes}
+            reviewCommandModes={reviewCommandModes ?? undefined}
         />,
     );
 
@@ -55,6 +61,19 @@ describe("General settings — review mode commands", () => {
                 name: "Block Ultra review by command",
             }),
         ).not.toBeChecked();
+    });
+
+    it("shows the switches unknown, and the rest of the page, when they could not be read", () => {
+        renderPage(null);
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "These settings could not be loaded.",
+        );
+        for (const name of [
+            "Block Heavy review by command",
+            "Block Ultra review by command",
+        ]) {
+            expect(screen.getByRole("switch", { name })).toBeDisabled();
+        }
     });
 
     it("saves the switch blocked, and only that parameter", async () => {

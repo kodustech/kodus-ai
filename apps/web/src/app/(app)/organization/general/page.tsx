@@ -79,7 +79,10 @@ export default async function OrganizationSettingsPage() {
     };
 
     // Nothing stored leaves both commands on; no row is created for it.
-    const loadReviewCommandModes = async () => {
+    // Undefined when the read failed: the page shows the switches unknown.
+    const loadReviewCommandModes = async (): Promise<
+        OrganizationParametersReviewCommandModesConfig | undefined
+    > => {
         try {
             const result = await getOrganizationParameterByKey<{
                 configValue: OrganizationParametersReviewCommandModesConfig;
@@ -89,11 +92,11 @@ export default async function OrganizationSettingsPage() {
             return result?.configValue ?? {};
         } catch (error: unknown) {
             // Only "not stored" means both commands are on; a failed read
-            // must not show them on.
+            // must not show them on, nor take the rest of the page down.
             if (error instanceof TypedFetchError && error.statusCode === 404) {
                 return {};
             }
-            throw error;
+            return undefined;
         }
     };
 
@@ -109,10 +112,12 @@ export default async function OrganizationSettingsPage() {
             email={email}
             timezone={timezoneConfigValue}
             autoJoinConfig={autoJoinConfigValue}
-            reviewCommandModes={{
-                heavyBlocked: reviewCommandModes.heavyBlocked === true,
-                ultraBlocked: reviewCommandModes.ultraBlocked === true,
-            }}
+            reviewCommandModes={
+                reviewCommandModes && {
+                    heavyBlocked: reviewCommandModes.heavyBlocked === true,
+                    ultraBlocked: reviewCommandModes.ultraBlocked === true,
+                }
+            }
         />
     );
 }
