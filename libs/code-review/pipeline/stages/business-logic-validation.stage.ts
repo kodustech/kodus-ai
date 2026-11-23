@@ -133,6 +133,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 message: `[BUSINESS-LOGIC] Validation failed for PR#${context.pullRequest?.number}: ${message}`,
                 context: this.stageName,
                 error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
             });
             const pipelineError: PipelineError = {
                 stage: this.stageName,

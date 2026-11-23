@@ -578,9 +578,8 @@ export class BusinessValidationService {
         judge: () => Promise<IntentJudge>,
     ): Promise<TaskCheck | { thin: Task } | undefined> {
         const readAt = new Date().toISOString();
-        const verdict = await (
-            await judge()
-        ).judge({
+        const judging = await judge();
+        const verdict = await judging.judge({
             instructions: this.instructions(request),
             task: found.task,
             taskText: formatTaskForJudge(found.task),
@@ -606,6 +605,10 @@ export class BusinessValidationService {
                         pullRequest: request.pullRequest?.number,
                         tracker: found.task.tracker,
                         cause: verdict.missingInfo,
+                        // Which model failed: the parse failures and
+                        // timeouts are per model, and the log said nothing.
+                        provider: judging.modelSlot?.provider,
+                        model: judging.modelSlot?.model,
                     },
                 });
                 return undefined;
