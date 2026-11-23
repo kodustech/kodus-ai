@@ -72,11 +72,19 @@ class SummaryPrUnavailableError extends Error {
     }
 }
 
+/** Most adapters catch their own errors and return null for a comment they could not post. */
+class UltraNoticeNotPostedError extends Error {
+    constructor() {
+        super('The code host did not take the Ultra review notice.');
+    }
+}
+
 /** A 429, a 5xx or a dropped connection: the same read may succeed a moment later. */
 function isTransientCodeHostError(error: unknown): boolean {
     const status = extractHttpStatus(error);
     return (
         error instanceof SummaryPrUnavailableError ||
+        error instanceof UltraNoticeNotPostedError ||
         is429Error(error) ||
         (status !== undefined && status >= 500) ||
         isTransientFetchError(error)
@@ -673,17 +681,21 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             // The team's only signal of a degraded Ultra review: a transient
             // code host failure is retried before it is given up.
             await retryWithBackoff(
-                () =>
-                    this.codeManagementService.createIssueComment({
-                        organizationAndTeamData:
-                            context.organizationAndTeamData,
-                        repository: context.repository,
-                        prNumber: context.pullRequest?.number,
-                        body: ultraDegradedNotice(ultra, {
-                            repositoryName: context.repository?.name,
+                async () => {
+                    const posted =
+                        await this.codeManagementService.createIssueComment({
+                            organizationAndTeamData:
+                                context.organizationAndTeamData,
+                            repository: context.repository,
                             prNumber: context.pullRequest?.number,
-                        }),
-                    }),
+                            body: ultraDegradedNotice(ultra, {
+                                repositoryName: context.repository?.name,
+                                prNumber: context.pullRequest?.number,
+                            }),
+                        });
+                    if (!posted) throw new UltraNoticeNotPostedError();
+                    return posted;
+                },
                 { maxAttempts: 3, shouldRetry: isTransientCodeHostError },
             );
         } catch (error) {

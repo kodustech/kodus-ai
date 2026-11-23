@@ -667,7 +667,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
             createComment: jest.fn().mockResolvedValue(undefined),
         } as any;
         const codeManagementService = {
-            createIssueComment: jest.fn().mockResolvedValue(undefined),
+            createIssueComment: jest.fn().mockResolvedValue({ id: 1 }),
         } as any;
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
@@ -863,6 +863,17 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
             'No model completed. The comments the models found before they stopped were posted.',
         );
     });
+
+    it('posts the notice again when the code host took nothing, as most adapters report a failure', async () => {
+        const { stage, codeManagementService } = makeStage();
+        codeManagementService.createIssueComment
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: 1 });
+        await stage.execute(context(undefined, degraded));
+        expect(codeManagementService.createIssueComment).toHaveBeenCalledTimes(
+            2,
+        );
+    }, 15_000);
 
     it('a failed notice post does not fail the stage', async () => {
         const { stage, codeManagementService, commentManagerService } =
