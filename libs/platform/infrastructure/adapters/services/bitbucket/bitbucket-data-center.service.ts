@@ -2430,6 +2430,14 @@ export class BitbucketDataCenterService implements Omit<
                     return true;
                 }
                 if (data?.isLastPage !== false) return false;
+                // A page that does not move forward would be read forever:
+                // the rest of the list is unread, so Data Center can't say.
+                if (
+                    typeof data.nextPageStart !== 'number' ||
+                    data.nextPageStart <= start
+                ) {
+                    return undefined;
+                }
                 start = data.nextPageStart;
             }
         } catch (error) {

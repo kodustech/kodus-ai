@@ -57,6 +57,18 @@ describe('BitbucketDataCenterService.userCanWrite', () => {
         expect(get.mock.calls[1][1].params.start).toBe(100);
     });
 
+    it.each([
+        ['no next page start', {}],
+        ['a next page start that does not move forward', { nextPageStart: 0 }],
+    ])('cannot say, without paging forever, on %s', async (_, page) => {
+        const get = jest.fn().mockResolvedValue({
+            data: { values: [{ name: 'dev-bot' }], isLastPage: false, ...page },
+        });
+
+        expect(await build(get).userCanWrite(params)).toBeUndefined();
+        expect(get).toHaveBeenCalledTimes(1);
+    });
+
     it('cannot write when no user with write matches', async () => {
         const get = jest.fn().mockResolvedValue({
             data: { values: [{ name: 'dev-bot' }], isLastPage: true },
