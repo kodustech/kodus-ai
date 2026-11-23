@@ -253,9 +253,11 @@ export function useOrganizationRouting({
             };
         },
         routing,
-        /** The saved trio is being broken by this edit. */
-        // Counted as the API's guard counts a trio: by its ids, one model
-        // through two providers once, whether or not each still runs.
+        /**
+         * The saved trio is being broken by this edit. Counted as the API's
+         * guard counts a trio: by its ids, one model through two providers
+         * once, whether or not each still runs.
+         */
         breaksUltraTrio:
             dirty &&
             isUltraTrioSet(saved.ultraModelIds, modelOf) &&
