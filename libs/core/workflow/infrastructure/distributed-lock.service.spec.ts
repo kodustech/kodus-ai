@@ -66,9 +66,7 @@ class InMemoryLeases implements IDistributedLockRepository {
         return !!row && row.expiresAt > Date.now();
     }
 
-    async deleteExpired() {
-        return 0;
-    }
+    deleteExpired = jest.fn(async (_graceMs: number) => 0);
 }
 
 describe('DistributedLockService', () => {
@@ -86,7 +84,10 @@ describe('DistributedLockService', () => {
         instanceB = new DistributedLockService({} as any, leases, { renewer });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        // Stops the per-process sweeper so each spec starts without one.
+        await instanceA.onModuleDestroy();
+        await instanceB.onModuleDestroy();
         jest.useRealTimers();
     });
 
@@ -121,11 +122,67 @@ describe('DistributedLockService', () => {
     });
 
     it('a lock is released when its ttl elapses, even if the holder never releases it', async () => {
-        await instanceA.acquire('cron', { ttl: 5 * 60_000 });
+        const lock = await instanceA.acquire('cron', { ttl: 5 * 60_000 });
 
         await jest.advanceTimersByTimeAsync(5 * 60_000 + 1);
 
+        // The holder hands it back itself, not only the lease running out.
+        expect(lock!.isReleased()).toBe(true);
         expect(await instanceB.acquire('cron')).not.toBeNull();
+    });
+
+    it('a release that fails on the database throws, and the lease still ends on its own', async () => {
+        const lock = await instanceA.acquire('job');
+        leases.failing = true;
+        await expect(lock!.release()).rejects.toThrow('connection refused');
+        leases.failing = false;
+
+        // Released from the holder's side: nobody renews it any more.
+        await jest.advanceTimersByTimeAsync(LOCK_LEASE_MS + 1_000);
+
+        expect(await instanceB.acquire('job')).not.toBeNull();
+    });
+
+    it('sweeps leases expired for over an hour every 15 minutes, once per process', async () => {
+        instanceA.onModuleInit();
+        instanceB.onModuleInit();
+
+        await jest.advanceTimersByTimeAsync(15 * 60_000);
+        expect(leases.deleteExpired).toHaveBeenCalledTimes(1);
+        expect(leases.deleteExpired).toHaveBeenCalledWith(60 * 60_000);
+
+        await jest.advanceTimersByTimeAsync(15 * 60_000);
+        expect(leases.deleteExpired).toHaveBeenCalledTimes(2);
+    });
+
+    it('a sweep that fails is retried next cycle, without an unhandled rejection', async () => {
+        instanceA.onModuleInit();
+        leases.deleteExpired.mockRejectedValueOnce(
+            new Error('connection refused'),
+        );
+
+        await jest.advanceTimersByTimeAsync(30 * 60_000);
+
+        expect(leases.deleteExpired).toHaveBeenCalledTimes(2);
+    });
+
+    it('when the renewal thread cannot start, held locks still renew on the main event loop', async () => {
+        // A TLS option with a function cannot be handed to a thread.
+        const dataSource = {
+            options: {
+                host: 'db',
+                ssl: true,
+                extra: { ssl: { checkServerIdentity: () => undefined } },
+            },
+        };
+        const fallback = new DistributedLockService(dataSource as any, leases);
+        const lock = await fallback.acquire('job');
+
+        await jest.advanceTimersByTimeAsync(LOCK_LEASE_MS * 5);
+
+        expect(await instanceB.acquire('job')).toBeNull();
+        expect(lock!.isLost()).toBe(false);
+        await lock!.release();
     });
 
     it('a graceful shutdown hands back every held lock at once', async () => {

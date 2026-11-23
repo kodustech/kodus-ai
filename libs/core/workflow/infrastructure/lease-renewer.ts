@@ -170,6 +170,35 @@ parentPort.on('message', (m) => {
 });
 `;
 
+/**
+ * The pg connection the renewal thread opens, derived from the app's
+ * TypeORM DataSource options: same server, credentials and TLS as the app
+ * pool. A renewal thread that cannot connect renews nothing, and every held
+ * lock then expires one lease later.
+ */
+export function renewalConnectionConfig(
+    dataSourceOptions: Record<string, any>,
+    env: Record<string, string | undefined> = process.env,
+): Record<string, unknown> {
+    const ssl = resolvePgSslOption(dataSourceOptions);
+    return {
+        ...(dataSourceOptions.url
+            ? { connectionString: dataSourceOptions.url }
+            : {
+                  host: dataSourceOptions.host,
+                  port: dataSourceOptions.port,
+                  user: dataSourceOptions.username,
+                  password: dataSourceOptions.password,
+                  database: dataSourceOptions.database,
+              }),
+        ...(ssl !== undefined ? { ssl } : {}),
+        application_name: 'kodus-lock-renewer',
+        keepAlive: true,
+        connectionTimeoutMillis: 10_000,
+        ...resolveSessionTimeouts(env),
+    };
+}
+
 interface Tracked {
     key: string;
     holder: string;
@@ -205,23 +234,7 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
      * statement). Throws when a thread cannot be started.
      */
     static for(dataSourceOptions: Record<string, any>): ThreadLeaseRenewer {
-        const ssl = resolvePgSslOption(dataSourceOptions);
-        const connection: Record<string, unknown> = {
-            ...(dataSourceOptions.url
-                ? { connectionString: dataSourceOptions.url }
-                : {
-                      host: dataSourceOptions.host,
-                      port: dataSourceOptions.port,
-                      user: dataSourceOptions.username,
-                      password: dataSourceOptions.password,
-                      database: dataSourceOptions.database,
-                  }),
-            ...(ssl !== undefined ? { ssl } : {}),
-            application_name: 'kodus-lock-renewer',
-            keepAlive: true,
-            connectionTimeoutMillis: 10_000,
-            ...resolveSessionTimeouts(),
-        };
+        const connection = renewalConnectionConfig(dataSourceOptions);
         const id = JSON.stringify(connection);
         let renewer = ThreadLeaseRenewer.shared.get(id);
         if (!renewer) {
