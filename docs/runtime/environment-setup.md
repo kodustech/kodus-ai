@@ -109,6 +109,11 @@ product with the org's BYOK key, which never reaches the worker.
 - **Facts block:** computed with no model from the root listing and a few manifests (lockfile and package manager,
   workspace globs, Node version, Dockerfiles, compose files, `next/font/google`) (`repository-facts.ts:6-13`),
   prepended to the first message (`recipe-author.agent.ts:767-779`); the prompt says to trust it (`:375`).
+- **CI evidence:** the primary repository's `.github/workflows` jobs that boot the app for tests (e2e, integration,
+  Playwright, Cypress, compose, `services:`), summarised by code with no model: job, services, setup actions,
+  run commands, env var names only, capped at 4 KB (`ci-evidence.ts`); sent after the Facts. The prompt says to boot
+  what that workflow boots and a smaller app only with the reason in notes. Which apps recent PRs touch is not sent:
+  the Git port has no cheap read of it.
 - **Prompt rules** (`recipe-author.agent.ts:345-396`): the repository's own compose file or Dockerfile first and
   the CI workflow's steps mirrored (`:367-376`); registries-only egress, with rules for Nx, Yarn Berry, pnpm and
   corepack, `next/font/google`, and native modules on arm64 (`:377-382`); monorepos (`:383-388`); Kody's own files

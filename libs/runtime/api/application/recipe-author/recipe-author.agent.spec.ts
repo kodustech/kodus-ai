@@ -230,6 +230,25 @@ describe('authorRecipe on the harness', () => {
         expect(prompts[0]).toContain("this organization turned the Kodus recommended egress list off: a build reaches no Google Fonts host, so a next/font/google app runs next dev [Settings, Runtime, Outbound access]");
     });
 
+    // A big monorepo with no recipe: the author booted the easiest app and never read the e2e workflow that says how the app that matters boots.
+    it('puts how the repository CI boots its app in the first message when a workflow does, and the rule to prefer it', async () => {
+        const e2e = 'jobs:\n  e2e:\n    services:\n      db: { image: postgres:16 }\n    env: { DB_PASSWORD: hunter2 }\n    steps:\n      - run: pnpm --filter storefront build\n      - run: pnpm playwright test\n';
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        await run({ ...FILES, '.github/workflows/e2e.yml': e2e });
+        expect(prompts[0]).toContain('CI evidence');
+        expect(prompts[0]).toContain('pnpm --filter storefront build');
+        expect(prompts[0]).toContain('DB_PASSWORD');
+        expect(prompts[0]).not.toContain('hunter2');
+        expect(prompts[0]).toContain('Boot what the CI e2e workflow boots');
+        expect(prompts[0]).toContain('say why in notes');
+    });
+
+    it('sends no CI evidence block when no workflow boots the app', async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        await run({ ...FILES, '.github/workflows/lint.yml': 'jobs:\n  lint:\n    steps:\n      - run: pnpm lint\n' });
+        expect(prompts[0]).not.toContain('CI evidence (');
+    });
+
     it('does not call the model when the root lists no file (an unreadable tree), so no placeholder recipe is written', async () => {
         const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
         const r = await run({});
