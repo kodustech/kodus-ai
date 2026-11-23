@@ -857,11 +857,16 @@ describe('ValidateConfigStage — v2 routing', () => {
         const run = (
             requestedReviewMode?: 'heavy' | 'ultra' | 'balanced',
             reviewMode?: string,
+            requestedReviewModeAccess?: 'write' | 'none' | 'unknown',
         ) => {
             const context = buildContext(undefined) as any;
             if (reviewMode) context.codeReviewConfig.reviewMode = reviewMode;
             if (!requestedReviewMode) context.origin = 'github';
-            return stage.execute({ ...context, requestedReviewMode });
+            return stage.execute({
+                ...context,
+                requestedReviewMode,
+                requestedReviewModeAccess,
+            });
         };
         const comment = () =>
             mockCodeManagementService.createSingleIssueComment.mock
@@ -886,6 +891,39 @@ describe('ValidateConfigStage — v2 routing', () => {
                 expect(result.pipelineMetadata?.notificationHandled).toBe(true);
             },
         );
+
+        it.each([
+            ['heavy', 'none', 'Someone with write access can ask for it.'],
+            ['ultra', 'none', 'Someone with write access can ask for it.'],
+            ['ultra', 'unknown', 'Kody could not check yours'],
+        ] as const)(
+            '--%s from someone whose write access is %s runs no review and says why',
+            async (mode, access, text) => {
+                byKey(undefined);
+
+                const result = await run(mode, undefined, access);
+
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(result.heavy).toBeFalsy();
+                expect(result.ultra).toBeUndefined();
+                expect(comment()).toContain('needs write access');
+                expect(comment()).toContain(text);
+                expect(result.statusInfo?.message).toBe(comment());
+            },
+        );
+
+        it.each([
+            ['with write access', 'heavy', 'write'],
+            ['from a job enqueued before access was read', 'heavy', undefined],
+            ['--balanced, which needs none', 'balanced', 'none'],
+        ] as const)('a command %s runs the review', async (_, mode, access) => {
+            byKey(undefined);
+
+            const result = await run(mode, undefined, access);
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(comment()).toBeUndefined();
+        });
 
         it('a reply the platform refused leaves the usual skip notification', async () => {
             byKey({ heavyBlocked: true });

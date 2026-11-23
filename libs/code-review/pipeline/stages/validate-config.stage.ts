@@ -44,6 +44,7 @@ import {
 import { riskSnapshotMismatch } from '@libs/code-review/domain/risk/risk-assessment';
 import {
     blockedCommandMode,
+    reviewCommandAccessMessage,
     reviewCommandBlockedMessage,
     type ReviewCommandModesConfig,
 } from '@libs/code-review/domain/review-command-modes';
@@ -194,7 +195,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 }
             }
 
-            const commandBlocked = await this.refuseBlockedCommandMode(context);
+            const commandBlocked = await this.refuseCommandMode(context);
             if (commandBlocked) return commandBlocked;
 
             // Shared risk must be known before selecting the review model.
@@ -377,10 +378,11 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
     }
 
     /**
-     * `--heavy` or `--ultra` on an organization that turned that command off:
-     * no review runs, whatever the settings, and the PR is told why.
+     * `--heavy` or `--ultra` on an organization that turned that command off,
+     * or from someone without write access to the repository: no review
+     * runs, whatever the settings, and the PR is told why.
      */
-    private async refuseBlockedCommandMode(
+    private async refuseCommandMode(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext | undefined> {
         if (!context.requestedReviewMode) return undefined;
@@ -388,14 +390,25 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             OrganizationParametersKey.REVIEW_COMMAND_MODES_CONFIG,
             context.organizationAndTeamData,
         );
-        const mode = blockedCommandMode(
+        const blocked = blockedCommandMode(
             context.requestedReviewMode,
             stored?.configValue as ReviewCommandModesConfig | undefined,
         );
-        if (!mode) return undefined;
+        const requested = context.requestedReviewMode;
+        const access = context.requestedReviewModeAccess;
+        // A job enqueued before the access was read carries none: it runs.
+        const withoutAccess =
+            !blocked &&
+            (requested === 'heavy' || requested === 'ultra') &&
+            (access === 'none' || access === 'unknown')
+                ? { mode: requested, access }
+                : undefined;
+        if (!blocked && !withoutAccess) return undefined;
 
         this.logger.log({
-            message: `${mode} review asked by command, turned off for the organization — the review does not run`,
+            message: blocked
+                ? `${blocked} review asked by command, turned off for the organization — the review does not run`
+                : `${withoutAccess!.mode} review asked by command by someone without write access (${withoutAccess!.access}) — the review does not run`,
             context: this.stageName,
             metadata: {
                 organizationAndTeamData: context.organizationAndTeamData,
@@ -403,7 +416,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 repositoryId: context.repository?.id,
             },
         });
-        const message = reviewCommandBlockedMessage(mode);
+        const message = blocked
+            ? reviewCommandBlockedMessage(blocked)
+            : reviewCommandAccessMessage(
+                  withoutAccess!.mode,
+                  withoutAccess!.access,
+              );
         const told = await this.replyToReviewCommand(context, message);
         return this.updateContext(context, (draft) => {
             draft.statusInfo = {

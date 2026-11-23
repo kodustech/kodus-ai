@@ -237,6 +237,12 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
                     sanitizedPayload?.requestedReviewMode === 'ultra'
                         ? sanitizedPayload.requestedReviewMode
                         : undefined,
+                requestedReviewModeAccess:
+                    sanitizedPayload?.requestedReviewModeAccess === 'write' ||
+                    sanitizedPayload?.requestedReviewModeAccess === 'none' ||
+                    sanitizedPayload?.requestedReviewModeAccess === 'unknown'
+                        ? sanitizedPayload.requestedReviewModeAccess
+                        : undefined,
                 onlyCustomAgent:
                     typeof sanitizedPayload?.onlyCustomAgent === 'string'
                         ? sanitizedPayload.onlyCustomAgent

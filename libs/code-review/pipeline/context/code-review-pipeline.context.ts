@@ -1,3 +1,4 @@
+import type { ReviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import type {
     RequestedReviewMode,
     ReviewRoutingReason,
@@ -96,6 +97,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** The mode the review command asked for (`@kody review --heavy` /
      *  `--balanced` / `--ultra`), over the review mode set in settings. */
     requestedReviewMode?: RequestedReviewMode;
+    /** Whether the author of a `--heavy` / `--ultra` command can write to
+     *  the repository; set by the webhook handler for those two only. */
+    requestedReviewModeAccess?: ReviewCommandAccess;
     reviewRoutingReason?: ReviewRoutingReason;
 
     /**

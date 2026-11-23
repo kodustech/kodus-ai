@@ -28,3 +28,17 @@ export function reviewCommandBlockedMessage(
     const name = mode === 'heavy' ? 'Heavy' : 'Ultra';
     return `${name} review by command is turned off for this organization, so this pull request was not reviewed. An organization owner can turn it on in General settings.`;
 }
+
+/**
+ * Why a Heavy or Ultra review asked by command did not run: its author has
+ * no write access to the repository, or the code host could not say.
+ */
+export function reviewCommandAccessMessage(
+    mode: BlockableCommandMode,
+    access: 'none' | 'unknown',
+): string {
+    const name = mode === 'heavy' ? 'Heavy' : 'Ultra';
+    return access === 'none'
+        ? `${name} review by command needs write access to this repository, so this pull request was not reviewed. Someone with write access can ask for it.`
+        : `${name} review by command needs write access to this repository, and Kody could not check yours, so this pull request was not reviewed. Try the command again in a moment.`;
+}

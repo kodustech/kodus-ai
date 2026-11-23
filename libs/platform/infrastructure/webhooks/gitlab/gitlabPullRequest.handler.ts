@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
@@ -600,6 +601,12 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body, botUsername),
                             requestedReviewMode: requestedReviewModeOf(comment.body, botUsername),
+                            requestedReviewModeAccess: await reviewCommandAccess(
+                                this.codeManagement,
+                                params,
+                                context.organizationAndTeamData,
+                                requestedReviewModeOf(comment.body, botUsername),
+                            ),
                             onlyCustomAgent: customAgentSlug,
                         },
                     };

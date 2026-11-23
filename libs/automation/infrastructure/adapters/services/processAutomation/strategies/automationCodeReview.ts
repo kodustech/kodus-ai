@@ -133,6 +133,7 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
             reviewDirective,
             requestedReviewMode,
+            requestedReviewModeAccess,
             onlyCustomAgent,
             userGitId,
             signal,
@@ -334,6 +335,7 @@ export class AutomationCodeReviewService implements Omit<
                     reviewDirective, // @kody review <directive> steering text
                     requestedReviewMode, // @kody review --heavy / --balanced, over the mode in settings
                     onlyCustomAgent, // @kody -v <slug> — that custom agent only
+                    requestedReviewModeAccess, // whether that command's author can write
                 );
 
             await this._handleExecutionCompletion(

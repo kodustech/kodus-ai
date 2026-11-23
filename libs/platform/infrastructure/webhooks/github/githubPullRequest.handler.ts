@@ -1,4 +1,5 @@
 import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { createLogger } from '@libs/core/log/logger';
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
@@ -731,6 +732,13 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                             requestedReviewMode: requestedReviewModeOf(
                                 comment.body,
                             ),
+                            requestedReviewModeAccess:
+                                await reviewCommandAccess(
+                                    this.codeManagement,
+                                    params,
+                                    context?.organizationAndTeamData,
+                                    requestedReviewModeOf(comment.body),
+                                ),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||
