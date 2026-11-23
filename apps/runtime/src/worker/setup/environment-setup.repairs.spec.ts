@@ -66,7 +66,8 @@ const BUILD_FAILED: Blocked = {
     ],
     cellId: 'cell-1',
 };
-const blockedOn = (kind: Blocked['blockers'][number]['kind'], signature: string, message = 'the boot failed'): Blocked => ({ status: 'blocked', blockers: [{ kind, signature, message }], cellId: 'cell-1' });
+// 'not_ready' is the setup's own ready-check kind (boot-once), not a cell kind: the repair compares cause lines whatever the kind.
+const blockedOn = (kind: Blocked['blockers'][number]['kind'] | 'not_ready', signature: string, message = 'the boot failed'): Blocked => ({ status: 'blocked', blockers: [{ kind: kind as Blocked['blockers'][number]['kind'], signature, message }], cellId: 'cell-1' });
 
 type Boot = 'ok' | 'not_ready' | Blocked | (() => never);
 
