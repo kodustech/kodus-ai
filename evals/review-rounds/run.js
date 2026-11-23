@@ -282,8 +282,27 @@ function instrumentVerifier() {
 // exercises the timeout fallback, covered by the stage contract. It does not
 // measure the model's ability to identify a repeat.
 let repeatChecks;
+// `repeatCheckFault` on a case: every repeat-check model call fails the way
+// production's did on #2676 — `timeout` aborts, `parse` answers nothing
+// usable. Only that call; the finder and the verifier run normally.
+const repeatFaults = new AsyncLocalStorage();
+function failRepeatCheckCalls() {
+    const { LLM } = require('../../libs/llm/llm.ts');
+    const real = LLM.run.bind(LLM);
+    LLM.run = async (params, ...rest) => {
+        const fault = repeatFaults.getStore();
+        if (fault && params?.runName === 'code-review-repeat-check') {
+            if (fault === 'timeout') {
+                throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'AbortError' });
+            }
+            throw new Error('No object generated: could not parse the response.');
+        }
+        return real(params, ...rest);
+    };
+}
 function observeRepeatCheck() {
     if (repeatChecks) return;
+    failRepeatCheckCalls();
     repeatChecks = new AsyncLocalStorage();
     const mod = require('../../libs/code-review/infrastructure/agents/engine/repeat-check.ts');
     const real = mod.checkRepeats;
@@ -344,7 +363,7 @@ async function once(c, judgeKey) {
     // store, both agents, the anchoring, the repeat drop, dedup, severity, the
     // formatter, and what the stage hands to posting.
     const t0 = Date.now();
-    const review = await repeatChecks.run(checks, () =>
+    const review = await repeatFaults.run(c.repeatCheckFault, () => repeatChecks.run(checks, () =>
         reviewPullRequest({
             pr: prOf(c),
             team: teamOf(c),
@@ -358,7 +377,7 @@ async function once(c, judgeKey) {
                     ? undefined
                     : dyingSandbox(c.sandbox || 'alive', counter),
         }),
-    );
+    ));
     const reviewMs = Date.now() - t0;
     if (review.skipped) {
         throw new Error(`INFRA: production skipped the review: ${review.skipped}`);
@@ -376,7 +395,7 @@ async function once(c, judgeKey) {
         }
         for (const out of review.ruleReviews) assertCompleteRuleReview(out.warnings);
     }
-    if (checks.some((r) => r.model === 'failed')) {
+    if (!c.repeatCheckFault && checks.some((r) => r.model === 'failed')) {
         throw new Error('INFRA: the repeat check call failed');
     }
 

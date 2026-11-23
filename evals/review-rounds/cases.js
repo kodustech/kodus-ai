@@ -1031,6 +1031,8 @@ const cases = [
         }],
         claims: [{ id: 'unresolved-team-bypass', golden: 'teamBelongsToAnotherOrganization returns false for an empty teamId and for a team that does not exist, so createKodyRule proceeds and creates the rule ACTIVE (DEFAULT_CONFIG has kodyKnowledgeApproval disabled), bypassing Kody Knowledge Approval; the call should be refused instead of falling through.', truth: 'contested', premise: 'read-file', expect: 'if_delivered_linked', proposed: true }],
     },
+    // #2676: R10's claim is an approval bypass (security), still posted when
+    // linked; R11's is not, so its reversal is not posted.
     // PR #1902: round A said `if (!owned) return` swallows failures of runs that
     // never held the lease; round B asked to fence exactly that path.
     // https://github.com/kodustech/kodus-ai/pull/1902#discussion_r4152828436
@@ -1040,7 +1042,7 @@ const cases = [
             suggestionId: 'kodus-1902-round-a', relevantFile: 'libs/code-review/workflow/code-review-job-processor.service.ts', relevantLinesStart: 457, relevantLinesEnd: 497, label: 'bug', outcome: 'implemented', decidedAt: '2026-09-30T07:54:04Z',
             suggestionContent: 'The new `if (!owned) return;` treats a false result from handleFailure as "another worker now owns the row", but false is also returned when this run never held the lease at all: every error thrown before the lease claim (the rate-limit gate, the payload validation) runs the lease-owner guard against a PENDING row, matches zero rows and lands in this early return. process() then resolves normally, the consumer marks the inbox message PROCESSED and never rethrows, so the failure is swallowed. Only skip when another worker actually owns the row.',
         }],
-        claims: [{ id: 'unclaimed-path-unfenced', golden: 'For a run that never claimed the lease, handleFailure takes the !ownedBy branch and updates the job with no condition, so the "do not stamp over a live worker" fence added for the BYOK-exhausted branch is missing on the rate-limit-gate / payload-validation path; a redelivery can overwrite a row another worker holds.', truth: 'contested', premise: 'diff', expect: 'if_delivered_linked', proposed: true }],
+        claims: [{ id: 'unclaimed-path-unfenced', golden: 'For a run that never claimed the lease, handleFailure takes the !ownedBy branch and updates the job with no condition, so the "do not stamp over a live worker" fence added for the BYOK-exhausted branch is missing on the rate-limit-gate / payload-validation path; a redelivery can overwrite a row another worker holds.', truth: 'contested', premise: 'diff', expect: 'not_deliver' }],
     },
     // --- Kody Rules across rounds ---
     {
@@ -1051,11 +1053,11 @@ const cases = [
     },
     {
         // #2020 on the rule path: the judge flags the code Kody's own earlier
-        // suggestion produced. Either it is not posted, or it says it revises it.
+        // suggestion produced. Asking to undo it is a reversal (#2676).
         id: 'K2-rule-reverses-prior', family: 'rounds', agent: 'kody-rules', repo: resultFirstRepo, changedFiles: resultFirstDiff, sandbox: 'alive',
         kodyRules: [progressFirstRule],
         previousDecisions: [resultFirstDecision],
-        claims: [{ id: 'result-first-violates-rule', golden: 'finishRun writes the result with db.results.insert before updating progress with db.progress.update, violating the rule that progress must be updated before results are written.', truth: 'true', expect: 'if_delivered_linked' }],
+        claims: [{ id: 'result-first-violates-rule', golden: 'finishRun writes the result with db.results.insert before updating progress with db.progress.update, violating the rule that progress must be updated before results are written.', truth: 'true', expect: 'not_deliver' }],
     },
     // --- repeats across agents and files, and a guard (added 2026-10-06) ---
     // Guard: an unrelated new bug in another file, with an applied suggestion
@@ -1200,6 +1202,7 @@ const cases = [
     // One case per production repost shape (prod-shapes/cases), each with
     // its -control twin.
     ...require('./prod-shapes').prodShapeCases(),
+    ...require('./contradiction-cases').contradictionCases,
 ];
 
 module.exports = { cases };
