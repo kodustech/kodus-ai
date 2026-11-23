@@ -11,8 +11,11 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
-    forgejoConfigsForWebhook,
+    webhookConfigsOfInstance,
     getMappedPlatform,
+    githubWebhookSource,
+    gitlabWebhookSource,
+    type WebhookSource,
 } from '@libs/common/utils/webhooks';
 import {
     IIntegrationConfigService,
@@ -166,6 +169,8 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         pullRequest: IMappedPullRequest;
         repository: IMappedRepository;
         platformType: PlatformType;
+        instanceSource?: WebhookSource;
+        resolved?: OrganizationAndTeamData;
     } | null> {
         const { payload, platformType } = params;
 
@@ -233,6 +238,15 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
             pullRequest,
             repository,
             platformType,
+            // The mapped repository URL can be GitLab's SSH remote or
+            // GitHub's API address: the instance comes from the payload, as
+            // the handlers read it.
+            ...(platformType === PlatformType.GITLAB
+                ? { instanceSource: gitlabWebhookSource(sanitizedPayload) }
+                : platformType === PlatformType.GITHUB
+                  ? { instanceSource: githubWebhookSource(sanitizedPayload) }
+                  : {}),
+            resolved: params?.organizationAndTeamData,
         };
     }
 
@@ -250,6 +264,8 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 Number(pullRequest.number),
                 params?.repository,
                 platformType,
+                params?.instanceSource,
+                params?.resolved,
             );
 
         return {
@@ -273,6 +289,8 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         prNumber: number,
         repository: IRepositoryToIssues,
         platformType: PlatformType,
+        instanceSource?: WebhookSource,
+        resolved?: OrganizationAndTeamData,
     ): Promise<{
         organizationAndTeamData: OrganizationAndTeamData | null;
         host?: string;
@@ -283,16 +301,27 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 repository.id,
                 platformType,
             );
-        // Forgejo repository ids are per instance: keep the integrations of
-        // the instance that sent the webhook.
-        const configs =
-            platformType === PlatformType.FORGEJO
-                ? forgejoConfigsForWebhook(foundConfigs, {
-                              host: repository.url,
-                              repositoryId: repository.id,
-                              repositoryFullName: repository.full_name,
-                          })
-                : foundConfigs;
+        // GitLab and Forgejo repository ids are per instance: keep the
+        // integrations of the instance that sent the webhook, so a project
+        // of another server that reached the same id never takes its issues.
+        const instanceConfigs = webhookConfigsOfInstance(
+            platformType,
+            foundConfigs,
+            instanceSource
+                ? { ...instanceSource, repositoryId: repository.id }
+                : {
+                      host: repository.url,
+                      repositoryId: repository.id,
+                      repositoryFullName: repository.full_name,
+                  },
+        );
+        // The handler's webhook context already chose the team that reviews
+        // the PR: its issues land with that team, not with the first config.
+        const configs = resolved
+            ? instanceConfigs.filter(
+                  (config) => config?.team?.uuid === resolved.teamId,
+              )
+            : instanceConfigs;
 
         if (!configs || !configs.length) {
             this.logger.warn({

@@ -1,54 +1,81 @@
 ---
 title: "Descripción General"
-description: "Analíticas integrales y métricas para el rendimiento del equipo de ingeniería"
+description: "Métricas de efectividad de las revisiones y de entrega para tus repositorios, en un solo dashboard."
 ---
 
-## Qué es Cockpit Analytics
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-Cockpit Analytics proporciona información integral sobre el rendimiento de tu equipo de ingeniería a través de métricas clave que miden la productividad, la calidad del código y la eficiencia de entrega. Estas métricas te ayudan a identificar áreas de mejora y rastrear el progreso a lo largo del tiempo.
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Disponible en Kodus Cloud, incluido el trial.">
+    <Badge icon="cloud" stroke>Teams y Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Cockpit requiere una licencia Enterprise y que Analytics Worker esté en ejecución.">
+    <Badge icon="server" stroke>Autoalojado</Badge>
+  </FeatureBadge>
+</div>
 
-<Warning>
-  Cockpit requiere un plan de pago: **Teams o Enterprise en la nube** (pruebas incluidas), o **self-hosted Enterprise con licencia**. El self-hosted sin licencia (Community) y los planes free BYOK no lo incluyen: el elemento **Cockpit** permanece en la barra lateral con un candado y abre una vista previa difuminada **Unlock the Cockpit** con un botón **See plans** (**Activate a license** en self-hosted). En self-hosted Enterprise además hay que ejecutar el [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker).
-</Warning>
+El Cockpit mide dos cosas: qué tan bien llegan las revisiones de Kodus a tu equipo, y cómo entrega tu equipo.
+
+Los Owners y Repo Admins pueden abrir Cockpit.
+
+Configura [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker) para recopilar los datos de Cockpit en instalaciones autoalojadas.
+
+En un plan sin Cockpit, la barra lateral abre una vista previa bloqueada con **See plans** o, en instalaciones autoalojadas, **Activate a license**.
 
 <Frame caption="Monitorea el rendimiento de tu equipo con analíticas en tiempo real.">
   <img src="/images/cockpit.png" />
 </Frame>
 
-## Características Principales
-
-- Los datos se actualizan cada 30 minutos por defecto (`ANALYTICS_INGESTION_CRON`)
-- Teams/Enterprise en la nube (incluidas las pruebas), o self-hosted Enterprise con licencia
-- Cálculo de métricas impulsado por IA
-- Más de 8 métricas DORA y personalizadas
+Para consultar Cockpit desde la terminal o exportar sus métricas en JSON, usa [`kodus cockpit`](/es/how_to_use/cli/commands#kodus-cockpit).
 
 ## Las pestañas
 
-El cockpit se divide en dos pestañas de métricas, seguidas de una pestaña **Issues**:
+- **Kodus Review** (se abre por defecto): qué tan efectivas son las revisiones de Kodus: tasa de implementación, calibración de severidad, feedback negativo y la salud de tus Kody Rules. Consulta [Kodus Review](/es/how_to_use/cockpit/kodus_review).
+- **Delivered as asked**: pull requests verificados contra su tarea. Consulta [Delivered as asked](#delivered-as-asked).
+- **Productivity**: métricas de entrega: frecuencia de despliegue, PR cycle time, bug ratio, tamaño de PR, desglose del lead time, PRs abiertos vs cerrados, PRs mergeados por desarrollador y actividad del equipo.
+- **Code hotspots** (beta): los directorios de un repositorio que más cambian y que contienen funciones largas o complejas. Consulta [Code hotspots](/es/how_to_use/cockpit/code_hotspots).
+- **Issues**: abre la lista de [Issues](/es/how_to_use/issues/overview), con el número de issues abiertos junto al nombre de la pestaña.
 
-- **Kodus Review** (se abre por defecto) — qué tan efectivas son las revisiones de Kodus: implementation rate, calibración de severidad, retroalimentación negativa y la salud de tus Kody Rules. Trata sobre Kodus en sí, y es donde tomas acción. Consulta [Kodus Review](/es/how_to_use/cockpit/kodus_review).
-- **Productividad** — métricas generales de entrega: frecuencia de despliegue, lead time, tiempo de ciclo de PR, tamaño de PR y actividad de los desarrolladores.
-- **Issues** — abre la lista de [Issues](/es/how_to_use/issues/overview), con el número de issues abiertos junto al nombre de la pestaña.
-
-En la parte superior de la página eliges un repositorio (**All repositories** por defecto) y un rango de fechas (**Last 15 days** por defecto; opciones predefinidas **Last week**, **Last 15 days**, **Last month**, **Last 3 months**, o fechas personalizadas). No hay filtro por desarrollador. El botón de enlace (**Copy link to this view**) copia una URL que reabre la misma pestaña, repositorio y rango.
+En la parte superior de la página eliges un repositorio (**All repositories** por defecto) y un rango de fechas (**Last 15 days** por defecto; opciones predefinidas **Last week**, **Last 15 days**, **Last month**, **Last 3 months**, o un rango personalizado de hasta 93 días). No hay filtro por desarrollador. **Copy link to this view** copia la URL de la página, que lleva la pestaña, el repositorio y el rango que elegiste durante esta visita; uno que no cambiaste se abre con el valor por defecto de quien recibe el enlace. La pestaña **Code hotspots** tiene su propio selector de repositorio y no tiene rango de fechas.
 
 <Note>
   Los Owners pueden ocultar pestañas enteras o métricas individuales para toda la organización desde
-  **Organization → Cockpit visibility** — consulta [Configuración de Cockpit](/es/how_to_use/cockpit/configuration).
+  **Organization → Cockpit visibility**. Consulta [Configuración de Cockpit](/es/how_to_use/cockpit/configuration).
 </Note>
 
-## Categorías de Métricas Principales
+## De dónde provienen los datos
 
-**Métricas Disponibles:**
-- **Kodus Review:** Implementation rate (general, por severidad, por categoría), retroalimentación negativa, salud de repositorios y Kody Rules
-- **Productividad:** Frecuencia de despliegue, lead time, tiempos de ciclo de PR
-- **Calidad:** Tamaño del PR, efectividad de la revisión de código
-- **Rendimiento del Equipo:** Patrones de colaboración, identificación de cuellos de botella
+Cockpit mide los pull requests que Kodus rastrea en tus repositorios conectados: los PRs que ve después de conectar un repositorio, más hasta 10 PRs recientes por repositorio, de los últimos dos meses, importados cuando lo conectas. Los datos se actualizan cada 30 minutos por defecto (`ANALYTICS_INGESTION_CRON`). Hasta que haya datos suficientes, un banner lo indica.
 
+La mayoría de las métricas de Productivity cuentan un pull request en la fecha en que se cerró, y "cerrado" significa mergeado o cerrado sin merge: Cockpit no los distingue.
+
+Un rango va desde el inicio de su primer día hasta el inicio de su último día. Un pull request cerrado durante el último día se cuenta una vez que el rango pasa de ese día. **PRs processed** y **Review processing outcomes** en la pestaña Kodus Review, y la pestaña **Delivered as asked**, incluyen el último día.
+
+## Delivered as asked
+
+Muestra si los pull requests entregan lo que pedía su tarea, con base en las ejecuciones de [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation). Sigue el selector de repositorio y el rango de fechas. Cuando ningún pull request se verificó contra su tarea en el período, la pestaña enlaza a los ajustes de Business Logic en su lugar.
+
+| Tarjeta | Qué muestra |
+| --- | --- |
+| **Met their task** | Proporción de PRs verificados que cumplieron su tarea, con el cambio en puntos respecto al período anterior |
+| **Changes not in the task** | Proporción de PRs con al menos un cambio que la tarea no pedía |
+| **Findings accepted** | Con qué frecuencia los desarrolladores estuvieron de acuerdo con los hallazgos de Kody |
+| **Without a readable task** | Proporción de PRs que no referenciaron ninguna tarea, o cuya tarea no se pudo leer |
+
+Debajo de las tarjetas, **By who wrote the code** da la proporción de PRs que cumplieron su tarea para cada agente de código por nombre, para **People** y para **Not identified**, leída de los autores de los commits y de los trailers `Co-Authored-By`. **Most often missed** lista los temas de requisitos que los PRs omitieron con más frecuencia y, con más de un equipo, una tabla desglosa los números por equipo.
+
+## Reportes por email
+
+En la nube, Kodus envía por email dos reportes a partir de los mismos datos, y ambos se omiten cuando no hubo actividad de revisión:
+
+- **Org report**: un resumen mensual del mes calendario anterior, enviado el día 1 a los Owners.
+- **Repo report**: un digest enviado los días 1 y 16 a los Repo Admins, con una sección por cada repositorio que tienen asignado, que cubre los 15 días anteriores.
+
+Cada email enlaza de vuelta al Cockpit para el mismo rango. Elige quién los recibe en **Cockpit** dentro de [Notificaciones](/es/how_to_use/organization/notifications).
 
 ## Cómo Funciona la Coincidencia de Desarrolladores
 
-Los gráficos por desarrollador de Cockpit (**PRs Merged By Developer**, **Team Activity**) atribuyen cada pull request al **nombre de usuario de su autor en tu proveedor de Git**. Esto puede diferir de:
+Los gráficos por desarrollador (**PRs Merged By Developer**, **Team Activity**) atribuyen cada pull request al **nombre de usuario de su autor en tu proveedor de Git**. Esto puede diferir de:
 - El nombre de visualización de GitHub/GitLab
 - La dirección de correo electrónico
 - La cuenta del espacio de trabajo de Kodus

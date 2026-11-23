@@ -1,0 +1,31 @@
+---
+title: "Revisiones de la CLI"
+description: "Consulta las revisiones que tu equipo ejecutó con la CLI de Kodus, quién las ejecutó y qué encontraron."
+---
+
+**Reviews → CLI** lista las revisiones que tu equipo ejecutó desde la terminal con la [CLI de Kodus](/es/how_to_use/cli/introduction). Está junto a la pestaña [Pull requests](/es/how_to_use/reviews/pull_requests) y está abierta a los Owners, Repo Admins y Contributors. Hasta que alguien ejecute una revisión con la CLI, dice *No CLI reviews yet*.
+
+## La lista
+
+| Columna | Qué muestra |
+| --- | --- |
+| **When** | Hace cuánto tiempo se ejecutó la revisión |
+| **User** | La cuenta de Kodus que la ejecutó, si no el email de git, si no *Anonymous*. Una línea debajo indica si usó una clave **Team** (con el nombre de la clave) o un inicio de sesión **Personal**, y muestra `git:` con el email local de git cuando difiere de la cuenta |
+| **Repo** | El repositorio revisado |
+| **Branch** | La rama revisada |
+| **Commit** | El hash corto del commit |
+| **Status** | **Success**, **Error**, **In Progress**, **Skipped**, **Partial Error** o **Pending** |
+| **Issues** | Cuántos problemas encontró la revisión |
+| **Duration** | Cuánto tardó la revisión |
+
+La rama, el commit y la duración se ocultan en pantallas estrechas.
+
+Haz clic en una fila para expandirla. Muestra la línea de tiempo de la revisión con el estado, la duración y la hora de inicio de cada etapa, cualquier mensaje de error, la versión de la CLI de Kodus y las sugerencias que produjo la revisión, cada una con severidad, categoría, archivo y línea, explicación y cambio propuesto. Mientras una revisión sigue en ejecución, las sugerencias pueden aparecer como una vista previa que aún no es definitiva.
+
+## Filtros
+
+- **Search by user email**
+- **Repository**
+- **Date**: **Today**, **Last 7 days** o **Last 30 days**
+
+El contador **Reviewed today** de la parte superior derecha muestra cuántas revisiones con la CLI ejecutó tu equipo hoy y filtra la lista a ellas al hacer clic. Los filtros activos se muestran como chips, **Clear all** los restablece, y la URL los conserva para poder compartir una vista filtrada.

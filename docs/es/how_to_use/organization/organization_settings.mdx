@@ -1,0 +1,48 @@
+---
+title: "Ajustes de la Organización"
+description: "Dónde gestionar tu organización: ajustes generales, claves de la CLI y las demás páginas bajo Organization en la barra lateral."
+---
+
+El grupo **Organization** de la barra lateral reúne todo lo que se aplica a la organización completa. Lo que ves depende de tu rol; consulta [Roles del Espacio de Trabajo](/es/how_to_use/workspace_roles).
+
+| Página | Para qué sirve |
+| --- | --- |
+| **General** | Zona horaria y auto join. Consulta más abajo. |
+| **SSO** | Inicio de sesión único con SAML. Consulta [Inicio de Sesión Único](/es/how_to_use/security/sso). |
+| **Cockpit visibility** | Oculta pestañas y métricas de Cockpit para todos. Consulta [Configuración de Cockpit](/es/how_to_use/cockpit/configuration). |
+| **CLI keys** | Claves de equipo para la CLI de Kodus. Consulta más abajo. |
+| **Notifications** | Notificaciones por email y en la app por evento y rol. Consulta [Notificaciones](/es/how_to_use/organization/notifications). |
+| **Subscription** | Tu plan, las licencias de desarrollador y los miembros del workspace. Consulta [Planes y Licencias](/es/how_to_use/pricing) y [Roles del Espacio de Trabajo](/es/how_to_use/workspace_roles). |
+| **Activity logs** | Quién cambió qué. Consulta [Registros de actividad](/es/how_to_use/organization/activity_logs). |
+| **Token usage** | Tokens y costo estimado. Consulta [Uso de tokens](/es/how_to_use/organization/token_usage). |
+
+General, SSO, Cockpit visibility, CLI keys y Notifications son para los Owners.
+
+## Ajustes generales
+
+Abre **Organization → General** (**General settings**).
+
+- **Timezone**: **New York** o **São Paulo**. Define la zona horaria de la fecha y hora exactas que se muestran en la página **Pull Requests**, en el tooltip de una hora relativa ("opened 2 hours ago") y en la hora **Started** de cada etapa de la revisión. Al abrir **General** por primera vez se guarda New York; hasta entonces esas horas se muestran en UTC. Nada más la lee: los trabajos programados, las notificaciones, los reportes por email, los rangos de fechas de Cockpit y Token usage usan zonas horarias fijas.
+- **Auto Join**: activa **Enable Auto Join** y lista tus dominios de email, separados por comas, para que las personas que se registren con uno de ellos puedan unirse a la organización. No se permiten dominios públicos como gmail.com, y solo puedes agregar tu propio dominio. Quienes se unen entran como **Contributor**; consulta [Roles del Espacio de Trabajo](/es/how_to_use/workspace_roles#auto-join-para-miembros-del-espacio-de-trabajo).
+
+Haz clic en **Save settings** para aplicar.
+
+## Claves de la CLI
+
+Una clave de la CLI permite que la [CLI de Kodus](/es/how_to_use/cli/introduction) actúe en nombre de un workspace sin un inicio de sesión interactivo, lo que resulta útil para pipelines de CI y agentes de código con IA. Abre **Organization → CLI keys**. Las claves listadas pertenecen al workspace seleccionado, y solo los Owners pueden crearlas, configurarlas o revocarlas.
+
+<Steps>
+  <Step title="Genera una clave">
+    Escribe un **Key name** que indique dónde se usará la clave, como `CI pipeline deploy key`, y haz clic en **Generate key**.
+  </Step>
+
+  <Step title="Cópiala">
+    En **CLI key created**, copia la clave. Se muestra una sola vez. El diálogo también ofrece un comando de instalación para compartir con tu equipo.
+  </Step>
+
+  <Step title="Elige qué puede hacer">
+    Haz clic en **Configure** en la clave. **Allow repository configuration via CLI** habilita `kodus config remote` (también llamado `kodus config repo`) y `kodus config centralized` para la clave. **Allow Kody Rules management via CLI** habilita `kodus rules view`, `create` y `update`. Ambos están desactivados por defecto. Haz clic en **Save changes**. Una clave sigue sin poder ejecutar `kodus rules pause`, `resume` ni `delete`, y solo define seis ajustes de un repositorio; eso requiere un inicio de sesión. Consulta [Modos de autenticación](/es/how_to_use/cli/concepts#modos-de-autenticación).
+  </Step>
+</Steps>
+
+**Existing CLI keys** lista el **Name**, el **Status** (**Active** o **Revoked**), el **Last used**, el **Created at** y el **Created by** de cada clave. **Revoke** desactiva una clave de inmediato y no se puede deshacer. Las creaciones y revocaciones de claves aparecen en [Registros de actividad](/es/how_to_use/organization/activity_logs).

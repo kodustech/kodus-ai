@@ -11,11 +11,11 @@ import {
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 @Schema({
     collection: 'pullRequests',
     timestamps: true,
-    autoIndex: true,
 })
 export class PullRequestsModel extends CoreDocument {
     @Prop({ type: Object, required: false, default: null })
@@ -312,9 +312,10 @@ PullRequestsSchema.index(
 // Without this the match was a collection scan that grew with the org. Leading
 // on organizationId (equality) then the open-state fields keeps it index-bound.
 // Create with `{ background: true }` on large prod collections.
+// Defined in release-index-definitions.ts, which the index migration builds too.
 PullRequestsSchema.index(
-    { 'organizationId': 1, 'user.id': 1, 'createdAt': -1 },
-    { name: 'idx_org_user_id_createdAt_for_seat_labels' },
+    RELEASE_INDEX.pullRequestsBySeatAuthor.key,
+    RELEASE_INDEX.pullRequestsBySeatAuthor.options,
 );
 
 PullRequestsSchema.index(

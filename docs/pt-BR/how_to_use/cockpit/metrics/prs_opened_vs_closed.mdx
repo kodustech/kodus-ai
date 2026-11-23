@@ -1,47 +1,45 @@
 ---
 title: "PRs Abertos vs Fechados"
-description: "Compare quantos pull requests seu time abre e quantos fecha por semana, para enxergar um backlog de revisão crescendo."
+description: "Compare quantos pull requests seu time abre e quantos fecha por semana, para enxergar um backlog de review crescendo."
 ---
 
 ## O que é PRs Abertos vs Fechados
 
 Este gráfico coloca duas contagens semanais lado a lado: quantos pull requests foram **abertos** e
-quantos foram **fechados** na mesma semana. Ele responde uma pergunta que nenhuma métrica de
-velocidade responde — seu time está dando conta do próprio throughput, ou o trabalho está se
-acumulando mais rápido do que é mergeado?
+quantos foram **fechados** na mesma semana. Ele mostra se o time dá conta do trabalho que abre,
+ou se os pull requests se acumulam mais rápido do que são fechados.
 
 ## Como Calculamos
 
-Para cada semana do período selecionado contamos:
+Para cada semana do intervalo de datas selecionado:
 
-- **Abertos** — pull requests criados naquela semana.
-- **Fechados** — pull requests fechados naquela semana (mergeados ou fechados de outra forma).
+- **Opened**: pull requests abertos naquela semana, qualquer que seja o status hoje. Para um PR aberto antes de
+  o repositório ser conectado, e que não esteja entre os PRs importados na conexão, a data é quando
+  a Kodus o registrou pela primeira vez.
+- **Closed**: pull requests fechados naquela semana, com merge ou fechados sem merge.
 
-As duas contagens são independentes: um PR aberto numa semana e fechado três semanas depois
-aparece na barra de "abertos" da primeira e na de "fechados" da terceira. Isso é proposital — é o
-que torna o backlog visível.
+As duas contagens são independentes: um PR aberto em uma semana e fechado três semanas depois
+conta na barra **Opened** da primeira semana e na barra **Closed** da quarta. É isso que torna o
+backlog visível.
 
 ## Como Ler
 
-- **Fechados ≈ Abertos, semana após semana** — regime estável. O time absorve o que assume.
-- **Abertos consistentemente acima de Fechados** — o backlog está crescendo. O gargalo costuma
-  ser capacidade de revisão, não de escrita de código.
-- **Picos de Fechados bem acima de Abertos** — geralmente uma limpeza: alguém fechou um lote de
-  PRs parados. Vale confirmar antes de ler como ganho de produtividade.
-- **Ambos despencam juntos** — normalmente efeito de calendário (feriado, freeze, incidente), não
-  mudança de comportamento.
+- **Closed próximo de Opened, semana após semana**: regime estável. O time fecha o que abre.
+- **Opened acima de Closed por várias semanas**: o backlog está crescendo.
+- **Closed bem acima de Opened**: geralmente um lote de PRs parados fechado de uma vez. Confirme antes
+  de ler como ganho de produtividade.
+- **Ambos caem ao mesmo tempo**: normalmente um feriado, um freeze ou um incidente.
 
 <Tip>
-  Leia junto com [PR Cycle Time](/pt-BR/how_to_use/cockpit/metrics/lead_time_for_changes). Uma
-  distância crescente aqui somada a um cycle time subindo é o sinal mais claro de que o gargalo
-  está na revisão, não no desenvolvimento.
+  Leia este gráfico junto com [PR Cycle Time](/pt-BR/how_to_use/cockpit/metrics/lead_time_for_changes).
+  Uma distância crescente aqui somada a um cycle time subindo aponta o review como o gargalo.
 </Tip>
 
 ## Onde Encontrar
 
-Cockpit → aba **Productivity**, na seção de gráficos detalhados.
+Cockpit → aba **Productivity**, na seção de gráficos detalhados. As semanas começam na segunda-feira, e você pode esconder **Opened** ou **Closed** clicando no nome abaixo do gráfico.
 
 <Note>
   Este gráfico pode ser escondido para toda a organização. Se você não o vê, confira
-  **Organization → Cockpit visibility** — veja [Configuração do Cockpit](/pt-BR/how_to_use/cockpit/configuration).
+  **Organization → Cockpit visibility**. Veja [Configuração do Cockpit](/pt-BR/how_to_use/cockpit/configuration).
 </Note>

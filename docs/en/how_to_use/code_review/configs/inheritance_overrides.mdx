@@ -31,10 +31,26 @@ Once overridden, a field stops following the parent and uses its local value ins
 
 ## In the app
 
-- **Switching levels:** the scope picker at the top of the sidebar's **Code review** group lists **Global** ("applies to every repository"), then each repository that has its own configuration, with its directories indented beneath. Switching scope keeps you on the same page (General, What to review, Kody Rules, What Kody writes).
-- **Adding a level:** in the scope picker, choose **Add repository configuration**. The **Create repository settings** dialog asks you to **Select the target repository** and, optionally, **Select the target directories**; click **Create settings**. See [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level).
+- **Switching levels:** the scope picker at the top of the sidebar's **Code review** group lists **Global** ("applies to every repository"), then every repository Kody reviews, with its directory scopes indented beneath. A repository with no settings of its own is marked **Inherits Global**. Switching scope keeps you on the same page where that page exists at the new scope.
+- **Adding a level:** a repository gets its own settings the first time you save a change at its scope. To add a directory scope, pick the repository and choose **Add directory scope** at the bottom of the picker. See [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level).
 - **Seeing overrides:** a numeric pill next to a scope or page in the sidebar counts the settings overridden at that level ("N settings overridden at this level"). On the page, each overridden field shows an **Overridden** badge; its undo button returns the field to inheritance.
-- **Removing a level:** the **⋯** menu next to the scope picker has **Delete configuration** (and **Edit directories** for a directory scope).
+- **Removing a level:** the **⋯** menu next to the scope picker has **Delete configuration**, and **Edit directories** for a directory scope. After deleting, a repository uses the Global configuration and a directory's folders use their repository's. A repository's configuration can be deleted only after its directory scopes are removed.
+
+## kodus-config.yml
+
+When **Prefer kodus-config.yml settings** is on for a repository, Kody reads `kodus-config.yml` from the root of the repository's default branch. It applies on top of Global and the repository's own settings, and below any setting a directory scope overrides. See [General](/en/how_to_use/code_review/configs/general#config-priority).
+
+```
+Global
+ └─ Repository
+     └─ kodus-config.yml at the repository root (optional)
+         └─ Directory
+```
+
+- The root file is the only file Kody reads. It does not read a `kodus-config.yml` inside a folder.
+- The root file is read only when the switch is on at the **repository** scope. The switch also appears at directory scope, but it does not change a review.
+- Directory scopes take their settings from the app or from a [centralized config](/en/how_to_use/code_review/configs/centralized_config) repository, which writes into the same Global, repository and directory settings.
+- The directory level applies only when the pull request touches exactly one directory scope. See [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level#selection-rules).
 
 ## Examples
 
@@ -75,7 +91,7 @@ Once overridden, a field stops following the parent and uses its local value ins
   </Accordion>
 
   <Accordion title="Does a Directory inherit from Repository or Global?">
-    From Repository first. If Repository has no override for that field, it inherits from Global.
+    From Repository first, including the repository's `kodus-config.yml` when it is preferred. If Repository has no override for that field, it inherits from Global.
   </Accordion>
 </AccordionGroup>
 

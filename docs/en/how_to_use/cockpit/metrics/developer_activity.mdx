@@ -1,50 +1,30 @@
 ---
 title: "Developer Activity"
-description: "Track developer productivity and activity patterns over time"
+description: "See how many pull requests each developer opens, week by week"
 ---
 
 ## What is Developer Activity
 
-Developer Activity measures how productive your team members are over time, tracking the Pull Requests each developer opens on a weekly basis. This helps you understand individual performance, team workload distribution, and identify patterns in development activity.
+Developer Activity shows the pull requests each developer opens over time, so you can see workload and activity patterns across the team.
 
-In the Cockpit, it's the **Team Activity** chart on the **Productivity** tab.
+In the Cockpit, it's the **Team Activity** chart on the **Productivity** tab: a table with one row per developer and one column per week (Sunday to Saturday), newest first. Each row shows the developer's total PRs for the range, and each week shows one bar per PR opened.
 
 ## How We Calculate It
 
-We automatically track each developer's activity throughout the week, measuring their contributions and engagement with the codebase.
-
-**What We Track:**
-- **PRs Created**: Number of PRs created by each developer
-
-**How It's Calculated:**
 ```
-Weekly Activity = COUNT(PRs Created) per developer per week
+Activity = COUNT(PRs opened) per developer per week
 ```
 
-We aggregate data by week starting Monday to give you consistent weekly insights.
+- A PR counts on the date it was **opened**, whatever its status today (open, merged or closed). For a PR opened before its repository was connected, and not among the PRs imported at connection, that is the date Kodus first recorded it.
+- The developer is the PR author's username on your Git provider. PRs without an author are left out.
+- It covers the date range selected at the top of the Cockpit.
+
+Compare it with [PRs by Developer](/en/how_to_use/cockpit/metrics/prs_by_developer), which counts PRs by the date they **closed**.
 
 ## Why It Matters
 
-Understanding developer activity helps you:
+- **Balance workload**: see whether work is spread evenly across the team
+- **Track trends**: see how activity changes over time
+- **Spot bottlenecks**: find where work piles up on a few people
 
-- **Identify Top Performers**: Recognize your most productive team members
-- **Balance Workload**: Distribute work more evenly across the team
-- **Track Trends**: See how productivity changes over time
-- **Improve Collaboration**: Understand team dynamics and patterns
-
-### Impact on Team Performance
-
-- **Resource Allocation**: Better distribute work based on capacity
-- **Performance Recognition**: Acknowledge and reward high performers
-- **Bottleneck Identification**: Find where work gets stuck
-- **Team Health**: Monitor for burnout or disengagement
-
-
-## How to Improve
-
-- Set clear goals and specific targets for each developer
-- Provide training and learning opportunities
-- Spread work more evenly across the team
-- Encourage collaboration and knowledge sharing
-- Define clear processes for how work flows
-- Reduce manual, repetitive tasks through automation
+PR counts say nothing about PR size or difficulty, so read them next to [PR Size](/en/how_to_use/cockpit/metrics/pr_size).

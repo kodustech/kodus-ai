@@ -6,13 +6,15 @@ icon: "clone"
 
 ## なぜ CLI か
 
-diff を読むモデルには、今読んだ 30 行が 3 フォルダー先にすでに存在することはわかりません。[jscpd](https://github.com/kucherenko/jscpd) にはわかります。チェックアウトをスキャンし、すべてのクローンを両方の場所とともに報告します。このエージェントは jscpd を実行し、プルリクエストが持ち込んだクローンを残し、jscpd 自身の出力を証拠として各クローンを投稿します。
+diff を読むモデルには、今読んだ 30 行が 3 フォルダー先にすでに存在していることはわかりません。[jscpd](https://github.com/kucherenko/jscpd) にはそれがわかります。チェックアウトをスキャンし、すべてのクローンを両方の場所とともに報告します。このエージェントは jscpd を実行し、プルリクエストが持ち込んだクローンだけを残し、jscpd 自身の出力を証拠として各クローンを投稿します。
 
 例は TypeScript の請求サービスです。パスとしきい値はリポジトリに合わせて調整してください。
 
+カスタムエージェントはベータ版で、Teams プランと Enterprise プラン、およびトライアル期間中に利用できます。セルフホストの Kodus では `BETA_FEATURES=true` も必要です。
+
 ## ステップ1 — エージェントを作成する
 
-**Code review → What to review → Custom agents** で **New agent → Templates → Blank** をクリックします。ページで **Instructions** を入力します。
+**Code review → What to review → Custom agents** で **New agent → Templates → Blank** をクリックします。そのページで **Instructions** を入力します。
 
 ```text Name
 Duplicate code
@@ -35,7 +37,7 @@ For each finding, name both locations and say what to extract or reuse: an exist
 
 ## ステップ2 — ファイルを設定する
 
-**Files & knowledge** で：
+**Files & knowledge** で次のように設定します。
 
 | フィールド | 値 |
 | --- | --- |
@@ -52,8 +54,8 @@ For each finding, name both locations and say what to extract or reuse: an exist
 | **Binary** | `jscpd` |
 | **Install** | `npm i -g jscpd@5.4.1` |
 | **Allowed command prefixes** | `jscpd --reporters console` |
-| **Allowed domains** | *（空：jscpd はネットワーク不要）* |
-| **Runs project code** | オフ：jscpd はファイルを読むだけで実行しません |
+| **Allowed domains** | *（空：jscpd はネットワークを必要としません）* |
+| **Runs project code** | オフ：jscpd はファイルを読むだけで、実行はしません |
 | **Secrets** | *（なし）* |
 
 **Usage**：
@@ -65,47 +67,49 @@ Call it with the console reporter, the thresholds, and the directories the pull 
 
 --reporters console --min-lines 10 --min-tokens 70 --ignore **/*.test.ts,**/generated/** src/billing src/invoices
 
-There is no shell: do not quote arguments. Each clone prints both copies as `path [startLine:col - endLine:col]`.
+There is no shell: do not quote arguments. Each clone prints both copies as `file [startLine:col - endLine:col]`,
+with the file relative to the directory scanned.
 Read both copies before reporting a clone.
 ```
 
 ## ステップ4 — コメント
 
-**Comments & model** で：
+**Comments & model** で次のように設定します。
 
 | フィールド | 値 | 理由 |
 | --- | --- | --- |
 | **Format** | Inline comments | 各クローンがコピーされた行に付きます。 |
 | **Minimum severity** | Team minimum | |
-| **Max comments per pull request** | `5` | 大きなコピーは多くのクローンを生みます。重大度の高いものが残ります。 |
-| **Suggested fix** | Never | 修正は 1 行の変更ではなく、ファイルをまたぐリファクタリングです。 |
+| **Max comments per pull request** | `5` | 大きなコピー＆ペーストでは多数のクローンが出ることがあります。最も重大なものが残ります。 |
+| **Suggested fix** | Never | 修正は行の変更ではなく、ファイルをまたぐリファクタリングです。 |
 | **How it writes** | `Two sentences: where the other copy is, and what to reuse or extract.` | |
 
-**Save** をクリックします。
+**Save settings** をクリックします。
 
-## ステップ5 — Try it
+## ステップ5 — 試してみる
 
-関数をコピーしているプルリクエストのリンクを貼り、**Run agent** をクリックします。確認すること：
+コピーされた関数を含むプルリクエストのリンクを貼り付け、**Run agent** をクリックします。次を確認します。
 
-- ツール呼び出しに `jscpd` の呼び出しとその出力が表示される。
-- 保持された各指摘の **Comment** の最後に、ファイルを名指しする jscpd の行を引用した **Evidence** ブロックがある：
+- ツール呼び出しの一覧に、`jscpd` への `runCli` 呼び出しとその出力が表示されます。
+- 残った各指摘の **Comment** の末尾に、その指摘のファイル名を示す jscpd の行を引用した **Evidence** ブロックがあります。
 
-```markdown
-**Evidence** (`jscpd`):
-> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
-> src/billing/credit-note.ts [8:1 - 37:2]
+````markdown
+**Evidence** (`jscpd` output):
+```text
+- invoice.ts [12:1 - 41:2] (30 lines, 212 tokens)
 ```
+````
 
-**Warnings** に CLI をインストールできなかったと表示されたら、インストールコマンドを確認してください。CLI には E2B サンドボックスが必要で、それがない場合エージェントは jscpd なしで実行されます。
+**Warnings** に CLI をインストールできなかったと表示された場合は、インストールコマンドを確認してください。CLI には E2B サンドボックスが必要で、サンドボックスがないとエージェントは jscpd なしで実行されます。
 
-指摘が望みどおりになったら、エージェントをオンにします。
+指摘が期待どおりのものになったら、エージェントをオンにします。
 
 ## チェックリスト
 
-- [ ] インストールが正確なバージョンに固定されている
-- [ ] 許可プレフィックスがバイナリだけでなくフラグから始まっている
-- [ ] テストと生成コードが **Except** と jscpd の `--ignore` の両方にある
+- [ ] インストールを正確なバージョンに固定した
+- [ ] 許可するプレフィックスがバイナリ名だけでなくフラグで始まっている
+- [ ] テストと生成コードが **Except** と jscpd の `--ignore` の両方に入っている
 - [ ] **Max comments per pull request** を設定した
 - [ ] 既知のコピーを含むプルリクエストで試した
 
-各フィールドの詳細は [Skills、docs、ツール](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis) を参照してください。
+各フィールドの詳細は [Skills, docs and tools](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#team-clis) を参照してください。

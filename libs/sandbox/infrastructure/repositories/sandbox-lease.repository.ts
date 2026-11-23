@@ -385,6 +385,7 @@ export class SandboxLeaseRepository {
         prKey: string,
         expectedSandboxId: string,
         requireLeaseCountZero = false,
+        killAt?: Date,
     ): Promise<SandboxLeaseModel | null> {
         const filter: Record<string, unknown> = {
             _id: prKey,
@@ -407,6 +408,10 @@ export class SandboxLeaseRepository {
                         cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
                         cleanupRetryAt: null,
                         cleanupStartedAt: new Date(),
+                        // Written with the claim, so a crash between the two
+                        // cannot strand a claimed lease with no killAt (the
+                        // idle-kill cron only reads killAt).
+                        ...(killAt ? { killAt } : {}),
                     },
                     $inc: { cleanupAttempts: 1 },
                 },

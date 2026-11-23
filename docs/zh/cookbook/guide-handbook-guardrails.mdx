@@ -1,155 +1,148 @@
 ---
-title: "将您的最佳实践文档转变为审查护栏"
-description: "使用可选的 MCP 插件将您的工程手册转换为活的 Kody 规则。"
+title: "把你的最佳实践文档变成审查护栏"
+description: "把你的工程手册转换为 Kody Rules，或转换为引用它的自定义 agent。"
 icon: "shield-check"
 ---
 
-## 为什么本指南很重要
+## 为什么这份指南很重要
 
-每个工程团队都有一个"最佳实践"文档。问题是 IDE 建议不读它,审查者忘记细微差别,文档慢慢失去权威性。本指南展示如何将您的手册转变为主动护栏,以便 Kody 自动执行这些规则,并在代码偏离时引用相关部分。
+每个工程团队都有一份“最佳实践”文档。问题在于，IDE 的建议不会读它，审阅者会忘记其中的细节，文档也会慢慢失去权威。这份指南把你的手册变成主动护栏，让 Kody 在每个 pull request 上执行这些规则，并指出发生偏离的章节。
 
-我们将重点关注两个构建块:
+我们将使用两个构建块：
 
-- [Kody 规则](/zh/how_to_use/code_review/configs/kody_rules) – 将每个策略要点编码为确定性的文件级或 PR 级检查。
-- [自定义插件](/zh/cookbook/custom-plugin-install) – 当真相源存在于 Git 之外时,从远程 MCP 服务器获取标准。
+- [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules) – 每条策略要点变成引用该手册的文件级或 PR 级检查。
+- [自定义 agent](/zh/how_to_use/code_review/custom_agents) – 手册作为文档链接，每条发现都会引用所应用的规则。
 
-遵循流程,任何代码库都可以从"手册 PDF"演变为"活策略包"。
+## 前置检查清单
 
-
-## 飞行前检查清单
-
-- 您有权编辑 **Code review → Kody Rules**。
-- 策略包位于代码库中(例如 `docs/engineering-standards.md`)。如果您的位于另一个路径,请相应调整。如果它位于 Notion、Confluence 或 Google Docs 中,计划通过远程 MCP 端点公开它。
-- 您知道哪些主题应该在文件级(控制器、配置)还是 PR 级(功能标志、推出叙述、架构)进行评估。
+- 你有权限编辑 **Code review → Kody Rules**。
+- 手册存放在仓库中（例如 `docs/engineering-standards.md`）。如果你的手册位于其他路径，请相应调整。
+- 你清楚哪些主题应在文件级评估（控制器、配置），哪些应在 PR 级评估（feature flag、发布说明、架构）。
 
 <Callout icon="layers">
-  将手册保持在版本控制下。每次编辑都应通过有所有者签署的 PR。这种纪律使规则扎根于现实。
+  请将手册置于版本控制之下。规则和 agent 从 pull request 的目标分支读取它，因此每次修改都会经过 pull request，并由负责人签字确认。
 </Callout>
 
-## 第 1 阶段 – 塑造规则友好的策略包
+## 阶段 1 – 整理出适合规则的策略集
 
-1. 创建或重用 markdown 文件,例如 `docs/engineering-standards.md`。唯一的要求:Kody 必须能够通过 `@file:...` 引用它。
-2. 将内容组织成简短、可检查的要点:
+1. 创建或复用一个 markdown 文件，例如 `docs/engineering-standards.md`。
+2. 把内容组织成简短、可检查的要点：
 
 ```md
-# 工程标准
+# Engineering Standards
 
-## 错误处理
-- 绝不吞没错误。
-- 不要记录 PII 或秘密。
-- 外部请求必须有超时和重试策略。
+## Error handling
+- Never swallow errors.
+- Do not log PII or secrets.
+- External requests must have a timeout and retry policy.
 
-## 架构
-- 禁止从 `domain/*` 直接跨模块导入到 `web/*`。
-- 新端点必须包括跟踪字段(例如 requestId)和结构化日志。
-- 高风险更改必须使用功能标志。
+## Architecture
+- No direct cross-module imports from `domain/*` into `web/*`.
+- New endpoints must include tracing fields (e.g., requestId) and structured logs.
+- Feature flags are mandatory for risky changes.
 ```
-
-3. 添加元数据,如 `[所有者:后端平台]` 或 `[风险:高]` 以帮助路由违规。
-
-<Info>
-  如果真相源停留在 Git 之外,采用相同的结构,但通过远程 MCP 服务器发布它,以便规则可以调用 `@MCP:policy_pack.getSection(...)`。
-</Info>
 
 <Tip>
-  使每个要点都是原子的。当规则触发时,应该没有关于需要更改什么的争论。
+  让每条要点都是原子的。规则触发时，对于需要改什么，应当毫无争议。
 </Tip>
 
+## 阶段 2 – 让每条规则都指向真实文档
 
-## 第 2 阶段 – 将每个规则指向真实文档
-
-规则可以读取文件和远程 MCP 负载。引用实际手册,而不是在每个指令中粘贴片段。
+引用实际的手册，而不是在每条指令中粘贴片段。
 
 ```text
-使用 @file:docs/engineering-standards.md(架构部分)作为策略源。
-仅标记明显违反这些要点的代码。如果该部分缺失,请说明。
+Use @file:docs/engineering-standards.md (Architecture section) as the policy source.
+Only flag code that clearly violates those bullets. If the section is missing, say so.
 ```
 
-- 为特定领域的包交换其他文件路径(例如 `@file:docs/mobile.md`)。
-- 只需要文件的一部分?附加行锚点——`@file:docs/engineering-standards.md#L40-L72`——以便规则仅使用该部分。
-- 当策略来自 Notion/Confluence/等时,用 `@MCP:policy_pack.getSection({"id":"security"})` 替换文件引用。
-- 当规则需要静态模板加上动态数据时,结合两者(例如,`@file` 用于日志格式 + `@MCP:piiRegistry.list()` 用于当前敏感字段)。
+- 针对特定领域的策略集，换成其他文件路径（例如 `@file:docs/mobile.md`）。
+- 只需要文件的一部分？附加行锚点，例如 `@file:docs/engineering-standards.md#L40-L72`，让规则只读取该部分。
 
 <Callout icon="link">
-  一个引用使一切保持同步。更新手册一次,每个规则都会执行最新版本。
+  一处引用让一切保持同步。更新一次手册，每条规则就会执行最新版本。
 </Callout>
 
+## 阶段 3 – 把章节转化为 Kody Rules
 
-## 第 3 阶段 – 将部分转换为 Kody 规则
+在侧边栏中打开 **Code review → Kody Rules**。在 **Review Rules** 标签页点击 **New rule**，把每个策略章节对应到合适的执行模式和路径。
 
-在侧边栏中打开 **Code review → Kody Rules**,并将每个策略部分映射到适当的执行模式和路径。
-
-| 策略部分         | 规则类型     | 范围示例                     | 严重性 |
-| ---------------------- | ------------- | --------------------------------- | -------- |
-| 错误处理         | 文件级    | `backend/**/*.ts`                  | 高     |
-| 架构           | PR 级      | 通过 `pr_files_diff` 所有文件     | 严重 |
-| 日志和跟踪      | 文件级    | `web/apps/**/controllers/**/*.ts` | 中等   |
-| 安全 / PII         | 文件 + MCP    | `**/*` 与 PII 列表获取        | 严重 |
+| 策略章节         | 执行模式 | 路径示例                       | 严重级别 |
+| ---------------------- | -------------- | ---------------------------------- | -------- |
+| 错误处理         | Per file       | `backend/**/*.ts`                  | High     |
+| 架构           | Per PR         | 不适用                     | Critical |
+| 日志与追踪      | Per file       | `web/apps/**/controllers/**/*.ts`  | Medium   |
+| 安全 / PII         | Per file       | `**/*`                             | Critical |
 
 ### 文件级示例
 
 ```
-名称:在新端点上执行跟踪字段
-执行模式:Per file
-路径: web/apps/**/controllers/**/*.ts
-严重性:高
-说明:
-  将 fileDiff 与 @file:docs/engineering-standards.md 中的架构 → 新端点进行比较。
-  标记缺少 requestId 跟踪和结构化日志语句的处理程序。
-  引用违反策略的差异块。
+Rule name: Enforce tracing fields on new endpoints
+Execution mode: Per file
+Path: web/apps/**/controllers/**/*.ts
+Severity: High
+Instructions:
+  Compare fileDiff with Architecture → New endpoints in @file:docs/engineering-standards.md.
+  Flag handlers that lack requestId tracing AND structured log statements.
+  Quote the diff chunk that violates the policy.
 ```
 
 ### PR 级示例
 
 ```
-名称:高风险更改需要功能标志
-执行模式:Per PR
-严重性:严重
-说明:
-  扫描 pr_files_diff 以查找添加主要功能的路由/服务/域文件。
-  如果没有触及功能标志文件,引用"架构 → 功能标志是强制性的"并请求推出计划。
-```
-
-需要新鲜数据来评估规则?在指令中调用 MCP:
-
-```
-使用 @MCP:policy_pack.getSection({"id":"security"}) 获取最新的受限字段。
+Rule name: Require feature flags for risky changes
+Execution mode: Per PR
+Severity: Critical
+Instructions:
+  Scan pr_files_diff for routes/services/domain files that add major functionality.
+  If no feature flag file is touched, cite “Architecture → Feature flags are mandatory” and request the rollout plan.
 ```
 
 <Info>
-  规则已经理解变量(`fileDiff`、`pr_files_diff` 等)、文件引用和 MCP 调用。请参阅 [Kody 规则指南](/zh/how_to_use/code_review/configs/kody_rules)中的完整矩阵。
+  规则支持变量（每个文件的 `fileDiff`，以及每个 PR 的 `pr_files_diff` 和其他 `pr_*` 变量）和文件引用。完整列表请参阅 [Kody Rules 指南](/zh/how_to_use/code_review/configs/kody_rules)。
 </Info>
 
+## 阶段 4 – 或者把手册交给自定义 agent
 
-## 第 4 阶段 – 通过 MCP 镜像外部标准(可选)
+自定义 agent 把手册作为链接文档来读取，并且必须引用每条发现背后的规则。如果引用内容不在目标分支上的文档中，该发现会被丢弃。自定义 agent 处于 beta 阶段，适用于 Teams 和 Enterprise 套餐以及试用期间；自托管 Kodus 还需要 `BETA_FEATURES=true`。
 
-有时手册(或其部分)必须保留在 Notion、Confluence、Google Docs 或其他系统中。您仍然可以将其输入 Kody:
+<Steps>
+  <Step title="创建 agent">
+    在 **Code review → What to review → Custom agents** 中，点击 **New agent → Templates → Blank**。将其命名为 **Engineering standards**。
+  </Step>
+  <Step title="链接手册">
+    在 **Files & knowledge → Skills & docs** 下，点击 **Add skill or doc → Add by path** 并输入 `docs/engineering-standards.md`。文档在每次审查时都会完整加载，因此请保持简短。较长的手册更适合做成带参考文件的 skill。
+  </Step>
+  <Step title="编写指令">
+    ```text
+    Flag changes that break a rule in docs/engineering-standards.md.
+    Quote the rule you apply. Ignore tests and generated code.
+    ```
+  </Step>
+  <Step title="试一试，然后启用">
+    在一个违反规则的 pull request 上运行 **Try it**。每条评论都会以 **Rule** (`docs/engineering-standards.md`) 的形式引用该规则，并附上引用的要点。
+  </Step>
+</Steps>
 
-1. 构建或采用公开 `listSections()` 和 `getSection(id)` 的远程 MCP 端点。
-2. 通过**添加自定义插件**安装它。按照[自定义插件指南](/zh/cookbook/custom-plugin-install)获取确切流程。
-3. 用 `@MCP:policy_pack.getSection({"id":"architecture"})` 替换 `@file` 引用。
-4. 在 MCP 服务器上缓存响应,以便多个规则在每次审查时共享负载。
+有关预算和检测，请参阅[技能、文档和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools)。
 
-现在 Kody 执行相同的标准,无论文档位于何处。
-
-## 第 5 阶段 – 测试、观察并保持活力
+## 阶段 5 – 测试、观察并保持更新
 
 <AccordionGroup>
-  <Accordion title="种子验证 PR">
-    创建一个违反每个部分的一次性 PR。提及 @kody 并确保内联 + PR 级评论引用正确的要点。
+  <Accordion title="创建验证用 PR">
+    创建一个违反每个章节的临时 PR，让 Kody 审查它（如果尚未开始，评论 `@kody start-review`）。检查行内评论和 PR 级评论是否引用了正确的要点。可用 `@kody -v engineering-standards` 按需运行该 agent。
   </Accordion>
-  <Accordion title="调整噪音和严重性">
-    在推出期间,观察每个规则触发的频率。收紧文件 glob,添加排除项,或调整严重性,直到信号满足期望。
+  <Accordion title="调整噪声和严重级别">
+    在推广期间，观察每条规则的触发频率。收紧文件 glob、添加排除项或调整严重级别，直到信号达到预期。
   </Accordion>
-  <Accordion title="一起更新文档和规则">
-    每当手册更改时,在同一个 PR 中更新 markdown(或 MCP 负载)和相关规则,以便审查者可以验证整个管道。
+  <Accordion title="同时更新文档和规则">
+    每当手册变更时，在同一个 PR 中更新 markdown 以及相关规则或 agent 指令，让审阅者可以验证整条流水线。
   </Accordion>
 </AccordionGroup>
 
 ## 快速检查清单
 
-- [ ] `docs/engineering-standards.md`(或 MCP 等效项)存在,带有可扫描的标记要点。
-- [ ] 每个规则通过 `@file` 或 `@MCP` 引用策略包,确保它读取最新文本。
-- [ ] 文件级和 PR 级 Kody 规则涵盖您的关键部分。
-- [ ] 可选的 MCP 插件在需要时镜像非代码库标准。
-- [ ] 干运行 PR 在广泛推出之前确认了内联评论和 PR 摘要。
+- [ ] `docs/engineering-standards.md` 存在，且要点便于扫读。
+- [ ] 每条规则都用 `@file` 引用策略集，因此读取的是最新文本。
+- [ ] 文件级和 PR 级 Kody Rules 覆盖了你的关键章节。
+- [ ] 可选：一个遵循并引用手册的自定义 agent。
+- [ ] 在大范围推广之前，已用试运行 PR 确认行内评论和 PR 摘要。

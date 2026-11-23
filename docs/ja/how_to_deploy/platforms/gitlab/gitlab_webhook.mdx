@@ -1,10 +1,10 @@
 ---
 title: Webhookの作成
-description: "自動登録が行われなかった場合に GitLab の Webhook を手動で作成し、Kodus が利用するイベントを選択する手順。"
+description: "自動登録が行われなかった場合にGitLabのWebhookを手動で作成し、Kodusが利用するイベントを選択する手順。"
 icon: webhook
 ---
 
-Kodusは通常、Webhookを自動的に作成します。それが行われなかった場合は、以下の手順に従って手動で設定してください：
+Kodusは通常、リポジトリの選択を保存する際にWebhookを自動的に作成します。これにはプロジェクトの**Maintainer**または**Owner**ロールが必要です。自動作成が行われなかった場合は、**Repositories**にそのプロジェクトが理由とともに表示されるので、Webhookを手動で設定できます：
 
 <Note>
   WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
@@ -14,8 +14,8 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
 2. 「Settings」 > 「Webhooks」に移動
 3. Webhookを設定します：
 
-   - **URL**: `.env`ファイルのURLを入力：`API_GITLAB_CODE_MANAGEMENT_WEBHOOK`
-   - **Show full URLを確認**
+   - **URL**: `.env`ファイルのURLを入力：`API_GITLAB_CODE_MANAGEMENT_WEBHOOK`（末尾は`/gitlab/webhook`）
+   - **Show full URL**にチェックを入れる
    - **Name**: （オプション）Kodus Code Review
    - **Description**: （オプション）Kodus Code Review Webhook
    - **Secret token**: 空欄のまま
@@ -26,9 +26,8 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
 
 4. 「Add webhook」をクリック
 
-GitLabリポジトリのコードレビュー用Webhookのセットアップが完了しました。
+GitLabプロジェクトのコードレビュー用Webhookのセットアップが完了しました。
 
 <Note>
-  Kodus が利用するのはコメントとマージリクエストのイベントだけです。Issue イベントは届いた
-  時点で破棄されます。
+  Kodusが利用するのはコメントとマージリクエストのイベントだけです。issueイベントは届いた時点で破棄されます。
 </Note>

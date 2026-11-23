@@ -1,102 +1,36 @@
 ---
 title: "PRs por Desenvolvedor"
-description: "Acompanhe Pull Requests concluídos por desenvolvedor agrupados por semana"
+description: "Acompanhe os Pull Requests fechados por desenvolvedor, agrupados por semana"
 ---
 
 ## O que é PRs por Desenvolvedor
 
-PRs por Desenvolvedor mede o número de Pull Requests **fechados** concluídos por cada membro da equipe, agrupados por semana. Essa métrica foca nos resultados reais e no trabalho concluído, fornecendo insights sobre a produtividade individual dos desenvolvedores e a distribuição de carga de trabalho da equipe.
+PRs por Desenvolvedor conta os pull requests que cada membro do time teve **fechados**, agrupados por semana. Foca no trabalho concluído, para você ver a produção e como ela se distribui pelo time.
 
-No Cockpit, é o gráfico **PRs Merged By Developer** na aba **Productivity**.
+No Cockpit, é o gráfico **PRs Merged By Developer** na aba **Productivity**: uma barra empilhada por semana, com uma cor por desenvolvedor. Passe o mouse sobre uma barra para ver a contagem de cada desenvolvedor.
 
 ## Como Calculamos
 
-Rastreamos automaticamente cada Pull Request fechado e os agrupamos por desenvolvedor e semana, a partir de segunda-feira. Isso fornece uma visão clara de quem está concluindo o trabalho e quando.
-
-**O que rastreamos:**
-- **PRs Fechados**: Cada PR que foi concluído (mesclado ou fechado)
-- **Atribuição ao Desenvolvedor**: Quem criou cada PR concluído
-- **Agregação Semanal**: Agrupado por semana a partir de segunda-feira
-- **Contagem de Conclusão**: Número de PRs finalizados por desenvolvedor por semana
-
-**O que não contamos:**
-- PRs abertos ou em rascunho
-- PRs sem data de fechamento válida
-- Trabalho incompleto ou abandonado
-
-**Como é calculado:**
 ```
-PRs Semanais por Desenvolvedor = COUNT(PRs fechados) por desenvolvedor por semana
+Weekly PRs per Developer = COUNT(closed PRs) per developer per week
 ```
 
-Agrupamos dados por semana a partir de segunda-feira para fornecer insights semanais consistentes e identificar tendências ao longo do tempo.
+- Um PR conta na semana em que foi **fechado**, com merge ou fechado sem merge. Apesar do nome do gráfico, o Cockpit não distingue os dois.
+- O desenvolvedor é o nome de usuário do autor do PR no seu provedor Git.
+- As semanas começam na segunda-feira.
+- PRs abertos e em rascunho, PRs sem data de fechamento e PRs sem autor não são contados.
 
-## Por que é Importante
+## Developer Activity vs. PRs by Developer
 
-Entender a conclusão de PRs por desenvolvedor ajuda a:
+| | Developer Activity | PRs by Developer |
+| --- | --- | --- |
+| **Conta** | PRs abertos | PRs fechados |
+| **Base da data** | Data de abertura | Data de fechamento |
+| **Filtro de status** | Nenhum | Apenas PRs fechados |
+| **Exibido como** | Tabela, uma coluna por semana | Barras empilhadas por semana |
 
-- **Medir a Produção Individual**: Ver quem está concluindo mais trabalho
-- **Identificar Padrões de Produtividade**: Entender ritmos e tendências semanais
-- **Equilibrar a Carga de Trabalho**: Distribuir o trabalho de forma mais uniforme entre a equipe
-- **Acompanhar o Desempenho da Equipe**: Monitorar a velocidade e a produção geral da equipe
+## Contexto a Ter em Mente
 
-### Impacto na Gestão de Equipe
-
-- **Alocação de Recursos**: Distribuir melhor o trabalho com base na capacidade individual
-- **Reconhecimento de Desempenho**: Reconhecer os melhores performers e suas contribuições
-- **Identificação de Gargalos**: Encontrar onde o trabalho trava ou é atrasado
-- **Planejamento da Equipe**: Definir expectativas realistas para prazos de projetos
-
-### Distribuição da Equipe
-- **Equilibrada**: Trabalho distribuído uniformemente entre os membros da equipe
-- **Concentrada**: Poucos desenvolvedores lidando com a maior parte do trabalho
-- **Fragmentada**: Trabalho distribuído de forma muito fina entre muitos desenvolvedores
-
-## Como Melhorar
-
-### Aumentar a Produção Individual
-- **Metas Claras**: Defina objetivos específicos e alcançáveis para cada desenvolvedor
-- **Desenvolvimento de Habilidades**: Forneça treinamento em áreas que os atrasam
-- **Otimização de Ferramentas**: Certifique-se de que os desenvolvedores têm as ferramentas e acessos certos
-- **Redução de Bloqueios**: Remova obstáculos que impedem a conclusão do trabalho
-
-### Melhorar o Equilíbrio da Equipe
-- **Distribuição de Trabalho**: Distribua o trabalho de forma mais uniforme entre a equipe
-- **Treinamento Cruzado**: Ajude os desenvolvedores a trabalhar em diferentes áreas
-- **Programação em Par**: Incentive a colaboração e o compartilhamento de conhecimento
-- **Mentoria**: Desenvolvedores sênior ajudam membros júnior da equipe
-
-### Otimizar o Fluxo de Trabalho
-- **Processos Claros**: Defina como o trabalho flui pela equipe
-- **Automação**: Reduza tarefas manuais e repetitivas
-- **Comunicação**: Melhore a coordenação da equipe e o compartilhamento de informações
-- **Eficiência de Revisão**: Simplifique o processo de revisão de código
-
-## Principais Diferenças em Relação à Atividade do Desenvolvedor
-
-| **Aspecto** | **Atividade do Desenvolvedor** | **PRs por Desenvolvedor** |
-|-------------|------------------------|---------------------------|
-| **Status do PR** | ❌ Sem filtragem | ✅ `status = 'closed'` |
-| **Base da Data** | Data de **criação** | Data de **conclusão** |
-| **Agregação** | Por **data específica** | Por **semana** |
-| **Foco** | Atividade de criação | Resultados concluídos |
-
-## Padrões Comuns
-
-### Desenvolvedores de Alta Produção
-- **Características**: Concluem muitos PRs por semana consistentemente
-- **Benefícios**: Impulsionam a velocidade da equipe, definem padrões de desempenho
-- **Riscos**: Potencial burnout, silos de conhecimento
-- **Gestão**: Assegure um ritmo sustentável, compartilhe conhecimento
-
-### Desenvolvedores de Baixa Produção
-- **Características**: Concluem menos PRs por semana
-- **Possíveis Causas**: Curva de aprendizado, tarefas complexas, fatores externos
-- **Apoio**: Forneça mentoria, simplifique tarefas, verifique bloqueios
-- **Metas**: Defina objetivos de melhoria incremental
-
-## Considerações de Contexto
-- **Tamanho do PR**: Um desenvolvedor com menos mas maiores PRs pode ser igualmente produtivo
-- **Complexidade**: Alguns trabalhos naturalmente levam mais tempo para concluir
-- **Papel na Equipe**: Diferentes funções podem ter padrões de PR diferentes
-- **Fase do Projeto**: A produção varia durante diferentes fases de desenvolvimento
+- Um desenvolvedor com PRs menos numerosos, porém maiores, pode ser igualmente produtivo. Leia o gráfico junto com [PR Size](/pt-BR/how_to_use/cockpit/metrics/pr_size).
+- A produção varia com o tipo de trabalho, o papel e a fase do projeto.
+- O trabalho revisado ou feito em pareamento não aparece aqui.

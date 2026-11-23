@@ -246,15 +246,39 @@ export class CodeReviewFeedbackCronProvider {
             const publishResults = await Promise.allSettled(
                 teamsToProcess.map(({ team, executions }) =>
                     (async () => {
-                        const automationExecutionsPRs = executions
-                            .map(
-                                (execution) =>
+                        // One entry per PR: a PR reviewed on several pushes
+                        // has one execution per push.
+                        const automationExecutionsPRs = [
+                            ...new Set(
+                                executions
+                                    .map(
+                                        (execution) =>
+                                            execution?.dataExecution
+                                                ?.pullRequestNumber,
+                                    )
+                                    .filter(
+                                        (prNumber): prNumber is number =>
+                                            prNumber !== undefined &&
+                                            prNumber !== null,
+                                    ),
+                            ),
+                        ];
+                        // The (repository, PR) pairs narrow the PR lookup only
+                        // when every execution names both; otherwise one
+                        // without them would be left out.
+                        const pullRequestRefs = executions.every(
+                            (execution) =>
+                                execution?.repositoryId &&
+                                Number.isInteger(
                                     execution?.dataExecution?.pullRequestNumber,
-                            )
-                            .filter(
-                                (prNumber): prNumber is number =>
-                                    prNumber !== undefined && prNumber !== null,
-                            );
+                                ),
+                        )
+                            ? executions.map((execution) => ({
+                                  repositoryId: execution.repositoryId,
+                                  number: execution.dataExecution
+                                      .pullRequestNumber as number,
+                              }))
+                            : undefined;
 
                         if (!automationExecutionsPRs.length) {
                             this.logger.warn({
@@ -271,6 +295,7 @@ export class CodeReviewFeedbackCronProvider {
                         await this.publishSyncCodeReviewReactionsTasks(
                             team,
                             automationExecutionsPRs,
+                            pullRequestRefs,
                         );
 
                         return {
@@ -349,6 +374,7 @@ export class CodeReviewFeedbackCronProvider {
     private async publishSyncCodeReviewReactionsTasks(
         team: ITeamWithIntegrations,
         automationExecutionsPRs: number[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ) {
         if (!team.isCodeManagementConfigured) {
             this.logger.debug({
@@ -363,6 +389,7 @@ export class CodeReviewFeedbackCronProvider {
             teamId: team.uuid,
             organizationId: team.organization.uuid,
             automationExecutionsPRs,
+            ...(pullRequestRefs?.length ? { pullRequestRefs } : {}),
         };
 
         const runCodeReviewReactionsPayload =

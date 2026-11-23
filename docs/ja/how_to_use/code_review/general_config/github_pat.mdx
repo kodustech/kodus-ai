@@ -1,6 +1,6 @@
 ---
 title: "Github FGPAT トークン"
-description: "コードレビューに Kody が必要とする GitHub の Fine-Grained PAT を発行します。組織のリポジトリへのアクセスを解放する方法も含みます。"
+description: "コードレビューに Kody が必要とする GitHub の Fine-Grained PAT を発行します。組織のリポジトリへのアクセスを許可する方法も含みます。"
 ---
 
 ## FGPAT の概要
@@ -9,64 +9,75 @@ Kody が自動コードレビューを実行できるようにするには、Git
 
 ## Fine-Grained アクセス権限の確認
 
-デフォルトでは、Fine-Grained PAT は組織のコンテンツにアクセスできない場合があります。以下の手順に従ってアクセスを確保してください：
+デフォルトでは、Fine-Grained PAT は組織のコンテンツにアクセスできない場合があります。次の手順でアクセスを確保してください。
 
 ![title](/images/fgpat.png)
 
 1. 組織のオーナーである必要があります。
-1. GitHub で組織の設定に移動します：
-   - この URL を組織名に置き換えて使用できます：<small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>
-1. **Fine-Grained Personal Access Tokens** の下で、Kody の安全なアクセスを有効にするために **「Allow access via fine-grained personal access tokens」** を選択します。
+1. GitHub で組織の設定に移動します。
+   - 次の URL の組織名を置き換えて使用できます：<small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens</small>。
+1. 左サイドバーの **Personal access tokens** で **Settings** をクリックします。**Fine-grained tokens** タブで **Allow access via personal access tokens** を選択し、**Save** をクリックします。
 
 ## FGPAT（Fine-Grained Personal Access Token）の生成
 
-トークンを正しく設定するには、以下の手順に従ってください：
+トークンを正しく設定するには、次の手順に従ってください。
 
 1. **GitHub にアクセスし、プロフィール設定に移動します**：
 
-   - [プロフィール設定ページにアクセスするにはここをクリックしてください](https://github.com/settings/profile)
+   - [プロフィール設定ページにアクセスするにはここをクリックしてください](https://github.com/settings/profile)。
 
 2. **`Developer Settings` に移動します**：
 
-   - 左サイドバーで下にスクロールして `Developer Settings` を見つけてクリックします。
+   - 左サイドバーを下にスクロールして `Developer Settings` を見つけ、クリックします。
 
 3. **`Personal Access Tokens` に移動します**：
 
-   - 引き続き左サイドバーで、`Developer Settings` の下の `Personal Access Tokens` を選択します。
+   - 引き続き左サイドバーの `Developer Settings` の下で `Personal Access Tokens` を選択します。
    - 次に [Fine-grained Tokens](https://github.com/settings/tokens?type=beta) をクリックします。
 
 4. **新しいトークンを生成します**：
 
    - `Generate new token` ボタンをクリックします。
 
-5. **以下の仕様で新しいトークンを設定します**：
+5. **新しいトークンを次の内容で設定します**：
 
-   - **トークン名**：`kody_code_review` など識別しやすい名前を選択します。
-   - **有効期限**：可能であれば、少なくとも 180 日以上の長い有効期限を選択します。
-   - **リソースオーナー**：チームのリポジトリが組織下にあるため、組織をトークンオーナーとして設定していることを確認します。
-   - **リポジトリアクセス**：トークンがすべてのリポジトリにアクセスできるよう **すべてのリポジトリ**を選択します。
-   - **権限**：以下の権限を設定します：
-   - **リポジトリ**：
-     - **Actions**：読み取り権限。
-     - **コミットステータス**：読み取り権限。
-     - **コンテンツ**：読み取りと書き込み権限。
-     - **デプロイメント**：読み取り権限。
-     - **イシュー**：読み取り権限。
-     - **メタデータ**：読み取り権限。
-     - **プルリクエスト**：読み取りと書き込み権限。
+   - **Token Name**：`kody_code_review` など、識別しやすい名前を付けます。
+   - **Expiration Date**：可能であれば、長めの有効期限（できれば 180 日以上）を選択します。
+   - **Resource Owner**：チームのリポジトリは組織の配下にあるため、組織がトークンの所有者に設定されていることを確認します。
+   - **Repository Access**：トークンがすべてのリポジトリにアクセスできるよう、**All repositories** を選択します。
+   - **Permissions**：次の権限を設定します。
+   - **Repository**：
+     - **Commit statuses**：読み取り権限。
+     - **Contents**：読み取りと書き込み権限。
+     - **Issues**：読み取り権限。
+     - **Metadata**：読み取り権限。
+     - **Pull requests**：読み取りと書き込み権限。
      - **Webhooks**：読み取りと書き込み権限。
-   - **組織**：
-     - **メンバー**：読み取り権限。
+   - **Organization**：
+     - **Members**：読み取り権限。
+
+   Kody は **Actions** と **Deployments** を使用しません。これらは **No access** のままにしてください。
 
 6. **トークンを確定して保存します**：
    - 権限を設定したら、`Generate token` をクリックします。
-   - 生成されたトークンをコピーして安全に保存してください。Kody の設定に必要になります。
+   - 生成されたトークンは必ずコピーして安全に保管してください。Kody の設定に必要になります。
 
 ## Kody へのトークンの追加
 
-トークンを生成した後、Kodus に貼り付けます：
+トークンを生成したら、Kodus に貼り付けます。
 
 - **オンボーディング中**：**Connect your Git tool** で **Github** タブを選び、**Connect via token** をクリックします。
 - **後から**：サイドバーで **Repositories** を開き、**Connect a provider** の下の **Github** をクリックし、**Token** タブに切り替えてトークンを貼り付け、**Validate and save** をクリックします。
+- **トークンの置き換え**：**Repositories** の **Github** カードで **Reset** をクリックし、**Just reset the integration** を選択してから、上記の手順で新しいトークンを使って再度接続します。
 
 トークンを使用する場合、レビューは Kody ではなくあなたの GitHub プロフィールで公開され、GitHub Checks / PR ステータスは利用できません。
+
+## GitHub Enterprise Server（Beta）
+
+トークンで GitHub Enterprise Server に接続するには、Cloud のワークスペースにこのベータ機能へのアクセスが必要です。セルフホストの Kodus では `BETA_FEATURES=true` を設定してください。
+
+1. GitHub Enterprise Server インスタンスでトークンを作成します。
+2. **Github** のトークンダイアログで **Self-hosted** をオンにし、**GitHub Enterprise URL**（例：`https://github.your-company.com`）を入力します。`http://` または `https://` で始まっている必要があります。
+3. トークンを貼り付け、**Validate and save** をクリックします。
+
+Kodus は `<GitHub Enterprise URL>/api/v3` でインスタンスの API を呼び出します。トークンまたは URL が正しくない場合、ダイアログに **Invalid Token or GitHub Enterprise URL** と表示されます。

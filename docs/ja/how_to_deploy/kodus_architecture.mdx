@@ -1,69 +1,82 @@
 ---
 title: "Kodusアーキテクチャ"
-description: "Kodusの技術インフラストラクチャの詳細解説。"
+description: "セルフホスト型のKodusデプロイメントが実行するサービス、データストア、ネットワーク。"
 icon: "puzzle-piece"
 ---
 
 ## 概要
 
-このドキュメントでは、Kodusのインフラストラクチャを支えるアーキテクチャについて説明します。当システムはコンテナ化とネットワーク分割を活用した分散アーキテクチャで構築されており、最大限のスケーラビリティ、セキュリティ、保守性を確保しています。
-
-## ネットワークと主要コンポーネント
-
-インフラストラクチャは、パブリックアクセスと内部サービストラフィックを分離するDockerネットワークに分割されています：
-
-- shared-network: 公開サービスとエッジルーティング
-- kodus-backend-services: サービス間内部通信
-- monitoring-network: メトリクスとオブザーバビリティトラフィック（オプション）
-
-## コンポーネント
+Kodusは、Webアプリ、API、レビューを実行するworker、webhooksレシーバー、3つのデータストア（PostgreSQL、MongoDB、RabbitMQ）というコンテナ群として動作します。同じイメージがDocker ComposeとKubernetesの両方で動作します。
 
 ```mermaid
 graph LR
-    Web[Kodus Web App] --> API[API Service]
-    API --> RabbitMQ[(RabbitMQ)]
-    Webhooks[Webhooks Service] --> API
-    API --> Worker[Worker Service]
-    Worker --> RabbitMQ
-    API --> Postgres[(Postgres)]
+    Git[Git provider] -->|webhook| Webhooks[Webhooks]
+    Browser[Browser] --> Web[Web app]
+    Web --> API[API]
+    API --> MCP[MCP Manager]
+    API -->|jobs| Postgres[(PostgreSQL)]
+    Webhooks -->|jobs| Postgres
     API --> Mongo[(MongoDB)]
-    Worker --> Postgres
+    Postgres -->|outbox relay| Worker[Worker]
+    Worker <--> RabbitMQ[(RabbitMQ)]
     Worker --> Mongo
+    Worker -->|reviews| LLM[Your LLM provider]
 ```
 
-### 1. Kodus Webアプリケーション
+## サービス
 
-フロントエンドプラットフォームはNext.jsで構築されており、APIレイヤーとの直接通信によってシームレスなユーザー体験を提供します。
+| サービス | イメージ | ポート | 役割 |
+| --- | --- | --- | --- |
+| `kodus-web` | `kodus-ai-web` | 3000 | ダッシュボード。サーバーがブラウザの代わりにAPIを呼び出します。 |
+| `api` | `kodus-ai-api` | 3001 | 認証、設定、Kody Rules、インテグレーション。Docker Composeでは、起動時にデータベースのマイグレーションとシードも実行します。 |
+| `worker` | `kodus-ai-worker` | 3334（ヘルスチェック、内部） | ジョブキューを消費し、コードレビューを実行します。`WORKER_ROLE=code-review`が必要です。 |
+| `webhooks` | `kodus-ai-webhook` | 3332 | GitHub、GitLab、Bitbucket、Azure Repos、Forgejoからのイベントを受信し、それぞれジョブをキューに登録します。 |
+| `kodus-mcp-manager` | `kodus-mcp-manager` | 3101 | オプション。MCPプラグインを仲介します。[MCP Manager](/ja/how_to_deploy/deploy_kodus/mcp_manager)を参照してください。 |
+| `worker-analytics` | `kodus-ai-worker` | 3334（ヘルスチェック、内部） | オプション、Enterprise。`worker`と同じイメージで`WORKER_ROLE=analytics`を指定します。[Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker)を参照してください。 |
 
-### 2. コアバックエンドサービス
+イメージは`ghcr.io/kodustech/<image>`として公開されています。5つのアプリケーションイメージはリリースごとに同じバージョンタグを共有します。RabbitMQイメージ（`kodus-rabbitmq`）は独自のバージョンを持ちます。
 
-2.0スタックでは、バックエンドの責務を専用サービスに分割しています：
+レビューを実行するのはworkerだけなので、GitプロバイダーとLLMプロバイダーへのアウトバウンドアクセスが必要です。リポジトリはサンドボックス内で解析されます。[Sandbox & AST Graph](/ja/how_to_deploy/deploy_kodus/sandbox)を参照してください。
 
-- API: ビジネスロジックとリクエスト処理を担う中央サービスレイヤー
-- Worker: キューとバックグラウンドジョブの非同期処理
-- Webhooks: GitプロバイダーWebhookの専用サービス
-- Analytics Worker: Cockpit のダッシュボードを支える任意のインジェストワーカー（`WORKER_ROLE=analytics`）。Enterprise 限定 — [Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker) を参照
+### ヘルスエンドポイント
 
-### 3. MCP Manager
+| サービス | エンドポイント |
+| --- | --- |
+| Web | `GET /api/health` |
+| API | `GET /health`（RabbitMQとPostgreSQLを確認）、`GET /health/simple` |
+| Webhooks | `GET /health`、`/health/live`、`/health/ready` |
+| Worker | ポート3334の`GET /health`。インストーラーでは公開されません |
+| MCP Manager | `GET /health` |
 
-MCP Managerはプロバイダーとインテグレーションをカタログ化し、Kodusに公開することで、チームがPlugins画面からMCPをインストールできるようにします。
+## レビューが開始される流れ
 
-### 4. データストア
+1. Gitプロバイダーがwebhooksサービスを呼び出します。webhooksサービスはイベントを検証し、ジョブとoutboxメッセージを1つのトランザクションでPostgreSQLに記録します。
+2. workerがoutboxメッセージをRabbitMQに中継します。これにより、ブローカーが一時的に利用できなくてもイベントは失われません。
+3. workerがRabbitMQからジョブを取り出し、プルリクエストを読み込み、LLMプロバイダーでレビューを実行して、結果をプルリクエストに投稿します。
 
-Kodusは2つのデータベースを使用します：
+workerは最初の接続時に`workflow.jobs.*`キューを作成します。たとえば`WORKER_ROLE`が未設定のために一度も起動していない場合、webhooksとAPIは`QueueBind 404`エラーで失敗します。
 
-- Postgres: リレーショナルデータと埋め込みメタデータ
-- MongoDB: 柔軟なドキュメントストレージ
+## データストア
 
-### 5. メッセージングとオブザーバビリティ
+- **PostgreSQL**（pgvector拡張機能付き）：アプリケーションデータ、ワークフローのジョブとoutbox、各リポジトリのASTグラフ、MCP Managerとアナリティクスウェアハウスのスキーマ。
+- **MongoDB**：プルリクエストとレビューのデータ、Kody Rules、サンドボックスのリース。
+- **RabbitMQ**：workerが発行および消費するジョブキュー。KodusのRabbitMQイメージには、delayed message exchangeプラグインが同梱されており、`kodus-ai`と`kodus-ast`の仮想ホストが作成されます。自前のブローカーを使う場合は、`rabbitmq_delayed_message_exchange`プラグインを有効にし、両方の仮想ホストを作成して、`consumer_timeout = 7200000`を設定してください。
 
-RabbitMQは2.0で必須であり、API、ワーカー、Webhooks間の信頼性の高い非同期通信を提供します。
+Docker Composeでは、Kodusを自前のPostgreSQL、MongoDB、RabbitMQに向けることができます。[Installation](/ja/how_to_deploy/deploy_kodus/generic_vm#データベースの設定)を参照してください。
 
-PrometheusとGrafanaはオプションで、モニタリングと可視化に使用されます。
+## ネットワーク
 
-### 6. 補助サービス（Kodus Cloud）
+インストーラーは、3つの外部Dockerネットワークを作成します：
 
-Kodus Cloudには、セルフホスト型デプロイメントには不要なクローズドソースの補助サービス（課金、チャットインテグレーション）が含まれています。アナリティクスはクラウド専用ではありません：ライセンス済みのセルフホスト Enterprise は同じインジェストワーカーをローカルで実行します。
+- `shared-network`：web、api、worker、webhooks、MCP Manager、RabbitMQ。
+- `kodus-backend-services`：すべてのKodusサービスとPostgreSQL、MongoDB。
+- `monitoring-network`：RabbitMQのみ。
+
+PostgreSQLとMongoDBは`kodus-backend-services`にのみ接続されます。RabbitMQはポート15692でPrometheusメトリクスを公開します。KodusにはPrometheusもGrafanaも同梱されていません。
+
+## Enterprise機能
+
+ライセンスキーを使うと、セルフホスト型インスタンスでEnterprise機能が利用できます。`.env`に`KODUS_LICENSE_KEY`を設定するか、**Subscription**ページにキーを貼り付けてください。Cockpitのアナリティクスと SSOにはライセンスキーが必要です。
 
 ## 次のステップ
 <CardGroup cols={2}>

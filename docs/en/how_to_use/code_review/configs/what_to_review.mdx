@@ -1,0 +1,69 @@
+---
+title: "What to review"
+description: "Choose the review categories, write instructions for each, and decide what else Kody checks."
+---
+
+Open **Code review → What to review**. The settings on this page can be set at Global, Repository and Directory scope. See [Config Inheritance & Overrides](/en/how_to_use/code_review/configs/inheritance_overrides).
+
+## Categories
+
+Each category has a switch. All four are on by default.
+
+| Category | What it covers |
+| --- | --- |
+| **Bug** | Actual bugs and defects in the code. |
+| **Performance** | Code performance and efficiency. |
+| **Security** | Vulnerabilities and code security. |
+| **Business Logic** | Whether the implementation meets the business rules, requirements and acceptance criteria linked in the pull request. |
+
+A finding in a category you turned off is not posted. Kody Rules and custom agents are not categories; they run whatever the switches say.
+
+Business Logic needs a connected task tracker. Click its row to open its settings. See [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).
+
+```yaml
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+```
+
+## Instructions per category
+
+On the Bug, Performance and Security rows, **Instructions** opens an editor showing what Kody looks for in that category. Edit it to match your codebase. See [Instructions & Personality](/en/how_to_use/code_review/configs/custom_prompts).
+
+## Coding-agent instructions
+
+**Coding-agent instructions** (off by default) lets Kody read files such as `CLAUDE.md`, `AGENTS.md` and `.cursor/rules` and point out changes that break them. See [Coding-Agent Instructions](/en/how_to_use/code_review/configs/rules_file_detection).
+
+Kody reads these files through the Bug, Security and Performance reviews, so the setting needs at least one of them on.
+
+## Minimum severity to post
+
+Kody posts only findings at or above this level. **Apply the threshold to Kody Rules** extends it to your rules. See [Severity Threshold](/en/how_to_use/code_review/configs/suggestion_control).
+
+## Custom agents
+
+When custom agents are enabled for your workspace, they are listed under the categories. See [Custom Agents](/en/how_to_use/code_review/custom_agents).
+
+## Deterministic checks
+
+Deterministic checks scan changed files for vulnerable dependencies and exposed credentials, and can use CI results as evidence.
+
+<Badge color="yellow" size="sm">Beta</Badge>
+
+The section appears on Cloud when the workspace has access to deterministic checks. On self-hosted, set `BETA_FEATURES=true`. Each check starts off.
+
+- **Vulnerable dependencies** — checks packages a pull request adds or bumps against public advisory databases, and reports only the vulnerabilities that change introduces. It reads lockfiles even when they are on the ignored files list.
+- **Committed credentials** — scans changed files for tokens, keys and private keys.
+- **Use your CI's results as evidence** — reads the checks already on the commit. Nothing is re-run. On GitHub this needs the Kodus app: a personal access token cannot read check runs.
+
+With the CI setting on, a scanner stands down when your CI already covers what it checks. Findings are labeled **Deterministic**, cover only lines the pull request added, and are posted whatever the severity threshold.
+
+```yaml
+deterministicEvidence:
+    ciChecks: false
+    tools:
+        secrets: false
+        dependencies: false
+```

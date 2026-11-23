@@ -3368,6 +3368,20 @@ export class BitbucketCloudService implements Omit<
                     email: params.email,
                     host: params.host,
                 });
+            } else if (params && params?.authMode === AuthMode.BASIC) {
+                // Basic is how a Data Center host authenticates (#2570): there
+                // is nothing here to check it against, and the initial success
+                // above would report a connection that was never made.
+                throw new Error(
+                    'Bitbucket Cloud authenticates with a token, not a username and password',
+                );
+            } else {
+                // Token auth with no token, or no auth mode at all: neither
+                // branch above ran, so nothing was authenticated and the
+                // initial success is not a connection (#2570).
+                throw new Error(
+                    'A token is required to connect Bitbucket Cloud',
+                );
             }
 
             this.mcpManagerService?.createKodusMCPIntegration(

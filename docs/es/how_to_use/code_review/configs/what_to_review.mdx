@@ -1,0 +1,69 @@
+---
+title: "Qué revisar"
+description: "Elige las categorías de revisión, escribe instrucciones para cada una y decide qué más comprueba Kody."
+---
+
+Abre **Code review → What to review**. Los ajustes de esta página se pueden definir en el ámbito Global, de Repositorio y de Directorio. Consulta [Herencia y Overrides de Configuración](/es/how_to_use/code_review/configs/inheritance_overrides).
+
+## Categorías
+
+Cada categoría tiene un interruptor. Las cuatro están activadas por defecto.
+
+| Categoría | Qué cubre |
+| --- | --- |
+| **Bug** | Bugs y defectos reales en el código. |
+| **Performance** | Rendimiento y eficiencia del código. |
+| **Security** | Vulnerabilidades y seguridad del código. |
+| **Business Logic** | Si la implementación cumple las reglas de negocio, los requisitos y los criterios de aceptación enlazados en el pull request. |
+
+Un hallazgo en una categoría que desactivaste no se publica. Las Kody Rules y los agentes personalizados no son categorías; se ejecutan sin importar lo que digan los interruptores.
+
+Business Logic necesita un gestor de tareas conectado. Haz clic en su fila para abrir sus ajustes. Consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation).
+
+```yaml
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+```
+
+## Instrucciones por categoría
+
+En las filas de Bug, Performance y Security, **Instructions** abre un editor que muestra lo que Kody busca en esa categoría. Edítalo para que se ajuste a tu código. Consulta [Instructions & Personality](/es/how_to_use/code_review/configs/custom_prompts).
+
+## Instrucciones para agentes de código
+
+**Coding-agent instructions** (desactivado por defecto) permite que Kody lea archivos como `CLAUDE.md`, `AGENTS.md` y `.cursor/rules` y señale los cambios que los incumplen. Consulta [Instrucciones para Agentes de Código](/es/how_to_use/code_review/configs/rules_file_detection).
+
+Kody lee estos archivos a través de las revisiones de Bug, Security y Performance, por lo que el ajuste necesita al menos una de ellas activada.
+
+## Severidad mínima para publicar
+
+Kody solo publica los hallazgos de este nivel o superior. **Apply the threshold to Kody Rules** lo extiende a tus reglas. Consulta [Umbral de Severidad](/es/how_to_use/code_review/configs/suggestion_control).
+
+## Agentes personalizados
+
+Cuando los agentes personalizados están habilitados en tu workspace, aparecen listados bajo las categorías. Consulta [Agentes Personalizados](/es/how_to_use/code_review/custom_agents).
+
+## Comprobaciones deterministas
+
+Las comprobaciones deterministas buscan dependencias vulnerables y credenciales expuestas en los archivos modificados, y pueden usar los resultados de CI como evidencia.
+
+<Badge color="yellow" size="sm">Beta</Badge>
+
+La sección aparece en Cloud cuando el workspace tiene acceso a las comprobaciones deterministas. En instalaciones autoalojadas, configura `BETA_FEATURES=true`. Cada comprobación está desactivada por defecto.
+
+- **Vulnerable dependencies** — comprueba los paquetes que un pull request agrega o actualiza contra bases de datos públicas de avisos de seguridad, y reporta solo las vulnerabilidades que ese cambio introduce. Lee los lockfiles aunque estén en la lista de archivos ignorados.
+- **Committed credentials** — escanea los archivos modificados en busca de tokens, claves y claves privadas.
+- **Use your CI's results as evidence** — lee los checks que ya están en el commit. No se vuelve a ejecutar nada. En GitHub esto necesita la app de Kodus: un personal access token no puede leer los check runs.
+
+Con el ajuste de CI activado, un escáner se retira cuando tu CI ya cubre lo que él comprueba. Los hallazgos se etiquetan como **Deterministic**, cubren solo las líneas que agregó el pull request y se publican sea cual sea el umbral de severidad.
+
+```yaml
+deterministicEvidence:
+    ciChecks: false
+    tools:
+        secrets: false
+        dependencies: false
+```

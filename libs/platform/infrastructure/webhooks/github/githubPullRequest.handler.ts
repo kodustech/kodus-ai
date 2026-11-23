@@ -14,7 +14,10 @@ import {
     parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    getMappedPlatform,
+    githubWebhookSource,
+} from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
@@ -187,6 +190,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.GITHUB,
             repository.id,
+            githubWebhookSource(payload),
         );
         if (!context?.organizationAndTeamData) {
             return;
@@ -234,7 +238,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
 
         // Saved as the event it is: a faked `synchronize` would refetch the
         // PR's files and commits, and nothing was pushed.
-        await this.savePullRequestUseCase.execute(params);
+        await this.savePullRequestUseCase.execute({
+            ...params,
+            organizationAndTeamData: context?.organizationAndTeamData,
+        });
         const jobId = await this.enqueueCodeReviewJobUseCase.execute({
             codeManagementPayload: {
                 ...payload,
@@ -283,6 +290,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.GITHUB,
             String(payload?.repository?.id),
+            githubWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -300,7 +308,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         }
 
         try {
-            await this.savePullRequestUseCase.execute(params);
+            await this.savePullRequestUseCase.execute({
+                ...params,
+                organizationAndTeamData: context?.organizationAndTeamData,
+            });
 
             if (this.enqueueCodeReviewJobUseCase) {
                 this.enqueueCodeReviewJobUseCase
@@ -430,7 +441,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             }
 
             if (payload?.action === 'closed') {
-                this.generateIssuesFromPrClosedUseCase.execute(params);
+                this.generateIssuesFromPrClosedUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
@@ -645,6 +659,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     const context = await this.webhookContextService.getContext(
                         PlatformType.GITHUB,
                         String(repository.id),
+                        githubWebhookSource(payload),
                     );
 
                     if (!context?.organizationAndTeamData) {
@@ -721,6 +736,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     // Prepare params for the use cases
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',

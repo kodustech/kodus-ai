@@ -1,10 +1,9 @@
 ---
 title: "Buenas Prácticas"
 description: "Escribe agentes personalizados que encuentren problemas reales en tus pull requests y se mantengan en silencio el resto del tiempo."
-tag: 'beta'
 ---
 
-<Callout icon="alien" iconType="regular">Los agentes personalizados están en beta. El comportamiento y las pantallas aún pueden cambiar.</Callout>
+Consulta los [requisitos de los agentes personalizados](/es/how_to_use/code_review/custom_agents) para ver los planes y la configuración en instalaciones autoalojadas.
 
 ## Un agente por tema
 
@@ -41,8 +40,8 @@ El agente reporta solo lo que piden sus instrucciones, y el verificador descarta
 
 Los hallazgos se verifican antes de publicarse. Dale al agente algo que pueda probar:
 
-- **Una regla en una guía**: vincula el doc o la skill y pide al agente que cite la regla. La cita se verifica en la guía de la rama de destino.
-- **Un resultado de CLI**: las líneas de salida de la CLI que nombran el archivo van al comentario como evidencia.
+- **Una regla en una guía**: vincula el doc o la skill y pide al agente que cite la regla. La cita se verifica en la guía de la rama de destino. Una regla guardada en otro repositorio funciona igual, y se verifica en ese repositorio en su rama por defecto o en la rama o el tag que definas.
+- **Un resultado de CLI**: las líneas de salida del CLI que nombran el archivo van al comentario como evidencia.
 - **Una regla de ast-grep**: una coincidencia cuenta como prueba por sí sola, sin verificación del modelo.
 
 Una regla que solo existe en la cabeza de alguien no se puede citar, así que escríbela en las instrucciones o en un doc.
@@ -72,7 +71,7 @@ Un agente nuevo empieza apagado. Antes de activarlo:
 3. Ajusta las instrucciones, los globs o la severidad mínima, y vuelve a ejecutar.
 4. Actívalo cuando los comentarios que se publicarían sean los que quieres ver en un pull request.
 
-`@kody -v <nombre>` hace lo mismo en un pull request real, publicando los comentarios, mientras el agente sigue apagado.
+`@kody -v <name>` hace lo mismo en un pull request real, publicando los comentarios, mientras el agente sigue apagado.
 
 ## Lee los motivos de descarte
 
@@ -83,10 +82,12 @@ Los hallazgos descartados te dicen qué corregir en el agente:
 | Cita no encontrada | La guía en la rama de destino no tiene ese texto. Vincula la guía correcta, o pon la regla en las instrucciones. |
 | Fuera del foco del agente | Las instrucciones no lo piden. Agrégalo, o déjaselo a Kody. |
 | Sin respaldo en el código | El agente adivinó. Pide pruebas concretas en las instrucciones. |
-| Por debajo de la severidad mínima, o sobre el límite de comentarios | Filtrado esperado. Baja el mínimo si quieres ver más. |
+
+Un hallazgo por debajo de la severidad mínima, o por encima de **Max comments per pull request**, no se descarta: **Try it** lo muestra como **kept, not posted**. Baja el mínimo o sube el límite para publicarlo.
 
 ## Mantén el volumen adecuado
 
 - Define **Max comments per pull request** en agentes que pueden producir muchos hallazgos, como un agente de código duplicado. Se conservan los más graves.
 - Usa **One PR comment** para agentes cuyos hallazgos se leen mejor juntos, como un reporte de cobertura.
 - Usa **Suggested fix: Never** cuando un fix sería una suposición, como mover algo de arquitectura.
+- Define **Run automatically** como **When risk is found** para un agente que es lento o que solo importa en cambios riesgosos. Requiere que [Evaluación de riesgo](/es/how_to_use/code_review/configs/risk) esté activada, y `@kody -v <name>` lo sigue ejecutando a demanda.

@@ -886,6 +886,16 @@ export type CodeReviewConfig = {
     riskAssessmentSource?: 'legacy' | 'independent';
     reviewOptions: ReviewOptions;
 
+    /**
+     * How Kody takes part in the conversation on a pull request (#2576).
+     * `implicitReplies: false` makes Kody answer an unmentioned reply in its
+     * own review thread only when someone writes `@kody`; the default keeps
+     * the classifier deciding, as it has since #1946.
+     */
+    conversation?: {
+        implicitReplies?: boolean;
+    };
+
     /** How the PR is checked against the task it references (Business Logic). */
     businessLogic?: BusinessLogicConfig;
 

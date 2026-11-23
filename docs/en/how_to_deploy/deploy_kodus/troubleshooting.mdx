@@ -8,92 +8,107 @@ icon: "headset"
 
 ### "Run diagnostics"
 
-The installer ships with a doctor script that checks the stack and common misconfigurations.
+The installer ships with a doctor script. Run it from the `kodus-installer` directory:
 
 ```bash
-cd kodus-installer
 ./scripts/doctor.sh
 ```
+
+Its first line says whether reviews are running: `Reviews: NOT RUNNING`, `RUNNING, DEGRADED` or `OK`. Each problem after it lists what you lose and the one thing to do. The script changes nothing and prints no secret, so you can paste its output into a support thread. Add `--verbose` to see every passing check.
+
+To check `.env` on its own, run `./scripts/validate-env.sh`. It checks each variable against the schema and, when containers are running, shows which values the containers loaded differently from `.env`. That catches a change you made without recreating the containers.
+
+On Kubernetes, use `./scripts/doctor-k8s.sh -n <namespace>` instead. See [Kubernetes & OpenShift](/en/how_to_deploy/deploy_kodus/kubernetes#verify).
+
+### "Reviews never start"
+
+Work through these in order:
+
+1. **A model is connected.** Open **AI providers**, or set the model in `.env`. Without one, no review runs.
+2. **The webhook URL reaches the webhooks service.** Connecting a repository registers a webhook with the provider's `*_CODE_MANAGEMENT_WEBHOOK` URL, such as `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`. If the variable is empty, the repository connects and nothing triggers. The URL must be `https://` and reach port `3332`.
+3. **The worker is running.** `docker compose ps worker` should show it up, and `WORKER_ROLE=code-review` must be set.
 
 ### "I can't access the web interface"
 
 1. Check if the containers are running:
 
 ```bash
-docker-compose ps kodus-web
+docker compose ps kodus-web
 ```
 
-2. Verify the ports are correctly mapped:
+2. Verify the port is correctly mapped:
 
 ```bash
-docker-compose port kodus-web 3000
+docker compose port kodus-web 3000
 ```
 
 3. Check the web container logs:
 
 ```bash
-docker-compose logs kodus-web
+docker compose logs kodus-web
 ```
-
-### "Edge Runtime errors in `kodus-web` logs"
-
-If you see errors like `A Node.js API is used ... not supported in the Edge Runtime` (often with an `axios` import trace), part of the web app is running in the Edge Runtime, which does not support Node.js APIs.
-
-1. Update to the latest `kodus-web` image (re-run the installer or run `docker-compose pull kodus-web` and `docker-compose up -d`).
-2. If you are building from source, make sure auth/server routes run on the Node.js runtime (set `export const runtime = "nodejs"` and avoid `runtime = "edge"` on those routes).
-3. Rebuild and restart the container.
 
 ### "Git webhooks aren't working"
 
-1. Verify your domain setup:
+1. Verify the webhooks service answers:
 
 ```bash
-curl -I https://your-domain.com
+curl -i http://localhost:3332/health/live
 ```
 
 2. Check the webhooks logs for webhook attempts:
 
 ```bash
-docker-compose logs webhooks | grep webhook
+docker compose logs webhooks | grep webhook
 ```
 
-3. Verify your reverse proxy configuration:
+3. With a dedicated webhooks domain, check that it reaches the service through your reverse proxy:
 
 ```bash
+curl -i https://your-webhooks-domain.com/health/live
 sudo nginx -t
 ```
+
+If the API domain serves webhooks instead, the proxy must route `/github/webhook`, `/gitlab/webhook` and the other provider paths to port `3332`. See [Reverse Proxy](/en/how_to_deploy/deploy_kodus/reverse_proxy).
 
 ### "Database connection issues"
 
 1. Check database container status:
 
 ```bash
-docker-compose ps db_kodus_postgres
-docker-compose ps db_kodus_mongodb
+docker compose ps db_kodus_postgres db_kodus_mongodb
 ```
 
 2. Verify database logs:
 
 ```bash
-docker-compose logs db_kodus_postgres
-docker-compose logs db_kodus_mongodb
+docker compose logs db_kodus_postgres
+docker compose logs db_kodus_mongodb
 ```
 
-3. Test database connections:
+3. Test database connections from inside the containers:
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
-docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin'
 ```
+
+Enter the MongoDB root password when prompted.
+
+### MongoDB exits with SERVER-121912
+
+Some combinations of MongoDB 8.3 and recent Linux kernels fail at startup with `SERVER-121912`. On Docker kernels 6.19 and later, `install.sh` saves `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11` if you have not set an image override. For a fresh install using Compose directly, set that value in `.env`. For a fresh Helm install, set `mongodb.bundled.image=mongo:8.2.11`.
+
+If the volume already contains 8.3 data, follow the [MongoDB downgrade procedure](https://www.mongodb.com/docs/manual/release-notes/8.3-downgrade/) before switching images.
 
 ### "Migration failed due to missing vector type"
 
-If you encounter the error "type vector does not exist" during migrations, this is because the pgvector extension is not enabled in your PostgreSQL database. Here's how to fix it:
+If you encounter the error "type vector does not exist" during migrations, the pgvector extension is not enabled in your PostgreSQL database. The bundled PostgreSQL image enables it the first time its volume is created. An external database, or a volume that existed before the extension was added, needs it enabled by hand:
 
 1. Connect to your PostgreSQL database:
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 2. Enable the pgvector extension:
@@ -102,13 +117,13 @@ docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-3. After enabling the extension, try running your migrations again:
+3. Restart the api. It runs the migrations when it starts:
 
 ```bash
-docker-compose exec api npm run migration:run
+docker compose restart api
 ```
 
-If you're still experiencing issues, you can verify the extension is properly installed:
+To verify the extension is installed:
 
 ```sql
 SELECT * FROM pg_extension WHERE extname = 'vector';
@@ -123,16 +138,24 @@ If you're seeing message queue errors:
 1. Check RabbitMQ status:
 
 ```bash
-docker-compose logs rabbitmq
+docker compose logs rabbitmq
 ```
 
-2. Access the management console at `http://localhost:15672` to verify queues and connections
+2. Open the management console to verify queues and connections. The installer publishes it on a random host port; find it with:
+
+```bash
+docker compose port rabbitmq 15672
+```
 
 3. Restart the service if needed:
 
 ```bash
-docker-compose restart rabbitmq
+docker compose restart rabbitmq
 ```
+
+- `QueueBind 404` in the api or webhooks logs means the worker never created the `workflow.jobs.*` queues. Check that the worker is running and that `WORKER_ROLE` is set.
+- Connection errors usually mean `API_RABBITMQ_URI` does not match `RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS` or the `kodus-ai` virtual host.
+- `PRECONDITION_FAILED` on a long review means the broker's `consumer_timeout` is below 2 hours. The Kodus RabbitMQ image sets it; set `consumer_timeout = 7200000` on your own broker.
 
 ### Resource Problems
 
@@ -147,18 +170,19 @@ docker stats
 2. Verify container limits:
 
 ```bash
-docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+docker inspect $(docker compose ps -q api) | grep -A 5 "Resources"
 ```
 
-3. Adjust resource limits in docker-compose.yml if needed
+3. Adjust resource limits in `docker-compose.yml` if needed. Repository parsing runs inside the worker, so it needs the most memory; see [Sandbox & AST Graph](/en/how_to_deploy/deploy_kodus/sandbox#resource-sizing).
 
 ## Getting Help
 
 ### What to Include in Support Requests
 
 - The exact error message
+- The output of `./scripts/doctor.sh` (on Kubernetes, `./scripts/collect-diagnostics.sh -n <namespace>`)
 - Relevant logs from affected services
-- Your deployment method (CLI, VM, etc.)
+- Your deployment method (Docker Compose, Kubernetes, OpenShift) and Kodus version
 - Steps to reproduce the issue
 
 ### Where to Get Help

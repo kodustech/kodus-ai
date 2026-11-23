@@ -7,7 +7,9 @@ icon: "satellite-dish"
 Cada instancia self-hosted de Kodus envía **un heartbeat anónimo por día**
 a `https://telemetry.kodus.io`. La carga útil contiene únicamente
 contadores agregados y metadatos de runtime — nunca código, identidades,
-ni nada que pueda rastrearse hasta ti o tus usuarios.
+ni nada que pueda rastrearse hasta ti o tus usuarios. El `worker` de code
+review lo envía, a las 03:17 UTC. Cuando el worker inicia, registra en el log
+si la telemetría está activada.
 
 Esta página documenta exactamente qué se envía, por qué, dónde se almacena
 y cómo desactivarlo.
@@ -23,17 +25,17 @@ Un único `POST /v1/heartbeat` por día UTC, ~700 bytes. Ejemplo de carga
   "instance_id": "0188f5c5-5b8f-4f45-92d4-b20c25df0b5a",
   "sent_at": "2026-05-04T03:17:00.000Z",
   "kodus": {
-    "version": "0.4.15",
+    "version": "2.2.11",
     "deployment": "docker",
     "uptime_hours": 124
   },
   "runtime": {
-    "node_version": "v20.11.1",
+    "node_version": "v22.23.4",
     "os": "linux",
     "arch": "x64",
     "cpu_count": 8,
     "db_type": "postgres",
-    "db_version": "PostgreSQL 15.4"
+    "db_version": "PostgreSQL 16.4"
   },
   "usage_7d": {
     "active_users": 12,
@@ -51,6 +53,8 @@ Un único `POST /v1/heartbeat` por día UTC, ~700 bytes. Ejemplo de carga
   }
 }
 ```
+
+`suggestions_generated`, `suggestions_applied` y `agent_review_repos_pct` siempre se envían como `0`. `deployment` es `k8s` en Kubernetes, `docker` en un contenedor y `unknown` en cualquier otro caso. `integrations` lista solo tipos de integración de una lista fija, como `github` o `slack`.
 
 El schema completo está en el [repositorio kodus-beacon](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md) — se valida en el servidor con un validador estricto que rechaza cualquier
 campo desconocido con un `400`.
@@ -92,16 +96,17 @@ vendemos los datos.
 
 ## Inspecciona qué enviaría tu instancia
 
-Antes de que cualquier heartbeat salga de tu instancia, puedes imprimir
-la carga útil exacta que el cron diario construiría:
+Puedes volcar la carga útil exacta que el cron diario construiría, sin
+enviarla. Ejecuta esto desde un checkout del repositorio [kodus-ai](https://github.com/kodustech/kodus-ai)
+con un `.env` que apunte a tu PostgreSQL y MongoDB:
 
 ```bash
 pnpm run telemetry:preview
 ```
 
 Este comando inicializa un contexto Kodus mínimo, ejecuta el mismo
-coletor que usa el cron, e imprime el JSON en stdout — sin enviarlo.
-Encadénalo con `jq` para explorar:
+collector que usa el cron, e imprime el JSON en stdout. Encadénalo con
+`jq` para explorar:
 
 ```bash
 pnpm run telemetry:preview | jq '.usage_7d'
@@ -109,9 +114,7 @@ pnpm run telemetry:preview | jq '.usage_7d'
 
 ## Desactivar la telemetría
 
-Define `KODUS_TELEMETRY_DISABLED=true` en tu entorno. El cron salta
-silenciosamente — ningún heartbeat se envía, jamás, hasta que lo
-revistas.
+Define `KODUS_TELEMETRY_DISABLED=true` en el entorno del worker. Con Docker Compose, edita `.env` y aplica el cambio con `docker compose up -d worker`. Con Helm, defínelo en `global.config` y actualiza el release para que el worker reciba el cambio.
 
 ```bash
 # .env
@@ -127,30 +130,24 @@ telemetría activada.
 - **Receiver:** un pequeño servicio Node.js (Fastify) desplegado en
   `telemetry.kodus.io`. Código fuente público:
   [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
-- **Almacenamiento:** Neon Postgres, región US, cifrado en reposo, solo
-  TLS. Dos tablas — `telemetry_instances` (una fila por instancia, last
-  seen + version) y `telemetry_heartbeats` (una fila por instancia por
-  día UTC, carga útil como JSONB).
-- **Retención:** las filas individuales de heartbeat se guardan durante
-  **12 meses**. Después de eso, agregamos los contadores en estadísticas
-  históricas (p.ej. "X instancias activas en enero/2026") y borramos las
-  filas por día. La fila de la instancia permanece — no lleva series
-  temporales, solo la versión más reciente + timestamp de last seen.
-- **Acceso:** solo el equipo de ingeniería de producto, mediante
-  credenciales individuales de Neon con auditoría. Los datos nunca se
-  comparten con terceros y nunca se usan para entrenar ningún modelo
-  de IA.
+- **Almacenamiento:** Neon Postgres en AWS `us-east-1`, accedido por TLS.
+  Dos tablas: `telemetry_instances` (una fila por instancia, con last seen
+  y última versión) y `telemetry_heartbeats` (una fila por instancia por
+  día UTC, carga útil almacenada como JSONB). Un segundo heartbeat en el mismo día UTC
+  sobrescribe la fila de ese día.
+- **Rol de base de datos:** el receiver escribe con un rol que tiene solo los
+  privilegios que necesitan las escrituras de heartbeat.
 
 ## Código fuente que puedes auditar
 
 Ambos extremos son abiertos y lo suficientemente pequeños para leerse de
 principio a fin:
 
-- **Cliente** (lo que se ejecuta en tu instancia): el cron, coletor y
+- **Cliente** (lo que se ejecuta en tu instancia): el cron, collector y
   transporte HTTP están en [`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
   y [`apps/worker/src/cron/self-hosted-beacon.cron.ts`](https://github.com/kodustech/kodus-ai/blob/main/apps/worker/src/cron/self-hosted-beacon.cron.ts).
-- **Servidor** (lo que se ejecuta en `telemetry.kodus.io`): el receiver
-  completo son ~80 líneas de ruta Fastify + un upsert en Postgres. Ver
+- **Servidor** (lo que se ejecuta en `telemetry.kodus.io`): un pequeño
+  servicio Fastify que valida la carga útil y la hace upsert en Postgres. Ver
   [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
 
 ## Preguntas

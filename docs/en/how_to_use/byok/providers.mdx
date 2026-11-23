@@ -1,0 +1,249 @@
+---
+title: "BYOK providers"
+sidebarTitle: "Providers"
+description: "How to get a key and connect each supported provider, including Kimi, GLM and OpenRouter pinning."
+---
+
+Pick your provider for how to get a key and what to enter. Add the model on the **AI providers** page; see [Connect a provider](/en/how_to_use/byok#connect-a-provider).
+
+## Supported Providers
+
+<Tabs>
+  <Tab title="OpenAI">
+    **Best for:** Latest GPT models and reliable performance.
+
+    **Get an API key:**
+    1. Visit [OpenAI API Keys](https://platform.openai.com/api-keys)
+    2. Create a new key for Kodus
+    3. Add billing information
+
+    **Through your own gateway:** if your OpenAI traffic goes through an OpenAI-protocol gateway that serves the Responses API, set its address in the optional **Base URL** and use the key the gateway expects. With OpenAI's own model ids, reviews then run as on a direct OpenAI key: the Responses API, strict structured output, and your reasoning level.
+
+    - Include the API version, as in `https://your-gateway.example.com/v1`. Kodus calls `<Base URL>/responses`, and lists models from `<Base URL>/models`.
+    - If the gateway only serves chat completions, connect it as **OpenAI-compatible** instead.
+    - The URL must use `https://` and resolve to a public address, because Kodus sends your key there. Gateways on a self-hosted install's private network are not supported.
+    - Requests go out with `store: false`, so neither the gateway nor OpenAI is asked to keep them.
+    - Use OpenAI's own model ids (for example `gpt-5.4`). A model the gateway renames is not recognized as a reasoning model, so its reasoning level is not sent.
+    - Not supported here: gateways that need their own headers besides the key (Portkey, Cloudflare AI Gateway), and Azure OpenAI, which has its own **Azure OpenAI** provider.
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **Best for:** Large-context reviews (1M tokens) and competitive pricing.
+
+    **Get an API key:**
+    1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+    2. Create a new key
+    3. Enable billing in Google Cloud Console
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **Best for:** Nuanced analysis and adaptive extended thinking.
+
+    **Get an API key:**
+    1. Visit [Anthropic Console](https://console.anthropic.com/)
+    2. Create an account and generate a key
+    3. Add credits
+  </Tab>
+
+  <Tab title="Novita AI">
+    **Best for:** Open-source and hosted models (Llama, DeepSeek, Kimi) at competitive prices.
+
+    **Get an API key:**
+    1. Sign up at [Novita AI](https://novita.ai/)
+    2. Navigate to API settings
+    3. Generate a key
+
+    <Card title="Novita Setup Guide" icon="rocket" href="/en/cookbook/novita">
+      Detailed setup with screenshots.
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **Best for:** One billing relationship across many models.
+
+    **Get an API key:**
+    1. Create an account at [OpenRouter](https://openrouter.ai/)
+    2. Add credits
+    3. Generate a key in settings
+
+    <Warning>
+      OpenRouter routes each request to a different upstream provider by default, which can cause quality and latency drift between calls. **Pin specific upstreams** under Advanced settings → OpenRouter routing to keep behavior stable. See [Pinning OpenRouter providers](#pinning-openrouter-providers).
+    </Warning>
+  </Tab>
+
+  <Tab title="Google Vertex AI">
+    <Info>**Beta.** A more involved auth path than the single-key norm.</Info>
+
+    **Best for:** Teams already on Google Cloud that need Gemini (or Claude) under their existing
+    GCP billing, IAM, and data-residency guarantees.
+
+    **How to configure:**
+    1. In the connect flow, pick **Google Vertex AI** (under Custom).
+    2. Paste the **contents of your service account JSON file** into the Service Account JSON
+       field (base64-encoded also works). Kodus extracts `project_id` from the JSON
+       automatically.
+    3. **Region** — leave empty to use the global endpoint (recommended). Pin a region
+       (e.g. `us-east5`) only when you have data-residency requirements.
+
+    The service account needs permission to call the Vertex AI prediction API in that project. Test probes the *actual configured model*, so an unavailable model/region fails at Test time.
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**Beta.** A more involved auth path than the single-key norm.</Info>
+
+    **Best for:** Teams standardized on AWS that want models billed through their AWS account.
+
+    **How to configure:**
+    1. In the connect flow, pick **Amazon Bedrock** (under Custom).
+    2. Provide a **Bedrock API key** (bearer token) — see
+       [How to generate a Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html).
+    3. Set the **Region** (e.g. `us-east-1`, `us-west-2`, `eu-central-1`).
+
+    <Accordion title="Advanced: IAM user credentials instead">
+      If your team hasn't migrated to Bedrock API keys, expand **Advanced — use IAM user
+      credentials instead** and supply a static access key ID + secret (plus a session token for
+      STS temporary credentials). The IAM principal needs `bedrock:InvokeModel`.
+
+      The API key takes precedence: if a bearer token is set, the IAM fields are ignored.
+    </Accordion>
+  </Tab>
+
+  <Tab title="Azure OpenAI">
+    **Best for:** Teams that run OpenAI models in their own Azure resource.
+
+    **How to configure:**
+    1. In the connect flow, pick **Azure OpenAI** (under Custom).
+    2. Enter your **API key** and the **Resource endpoint**, for example `https://your-resource.openai.azure.com/openai`.
+    3. Type the **deployment name** as the model ID. Kodus can't list Azure deployments with the inference key.
+  </Tab>
+
+  <Tab title="OpenAI-compatible">
+    **Best for:** Specialized providers (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) or self-hosted endpoints.
+
+    **How to configure:**
+    1. In the connect flow, pick **OpenAI-compatible** (under Custom).
+    2. Enter the base URL (e.g. `https://api.moonshot.ai/v1`, `https://api.z.ai/api/paas/v4/`, `https://api.fireworks.ai/inference/v1`).
+    3. Provide the key and model ID.
+
+    <Note>
+      Model IDs are provider-specific — some use deep paths (e.g. Fireworks: `accounts/fireworks/models/kimi-k2p7-code`). Copy the exact ID from your provider's dashboard; Test sends a real request, so a wrong ID fails immediately.
+    </Note>
+
+    <CardGroup cols={2}>
+      <Card title="Z.ai (GLM) guide" href="/en/cookbook/z-ai" icon="bolt">
+        Full Z.ai setup with Coding Plan details.
+      </Card>
+      <Card title="Moonshot (Kimi) guide" href="/en/cookbook/moonshot" icon="moon">
+        Kimi + Kimi Code Plan setup.
+      </Card>
+      <Card title="Fireworks AI" href="/en/cookbook/fireworks" icon="fire">
+        Fireworks-specific setup.
+      </Card>
+      <Card title="Together AI" href="/en/cookbook/together" icon="handshake">
+        Together AI setup.
+      </Card>
+    </CardGroup>
+  </Tab>
+
+  <Tab title="Anthropic-compatible">
+    **Best for:** Endpoints that speak the Anthropic Messages API rather than the OpenAI one —
+    including coding-plan endpoints such as Kimi's.
+
+    **How to configure:**
+    1. In the connect flow, pick **Anthropic-compatible** (under Custom).
+    2. Enter the base URL, the key, and the model ID.
+
+    <Note>
+      Paste the base URL in whichever shape your provider documents — with or without a trailing
+      `/v1` (e.g. `https://api.kimi.com/coding` or `https://api.kimi.com/coding/v1`). Kodus
+      normalizes it internally, because the two Anthropic SDK paths disagree on where `/v1`
+      belongs. For a known brand, a key-only connect resolves the endpoint automatically.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Connecting Kimi (Moonshot) and GLM (Z.ai)
+
+Moonshot and Z.ai each offer a subscription plan on a **different endpoint** than their pay-per-token Developer API. Each plan is a separate account with its own key — pick the base URL that matches the key you have.
+
+The **Moonshot** tile uses the Developer API's Anthropic-compatible endpoint (`https://api.moonshot.ai/anthropic`). The **Z.ai** tile uses `https://api.z.ai/api/anthropic`, which Z.AI documents for its GLM Coding Plan. To use the Z.AI Developer API, choose **OpenAI-compatible** under **Custom** and use `https://api.z.ai/api/paas/v4/`. For a Kimi Code Plan key, choose a compatible provider under **Custom** and enter the base URL from the table.
+
+<Tabs>
+  <Tab title="Kimi (Moonshot AI)">
+    | Plan | Endpoint | Keys from | Best for |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1` (OpenAI-compatible) or `https://api.moonshot.ai/anthropic` (Anthropic-compatible) | [platform.kimi.ai](https://platform.kimi.ai/console/api-keys) | Pay-per-token, concurrency scales with recharge tier |
+    | **Kimi Code Plan** | `https://api.kimi.ai/coding/v1` (international)<br />`https://api.kimi.com/coding/v1` (China) | [kimi.com/code](https://www.kimi.com/code) | Subscription with a dedicated coding endpoint |
+
+    <Info>
+      For Kimi Code Plan, start with a low cap and adjust it for your account. See [Tuning concurrency](/en/cookbook/moonshot#tuning-concurrency). Kimi K2.7 Code always reasons. Kodus hides its temperature field and omits temperature from requests. See [Temperature](/en/how_to_use/byok/model_settings#temperature).
+    </Info>
+  </Tab>
+
+  <Tab title="GLM (Z.ai)">
+    | Plan | Endpoint | Keys from | Best for |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | Bursty workloads, pay-per-token |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | Predictable team volume, flat monthly fee |
+
+    <Warning>
+      Use a **Developer API** key to run reviews in Kodus. Z.AI restricts the GLM Coding Plan to its [supported tools](https://docs.z.ai/devpack/tool/others#supported-tools). Confirm eligibility with Z.AI before using a Coding Plan subscription in Kodus.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Pinning OpenRouter providers
+
+OpenRouter is a router — when you request a model (e.g. `moonshotai/kimi-k2`), it forwards the call to one of several upstream providers (Moonshot direct, Together, Groq, Fireworks, Novita…). Each call can land on a different backend. That's convenient, but it introduces silent variance:
+
+- **Quality drift** — upstreams run different precisions (FP8, INT4, full) and give subtly different outputs for identical prompts
+- **Tool-calling inconsistency** — some backends don't support function calling the same way, leading to malformed tool use
+- **Reasoning format variance** — one upstream honors `reasoning_effort`, another only `thinking.enabled`, another ignores both
+- **Latency swings** — p50 can jump from 800ms to 4s between calls as routing changes
+- **Rate-limit surprises** — you hit quota on a backend you didn't explicitly choose
+
+### How to pin
+
+When your BYOK provider is **OpenRouter**, the Advanced settings panel shows an **OpenRouter routing** section with two fields:
+
+- **Pin providers (in order)** — comma-separated list of upstream names (e.g. `moonshot, together`). OpenRouter tries them in order and uses the first available.
+- **Allow fallbacks** — when off, requests hard-fail if none of the pinned providers are available. When on (default), OpenRouter can fall back to any other upstream that serves the model.
+
+<Tip>
+  For a **stable** setup, pin a single provider and turn off fallbacks (`Pin: moonshot`, `Allow fallbacks: off`). Requests will always hit the same upstream or fail loudly — no silent quality changes. The tradeoff is zero resilience if that one upstream goes down; pair it with a **Fallback model** on a different provider (e.g. Anthropic) to absorb outages.
+</Tip>
+
+<Warning>
+  Upstream names must match OpenRouter's catalog. Check the provider tags on [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) — common values include `moonshot`, `together`, `groq`, `fireworks`, `novita`.
+</Warning>
+
+Under the hood, Kodus emits this into the Vercel AI SDK call:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### Advanced: raw JSON override
+
+If you need fields beyond `order` and `allow_fallbacks` (e.g. `ignore`, `data_collection`, `require_parameters`), switch **Thinking / Reasoning** to **Custom** in Advanced settings ([Custom JSON override](/en/how_to_use/byok/model_settings#custom-json-override)) and paste the full routing payload — it's merged into `providerOptions` alongside any reasoning config:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```

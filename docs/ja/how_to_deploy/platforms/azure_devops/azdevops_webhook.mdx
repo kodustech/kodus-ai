@@ -1,10 +1,10 @@
 ---
 title: Webhookの作成
-description: "Kody が service hook を作成できなかった場合に、Azure Repos の Webhook を手動で登録する手順。URL に必要な署名付きトークンも含みます。"
+description: "Kodyがservice hookを作成できなかった場合に、Azure ReposのWebhookを手動で登録する手順。URLに必要な署名付きトークンも含みます。"
 icon: webhook
 ---
 
-KodyはAzure DevOpsプロジェクトを接続する際に通常Webhookを自動的に作成します。このページでは、自動登録が行われなかった場合の**手動セットアップ**手順を説明します。これは主にセルフホスト型インストールや、KodyがユーザーのためにService Hookを作成できないAzureプロジェクトで発生します。
+Kodyは通常、リポジトリの選択を保存する際に、リポジトリごとにservice hookを自動的に作成します。これにはプロジェクトの**Edit subscriptions**権限が必要です（Project Administratorsは持っています）。このページでは、自動登録が行われなかった場合に行う**手動セットアップ**の手順を説明します。**Repositories**に、そのリポジトリが理由とともに表示されます。
 
 <Note>
   WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
@@ -12,7 +12,7 @@ KodyはAzure DevOpsプロジェクトを接続する際に通常Webhookを自動
 
 ## Azure ReposのWebhook URLには署名済みトークンが必要
 
-GitHub、GitLab、Bitbucket、Forgejoとは異なり、Azure ReposのWebhookリクエストには**暗号化された`token`クエリパラメーター**が含まれている必要があります。Kodusは受信リクエストごとにこのトークンを検証し、トークンなしのコールは`403 Unauthorized`で拒否されます。トークンはセルフホスト型セットアップ中にすでに設定した2つの環境変数から導出されます：
+GitHub、GitLab、Bitbucket、Forgejoとは異なり、Azure ReposのWebhookリクエストには**暗号化された`token`クエリパラメーター**が含まれている必要があります。Kodusは受信リクエストごとにこのトークンを検証し、トークンなしの呼び出しは`403 Unauthorized`で拒否されます。トークンはセルフホスト型セットアップ中にすでに設定した2つの環境変数から導出されます：
 
 - `CODE_MANAGEMENT_SECRET` — 32バイトの暗号化キー（16進数エンコード）。
 - `CODE_MANAGEMENT_WEBHOOK_TOKEN` — キーが暗号化するプレーンテキスト。
@@ -60,8 +60,8 @@ console.log(iv.toString('hex') + ':' + e);
 Kodusスタックが実行中でない場合、または別のマシンでトークンを生成したい場合は、2つの環境変数をエクスポートして実行します：
 
 ```bash
-export CODE_MANAGEMENT_SECRET="<.envと同じ値>"
-export CODE_MANAGEMENT_WEBHOOK_TOKEN="<.envと同じ値>"
+export CODE_MANAGEMENT_SECRET="<same value as in your .env>"
+export CODE_MANAGEMENT_WEBHOOK_TOKEN="<same value as in your .env>"
 
 node -e "
 const crypto = require('crypto');
@@ -79,7 +79,7 @@ console.log(iv.toString('hex') + ':' + e);
 </Warning>
 
 <Tip>
-  トークンは有効期限がありません。組織内のすべてのAzure ReposのWebhookに同じ生成値を再利用できます。`CODE_MANAGEMENT_SECRET`または`CODE_MANAGEMENT_WEBHOOK_TOKEN`をローテーションする場合のみ、ローテーションが必要です。
+  トークンに有効期限はありません。組織内のすべてのAzure ReposのWebhookに、同じ生成値を再利用できます。`CODE_MANAGEMENT_SECRET`または`CODE_MANAGEMENT_WEBHOOK_TOKEN`をローテーションする場合のみ、トークンも再生成してください。
 </Tip>
 
 ## Azure DevOpsでのWebhookサブスクリプションの作成
@@ -103,12 +103,13 @@ console.log(iv.toString('hex') + ':' + e);
 
 6. **Finish**をクリックします。
 
-イベントタイプごとに1つのサブスクリプションを作成します。Kodusは現在以下に対応しています：
+イベントタイプごとに1つのサブスクリプションを作成します。次の3つは、Kody自身が作成するもので、レビューに必要なものです：
 
 - `git.pullrequest.created` — プルリクエストの作成
 - `git.pullrequest.updated` — プルリクエストの更新
-- `git.pullrequest.merge.attempted` — プルリクエストのマージ試行
 - `ms.vss-code.git-pullrequest-comment-event` — プルリクエストへのコメント
+
+Kodusは`git.pullrequest.merge.attempted`（プルリクエストのマージ試行）も受け付けますが、レビューには必要ありません。
 
 <Note>
   URLがAzure DevOpsから到達可能で、ポート3332（直接またはリバースプロキシ経由）での受信POSTリクエストを受け付けることを確認してください。
@@ -127,5 +128,9 @@ console.log(iv.toString('hex') + ':' + e);
 
   <Accordion title="1つのイベントは機能するが他は機能しない">
     各イベントタイプにはAzure DevOpsで独自のサブスクリプションが必要です。「Pull request created」のみ作成した場合、更新とコメントはレビューをトリガーしません。
+  </Accordion>
+
+  <Accordion title="Kodusが400 Unrecognized eventを返す">
+    トークンは受け付けられましたが、リクエストボディに`eventType`がありません。Azure DevOpsのservice hookは常にこれを送信するため、手動のテストリクエストなど、別の何かがこのURLにPOSTしています。
   </Accordion>
 </AccordionGroup>

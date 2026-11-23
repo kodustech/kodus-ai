@@ -165,7 +165,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         }
 
         try {
-            await this.savePullRequestUseCase.execute(params);
+            await this.savePullRequestUseCase.execute({
+                ...params,
+                organizationAndTeamData: context?.organizationAndTeamData,
+            });
 
             if (this.enqueueCodeReviewJobUseCase) {
                 this.enqueueCodeReviewJobUseCase
@@ -243,7 +246,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             }
 
             if (payload?.action === WebhookForgejoHookIssueAction.CLOSED) {
-                this.generateIssuesFromPrClosedUseCase.execute(params);
+                this.generateIssuesFromPrClosedUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
@@ -644,6 +650,8 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
 
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',

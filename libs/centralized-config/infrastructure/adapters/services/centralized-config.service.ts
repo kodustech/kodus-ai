@@ -62,6 +62,8 @@ import * as yaml from 'js-yaml';
 import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import z from 'zod';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
+import { syncedRuleIsUnchanged } from '@libs/centralized-config/utils/synced-rule-is-unchanged';
+import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 
 @Injectable()
 export class CentralizedConfigService implements ICentralizedConfigService {
@@ -87,6 +89,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        private readonly contextReferenceDetectionService: ContextReferenceDetectionService,
     ) {}
 
     async validateCentralizedConfig(params: {
@@ -2042,6 +2045,32 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         }
     }
 
+    /**
+     * The write is also what re-runs a rule's reference detection. A rule
+     * whose last detection failed (a referenced file not there yet, a
+     * provider or model error) is written again, so the next sync retries it
+     * as every sync did before. Every rule is asked, not only one with a
+     * reference id: a first detection that failed leaves none. A clean
+     * detection stores a revision (with its answer), so a rule that
+     * references nothing reads as clean and is skipped. When the answer
+     * cannot be read, the rule is written, as before.
+     */
+    private async referenceDetectionFailed(
+        rule: Partial<IKodyRule>,
+    ): Promise<boolean> {
+        if (!rule.uuid) {
+            return false;
+        }
+        try {
+            return await this.contextReferenceDetectionService.lastDetectionFailed(
+                'kodyRule',
+                rule.uuid,
+            );
+        } catch {
+            return true;
+        }
+    }
+
     async synchronizeKodyRules(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         ruleFiles: IKodyRuleFileMeta[];
@@ -2109,6 +2138,12 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     updatedAt?: Date;
                 }
             >();
+
+            const existingRuleByUuid = new Map(
+                (existingRulesEntity?.rules || [])
+                    .filter((rule) => rule.uuid)
+                    .map((rule) => [rule.uuid, rule]),
+            );
 
             for (const existingRule of existingRulesEntity?.rules || []) {
                 const sourcePathKey = getSourcePathLookupKey(
@@ -2353,6 +2388,22 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                             KodyRulesOrigin.REPO_FILE_SYNC,
                     };
 
+                    // Every PR event runs this sync. A file nobody edited
+                    // produces the rule already stored, and writing it back
+                    // rewrote the organization's whole rules document and
+                    // recompiled the rule's detector (an LLM call) each time.
+                    const storedRule = existingMatch
+                        ? existingRuleByUuid.get(existingMatch.uuid)
+                        : undefined;
+                    if (
+                        storedRule &&
+                        syncedRuleIsUnchanged(storedRule, ruleDto) &&
+                        !(await this.referenceDetectionFailed(storedRule))
+                    ) {
+                        syncedCount++;
+                        continue;
+                    }
+
                     await this.createOrUpdateKodyRulesUseCase.execute(
                         ruleDto,
                         organizationAndTeamData.organizationId,
@@ -2580,6 +2631,15 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 // centralized PR is open) — deleting it here would wipe data
                 // the centralized config never owned.
                 if (!sourcePath) {
+                    continue;
+                }
+
+                // A deleted rule keeps its centralized path, so it is "absent
+                // from the repository" on every later sync too. Deleting it
+                // again changed nothing and cost three passes over the whole
+                // rules document (read it, re-read it, write it back) per rule,
+                // per sync.
+                if (rule.status === KodyRulesStatus.DELETED) {
                     continue;
                 }
 

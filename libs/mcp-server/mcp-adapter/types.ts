@@ -227,6 +227,12 @@ export interface MCPServerConfig {
     category?: string | null;
     /** Catalog id of the integration this server comes from (`linear-default`), or the custom integration's id. */
     integrationId?: string;
+    /**
+     * Called when the server refuses the credential in `headers` (HTTP 401,
+     * `invalid_token`). Set by whoever issued that credential, so it can
+     * refresh it or retire the connection instead of sending it again.
+     */
+    onCredentialRejected?: () => void;
 }
 
 export interface MCPAdapterConfig {

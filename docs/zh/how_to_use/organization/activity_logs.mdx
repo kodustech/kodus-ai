@@ -1,0 +1,63 @@
+---
+title: "活动日志"
+description: "查看谁更改了组织中的 Kody Rules、审查设置、集成和访问权限。"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="适用于 Kodus Cloud Enterprise 或有效的试用版。">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="需要 Enterprise 许可证。">
+    <Badge icon="server" stroke>自托管</Badge>
+  </FeatureBadge>
+</div>
+
+**Organization → Activity logs** 是配置更改的审计记录。该页面的标题为 **User Activity Logs**。所有者、代码库管理员、计费管理员和贡献者都可以阅读,并且每个人都能看到组织中的所有条目。
+
+| 您的套餐 | 您看到的内容 |
+| --- | --- |
+| Enterprise 或试用 | 完整页面 |
+| Free 或 Teams | 侧边栏条目带有挂锁图标,页面会打开一个带有 **See plans** 按钮的预览 |
+| 带有 Enterprise 许可证密钥的自托管 | 完整页面 |
+| 没有许可证密钥的自托管 | 挂锁图标,以及带有 **Activate a license** 按钮的预览 |
+| 已过期、已取消或付款失败的套餐 | 挂锁图标和预览 |
+
+在任何其他套餐上,API 都会拒绝该请求。记录功能是单独检查的:Kodus 会在除 Free 之外的所有有效套餐上记录更改,而在自托管上只有带许可证密钥时才会记录。在 Free 上,或在没有密钥的自托管实例上所做的更改永远不会被记录。
+
+## 记录哪些内容
+
+在应用中所做的更改,以及更改者:
+
+- 代码审查设置,包括移除某个代码库或目录的配置
+- Kody Rules
+- 选择进行审查的代码库
+- 已连接或已移除的 Git 集成
+- 拉取请求消息
+- 组织设置
+- CLI 密钥
+- 成员邀请、角色更改和代码库访问权限
+- 席位状态更改
+
+## 列表
+
+最新的在前。每一行包含:
+
+| 列 | 显示内容 |
+| --- | --- |
+| **Action** | **ADD**、**CREATE**、**EDIT**、**DELETE** 或 **CLONE** |
+| **User** | 做出更改的人的邮箱 |
+| **Description** | 更改了什么 |
+| **Action Description** | 更改类型的简短标签 |
+| **Level** | 更改适用的位置:**Main**、**Global**、**Repository** 或 **Directory** |
+| **Date** | 多久之前 |
+
+点击某一行上的眼睛图标可打开 **Log Details**:用户、级别、创建和更新时间,以及该条目中的每项更改。点击 **Action**、**User**、**Level** 或 **Date** 可排序。
+
+## 搜索和日期范围
+
+页面会加载最近的 100 条记录。以下两个控件用于缩小该列表,因此无法从这里访问更早的记录:
+
+- **Search logs...**:匹配用户邮箱和更改描述。
+- 日期范围:**Today**、**Last week**、**Last 2 weeks**、**Last month**、**Last 3 months** 或自定义日期,最长约三个月。

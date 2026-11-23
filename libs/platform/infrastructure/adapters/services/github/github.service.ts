@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -6564,6 +6565,25 @@ This is an experimental feature that generates committable changes. Review the d
         try {
             if (!params?.repository) {
                 return null;
+            }
+
+            // GitHub Enterprise Server numbers repositories per server: with
+            // the sending host, only a config on that server takes the event.
+            if (params?.host) {
+                const repositoryId = String(params.repository.id ?? '');
+                const configs =
+                    await this.integrationConfigService.findIntegrationConfigWithTeams(
+                        IntegrationConfigKey.REPOSITORIES,
+                        repositoryId,
+                        PlatformType.GITHUB,
+                    );
+                return (
+                    webhookConfigsOfInstance(PlatformType.GITHUB, configs, {
+                        host: params.host,
+                        repositoryId,
+                        repositoryFullName: params.repositoryFullName,
+                    })[0] ?? null
+                );
             }
 
             const integrationConfig =

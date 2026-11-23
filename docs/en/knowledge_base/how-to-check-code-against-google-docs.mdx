@@ -3,32 +3,13 @@ title: "How to check code against Google Docs specs"
 description: "Validate your pull request implementation against specifications written in Google Docs."
 ---
 
-Product specs and requirements often live in Google Docs. Kodus can fetch the document content and compare it against your PR diff to verify that the implementation matches the spec.
+Product specs and requirements often live in Google Docs. Google Docs is not a built-in task source for Business Logic Validation, which reads tasks from Linear, Jira, Notion, Git Issues or a custom plugin. A Google Docs link in the command is not read.
 
-## How it works
+Two ways to check a PR against a spec from a Google Doc:
 
-1. **Connect the Google Docs plugin** in your workspace's [Plugins](/en/how_to_use/code_review/plugins) page
-2. Make sure the document is accessible to the connected account
-3. Comment on your PR:
+## Paste the requirements in the command
 
-```
-@kody -v business-logic https://docs.google.com/document/d/1abc123/edit
-```
-
-4. Kody fetches the document, extracts the requirements, and compares them against the PR diff
-
-## What you get
-
-Kody produces a structured validation report:
-
-- **Findings** with severity: MUST_FIX, SUGGESTION, or INFO
-- **Requirement tracing** — each finding quotes text from the Google Doc
-- **Requirements Verified** — what was correctly implemented
-
-## Tips
-
-- Keep specs structured with clear sections and numbered requirements for best results
-- You can also paste the spec content inline:
+Copy the requirements from the document and comment on your PR:
 
 ```
 @kody -v business-logic
@@ -38,6 +19,16 @@ Kody produces a structured validation report:
 3. Deleted comments show "[removed]" placeholder
 ```
 
-- Break large documents into sections and validate them individually for more focused feedback
+Kody checks the PR against the text you wrote. No tracker is needed, but the text must be at least 40 characters. The result is one comment on the PR, **Kody · Business Logic**, with each requirement marked **MET**, **PARTIAL**, **MISSING**, **CHECK MANUALLY** or **NOT IN TASK**.
+
+## Keep the requirements in a task
+
+Copy the requirements into the description of a task in your tracker, under a heading such as `Acceptance criteria`, and name the task in the PR title, branch or description. Kody then checks every PR that references the task, without a command. If the criteria sit under a heading or in a custom field, set **Requirements → Where acceptance criteria live** in the Business Logic settings. A Notion page works as a task: put its URL in the PR.
+
+## Tips
+
+- Keep specs structured, with clear sections and numbered requirements.
+- Break large documents into sections and check them one at a time for more focused feedback.
+- After you fix a gap, comment `@kody -v business-logic` again. The same comment is updated.
 
 For details, see [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).

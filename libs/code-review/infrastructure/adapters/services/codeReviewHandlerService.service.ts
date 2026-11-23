@@ -375,6 +375,7 @@ export class CodeReviewHandlerService {
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 businessLogicValidatedAt: result?.businessLogicValidatedAt,
+                licenseNoticePostedAt: result?.licenseNoticePostedAt,
                 reviewWarnings: withFallbackWarnings(
                     result?.reviewWarnings,
                     failovers,

@@ -6,9 +6,6 @@ description: "AIコードレビュー、コーディング標準の適用、ビ�
 ## コードレビュー
 
 <CardGroup cols={2}>
-  <Card title="プルリクエストでコーディング標準を適用する方法" href="/ja/knowledge_base/how-to-enforce-coding-standards-in-pull-requests">
-    カスタムルールを使用して、すべてのPRにチームのコーディング規約を自動的に適用します。
-  </Card>
   <Card title="GitHub、GitLab、Bitbucketでコードレビューを自動化する方法" href="/ja/knowledge_base/how-to-automate-code-review">
     すべてのプルリクエストで自動的に実行されるAI搭載コードレビューをセットアップします。
   </Card>
@@ -29,11 +26,11 @@ description: "AIコードレビュー、コーディング標準の適用、ビ�
 ## ビジネスロジック検証
 
 <CardGroup cols={2}>
-  <Card title="PRがJiraチケットを実装しているか検証する方法" href="/ja/knowledge_base/how-to-validate-pr-against-jira-ticket">
-    マージ前にJiraの受け入れ基準とプルリクエストを比較します。
+  <Card title="Jira を接続してプルリクエストを検証する" href="/ja/knowledge_base/how-to-connect-jira-to-code-review">
+    Kodus で Atlassian Rovo を設定し、Jira チケットに照らして PR を検証します。
   </Card>
-  <Card title="プルリクエストに対してLinearイシューを検証する方法" href="/ja/knowledge_base/how-to-validate-pr-against-linear-issue">
-    PRがLinearイシューに記載された内容を実装していることを確認します。
+  <Card title="Linear を接続してプルリクエストを検証する" href="/ja/knowledge_base/how-to-connect-linear-to-code-review">
+    Kodus で Linear を設定し、イシューに照らして PR を検証します。
   </Card>
   <Card title="Google Docsの仕様に対してコードを確認する方法" href="/ja/knowledge_base/how-to-check-code-against-google-docs">
     Google Docsに記載された仕様に対して実装を検証します。
@@ -46,8 +43,8 @@ description: "AIコードレビュー、コーディング標準の適用、ビ�
 ## ルールと自動化
 
 <CardGroup cols={2}>
-  <Card title="Cursor、Copilot、またはClaudeからルールをインポートする方法" href="/ja/knowledge_base/how-to-import-rules-from-ide-tools">
-    既存のAIコーディングツールのルールをコードレビューワークフローに同期します。
+  <Card title="Cursor、Copilot、Claude の指示をコードレビューで使う方法" href="/ja/knowledge_base/how-to-import-rules-from-ide-tools">
+    コーディングエージェント向けに書いた指示に照らして、Kody がプルリクエストを確認します。
   </Card>
   <Card title="コードレビュールールを自動生成する方法" href="/ja/knowledge_base/how-to-generate-rules-automatically">
     AIにレビュー履歴を分析させ、チームのパターンに基づいたルールを提案させます。
@@ -72,14 +69,14 @@ description: "AIコードレビュー、コーディング標準の適用、ビ�
   <Card title="GitLabでAIコードレビューをセットアップする方法" href="/ja/knowledge_base/how-to-set-up-ai-code-review-on-gitlab">
     GitLabプロジェクトにKodusをインストールして設定します。
   </Card>
+  <Card title="Bitbucket で AI コードレビューを設定する方法" href="/ja/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket">
+    API トークンで Bitbucket Cloud を接続すると、Kody が各プルリクエストをレビューします。
+  </Card>
   <Card title="Azure DevOpsでAIコードレビューをセットアップする方法" href="/ja/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops">
     Azure DevOpsリポジトリにKodusをインストールして設定します。
   </Card>
-  <Card title="JiraをコードレビューツールにConnectする方法" href="/ja/knowledge_base/how-to-connect-jira-to-code-review">
-    Jiraをリンクしてコードレビューで自動タスクコンテキストを有効にします。
-  </Card>
-  <Card title="LinearをコードレビューツールにConnectする方法" href="/ja/knowledge_base/how-to-connect-linear-to-code-review">
-    Linearをリンクしてコードレビューで自動タスクコンテキストを有効にします。
+  <Card title="Forgejo で AI コードレビューを設定する方法" href="/ja/knowledge_base/how-to-set-up-ai-code-review-on-forgejo">
+    アクセストークンを使って Forgejo インスタンスに接続します。
   </Card>
   <Card title="コードレビューに独自のLLMプロバイダーを使用できますか" href="/ja/knowledge_base/can-i-use-my-own-llm-provider">
     独自のAPIキーを持ち込み、好みのLLMプロバイダーを選択します。
@@ -104,18 +101,30 @@ description: "AIコードレビュー、コーディング標準の適用、ビ�
   <Card title="KodusでFireworks AIを使用する方法" href="/ja/cookbook/fireworks">
     Fireworks AIの高速推論をLLMプロバイダーとして設定します。
   </Card>
+  <Card title="Kodus で Moonshot（Kimi）を使う方法" href="/ja/cookbook/moonshot">
+    Moonshot の開発者向け API または Kimi Code Plan で Kimi に接続します。
+  </Card>
+  <Card title="Kodus で Z.AI（GLM）を使う方法" href="/ja/cookbook/z-ai">
+    GLM モデルに接続します。GLM Coding Plan のサブスクリプションも使えます。
+  </Card>
+  <Card title="Kodus で Synthetic を使う方法" href="/ja/cookbook/synthetic">
+    オープンソースのコーディングモデルを利用できる Synthetic の定額プランに接続します。
+  </Card>
+  <Card title="Kodus で Chutes を使う方法" href="/ja/cookbook/chutes">
+    オープンソースモデルを利用できる Chutes のサブスクリプションに接続します。
+  </Card>
 </CardGroup>
 
 ## トラブルシューティング
 
 <CardGroup cols={2}>
-  <Card title="AIコードレビューがトリガーされない理由" href="/ja/knowledge_base/why-is-ai-code-review-not-triggering">
+  <Card title="AIコードレビューがトリガーされない理由" href="/ja/how_to_use/code_review/troubleshooting">
     レビューが自動的に開始されない場合の一般的な原因と修正方法。
   </Card>
-  <Card title="GitHubまたはGitLabのWebhook問題を修正する方法" href="/ja/knowledge_base/how-to-fix-webhook-issues">
-    Webhookの接続問題をデバッグして解決します。
+  <Card title="Webhook の問題を解決する方法" href="/ja/knowledge_base/how-to-fix-webhook-issues">
+    Webhook の接続障害を調べて解決します。
   </Card>
-  <Card title="コードレビューが一時停止している理由" href="/ja/knowledge_base/why-are-code-reviews-paused">
+  <Card title="コードレビューが一時停止している理由" href="/ja/how_to_use/code_review/flow#レビューの頻度">
     自動一時停止の動作とレビューを再開する方法を理解します。
   </Card>
 </CardGroup>

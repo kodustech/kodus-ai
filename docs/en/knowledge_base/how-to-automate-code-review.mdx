@@ -28,13 +28,19 @@ By default, Kodus checks the categories you can switch on or off in **Code revie
 
 ### Review cadence options
 
-Set the cadence in **Code review → General** under **Enable Automated Code Review** → **Review Cadence**.
+Set the cadence in **Code review → General** under **Automated code review** → **Review Cadence**.
 
 | Mode | Behavior |
 |------|----------|
-| **Automatic** | Reviews every push — continuous feedback |
-| **Auto-pause** | Pauses during rapid pushes (e.g., 3 in 15 minutes) to avoid noise |
-| **Manual** | Only reviews when you comment `@kody start-review` |
+| **Automatic** | Reviews every push, for continuous feedback |
+| **Auto-pause** | Pauses a PR after a burst of reviews (default: 3 in 15 minutes) to avoid noise |
+| **Manual** | Reviews the PR when it is opened, then only when you comment `@kody start-review` |
+
+You can also run a review on demand on any PR with `@kody start-review`. See [Code Review Flow](/en/how_to_use/code_review/flow) for every command and for the reasons a review is skipped.
+
+### What happens after the review
+
+Kody can also approve clean PRs (see [Auto-approve](/en/how_to_use/code_review/configs/auto_approve)) and request changes on critical issues (see [Review Policy](/en/how_to_use/code_review/policy)). Both are off by default. Kodus never merges a PR.
 
 ## Getting started
 
@@ -47,4 +53,5 @@ For platform-specific setup, see:
 - [GitHub setup](/en/knowledge_base/how-to-set-up-ai-code-review-on-github)
 - [GitLab setup](/en/knowledge_base/how-to-set-up-ai-code-review-on-gitlab)
 - [Azure DevOps setup](/en/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops)
-- [Bitbucket setup](/en/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+- [Bitbucket setup](/en/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket)
+- [Forgejo setup](/en/knowledge_base/how-to-set-up-ai-code-review-on-forgejo)

@@ -82,6 +82,8 @@ describe('MCPManagerService', () => {
             permissionValidationService.shouldLimitResources,
         ).toHaveBeenCalled();
         expect(jwtService.sign).toHaveBeenCalled();
+        // Signed here, not issued by the MCP Manager: nothing to report there.
+        expect(connections[0].onCredentialRejected).toBeUndefined();
         expect(axiosGet).toHaveBeenCalledWith(
             'mcp/connections',
             expect.objectContaining({

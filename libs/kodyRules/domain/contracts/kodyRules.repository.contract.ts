@@ -24,6 +24,24 @@ export interface IKodyRulesRepository {
     findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null>;
+    /**
+     * The organization's rules minus the deleted ones, filtered by the
+     * server. For readers that never act on a deleted rule (the review):
+     * deleted rules stay in the document and can be most of it.
+     */
+    findLiveRulesByOrganizationId(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null>;
+    /**
+     * Applies several per-rule field patches to one rules document in a
+     * single round trip, each patch touching only its rule's fields. Returns
+     * the ids whose patch could not be written.
+     */
+    updateRulesFields(
+        organizationId: string,
+        uuid: string,
+        changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
+    ): Promise<string[]>;
 
     /**
      * Projected list of an organization's rules — id, title and scope only.
@@ -89,10 +107,11 @@ export interface IKodyRulesRepository {
     /** Whether the organization has a Kody Rules document at all. */
     existsForOrganization(organizationId: string): Promise<boolean>;
     deleteRule(uuid: string, ruleId: string): Promise<boolean>;
+    /** Marks the organization's rule deleted; true when the rule was found. */
     deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null>;
+    ): Promise<boolean>;
     /**
      * Stamps `digestedAt` on the rule's `autoPause` / `lastAutoPause` whose
      * `pausedAt` is one of `pausedAts`. Matching on `pausedAt` keeps a resume

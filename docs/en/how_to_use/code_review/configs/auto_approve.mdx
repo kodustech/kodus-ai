@@ -1,9 +1,28 @@
 ---
 title: "Auto-approve"
 description: "Approve clean PRs with named policies and a recorded decision."
+tag: "beta"
 ---
 
-Turn on **Automatic PR approval** in **Code review → General**. Kody submits a review approval to your Git provider. It never merges the PR.
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="Basic automatic PR approval is available on every plan.">
+    <Badge icon="layer-group" stroke>All plans</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="policies" detail="Approval policies and Human approval are in beta on Kodus Cloud for Teams and Enterprise, including the trial. The workspace must have beta access.">
+    <Badge icon="flask" color="orange" stroke>Approval policies · Beta</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Approval policies and Human approval require an Enterprise license and BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+When a review is clean, Kody submits a review approval to your Git provider. It never merges the PR.
+
+## Enable automatic approval
+
+Open **Code review → General**, turn on **Automatic PR approval** and click **Save settings**. On workspaces with approval policies, approval also requires an enabled policy that matches the PR.
 
 ## Approval policies
 
@@ -12,6 +31,18 @@ Each policy has a name, a switch and optional conditions. All conditions within 
 New policies start **off**. A policy without conditions covers **All clean PRs**, shown in both the editor and the list. Adding or editing a policy does not turn on automatic approval.
 
 Policies support Global, Repository and Directory scope. They apply to the complete PR, including files skipped by incremental review or ignored for review comments.
+
+### Approve documentation-only PRs
+
+Use this example when you want Kody to approve clean PRs that only change files under `docs/`.
+
+1. In **Code review → General**, go to **Approval policies** and click **Add policy**.
+2. Name it `Documentation only`. In **Add condition**, choose **Changed files**. Under **Included files**, click **Add files**, type `docs/**` and press Enter.
+3. Click **Apply**, then turn on the new policy. Turn on **Automatic PR approval** and click **Save settings**.
+
+A clean PR that changes only files under `docs/` can match this policy. A PR that also changes application code needs a different matching policy.
+
+### Policy conditions
 
 | Condition | Requirement |
 | --- | --- |
@@ -32,7 +63,7 @@ If an eligibility instruction fails, times out or lacks evidence, that policy ca
 
 - The review must finish without blocking failures or unresolved findings. A failed PR-summary narrative alone does not invalidate a delivered clean review.
 - If [risk assessment](/en/how_to_use/code_review/configs/risk) is on, risk found or an unavailable assessment blocks every policy.
-- Files listed under **Files requiring human approval** always block automatic approval.
+- Files listed under **Human approval** always block automatic approval, whatever the policies say.
 - The PR head and base must still match the reviewed snapshot. A newer failed or incomplete review prevents reuse of an older clean result.
 
 When risk assessment is off, the clean-review and policy requirements still apply. There is no per-policy risk bypass.
@@ -41,16 +72,20 @@ Kody can reconsider a reviewed PR when a label changes or delivered line comment
 
 ## Decision comment
 
-With automatic approval on, each reviewed PR receives an updated decision comment. It names the matching policy or explains the failed conditions. Private eligibility instructions and free-form model reasoning are not published.
+When Kody approves under a policy, or holds approval, it posts a decision comment on the PR and keeps it up to date. The comment names the matching policy or explains the failed conditions. Private eligibility instructions and free-form model reasoning are not published.
 
-Changing or disabling a policy does not withdraw an approval already on the provider.
+If Kody cannot confirm the comment appeared on the PR, the PR in the [Pull requests](/en/how_to_use/reviews/pull_requests) list shows **Approval note unverified**, and its tooltip gives the reason Kody tried to post. Check the PR's comments and the repository integration permissions.
+
+Changing or disabling a policy does not withdraw an approval already on the provider. A later review that holds approval, for example because it is no longer clean or risk was found, dismisses Kody's earlier approval and says why.
 
 ## YAML
 
-Enable **kodus Config File Overrides Web Preferences** in General before using repository configuration files.
+Turn on **Prefer kodus-config.yml settings** in **Code review → General** (repository scope) before using repository configuration files.
 
 ```yaml
 pullRequestApprovalActive: true
+approvalSensitivePaths:
+  - 'src/payments/**'
 approvalPolicies:
   - id: docs
     name: Documentation
@@ -62,6 +97,8 @@ approvalPolicies:
     enabled: false
     authors:
       - 'dependabot[bot]'
+    authorTeams:
+      - 'platform'
     includedFiles:
       - 'package.json'
       - 'yarn.lock'
@@ -71,6 +108,6 @@ approvalPolicies:
     instruction: 'Only dependency updates that keep the same major version.'
 ```
 
-Keep policy IDs stable and names distinct. An explicit empty list disables all policies. Existing unrestricted approval resolves to one enabled **Existing approval policy**, preserving the master switch.
+`approvalSensitivePaths` is the **Human approval** list. `authors` takes usernames and bots, `authorTeams` takes provider teams, and `labels` takes PR labels. Keep policy IDs stable and names distinct. You can have up to 50 policies, and an eligibility instruction is up to 4,000 characters. An explicit empty list disables all policies. Existing unrestricted approval resolves to one enabled **Existing approval policy**, preserving the master switch.
 
 Legacy `approvalLabels` and `approvalAuthors` still scope that migrated policy. If a higher-priority file uses legacy filters with a new policy list that has no migrated policy, update the file to `approvalPolicies`; Kody rejects the ambiguous configuration rather than ignoring a restriction.

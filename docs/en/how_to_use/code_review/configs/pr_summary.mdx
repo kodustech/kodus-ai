@@ -1,58 +1,65 @@
 ---
 title: "PR Summarization"
-description: "Have Kody write concise, actionable pull request descriptions, and tune the tone, triggers, and behavior on existing descriptions."
+description: "Have Kody write the pull request description, and choose what happens to an existing description and to new commits."
 ---
 
-Kody's PR Summary feature allows you to automate the creation of concise, actionable pull request descriptions.
-This configuration guide explains how to tailor the feature to suit your team’s workflow and preferences.
+Kody can write a description of what a pull request changes. Open **Code review → What Kody writes**; the settings are in the **PR summary** section. They can be set at Global, Repository and Directory scope.
 
-In the sidebar, open **Code review → What Kody writes**; these settings are in the **PR summary**
-section. The page's live preview (**Show preview** / **Hide preview**) shows how the summary
-lands on a sample pull request.
+The page's preview (**Show preview** / **Hide preview**) shows how the summary lands on a sample pull request.
 
-## Enabling Automatic Summaries
+## Write a summary
 
-Enable or disable the automatic generation of pull request summaries:
+Turn on **Write a summary on every pull request**. It is on by default. With it off, Kody writes no summary and the options below are disabled.
 
-Toggle **Write a summary on every pull request**.
-
-When enabled, Kody will generate summaries for every pull request, ensuring consistency and saving time.
+Kody writes the summary in the language set under **Kody Language** in [General](/en/how_to_use/code_review/configs/general).
 
 ## When the PR already has a description
 
-Control how Kody interacts with existing pull request descriptions. You can choose from three modes:
+Choose what Kody does with a description the author wrote:
 
-### Replace (Default):
+- **Replace** (default) — writes a new description from scratch.
+- **Concatenate** — adds the summary to the end of the existing description.
+- **Complement** — reads the existing description and writes one that highlights only what is new or relevant.
 
-Overwrites any existing description with a newly generated summary from scratch.
+Replace and Complement keep the lines of the old description that link a task, such as `Closes #12`, `AB#12` or a tracker link, at the top of the new one. Concatenate leaves the whole description in place.
 
-### Concatenate:
-
-Appends the generated summary to the end of the existing description.
-
-### Complement:
-
-Combines Kody’s generated insights with the current description, highlighting only what’s new or relevant.
+Kody's text sits between two hidden comment markers, so a re-run updates that block instead of stacking a new one.
 
 ## When new commits arrive
 
-Control what happens to Kody's summary when new commits are pushed after the PR is opened:
+Choose what happens to Kody's summary when commits are pushed after the pull request opened:
 
-- **Do nothing** (default) — the summary is left as it is.
-- **Concatenate new summary** — a new summary is added to Kody's existing one.
-- **Replace Kody's summary** — Kody's existing summary is replaced with a new one.
+- **Do nothing** (default) — the summary stays as it is.
+- **Concatenate new summary** — a summary of the new commits is added to Kody's existing block.
+- **Replace Kody's summary** — Kody's block is replaced with a summary of the whole pull request.
+
+Only Kody's block changes. Text the author wrote stays.
 
 ## Summary instructions
 
-Fine-tune how Kody generates summaries by providing specific guidelines:
+The optional **Summary instructions** field tells Kody what the summary should focus on or leave out. The **Examples** chips add ready-made lines.
 
-Add instructions in the optional **Summary instructions** field — what the summary should focus on
-or leave out. The **Examples** chips insert ready-made instructions.
+- "Focus on security changes and performance impacts"
+- "Summarize concisely, highlighting modified public APIs"
 
-**Examples:**
+Instructions can also refer to what the review found, for example to mention the highest severity. Instructions can reference repository files; see [External References](/en/how_to_use/code_review/configs/custom_prompts#external-references).
 
-* "Focus on security changes and performance impacts."
-* "Summarize concisely, highlighting modified public APIs."
+**Try on a real PR** runs the current settings on one of your pull requests. It is available when the summary is on and you can read pull requests. The preview runs before any review, so it shows no review findings.
 
-Click **Try on a real PR** to preview the summary these settings produce on one of your pull
-requests.
+<Note>
+  On a very large pull request that does not fit the model's context in a few passes, Kody skips the summary.
+</Note>
+
+A description that exceeds the provider's limit is cut with a truncation note: 4,000 characters on Azure DevOps, 32,768 on Bitbucket and 65,536 on GitHub. Kody keeps its summary short on Azure DevOps to leave room for the existing description.
+
+## YAML
+
+```yaml
+summary:
+    generatePRSummary: true
+    behaviourForExistingDescription: 'replace' # replace | concatenate | complement
+    behaviourForNewCommits: 'none' # none | concatenate | replace
+    customInstructions: ''
+```
+
+The file is only read once **Prefer kodus-config.yml settings** is on. See [General](/en/how_to_use/code_review/configs/general#config-priority).

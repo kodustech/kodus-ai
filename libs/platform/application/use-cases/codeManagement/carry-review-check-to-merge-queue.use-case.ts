@@ -1,3 +1,4 @@
+import { githubWebhookSource } from '@libs/common/utils/webhooks/webhook-source-host';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
@@ -106,9 +107,11 @@ export class CarryReviewCheckToMergeQueueUseCase {
         let carrying = false;
 
         try {
+            // GitHub Enterprise Server numbers repositories per server.
             const context = await this.webhookContextService.getContext(
                 PlatformType.GITHUB,
                 repositoryId,
+                githubWebhookSource(payload),
             );
             if (!context?.organizationAndTeamData) {
                 return done({ carried: false, reason: 'no_context' });

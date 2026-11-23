@@ -30,12 +30,14 @@ import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-
 import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
 
 /**
- * After review finishes, only keep the sandbox warm for 30 seconds. Either
- * `@kody` arrives in a hot window (likely seconds after the review comment
- * lands) — and benefits from warm-resume — or the user takes their time and
- * comes back well past the lease TTL anyway, where cold-start is unavoidable.
- * 30s strikes the balance without keeping a paused sandbox occupying an E2B
- * concurrent slot for the full default 5-min idle window.
+ * After the review's last read of the checkout, only keep the sandbox warm for
+ * 30 seconds. Either `@kody` arrives in a hot window (likely seconds after the
+ * review comment lands) — and benefits from warm-resume — or the user takes
+ * their time and comes back well past the lease TTL anyway, where cold-start
+ * is unavoidable.
+ * The sandbox keeps running, and billing, through the window, so 30s rather
+ * than the default 5 min. (A paused E2B sandbox bills no compute and holds no
+ * concurrent slot; this window is spent running, not paused.)
  */
 const REVIEW_IDLE_TIMEOUT_MS = 30_000;
 
@@ -71,21 +73,6 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         private readonly organizationService?: IOrganizationService,
     ) {
         super();
-    }
-
-    /**
-     * A cleanup that releases the lease the first time it is called; later
-     * calls share that release's outcome. Not retried: the release frees the worker slot first and then decrements
-     * the lease, which is not idempotent, so a retry after a failure whose
-     * write may have landed could drop the count under a consumer still
-     * using the sandbox. A lease left held is reaped at its expiry.
-     */
-    private releaseOnce(leaseId: string): () => Promise<void> {
-        let release: Promise<void> | undefined;
-        return () =>
-            (release ??= this.leaseManager.release(leaseId, {
-                idleMs: REVIEW_IDLE_TIMEOUT_MS,
-            }));
     }
 
     protected async executeStage(
@@ -199,12 +186,21 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 { signal: context.parentSignal },
             );
 
-            // Override cleanup so the observer's context.sandboxHandle.cleanup()
-            // releases the lease (pause) rather than killing the sandbox.
-            // 30s idle window — see REVIEW_IDLE_TIMEOUT_MS rationale. Once:
-            // an Ultra review releases it after its last run, before the
-            // observer's call at the end of the pipeline.
-            sandbox.cleanup = this.releaseOnce(leaseId);
+            // Override cleanup so it releases the lease (pause) rather than
+            // killing the sandbox. 30s idle window — see
+            // REVIEW_IDLE_TIMEOUT_MS rationale. Releases once: AgentReviewStage
+            // releases after its last read of the checkout (#2628), an Ultra
+            // review after its last run, and the observer's call at pipeline
+            // end is the fallback for a review that never got there. Every
+            // call shares that one release and its outcome. A failed one is
+            // not retried: release() is not idempotent (the lease count is a
+            // plain decrement), so a retry could take a co-holder's count; the
+            // lease TTL reaper frees it.
+            let release: Promise<void> | undefined;
+            sandbox.cleanup = () =>
+                (release ??= this.leaseManager.release(leaseId, {
+                    idleMs: REVIEW_IDLE_TIMEOUT_MS,
+                }));
 
             this.logger.log({
                 message: `Sandbox lease acquired for ${label} (type=${sandbox.type}, baseBranch=${sandbox.baseBranch || 'none'})`,

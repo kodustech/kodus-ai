@@ -348,11 +348,15 @@ describe('PullRequestIngestionService.run()', () => {
             'openedAt',
             'closedAt',
             'updatedAt',
-            'files',
             'commits',
+            'files.filename',
+            'files.suggestions',
         ]) {
-            expect(projection).toHaveProperty(k);
+            expect(projection).toHaveProperty([k]);
         }
+        // The warehouse never reads a file's patch, the bulk of a PR document.
+        expect(projection).not.toHaveProperty(['files.patch']);
+        expect(projection).not.toHaveProperty('files');
     });
 
     it('reads from a Mongo secondary so the OLTP write path is unaffected', async () => {
@@ -362,7 +366,9 @@ describe('PullRequestIngestionService.run()', () => {
 
         await svc.run();
 
-        expect(model.read).toHaveBeenCalledWith('secondaryPreferred');
+        const [readPreference] = model.read.mock.calls[0];
+        expect(readPreference.mode).toBe('secondaryPreferred');
+        expect(readPreference.tags).toEqual([{ workload: 'analytics' }, {}]);
     });
 
     it('skips suggestions without an id instead of quarantining the PR', async () => {

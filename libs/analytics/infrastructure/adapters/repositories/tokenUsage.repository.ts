@@ -21,6 +21,7 @@ import {
 import { ObservabilityTelemetryModel } from './schemas/observabilityTelemetry.model';
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
 import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
+import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 type RawAggRow = {
     model: string;
@@ -390,6 +391,8 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             // The $group stages hold one entry per (model, bracket, keys)
             // group; let them spill on a huge window instead of failing.
             .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS, allowDiskUse: true })
+            // Token usage screens and spend: seconds behind is fine.
+            .read(ANALYTICS_READ_PREFERENCE)
             .exec();
         return this._withTiers(rows, thresholds, distinct);
     }
@@ -485,7 +488,13 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 {
                     $match: {
                         ...this._tuMatch(query),
-                        'attributes.tu.credentialId': { $nin: ['', null] },
+                        // A non-empty string. Same rows as `$nin: ['', null]`
+                        // (tu.credentialId is always a string, '' when there
+                        // is none), but a range the partial index
+                        // `tu_cred_byok_v1` can prove, so the pairs come from
+                        // the index instead of fetching every span of the
+                        // month.
+                        'attributes.tu.credentialId': { $gt: '' },
                     },
                 },
                 {
@@ -505,6 +514,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 },
             ] as any)
             .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .read(ANALYTICS_READ_PREFERENCE)
             .exec();
     }
 
@@ -807,6 +817,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 taskModelSpan: RawSpanRow[];
             }>(pipeline)
             .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .read(ANALYTICS_READ_PREFERENCE)
             .exec();
 
         const rows = facet ?? {

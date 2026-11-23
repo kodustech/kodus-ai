@@ -10,6 +10,7 @@ import { classifyReplyAddressedToKody } from './implicit-reply';
 import {
     buildReplyThread,
     classifyImplicitReply,
+    CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE,
     isKodyComment,
     KODY_ACKNOWLEDGMENT_MESSAGE,
 } from './reply-thread';
@@ -42,6 +43,8 @@ describe('reply-thread', () => {
         expect(isKodyComment(github(1, 'kody-ai[bot]', 'x'), PlatformType.GITHUB)).toBe(true);
         expect(isKodyComment(github(1, 'bob', 'y <!-- kody-codereview -->'), PlatformType.GITHUB)).toBe(true);
         expect(isKodyComment(github(1, 'bob', KODY_ACKNOWLEDGMENT_MESSAGE), PlatformType.GITHUB)).toBe(true);
+        // Posted through the customer's own account on Bitbucket, unmarked.
+        expect(isKodyComment(github(1, 'bob', CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE), PlatformType.BITBUCKET)).toBe(true);
         expect(isKodyComment(github(1, 'bob', 'a human reply'), PlatformType.GITHUB)).toBe(false);
     });
 

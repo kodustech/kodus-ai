@@ -14,10 +14,10 @@ import { Page } from "@components/ui/page";
 import { Separator } from "@components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { GIT_INTEGRATIONS_KEY } from "@enums";
+import { useConfig } from "@providers/ConfigProvider";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import integrationFactory from "src/core/integrations/integrationFactory";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
 
@@ -59,8 +59,8 @@ export function SetupConnectingGitToolPage(props: {
     };
 
     return (
-        <Page.Root className="mx-auto flex h-full min-h-[calc(100vh-4rem)] w-full flex-row overflow-hidden p-6">
-            <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
+        <Page.Root className="mx-auto flex min-h-[calc(100vh-4rem)] w-full flex-col gap-6 p-6 lg:h-full lg:flex-row lg:gap-0 lg:overflow-hidden">
+            <div className="bg-card-lv1 hidden flex-10 flex-col justify-center gap-10 rounded-3xl p-12 lg:flex">
                 <div className="flex flex-1 flex-col justify-center gap-10">
                     <Heading variant="h1" className="max-w-60 text-[4vh]">
                         Security and Privacy
@@ -98,8 +98,8 @@ export function SetupConnectingGitToolPage(props: {
                 </div>
             </div>
 
-            <div className="flex flex-14 flex-col items-center justify-center gap-20 p-10">
-                <div className="flex max-w-fit flex-1 flex-col justify-center gap-10">
+            <div className="flex flex-col items-center justify-center gap-10 lg:flex-14 lg:gap-20 lg:p-10">
+                <div className="flex w-full flex-1 flex-col justify-center gap-10 lg:w-auto lg:max-w-fit">
                     <StepIndicators.Auto />
 
                     <div className="flex flex-col gap-2">
@@ -114,7 +114,7 @@ export function SetupConnectingGitToolPage(props: {
                     <Tabs
                         defaultValue={GIT_INTEGRATIONS_KEY.GITHUB}
                         className="w-full">
-                        <TabsList className="mb-4">
+                        <TabsList className="mb-4 h-auto flex-wrap justify-center lg:justify-start">
                             <TabsTrigger value={GIT_INTEGRATIONS_KEY.GITHUB}>
                                 <div className="flex flex-row items-center gap-2">
                                     <SvgGithub className="size-5" />
@@ -335,45 +335,37 @@ export function SetupConnectingGitToolPage(props: {
                         code faster.
                     </p>
 
-                    <div className="flex flex-row justify-center gap-4 opacity-75">
+                    <div className="flex flex-row flex-wrap items-center justify-center gap-x-8 gap-y-5 opacity-75">
                         <Image
-                            width={40}
-                            height={24}
-                            alt="r10 logo"
-                            className="h-6 w-auto object-contain"
-                            src="https://t5y4w6q9.rocketcdn.me/wp-content/uploads/2025/03/r10scrore.png"
+                            width={126}
+                            height={19}
+                            alt="Scorpion logo"
+                            className="h-[19px] w-auto object-contain"
+                            src="/assets/images/trusted-by/scorpion.svg"
                         />
 
                         <Image
-                            width={40}
-                            height={24}
-                            alt="lerian logo"
-                            className="h-6 w-auto object-contain"
-                            src="https://t5y4w6q9.rocketcdn.me/wp-content/uploads/2025/03/lerian1-300x182.png"
+                            width={138}
+                            height={25}
+                            alt="Cover Genius logo"
+                            className="h-[25px] w-auto object-contain"
+                            src="/assets/images/trusted-by/cover-genius.svg"
                         />
 
                         <Image
-                            width={86}
-                            height={24}
-                            alt="Ikatec logo"
-                            className="h-6 w-auto object-contain"
-                            src="/assets/images/trusted-by/ikatec.webp"
+                            width={64}
+                            height={23}
+                            alt="Capim logo"
+                            className="h-[23px] w-auto object-contain"
+                            src="/assets/images/trusted-by/capim.svg"
                         />
 
                         <Image
-                            width={62}
-                            height={24}
-                            alt="origen logo"
-                            className="h-6 w-auto object-contain"
-                            src="https://t5y4w6q9.rocketcdn.me/wp-content/uploads/2025/03/origen.png"
-                        />
-
-                        <Image
-                            width={95}
-                            height={24}
-                            alt="rocket chat logo"
-                            className="h-6 w-[95px] object-contain"
-                            src="https://t5y4w6q9.rocketcdn.me/wp-content/uploads/2025/03/rocket-chat-logo.svg"
+                            width={129}
+                            height={22}
+                            alt="Rocket.Chat logo"
+                            className="h-[22px] w-auto object-contain"
+                            src="/assets/images/trusted-by/rocket-chat.webp"
                         />
                     </div>
                 </div>

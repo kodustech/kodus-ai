@@ -16,15 +16,18 @@
       from cloud providers (GitHub.com, GitLab.com, etc.)
   </Accordion>
   <Accordion title="Required Ports">
-    Default host port mappings — adjust in `.env` if any conflict.
+    Published on the host by the installer's Compose file.
 
-    - **3000** — Kodus Web App
+    - **3000** — Kodus Web App (`WEB_PORT`)
     - **3001** — API
-    - **3332** — Webhooks
-    - **5432** — PostgreSQL
-    - **27017** — MongoDB
-    - **5672, 15672, 15692** — RabbitMQ (AMQP, management UI, metrics)
-    - **3101** — MCP Manager _(only if `API_MCP_SERVER_ENABLED=true`)_
+    - **3332** — Webhooks (`API_WEBHOOKS_PORT`)
+    - **3101** — MCP Manager (`API_MCP_MANAGER_PORT`), _only if `API_MCP_SERVER_ENABLED=true`_
+    - **15692** — RabbitMQ Prometheus metrics
+
+    PostgreSQL (5432), MongoDB (27017) and RabbitMQ (5672 AMQP, 15672
+    management UI) are published on random host ports. Containers reach them
+    over the Docker networks; run `docker compose port <service> <port>` to
+    find the host port.
   </Accordion>
   <Accordion title="Services">
     What `./scripts/install.sh` brings up, based on your `.env`.
@@ -35,14 +38,16 @@
     - `webhooks` — Git provider webhook receiver
     - `kodus-web` — Next.js frontend
     - `db_kodus_postgres`, `db_kodus_mongodb`, `rabbitmq` — local
-      infrastructure. Skip with `USE_LOCAL_DB=false` /
-      `USE_LOCAL_RABBITMQ=false` to point at managed instances.
+      infrastructure. Set `USE_LOCAL_DB=false` /
+      `USE_LOCAL_RABBITMQ=false` to point at managed instances. The
+      containers still start as dependencies, but Kodus does not use them.
 
     **Optional:**
     - `kodus-mcp-manager` — Model Context Protocol broker. Enable with
       `API_MCP_SERVER_ENABLED=true`. See [MCP Manager](/en/how_to_deploy/deploy_kodus/mcp_manager).
     - `worker-analytics` — Cockpit ingestion (DORA metrics, PR
-      classifier). **Self-hosted Enterprise only**, not wired by default.
+      classifier). **Self-hosted Enterprise only.** Behind the `analytics`
+      Compose profile, so the installer does not start it.
       See [Analytics Worker](/en/how_to_deploy/deploy_kodus/analytics_worker).
   </Accordion>
 </AccordionGroup>
@@ -55,15 +60,12 @@
 </Note>
 
 <Note>
-  **Internet access is required if you plan to connect to cloud-based Git
-  services (GitHub, GitLab, Bitbucket) or cloud LLM providers (OpenAI, Anthropic,
-  etc.).** For self-hosted Git tools and on-prem LLMs within your network,
-  external internet access is optional.
+  Install-time images must be available from their registries or mirrors, or already loaded on the host. For an internal deployment, use Git and model endpoints reachable on your network. Optional external services need access to their own endpoints.
 </Note>
 
 ## Domain Name Setup (Optional)
 
-If you're planning to integrate Kodus with cloud-based Git providers (GitHub, GitLab, or Bitbucket), you'll need public-facing URLs for both the Kodus Web App and its API. This allows your server to receive webhooks for proper Code Review functionality and ensures correct application behavior.
+Your Git provider must be able to reach the webhook URL over HTTPS. The installer requires at least one HTTPS webhook URL, including when both Kodus and Git run on a private network. The web app must be reachable by its users and by their browsers when they return from sign-in or a Git provider.
 
 We recommend setting up two subdomains:
 - One for the Web Application, e.g., `kodus-web.yourdomain.com`.
@@ -73,9 +75,8 @@ Webhooks are handled by a separate service (port 3332). You can either:
 - Use a dedicated webhooks subdomain, e.g., `kodus-webhooks.yourdomain.com`, or
 - Keep using the API domain and route `/github/webhook`, `/gitlab/webhook`, etc. to the webhooks service in your reverse proxy.
 
-Both subdomains should have DNS A records pointing to your server's IP address. Later in this guide, we will configure a reverse proxy (Nginx) to route requests to these subdomains to the correct internal services. This setup is essential for full functionality, including webhooks and authentication.
+Both subdomains should have DNS A records pointing to your server's IP address. The [reverse proxy](/en/how_to_deploy/deploy_kodus/reverse_proxy) routes each subdomain to the right internal service.
 
-> **Note**: If you're only connecting to self-hosted Git tools on your network and do not require public access or webhooks, you might be able to use a simpler setup, but this guide focuses on public-facing deployments.
 
 ## Setup
 
@@ -93,8 +94,12 @@ Both subdomains should have DNS A records pointing to your server's IP address. 
   </Step>
   <Step title="Generate secure keys for the required environment variables">
     ```bash
-    ./generate-keys.sh
+    ./scripts/generate-secrets.sh
     ```
+
+    <Warning>
+      Run it once, before the first install. Running it again replaces every secret in `.env`, including the database passwords and `API_CRYPTO_KEY`, and the existing data stops working.
+    </Warning>
   </Step>
   <Step title="Edit the environment file">
     Edit `.env` with your values using your preferred text editor. 
@@ -102,27 +107,34 @@ Both subdomains should have DNS A records pointing to your server's IP address. 
     nano .env
     ```
 
+    Add `IMAGE_TAG=<version>` to pin the release you install, for example `IMAGE_TAG=2.2.11`. Without it the installer uses `latest`. Release versions are listed on the [kodus-ai releases page](https://github.com/kodustech/kodus-ai/releases) as _Self-Hosted Release_.
+
     See [Environment Variables Configuration](/en/how_to_deploy/deploy_kodus/generic_vm#environment-variables-configuration) for detailed instructions.
   </Step>
 
   <Step title="Run the installer">
     ```bash
+    ./scripts/validate-env.sh
     ./scripts/install.sh
     ```
+
+    `validate-env.sh` checks `.env` against the schema. `install.sh` refuses to start until the required variables are set and at least one Git webhook URL is valid. The `api` container runs database migrations and seeds when it starts.
   </Step>
-  <Step title="Success 🎉">
-  When complete, Kodus Services should be running on your machine.
-  You can verify your installation using the following script:
+  <Step title="Verify the installation">
+  When the installer finishes, the services are running. Check them with:
   ```bash
   ./scripts/doctor.sh
   ```
+
+  The first line says whether reviews are running. Each problem after it lists what you lose and how to fix it. Add `--verbose` to see every check.
   </Step>
   <Step title="Access the web interface">
     Once you access the web interface for the first time, you'll need to:
 
 1. **Create your admin account** - This will be the first user with full system access
-2. **Configure your Git provider** - Connect GitHub, GitLab, or Bitbucket following the on-screen instructions
-3. **Select repositories** for analysis - Choose which code repositories Kody will review
+2. **Connect an LLM provider** - Kodus is bring-your-own-key, and no review runs without a model. Open **AI providers** in the sidebar, or set the model in `.env` (see [LLM Provider Configuration](/en/how_to_deploy/deploy_kodus/generic_vm#llm-provider-configuration))
+3. **Configure your Git provider** - Connect GitHub, GitLab, Bitbucket, Azure DevOps or Forgejo following the on-screen instructions
+4. **Select repositories** for analysis - Choose which code repositories Kody will review
 
 <Info>
   For detailed steps on the initial configuration process, refer to our [Getting

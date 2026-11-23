@@ -571,6 +571,26 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             },
         );
 
+        it('writes every verdict to the PR document it was given, grouped or not', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            await service.checkImplementedSuggestions({
+                organizationAndTeamData: org,
+                prNumber: 42,
+                changedFiles: [fileA, fileB] as any,
+                savedSuggestions: [grouped(), sent('s-2', 'app/a.rb')] as any,
+                pullRequestId: 'pr-doc-1',
+            });
+
+            const calls = pullRequestService.updateSuggestion.mock.calls;
+            expect(calls.map(([id]) => id)).toEqual(
+                expect.arrayContaining(['s-1', 's-2']),
+            );
+            for (const [, , , options] of calls) {
+                expect(options.pullRequestId).toBe('pr-doc-1');
+            }
+        });
+
         it('reads the other locations from the comment when the suggestion carries no list', async () => {
             answerAll(ImplementationStatus.IMPLEMENTED);
 
@@ -653,7 +673,17 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             async (location) => {
                 answerAll(ImplementationStatus.IMPLEMENTED);
 
-                await check([grouped({ alsoFoundIn: [location] })], [fileA]);
+                // No list in the text either: the point is that an unparsable
+                // entry does not turn the comment into a group of two.
+                await check(
+                    [
+                        grouped({
+                            alsoFoundIn: [location],
+                            suggestionContent: 'Escape the query.',
+                        }),
+                    ],
+                    [fileA],
+                );
 
                 expect(statusWritten()).toEqual([
                     ImplementationStatus.IMPLEMENTED,
@@ -672,6 +702,30 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
                 aiAnalysisService.checkSuggestionImplementation,
             ).not.toHaveBeenCalled();
         });
+
+        it.each([
+            { name: 'no line', start: undefined, end: undefined },
+            { name: 'line 0', start: 0, end: 0 },
+        ])(
+            'does not measure a line-less Kody Rule against a file diff ($name, #2420)',
+            async ({ start, end }) => {
+                const result = await check(
+                    [
+                        grouped({
+                            label: 'kody_rules',
+                            relevantLinesStart: start,
+                            relevantLinesEnd: end,
+                        }),
+                    ],
+                    [fileA, fileB],
+                );
+
+                expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+                expect(
+                    aiAnalysisService.checkSuggestionImplementation,
+                ).not.toHaveBeenCalled();
+            },
+        );
 
         // A push that deletes a file deletes the problem in it: the file is
         // not in the changed files the check reads, which leave removed ones out.

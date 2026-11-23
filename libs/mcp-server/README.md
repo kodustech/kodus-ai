@@ -1,10 +1,10 @@
 # Kodus Code Management MCP Server
 
-Este módulo expõe funcionalidades do `CodeManagementService` através do protocolo MCP (Model Context Protocol), permitindo que aplicações externas consumam as operações de gerenciamento de código do Kodus.
+Este módulo expõe funcionalidades do `CodeManagementService` através do protocolo MCP (Model Context Protocol), permitindo que aplicações externas consumam as operações de gerenciamento de código da Kodus.
 
 ## Modelo de transporte HTTP
 
-O endpoint HTTP MCP do Kodus roda em modo `Streamable HTTP` stateless.
+O endpoint HTTP MCP da Kodus roda em modo `Streamable HTTP` stateless.
 
 ## Contrato atual
 
@@ -29,7 +29,7 @@ O endpoint HTTP MCP do Kodus roda em modo `Streamable HTTP` stateless.
 - As rotas são `@Public()` em relação ao guard de sessão de usuário; a autenticação delas é o `McpAuthGuard`.
 - Esse desenho evita afinidade de sessão no load balancer e funciona corretamente com múltiplas instâncias ECS/EC2 atrás de ALB.
 
-Esse comportamento é intencional. No fluxo interno do Kodus, contexto de tenant e autenticação trafegam na credencial do request. Não há dependência funcional de sessão MCP para executar `initialize`, `tools/list`, `tool/call` e `ping`.
+Esse comportamento é intencional. No fluxo interno da Kodus, contexto de tenant e autenticação trafegam na credencial do request. Não há dependência funcional de sessão MCP para executar `initialize`, `tools/list`, `tool/call` e `ping`.
 
 ## Funcionalidades Disponíveis
 
@@ -74,7 +74,7 @@ const mcpAdapter = createMCPAdapter({
     {
       name: 'kodus-code-management',
       type: 'http',
-      url: 'https://api.kodus.io/mcp',
+      url: 'https://<your-api-host>/mcp',
       headers: { 'x-team-key': 'kodus_...' }
     }
   ]
@@ -293,7 +293,7 @@ This sets the issue status to `dismissed`.
 
 ## Quando não usar esse modelo
 
-Se no futuro o Kodus precisar de:
+Se no futuro a Kodus precisar de:
 
 - SSE iniciado por `GET`,
 - resumability com `Last-Event-ID`,
@@ -306,7 +306,7 @@ o endpoint HTTP terá que voltar a um modo stateful com storage ou roteamento di
 
 - **`@modelcontextprotocol/sdk`** - SDK oficial do MCP v1.13.2
 - **`@nestjs/common`** - Framework NestJS
-- **`CodeManagementService`** - Serviço interno do Kodus
+- **`CodeManagementService`** - Serviço interno da Kodus
 - **TypeScript** - Type safety completo
 
 ## Características
@@ -381,7 +381,7 @@ private async handleNewTool(args: any): Promise<CallToolResult> {
 
 ## Suporte a Plataformas
 
-O MCP Server funciona com todas as plataformas suportadas pelo Kodus:
+O MCP Server funciona com todas as plataformas suportadas pela Kodus:
 - ✅ **GitHub** 
 - ✅ **GitLab**
 - ✅ **Azure Repos**

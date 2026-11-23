@@ -1,11 +1,32 @@
 ---
-title: "How to fix webhook issues with GitHub or GitLab"
-description: "Debug and resolve webhook connectivity problems between your Git provider and Kodus."
+title: "How to fix webhook issues"
+description: "Debug and resolve webhook delivery problems between your Git provider and Kodus."
 ---
 
-Webhooks are how Kodus knows when a PR is opened or updated. If they're not working, reviews won't trigger.
+Webhooks are how Kodus knows when a PR is opened, updated or commented on. If they're not working, reviews won't trigger.
 
-## Diagnosing the issue
+With the GitHub App, events come from the App's own webhook. With every other connection, Kodus creates a webhook on each repository when you save the selection on **Repositories**.
+
+## Check Repositories first
+
+When a provider refuses to create a webhook, **Repositories** shows a warning, **A repository has no webhook** or **N repositories have no webhook**, with each repository and the reason. Kodus never hears about pull requests on those, so no review runs. The usual cause is a credential that can't manage webhooks:
+
+### Webhook permissions by provider
+
+| Provider | What the credential needs |
+| --- | --- |
+| GitHub (token) | Read and write access to repository webhooks: `admin:repo_hook`, or **Webhooks: Read and write** on a fine-grained token |
+| GitLab | **Maintainer** or **Owner** role on the project |
+| Bitbucket Cloud | Admin access to the repository and `read:webhook:bitbucket` and `write:webhook:bitbucket` |
+| Bitbucket Data Center | **Repository admin** permission |
+| Azure DevOps | **Edit subscriptions** on the project (Project Administrators have it) |
+| Forgejo | Admin access to the repository and the `write:repository` scope |
+
+Fix the permission, then save the selection again (**Save selected repositories**). With **Review every repository** on, Kodus retries these repositories on every sync.
+
+Azure DevOps refusals show up here only with **Review every repository** on. With a selection, check the subscriptions under **Project settings** → **Service hooks**.
+
+## Check the delivery
 
 ### GitHub
 
@@ -14,21 +35,52 @@ Webhooks are how Kodus knows when a PR is opened or updated. If they're not work
 3. Click on it and check **Recent Deliveries**
 4. Look for failed deliveries (non-2xx status codes)
 
+With a GitHub App you created for a self-hosted instance, check **Advanced** → **Recent Deliveries** in the App's settings instead.
+
 ### GitLab
 
 1. Go to your project **Settings** → **Webhooks**
 2. Find the Kodus webhook
 3. Check the delivery history for errors
 
+### Azure DevOps
+
+Open **Project settings** → **Service hooks** and check the subscription's history.
+
+## Check that the URL reaches Kodus
+
+Webhooks are handled by a separate service (port 3332), not the API or the web app. Send a request that the service accepts without a real event:
+
+```bash
+curl -i -X POST https://kodus-webhooks.yourdomain.com/github/webhook \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: ping' \
+  -d '{}'
+```
+
+`200` with `Webhook ignored (event not supported)` means the request reached the webhooks service. A `404`, a redirect or an HTML page means the URL points to the API or the web app: fix the URL or your reverse proxy. For other providers use `/gitlab/webhook`, `/bitbucket/webhook` or `/forgejo/webhook`. Azure Repos answers `403 Unauthorized` without its `token` parameter, which also proves the route is right.
+
+A `200` only means the service accepted the request. Kodus drops events from a repository that isn't selected on **Repositories**.
+
 ## Common fixes
 
 ### Webhook URL is wrong or outdated
 
-If you changed your Kodus deployment URL, update the webhook URL in your Git provider settings.
+Each provider's URL comes from its environment variable:
+
+| Provider | Variable | Path |
+| --- | --- | --- |
+| GitHub | `API_GITHUB_CODE_MANAGEMENT_WEBHOOK` | `/github/webhook` |
+| GitLab | `API_GITLAB_CODE_MANAGEMENT_WEBHOOK` | `/gitlab/webhook` |
+| Bitbucket | `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | `/bitbucket/webhook` |
+| Azure DevOps | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | `/azure-repos/webhook` |
+| Forgejo | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | `/forgejo/webhook` |
+
+Kodus matches existing webhooks by URL. After you change the URL, restart the API and save the selection again: Kodus creates a new webhook and leaves the old one in place. Delete the old one in your Git provider.
 
 ### SSL certificate issues
 
-If you're self-hosting, ensure your SSL certificate is valid. GitHub and GitLab reject webhooks with invalid certificates.
+The webhooks Kodus creates on GitHub and GitLab have SSL verification on; other providers use their own default. If you're self-hosting, ensure your SSL certificate is valid, or the provider rejects the delivery.
 
 ### Firewall blocking
 
@@ -36,13 +88,10 @@ If Kodus is behind a firewall, ensure your Git provider's IP ranges can reach th
 
 ### Webhook was deleted
 
-Kodus registers missing webhooks whenever the repository selection is saved on **Repositories** in the sidebar (**Add repository** → **Save selected repositories**), so saving a selection change re-registers it. You can also add the webhook URL manually.
+Saving the selection on **Repositories** (**Add repository** → **Save selected repositories**) registers any missing webhook. You can also add it manually: [GitHub](/en/how_to_deploy/platforms/github/github_webhook), [GitLab](/en/how_to_deploy/platforms/gitlab/gitlab_webhook), [Bitbucket](/en/how_to_deploy/platforms/bitbucket/bitbucket_webhook), [Azure DevOps](/en/how_to_deploy/platforms/azure_devops/azdevops_webhook) or [Forgejo](/en/how_to_deploy/platforms/forgejo/forgejo_webhook).
 
 ## Testing
 
 Most Git providers let you **redeliver** a recent webhook payload. Use this to test without creating a new PR.
 
-For platform-specific guides, see:
-- [GitHub webhooks](/en/how_to_deploy/platforms/github/github_webhook)
-- [GitLab webhooks](/en/how_to_deploy/platforms/gitlab/gitlab_webhook)
-- [Bitbucket webhooks](/en/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+Self-hosted: run `./scripts/doctor.sh` from the installer folder. Its Git checks report repositories the token can't read or comment on, repositories with no Kodus webhook, and whether the webhook URL is set and received events in the last 7 days.

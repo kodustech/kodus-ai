@@ -1,189 +1,163 @@
 ---
 title: "リポジトリルール"
-description: "構造化されたテンプレートを持つマークダウンファイルを使用して、リポジトリに直接カスタム Kody ルールを作成します。"
+description: "Kody Rules をマークダウンファイルとしてリポジトリに置きます。1 ルールにつき 1 ファイルで、コードと一緒にバージョン管理できます。"
 ---
 
 <Info>
-リポジトリルールは常に同期されます。オンにする設定はありません。リポジトリ内で Kody ルールになるのはこれらのファイルだけです。コーディングエージェント向けに書かれた指示（`CLAUDE.md`、`AGENTS.md`、`.cursor/rules`）は別に扱われます。<a href="/ja/how_to_use/code_review/configs/rules_file_detection">コーディングエージェント向け指示</a> を参照してください。
+リポジトリルールは常に同期されます。オンにする設定はありません。リポジトリ内で Kody Rules になるのはこれらのファイルだけです。コーディングエージェント向けに書かれた指示（`CLAUDE.md`、`AGENTS.md`、`.cursor/rules`）は別に扱われます。<a href="/ja/how_to_use/code_review/configs/rules_file_detection">コーディングエージェント向け指示</a> を参照してください。
 </Info>
 
 ## 使い方
-リポジトリに直接カスタム Kody ルールを作成するには、特定のディレクトリに構造化されたマークダウンファイルを配置します。これにより、コードと並行してルールをバージョン管理し、チーム全体で共有できます。
 
-<Info>
-リポジトリのルールファイルは **そのまま**（LLM 変換なしで）インポートされます。フロントマターはそのまま解析され、マークダウン本文は記述したとおりにルールの指示になり（識別子・書式・文言は保持されます）、悪い例／良い例も構造を保ってインポートされます。1 つのファイルから 1 つのルールが作成されます。テンプレートとして解析できないファイル（フロントマター、`title`、または本文が無いもの）はスキップされ、同期のログに記録されます。そこから何かが生成されることはありません。
-</Info>
+以下のテンプレートに沿ったマークダウンファイルをリポジトリに置きます。Kody はそれをルールとしてインポートし、ルールはファイルに追従します。ファイルを編集するとルールが変わり、ファイルを削除するとルールも削除されます。
 
-### 同期
-- **自動検出**：リポジトリルールは接続済みのすべてのリポジトリで検出・同期されます。有効化する必要はありません
-- **今すぐインポート**：リポジトリの **Kody Rules → Configuration** シートにある **Import rule files now** で、デフォルトブランチ上のすべてのルールファイルを読み込みます
-- **Webアプリケーション**：同期されたルールは、そのリポジトリの **Code review → Kody Rules** ページに **Auto-sync** のオリジン付きで表示されます（変換が停止される前にコーディングエージェント向けファイルからインポートされたルールには、代わりに **Agent file** と表示されます）
-- **リアルタイム更新**：プルリクエストがデフォルトブランチにマージされるとルールファイルの変更が同期されます
+ファイルは LLM による変換なしで **そのまま** インポートされます。フロントマターは記述どおりに読み込まれ、マークダウン本文は記述したとおりにルールの指示になり、悪い例と良い例は本文からインポートされます。1 つのファイルから 1 つのルールが作成されます。
+
+- **自動：** ルールファイルは、接続済みのすべてのリポジトリで同期されます。
+- **マージ時：** ルールファイルを追加・変更・リネーム・削除するプルリクエストがマージされると、ルールが作成・更新・削除されます。[集中設定](/ja/how_to_use/code_review/configs/centralized_config) リポジトリのプルリクエストは同期されません。
+- **今すぐインポート：** すでにリポジトリにあるファイルは、リポジトリの **Code review → Kody Rules → Configuration** を開き、**Import rule files now** をクリックします。デフォルトブランチ上のすべてのルールファイルを読み込みます。
+- **アプリ内：** 同期されたルールは、リポジトリの **Kody Rules** ページに、**Auto-sync** のオリジンと、ソースとしてのファイルパス付きで表示されます。
+
+新しいルールは有効な状態で追加されます。**Kody knowledge approval** がオンの場合は **Pending review** に入ります。
+
+ファイルが信頼できる唯一の情報源です。ルールのテキスト、パス、重大度、ステータスは同期のたびにファイルの内容で置き換えられるため、アプリ上のルールではなくファイルを変更してください。アプリで一時停止したルールは、そのファイルが次に同期されたときに再び有効になります。
 
 ## ファイルの場所
 
-ルールファイルを以下のいずれかのディレクトリ（リポジトリのルートまたは任意のサブディレクトリ）に配置してください：
-- `.kody/rules/**/*.md`
+ルールファイルは、リポジトリのルートまたは任意のサブディレクトリにある、以下のいずれかの場所に配置します。
+
+- `.kody/rules/`
 - `rules/**/*.md`
-- `.rules/**` と `docs/coding-standards/**`（テンプレートに沿ったファイルのみ）
+- `.rules/` と `docs/coding-standards/`（テンプレートに沿ったファイルのみ）
+
+ルールのスコープは、ファイルの場所ではなく `path` で決まります。`services/billing/.kody/rules/` にある `path` のないルールも、すべてのファイルに適用されます。
 
 ## ルールテンプレート
 
-各ルールファイルはこの正確なテンプレート構造に従う必要があります：
-
-```markdown
+````markdown
 ---
-title: "<ルール名>"
-scope: "file"            # "file" または "pull-request"
-path: []                 # glob のリスト。例：["**/*.ts", "apps/web/**"]
+title: "<rule name>"
+scope: "file"            # "file" or "pull-request"
+path: []                 # list of globs. example: ["**/*.ts", "apps/web/**"]
 severity_min: "high"     # "low", "medium", "high", "critical"
-languages: []            # オプション。例：["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
-buckets: []              # オプション。例：["style-conventions", "error-handling", "security"]
-uuid: ""                 # オプション。安定したルール ID に使用
-enabled: true            # オプション
+enabled: true            # optional
 ---
 
-## 指示
-何をレビューするかとどのように判断するかを説明します。直接的で客観的に。
-- セキュリティ、パフォーマンス、パブリックコントラクトへの影響に焦点を当てます。
-- 該当する場合はチームの設定やパターンを提供します。
-- PR ルールの場合は、変更セットで何を考慮するかを説明します。
+## Instructions
+Describe what to review and how to decide. Be direct and objective.
+- Focus on security, performance and public contract impacts.
+- Give team preferences or patterns when applicable.
+- If it's a PR rule, explain what to consider in the changeset.
 
-## 例
+## Examples
 
-### 悪い例
-\`\`\`lang
-// ルールに違反する短い反例をここに貼り付け
-\`\`\`
-
-### 良い例  
-\`\`\`lang
-// ルールに従う短い例をここに貼り付け
-\`\`\`
+### Bad example
+```lang
+// paste here a short counter-example that violates the rule
 ```
-## テンプレートフィールド
 
-### 必須フィールド
+### Good example
+```lang
+// paste here a short example that follows the rule
+```
+````
 
-厳密に必須なのは 2 つだけです：空でない `title` と、空でないルール本文。どちらかが欠けている
-ファイルは丸ごとスキップされます。
+### フィールド
 
-| フィールド | 説明 | 値 |
-|-------|-------------|---------|
-| `title` | インターフェースに表示されるルール名 | 任意の説明的な文字列 |
-
-### デフォルト値のあるフィールド
-
-それ以外はすべて任意です — 省略するとデフォルトが適用されます。
+必須なのは、空でない `title` と空でない本文だけです。どちらかが欠けているファイルはスキップされます。
 
 | フィールド | 説明 | 値 | デフォルト |
-|-------|-------------|---------|---------|
-| `scope` | ルールの分析スコープ | `"file"` または `"pull-request"` | `"file"` |
-| `path` | ルールを適用するパス。**いずれか**のグロブに一致するファイルで発火します | グロブパターンの配列 | `**/*`（すべてのファイル） |
-| `severity_min` | 最小の重大度レベル | `"low"`、`"medium"`、`"high"`、`"critical"` | `"medium"` |
-| `enabled` | `false` にするとこのファイルはインポートされません（既にインポート済みのルールは削除されません） | boolean | `true` |
-| `uuid` | 安定したルール識別子 — ファイル名を変更してもプラットフォーム上で同じルールを維持します | string | なし |
-| `languages`、`buckets` | 参考用のメタデータ | — | — |
+|-------|-------------|--------|---------|
+| `title` | アプリに表示されるルール名 | 任意の文字列 | 必須 |
+| `scope` | **Per file** または **Per PR** | `"file"` または `"pull-request"` | `"file"` |
+| `path` | ルールを適用するファイル。**いずれか**のグロブに一致するファイルで実行されます。`pull-request` ルールでは使用されません | グロブ、またはグロブのリスト | `**/*`（すべてのファイル） |
+| `severity_min` | ルールの重大度 | `"low"`、`"medium"`、`"high"`、`"critical"` | `"medium"` |
+| `enabled` | `false` にするとファイルはスキップされます。そこからインポート済みのルールは削除されません | boolean | `true` |
 
 <Note>
-  `severity` は `severity_min` のエイリアスとして受け付けられます（打ち間違えやすく、意図が
-  明確なため）。4 つのレベル以外の値は `"medium"` にフォールバックし、`"pull-request"` 以外の
-  `scope` は `"file"` として扱われます。
+  `severity` は `severity_min` のエイリアスとして受け付けられます。4 つのレベル以外の値は `"medium"` にフォールバックし、`"pull-request"` 以外の `scope` は `"file"` として扱われます。それ以外のフロントマターキーは無視されます。
 </Note>
+
+悪い例と良い例は、見出しに "bad" または "good" を含むもの（たとえば `### Bad example`）から取得されます。そのような見出しの下にあるフェンス付きコードブロックは、すべて例になります。
 
 ## ルールの例
 
-### ファイルレベルルールの例
-```markdown
+### ファイルレベルルール
+
+````markdown
 ---
-title: "本番コードで console.log を使用しない"
+title: "Avoid console.log in production code"
 scope: "file"
 path: ["src/**/*.ts", "src/**/*.tsx"]
 severity_min: "medium"
-languages: ["jsts"]
-buckets: ["style-conventions"]
-enabled: true
 ---
 
-## 指示
-本番 TypeScript/JavaScript ファイルで console.log ステートメントを確認します。
-- console.log は本番コードに含まれるべきではありません
-- 代わりに適切なログライブラリを使用してください
-- console.log は開発ユーティリティのみに許可します
+## Instructions
+Check for console.log statements in production TypeScript/JavaScript files.
+- Console logs should not appear in production code
+- Use proper logging libraries instead
+- Allow console.log only in development utilities
 
-## 例
+## Examples
 
-### 悪い例
-\`\`\`typescript
+### Bad example
+```typescript
 function processUser(user: User) {
   console.log('Processing user:', user.id);
   return user.process();
 }
-\`\`\`
+```
 
-### 良い例
-\`\`\`typescript
+### Good example
+```typescript
 import { logger } from './logger';
 
 function processUser(user: User) {
   logger.info('Processing user:', user.id);
   return user.process();
 }
-\`\`\`
 ```
+````
 
-### プルリクエストレベルルールの例
-```markdown
+### プルリクエストレベルルール
+
+````markdown
 ---
-title: "新しい API エンドポイントにはテストが必要"
+title: "New API endpoints must have tests"
 scope: "pull-request"
-path: ["**/*"]
 severity_min: "high"
-buckets: ["testing"]
-enabled: true
 ---
 
-## 指示
-新しい API エンドポイントが追加された場合、対応するテストが PR に含まれていることを確認します。
-- コントローラーの新しいルート定義を確認します
-- 新しいエンドポイントのテストファイルが存在することを確認します
-- 正常系と異常系の両方のテストケースを確認します
+## Instructions
+When new API endpoints are added, ensure corresponding tests are included in the PR.
+- Check for new route definitions in controllers
+- Verify test files exist for new endpoints
+- Ensure both positive and negative test cases
 
-## 例
+## Examples
 
-### 悪い例
-新しいエンドポイント `/api/users/profile` が追加されたが、PR にテストファイルが含まれていない。
+### Bad example
+Added new endpoint `/api/users/profile` but no test file included in the PR.
 
-### 良い例
-新しいエンドポイント `/api/users/profile` が追加され、成功とエラーのケースをカバーする対応するテストファイル `tests/api/users/profile.test.ts` が含まれている。
-```
+### Good example
+Added new endpoint `/api/users/profile` with corresponding test file `tests/api/users/profile.test.ts` that covers success and error cases.
+````
 
-## セットアップ要件
+## ファイルが同期されなくなる場合
 
-1. **ルールファイルを作成する**：テンプレートに沿った `.md` ファイルを `.kody/rules/**` または `rules/**` に配置します。`.rules/**` と `docs/coding-standards/**` にあるテンプレートに沿ったファイルもインポートされます。
-2. **マージする**：ルールファイルは、それを追加・変更・リネーム・削除するプルリクエストがデフォルトブランチにマージされたときに同期されます。ファイルを削除するとそのルールも削除されます。
-3. **既存のファイル**：デフォルトブランチにすでにあるルールファイルをインポートするには、リポジトリの **Kody Rules → Configuration** シートで **Import rule files now** を使います。
+- **ファイルがテンプレートに沿っていない。** フロントマター、`title`、本文のいずれかがないファイルはスキップされます。そのファイルからすでにルールがインポートされている場合、ルールは最後のテキストとステータスを保持し、ルールのサイドパネルに、ファイルが同期されなくなったという警告が表示されます。ファイルが再び解析できるようになると、警告は消えます。
+- **ファイルを同期の対象外にする。** ファイルの最初または最後の 10 行以内に `@kody-ignore` を追加します。そのルールは次回の同期で削除されます。
+- **ファイルのインポートを止める。** `enabled: false` にすると、そのファイルはインポートされなくなります。すでにあるルールは削除も一時停止もされません。それにはファイルを削除するか、`@kody-ignore` を使ってください。
 
-新しいルールは有効な状態で追加されます。**Kody knowledge approval** がオンの場合は **Pending review** に入ります。
+## セルフホストのログ
 
-<Tip>
-ルールファイルをリポジトリに残したまま同期しないようにするには、ファイル内のどこかに `@kody-ignore` を追加します。既存のルールは次回の同期で削除されます。
-</Tip>
+セルフホストのデプロイでは、ログから次のマーカーを検索します。
 
-## 同期とルール評価の確認（セルフホスト）
+- `[kody-rules-sync]`：同期ごとのサマリー。インポート、スキップ（理由付き）、削除されたファイルが記録されます。
+- `[kody-rules-eval]`：レビュー中に、変更されたファイルに対してどのルール（uuid とタイトル）が選ばれたかが記録されます。
 
-セルフホストのデプロイでは、API のログに grep しやすいマーカーが出力されます：
-
-- `[kody-rules-sync]` — 実行ごとの同期サマリー：どのファイルがインポート・スキップ（理由付き）・削除されたか。
-- `[kody-rules-eval]` — レビュー中のファイル単位の評価トレース：レビュー対象ファイルごとに、どのルール（uuid + タイトル）がプロンプトに選ばれたか。
-
-```bash
-docker logs kodus_api 2>&1 | grep "kody-rules-sync"
-docker logs kodus_api 2>&1 | grep "kody-rules-eval"
-```
-
-UI 上では有効なのに、期待するファイルの `[kody-rules-eval]` に一度も現れないルールがある場合は、その **Path** グロブを確認してください — ルールはパスに一致するファイルでしか実行されません。
+アプリ上では有効なのに、期待するファイルの `[kody-rules-eval]` に一度も現れないルールがある場合は、その **Path** を確認してください。ルールはパスに一致するファイルでしか実行されません。
 
 ## ルールの上限
 
-クラウドの **Free** プランの組織（またはサブスクリプションがキャンセル済み・期限切れの組織）と、**有効なライセンスなし**で稼働しているセルフホストインスタンス（Community Edition）は、1 回のレビューで最大 **10 個の有効なルール**（古い順）までしか評価しません。上限を超えたルールは **Locked** としてリストに残り、すべての PR でスキップされます。**Code review → Kody Rules** のバナーに、スキップされているルールの数が表示されます。有料のクラウドプランとライセンス済みのセルフホストにはこの上限はありません。11 個目以降のルールが発火しない場合は、この上限が原因です。
+Free プランと、ライセンスのないセルフホストインスタンスでは、ファイル由来のルールを含め、有効なルールは最大 10 個までです。[ルールの上限](/ja/how_to_use/code_review/configs/kody_rules#ルールの上限) を参照してください。

@@ -1,0 +1,48 @@
+---
+title: "组织设置"
+description: "在哪里管理您的组织:通用设置、CLI 密钥,以及侧边栏 Organization 下的其他页面。"
+---
+
+侧边栏中的 **Organization** 分组包含适用于整个组织的所有内容。您看到的内容取决于您的角色;请参阅[工作区角色](/zh/how_to_use/workspace_roles)。
+
+| 页面 | 用途 |
+| --- | --- |
+| **General** | 时区和自动加入。见下文。 |
+| **SSO** | SAML 单点登录。请参阅[单点登录](/zh/how_to_use/security/sso)。 |
+| **Cockpit visibility** | 对所有人隐藏 Cockpit 标签页和指标。请参阅 [Cockpit 配置](/zh/how_to_use/cockpit/configuration)。 |
+| **CLI keys** | Kodus CLI 的团队密钥。见下文。 |
+| **Notifications** | 按事件和角色设置邮件和应用内通知。请参阅[通知](/zh/how_to_use/organization/notifications)。 |
+| **Subscription** | 您的套餐、开发者许可证和工作区成员。请参阅[套餐与许可证](/zh/how_to_use/pricing)和[工作区角色](/zh/how_to_use/workspace_roles)。 |
+| **Activity logs** | 谁更改了什么。请参阅[活动日志](/zh/how_to_use/organization/activity_logs)。 |
+| **Token usage** | Token 和预估成本。请参阅 [Token 用量](/zh/how_to_use/organization/token_usage)。 |
+
+General、SSO、Cockpit visibility、CLI keys 和 Notifications 仅限所有者。
+
+## 通用设置
+
+打开 **Organization → General**(**General settings**)。
+
+- **Timezone**:**New York** 或 **São Paulo**。它设置 **Pull Requests** 页面上显示的精确日期和时间、相对时间("opened 2 hours ago")工具提示中的时间,以及每个审查阶段的 **Started** 时间所使用的时区。首次打开 **General** 时会存储 New York;在此之前这些时间以 UTC 显示。其他内容都不会读取它:定时任务、通知、邮件报告、Cockpit 日期范围和 Token usage 使用固定的时区。
+- **Auto Join**:开启 **Enable Auto Join** 并列出您的邮箱域名(以逗号分隔),使用其中某个域名注册的人即可加入该组织。不允许使用 gmail.com 等公共域名,并且您只能添加自己的域名。加入者的角色为 **Contributor**;请参阅[工作区角色](/zh/how_to_use/workspace_roles#工作区成员的自动加入)。
+
+点击 **Save settings** 应用。
+
+## CLI 密钥
+
+CLI 密钥让 [Kodus CLI](/zh/how_to_use/cli/introduction) 无需交互式登录即可代表某个工作区执行操作,适用于 CI 流水线和 AI 编码代理。打开 **Organization → CLI keys**。列出的密钥属于所选工作区,只有所有者可以创建、配置或撤销它们。
+
+<Steps>
+  <Step title="生成密钥">
+    输入一个说明该密钥将在何处使用的 **Key name**,例如 `CI pipeline deploy key`,然后点击 **Generate key**。
+  </Step>
+
+  <Step title="复制它">
+    在 **CLI key created** 中复制该密钥。它只会显示一次。该对话框还会提供一条可分享给团队的安装命令。
+  </Step>
+
+  <Step title="选择它能做什么">
+    点击该密钥上的 **Configure**。**Allow repository configuration via CLI** 会为该密钥启用 `kodus config remote`(也称为 `kodus config repo`)和 `kodus config centralized`。**Allow Kody Rules management via CLI** 会启用 `kodus rules view`、`create` 和 `update`。两者默认都关闭。点击 **Save changes**。密钥仍然无法运行 `kodus rules pause`、`resume` 或 `delete`,并且它只能设置一个代码库的六项设置;这些需要登录。请参阅[认证模式](/zh/how_to_use/cli/concepts#认证模式)。
+  </Step>
+</Steps>
+
+**Existing CLI keys** 列出每个密钥的 **Name**、**Status**(**Active** 或 **Revoked**)、**Last used**、**Created at** 和 **Created by**。**Revoke** 会立即停用密钥,且无法撤销。密钥的创建和撤销会显示在[活动日志](/zh/how_to_use/organization/activity_logs)中。

@@ -175,13 +175,38 @@ import { recordWebhookSetupOutcome } from './webhook-setup/webhook-setup-failure
 /**
  * The Forgejo client returns failures instead of throwing. Turns one into an
  * error carrying the HTTP status and headers, so it can be classified.
+ *
+ * A request that got no answer (connection dropped, reset, refused) comes
+ * back as the axios error itself, with `error: {}` and no `response`. Its
+ * `code` and message are what tell a transport failure, so they are kept;
+ * its `config` holds the token, so it is not passed on.
  */
 function throwIfForgejoFailed(result: {
     error?: unknown;
     response?: { status?: number; headers?: unknown };
+    code?: unknown;
+    message?: unknown;
 }): void {
-    if (!result?.error) {
+    // `error` is the response body, and a proxy's 429 or 502 often has none
+    // (`error === ""`): the status, or the result being the axios error
+    // itself, is what says the request failed.
+    const failed =
+        result instanceof Error ||
+        (result?.response?.status ?? 0) >= 400 ||
+        !!result?.error;
+    if (!failed) {
         return;
+    }
+
+    if (!result.response) {
+        throw Object.assign(
+            new Error(
+                typeof result.message === 'string'
+                    ? result.message
+                    : 'Forgejo request got no response',
+            ),
+            typeof result.code === 'string' ? { code: result.code } : {},
+        );
     }
 
     const status = result.response?.status;
@@ -204,7 +229,8 @@ function throwIfForgejoFailed(result: {
         (typeof result.error === 'string' ? result.error : undefined);
 
     throw Object.assign(
-        new Error(detail ?? `Forgejo request failed with status ${status}`),
+        // An empty body gives an empty detail: the status says more.
+        new Error(detail || `Forgejo request failed with status ${status}`),
         { status, response: { status, headers } },
     );
 }
@@ -1316,6 +1342,7 @@ export class ForgejoService implements Omit<
     async findTeamAndOrganizationIdByConfigKey(params: {
         repository: { id?: string | number; name?: string };
         host?: string;
+        repositoryFullName?: string;
     }): Promise<IntegrationConfigEntity | null> {
         try {
             const repositoryId = String(params?.repository?.id ?? '');
@@ -1334,7 +1361,8 @@ export class ForgejoService implements Omit<
                 forgejoConfigsForWebhook(configs, {
                     host: params.host,
                     repositoryId,
-                    repositoryFullName: params.repository.name,
+                    repositoryFullName:
+                        params.repositoryFullName ?? params.repository.name,
                 })[0] ?? null
             );
         } catch (error) {
@@ -2675,11 +2703,7 @@ export class ForgejoService implements Omit<
         prNumber: number;
         reason: string;
     }): Promise<number> {
-        return this.dismissOwnReviews(
-            params,
-            'REQUEST_CHANGES',
-            params.reason,
-        );
+        return this.dismissOwnReviews(params, 'REQUEST_CHANGES', params.reason);
     }
 
     private async dismissOwnReviews(
@@ -3288,12 +3312,13 @@ export class ForgejoService implements Omit<
             const me = await userGetCurrent({ client });
             if (!me.data?.id) return null;
             const own = reviews.filter(
-                (review) =>
-                    review.user?.id === me.data.id && !review.dismissed,
+                (review) => review.user?.id === me.data.id && !review.dismissed,
             );
             const latestReview = own
                 .filter((review) =>
-                    ['APPROVED', 'REQUEST_CHANGES'].includes(review.state ?? ''),
+                    ['APPROVED', 'REQUEST_CHANGES'].includes(
+                        review.state ?? '',
+                    ),
                 )
                 .at(-1);
             if (!latestReview) {
@@ -4476,7 +4501,9 @@ export class ForgejoService implements Omit<
             );
 
             if (!authDetail) {
-                throw new Error('No Forgejo credential is stored for this team');
+                throw new Error(
+                    'No Forgejo credential is stored for this team',
+                );
             }
 
             client = this.createForgejoClient(authDetail);
@@ -4982,13 +5009,11 @@ export class ForgejoService implements Omit<
                                         organizationId:
                                             params.organizationAndTeamData
                                                 ?.organizationId,
-                                        teamId:
-                                            params.organizationAndTeamData
-                                                ?.teamId,
+                                        teamId: params.organizationAndTeamData
+                                            ?.teamId,
                                         commentId: comment.id,
                                         prNumber: params.pr?.pull_number,
-                                        repository:
-                                            params.pr?.repository?.name,
+                                        repository: params.pr?.repository?.name,
                                     },
                                 });
                                 return null;

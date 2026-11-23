@@ -1,10 +1,10 @@
 ---
 title: Crear un webhook
-description: "Registra manualmente el webhook de Azure Repos cuando Kody no pudo crear el service hook, incluido el token firmado que exige la URL."
+description: "Registra manualmente el webhook de Azure Repos cuando Kody no pudo crear el service hook por ti, incluido el token firmado que exige la URL."
 icon: webhook
 ---
 
-Kody generalmente crea el webhook automáticamente al conectar un proyecto de Azure DevOps. Esta página cubre la configuración **manual** que debes realizar cuando el registro automático no ocurrió — típicamente en instalaciones auto-hospedadas o en proyectos de Azure donde Kody no puede crear service hooks en tu nombre.
+Kody normalmente crea los service hooks automáticamente, por repositorio, cuando guardas la selección de repositorios. Para eso necesita el permiso **Edit subscriptions** en el proyecto (los Project Administrators lo tienen). Esta página cubre la configuración **manual** que debes realizar cuando el registro automático no ocurrió. **Repositories** muestra el repositorio con el motivo.
 
 <Note>
   Las URLs de webhook deben llegar al servicio de Webhooks (puerto 3332). Usar el dominio de la API solo funciona si tu proxy inverso enruta las rutas `/.../webhook` al servicio de Webhooks.
@@ -12,7 +12,7 @@ Kody generalmente crea el webhook automáticamente al conectar un proyecto de Az
 
 ## La URL de webhook de Azure Repos requiere un token firmado
 
-A diferencia de GitHub, GitLab, Bitbucket y Forgejo, las solicitudes de webhook de Azure Repos **deben incluir un parámetro de consulta `token` cifrado**. Kodus valida este token en cada solicitud entrante y rechaza las llamadas sin él con `403 Unauthorized`. El token se deriva de dos variables de entorno que ya configuraste durante la instalación auto-hospedada:
+A diferencia de GitHub, GitLab, Bitbucket y Forgejo, las solicitudes de webhook de Azure Repos **deben incluir un parámetro de consulta `token` cifrado**. Kodus valida este token en cada solicitud entrante y rechaza las llamadas sin él con `403 Unauthorized`. El token se deriva de dos variables de entorno que ya configuraste durante la instalación self-hosted:
 
 - `CODE_MANAGEMENT_SECRET` — la clave de cifrado de 32 bytes (codificada en hexadecimal).
 - `CODE_MANAGEMENT_WEBHOOK_TOKEN` — el texto plano que la clave cifra.
@@ -26,7 +26,7 @@ https://kodus-api.yourdomain.com/azure-repos/webhook?token=<generated>
 El valor `<generated>` se produce cifrando `CODE_MANAGEMENT_WEBHOOK_TOKEN` con `CODE_MANAGEMENT_SECRET` usando AES-256-CBC, con el formato `<ivHex>:<cipherHex>`.
 
 <Note>
-  Kody genera este token automáticamente cuando crea el webhook a través del flujo de integración de la interfaz de usuario. Solo necesitas generarlo manualmente cuando registras el webhook en Azure DevOps de forma manual.
+  Kody genera este token automáticamente cuando crea el webhook por ti a través del flujo de integración de la interfaz. Solo necesitas generarlo manualmente cuando registras el webhook en Azure DevOps de forma manual.
 </Note>
 
 ## Generar el token de webhook
@@ -57,11 +57,11 @@ El resultado es el valor que pegas como `?token=...` en la URL del webhook. Ejem
 
 ### Opción B — localmente con Node (sin Docker)
 
-Si tu stack de Kodus no está en ejecución o deseas generar el token en una máquina diferente, exporta las dos variables de entorno y ejecuta:
+Si tu stack de Kodus no está en ejecución o quieres generar el token en una máquina diferente, exporta las dos variables de entorno y ejecuta:
 
 ```bash
-export CODE_MANAGEMENT_SECRET="<mismo valor que en tu .env>"
-export CODE_MANAGEMENT_WEBHOOK_TOKEN="<mismo valor que en tu .env>"
+export CODE_MANAGEMENT_SECRET="<same value as in your .env>"
+export CODE_MANAGEMENT_WEBHOOK_TOKEN="<same value as in your .env>"
 
 node -e "
 const crypto = require('crypto');
@@ -75,7 +75,7 @@ console.log(iv.toString('hex') + ':' + e);
 ```
 
 <Warning>
-  Ambos valores de variables de entorno deben coincidir **exactamente** con los que usa el contenedor de la API de Kodus en ejecución. Una discrepancia en la clave produce un token con apariencia válida que Kodus rechazará con `403 Unauthorized`.
+  Ambos valores de variables de entorno deben coincidir **exactamente** con los que usa el contenedor de la API de Kodus. Una discrepancia en la clave produce un token con apariencia válida que Kodus rechazará con `403 Unauthorized`.
 </Warning>
 
 <Tip>
@@ -103,12 +103,13 @@ console.log(iv.toString('hex') + ':' + e);
 
 6. Haz clic en **Finish**.
 
-Crea una suscripción por tipo de evento. Kodus actualmente reacciona a:
+Crea una suscripción por tipo de evento. Estos tres son los que Kody crea por sí mismo y necesita para revisar:
 
 - `git.pullrequest.created` — Pull request creado
 - `git.pullrequest.updated` — Pull request actualizado
-- `git.pullrequest.merge.attempted` — Intento de fusión de pull request
 - `ms.vss-code.git-pullrequest-comment-event` — Comentario en pull request
+
+Kodus también acepta `git.pullrequest.merge.attempted` — Intento de fusión de pull request — pero no lo necesita para revisar.
 
 <Note>
   Asegúrate de que la URL sea accesible desde Azure DevOps y acepte solicitudes POST entrantes en el puerto 3332 (directamente o a través de tu proxy inverso).
@@ -127,5 +128,9 @@ Crea una suscripción por tipo de evento. Kodus actualmente reacciona a:
 
   <Accordion title="Funciona para un evento pero no para otros">
     Cada tipo de evento necesita su propia suscripción en Azure DevOps. Si solo creaste "Pull request created", las actualizaciones y los comentarios no desencadenarán revisiones.
+  </Accordion>
+
+  <Accordion title="Kodus devuelve 400 Unrecognized event">
+    El token fue aceptado, pero el cuerpo de la solicitud no tiene `eventType`. Los service hooks de Azure DevOps siempre lo envían, así que otra cosa está haciendo POST a la URL, por ejemplo una solicitud de prueba manual.
   </Accordion>
 </AccordionGroup>

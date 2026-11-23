@@ -60,8 +60,8 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import {
+    OrchestratorOutput,
     ReviewOrchestratorService,
-    type OrchestratorOutput,
 } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
 import {
@@ -161,6 +161,7 @@ import {
     CodeReviewPipelineContext,
     resolvedModel,
     resolvedProvider,
+    usesOrgOwnedKey,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
 } from '../context/code-review-pipeline.context';
@@ -1020,6 +1021,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         });
     }
 
+    /**
+     * Give the review's sandbox lease back once the orchestrator returns: it
+     * is the review's last reader of the checkout, and everything after it
+     * reads the diff the platform returned (#2628). Another holder of the
+     * PR's sandbox, such as a `@kody` reply, keeps it running. Not awaited by
+     * the stage: on the local provider the release deletes the clone, and the
+     * comments must not wait for it; the observer awaits the same release at
+     * pipeline end.
+     */
+    private async releaseSandbox(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        try {
+            await context.sandboxHandle?.cleanup?.();
+        } catch (error) {
+            this.logger.warn({
+                message: `[AGENT] Could not release the sandbox for PR#${context.pullRequest?.number}; the lease TTL reaper frees it`,
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
+    }
+
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
@@ -1034,7 +1063,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     /**
      * One review of the PR: the agents, then every step up to the comments.
      * With no `pass` it is the whole review and publishes; an Ultra review
-     * runs it once per model (`native`, with that model forced and its own
+     * runs it once per model (`native`, with that model forced, on the PR's
      * sandbox) and once for Kody Rules and the custom agents (`auxiliary`),
      * each handing its findings to `collect` instead of publishing.
      */
@@ -1318,41 +1347,48 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 changedFiles,
             );
             stageWarnings.push(...reviewKnowledge.warnings);
-            const result = await this.reviewOrchestrator.execute({
-                ...buildOrchestratorInput(context, {
-                    changedFiles,
-                    prNumber,
-                    repositoryId,
-                    reviewOptions,
-                    onAgentProgress,
-                    gitHubToken: await this.resolveGitHubToken(context),
-                    callGraph,
-                    adaptiveProfile,
-                    kodyRules:
-                        scope === 'native'
-                            ? []
-                            : await this.prepareKodyRulesForReview(context),
-                    linkedRepoAccess,
-                    repoInstructions,
-                }),
-                ...(pass.model && {
-                    forcedModel: pass.model.slot,
-                    // Each model runs the heavy review: the lenses on.
-                    heavy: true,
-                }),
-                ...(scope === 'native' && { analyzerFindings: [] }),
-                agentScope: scope,
-                customAgents,
-                onlyCustomAgent: context.onlyCustomAgent,
-                ignoredChangedFiles,
-                knowledgeByTarget: reviewKnowledge.byTarget,
-                knowledgeReader: reviewKnowledge.reader,
-                customAgentTooling: {
-                    sandbox: context.sandboxHandle,
-                    installedClis: context.customAgentClis?.byAgentId,
-                    onCliRun: (run) => cliRuns.push(run),
-                },
-            });
+            let result: OrchestratorOutput;
+            try {
+                result = await this.reviewOrchestrator.execute({
+                    ...buildOrchestratorInput(context, {
+                        changedFiles,
+                        prNumber,
+                        repositoryId,
+                        reviewOptions,
+                        onAgentProgress,
+                        gitHubToken: await this.resolveGitHubToken(context),
+                        callGraph,
+                        adaptiveProfile,
+                        kodyRules:
+                            scope === 'native'
+                                ? []
+                                : await this.prepareKodyRulesForReview(context),
+                        linkedRepoAccess,
+                        repoInstructions,
+                    }),
+                    ...(pass.model && {
+                        forcedModel: pass.model.slot,
+                        // Each model runs the heavy review: the lenses on.
+                        heavy: true,
+                    }),
+                    ...(scope === 'native' && { analyzerFindings: [] }),
+                    agentScope: scope,
+                    customAgents,
+                    onlyCustomAgent: context.onlyCustomAgent,
+                    ignoredChangedFiles,
+                    knowledgeByTarget: reviewKnowledge.byTarget,
+                    knowledgeReader: reviewKnowledge.reader,
+                    customAgentTooling: {
+                        sandbox: context.sandboxHandle,
+                        installedClis: context.customAgentClis?.byAgentId,
+                        onCliRun: (run) => cliRuns.push(run),
+                    },
+                });
+            } finally {
+                // An Ultra run shares the PR's sandbox with the other runs:
+                // the executor releases it after the last one.
+                if (scope === 'all') void this.releaseSandbox(context);
+            }
             pass.onLoopEnd?.();
 
             // Snapshot linked-repo metadata after the review so clone status
@@ -1378,7 +1414,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Emit profile-driven warnings up here at the stage so they
             // surface even when the agent's overhead preflight throws
-            // before its own emission points. These four are decided
+            // before its own emission points. These are decided
             // purely by the resolved profile — no PR-specific condition
             // needed. The agent will re-emit some of them when it runs;
             // dedupReviewWarnings folds the duplicates so the user sees
@@ -1397,9 +1433,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
             if (adaptiveProfile.compactPrompt) {
                 emitStageWarning('PROMPT_COMPACTED');
-            }
-            if (adaptiveProfile.allOptional) {
-                emitStageWarning('HUNK_HEADERS_ONLY');
             }
 
             const durationMs = Date.now() - startTime;
@@ -1442,7 +1475,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     ).friendlyMessage || ULTRA_RUN_GENERIC_FAILURE,
             );
 
-            for (const failure of result.failures || []) {
+            const failures = result.failures ?? [];
+
+            // Classify against the provider that ANSWERED, not the one
+            // resolved before the run. The friendly sentence names the
+            // provider inline ("the key (openai) appears invalid"), so
+            // classifying with the pre-run slot after a cascade puts one
+            // provider in the prose and another in the facts line — the
+            // same never-co-occurred pair, split across two fields.
+            // A classification already attached by byok-model-wrapper is
+            // anchored to the attempt that raised it, so it is preferred.
+            const classifyFailure = (f: (typeof failures)[number]) =>
+                getClassification(f.error) ??
+                classifyLLMError(f.error, resolvedProvider(context, f.error));
+
+            for (const failure of failures) {
                 // A custom agent is auxiliary, like kody-rules: its failure
                 // leaves the review partial, not failed.
                 const severity = CRITICAL_AGENTS.has(failure.agentName)
@@ -1462,6 +1509,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
+                            errorCategory: classifyFailure(failure).category,
+                            orgOwnedKey: usesOrgOwnedKey(
+                                context,
+                                failure.error,
+                            ),
                             prNumber,
                         },
                     });
@@ -1544,23 +1596,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // context for the message. A critical agent with a mapped (non-
             // UNKNOWN) classification wins; fall back to any critical, then
             // any failure.
-            const failures = result.failures ?? [];
-
             if (failures.length > 0) {
-                // Classify against the provider that ANSWERED, not the one
-                // resolved before the run. The friendly sentence names the
-                // provider inline ("the key (openai) appears invalid"), so
-                // classifying with the pre-run slot after a cascade puts one
-                // provider in the prose and another in the facts line — the
-                // same never-co-occurred pair, split across two fields.
-                // A classification already attached by byok-model-wrapper is
-                // anchored to the attempt that raised it, so it is preferred.
-                const classifyFailure = (f: (typeof failures)[number]) =>
-                    getClassification(f.error) ??
-                    classifyLLMError(
-                        f.error,
-                        resolvedProvider(context, f.error),
-                    );
                 const criticalFailures = failures.filter((f) =>
                     CRITICAL_AGENTS.has(f.agentName),
                 );
@@ -1703,6 +1739,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
                 logIds,
+                new Set(changedFiles.map((f) => f.filename)),
             );
 
             const validatedSuggestions = this.normalizeSuggestionLabels(
@@ -2188,7 +2225,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     // An Ultra review's Kody Rules and custom agents failing
                     // leave the models' review standing.
                     severity: scope === 'auxiliary' ? 'partial' : 'critical',
-                    metadata: { prNumber, durationMs },
+                    metadata: {
+                        prNumber,
+                        durationMs,
+                        errorCategory: classification.category,
+                        orgOwnedKey: usesOrgOwnedKey(context, stageError),
+                    },
                 });
 
                 if (!draft.lastReviewError) {
@@ -2265,17 +2307,38 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // comment. `changedFilesByName` (built above for the diff-snap
         // step) tells the two cases apart.
         //
-        // An analyzer finding on a file whose diff the host withheld takes
-        // no line comment either: GitHub rejects it with 422 "diff is too
-        // large". The analyzers read such a file from a hunk they
-        // recovered, so a lockfile advisory would never reach the PR.
+        // A file the PR carries without a patch has no hunk to anchor a
+        // line comment to, and GitHub answers 422 on every attempt. Two
+        // shapes reach this. A diff the host withheld ("diff is too
+        // large") is the first: the analyzers read such a file from a hunk
+        // they recovered, so a lockfile advisory would never reach the PR.
+        // A file moved without a content change is the second: a 100%
+        // similarity rename has no hunks at all, and the host rejects the
+        // comment with "could not be resolved". Route both PR-level,
+        // citing file:line: the first covers analyzer findings, the second
+        // covers anything a model or an analyzer found on that file.
+        const withoutPatch = (f: FileChange) => Boolean(f.filename) && !f.patch;
+        const allChanges = [
+            ...changedFiles,
+            ...(context.ignoredFileChanges ?? []),
+        ];
         const withheldDiffs = new Set(
-            [...changedFiles, ...(context.ignoredFileChanges ?? [])]
-                .filter((f) => f.filename && !f.patch)
+            allChanges.filter(withoutPatch).map((f) => f.filename),
+        );
+        const movedWithoutHunks = new Set(
+            allChanges
+                .filter(
+                    (f) =>
+                        withoutPatch(f) &&
+                        (f.status === 'renamed' || f.status === 'copied'),
+                )
                 .map((f) => f.filename),
         );
         const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-            (isAnalyzerSuggestion(s) && withheldDiffs.has(s.relevantFile)) ||
+            (!!s.relevantFile &&
+                (isAnalyzerSuggestion(s)
+                    ? withheldDiffs.has(s.relevantFile)
+                    : movedWithoutHunks.has(s.relevantFile))) ||
             (s.label === 'kody_rules' &&
                 (!s.relevantFile ||
                     s.fileAnchored === true ||
@@ -2539,6 +2602,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             teamId?: string;
             prNumber?: number;
         } = {},
+        /**
+         * Files this PR changes, without the ignored ones. Only these reach the
+         * PR-level routing below, so only these may skip the diff snap.
+         */
+        prChangedFileNames: ReadonlySet<string> = new Set(),
     ): Partial<CodeSuggestion>[] {
         // Snap suggestion line numbers to valid diff ranges before passing downstream.
         // GitHub rejects inline comments on lines that aren't part of the diff.
@@ -2571,6 +2639,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     return null;
                 }
                 if (!file) return s;
+
+                // A Kody Rule finding that names a file this PR changes without
+                // citing lines is a PR-level finding by intent — see
+                // `isPrLevelSuggestion` below. Snapping it to the file's first
+                // hunk here turned a rule about the PR itself into an inline
+                // comment on an unrelated changed line (#2420). The snap is
+                // kept for ignored files: they never reach that routing map,
+                // so leaving them line-less would produce a broken inline
+                // comment instead of a PR-level one.
+                if (
+                    s.label === 'kody_rules' &&
+                    !s.relevantLinesStart &&
+                    prChangedFileNames.has(s.relevantFile)
+                ) {
+                    return s;
+                }
+
                 const validRanges = extractValidDiffLines(file.patch);
                 const snapped = snapLinesToDiff(s, validRanges);
                 if (snapped === null) {

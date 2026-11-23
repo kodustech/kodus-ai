@@ -4,6 +4,11 @@ import {
     kodyRuleEvidenceVerifier,
 } from './kody-rule-evidence';
 import { LLM } from '@libs/llm/llm';
+import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
+import {
+    INTENT_BUDGET_CHARS,
+    PR_DESCRIPTION_BUDGET_CHARS,
+} from './kody-rules-sharded.judge';
 import type { ReviewAgentInput } from '../review-agent.contract';
 
 const read = {
@@ -149,6 +154,83 @@ describe('Kody Rule evidence deadline', () => {
             'deadline',
         );
         expect(judge).not.toHaveBeenCalled();
+    });
+
+    const judgedCandidate = async (
+        prBody: string | undefined,
+        verifier = (body: string | undefined) =>
+            kodyRuleEvidenceVerifier(
+                {
+                    changedFiles: [],
+                    prTitle: 'Update title',
+                    prBody: body,
+                } as unknown as ReviewAgentInput,
+                undefined,
+                false,
+            ),
+    ) => {
+        const judge = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ verdict: 'satisfied' });
+        await expect(
+            verifier(prBody)(candidate, shard, Date.now() + 60_000),
+        ).resolves.toBe('satisfied');
+        const { user, system } = judge.mock.calls[0][0] as {
+            user: string;
+            system: string;
+        };
+        return { sent: JSON.parse(user), system };
+    };
+
+    it('judges a PR-metadata candidate on the whole description, not its first 1,000 characters', async () => {
+        const prBody = `${'Context. '.repeat(200)}\n## Test plan\nRan the suite.`;
+        const { sent, system } = await judgedCandidate(prBody);
+
+        expect(sent.description).toBe(prBody);
+        expect(sent).not.toHaveProperty('descriptionTruncated');
+        expect(system).toContain(
+            'Only that field says the description was cut',
+        );
+
+        // Guard, as before the fix: a PR with no description sends no key.
+        jest.restoreAllMocks();
+        const { sent: none } = await judgedCandidate(undefined);
+        expect(none).not.toHaveProperty('description');
+        expect(none).not.toHaveProperty('descriptionTruncated');
+    });
+
+    it('flags a cut description in its own field', async () => {
+        const { sent } = await judgedCandidate(
+            'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS + 10),
+        );
+
+        expect(sent.description).toHaveLength(PR_DESCRIPTION_BUDGET_CHARS);
+        expect(sent.descriptionTruncated).toBe(true);
+    });
+
+    it('gives a file-level candidate the 1,000-character intent its shard read', async () => {
+        const run = jest
+            .spyOn(AiSdkAgentRunner.prototype, 'run')
+            .mockResolvedValue({
+                status: 'completed',
+                steps: [],
+                artifacts: [],
+            } as never);
+        await kodyRuleEvidenceVerifier(
+            {
+                changedFiles: [],
+                prTitle: 'Update title',
+                prBody: 'y'.repeat(5000),
+            } as unknown as ReviewAgentInput,
+            undefined,
+            true,
+        )(candidate, { ...shard, filename: 'src/a.ts' }, Date.now() + 60_000);
+
+        const sent = JSON.parse(
+            (run.mock.calls[0][1] as { prompt: string }).prompt,
+        );
+        expect(sent.description).toHaveLength(INTENT_BUDGET_CHARS);
+        expect(sent.descriptionTruncated).toBe(true);
     });
 
     it.each([

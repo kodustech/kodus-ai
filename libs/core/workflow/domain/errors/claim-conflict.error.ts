@@ -13,14 +13,22 @@ export const CLAIM_CONFLICT_REQUEUE_DELAY_MS = 20_000;
 export class ClaimConflictError extends Error {
     readonly errorClassification = CLAIM_CONFLICT_CLASSIFICATION;
     readonly requeueDelayMs: number;
+    /**
+     * Publish a fresh copy to the queue's own exchange instead of a delayed
+     * one: for work this worker's shutdown stopped, whose consumer is
+     * already cancelled, so the copy goes to the next worker.
+     */
+    readonly returnToQueue: boolean;
 
     constructor(
         message = 'Message already claimed but not finished',
         requeueDelayMs: number = CLAIM_CONFLICT_REQUEUE_DELAY_MS,
+        options: { returnToQueue?: boolean } = {},
     ) {
         super(message);
         this.name = 'ClaimConflictError';
         this.requeueDelayMs = requeueDelayMs;
+        this.returnToQueue = options.returnToQueue === true;
     }
 }
 

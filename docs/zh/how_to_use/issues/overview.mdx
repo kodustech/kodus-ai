@@ -1,128 +1,72 @@
 ---
-title: "概述"
+title: "Kody 工单"
 description: "使用 Kody 工单功能跟踪和管理未实施的建议。"
 ---
 
-## 快速概述
+**Kody Issues**(Kody 工单)会维护一份实时列表,记录 Kody 提出的、在其拉取请求关闭时**未被实施**的建议,并随着代码变化将它们关闭。它独立运行;可通过 **Auto-create issues** 开关将其关闭。
 
-- **自动跟踪**:自动捕获已关闭 PR 中未实施的建议
-- **智能解决**:当建议在未来的 PR 中实施时自动解决
-- **高级过滤**:按状态、严重性、类别等进行过滤,并保存您的默认过滤器
-- **零设置**:自动与您现有的代码审查工作流程配合使用(可通过 **Auto-create issues** 开关将其关闭)
+在所有套餐中，包括无许可证的自托管环境，Owner、Repo Admin 和 Contributor 都可以从 ⌘K 命令面板打开 **Issues**。即使该入口带有挂锁图标和 **Teams** 标签，也能打开列表。
 
-## 是什么
+拥有 [Cockpit 访问权限](/zh/how_to_use/cockpit/overview)时，可从 **Issues** 标签页打开列表并查看未关闭的工单数量。
 
-**Kody 工单**功能自动跟踪 Kody 生成的所有在您的拉取请求(PR)中**未实施**的建议。它就像声纳一样,提供待处理改进的实时列表,确保您永远不会失去对关键反馈的关注。
-
-工单不是侧边栏中的条目:请从 [Cockpit](/zh/how_to_use/cockpit/overview) 中的 **Issues** 标签页打开它(该标签页会显示未解决工单的数量),或在 ⌘K 命令面板中搜索 **Issues**(当您的套餐不包含 Cockpit 时,这是进入的方式)。列表显示 **Status**、**Severity**、**Category**、**Title**、**Repository**、**File**、**Age** 和 **#PR(s)**,默认过滤为打开的工单。点击某一行即可打开该工单的详情面板,您可以在其中更改其状态和严重性、使用 **J** / **K** 在工单之间切换、通过 **Share** 分享链接,并查看 **Team feedback from PR reactions**。
-
-页面右上角的 **Auto-create issues** 开关用于为工作区打开或关闭自动创建工单(默认打开)。
+列表显示 **Status**、**Severity**、**Category**、**Title**、**Repository**、**File**、**Age** 和 **#PR(s)**。默认显示未关闭的工单。
 
 <Frame caption="Kody 工单仪表板显示带有过滤器和状态管理的跟踪建议">
   <img src="/images/issues.png" alt="Kody 工单仪表板" />
 </Frame>
 
-## 主要优势
+Owners、Repo Admins 和 Contributors 可以读取所有代码库的工单;Billing Managers 不能。Owners 可以更改任何工单,Repo Admins 只能更改其被分配的代码库中的工单,Contributors 则不能更改任何工单。
 
-<CardGroup cols={2}>
-  <Card title="持续可见性" icon="eye">
-    始终了解未完成的改进,无需手动跟踪
-  </Card>
-  <Card title="质量跟踪" icon="chart-line">
-    使用严重性级别高效地优先处理和解决关键修复
-  </Card>
-  <Card title="错误预防" icon="shield-check">
-    确保重要建议在开发过程中不会被遗漏
-  </Card>
-  <Card title="团队灵活性" icon="users">
-    自定义状态和严重性以完美适应您的工作流程
-  </Card>
-</CardGroup>
+要在终端查看工单，请参阅 [`kodus issues`](/zh/how_to_use/cli/commands#kodus-issues) 的可用性和筛选选项。
 
-## 工作原理
-
-### 1. 工单创建
+## 工单如何创建
 
 <Note>
-  工单仅在 PR **关闭**时创建 - 不是在它们打开或审查期间。
+  工单仅在 PR **关闭**时创建,不是在它们打开或审查期间。在 GitLab 和 Azure Repos 上,只有已合并的 PR 才算数。
 </Note>
 
-<Warning>
-  类型为 **PR** 的 Kody 规则不会生成工单。只有文件级和特定代码的建议才会创建可跟踪的工单。
-</Warning>
-
-- 当 PR **关闭**时,Kody 汇编该 PR 中所有**未应用**的建议
-- 对于每个未实施的建议,Kody 自动创建一个链接到代码库的**工单**
-- 每个工单都包含原始建议上下文、文件位置和严重性级别
-
-### 2. 自动解决
-
-- 如果开发人员在**后续 PR** 中实施了建议的更改,Kody 会将相关工单标记为**已解决**
-- Kody 使用代码分析智能地将实施的更改与现有工单匹配
-- 解决自动发生,无需手动干预
-
-### 3. 手动管理
-
-#### 状态控制
-
-- **打开**:需要关注的新工单
-- **已解决**:当建议被实施时自动标记
-- **已忽略**:当建议与您的团队不相关时手动标记
-
-#### 严重性调整
-
-- 每个工单都有严重性级别(`严重`、`高`、`中等`、`低`)
-- 您可以随时更新严重性级别以反映团队的优先级
-- 使用严重性首先关注最具影响力的改进
-
-### 4. 高级过滤
+- 当 PR 关闭时,Kody 会取出它在该 PR 上提出的未被实施的建议,并为每条建议创建一个链接到代码库的**工单**。每个工单都保留原始说明、文件、严重性和类别。
+- 如果同一文件上已有一个打开的工单涵盖了相同的问题,Kody 会把新建议加入该工单,而不是创建重复的工单。**#PR(s)** 列出所有贡献过的 PR。
+- 这包括 Kody 因低于最低严重性或超过评论数量上限而未发布的建议。被 Kody 因错误、重复或类别已关闭而丢弃的建议不会成为工单。
 
 <Warning>
-  过滤器是强大的工具 - 将其保存为默认设置,以快速访问对您的工作流程最重要的工单。
+  **Per PR** 类型的 Kody Rules 不会生成工单。只有文件级建议才会创建可跟踪的工单。
 </Warning>
 
-打开列表顶部的 **Filters**(该按钮会显示当前生效的过滤器数量):
+## 工单如何解决
 
-- **状态过滤器**:打开、已解决、已忽略
-- **严重性过滤器**:严重、高、中等、低
-- **类别过滤器**:安全性、性能、代码风格等
-- **代码库过滤器**:专注于特定项目
-- **标题、文件路径和 PR 编号**:精确定位到特定工单
-- **Set as default filters**:每次在此浏览器中打开工单时自动应用您首选的过滤器(**Reset to default filters** 可将其恢复)
+每次 PR 关闭时,Kody 都会将该 PR 所更改文件上的打开工单与当前代码进行核对:
 
-## 为什么重要
+- 如果代码中已不再存在该问题,工单变为 **Resolved**。
+- 如果文件已被删除,工单变为 **Dismissed**。
 
-### 对于开发团队
+即使 **Auto-create issues** 处于关闭状态,这一过程也会运行,因此现有工单会继续被关闭。
 
-- **永远不会失去跟踪**重要的代码改进
-- **根据实际影响和严重性优先处理工作**
-- **从常见的已忽略 vs. 已实施建议中学习模式**
+## 处理工单
 
-### 对于工程经理
+点击某一行即可打开该工单的详情面板,其中包含代码库、PR 和文件链接、描述,以及 **Team feedback from PR reactions**(👍 / 👎 数量)。使用 **J** / **K** 在工单之间切换,**Share** 会复制该工单的链接。
 
-- **跟踪代码质量**趋势跨代码库
-- **识别瓶颈**在建议实施中
-- **衡量改进**在代码审查跟进中
+### 状态
 
-## 最佳实践
+- **Open**:需要关注。
+- **Resolved**:当问题已从代码中消失时由 Kody 设置。
+- **Dismissed**:不相关。当某条建议不适用于您的团队时手动设置;文件被删除时 Kody 也会设置该状态。
 
-<CardGroup cols={1}>
-  <Card title="定期审查会议" icon="calendar">
-    安排每周团队审查打开的工单以保持代码质量动力
-  </Card>
-  <Card title="严重性指南" icon="triangle-exclamation">
-    为何时调整工单严重性级别建立团队标准
-  </Card>
-  <Card title="忽略标准" icon="circle-xmark">
-    为何时应忽略 vs. 实施工单创建明确的指南
-  </Card>
-</CardGroup>
+从详情面板顶部的选择器更改状态。
+
+### 严重性
+
+每个工单都有一个严重性(`Critical`、`High`、`Medium`、`Low`),初始值来自建议本身的严重性。可在详情面板中更改,以匹配您团队的优先级。
+
+### 过滤器
+
+打开列表顶部的 **Filters**(该按钮会显示当前生效的过滤器数量),可按 **Status**、**Severity**、**Category**、**Title**、**Repository**、**File path** 和 **PR numbers** 过滤。**Set as default filters** 会在此浏览器中每次打开 Issues 时应用您的过滤器;**Reset to default filters** 可将其恢复。
 
 ## 下一步
 
 <CardGroup cols={2}>
   <Card
-    title="Kody 规则设置"
+    title="Kody Rules 设置"
     icon="user-police"
     href="/zh/how_to_use/code_review/configs/kody_rules"
   >
@@ -133,6 +77,6 @@ description: "使用 Kody 工单功能跟踪和管理未实施的建议。"
     icon="graduation-cap"
     href="/zh/how_to_use/code_review/learning/kody_learning"
   >
-    了解反馈的记录范围，以及如何配置后续审查。
+    了解反馈的记录范围,以及如何配置后续审查。
   </Card>
 </CardGroup>

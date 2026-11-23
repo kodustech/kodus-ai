@@ -118,53 +118,41 @@ describe('WebhookContextService', () => {
             // Real-world scenario: two GitLab self-hosted instances both have a
             // project with id=93. Without disambiguation the first one (sorted
             // by updatedAt DESC) wins and the webhook is routed to the wrong org.
-            const omarHerreraConfig = buildConfig(
-                'org-omar',
-                'team-omar',
-                'vcs.789.com.mx',
-            );
-            const ikatecConfig = buildConfig(
-                'org-ikatec',
-                'team-ikatec',
-                'gitlab.ikatec.cloud',
-            );
+            const configD = buildConfig('org-d', 'team-d', 'gitlab-d.example');
+            const configC = buildConfig('org-c', 'team-c', 'gitlab-c.example');
 
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [omarHerreraConfig, ikatecConfig],
+                [configD, configC],
             );
 
-            const result = await service.getContext(
-                PlatformType.GITLAB,
-                '93',
-                { host: 'gitlab.ikatec.cloud' },
-            );
+            const result = await service.getContext(PlatformType.GITLAB, '93', {
+                host: 'gitlab-c.example',
+            });
 
             expect(result?.organizationAndTeamData.organizationId).toBe(
-                'org-ikatec',
+                'org-c',
             );
-            expect(result?.organizationAndTeamData.teamId).toBe('team-ikatec');
+            expect(result?.organizationAndTeamData.teamId).toBe('team-c');
         });
 
         it('normalises host (full URL, trailing slash, casing) before comparing', async () => {
-            const configA = buildConfig('org-a', 'team-a', 'GitLab.IKATEC.cloud');
-            const configB = buildConfig('org-b', 'team-b', 'vcs.789.com.mx');
+            const configA = buildConfig('org-a', 'team-a', 'GitLab-C.Example');
+            const configB = buildConfig('org-b', 'team-b', 'gitlab-d.example');
 
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [configA, configB],
             );
 
-            const result = await service.getContext(
-                PlatformType.GITLAB,
-                '93',
-                { host: 'https://gitlab.ikatec.cloud/agnus/agnuscloud' },
-            );
+            const result = await service.getContext(PlatformType.GITLAB, '93', {
+                host: 'https://gitlab-c.example/initech/portal',
+            });
 
             expect(result?.organizationAndTeamData.organizationId).toBe(
                 'org-a',
             );
         });
 
-        it('falls back to original candidates when no config matches the host (never worse than current behaviour)', async () => {
+        it('refuses a webhook from a host no config is on', async () => {
             const configA = buildConfig('org-a', 'team-a', 'host-a.com');
             const configB = buildConfig('org-b', 'team-b', 'host-b.com');
 
@@ -172,19 +160,52 @@ describe('WebhookContextService', () => {
                 [configA, configB],
             );
 
-            const result = await service.getContext(
-                PlatformType.GITLAB,
-                '93',
-                { host: 'unrelated.host' },
+            const result = await service.getContext(PlatformType.GITLAB, '93', {
+                host: 'unrelated.host',
+            });
+
+            expect(result).toBeNull();
+        });
+
+        it('never routes to the only config when it is on another instance', async () => {
+            // Project 9 of gitlab-b.example, sent while only gitlab-a's
+            // project 9 is connected: the webhook belongs to no organization.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [buildConfig('org-a', 'team-a', 'gitlab-a.example')],
             );
 
-            // Falls back to the first candidate from the original list.
+            const result = await service.getContext(PlatformType.GITLAB, '9', {
+                host: 'gitlab-b.example',
+                repositoryFullName: 'other/project',
+            });
+
+            expect(result).toBeNull();
+        });
+
+        it('takes the config whose listed repository is on the sending host, when the integration stores none', async () => {
+            const listedOn = (org: string, httpUrl: string) => ({
+                ...buildConfig(org, `team-${org}`),
+                configValue: [
+                    { id: '9', name: `${org}/app`, http_url: httpUrl },
+                ],
+            });
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedOn('org-a', 'https://gitlab-a.example/org-a/app.git'),
+                    listedOn('org-b', 'https://gitlab-b.example/org-b/app.git'),
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITLAB, '9', {
+                host: 'gitlab-b.example',
+            });
+
             expect(result?.organizationAndTeamData.organizationId).toBe(
-                'org-a',
+                'org-b',
             );
         });
 
-        it('falls back to original candidates when disambiguator is missing', async () => {
+        it('refuses a webhook that names no instance when the configs are on known hosts', async () => {
             const configA = buildConfig('org-a', 'team-a', 'host-a.com');
             const configB = buildConfig('org-b', 'team-b', 'host-b.com');
 
@@ -194,52 +215,240 @@ describe('WebhookContextService', () => {
 
             const result = await service.getContext(PlatformType.GITLAB, '93');
 
-            expect(result?.organizationAndTeamData.organizationId).toBe(
-                'org-a',
-            );
+            expect(result).toBeNull();
         });
 
-        it('falls back to original candidates when any colliding config has no host stored (legacy data) — never picks a partial winner', async () => {
-            // If a legacy IntegrationConfig was created before host was being
-            // persisted, it would be silently excluded from the filter and
-            // we could end up picking the wrong "matching" config. Better to
-            // fall back to current behaviour than risk a wrong routing.
+        it('takes the config on the sending host beside a legacy config that stores no host', async () => {
             const configWithoutHost = buildConfig('org-legacy', 'team-legacy');
-            const configIkatec = buildConfig(
-                'org-ikatec',
-                'team-ikatec',
-                'gitlab.ikatec.cloud',
-            );
+            const configC = buildConfig('org-c', 'team-c', 'gitlab-c.example');
 
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [configWithoutHost, configIkatec],
+                [configWithoutHost, configC],
             );
 
-            const result = await service.getContext(
-                PlatformType.GITLAB,
-                '93',
-                { host: 'gitlab.ikatec.cloud' },
-            );
+            const result = await service.getContext(PlatformType.GITLAB, '93', {
+                host: 'gitlab-c.example',
+            });
 
-            // Without the safeguard the filter would pick configIkatec, which
-            // might be wrong if the legacy config (org-legacy) was actually the
-            // intended target. Falling back keeps current (imperfect but
-            // unchanged) behaviour: first candidate by updatedAt DESC.
             expect(result?.organizationAndTeamData.organizationId).toBe(
-                'org-legacy',
+                'org-c',
             );
         });
 
-        it('does not require disambiguator when only one config matches', async () => {
-            const config = buildConfig('org-only', 'team-only', 'host-a.com');
+        it('keeps taking the only config when no config stores any host (legacy data)', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [config],
+                [buildConfig('org-only', 'team-only')],
             );
 
-            const result = await service.getContext(PlatformType.GITLAB, '93');
+            const result = await service.getContext(PlatformType.GITLAB, '93', {
+                host: 'gitlab.example.com',
+            });
 
             expect(result?.organizationAndTeamData.organizationId).toBe(
                 'org-only',
+            );
+        });
+
+        const listedAt = (org: string, httpUrl: string, name: string) => ({
+            ...buildConfig(org, `team-${org}`),
+            configValue: [{ id: '9', name, http_url: httpUrl }],
+        });
+
+        it('never routes to a config whose listed project is on another server, even with the same path', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedAt(
+                        'org-a',
+                        'https://gitlab-a.example/acme/api.git',
+                        'acme/api',
+                    ),
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITLAB, '9', {
+                host: 'gitlab-b.example',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result).toBeNull();
+        });
+
+        it('routes the event to the same server listed under another name', async () => {
+            // The integration and repository list devops.gitlab.acme.com; the
+            // server sends its events as gitlab.acme.com (custom clone URL).
+            const alias = {
+                ...buildConfig(
+                    'org-a',
+                    'team-a',
+                    'https://devops.gitlab.acme.com',
+                ),
+                configValue: [
+                    {
+                        id: '9',
+                        name: 'acme/api',
+                        http_url: 'https://devops.gitlab.acme.com/acme/api.git',
+                    },
+                ],
+            };
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedAt(
+                        'org-other',
+                        'https://gitlab.other.example/web/shop.git',
+                        'web/shop',
+                    ),
+                    alias,
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITLAB, '9', {
+                host: 'gitlab.acme.com',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-a',
+            );
+        });
+
+        it('keeps a legacy config that stores no host beside a config on another server', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    buildConfig(
+                        'org-other',
+                        'team-other',
+                        'gitlab-other.example',
+                    ),
+                    buildConfig('org-only', 'team-only'),
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITLAB, '93', {
+                host: 'gitlab.example.com',
+            });
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-only',
+            );
+        });
+
+        it('takes a config reached at an internal address that lists the same project and no URL', async () => {
+            // Older configs list no repository URL, and Kodus may reach the
+            // server at an IP while GitLab builds its URLs from external_url.
+            const internal = {
+                ...buildConfig('org-a', 'team-a', 'http://10.0.0.5:8080'),
+                configValue: [{ id: '9', name: 'acme/api' }],
+            };
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [internal],
+            );
+
+            const result = await service.getContext(PlatformType.GITLAB, '9', {
+                host: 'gitlab.acme.example',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-a',
+            );
+        });
+    });
+
+    describe('GitHub Enterprise Server', () => {
+        // Two Enterprise Servers each have a repository 9.
+        const listedAt = (org: string, htmlUrl: string) => ({
+            ...buildConfig(org, `team-${org}`),
+            configValue: [{ id: '9', name: 'acme/api', http_url: htmlUrl }],
+        });
+
+        it('routes the event to the config on the server that sent it', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedAt('org-a', 'https://ghe-a.example/acme/api'),
+                    listedAt('org-b', 'https://ghe-b.example/acme/api'),
+                ],
+            );
+
+            const result = await service.getContext(PlatformType.GITHUB, '9', {
+                host: 'ghe-b.example',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-b',
+            );
+        });
+
+        it('ignores the event when only another server has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [listedAt('org-a', 'https://ghe-a.example/acme/api')],
+            );
+
+            const result = await service.getContext(PlatformType.GITHUB, '9', {
+                host: 'ghe-b.example',
+                repositoryFullName: 'acme/api',
+            });
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('Bitbucket Data Center', () => {
+        // Two Data Center servers each have a repository 84; the payload
+        // carries no URL.
+        const listed = (org: string, name: string, workspaceId: string) => ({
+            ...buildConfig(org, `team-${org}`),
+            configValue: [{ id: '84', name, workspaceId }],
+        });
+        const fromWeb = {
+            dataCenterRepository: { projectKey: 'WEB', slug: 'portal' },
+        };
+
+        it('routes the event to the config with the same project key and slug', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listed('org-a', 'billing', 'FIN'),
+                    listed('org-b', 'portal', 'WEB'),
+                ],
+            );
+
+            const result = await service.getContext(
+                PlatformType.BITBUCKET,
+                '84',
+                fromWeb,
+            );
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-b',
+            );
+        });
+
+        it('ignores the event when only another server has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [listed('org-a', 'billing', 'FIN')],
+            );
+
+            const result = await service.getContext(
+                PlatformType.BITBUCKET,
+                '84',
+                fromWeb,
+            );
+
+            expect(result).toBeNull();
+        });
+
+        it('leaves Bitbucket Cloud events as they were', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [listed('org-a', 'billing', 'FIN')],
+            );
+
+            const result = await service.getContext(
+                PlatformType.BITBUCKET,
+                '84',
+            );
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-a',
             );
         });
     });

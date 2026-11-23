@@ -5,31 +5,50 @@ icon: "arrow-up"
 ---
 
 <Note>
-  匿名のセルフホストテレメトリを含むバージョンはデフォルトで有効になっており、
-  集計されたカウンタのみを `telemetry.kodus.io` に1日1回ハートビートとして
-  送信します — コード、名前、識別子は一切含まれません。`pnpm run telemetry:preview`
-  で送信される内容を確認したり、`KODUS_TELEMETRY_DISABLED=true` を設定して
-  オプトアウトできます。完全なスキーマとポリシーは
-  [匿名テレメトリ](/ja/how_to_deploy/deploy_kodus/telemetry) を参照してください。
+  セルフホスト環境のインスタンスは、1日1回、`telemetry.kodus.io`に匿名のハートビートを送信します。送信されるのは集計されたカウンターのみです。オプトアウトするには`KODUS_TELEMETRY_DISABLED=true`を設定します。送信される内容については[匿名テレメトリ](/ja/how_to_deploy/deploy_kodus/telemetry)を参照してください。
 </Note>
 
-Kodusのインストールを最新バージョンにアップデートするには：
+## Docker Compose
 
-```bash
-# Kodusのインストールディレクトリに移動
-cd kodus-installer
+以下の手順は`kodus-installer`ディレクトリで実行します。
 
-# リポジトリから最新の変更を取得
-git pull
+アップグレード前に PostgreSQL、MongoDB、`.env` ファイルをバックアップします。復元後も暗号化された認証情報を読み取れるよう、現在の `API_CRYPTO_KEY` をバックアップと一緒に保管してください。
 
-# 1.xからアップグレードする場合は、.envを新しい2.0の変数で更新してください
-# （RabbitMQ、MCP Manager、Webhooks）
+<Steps>
+  <Step title="インストーラーを更新する">
+    ```bash
+    git pull
+    ```
 
-# インストーラーを再実行してイメージを取得し、サービスを起動してマイグレーションを実行
-./scripts/install.sh
+    これにより、`docker-compose.yml`、`.env.example`、必須変数のリストがリリースと同期されます。`.env.example`と自分の`.env`を比較し、不足している変数があれば追加してください。
+  </Step>
+  <Step title="バージョンを設定する">
+    `.env`の`IMAGE_TAG`に、使用したいリリースを設定します（例：`IMAGE_TAG=2.2.11`）。バージョンは[kodus-ai releases page](https://github.com/kodustech/kodus-ai/releases)に_Self-Hosted Release_として一覧されています。`IMAGE_TAG`を設定しない場合、インストーラーは`latest`を使用しますが、Dockerは明示的に指示しない限り`latest`を再取得しません。
+  </Step>
+  <Step title="イメージを取得してコンテナを再作成する">
+    ```bash
+    ./scripts/validate-env.sh
+    docker compose pull
+    ./scripts/install.sh
+    ```
 
-# オプション：診断を実行
-./scripts/doctor.sh
-```
+    `api`コンテナは起動時にデータベースマイグレーションを実行します。
+  </Step>
+  <Step title="結果を確認する">
+    ```bash
+    ./scripts/doctor.sh
+    ```
+  </Step>
+</Steps>
 
+<Warning>
+  すでにデータがあるインストールで`./scripts/generate-secrets.sh`を実行しないでください。データベースのパスワードや`API_CRYPTO_KEY`を含め、`.env`内のすべてのシークレットが置き換えられます。
+</Warning>
 
+データはDockerボリュームに保存されています：`pgdata`（PostgreSQL）、`mongodbdata`（MongoDB）、`rabbitmq-data-prod`（RabbitMQ）、`log_volume`。`rabbitmq-data-prod`以外は、Composeのプロジェクト名がプレフィックスとして付きます。`docker volume ls`で確認できます。`docker compose down`ではボリュームは保持され、`docker compose down -v`では削除されます。アップグレード前に、PostgreSQLとMongoDBをバックアップしてください。マイグレーションは元に戻せません。
+
+analytics workerを使用している場合は、アップグレード後に`docker compose --profile analytics up -d worker-analytics`で再度起動してください。
+
+## Kubernetes
+
+チャートのバージョンはKodusのリリースに固定されています。新しいリリースに移行するには、チャートをアップグレードするか、`imageTag`を設定します。マイグレーションジョブは、Podのロールアウト前に実行されます。[Kubernetes & OpenShift](/ja/how_to_deploy/deploy_kodus/kubernetes#アップグレード)を参照してください。

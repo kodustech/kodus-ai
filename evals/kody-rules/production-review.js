@@ -47,6 +47,22 @@ class InMemoryKodyRulesRepository {
         return organizationId === this.doc.organizationId ? this.entity() : null;
     }
 
+    // The rules the review reads: every rule but the deleted ones.
+    async findLiveRulesByOrganizationId(organizationId) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const doc = JSON.parse(JSON.stringify(this.doc));
+        return this.Entity.create({ ...doc, rules: doc.rules.filter((r) => r.status !== 'deleted') });
+    }
+
+    // The plan sync's per-rule writes in one call; returns the ids it missed.
+    async updateRulesFields(_organizationId, uuid, changes) {
+        const failed = [];
+        for (const { ruleId, patch } of changes) {
+            if (!(await this.updateRule(uuid, ruleId, patch))) failed.push(ruleId);
+        }
+        return failed;
+    }
+
     async existsForOrganization(organizationId) {
         return organizationId === this.doc.organizationId;
     }

@@ -1,5 +1,11 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
-import { forgejoWebhookSource } from '@libs/common/utils/webhooks/webhook-source-host';
+import {
+    bitbucketWebhookSource,
+    forgejoWebhookSource,
+    githubWebhookSource,
+    gitlabWebhookSource,
+    type WebhookSource,
+} from '@libs/common/utils/webhooks/webhook-source-host';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -54,6 +60,10 @@ import {
     IMessageClaimService,
     MESSAGE_CLAIM_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/message-claim.service.contract';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    type ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 
 import { PlatformResponsePolicyFactory } from './policies/platform-response.policy';
@@ -68,6 +78,7 @@ import {
     getOriginalKodyComment,
     getOthersReplies,
     prepareContext,
+    CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE,
     CONVERSATION_PLAN_GATE_MESSAGE,
     isKodyComment,
     KODY_ACKNOWLEDGMENT_MESSAGE,
@@ -269,6 +280,12 @@ export class ChatWithKodyFromGitUseCase {
         private readonly businessLogicReplies?: BusinessLogicReplies,
         @Optional()
         private readonly webhookContextService?: WebhookContextService,
+
+        // Reads `conversation.implicitReplies` from the config cascade.
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService?: ICodeBaseConfigService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -293,16 +310,23 @@ export class ChatWithKodyFromGitUseCase {
             claim = delivery.claim;
 
             const repository = this.getRepository(params);
-            // Forgejo repository ids are per instance: resolve the team on
-            // the instance that sent the comment.
+            // GitLab, Forgejo, GitHub Enterprise Server and Bitbucket Data
+            // Center repository ids are per instance: resolve the team on the
+            // instance that sent the comment.
             const source =
                 params.platformType === PlatformType.FORGEJO
                     ? forgejoWebhookSource(params.payload)
-                    : undefined;
+                    : params.platformType === PlatformType.GITLAB
+                      ? gitlabWebhookSource(params.payload)
+                      : params.platformType === PlatformType.GITHUB
+                        ? githubWebhookSource(params.payload)
+                        : params.platformType === PlatformType.BITBUCKET
+                          ? bitbucketWebhookSource(params.payload)
+                          : undefined;
             const integrationConfig = await this.getIntegrationConfig(
                 params.platformType,
                 repository,
-                source?.host,
+                source,
             );
 
             // A repository connected in more than one organization: answer as
@@ -1155,7 +1179,14 @@ export class ChatWithKodyFromGitUseCase {
                 normalizedComments,
                 params.platformType,
             );
-            const silence = implicitReplyGate(replyThread);
+            const silence =
+                implicitReplyGate(replyThread) ??
+                ((await this.implicitRepliesDisabled(
+                    organizationAndTeamData,
+                    repository,
+                ))
+                    ? 'disabled'
+                    : undefined);
             if (silence) {
                 this.logImplicitReplySilence(silence, silenceContext);
                 return;
@@ -1197,18 +1228,26 @@ export class ChatWithKodyFromGitUseCase {
         const permissionBlocked =
             !permission.allowed &&
             permission.errorType !== ValidationErrorType.NOT_ERROR;
+        // The license read never answered: the org may be paying, so this is
+        // our outage to report, not a plan to point at (#2452).
+        const licenseUnavailable =
+            permission.errorType === ValidationErrorType.LICENSE_UNAVAILABLE;
 
         // Nobody asked for Kody here, so the BYOK pointer would land on every
         // reply of every thread. Stay quiet; the log carries the reason.
         if (permissionBlocked && implicit) {
-            this.logImplicitReplySilence('plan_blocked', silenceContext);
+            this.logImplicitReplySilence(
+                licenseUnavailable ? 'license_unavailable' : 'plan_blocked',
+                silenceContext,
+            );
             return;
         }
 
         if (permissionBlocked) {
             this.logger.warn({
-                message:
-                    'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
+                message: licenseUnavailable
+                    ? 'Conversation not run: the license check is unavailable; replying with a retry note'
+                    : 'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
                 context: ChatWithKodyFromGitUseCase.name,
                 metadata: {
                     organizationAndTeamData,
@@ -1227,7 +1266,9 @@ export class ChatWithKodyFromGitUseCase {
                     comment.discussionId,
                 threadId: comment.threadId,
                 body: this.withKodyMarker(
-                    CONVERSATION_PLAN_GATE_MESSAGE,
+                    licenseUnavailable
+                        ? CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE
+                        : CONVERSATION_PLAN_GATE_MESSAGE,
                     params.platformType,
                 ),
                 repository,
@@ -1588,10 +1629,17 @@ export class ChatWithKodyFromGitUseCase {
     private async getIntegrationConfig(
         platformType: PlatformType,
         repository: Repository,
-        host?: string,
+        source?: WebhookSource,
     ): Promise<IntegrationConfigEntity> {
         return await this.codeManagementService.findTeamAndOrganizationIdByConfigKey(
-            host ? { repository, host } : { repository },
+            source
+                ? {
+                      repository,
+                      host: source.host,
+                      repositoryFullName: source.repositoryFullName,
+                      dataCenterRepository: source.dataCenterRepository,
+                  }
+                : { repository },
             platformType,
         );
     }
@@ -1608,7 +1656,15 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private getRepository(params: WebhookParams): Repository {
-        return commentRepositoryOf(params);
+        const repository = commentRepositoryOf(params);
+
+        // Webhook payloads carry the platform's numeric id (GitHub, GitLab,
+        // Azure), while the stored configuration keys are strings and every
+        // lookup compares them with `===`. Normalizing here keeps every caller
+        // on the same side of that comparison. A payload with no id is left as
+        // it was: callers already handle that shape.
+        if (repository.id == null) return repository;
+        return { ...repository, id: String(repository.id) };
     }
 
     private getRepositoryOwner(
@@ -2123,6 +2179,95 @@ export class ChatWithKodyFromGitUseCase {
             metadata: { implicitReplySilence: reason, ...silenceContext },
             error: error instanceof Error ? error : undefined,
         });
+    }
+
+    /**
+     * `conversation.implicitReplies` for the PR's repository (#2576). Off means
+     * Kody answers an unmentioned reply in its own review thread only when
+     * someone writes `@kody`.
+     *
+     * Read through the config cascade at repository scope: the stored deltas
+     * merge with the repository's `kodus-config.yml`, which only applies when
+     * the repository enabled `kodusConfigFileOverridesWebPreferences`. The
+     * reply is not tied to a file, so a directory-scoped value is out of scope
+     * here. It is read after the free gate, never before: the gate silences
+     * most replies at no cost, and the read only happens for a reply that would
+     * otherwise reach the classifier, which costs a model call.
+     *
+     * A config that cannot be read keeps today's behaviour: the classifier
+     * decides, as it did before this setting existed.
+     */
+    private async implicitRepliesDisabled(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Repository,
+    ): Promise<boolean> {
+        if (!this.codeBaseConfigService) {
+            return false;
+        }
+
+        try {
+            const config = await this.codeBaseConfigService.getSimpleConfig(
+                organizationAndTeamData,
+                { repositoryId: repository.id },
+            );
+
+            // `getSimpleConfig` merges the deltas stored on the config row; the
+            // repository's `kodus-config.yml` is a separate layer of the same
+            // cascade (`getMergedCodeReviewConfigs` reads it, and this setting
+            // is documented in `default-kodus-config.yml`). Read it here and let
+            // it win over the stored deltas, as the review pipeline does. A file
+            // that cannot be read leaves the stored decision in place.
+            let fileValue: boolean | undefined;
+            try {
+                const fileConfig =
+                    await this.codeBaseConfigService.getKodusConfigFile({
+                        organizationAndTeamData,
+                        repository,
+                        // The file only overrides the stored preferences when
+                        // the repository opted in, as in the review pipeline.
+                        // The loader defaults to true, so an undefined value
+                        // here would silently reverse that decision.
+                        overrideConfig:
+                            config?.kodusConfigFileOverridesWebPreferences ??
+                            false,
+                        // An invalid risk/approval block must not discard the
+                        // whole file: the pipeline isolates those fields and
+                        // keeps the rest, and `conversation` is one of them.
+                        tolerateReviewSettingsErrors: true,
+                    });
+                fileValue = fileConfig?.conversation?.implicitReplies;
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'Could not read the repository kodus-config.yml: the stored conversation setting applies',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        repository: repository.name,
+                    },
+                });
+            }
+
+            if (fileValue !== undefined) {
+                return fileValue === false;
+            }
+
+            return config?.conversation?.implicitReplies === false;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the conversation settings: implicit replies stay as they were',
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repository: repository.name,
+                },
+            });
+
+            return false;
+        }
     }
 
     /**

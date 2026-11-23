@@ -1,0 +1,220 @@
+---
+title: "BYOK model settings"
+sidebarTitle: "Model settings"
+description: "Reasoning, temperature, custom provider options and concurrency limits for each model."
+---
+
+These settings are in the **Advanced settings** card of a model's add or edit form on the **AI providers** page.
+
+## Reasoning / Extended Thinking
+
+The add-model form exposes a **Thinking / Reasoning** toggle (Off / Low / Medium / High / Custom) under **Advanced settings**. The available options mirror what the model can actually do:
+
+- A model that can't reason is locked to **Off** with a note.
+- A model that only reasons at certain levels (e.g. GPT-5's medium/high) disables the invalid ones.
+- A reasoning-by-default model gets **Medium** as a sensible starting point.
+
+### Preset levels
+
+When you pick Low / Medium / High, Kodus translates the level to each provider's native format automatically:
+
+| Provider | What the level sends |
+| --- | --- |
+| **Anthropic** (Claude 4.6 and later) | `thinking: { type: "adaptive" }` + `effort` set to the level |
+| **Anthropic** (Claude 3.7 to 4.5) | `thinking: { type: "enabled", budgetTokens }` with 5,000 / 15,000 / 40,000 tokens for Low / Medium / High |
+| **Google** (Gemini 3) | `thinkingConfig: { thinkingLevel }` |
+| **Google** (Gemini 2.5) | `thinkingConfig: { thinkingBudget }` with the same token sizes, capped at the model's maximum |
+| **OpenAI** (GPT-5 / o-series) and **Azure OpenAI** | `reasoningEffort` |
+| **OpenRouter** | `reasoning: { effort }` |
+| **Google Vertex AI**, **Amazon Bedrock** | The Gemini or Claude format above. Bedrock sends nothing for Off, and nothing for models other than Claude |
+| **OpenAI-compatible** (Kimi) | `thinking: { type: "enabled" }`. The level is ignored |
+| **OpenAI-compatible** (GLM, DeepSeek) | `thinking: { type: "enabled" }` plus `reasoning_effort` (Low is `low`, Medium is `high`, High is `max`). GLM-5.3 gets only `reasoning_effort` |
+| **Moonshot**, **Z.ai**, **Anthropic-compatible** (Kimi, GLM, DeepSeek) | `thinking: { type: "enabled", budgetTokens }` sized by the level |
+| **Novita** | Nothing. Use **Custom** to turn reasoning on |
+
+<Note>
+  **Always-reasoning variants** (Kimi `k2p7-code`/`k3`, GLM-5.3) reason unconditionally and can't be turned Off. **Test** rejects an Off setting on them.
+</Note>
+
+### Custom JSON override
+
+Picking **Custom** in the **Thinking / Reasoning** toggle reveals a JSON textarea. Paste the provider options directly — **Kodus auto-wraps them under the active provider's namespace**. You don't need to know the Vercel AI SDK routing rules.
+
+Use this when:
+
+- You need a specific `budgetTokens` value for Claude (instead of the preset effort mapping)
+- You want to enable/disable thinking on a per-model basis for OpenAI-compatible providers
+- You want fields beyond reasoning — **caching, service tier, safety settings, `user` tagging, etc.** The override is merged into `providerOptions`, so any adapter field passes through
+- The provider ships a new field Kodus hasn't wrapped yet
+
+#### Examples (paste directly — no namespace needed)
+
+<Tabs>
+  <Tab title="Anthropic">
+    Override Claude's thinking budget to exactly 20,000 tokens (Claude 4.7 and later reject `budgetTokens`; use `effort` there):
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    Enable prompt caching (non-reasoning example):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    Explicit thinking budget (Gemini 2.5) or level (Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    Adjust safety settings:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    Reasoning with OpenAI-specific fields:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    Force reasoning + ignore a specific upstream:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "provider": { "ignore": ["deepinfra"] }
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible (Kimi, GLM, etc.)">
+    Enable thinking with a budget hint:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    Explicitly disable thinking (only on a model that supports it):
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      Fields the upstream provider doesn't recognize (e.g. `budget_tokens` on a server that ignores it) are silently dropped. Check the provider's docs to confirm what they accept.
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### Going manual with namespaces (power users)
+
+If your JSON already starts with a known namespace key at the top level — any key from the mapping table below — Kodus leaves it untouched. Useful if you want to mix multiple provider namespaces or be explicit:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+Under the hood, these are the namespace mappings Kodus uses:
+
+| BYOK provider | Namespace key |
+| --- | --- |
+| `anthropic` / `anthropic_compatible` / `moonshot` / `zai` | `anthropic` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` for Gemini, `anthropic` for Claude on Vertex |
+| `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (also accepts `bedrock`) |
+| `novita` | `novita` |
+| `open_router` | `openrouter` |
+
+#### Gotchas
+
+- **A valid JSON object only.** Missing commas, trailing commas or a non-object value are rejected when you save.
+- **Precedence:** the JSON override **fully replaces** the effort-preset's namespace block — if you override `anthropic.thinking` but forget `anthropic.effort`, that field won't be sent. OpenRouter routing (Pin providers / Allow fallbacks) is the one exception: it deep-merges with your override under `openrouter`.
+- **Unknown provider = no wrap.** If your BYOK provider isn't in the namespace table above, Kodus passes the JSON through as-is.
+
+## Temperature
+
+Temperature lives under **Advanced settings**, and the field adapts to the model's rules — set by the provider, not guessed by the form:
+
+| Model | Temperature field |
+| --- | --- |
+| Most models | **Editable** (0 = deterministic, 2 = creative). |
+| Kimi `k3` and GLM-5.3 (always reasoning) | **Locked to `1`.** The protocol pins temperature to 1 while thinking, so Kodus sends `1` regardless of what was stored. The field shows a lock. |
+| Kimi `k2.6` and `k2.7-code`, and DeepSeek with reasoning on | **Hidden.** Kimi states that temperature is not modifiable on these models, and DeepSeek ignores it while thinking. DeepSeek with reasoning **Off** keeps an editable field. |
+| Claude 4.7+ and OpenAI GPT-5 / o-series | **Hidden.** These models removed temperature and reject any request that sets it. Steer them with the thinking level instead. |
+
+<Info>
+  [Test](/en/how_to_use/byok#test-before-you-save) validates the temperature you set against these rules and returns an error before saving, so you never persist a value the model won't honor.
+</Info>
+
+## Concurrency and rate limits
+
+The `maxConcurrentRequests` field (**Max concurrent requests**, under **Advanced settings**) caps how many inflight requests Kodus sends to your provider in parallel. Most of the time, the default is fine — but subscription plans with strict concurrency caps need it set explicitly.
+
+### Values to set
+
+| Provider / plan | Value | Why |
+| --- | --- | --- |
+| **GLM Coding Plan** | Confirm with Z.AI | For approved use, set the cap to the limit Z.AI gives your account. |
+| **Kimi Code Plan** | Start low | [Tuning concurrency](/en/cookbook/moonshot#tuning-concurrency) |
+| **GLM Developer API** | _(empty)_ | Limits scale per key; no sensible global default. |
+| **Kimi Developer API** | _(empty)_ | Scales with your recharge tier (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(empty)_ | Providers enforce their own TPM/RPM; Kodus doesn't cap. |
+
+### When to tune it
+
+<CardGroup cols={2}>
+  <Card title="Raise it" icon="arrow-up">
+    - You have a high-tier recharge on Moonshot/OpenRouter and want higher throughput on big PRs
+    - Reviews feel serialized on multi-file PRs and you're not seeing 429s
+  </Card>
+  <Card title="Lower it" icon="arrow-down">
+    - You see `429` or `Too much concurrency` errors in review logs
+    - Your provider warns about rate limits on the dashboard
+    - You want to conserve Coding Plan window (5h/weekly) across more PRs
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Concurrency vs. RPM vs. TPM.** `maxConcurrentRequests` only caps parallel inflight requests. Many providers also enforce separate **RPM** (requests per minute) and **TPM** (tokens per minute) limits. If you're hitting RPM/TPM while concurrency looks fine, the fix is usually to upgrade your tier or spread load across time — not to change `maxConcurrentRequests`.
+</Tip>
+
+<Note>
+  **Fallback interaction.** When a task's model keeps failing with 429s and Kody fails over to the **Fallback model**, the fallback's own `maxConcurrentRequests` applies. Setting a generous fallback on a different provider is a good way to absorb bursts when your main model is on a tight subscription.
+</Note>

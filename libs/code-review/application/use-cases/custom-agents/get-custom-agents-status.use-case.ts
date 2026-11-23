@@ -12,20 +12,14 @@ import {
     PULL_REQUESTS_REPOSITORY_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import type {
+    CustomAgentSuggestionRow,
+    UnfollowedCitationRow,
+} from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 
 export const CUSTOM_AGENT_STATUS_WINDOW_DAYS = 30;
 
-/**
- * Stored findings of a custom agent sharing a pull request and statuses, as
- * the status reads them. `count` defaults to one finding.
- */
-export type CustomAgentSuggestionRow = {
-    agentId: string;
-    prNumber: number;
-    deliveryStatus?: string;
-    priorityStatus?: string;
-    count?: number;
-};
+export type { CustomAgentSuggestionRow } from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 
 /** How an agent's recent runs ended, newest first. */
 export type CustomAgentRunHealth = {
@@ -153,12 +147,7 @@ const READS_LIKE_GUIDE =
  *  the most cited file took every slot and hid the other files (#2384). */
 const MAX_UNFOLLOWED_CITATIONS = 20;
 
-export type UnfollowedCitationRow = {
-    agentId: string;
-    reason: string;
-    findings: number;
-    prNumbers: number[];
-};
+export type { UnfollowedCitationRow } from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 
 /** Files each agent's dropped findings cited without following them. */
 export function summarizeUnfollowedCitations(
@@ -192,86 +181,6 @@ export function summarizeUnfollowedCitations(
         ]),
     );
 }
-
-const unfollowedCitationsPipeline = (match: Record<string, unknown>) => [
-    {
-        $match: {
-            ...match,
-            'files.suggestions.customAgent.id': { $exists: true },
-        },
-    },
-    { $unwind: '$files' },
-    { $unwind: '$files.suggestions' },
-    {
-        $match: {
-            'files.suggestions.customAgent.id': { $exists: true },
-            'files.suggestions.discardReason': {
-                $regex: 'is not a guide linked to this review$',
-            },
-        },
-    },
-    {
-        $group: {
-            _id: {
-                agentId: '$files.suggestions.customAgent.id',
-                reason: '$files.suggestions.discardReason',
-            },
-            findings: { $sum: 1 },
-            prNumbers: { $addToSet: '$number' },
-        },
-    },
-    {
-        $project: {
-            _id: 0,
-            agentId: '$_id.agentId',
-            reason: '$_id.reason',
-            findings: 1,
-            prNumbers: 1,
-        },
-    },
-];
-
-const suggestionRowsPipeline = (
-    match: Record<string, unknown>,
-    path: 'files.suggestions' | 'prLevelSuggestions',
-) => [
-    { $match: { ...match, [`${path}.customAgent.id`]: { $exists: true } } },
-    ...(path === 'files.suggestions'
-        ? [{ $unwind: '$files' }, { $unwind: '$files.suggestions' }]
-        : [{ $unwind: '$prLevelSuggestions' }]),
-    { $match: { [`${path}.customAgent.id`]: { $exists: true } } },
-    {
-        $project: {
-            _id: 0,
-            agentId: `$${path}.customAgent.id`,
-            prNumber: '$number',
-            deliveryStatus: `$${path}.deliveryStatus`,
-            priorityStatus: `$${path}.priorityStatus`,
-        },
-    },
-    // One row per agent, PR and status pair instead of one per finding.
-    {
-        $group: {
-            _id: {
-                agentId: '$agentId',
-                prNumber: '$prNumber',
-                deliveryStatus: '$deliveryStatus',
-                priorityStatus: '$priorityStatus',
-            },
-            count: { $sum: 1 },
-        },
-    },
-    {
-        $project: {
-            _id: 0,
-            agentId: '$_id.agentId',
-            prNumber: '$_id.prNumber',
-            deliveryStatus: '$_id.deliveryStatus',
-            priorityStatus: '$_id.priorityStatus',
-            count: 1,
-        },
-    },
-];
 
 /**
  * What each custom agent of a repository did over the last 30 days, read
@@ -307,70 +216,46 @@ export class GetCustomAgentsStatusUseCase {
             (params.now ?? new Date()).getTime() -
                 CUSTOM_AGENT_STATUS_WINDOW_DAYS * 24 * 60 * 60 * 1000,
         );
-        const match = {
-            'organizationId': params.organizationId,
-            'repository.id': params.repositoryId,
-            'updatedAt': { $gte: since },
+        const scope = {
+            organizationId: params.organizationId,
+            repositoryId: params.repositoryId,
+            since,
         };
-        const collection = this.pullRequestsRepository.getNativeCollection();
         let runsUnavailable = false;
-        const [fileRows, prLevelRows, citationRows, runRecords] =
-            await Promise.all([
-                collection
-                    .aggregate(
-                        suggestionRowsPipeline(match, 'files.suggestions'),
-                        {
-                            allowDiskUse: true,
-                        },
-                    )
-                    .toArray(),
-                collection
-                    .aggregate(
-                        suggestionRowsPipeline(match, 'prLevelSuggestions'),
-                        {
-                            allowDiskUse: true,
-                        },
-                    )
-                    .toArray(),
-                collection
-                    .aggregate(unfollowedCitationsPipeline(match), {
-                        allowDiskUse: true,
-                    })
-                    .toArray(),
-                // A page that cannot read the runs still shows the findings.
-                this.runLog
-                    ? this.runLog
-                          .listSince({
-                              organizationId: params.organizationId,
-                              repositoryId: params.repositoryId,
-                              since,
-                          })
-                          .catch((error) => {
-                              this.logger.warn({
-                                  message:
-                                      'Could not read custom agent runs; showing findings only',
-                                  context: GetCustomAgentsStatusUseCase.name,
-                                  error,
-                                  metadata: {
-                                      organizationId: params.organizationId,
-                                      repositoryId: params.repositoryId,
-                                      since,
-                                  },
-                              });
-                              runsUnavailable = true;
-                              return [] as CustomAgentRunRecord[];
-                          })
-                    : Promise.resolve([] as CustomAgentRunRecord[]),
-            ]);
+        const [suggestionRows, citationRows, runRecords] = await Promise.all([
+            this.pullRequestsRepository.findCustomAgentSuggestionRows(scope),
+            this.pullRequestsRepository.findUnfollowedCustomAgentCitations(
+                scope,
+            ),
+            // A page that cannot read the runs still shows the findings.
+            this.runLog
+                ? this.runLog
+                      .listSince({
+                          organizationId: params.organizationId,
+                          repositoryId: params.repositoryId,
+                          since,
+                      })
+                      .catch((error) => {
+                          this.logger.warn({
+                              message:
+                                  'Could not read custom agent runs; showing findings only',
+                              context: GetCustomAgentsStatusUseCase.name,
+                              error,
+                              metadata: {
+                                  organizationId: params.organizationId,
+                                  repositoryId: params.repositoryId,
+                                  since,
+                              },
+                          });
+                          runsUnavailable = true;
+                          return [] as CustomAgentRunRecord[];
+                      })
+                : Promise.resolve([] as CustomAgentRunRecord[]),
+        ]);
 
-        const findings = summarizeCustomAgentSuggestions([
-            ...fileRows,
-            ...prLevelRows,
-        ] as CustomAgentSuggestionRow[]);
+        const findings = summarizeCustomAgentSuggestions(suggestionRows);
         const health = summarizeCustomAgentRuns(runRecords);
-        const citations = summarizeUnfollowedCitations(
-            citationRows as UnfollowedCitationRow[],
-        );
+        const citations = summarizeUnfollowedCitations(citationRows);
         const findingsByAgent = new Map(findings.map((s) => [s.agentId, s]));
         // An agent whose runs all failed left no finding: list it anyway.
         const agentIds = new Set([

@@ -1,54 +1,81 @@
 ---
 title: "Overview"
-description: "Comprehensive analytics and metrics for engineering team performance"
+description: "Review effectiveness and delivery metrics for your repositories, in one dashboard."
 ---
 
-## What is Cockpit Analytics
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-Cockpit Analytics provides comprehensive insights into your engineering team's performance through key metrics that measure productivity, code quality, and delivery efficiency. These metrics help you identify areas for improvement and track progress over time.
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Available on Kodus Cloud, including the trial.">
+    <Badge icon="cloud" stroke>Teams &amp; Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Cockpit requires an Enterprise license and a running Analytics Worker.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
 
-<Warning>
-  Cockpit requires a paid tier: **Teams or Enterprise on cloud** (trials included), or **licensed self-hosted Enterprise**. Unlicensed self-hosted (Community) and free BYOK plans don't include it: the **Cockpit** item stays in the sidebar with a padlock and opens a blurred **Unlock the Cockpit** preview with a **See plans** button (**Activate a license** on self-hosted). Self-hosted Enterprise also needs the [Analytics Worker](/en/how_to_deploy/deploy_kodus/analytics_worker) running.
-</Warning>
+The Cockpit measures two things: how well Kodus's reviews land with your team, and how your team ships.
+
+Owners and Repo Admins can open Cockpit.
+
+Set up the [Analytics Worker](/en/how_to_deploy/deploy_kodus/analytics_worker) to collect Cockpit data on self-hosted.
+
+On a plan without Cockpit, the sidebar opens a locked preview with **See plans** or, on self-hosted, **Activate a license**.
 
 <Frame caption="Monitor your team's performance with real-time analytics.">
   <img src="/images/cockpit.png" />
 </Frame>
 
-## Key Features
-
-- Data refreshes every 30 minutes by default (`ANALYTICS_INGESTION_CRON`)
-- Teams/Enterprise on cloud (including trials), or licensed self-hosted Enterprise
-- AI-powered metric calculation
-- 8+ DORA and custom metrics
+To query Cockpit from the terminal or export metrics as JSON, use [`kodus cockpit`](/en/how_to_use/cli/commands#kodus-cockpit).
 
 ## The tabs
 
-The cockpit is split into two metric tabs, followed by an **Issues** tab:
+- **Kodus Review** (opens by default): how effective Kodus's reviews are: implementation rate, severity calibration, negative feedback, and the health of your Kody Rules. See [Kodus Review](/en/how_to_use/cockpit/kodus_review).
+- **Delivered as asked**: pull requests checked against their task. See [Delivered as asked](#delivered-as-asked).
+- **Productivity**: delivery metrics: deploy frequency, PR cycle time, bug ratio, PR size, lead time breakdown, PRs opened vs closed, PRs merged by developer, and team activity.
+- **Code hotspots** (beta): the directories of one repository that change most and hold long or complex functions. See [Code hotspots](/en/how_to_use/cockpit/code_hotspots).
+- **Issues**: opens the [Issues](/en/how_to_use/issues/overview) list, with the open-issue count next to the tab name.
 
-- **Kodus Review** (opens by default) — how effective Kodus's reviews are: implementation rate, severity calibration, negative feedback, and the health of your Kody Rules. This is about Kodus itself, and it's where you take action. See [Kodus Review](/en/how_to_use/cockpit/kodus_review).
-- **Productivity** — general delivery metrics: deploy frequency, lead time, PR cycle time, PR size, and developer activity.
-- **Issues** — opens the [Issues](/en/how_to_use/issues/overview) list, with the open-issue count next to the tab name.
-
-At the top of the page you pick a repository (**All repositories** by default) and a date range (**Last 15 days** by default; presets **Last week**, **Last 15 days**, **Last month**, **Last 3 months**, or custom dates). There is no per-developer filter. The link button (**Copy link to this view**) copies a URL that reopens the same tab, repository, and range.
+At the top of the page you pick a repository (**All repositories** by default) and a date range (**Last 15 days** by default; presets **Last week**, **Last 15 days**, **Last month**, **Last 3 months**, or a custom range of up to 93 days). There is no per-developer filter. **Copy link to this view** copies the page URL, which carries the tab, repository, and range you picked during this visit; one you didn't change opens with the recipient's own default. The **Code hotspots** tab has its own repository picker and no date range.
 
 <Note>
   Owners can hide whole tabs or individual metrics for the entire organization from
-  **Organization → Cockpit visibility** — see [Cockpit Configuration](/en/how_to_use/cockpit/configuration).
+  **Organization → Cockpit visibility**. See [Cockpit Configuration](/en/how_to_use/cockpit/configuration).
 </Note>
 
-## Key Metrics Categories
+## Where the data comes from
 
-**Available Metrics:**
-- **Kodus Review:** Implementation rate (overall, by severity, by category), negative feedback, repository and Kody Rule health
-- **Productivity:** Deployment frequency, lead time, PR cycle times
-- **Quality:** PR size, code review effectiveness
-- **Team Performance:** Collaboration patterns, bottleneck identification
+Cockpit measures the pull requests Kodus tracks in your connected repositories: the PRs it sees after a repository is connected, plus up to 10 recent PRs per repository, from the last two months, imported when you connect it. Data refreshes every 30 minutes by default (`ANALYTICS_INGESTION_CRON`). Until there is enough data, a banner says so.
 
+Most Productivity metrics count a pull request on the date it closed, and "closed" means merged or closed without merging: Cockpit doesn't tell them apart.
+
+A range runs from the start of its first day to the start of its last day. A pull request closed during the last day itself is counted once the range moves past that day. **PRs processed** and **Review processing outcomes** on the Kodus Review tab, and the **Delivered as asked** tab, include the last day.
+
+## Delivered as asked
+
+Shows whether pull requests deliver what their task asked, based on [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation) runs. It follows the repository picker and date range. When no pull request was checked against its task in the period, the tab links to the Business Logic settings instead.
+
+| Card | What it shows |
+| --- | --- |
+| **Met their task** | Share of checked PRs that met their task, with the change in points vs. the previous period |
+| **Changes not in the task** | Share of PRs with at least one change the task didn't ask for |
+| **Findings accepted** | How often developers agreed with Kody's findings |
+| **Without a readable task** | Share of PRs that referenced no task, or whose task could not be read |
+
+Below the cards, **By who wrote the code** gives the share of PRs that met their task for each coding agent by name, for **People**, and for **Not identified**, read from commit authors and `Co-Authored-By` trailers. **Most often missed** lists the requirement topics PRs missed most, and, with more than one team, a table splits the numbers by team.
+
+## Email reports
+
+On cloud, Kodus emails two reports from the same data, both skipped when there was no review activity:
+
+- **Org report**: a monthly summary of the previous calendar month, sent on the 1st to Owners.
+- **Repo report**: a digest sent on the 1st and 16th to Repo Admins, with one section per repository assigned to them, covering the preceding 15 days.
+
+Each email links back to the Cockpit for the same range. Choose who gets them under **Cockpit** in [Notifications](/en/how_to_use/organization/notifications).
 
 ## How Developer Matching Works
 
-Cockpit's per-developer charts (**PRs Merged By Developer**, **Team Activity**) attribute each pull request to its **author's username on your Git provider**. This may differ from:
+The per-developer charts (**PRs Merged By Developer**, **Team Activity**) attribute each pull request to its **author's username on your Git provider**. This may differ from:
 - GitHub/GitLab display name
 - Email address
 - Kodus workspace account

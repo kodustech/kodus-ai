@@ -424,6 +424,29 @@ describe('GitHubPullRequestHandler', () => {
         });
     });
 
+    it('resolves the context on the Enterprise Server that sent the event', async () => {
+        const payload = makeGitHubPullRequestWebhookPayload('closed');
+        await handler.execute({
+            platformType: PlatformType.GITHUB,
+            event: 'pull_request',
+            payload: {
+                ...payload,
+                repository: {
+                    ...payload.repository,
+                    url: 'https://ghe-b.example/api/v3/repos/org/test-repo',
+                    html_url: 'https://ghe-b.example/org/test-repo',
+                },
+            },
+        } as any);
+
+        // GitHub Enterprise Server numbers repositories per server.
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.GITHUB,
+            '12345',
+            { host: 'ghe-b.example', repositoryFullName: 'org/test-repo' },
+        );
+    });
+
     describe('review re-request', () => {
         const kody = { login: 'kody-ai[bot]', node_id: 'BOT_kody' };
         const reviewRequested = (requested: Record<string, unknown>) => ({
@@ -466,8 +489,12 @@ describe('GitHubPullRequestHandler', () => {
                 },
                 prNumber: 42,
             });
-            // Saved as the event it is; only the review job is a command.
-            expect(savePullRequestUseCase.execute).toHaveBeenCalledWith(params);
+            // Saved as the event it is, with the team the context resolved;
+            // only the review job is a command.
+            expect(savePullRequestUseCase.execute).toHaveBeenCalledWith({
+                ...params,
+                organizationAndTeamData,
+            });
             expect(enqueueCodeReviewJobUseCase.execute).toHaveBeenCalledTimes(
                 1,
             );

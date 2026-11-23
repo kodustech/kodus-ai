@@ -439,6 +439,17 @@ class DeterministicEvidenceDto {
     tools?: DeterministicEvidenceToolsDto;
 }
 
+class ConversationConfigDto {
+    /**
+     * `false` makes Kody answer an unmentioned reply in its own thread only
+     * when someone writes `@kody`. Unset leaves the classifier deciding.
+     */
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional()
+    implicitReplies?: boolean;
+}
+
 class BusinessLogicDto {
     @IsOptional()
     @IsString()
@@ -1027,6 +1038,17 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @ValidateNested()
     @Type(() => BusinessLogicDto)
     businessLogic?: BusinessLogicDto;
+
+    /**
+     * How Kody takes part in the conversation on a pull request (#2576).
+     * `implicitReplies: false` makes Kody answer an unmentioned reply in its
+     * own review thread only when someone writes `@kody`.
+     */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => ConversationConfigDto)
+    @ApiPropertyOptional({ type: ConversationConfigDto })
+    conversation?: ConversationConfigDto;
 
     @IsOptional()
     @IsEnum(CodeReviewVersion)

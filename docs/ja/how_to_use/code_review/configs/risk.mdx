@@ -1,0 +1,71 @@
+---
+title: "リスク評価"
+description: "自動承認とは独立して PR のリスクを評価します。"
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Kodus Cloud で利用できます。トライアルも対象です。">
+    <Badge icon="cloud" stroke>Teams・Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Enterprise ライセンスと BETA_FEATURES=true が必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="Kodus Cloud のワークスペースでは、このベータ機能へのアクセスが必要です。">
+    <Badge icon="flask" color="orange" stroke>ベータ版</Badge>
+  </FeatureBadge>
+</div>
+
+Kody は PR 全体のリスクを評価します。[レビューモード](/ja/how_to_use/code_review/configs/routing)とリスク条件付きのカスタムエージェントは、評価結果に応じてレビュー方法を決めます。[自動承認](/ja/how_to_use/code_review/configs/auto_approve)がオンの場合、評価結果によって承認が止まることもあります。
+
+## リスク評価を有効にする
+
+1. **Code review → Risk assessment** を開きます。
+2. **Risk assessment** をオンにし、**Save settings** をクリックします。
+
+リスク評価の初期設定はオフです。自動承認をオフにしたままでも使えます。
+
+## 結果
+
+- **Risk found：** リスク条件付きのエージェントが実行される場合があり、Routing はリスクありのモードを使用し、自動承認はブロックされます。
+- **No risk found：** Routing はリスクなしのモードを使用します。承認には、引き続きクリーンなレビューと一致するポリシーが必要です。
+- **Unavailable：** Routing は設定されたデフォルトのレビューモードを使用します。自動承認はブロックされ、リスクの確定を必要とするエージェントは自動では実行されません。
+
+評価をオフにすると、Routing はすべての PR に対して設定された 1 つのモードを使用します。条件付きエージェントはリスクが確定しない限り実行されません。手動のエージェントコマンドを明示的に実行した場合は、その条件をバイパスします。
+
+評価の対象は、1 つの PR の head、タイトル、説明です。新しいコミットや、タイトルまたは説明の変更があると、新しいレビューが行われるまで自動承認は保留されます。
+
+## PR でプレビュー
+
+**Preview on a PR** はサイドパネルを開きます。接続済みのリポジトリと PR 番号を選択すると、未保存の編集も含めて現在の基準を試せます。設定されたリスク評価モデルを使用し、コメントの投稿や PR の承認は行いません。
+
+## 任意のチーム基準
+
+Kody はチーム基準がなくてもリスクを評価します。基準を追加すると、アカウント権限の変更や顧客データの削除がもたらす結果など、チームのコンテキストを加えられます。
+
+基準には、名前、指示、スイッチ、および任意の対象／除外ファイルパターンがあります。最大 50 件まで追加できます。名前は最大 120 文字、指示は最大 4,000 文字で、ファイルでは各 `id` が一意である必要があります。ファイルフィルターはガイダンスの範囲を絞るものであり、ファイルに一致しただけで PR が自動的にリスクありと判定されることはありません。Kody は変更の残りの部分も引き続き評価します。
+
+評価では、差分と利用可能なコード／履歴のコンテキストを使用します。履歴がない場合は不明な情報として扱われ、安全であることの証拠にはなりません。
+
+## YAML
+
+リポジトリの設定ファイルを使用する前に、**Code review → General**（リポジトリスコープ）で **Prefer kodus-config.yml settings** をオンにしてください。
+
+```yaml
+riskAssessmentActive: true
+riskCriteria:
+  - id: access-control
+    name: Access control
+    enabled: true
+    instructions: 'Check whether permission changes expose data across accounts. Distinguish them from equivalent refactors.'
+    includedFiles:
+      - 'src/access/**'
+    excludedFiles:
+      - '**/*.test.ts'
+```
+
+`riskCriteria: []` にすると、Kody の標準の評価が維持されます。評価を止めるには、`riskAssessmentActive: false` を設定します。
+
+**Risk assessment** を一度も設定していない構成は、この設定を変更するまで、既存の承認時のリスクの挙動を維持します。自動承認をオンまたはオフにしても、**Risk assessment** のスイッチは変わりません。

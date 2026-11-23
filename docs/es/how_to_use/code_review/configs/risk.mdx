@@ -1,0 +1,71 @@
+---
+title: "Evaluación de riesgo"
+description: "Evalúa el riesgo de un PR de forma independiente de la aprobación automática."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Disponible en Kodus Cloud, incluido el trial.">
+    <Badge icon="cloud" stroke>Teams y Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requiere una licencia Enterprise y BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Autoalojado</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="El espacio de trabajo en Kodus Cloud necesita acceso a esta beta.">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+Kody evalúa el PR completo. El [modo de revisión](/es/how_to_use/code_review/configs/routing) y los agentes condicionados por el riesgo usan el resultado para decidir cómo revisar. Con la [aprobación automática](/es/how_to_use/code_review/configs/auto_approve) activada, el resultado también puede impedir la aprobación.
+
+## Activa la evaluación de riesgo
+
+1. Abre **Code review → Risk assessment**.
+2. Activa **Risk assessment** y haz clic en **Save settings**.
+
+La evaluación de riesgo está desactivada por defecto. Puede ejecutarse con la aprobación automática desactivada.
+
+## Resultados
+
+- **Risk found:** los agentes condicionados por riesgo pueden ejecutarse, Routing usa su modo de riesgo encontrado y la aprobación automática se bloquea.
+- **No risk found:** Routing usa su modo sin riesgo. La aprobación sigue necesitando una revisión limpia y una política que coincida.
+- **Unavailable:** Routing usa el modo de revisión predeterminado configurado. La aprobación automática se bloquea, y los agentes que requieren riesgo confirmado no se ejecutan automáticamente.
+
+Con la evaluación desactivada, Routing usa un único modo configurado para todos los PRs. Los agentes condicionales no se ejecutan sin riesgo confirmado; los comandos manuales explícitos de agentes omiten esa condición.
+
+Una evaluación cubre un head, un título y una descripción de PR. Un nuevo commit, o un cambio en el título o la descripción, mantiene en espera la aprobación automática hasta una nueva revisión.
+
+## Vista previa en un PR
+
+**Preview on a PR** abre un panel lateral. Elige un repositorio conectado y un número de PR para probar los criterios actuales, incluidas las ediciones sin guardar. Usa el modelo de evaluación de riesgo configurado y no publica un comentario ni aprueba el PR.
+
+## Criterios opcionales del equipo
+
+Kody evalúa el riesgo sin criterios del equipo. Los criterios agregan contexto del equipo, como las consecuencias de cambiar permisos de cuentas o eliminar datos de clientes.
+
+Un criterio tiene un nombre, instrucciones, un interruptor y patrones de archivos incluidos/excluidos opcionales. Puedes agregar hasta 50. Un nombre admite hasta 120 caracteres y las instrucciones hasta 4.000; en un archivo, cada `id` debe ser único. Sus filtros de archivos acotan la guía; que coincida con un archivo no declara automáticamente que el PR sea riesgoso. Kody sigue evaluando el resto del cambio.
+
+La evaluación usa el diff y el contexto de código/historial disponible. Un historial ausente es información desconocida, no evidencia de seguridad.
+
+## YAML
+
+Activa **Prefer kodus-config.yml settings** en **Code review → General** (ámbito de repositorio) antes de usar los archivos de configuración del repositorio.
+
+```yaml
+riskAssessmentActive: true
+riskCriteria:
+  - id: access-control
+    name: Access control
+    enabled: true
+    instructions: 'Check whether permission changes expose data across accounts. Distinguish them from equivalent refactors.'
+    includedFiles:
+      - 'src/access/**'
+    excludedFiles:
+      - '**/*.test.ts'
+```
+
+`riskCriteria: []` mantiene la evaluación estándar de Kody. Para detener la evaluación, define `riskAssessmentActive: false`.
+
+Una configuración que nunca definió **Risk assessment** mantiene su comportamiento de riesgo de aprobación existente hasta que cambies este ajuste. Activar o desactivar la aprobación automática no cambia el interruptor **Risk assessment**.

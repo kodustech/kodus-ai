@@ -1,0 +1,31 @@
+---
+title: "CLI reviews"
+description: "See the reviews your team ran with the Kodus CLI, who ran them, and what they found."
+---
+
+**Reviews → CLI** lists the reviews your team ran from the terminal with the [Kodus CLI](/en/how_to_use/cli/introduction). It sits next to the [Pull requests](/en/how_to_use/reviews/pull_requests) tab and is open to Owners, Repo Admins and Contributors. Until someone runs a CLI review, it says *No CLI reviews yet*.
+
+## The list
+
+| Column | What it shows |
+| --- | --- |
+| **When** | How long ago the review ran |
+| **User** | The Kodus account that ran it, otherwise the git email, otherwise *Anonymous*. A line under it says whether it used a **Team** key (with the key's name) or a **Personal** login, and shows `git:` with the local git email when it differs from the account |
+| **Repo** | The repository reviewed |
+| **Branch** | The branch reviewed |
+| **Commit** | The short commit hash |
+| **Status** | **Success**, **Error**, **In Progress**, **Skipped**, **Partial Error** or **Pending** |
+| **Issues** | How many issues the review found |
+| **Duration** | How long the review took |
+
+Branch, commit and duration are hidden on narrow screens.
+
+Click a row to expand it. It shows the review timeline with the status, duration and start time of each stage, any error message, the Kodus CLI version, and the suggestions the review produced, each with severity, category, file and line, explanation and proposed change. While a review is still running, suggestions can appear as a preview that isn't final.
+
+## Filters
+
+- **Search by user email**
+- **Repository**
+- **Date**: **Today**, **Last 7 days** or **Last 30 days**
+
+The **Reviewed today** counter at the top right shows how many CLI reviews your team ran today and filters the list to them when clicked. Active filters show as chips, **Clear all** resets them, and the URL keeps them so a filtered view can be shared.

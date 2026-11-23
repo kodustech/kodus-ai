@@ -19,6 +19,8 @@ import {
     ObservabilityTelemetryModelSchema,
 } from '../infrastructure/adapters/repositories/schemas/observabilityTelemetry.model';
 import { ListKodusCreditChargesUseCase } from '../application/use-cases/credits/list-kodus-credit-charges.use-case';
+import { KODUS_CREDITS_LEDGER_REPOSITORY_TOKEN } from '../domain/credits/contracts/kodus-credits-ledger.repository.contract';
+import { KodusCreditsLedgerRepository } from '../infrastructure/adapters/repositories/kodus-credits-ledger.repository';
 
 /**
  * Metering for "Kodus as the provider": journals Kodus-routed usage spans as
@@ -45,6 +47,10 @@ import { ListKodusCreditChargesUseCase } from '../application/use-cases/credits/
         forwardRef(() => LicenseModule),
     ],
     providers: [
+        {
+            provide: KODUS_CREDITS_LEDGER_REPOSITORY_TOKEN,
+            useClass: KodusCreditsLedgerRepository,
+        },
         {
             provide: KODUS_CREDITS_METERING_SERVICE_TOKEN,
             useClass: KodusCreditsMeteringService,

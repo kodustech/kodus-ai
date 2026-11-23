@@ -88,10 +88,17 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             const payload =
                 job.payload as unknown as CheckImplementationJobPayload;
 
-            const savedPr = await this.pullRequestsService.findOne({
-                'number': payload.pullRequestNumber,
-                'repository.id': payload.repository.id,
-            } as any);
+            // The organization pins the tenant (and the whole unique index);
+            // the check reads only the suggestions, not the patches.
+            const savedPr = await this.pullRequestsService.findOne(
+                {
+                    'number': payload.pullRequestNumber,
+                    'repository.id': payload.repository.id,
+                    'organizationId':
+                        payload.organizationAndTeamData.organizationId,
+                } as any,
+                { 'files.suggestions': 1 },
+            );
 
             if (!savedPr) {
                 this.logger.warn({
@@ -223,6 +230,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     savedSuggestions,
                     diffSource,
                     removedFiles,
+                    pullRequestId: savedPr.uuid,
                 });
 
             if (check.skipped) {

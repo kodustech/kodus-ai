@@ -169,7 +169,7 @@ describe('SavePullRequestUseCase', () => {
                 ).not.toHaveBeenCalled();
             });
 
-            it('should use cached data from DB when action is "closed" and PR exists', async () => {
+            it('keeps the stored files and commits when action is "closed" and the PR exists', async () => {
                 mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
                     mockExistingPR,
                 );
@@ -193,29 +193,18 @@ describe('SavePullRequestUseCase', () => {
                 expect(
                     mockCodeManagementService.getCommitsForPullRequestForCodeReview,
                 ).not.toHaveBeenCalled();
-                expect(
-                    mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).toHaveBeenCalledWith(
-                    mockPullRequest.number,
-                    mockRepository.id.toString(),
-                    mockOrganizationAndTeamData,
-                );
-                // Verify files are mapped from DB format to API format
+                // No files to write: the save leaves the stored ones as they
+                // are instead of re-saving a copy read back from the database.
                 const callArgs =
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0];
-                const filesArg = callArgs[2];
-                const commitsArg = callArgs[7];
-
-                expect(filesArg).toHaveLength(2);
-                expect(filesArg[0].filename).toBe('file1.ts');
-                expect(filesArg[0].additions).toBe(10);
-                expect(filesArg[0].deletions).toBe(5);
-                expect(filesArg[1].filename).toBe('file2.ts');
-                expect(filesArg[1].additions).toBe(20);
-                expect(filesArg[1].deletions).toBe(10);
-
-                expect(commitsArg).toEqual(mockApiCommits);
+                expect(callArgs[2]).toEqual([]);
+                expect(callArgs[7]).toEqual([]);
+                expect(callArgs[9]).toEqual({ filesUnchanged: true });
+                // Nothing is read back from the database either.
+                expect(
+                    mockPullRequestsRepository.findByNumberAndRepositoryId,
+                ).not.toHaveBeenCalled();
             });
 
             it('should use empty arrays when action is "closed" and PR does not exist in DB', async () => {
@@ -253,6 +242,8 @@ describe('SavePullRequestUseCase', () => {
                     expect.anything(),
                     expect.anything(),
                     [],
+                    undefined,
+                    { filesUnchanged: true },
                 );
             });
         });
@@ -312,7 +303,7 @@ describe('SavePullRequestUseCase', () => {
                 ).toHaveBeenCalled();
             });
 
-            it('should use cached data when GitLab action is "close"', async () => {
+            it('keeps the stored files and commits when GitLab action is "close"', async () => {
                 mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
                     mockExistingPR,
                 );
@@ -340,8 +331,12 @@ describe('SavePullRequestUseCase', () => {
                     mockCodeManagementService.getCommitsForPullRequestForCodeReview,
                 ).not.toHaveBeenCalled();
                 expect(
+                    mockPullRequestsService.aggregateAndSaveDataStructure.mock
+                        .calls[0][9],
+                ).toEqual({ filesUnchanged: true });
+                expect(
                     mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).toHaveBeenCalled();
+                ).not.toHaveBeenCalled();
             });
         });
 

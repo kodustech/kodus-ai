@@ -33,6 +33,16 @@ export const CONVERSATION_PLAN_GATE_MESSAGE =
     'LLM API key (BYOK) is configured. Connect your key in the Kodus ' +
     'settings to keep chatting with Kody.';
 
+/**
+ * Posted instead of running the agent when the license read never answered
+ * (billing 5xx, rate limit, timeout). The org may be paying: the plan gate's
+ * "trial has ended" would send it to the plan page over our own outage.
+ */
+export const CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE =
+    "I can't reply right now: I couldn't confirm your organization's " +
+    'subscription because the license service is temporarily unreachable. ' +
+    'Mention me again in a few minutes.';
+
 /** The fields of a platform comment this module reads. */
 export interface ThreadComment {
     id: number;
@@ -64,7 +74,8 @@ export function isKodyFixedMessage(body: string): boolean {
     const text = (body ?? '').replace(/[​\s]+$/u, '').trim();
     return (
         text === KODY_ACKNOWLEDGMENT_MESSAGE ||
-        text === CONVERSATION_PLAN_GATE_MESSAGE
+        text === CONVERSATION_PLAN_GATE_MESSAGE ||
+        text === CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE
     );
 }
 

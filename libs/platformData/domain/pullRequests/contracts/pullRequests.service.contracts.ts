@@ -23,6 +23,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
     findById(uuid: string): Promise<PullRequestsEntity | null>;
     findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]>;
 
@@ -44,7 +45,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
         /** The review's save: keep the stored status, merged and closedAt. */
-        options?: { keepStoredState?: boolean },
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null>;
 
     extractUser(
@@ -136,6 +137,15 @@ export interface IPullRequestsService extends IPullRequestsRepository {
             unresolvedOnly?: boolean;
             openOnly?: boolean;
         },
+    ): Promise<number>;
+    /**
+     * Pull requests an author opened in the organization, counting no further
+     * than `limit`: callers that only tell 0, 1 and "more" apart stop there.
+     */
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
     ): Promise<number>;
     /** PR numbers of one repository — see the repository contract. */
     findNumbersByRepositoryId(

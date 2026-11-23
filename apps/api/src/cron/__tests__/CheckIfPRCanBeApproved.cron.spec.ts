@@ -999,6 +999,32 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('scopes the delivered-suggestions read to the eligible (repository, PR) pairs', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [
+                { repositoryId: 'repo-b', pullRequestNumber: 2 },
+                { repositoryId: 'repo-b', pullRequestNumber: 3 },
+                { repositoryId: 'repo-c', pullRequestNumber: 5 },
+            ],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [],
+        );
+        jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        const [, , , pullRequestRefs] =
+            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions
+                .mock.calls[0];
+        expect(pullRequestRefs).toEqual([
+            { repositoryId: 'repo-b', number: 2 },
+            { repositoryId: 'repo-b', number: 3 },
+            { repositoryId: 'repo-c', number: 5 },
+        ]);
+    });
+
     it('processes a successful PR when a different PR is in progress for the same team', async () => {
         const { cron, deps } = makeCron();
 
@@ -1018,7 +1044,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith('org-1', [2], expect.anything());
+        ).toHaveBeenCalledWith('org-1', [2], expect.anything(), [
+            { repositoryId: 'repo-b', number: 2 },
+        ]);
         expect(
             deps.pullRequestService
                 .findPullRequestsWithoutDeliveredSuggestionsForApproval,
@@ -2557,7 +2585,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith('org-1', [123], expect.anything());
+        ).toHaveBeenCalledWith('org-1', [123], expect.anything(), [
+            { repositoryId: 'repo-b', number: 123 },
+        ]);
         expect(shouldApproveSpy).toHaveBeenCalledTimes(1);
         expect(shouldApproveSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -3102,6 +3132,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.parametersService,
             {
                 findByOrganizationId: async () => null,
+                findLiveRulesByOrganizationId: async () => null,
                 syncRulesWithPlanLimit: async () => null,
             } as any,
             {} as any,

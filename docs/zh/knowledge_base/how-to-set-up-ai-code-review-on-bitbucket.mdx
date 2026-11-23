@@ -1,0 +1,24 @@
+---
+title: "如何在 Bitbucket 上设置 AI 代码审查"
+description: "将 Bitbucket 连接到 Kodus，并选择要自动审查的仓库。"
+---
+
+Kodus 使用 API 令牌连接到 Bitbucket,并通过代码库 webhooks 接收拉取请求事件。支持 Bitbucket Cloud;Bitbucket Data Center 处于 alpha 阶段。在 Data Center 上,向已打开的拉取请求推送不会启动审查:请评论 `@kody start-review`。
+
+## 步骤
+
+1. **创建账户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
+2. **连接 Bitbucket** — 在入门引导的 **Connect your Git tool** 步骤中,打开 **Bitbucket** 选项卡,点击 **Connect via token**,然后输入您的 Bitbucket 用户名、电子邮件和 API 令牌(之后也可以从侧边栏的 **Repositories** 进行连接:在 **Connect a provider** 下点击 **Bitbucket**)。对于 Bitbucket Data Center,请开启 **Bitbucket Data Center** 并输入基础 URL、您的用户名和 **Basic auth password**
+3. **选择代码库** — 选择 Kodus 应审查的 Bitbucket 代码库,或在 **Repositories** 上开启[审查所有代码库](/zh/how_to_use/code_review/configs/review_all_repositories)
+4. **Webhooks** — 保存选择时,Kodus 会自动创建拉取请求 webhook。这需要对代码库拥有管理员权限:在 Bitbucket Cloud 上,令牌还需要 `read:webhook:bitbucket` 和 `write:webhook:bitbucket`;在 Data Center 上需要 **Repository admin** 权限。如果没有创建,**Repositories** 会列出该代码库及原因;请按照 [Bitbucket Webhooks](/zh/how_to_deploy/platforms/bitbucket/bitbucket_webhook) 指南手动添加 webhook
+5. 在已选仓库中打开一个拉取请求。[查看 Kody 会发布什么以及如何确认审查状态](/zh/how_to_use/code_review/flow)。
+
+## 自定义配置
+
+通过 [kodus-config.yml](/zh/how_to_use/code_review/configs/general#kodus-config-yml) 自定义各仓库的审查配置。
+
+## 速率限制
+
+Bitbucket Cloud 限制每小时允许的 API 请求数量。每个 Kodus 进程(API、worker、webhooks)在使用相同凭据调用 Bitbucket Cloud 时,调用之间至少等待 400 毫秒(`BITBUCKET_RATE_GATE_MIN_INTERVAL_MS`),并对 `429` 响应最多重试 4 次,同时遵守 `Retry-After`(`BITBUCKET_RATE_GATE_429_MAX_RETRIES`)。该间隔是按进程计算的,因此有多个 worker 时,实际速率会成倍增加。如果您的 Bitbucket 限流很严格,请调大该值。
+
+完整设置指南,请参阅 [Bitbucket API 令牌](/zh/how_to_use/code_review/general_config/bitbucket_pat)和 [Bitbucket Webhooks](/zh/how_to_deploy/platforms/bitbucket/bitbucket_webhook)。

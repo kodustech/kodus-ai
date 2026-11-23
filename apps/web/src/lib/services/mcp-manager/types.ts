@@ -3,6 +3,9 @@ export type PluginAuthScheme = "BEARER_TOKEN" | "API_KEY" | "OAUTH2" | "BASIC";
 export enum MCP_CONNECTION_STATUS {
     ACTIVE = "ACTIVE",
     PENDING = "PENDING",
+    // The MCP server refused the credential and it could not be refreshed:
+    // reviews stop using the plugin until it is connected again.
+    EXPIRED = "EXPIRED",
 }
 
 export const KODUS_ISSUES_INTEGRATION_ID = "kodus-issues-default";

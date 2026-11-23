@@ -139,7 +139,12 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
     it('cleans up the leased sandbox on completion', async () => {
         await processor.process('job-2');
 
-        expect(sandbox.cleanup).toHaveBeenCalledTimes(1);
+        // Single-use graph sandbox: the final release stops compute now,
+        // instead of leaving it warm for the 5-minute default (#2626).
+        expect(leaseManager.release).toHaveBeenCalledWith('lease-2', {
+            idleMs: 0,
+        });
+        expect(sandbox.cleanup).not.toHaveBeenCalled();
     });
 
     it('still cleans up the leased sandbox when the update fails after acquire', async () => {
@@ -147,7 +152,12 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
 
         await processor.process('job-2');
 
-        expect(sandbox.cleanup).toHaveBeenCalledTimes(1);
+        // Single-use graph sandbox: the final release stops compute now,
+        // instead of leaving it warm for the 5-minute default (#2626).
+        expect(leaseManager.release).toHaveBeenCalledWith('lease-2', {
+            idleMs: 0,
+        });
+        expect(sandbox.cleanup).not.toHaveBeenCalled();
     });
 
     // The build runs clone + many /contents reads + indexing, any of which

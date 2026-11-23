@@ -409,7 +409,11 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
             if (repositoryName) {
                 queryBuilder.andWhere(
-                    "automation_execution.dataExecution->'repository'->>'name' = :repositoryName",
+                    // Quoted: TypeORM only rewrites `alias.property` followed
+                    // by a space, `=`, `)` or `,`. Before `->` it passed the
+                    // bare name through and Postgres folded it to
+                    // `dataexecution`, a column that does not exist.
+                    `"automation_execution"."dataExecution"->'repository'->>'name' = :repositoryName`,
                     { repositoryName },
                 );
             }
@@ -887,6 +891,32 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             });
             if (options?.rethrow) throw error;
         }
+    }
+
+    async hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean> {
+        return this.automationExecutionRepository
+            .createQueryBuilder('automation_execution')
+            .where(
+                'automation_execution.team_automation_id = :teamAutomationId',
+                { teamAutomationId: params.teamAutomationId },
+            )
+            .andWhere('automation_execution.repositoryId = :repositoryId', {
+                repositoryId: params.repositoryId,
+            })
+            .andWhere(
+                'automation_execution.pullRequestNumber = :pullRequestNumber',
+                { pullRequestNumber: params.pullRequestNumber },
+            )
+            .andWhere(
+                `"automation_execution"."dataExecution"->>:key IS NOT NULL`,
+                { key: params.key },
+            )
+            .getExists();
     }
 
     async findByPeriodAndTeamAutomationId(

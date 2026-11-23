@@ -7,7 +7,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
-import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
+import {
+    IntegrationOAuthService,
+    RejectedCredentialOutcome,
+} from '../integrations/integration-oauth.service';
 import {
     MCPIntegrationAuthType,
     MCPIntegrationOAuthStatus,
@@ -607,8 +610,43 @@ export class McpService {
     }
 
     /**
-     * Expire the connection only while its grant is still INACTIVE, in the same
-     * statement: a reconnect that saved an ACTIVE grant in between must not be
+     * An MCP server refused the credential the worker got from
+     * getKodusMCPConnectionConfig. Refresh it or, when it is gone for good,
+     * expire the connection: the runtime only lists ACTIVE connections, so the
+     * reviews stop sending it, and the plugin page asks to reconnect.
+     */
+    async handleRejectedKodusMcpCredential(
+        organizationId: string,
+        integrationId: string,
+        fingerprint: string,
+    ): Promise<{ outcome: RejectedCredentialOutcome }> {
+        const outcome =
+            await this.integrationOAuthService.handleRejectedCredential(
+                organizationId,
+                integrationId,
+                fingerprint,
+            );
+
+        // Both leave the stored credential INACTIVE; the expiry re-checks that
+        // in its own statement, so a reconnect in between stays ACTIVE.
+        if (outcome === 'grant_lost' || outcome === 'token_rejected') {
+            await this.expireConnectionOfLostGrant(
+                organizationId,
+                integrationId,
+            );
+        }
+
+        this.logger.warn(
+            `MCP server refused the ${integrationId} credential: ${outcome}`,
+            { organizationId, integrationId, outcome },
+        );
+        return { outcome };
+    }
+
+    /**
+     * Expire the connection only while its stored credential (OAuth grant or
+     * refused static token) is still INACTIVE, in the same statement: a
+     * reconnect that saved an ACTIVE credential in between must not be
      * overwritten with EXPIRED.
      */
     private async expireConnectionOfLostGrant(

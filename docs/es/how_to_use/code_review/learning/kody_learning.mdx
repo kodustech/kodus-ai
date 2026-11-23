@@ -1,18 +1,16 @@
 ---
 title: "Comentarios sobre sugerencias"
-description: "Qué registra la retroalimentación y qué mecanismos influyen en futuras revisiones."
+description: "Qué registra hoy el feedback y qué mecanismos influyen en futuras revisiones."
 ---
 
-<Note>
-El ajuste basado en reacciones no está activo actualmente. Las reacciones 👍/👎 y el estado de implementación pueden registrarse, pero no entrenan un modelo, no crean grupos de preferencias ni filtran la siguiente revisión.
-</Note>
+Las reacciones a los comentarios de Kody no entrenan un modelo ni filtran la siguiente revisión. Kody registra las reacciones 👍 y 👎, y si cada sugerencia fue aplicada, y las muestra en Cockpit. El único lugar donde actúan es **Pause ignored and noisy rules** (más abajo): una Kody Rule cuyas sugerencias acumulan 👎 o rara vez se aplican puede pausarse.
 
-Un pulgar arriba o abajo no explica por qué se rechazó una sugerencia. Se necesita más contexto sobre la retroalimentación negativa antes de reactivar este ciclo.
-
-Puedes seguir dejando reacciones como comentarios opcionales sobre el producto. Reaccionar a una sugerencia no suprime automáticamente sugerencias similares en revisiones posteriores.
+Puedes seguir reaccionando a una sugerencia como feedback para tu equipo. Para evitar que vuelva un tipo de sugerencia, usa uno de los mecanismos de abajo.
 
 ## Qué influye en futuras revisiones
 
-- [Memorias](/es/knowledge_base/how-to-teach-ai-your-team-conventions): Guarda convenciones explícitas del equipo mediante `@kody remember` y conversaciones.
-- [Kody Rules](/es/how_to_use/code_review/configs/kody_rules): Define estándares que se aplican durante la revisión de código.
-- [Generación automática de reglas](/es/how_to_use/code_review/learning/kody_rules_generation): Genera reglas a partir del historial de revisiones (activas por defecto, o retenidas en **Pending review** para aprobación cuando **Kody knowledge approval** está activado). Es una función activa distinta del ajuste basado en reacciones.
+- **Sugerencias anteriores en el mismo PR:** en un PR que Kody ya revisó, ve las sugerencias que publicó antes y si fueron aplicadas, y evita publicarlas de nuevo.
+- [Memorias](/es/knowledge_base/how-to-teach-ai-your-team-conventions): guardan convenciones explícitas del equipo mediante `@kody remember` y conversaciones.
+- [Kody Rules](/es/how_to_use/code_review/configs/kody_rules): definen estándares que se aplican durante la revisión de código.
+- [Generación automática de reglas](/es/how_to_use/code_review/learning/kody_rules_generation): genera reglas a partir del historial de revisiones. Las reglas están activas por defecto, o retenidas en **Pending review** para aprobación cuando **Kody knowledge approval** está activado.
+- [Pausar reglas ignoradas y ruidosas](/es/how_to_use/code_review/configs/kody_rules#pause-ignored-and-noisy-rules): en los planes Teams y Enterprise, desactivado por defecto. Cuando está activado, Kody pausa una vez al día las reglas activas etiquetadas como **Ignored** (pocas sugerencias aplicadas) o **Noisy** (mayormente 👎) en los últimos 30 días.

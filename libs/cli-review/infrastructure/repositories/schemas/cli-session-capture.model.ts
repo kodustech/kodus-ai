@@ -83,7 +83,6 @@ class CliSessionDecisionModel {
 @Schema({
     collection: 'cliSessionCaptures',
     timestamps: true,
-    autoIndex: true,
 })
 export class CliSessionCaptureModel extends CoreDocument {
     @Prop({ type: String, required: true })

@@ -19,10 +19,13 @@ import {
     isReviewCommand,
     parseReviewDirective,
     requestedReviewModeOf,
-    parseCustomAgentCommand
+    parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    bitbucketWebhookSource,
+    getMappedPlatform,
+} from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
@@ -173,6 +176,7 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.BITBUCKET,
             String(repository.id),
+            bitbucketWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -194,7 +198,10 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
             const shouldTrigger = await this.shouldTriggerCodeReview(params);
 
             if (shouldTrigger) {
-                await this.savePullRequestUseCase.execute(params);
+                await this.savePullRequestUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 const action =
                     mappedPlatform?.mapAction({ payload, event }) ?? event;
@@ -305,30 +312,39 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                 }
             } else {
                 // For events that don't trigger code review, just save the state
-                const pullRequest =
-                    await this.savePullRequestUseCase.execute(params);
+                const pullRequest = await this.savePullRequestUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 if (pullRequest && pullRequest.status === 'closed') {
-                    this.generateIssuesFromPrClosedUseCase.execute(params);
+                    this.generateIssuesFromPrClosedUseCase.execute({
+                        ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                    });
 
                     // Durable sandbox invalidation via outbox (SBX-05).
                     const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.pullrequest?.id}`;
-                    await this.outboxRepository.create({
-                        jobId: undefined,
-                        exchange: 'sandbox.events',
-                        routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
-                        payload: {
-                            prKey,
-                            reason: 'pr_closed',
-                        } satisfies SandboxInvalidatePayload,
-                    }).catch((err) => {
-                        this.logger.warn({
-                            message: '[SBX-05] Failed to write sandbox invalidation outbox message',
-                            context: BitbucketPullRequestHandler.name,
-                            error: err instanceof Error ? err : undefined,
-                            metadata: { prKey },
+                    await this.outboxRepository
+                        .create({
+                            jobId: undefined,
+                            exchange: 'sandbox.events',
+                            routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                            payload: {
+                                prKey,
+                                reason: 'pr_closed',
+                            } satisfies SandboxInvalidatePayload,
+                        })
+                        .catch((err) => {
+                            this.logger.warn({
+                                message:
+                                    '[SBX-05] Failed to write sandbox invalidation outbox message',
+                                context: BitbucketPullRequestHandler.name,
+                                error: err instanceof Error ? err : undefined,
+                                metadata: { prKey },
+                            });
                         });
-                    });
 
                     // TODO(SBX-05): Bitbucket 'pullrequest:updated' events do not distinguish
                     // force-push from regular push — no force-push outbox write is added here.
@@ -496,6 +512,7 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.BITBUCKET,
             String(repository.id),
+            bitbucketWebhookSource(payload),
         );
 
         try {
@@ -522,7 +539,6 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
             const customAgentSlug = parseCustomAgentCommand(comment.body);
 
             const isStartCommand =
-
                 isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
 
@@ -545,13 +561,16 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
 
                 const updatedParams = {
                     ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
                     payload: {
                         ...payload,
                         action: 'synchronize',
                         origin: isForceCommand ? 'command-force' : 'command',
                         triggerCommentId: comment?.id,
                         reviewDirective: parseReviewDirective(comment.body),
-                        requestedReviewMode: requestedReviewModeOf(comment.body),
+                        requestedReviewMode: requestedReviewModeOf(
+                            comment.body,
+                        ),
                         requestedReviewModeAccess: await reviewCommandAccess(
                             this.codeManagement,
                             params,
@@ -633,6 +652,7 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             platformType,
             repoId,
+            bitbucketWebhookSource(payload),
         );
 
         const organizationAndTeamData = context?.organizationAndTeamData;

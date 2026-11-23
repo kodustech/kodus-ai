@@ -1,43 +1,34 @@
 ---
-title: "Google Docsの仕様に対してコードを確認する方法"
-description: "Google Docsに記載された仕様に対してプルリクエストの実装を検証します。"
+title: "Google Docs の仕様に対してコードを確認する方法"
+description: "Google Docs に書かれた仕様に対して、Pull Request の実装を検証します。"
 ---
 
-製品の仕様や要件はGoogle Docsに記載されていることが多いです。Kodusはドキュメントのコンテンツを取得し、PRのdiffと比較して実装が仕様と一致していることを確認できます。
+製品の仕様や要件は Google Docs に書かれていることがよくあります。Google Docs は、Linear、Jira、Notion、Git Issues、カスタムプラグインからタスクを読み取る Business Logic Validation の組み込みのタスクソースではありません。コマンドに Google Docs のリンクを含めても読み取られません。
 
-## 動作方法
+Google Docs の仕様に対して PR を確認する方法は 2 つあります。
 
-1. ワークスペースの[プラグイン](/ja/how_to_use/code_review/plugins)ページで**Google Docsプラグインを接続**します
-2. ドキュメントが接続されたアカウントからアクセスできることを確認します
-3. PRにコメントします：
+## コマンドに要件を貼り付ける
 
-```
-@kody -v business-logic https://docs.google.com/document/d/1abc123/edit
-```
-
-4. Kodyはドキュメントを取得し、要件を抽出して、PRのdiffと比較します
-
-## 得られるもの
-
-Kodyは構造化された検証レポートを作成します：
-
-- **重要度を持つ調査結果**：MUST_FIX、SUGGESTION、またはINFO
-- **要件のトレーサビリティ** — 各調査結果はGoogle Docからのテキストを引用
-- **検証済み要件** — 正しく実装されたもの
-
-## ヒント
-
-- 最良の結果を得るために、明確なセクションと番号付き要件を持つ構造化された仕様を保持してください
-- 仕様コンテンツをインラインで貼り付けることもできます：
+ドキュメントから要件をコピーし、PR にコメントします。
 
 ```
 @kody -v business-logic
-## 要件
-1. "admin"ロールを持つユーザーは任意のコメントを削除できます
-2. ユーザーは24時間以内に自分のコメントのみ編集できます
-3. 削除されたコメントには"[removed]"プレースホルダーが表示されます
+## Requirements
+1. Users with role "admin" can delete any comment
+2. Users can only edit their own comments within 24 hours
+3. Deleted comments show "[removed]" placeholder
 ```
 
-- 大きなドキュメントをセクションに分割し、より集中したフィードバックのために個別に検証します
+Kody は、書いたテキストに対して PR を確認します。トラッカーは不要ですが、テキストは 40 文字以上である必要があります。結果は PR への 1 件のコメント **Kody · Business Logic** で、各要件に **MET**、**PARTIAL**、**MISSING**、**CHECK MANUALLY**、**NOT IN TASK** のいずれかが付きます。
 
-詳細については、[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)を参照してください。
+## 要件をタスクに保存する
+
+要件を、トラッカーのタスクの説明に `Acceptance criteria` などの見出しの下にコピーし、PR のタイトル、ブランチ、説明にそのタスクを記載します。すると Kody は、コマンドなしで、そのタスクを参照するすべての PR を確認します。基準が見出しの下やカスタムフィールドにある場合は、Business Logic の設定で **Requirements → Where acceptance criteria live** を設定します。Notion のページはタスクとして使えます。その URL を PR に記載してください。
+
+## ヒント
+
+- 仕様は、明確なセクションと番号付きの要件で構造化しておきます。
+- 大きなドキュメントはセクションに分け、1 つずつ確認すると、より焦点の絞られたフィードバックが得られます。
+- 不足を修正したら、もう一度 `@kody -v business-logic` とコメントします。同じコメントが更新されます。
+
+詳細については、[Business Logic Validation](/ja/how_to_use/code_review/business_logic_validation) を参照してください。

@@ -218,7 +218,10 @@ services:
         deploy:
             resources:
                 limits:
-                    memory: 2G
+                    # The consumer and each slice child are separate Node
+                    # heaps (#2601), on top of the watch tooling: at 2G the
+                    # first slice got the container OOM-killed, parent too.
+                    memory: 4G
                 reservations:
                     memory: 256M
         healthcheck:

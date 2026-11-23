@@ -1,88 +1,153 @@
 ---
-title: "Kubernetes と OpenShift"
-description: "公式 Helm チャートで Kodus を Kubernetes または OpenShift にデプロイします。"
+title: "Kubernetes & OpenShift"
+description: "公式の Helm チャートを使って、Kubernetes または OpenShift に Kodus をデプロイします。"
 icon: "dharmachakra"
 ---
 
-単一の VM よりもクラスターを使いたい場合は、Kodus が
-[kodus-installer](https://github.com/kodustech/kodus-installer) リポジトリで
-Kubernetes と OpenShift 向けの **Helm チャート** を提供しています。このページは概要です
-——完全なリファレンスはチャートの
+単一の VM よりもクラスターを使いたいですか？ Kodus は、Kubernetes と OpenShift 向けの **Helm チャート**を
+[kodus-installer](https://github.com/kodustech/kodus-installer)
+リポジトリで提供しています。このページは概要です。チャートの
 [README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
-です（エアギャップ環境でのインストール、ExternalSecrets、operator、可観測性、SOC 2 を意識した
-ハードニングなど）。
+が完全なリファレンスで、エアギャップ環境へのインストール、ExternalSecrets、オペレーター、
+オブザーバビリティ、ハードニングを扱っています。
 
 ## 要件
 
-- Helm 3.8+
-- Kubernetes 1.28+ または OpenShift 4.14+
-- `mode: operator` のデータストアには、対応する operator をクラスターに事前インストール
+- Helm 3.8 以上
+- Kubernetes 1.28 以上、または OpenShift 4.14 以上
+- `mode: operator` のデータストアには、対応するオペレーターがクラスターにインストールされていること
 
-## クイックスタート（バンドルされたデータストア）
+## クイックスタート（バンドル版データストア）
 
 デフォルトの `bundled` モードは、PostgreSQL（pgvector）、MongoDB、RabbitMQ を
-チャートが管理する StatefulSet として起動します——Docker Compose の `USE_LOCAL_DB=true`
-に相当します。operator 不要、コマンド 1 つで完了します:
+チャートが管理する StatefulSet として実行します。Docker Compose の `USE_LOCAL_DB=true` に相当します。
+
+インストーラーをクローンしてチャートの依存関係を準備します。例のホスト名を独自の DNS 名に置き換え、インストール済みの Ingress コントローラーを指すようにします。デフォルトの Ingress クラスは `nginx` です。リリースの名前空間にある TLS Secret を使用する場合は、`ingress.tls.secretName` を設定します。証明書は 3 つのホストすべてを対象にしてください。
+
+```bash
+git clone https://github.com/kodustech/kodus-installer.git
+cd kodus-installer/charts/kodus
+helm dependency build
+helm install kodus . \
+  -n kodus --create-namespace \
+  --set global.config.NEXTAUTH_URL=https://kodus.example.net \
+  --set global.config.API_FRONTEND_URL=https://kodus.example.net \
+  --set global.config.API_USER_INVITE_BASE_URL=https://kodus.example.net \
+  --set ingress.hosts.web.host=kodus.example.net \
+  --set ingress.hosts.api.host=api.kodus.example.net \
+  --set ingress.hosts.webhooks.host=webhooks.kodus.example.net
+```
+
+チャートと Kodus イメージのバージョンは別々です。デフォルトでは、移行 Job を含むすべての Kodus イメージにチャートの `appVersion` が使われます。公開済みのチャートを OCI からインストールする手順は、[チャートの README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md) を参照してください。
+
+`NEXTAUTH_URL`、`API_FRONTEND_URL`、`API_USER_INVITE_BASE_URL` を Web アプリの公開 URL に設定します。これらはサインイン、GitHub App からの戻り先、CLI ログイン、招待に使われます。SAML SSO を使う場合は、`global.config.API_URL` に API の公開 URL も設定します。
+
+<Tip>
+  webhooks サービスには、専用のパブリックホストが必要です。`ingress.hosts.webhooks.host`
+  （OpenShift では `route.hosts.webhooks.host`）に専用のホスト名を設定すると、チャートが
+  各プロバイダーの `*_CODE_MANAGEMENT_WEBHOOK` URL を導出します。プレースホルダーのままにする場合は、
+  `global.config.API_GITHUB_CODE_MANAGEMENT_WEBHOOK`（またはお使いのプロバイダーの変数）を
+  自分で設定してください。そうしないと、接続したリポジトリはレビューを開始しません。
+</Tip>
+
+Web ホストを開いてアカウントを作成し、**AI providers** でモデルを接続します。インストール時にモデルを設定する場合は、秘密情報以外を `global.config` に、キーを `global.secrets` に設定します。[LLM プロバイダーの設定](/ja/how_to_deploy/deploy_kodus/generic_vm#llm-プロバイダーの設定)を参照してください。
+
+<Warning>
+  `WEB_HOSTNAME_API` はパブリックなホスト名ではありません。Web Pod はサーバー側で `/api/proxy` を通じて API を呼び出し、`WEB_HOSTNAME_API` と `WEB_PORT_API` はクラスター内の API のアドレスです。チャートのデフォルトは `<release>-api` と `3001` です。`WEB_HOSTNAME_API` をパブリックな Ingress や Route に向けると、Web Pod がルーターまで出て戻ってくることになり、`fetch failed` で失敗することがあります。Git プロバイダーは、設定された公開 webhook URL にイベントを送ります。たとえば、Bitbucket は `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` の URL、Azure Repos は `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` の URL を使用します。
+</Warning>
+
+## データストアのモード
+
+各ストア（`postgres`、`mongodb`、`rabbitmq`）には、独立した `mode` があります。
+
+| mode | 動作 | 用途 |
+|------|--------------|-----|
+| `bundled` *(デフォルト)* | チャートが管理する StatefulSet | 開発 / トライアル |
+| `external` | `existingSecret` 経由で接続する、お客様のマネージド / 自己管理のサービス | 本番 |
+| `operator` | クラスターのオペレーターが調整する CR（HA）：CloudNativePG、RabbitMQ Cluster Operator、MongoDB Community Operator | 本番 |
+
+本番環境では、`external` または `operator` を推奨します。データベースの運用を、
+専用に作られたものに任せられるためです。外部の PostgreSQL には `vector` 拡張が必要で、
+外部の RabbitMQ には delayed message exchange プラグイン、`kodus-ai` と
+`kodus-ast` の仮想ホスト、`consumer_timeout = 7200000` が必要です。各ストアの
+前提条件は、チャートの README に記載されています。
+
+TLS が必須の外部 PostgreSQL を使う場合は、`global.config.API_DATABASE_DISABLE_SSL` を `"false"` に設定します。
+
+## OpenShift
+
+OpenShift では、リポジトリのチェックアウトにある `values-openshift.yaml` オーバーレイが必要です。
+Ingress の代わりに Route を使い、Pod の UID は名前空間の SCC（`restricted-v2`）に任せるため、
+UID はハードコードされません。
 
 ```bash
 git clone https://github.com/kodustech/kodus-installer
 cd kodus-installer/charts/kodus
 helm dependency build
-helm install kodus . -n kodus --create-namespace \
-  --set imageTag=<バージョン> \
-  --set global.config.WEB_HOSTNAME_API=api.kodus.example.com \
-  --set global.config.NEXTAUTH_URL=https://kodus.example.com \
-  --set ingress.hosts.web.host=kodus.example.com \
-  --set ingress.hosts.api.host=api.kodus.example.com
+helm install kodus . -f values-openshift.yaml \
+  -n kodus --create-namespace \
+  --set global.config.NEXTAUTH_URL=https://kodus.apps.cluster.example.net \
+  --set global.config.API_FRONTEND_URL=https://kodus.apps.cluster.example.net \
+  --set global.config.API_USER_INVITE_BASE_URL=https://kodus.apps.cluster.example.net \
+  --set route.hosts.web.host=kodus.apps.cluster.example.net \
+  --set route.hosts.api.host=kodus-api.apps.cluster.example.net \
+  --set route.hosts.webhooks.host=kodus-webhooks.apps.cluster.example.net
 ```
 
-`imageTag` はスタック全体の Kodus バージョンを固定します（Docker Compose の `IMAGE_TAG`
-と同様）。本番環境では `latest` ではなく実際のタグを使用してください。認証・暗号化用の
-シークレットは正しい形式で自動生成され、アップグレード後も安定して維持されます。
+ホスト名は、apps ドメインの下で `kodus-api.apps…` のようにラベル 1 つ分の深さにしてください。
+デフォルトのワイルドカード証明書は 1 ラベルしかカバーしないため、より深いホスト名は、
+Git プロバイダーの webhook 配信を含め、TLS を検証するクライアントで失敗します。
 
-<Tip>
-  webhooks サービスには専用の公開ホストが必要です。`ingress.hosts.webhooks.host`
-  （OpenShift では `route.hosts.webhooks.host`）を専用のホスト名に向けると、チャートが
-  `API_<provider>_CODE_MANAGEMENT_WEBHOOK` を自動的に導出します。
-</Tip>
+OpenShift にホスト名を割り当てさせる場合は、`oc get route -n kodus` で確認します。上記の公開 Web URL の 3 項目を更新し、割り当てられた Webhook ホストの HTTPS URL をプロバイダーの Webhook 変数に指定します。
 
-## データストアのモード
+クラスターによっては、Docker Hub の `library/*` イメージをミラーしたりブロックしたりしているため、バンドルされた `mongo`
+イメージは、チャートが固定しているものと同じタグで上書きする必要があるかもしれません（`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8.3.13`）。
+または、`external` / `operator` のデータストアを使います。
 
-各ストア（`postgres`、`mongodb`、`rabbitmq`）は独立した `mode` を持ちます:
+MongoDB ノードで Linux 6.19 以降を使用している場合は、イメージタグを選ぶ前に [MongoDB の起動に関するトラブルシューティング](/ja/how_to_deploy/deploy_kodus/troubleshooting#mongodbがserver-121912で終了する)を確認してください。
 
-| mode | 内容 | 用途 |
-|------|------|------|
-| `bundled` *(デフォルト)* | チャートが管理する StatefulSet | 開発 / お試し |
-| `external` | `existingSecret` を介したマネージド/自己管理サービス | 本番 |
-| `operator` | クラスター operator が調整する CR（HA）——CloudNativePG、RabbitMQ Cluster Operator、MongoDB Community Operator | 本番 |
+## オプションのサービス
 
-本番環境では `external` または `operator` を推奨します——データベースの運用を専用の
-コンポーネントに委ねられます。
-
-## OpenShift
-
-OpenShift オーバーレイを追加します——Ingress の代わりに Route を使用し、Pod の UID は
-namespace の SCC（`restricted-v2`）に委ねられるため、UID はハードコードされません:
+`mcp-manager` と `worker-analytics` は、どちらもデフォルトで有効です。最小構成でインストールするには、
+どちらかをオフにします。
 
 ```bash
-helm install kodus . -f values.yaml -f values-openshift.yaml \
-  -n kodus --create-namespace --set imageTag=<バージョン>
+--set services.mcp-manager.enabled=false
+--set services.worker-analytics.enabled=false
 ```
 
-`route.hosts.*.host` を空のままにすると、OpenShift が `<name>-<namespace>.apps…`
-ホスト名を自動的に割り当てます。一部のクラスターは Docker Hub の `library/*` イメージを
-ミラーまたはブロックするため、バンドルされた `mongo` イメージにはオーバーライド
-（`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8`）または `external` /
-`operator` データストアが必要になる場合があります。
+- **MCP manager** は Plugins 画面を提供します。[MCP Manager](/ja/how_to_deploy/deploy_kodus/mcp_manager) を参照してください。
+- **Analytics worker** は、Cockpit 向けに `WORKER_ROLE=analytics` を実行します。有用な処理を行うのは、セルフホスト Enterprise ライセンスの場合だけです。[Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker) を参照してください。
 
-## オプションのサービスと検証
+### Beta
 
-- **MCP manager** — `--set services.mcp-manager.enabled=true`
-- **Analytics worker** — `--set services.worker-analytics.enabled=true`
-- **ヘルスチェック** — `../../scripts/doctor-k8s.sh -n kodus` がワークロード、設定、実際の
-  ヘルスエンドポイントを検査します。
+セルフホストのベータ設定を必要とする機能を使うには、values ファイルの `global.config` に `BETA_FEATURES: "true"` を追加し、`helm upgrade` で反映します。プランや設定の要件は機能ごとに異なります。
+
+## アップグレード
+
+カスタマイズした値を保存し、インストーラーのチェックアウトを目的のチャートに更新してから、`charts/kodus` でアップグレードを実行します。OpenShift では Route の設定を values ファイルに残します。新しいチャートのデフォルトバージョンを使うには、ファイルから `imageTag` の上書きを削除します。
+
+カスタマイズした設定は `kodus-values.yaml` に保存します。
+
+```bash
+helm dependency build
+helm upgrade kodus . -n kodus -f kodus-values.yaml
+```
+
+アップグレード前にデータベースをバックアップし、Secret を保管します。Helm のロールバックでは以前のデプロイが復元されます。データベースのマイグレーションには別途復旧手順が必要です。
+
+## 検証
+
+```bash
+../../scripts/doctor-k8s.sh -n kodus
+helm test kodus -n kodus
+```
+
+`doctor-k8s.sh` は、ワークロード、設定、実際のヘルスエンドポイントを検査します。機密情報をマスクした
+サポートバンドルを取得するには、`../../scripts/collect-diagnostics.sh -n kodus` を実行します。どちらも、リポジトリのチェックアウトの
+`charts/kodus` から実行します。
 
 <Card title="Helm の完全なリファレンス" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
-  データストア operator の設定、既存データベースの再利用、エアギャップ環境でのインストール、
-  ExternalSecrets によるシークレット管理、可観測性、セキュリティのデフォルト値。
+  データストアのオペレーターのセットアップ、既存のデータベースの再利用、エアギャップ環境へのインストール、
+  ExternalSecrets 経由のシークレット、オブザーバビリティ、セキュリティのデフォルト設定。
 </Card>
