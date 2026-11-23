@@ -11,6 +11,10 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
+// runsLikeCIEnv is the environment every service gets unless its own file or
+// the recipe sets the name.
+var runsLikeCIEnv = map[string]string{"CI": "true"}
+
 // loadClaimCompose validates declarative changes before transports can build,
 // then produces the same project used by the gVisor execution path.
 func (a *Agent) loadClaimCompose(c *claims.Claim, repo string, rec *recipe.Recipe) (*compose.Project, error) {
@@ -45,6 +49,12 @@ func (a *Agent) loadClaimCompose(c *claims.Claim, repo string, rec *recipe.Recip
 		if err := proj.AddEnvironment(rec.Services.Compose.Env); err != nil {
 			return nil, blockerErr(protocol.BlockerKindRecipeOutdated, "compose_load", err)
 		}
+	}
+	// The Runtime runs like CI (GitHub Actions always sets CI=true, and
+	// tools change behavior on it): what the compose file or the recipe set
+	// stays.
+	if err := proj.DefaultEnvironment(runsLikeCIEnv); err != nil {
+		return nil, blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
 	}
 	if rec != nil {
 		if err := proj.AddRecipeFakes(rec); err != nil {

@@ -145,11 +145,13 @@
     }
   },
   "mirrorBuildArgs": {
-    "about": "The build args the cell passes every image build with its read-only mirror (docs/runtime/egress-allowlist.md §16): a build reaches registries only through it. A Dockerfile uses one only when it declares the ARG; Kody's recipe author declares them in each stage that installs. npm reads npm_config_*, pnpm pnpm_config_*, Yarn Berry YARN_<SETTING> (with HTTP allowed for the mirror's host), pip PIP_<OPTION>, uv UV_DEFAULT_INDEX and UV_INSECURE_HOST. artifacts are the tools that download a known build artifact (Prisma engines, MongoDB test binaries) and honor a mirror variable: the cell serves only a fixed list of them under /artifacts/ (§17).",
+    "about": "The build args the cell passes every image build with its read-only mirror (docs/runtime/egress-allowlist.md §16): a build reaches registries only through it. A Dockerfile uses one only when it declares the ARG; Kody's recipe author declares them in each stage that installs. npm reads npm_config_*, pnpm pnpm_config_*, Yarn Berry YARN_<SETTING> (with HTTP allowed for the mirror's host), pip PIP_<OPTION>, uv UV_DEFAULT_INDEX and UV_INSECURE_HOST. artifacts are the tools that download a known build artifact (Prisma engines, MongoDB test binaries) and honor a mirror variable: the cell serves only a fixed list of them under /artifacts/ (§17). firebase is the mirror base of firebase-tools' emulator downloads, which has no URL override: a Dockerfile fetches them from it into the emulators' cache (§17). ci is CI=true: every build runs like the project's CI, which tools read (a lint step off in CI, non-interactive installs).",
     "npm": ["npm_config_registry", "pnpm_config_registry", "YARN_NPM_REGISTRY_SERVER", "YARN_UNSAFE_HTTP_WHITELIST"],
     "pypi": ["PIP_INDEX_URL", "PIP_TRUSTED_HOST", "UV_DEFAULT_INDEX", "UV_INSECURE_HOST"],
     "go": ["GOPROXY"],
-    "artifacts": ["PRISMA_ENGINES_MIRROR", "MONGOMS_DOWNLOAD_MIRROR", "MONGOMS_USE_HTTP"]
+    "artifacts": ["PRISMA_ENGINES_MIRROR", "MONGOMS_DOWNLOAD_MIRROR", "MONGOMS_USE_HTTP"],
+    "firebase": ["FIREBASE_EMULATORS_MIRROR"],
+    "ci": ["CI"]
   },
   "recommended": {
     "version": 2,

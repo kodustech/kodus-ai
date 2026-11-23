@@ -58,8 +58,8 @@ func At(base string) (Mirror, error) {
 // pnpm and Yarn Berry's registry; pip and uv's index, with HTTP allowed for
 // the mirror's host): a Dockerfile that declares the ARG reaches its
 // registry only through the read-only mirror. The project's own value of
-// each wins, and an index it set itself keeps its own trusted host. Nil
-// when the project has no args and the mirror serves nothing.
+// each wins, and an index it set itself keeps its own trusted host. Every
+// build gets CI=true, so the args are never nil.
 func (m Mirror) Args(project map[string]string) map[string]string {
 	args := maps.Clone(project)
 	set := func(k, v string) {
@@ -73,6 +73,10 @@ func (m Mirror) Args(project map[string]string) map[string]string {
 			args[k] = v
 		}
 	}
+	// The Runtime builds like CI: GitHub Actions always sets CI=true, and
+	// tools change behavior on it. Whatever the mirror serves, and the
+	// project's own value wins.
+	set("CI", "true")
 	set("GOPROXY", m.GoProxy)
 	if m.NPM != "" {
 		host := hostOf(m.NPM)
@@ -106,6 +110,10 @@ func (m Mirror) Args(project map[string]string) map[string]string {
 		// mongodb-memory-server builds its URL with https unless told otherwise,
 		// whatever the mirror's scheme; the cell's mirror is plain HTTP.
 		set("MONGOMS_USE_HTTP", "1")
+		// firebase-tools has no download-URL override: a Dockerfile fetches
+		// the emulators it names from here (the mirror's firebase-emulators
+		// entry) into the cache firebase-tools reads (docs/runtime/egress-allowlist.md §17).
+		set("FIREBASE_EMULATORS_MIRROR", m.Artifacts+"firebase-emulators")
 	}
 	return args
 }

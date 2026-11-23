@@ -68,6 +68,10 @@ type listsFile struct {
 		Go    []string `json:"go"`
 		// Artifacts are the mirror variables of tools that download a known artifact.
 		Artifacts []string `json:"artifacts"`
+		// Firebase is the mirror base firebase-tools' emulator downloads are
+		// fetched from; CI is CI=true.
+		Firebase []string `json:"firebase"`
+		CI       []string `json:"ci"`
 	} `json:"mirrorBuildArgs"`
 	Recommended struct {
 		Version int                `json:"version"`
@@ -170,6 +174,14 @@ func MirrorBuildArgNames() (npm, pypi, goproxy []string) {
 	a := lists.MirrorBuildArgs
 	return slices.Clone(a.NPM), slices.Clone(a.PyPI), slices.Clone(a.Go)
 }
+
+// FirebaseBuildArgNames are the build args that give a Dockerfile the base of
+// the mirror's firebase-emulators artifacts (FIREBASE_EMULATORS_MIRROR).
+func FirebaseBuildArgNames() []string { return slices.Clone(lists.MirrorBuildArgs.Firebase) }
+
+// CIBuildArgNames are the build args that make a build run like the project's
+// CI (CI).
+func CIBuildArgNames() []string { return slices.Clone(lists.MirrorBuildArgs.CI) }
 
 // MirrorArtifactBuildArgNames are the build args that point a tool's
 // download of a known build artifact at the mirror's /artifacts/ routes

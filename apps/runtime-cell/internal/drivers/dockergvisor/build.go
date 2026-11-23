@@ -240,7 +240,7 @@ func (d *Driver) hasBuilt(machine, service, fp string) bool {
 // added (buildmirror.Mirror.Args): a build reaches registries only through
 // the read-only mirror (G1), and the project's own value of each wins.
 func mirrorBuildArgs(project map[string]string, cfg Config) map[string]string {
-	return buildmirror.Mirror{GoProxy: cfg.MirrorGoProxy, NPM: cfg.MirrorNPM, PyPI: cfg.MirrorPyPI}.Args(project)
+	return buildmirror.Mirror{GoProxy: cfg.MirrorGoProxy, NPM: cfg.MirrorNPM, PyPI: cfg.MirrorPyPI, Artifacts: cfg.MirrorArtifacts}.Args(project)
 }
 
 // builderTrusted reports whether the builds' RUN steps trust the cell CA:

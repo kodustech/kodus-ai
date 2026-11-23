@@ -75,6 +75,11 @@ type Config struct {
 	// the claim network): a Dockerfile that declares the ARG installs
 	// through the read-only mirror. Empty: none.
 	MirrorNPM, MirrorPyPI string
+	// MirrorArtifacts is the root of the mirror's known read-only artifacts
+	// (http://mirror.cell.internal:8080/artifacts/): Prisma engines, MongoDB
+	// test binaries, Firebase emulators, given to every build as the build
+	// args their tools honor. Empty: none.
+	MirrorArtifacts string
 	// MirrorRegistry is the cell's registry mirror (host:port) every build's
 	// BuildKit pulls docker.io images through; empty: straight to Docker Hub.
 	MirrorRegistry string

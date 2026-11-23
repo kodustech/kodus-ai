@@ -168,11 +168,8 @@ func renderForVM(composeFile []byte, f vmFiles, mirror buildmirror.Mirror) (out 
 // withMirrorArgs is a service's build section with the mirror's build args
 // (buildmirror.Mirror.Args): a context given as a string becomes the long
 // form, and args given as a list or a map keep every value of the file's.
-// With no mirror the section stays as the file wrote it.
+// Every build gets CI=true (the Runtime builds like CI), with a mirror or not.
 func withMirrorArgs(build any, mirror buildmirror.Mirror) (any, error) {
-	if mirror == (buildmirror.Mirror{}) {
-		return build, nil
-	}
 	var b map[string]any
 	switch v := build.(type) {
 	case string:

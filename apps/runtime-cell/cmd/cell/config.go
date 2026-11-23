@@ -234,6 +234,8 @@ type settings struct {
 	// GVisorMirrorNPM and GVisorMirrorPyPI: the npm registry and PyPI index
 	// every docker-gvisor build gets as build arguments (the cell's mirror).
 	GVisorMirrorNPM, GVisorMirrorPyPI string
+	// GVisorMirrorArtifacts is the root of the mirror's artifacts every docker-gvisor build gets the mirror variables of.
+	GVisorMirrorArtifacts string
 	// GVisorMirrorRegistry is the registry mirror (host:port) every docker-gvisor build pulls docker.io through.
 	GVisorMirrorRegistry string
 	// GVisorMemLimit is the memory every docker-gvisor service and build gets ("4g" when empty)
@@ -385,6 +387,7 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.BoolVar(&s.GVisorBuilderTrust, "gvisor-builder-trust", false, "docker-gvisor: the builder image is a build of builder-image/ under another digest (a local build of a new patch), so its RUN steps trust the cell CA; the cell's own pinned builder always does, under any name")
 	fs.StringVar(&s.GVisorMirrorNPM, "gvisor-mirror-npm", "", "docker-gvisor: npm_config_registry every build gets as a build argument, the cell's read-only npm mirror (http://mirror.cell.internal:8080/npm/)")
 	fs.StringVar(&s.GVisorMirrorPyPI, "gvisor-mirror-pypi", "", "docker-gvisor: PIP_INDEX_URL every build gets as a build argument, the cell's read-only PyPI mirror (http://mirror.cell.internal:8080/pypi/simple/)")
+	fs.StringVar(&s.GVisorMirrorArtifacts, "gvisor-mirror-artifacts", "", "docker-gvisor: the root of the cell mirror's read-only artifacts (http://mirror.cell.internal:8080/artifacts/): every build gets PRISMA_ENGINES_MIRROR, MONGOMS_DOWNLOAD_MIRROR and FIREBASE_EMULATORS_MIRROR under it")
 	fs.StringVar(&s.GVisorMirrorGoProxy, "gvisor-mirror-goproxy", "", "docker-gvisor: GOPROXY every build gets as a build argument, the cell's registry mirror (http://mirror.cell.internal:8080/go,off)")
 	fs.StringVar(&s.GVisorMirrorRegistry, "gvisor-mirror-registry", "", "docker-gvisor: the registry mirror (host:port, e.g. mirror.cell.internal:8080) every build pulls docker.io images through")
 	fs.BoolVar(&s.GVisorBuildState, "gvisor-build-state", false, "docker-gvisor: keep BuildKit's state per environment, written by the default branch's setup and read by every other build through a throwaway copy of it (needs root): a reflink clone when the work directory's filesystem has reflinks (XFS, btrfs), the kernel's overlay elsewhere, where a build that replaces a file of an earlier layer runs again without the state")

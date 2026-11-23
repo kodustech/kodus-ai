@@ -88,7 +88,7 @@ func TestARunsCheckoutAndComposeProjectGoIntoItsVM(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(filepath.Join(root, "workspace", "repo", composeFileName))
-	for _, want := range []string{"build: .", "- 3000:3000", "- 8080:80", "- 9000:9000"} {
+	for _, want := range []string{"context: .", "- 3000:3000", "- 8080:80", "- 9000:9000"} {
 		if !strings.Contains(string(got), want) {
 			t.Fatalf("compose file %q lacks %q: a port the observer could not find after a reset", got, want)
 		}
@@ -750,7 +750,8 @@ func TestEveryBuildInTheVMGetsTheMirrorsBuildArgs(t *testing.T) {
 		t.Fatalf("an image service got a build: %+v", s["image"].Build)
 	}
 	out, _, err = renderForVM([]byte("services: {app: {build: .}}\n"), vmFiles{}, buildmirror.Mirror{})
-	if err != nil || strings.Contains(string(out), "args") {
+	// No mirror: the build still runs like CI, and gets nothing of the mirror.
+	if err != nil || !strings.Contains(string(out), "CI: \"true\"") || strings.Contains(string(out), "GOPROXY") {
 		t.Fatalf("no mirror: %s %v", out, err)
 	}
 	if _, builds, _ := renderForVM([]byte("services: {app: {image: a}}\n"), vmFiles{}, mirror); builds {

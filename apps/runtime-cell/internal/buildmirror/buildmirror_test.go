@@ -12,7 +12,7 @@ func TestEveryBuildGetsTheMirrorsAndTheProjectsOwnValueWins(t *testing.T) {
 	m := Mirror{GoProxy: "http://mirror.cell.internal:8080/go,off", NPM: "http://mirror.cell.internal:8080/npm/", PyPI: "http://mirror.cell.internal:8080/pypi/simple/", Artifacts: "http://mirror.cell.internal:8080/artifacts/"}
 	got := m.Args(map[string]string{"NODE_ENV": "production"})
 	want := map[string]string{
-		"NODE_ENV": "production", "GOPROXY": m.GoProxy, "npm_config_registry": m.NPM, "pnpm_config_registry": m.NPM,
+		"NODE_ENV": "production", "CI": "true", "FIREBASE_EMULATORS_MIRROR": "http://mirror.cell.internal:8080/artifacts/firebase-emulators", "GOPROXY": m.GoProxy, "npm_config_registry": m.NPM, "pnpm_config_registry": m.NPM,
 		"YARN_NPM_REGISTRY_SERVER": "http://mirror.cell.internal:8080/npm", "YARN_UNSAFE_HTTP_WHITELIST": "mirror.cell.internal",
 		"PIP_INDEX_URL": m.PyPI, "PIP_TRUSTED_HOST": "mirror.cell.internal",
 		"UV_DEFAULT_INDEX": m.PyPI, "UV_INSECURE_HOST": "mirror.cell.internal",
@@ -29,8 +29,20 @@ func TestEveryBuildGetsTheMirrorsAndTheProjectsOwnValueWins(t *testing.T) {
 	if _, set := got["PIP_TRUSTED_HOST"]; set {
 		t.Fatal("the mirror is trusted for an index the project chose")
 	}
-	if args := (Mirror{}).Args(nil); args != nil {
-		t.Fatalf("no mirror, args %v", args)
+	got = m.Args(map[string]string{"CI": "false", "FIREBASE_EMULATORS_MIRROR": "https://emulators.corp.example"})
+	if got["CI"] != "false" || got["FIREBASE_EMULATORS_MIRROR"] != "https://emulators.corp.example" {
+		t.Fatalf("the project's own CI or emulator mirror was replaced: %v", got)
+	}
+}
+
+// The Runtime builds like CI (GitHub Actions always sets CI=true): every build
+// gets it, with a mirror or without one, and a project's own value wins.
+func TestEveryBuildGetsCITrueEvenWithNoMirror(t *testing.T) {
+	if got := (Mirror{}).Args(nil); !maps.Equal(got, map[string]string{"CI": "true"}) {
+		t.Fatalf("no mirror, args %v", got)
+	}
+	if got := (Mirror{}).Args(map[string]string{"CI": ""}); got["CI"] != "" {
+		t.Fatalf("the project's own CI was replaced: %v", got)
 	}
 }
 
@@ -40,7 +52,7 @@ func TestTheBuildArgsAreTheSharedListsNames(t *testing.T) {
 	m := Mirror{GoProxy: "http://m:8080/go,off", NPM: "http://m:8080/npm/", PyPI: "http://m:8080/pypi/simple/", Artifacts: "http://m:8080/artifacts/"}
 	npm, pypi, goproxy := netguard.MirrorBuildArgNames()
 	want := map[string]bool{}
-	for _, n := range append(append(append(npm, pypi...), goproxy...), netguard.MirrorArtifactBuildArgNames()...) {
+	for _, n := range append(append(append(append(append(npm, pypi...), goproxy...), netguard.MirrorArtifactBuildArgNames()...), netguard.CIBuildArgNames()...), netguard.FirebaseBuildArgNames()...) {
 		want[n] = true
 	}
 	got := m.Args(nil)

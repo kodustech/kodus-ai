@@ -285,6 +285,27 @@ func TestAddEnvironmentReachesEveryServiceAndWins(t *testing.T) {
 	}
 }
 
+// The Runtime runs like CI: a service gets CI=true unless its own file or the
+// recipe's env sets CI.
+func TestDefaultEnvironmentFillsOnlyWhatAServiceLacks(t *testing.T) {
+	p := mustYAML(t, "services: { app: { image: a, environment: { CI: 'false', MODE: x } }, worker: { environment: [\"QUEUE=q\"] }, ci: { environment: [\"CI\"] }, db: }\n")
+	if err := p.DefaultEnvironment(map[string]string{"CI": "true"}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(p.Service("app")["environment"], map[string]any{"CI": "false", "MODE": "x"}) {
+		t.Fatalf("app %v", p.Service("app")["environment"])
+	}
+	if !reflect.DeepEqual(p.Service("worker")["environment"], map[string]any{"QUEUE": "q", "CI": "true"}) {
+		t.Fatalf("worker %v", p.Service("worker")["environment"])
+	}
+	if !reflect.DeepEqual(p.Service("ci")["environment"], map[string]any{"CI": "true"}) {
+		t.Fatalf("a bare name has no value in a cell (the host's environment is never passed): %v", p.Service("ci")["environment"])
+	}
+	if !reflect.DeepEqual(p.Service("db")["environment"], map[string]any{"CI": "true"}) {
+		t.Fatalf("db %v", p.Service("db")["environment"])
+	}
+}
+
 func TestDropContainerNames(t *testing.T) {
 	p := mustYAML(t, "services: { web: { image: w, container_name: kodus_api } }\n")
 	if err := p.DropContainerNames(); err != nil || p.Service("web")["container_name"] != nil {

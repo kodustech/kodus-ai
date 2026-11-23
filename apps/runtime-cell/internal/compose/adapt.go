@@ -128,6 +128,30 @@ func (p *Project) AddEnvironment(env map[string]string) error {
 	})
 }
 
+// DefaultEnvironment gives every service the variables it does not set
+// itself: a value in the service's own environment, or one AddEnvironment
+// wrote from the recipe, stays. A bare name (its value would come from the
+// host's environment, which the cell never passes) takes the default. The
+// Runtime runs like CI this way (CI=true).
+func (p *Project) DefaultEnvironment(env map[string]string) error {
+	if len(env) == 0 {
+		return nil
+	}
+	return p.eachService(func(name string, svc map[string]any) error {
+		merged, err := environmentMap(svc["environment"])
+		if err != nil {
+			return fmt.Errorf("compose: service %q: %w", name, err)
+		}
+		for k, v := range env {
+			if cur, set := merged[k]; !set || cur == nil {
+				merged[k] = strings.ReplaceAll(v, "$", "$$")
+			}
+		}
+		svc["environment"] = merged
+		return nil
+	})
+}
+
 // environmentMap reads environment written as a mapping or as a list of
 // k=v; a bare name in the list (its value comes from compose's own
 // environment) stays a name with no value.
