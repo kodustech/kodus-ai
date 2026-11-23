@@ -273,6 +273,6 @@ describe('estimateMessagesTokens — per-run counts', () => {
         estimateMessagesTokens([big, head()], counts);
         expect(counts.size).toBe(2);
         // A 600k-char head held as a key would stay alive for the whole run.
-        expect([...counts.keys()].every((key) => key.length <= 28)).toBe(true);
+        expect([...counts.keys()].every((key) => key.length <= 44)).toBe(true);
     });
 });

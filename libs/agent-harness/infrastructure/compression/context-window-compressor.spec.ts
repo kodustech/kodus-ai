@@ -11,7 +11,7 @@ import type { AgentMessage } from '@libs/agent-harness/domain/contracts/run-stat
 
 import { ContextWindowCompressor } from './context-window-compressor';
 import { estimateMessagesTokens } from './context-compressor';
-import { estimateTextTokens } from './token-estimator';
+import { estimateTextTokens, estimateValueTokens } from './token-estimator';
 
 // Counts the real tokenizer calls, so a test can see a recount.
 jest.mock('./token-estimator', () => {
@@ -19,10 +19,15 @@ jest.mock('./token-estimator', () => {
     return {
         ...actual,
         estimateTextTokens: jest.fn(actual.estimateTextTokens),
+        // The uncached path tokenizes through this one instead.
+        estimateValueTokens: jest.fn(actual.estimateValueTokens),
     };
 });
 const tokenizerCalls = estimateTextTokens as jest.MockedFunction<
     typeof estimateTextTokens
+>;
+const uncachedCalls = estimateValueTokens as jest.MockedFunction<
+    typeof estimateValueTokens
 >;
 
 function toModel(messages: AgentMessage[]) {
@@ -157,7 +162,9 @@ describe('ContextWindowCompressor — per-run token counts', () => {
             runB.maybeCompress([{ role: 'user', content: `other run ${i}` }]);
         }
         tokenizerCalls.mockClear();
+        uncachedCalls.mockClear();
         runA.maybeCompress(head());
         expect(tokenizerCalls).not.toHaveBeenCalled();
+        expect(uncachedCalls).not.toHaveBeenCalled();
     });
 });

@@ -73,7 +73,7 @@ interface ToolCallRecord {
 }
 
 /**
- * Per-run memo of message token counts, keyed by a SHA-1 digest of the
+ * Per-run memo of message token counts, keyed by a SHA-256 digest of the
  * message as serialized for counting. A run re-measures the same head (diff
  * plus graph context, up to millions of chars) on every step and several
  * more times when it trims rounds; `maybeCompress` rebuilds the message
@@ -81,7 +81,7 @@ interface ToolCallRecord {
  * one run's compressor, so concurrent runs on a worker never evict each
  * other's heads (a global budget did, at peak: 4 runs with 2.35M-char heads
  * re-tokenized every count). Bounded: at most MAX_RUN_COUNTS entries, the
- * oldest going first, and each entry holds a 28-char digest, never the
+ * oldest going first, and each entry holds a 44-char digest, never the
  * serialized text (a head that changes every step would otherwise keep up
  * to MAX_RUN_COUNTS multi-megabyte strings alive). Hashing 2.35M chars
  * takes milliseconds; tokenizing them took 1.8s.
@@ -90,7 +90,7 @@ export type MessageTokenCounts = Map<string, number>;
 const MAX_RUN_COUNTS = 256;
 
 function countKey(serialized: string): string {
-    return createHash('sha1').update(serialized).digest('base64');
+    return createHash('sha256').update(serialized).digest('base64');
 }
 
 function serializeForCount(msg: unknown): string {
