@@ -902,6 +902,13 @@ describe('CellHub', () => {
             expect(await store.evictedBuildStateAt('cell-a', 'org-a', 'shop')).toBeNull();
         });
 
+        it('keeps the free space and the floor that removed the cache, to show why it was not kept', async () => {
+            const { store, connect } = setup();
+            const c = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'buildStateEvicted', 'buildStateDiskFacts'] });
+            await c.onMessage(beat({ evictedBuildStates: [{ ...evicted, freeBytes: 8 * 2 ** 30, floorBytes: 20 * 2 ** 30 }] }));
+            expect(await store.evictedBuildState('cell-a', 'org-a', 'shop')).toEqual({ ...evicted, freeBytes: 8 * 2 ** 30, floorBytes: 20 * 2 ** 30 });
+        });
+
         it("a Run's boot that outlives the wait on an evicted state says it built with no cache and that a setup restores it", async () => {
             const { store, connect, acquireOn } = setup({ readyTimeoutMs: 30 });
             const c = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'buildStateEvicted'] });

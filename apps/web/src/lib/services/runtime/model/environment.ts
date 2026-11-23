@@ -30,6 +30,12 @@ const evictedAtWords = (at: string) => {
         : `${new Date(t).toISOString().slice(0, 16).replace("T", " ")} UTC`;
 };
 
+/** Bytes as the screen says disk: GB with one decimal under 10, whole above. */
+const gigabytes = (bytes: number) => {
+    const gb = bytes / 2 ** 30;
+    return gb < 10 ? gb.toFixed(1).replace(/\.0$/, "") : String(Math.round(gb));
+};
+
 /**
  * An active environment whose build cache its cell removed to free disk:
  * Runs still boot main from the bake, but every pull request builds from
@@ -42,7 +48,11 @@ export const buildCacheEvictedWords = (
     const c = env?.buildCache;
     if (c?.state !== "evicted") return undefined;
     const when = evictedAtWords(c.evictedAt);
-    return `The build cache of this environment was removed to free disk${when ? ` on ${when}` : ""}. Pull requests build with no cache, slower and maybe past their boot's wait, until a new setup restores it. Set up again.`;
+    const disk =
+        c.floorBytes && c.floorBytes > 0
+            ? ` The build cache was not kept: the cell's volume has ${gigabytes(c.freeBytes ?? 0)} GB free and it needs ${gigabytes(c.floorBytes)} GB; the next Run starts cold.`
+            : "";
+    return `The build cache of this environment was removed to free disk${when ? ` on ${when}` : ""}.${disk} Pull requests build with no cache, slower and maybe past their boot's wait, until a new setup restores it. Set up again.`;
 };
 
 /**

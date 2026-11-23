@@ -368,6 +368,12 @@ export const CELL_FEATURES = [
     // and, like sandboxPool, only while the hello stays within
     // HELLO_FEATURES_OLDER_HUB_MAX.
     'toolLayers',
+    // heartbeat evictedBuildStates[].freeBytes and floorBytes: the free space
+    // of the volume when the disk floor removed the state, and the floor it
+    // kept, so the environment says why its cache was not kept. Cell to hub,
+    // sent only to a hub whose hello ack accepts it; at the end, like the
+    // features before it, so an older hub's trim drops it first.
+    'buildStateDiskFacts',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -440,7 +446,7 @@ export type ExercisedResult = z.infer<typeof ExercisedResultSchema>;
  * without `accepts`, so it never sees the field; an older cell never names
  * it, so it never gets an ack with `accepts` it would refuse.
  */
-export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool'] as const satisfies readonly CellFeature[];
+export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool', 'buildStateDiskFacts'] as const satisfies readonly CellFeature[];
 export type HubAcceptedFeature = (typeof HUB_ACCEPTED_FEATURES)[number];
 
 /** What a hello ack's `accepts` names: the cell's features this hub accepts fields of. Empty: send `accepts` not at all. */
@@ -761,6 +767,10 @@ export const EvictedBuildStateSchema = z.strictObject({
     // build that made the state from none took, in seconds (at most a week);
     // absent when the cell never measured it.
     rebuildSeconds: z.number().int().min(1).max(604_800).optional(),
+    // Only to a hub whose hello ack accepts buildStateDiskFacts: the bytes free on
+    // the volume when the floor removed the state, and the floor the cell keeps.
+    freeBytes: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    floorBytes: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
 });
 export type EvictedBuildState = z.infer<typeof EvictedBuildStateSchema>;
 const hostSwitch = z.enum(['on', 'off', 'unknown']);

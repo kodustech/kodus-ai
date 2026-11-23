@@ -51,3 +51,25 @@ func TestTheHeartbeatSaysWhatAnEvictedStateTookToMake(t *testing.T) {
 		t.Fatalf("evictedBuildStates = %+v, want calcom at 2050 s and the unmeasured one without a cost", got)
 	}
 }
+
+// A volume under the disk floor drops the cache a setup just seeded, and the
+// next Run is cold with no word of why: the heartbeat carries the free space
+// and the floor of each eviction to a hub that accepts them, and nothing to
+// one that does not.
+func TestTheHeartbeatSaysWhyAnEvictedStateWasNotKept(t *testing.T) {
+	at := time.Date(2026, 11, 13, 7, 31, 31, 0, time.UTC)
+	h := newHarness(t, func(c *Config) {
+		c.Parts.BuildStates = fakeBuildStates{{Org: "org-1", Env: "env-calcom", At: at, FreeBytes: 8 << 30, FloorBytes: 20 << 30}, {Org: "org-1", Env: "env-old", At: at}}
+	})
+	h.a.accepts = protocol.Accepted(&protocol.AckBody{Accepts: []string{protocol.FeatureBuildStateEvicted, protocol.FeatureBuildStateRebuildCost}})
+	for _, e := range h.a.Heartbeat().EvictedBuildStates {
+		if e.FreeBytes != nil || e.FloorBytes != nil {
+			t.Fatalf("a hub that does not accept the disk facts got them: %+v", e)
+		}
+	}
+	h.a.accepts = protocol.Accepted(&protocol.AckBody{Accepts: []string{protocol.FeatureBuildStateEvicted, protocol.FeatureBuildStateDiskFacts}})
+	got := h.a.Heartbeat().EvictedBuildStates
+	if len(got) != 2 || got[0].FreeBytes == nil || *got[0].FreeBytes != 8<<30 || got[0].FloorBytes == nil || *got[0].FloorBytes != 20<<30 || got[1].FloorBytes != nil {
+		t.Fatalf("evictedBuildStates = %+v, want 8 GiB free under a 20 GiB floor for calcom and no facts for the old entry", got)
+	}
+}

@@ -31,6 +31,10 @@ type Evicted struct {
 	// (cost.go), the cost of the next one that finds it gone with no cache;
 	// zero: not measured (a state made before the mark existed).
 	Rebuild time.Duration
+	// FreeBytes is what the volume had free when the floor removed the
+	// state, and FloorBytes the floor it keeps (Config.MinFree): why the
+	// cache was not kept. Zero: not recorded (an entry from an older cell).
+	FreeBytes, FloorBytes int64
 }
 
 // stateOwnerMark names the org and environment of a state, inside it.
@@ -49,10 +53,12 @@ type evictedEntry struct {
 	Env            string    `json:"env"`
 	At             time.Time `json:"at"`
 	RebuildSeconds int64     `json:"rebuildSeconds,omitempty"`
+	FreeBytes      int64     `json:"freeBytes,omitempty"`
+	FloorBytes     int64     `json:"floorBytes,omitempty"`
 }
 
 func (e evictedEntry) evicted() Evicted {
-	return Evicted{Org: e.Org, Env: e.Env, At: e.At, Rebuild: time.Duration(e.RebuildSeconds) * time.Second}
+	return Evicted{Org: e.Org, Env: e.Env, At: e.At, Rebuild: time.Duration(e.RebuildSeconds) * time.Second, FreeBytes: e.FreeBytes, FloorBytes: e.FloorBytes}
 }
 
 func (s *Store) evictedDir() string { return filepath.Join(s.root, "evicted") }
@@ -113,11 +119,12 @@ func (s *Store) loadEvicted() {
 }
 
 // recordEvicted adds an environment to the ledger, on disk and in memory,
-// with what the state cost to make (zero: not measured), and keeps the newest
+// with what the state cost to make (zero: not measured) and the free space
+// and floor that removed it, and keeps the newest
 // maxEvicted. The caller holds no lock.
-func (s *Store) recordEvicted(owner ownerMark, at time.Time, rebuild time.Duration) {
+func (s *Store) recordEvicted(owner ownerMark, at time.Time, rebuild time.Duration, free, floor int64) {
 	key := EnvKey(s.cellID, owner.Org, owner.Env)
-	en := evictedEntry{Org: owner.Org, Env: owner.Env, At: at.UTC(), RebuildSeconds: int64(rebuild / time.Second)}
+	en := evictedEntry{Org: owner.Org, Env: owner.Env, At: at.UTC(), RebuildSeconds: int64(rebuild / time.Second), FreeBytes: max(free, 0), FloorBytes: floor}
 	if b, err := json.Marshal(en); err == nil {
 		if err := os.MkdirAll(s.evictedDir(), 0o700); err == nil {
 			_ = os.WriteFile(filepath.Join(s.evictedDir(), key), b, 0o600)

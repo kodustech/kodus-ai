@@ -137,6 +137,8 @@ type HeartbeatBodyEvictedBuildStatesItem struct {
 	EnvironmentID  string `json:"environmentId"`
 	EvictedAt      string `json:"evictedAt"`
 	RebuildSeconds *int64 `json:"rebuildSeconds,omitempty"`
+	FreeBytes      *int64 `json:"freeBytes,omitempty"`
+	FloorBytes     *int64 `json:"floorBytes,omitempty"`
 }
 
 type HeartbeatBodyHostPolicy string

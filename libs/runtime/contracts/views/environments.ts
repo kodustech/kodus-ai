@@ -89,8 +89,10 @@ export interface RuntimeEnvironmentView {
      * disk after its last setup (the cell's evictedBuildStates): its pull
      * requests build with no cache, slower and maybe past their boot's wait,
      * until a setup again restores it. Absent: the cache is in place or unknown.
+     * `freeBytes` and `floorBytes`: what the cell's volume had free and the
+     * free space it keeps (why the cache was not kept), when the cell said so.
      */
-    buildCache?: { state: 'evicted'; evictedAt: string; cellId: string; reason: 'disk_floor' };
+    buildCache?: { state: 'evicted'; evictedAt: string; cellId: string; reason: 'disk_floor'; freeBytes?: number; floorBytes?: number };
     metrics: {
         bootRate7d?: number;
         readyP50Ms?: number;

@@ -516,7 +516,7 @@ export class CellHub {
         const named = body.evictedBuildStates ?? [];
         const rows = named
             .filter((e) => (conn.cred.owner !== 'customer' || e.orgId === conn.cred.orgId) && Date.parse(e.evictedAt) <= latest)
-            .map((e) => ({ orgId: e.orgId, environmentId: e.environmentId, evictedAt: e.evictedAt, ...(e.rebuildSeconds ? { rebuildSeconds: e.rebuildSeconds } : {}) }));
+            .map((e) => ({ orgId: e.orgId, environmentId: e.environmentId, evictedAt: e.evictedAt, ...(e.rebuildSeconds ? { rebuildSeconds: e.rebuildSeconds } : {}), ...(e.floorBytes ? { freeBytes: e.freeBytes ?? 0, floorBytes: e.floorBytes } : {}) }));
         if (rows.length !== named.length) this.log('warn', 'cell.build_states_evicted.refused', { cellId: conn.cred.cellId, refused: named.length - rows.length });
         const key = JSON.stringify(rows);
         if (conn.evictedBuildStates === key) return;

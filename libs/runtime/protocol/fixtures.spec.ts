@@ -55,7 +55,7 @@ describe('hello features', () => {
     });
 
     it('a hub accepts only the cell-sent fields the cell named, and names nothing for an older cell', () => {
-        expect(hubAccepts([...CELL_FEATURES])).toEqual(['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool']);
+        expect(hubAccepts([...CELL_FEATURES])).toEqual(['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool', 'buildStateDiskFacts']);
         expect(hubAccepts(['serviceLogs', 'seedsCache'])).toEqual(['serviceLogs']);
         expect(hubAccepts(['seedsCache', 'claimSize'])).toEqual([]);
         expect(hubAccepts(undefined)).toEqual([]);

@@ -1,0 +1,26 @@
+{
+  "name": "heartbeat-evicted-build-states-zero-floor",
+  "message": {
+    "v": 1,
+    "id": "9c4f5e6d-7081-4c93-8dbe-2f3a4b5c6d7e",
+    "cellId": "cell-dev-1",
+    "type": "heartbeat",
+    "body": {
+      "claims": [],
+      "freeSlots": 3,
+      "evictedBuildStates": [
+        {
+          "orgId": "org-1",
+          "environmentId": "env-1",
+          "evictedAt": "2026-11-13T07:31:31Z",
+          "freeBytes": 0,
+          "floorBytes": 0
+        }
+      ]
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

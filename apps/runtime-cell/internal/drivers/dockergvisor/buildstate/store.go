@@ -522,9 +522,11 @@ func (s *Store) evictCheapest() error {
 		if st.measured {
 			rebuild = st.rebuild
 		}
-		s.log.Info("build.state.evicted", "state", filepath.Base(st.dir), "lastUsed", st.used, "rebuildSeconds", int64(rebuild.Seconds()), "reported", named)
+		// The cache was not kept because the volume is under the floor: say with what numbers,
+		// so the next Run being cold is not a mystery (the hub shows them on the environment).
+		s.log.Warn("build.state.evicted", "state", filepath.Base(st.dir), "lastUsed", st.used, "rebuildSeconds", int64(rebuild.Seconds()), "reported", named, "reason", "disk_floor", "freeBytes", free, "floorBytes", s.minFree)
 		if named {
-			s.recordEvicted(owner, s.clock.Now(), rebuild)
+			s.recordEvicted(owner, s.clock.Now(), rebuild, free, s.minFree)
 		}
 		if err := os.RemoveAll(trash); err != nil {
 			return err

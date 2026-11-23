@@ -27,7 +27,7 @@ const setup = (finishedAt: string) => ({
     finishedAt,
 });
 
-const builder = (finishedAt: string, evictions: Array<{ cellId: string; evictedAt: string }>) =>
+const builder = (finishedAt: string, evictions: Array<{ cellId: string; evictedAt: string; freeBytes?: number; floorBytes?: number }>) =>
     new EnvironmentViewBuilder(
         { listByOrganization: async () => [product], get: async () => product } as any,
         { list: async () => [] } as any,
@@ -50,6 +50,13 @@ describe("an environment's build cache the cell evicted", () => {
         const view = await viewOf(builder('2026-11-13T06:34:00.000Z', [{ cellId: 'cell-dev', evictedAt: '2026-11-13T07:31:31.000Z' }]));
         expect(view.state).toBe('active');
         expect(view.buildCache).toEqual({ state: 'evicted', evictedAt: '2026-11-13T07:31:31.000Z', cellId: 'cell-dev', reason: 'disk_floor' });
+    });
+
+    // A volume under the floor dropped the cache a setup had just seeded and the next Run was cold with no word of why.
+    it('carries the free space and the floor that removed it, when the cell said them', async () => {
+        const GB = 2 ** 30;
+        const view = await viewOf(builder('2026-11-13T06:34:00.000Z', [{ cellId: 'cell-dev', evictedAt: '2026-11-13T07:31:31.000Z', freeBytes: 8 * GB, floorBytes: 20 * GB }]));
+        expect(view.buildCache).toEqual({ state: 'evicted', evictedAt: '2026-11-13T07:31:31.000Z', cellId: 'cell-dev', reason: 'disk_floor', freeBytes: 8 * GB, floorBytes: 20 * GB });
     });
 
     it('is not named when a setup finished after it, or it was on another cell', async () => {

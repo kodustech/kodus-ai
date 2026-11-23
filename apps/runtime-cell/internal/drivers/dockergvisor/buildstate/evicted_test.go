@@ -96,7 +96,7 @@ func TestTheLedgerKeepsTheNewestEvictions(t *testing.T) {
 	st, _ := newStore(t)
 	base := fakeClock(st).Now()
 	for i := range maxEvicted + 3 {
-		st.recordEvicted(ownerMark{Org: testOrg, Env: "env-" + string(rune('a'+i%26)) + string(rune('a'+i/26))}, base.Add(time.Duration(i)*time.Minute), 0)
+		st.recordEvicted(ownerMark{Org: testOrg, Env: "env-" + string(rune('a'+i%26)) + string(rune('a'+i/26))}, base.Add(time.Duration(i)*time.Minute), 0, 0, 0)
 	}
 	got := st.Evicted()
 	if len(got) != maxEvicted {
@@ -108,5 +108,26 @@ func TestTheLedgerKeepsTheNewestEvictions(t *testing.T) {
 	files, _ := os.ReadDir(st.evictedDir())
 	if len(files) != maxEvicted {
 		t.Fatalf("%d ledger files, want %d", len(files), maxEvicted)
+	}
+}
+
+// A volume with less free space than the floor dropped the cache right after
+// the setup seeded it, and nobody could tell why the next Run was cold. The
+// ledger keeps the free space the volume had and the floor it needed, across
+// a restart, so the cell can log them and the hub can show them.
+func TestEvictionRecordsHowMuchSpaceTheVolumeHadAndWhatItNeeded(t *testing.T) {
+	st, _ := newStore(t)
+	useAt(t, st, testEnv, fakeClock(st).Now())
+	st.minFree = 20 << 30
+	st.freeBytes = func(string) (int64, error) { return 8 << 30, nil }
+	if err := st.Evict(); err != nil {
+		t.Fatal(err)
+	}
+	got := st.Evicted()
+	if len(got) != 1 || got[0].FreeBytes != 8<<30 || got[0].FloorBytes != 20<<30 {
+		t.Fatalf("evicted = %+v, want 8 GiB free under a 20 GiB floor", got)
+	}
+	if again := newStoreAt(t, st.root, &fakeMounter{}).Evicted(); len(again) != 1 || again[0].FreeBytes != 8<<30 || again[0].FloorBytes != 20<<30 {
+		t.Fatalf("after a restart evicted = %+v", again)
 	}
 }

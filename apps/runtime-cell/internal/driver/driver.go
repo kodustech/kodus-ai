@@ -204,6 +204,9 @@ type EvictedBuildState struct {
 	// Rebuild is how long the build that made the state from none took;
 	// zero: not measured.
 	Rebuild time.Duration
+	// FreeBytes is what the volume had free when the floor removed the
+	// state, FloorBytes the floor; zero: not recorded.
+	FreeBytes, FloorBytes int64
 }
 
 // BuildStateReporter is a driver that keeps environments' build states and

@@ -1081,6 +1081,14 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS setup_key text;
         ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS setup_requested_at timestamptz;`,
     },
+    {
+        version: 48,
+        name: 'why an evicted build state was not kept',
+        // Heartbeat evictedBuildStates[].freeBytes and floorBytes (cell feature buildStateDiskFacts): the free space the
+        // volume had when the disk floor removed the state and the floor, so the environment says why the cache was not kept.
+        sql: `ALTER TABLE runtime.runtime_build_state_evictions ADD COLUMN IF NOT EXISTS free_bytes bigint;
+        ALTER TABLE runtime.runtime_build_state_evictions ADD COLUMN IF NOT EXISTS floor_bytes bigint;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

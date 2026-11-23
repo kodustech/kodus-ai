@@ -199,7 +199,7 @@ export class EnvironmentViewBuilder {
         const since = Date.parse(setup.finishedAt ?? setup.updatedAt);
         const rows = await this.evictions.evictions(env.organizationId, env.environmentId).catch(() => []);
         const hit = rows.find((r) => (!cell || r.cellId === cell) && !(Date.parse(r.evictedAt) < since));
-        return hit ? { state: 'evicted', evictedAt: hit.evictedAt, cellId: hit.cellId, reason: 'disk_floor' } : undefined;
+        return hit ? { state: 'evicted', evictedAt: hit.evictedAt, cellId: hit.cellId, reason: 'disk_floor', ...(hit.floorBytes ? { freeBytes: hit.freeBytes ?? 0, floorBytes: hit.floorBytes } : {}) } : undefined;
     }
 
     /**

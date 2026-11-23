@@ -327,6 +327,9 @@ export interface EvictedBuildStateRow {
     evictedAt: string;
     /** How long the build that made the state from none took (heartbeat rebuildSeconds); absent: not measured. */
     rebuildSeconds?: number;
+    /** What the volume had free when the floor removed the state, and the floor (heartbeat freeBytes, floorBytes); absent: the cell did not say. */
+    freeBytes?: number;
+    floorBytes?: number;
 }
 
 /**
@@ -643,14 +646,15 @@ export class PgHubStore implements HubStore {
         // One statement: the cell's rows become exactly its list.
         await this.pool.query(
             `WITH listed AS (
-               SELECT * FROM unnest($2::text[], $3::text[], $4::timestamptz[], $5::integer[]) AS l(org_id, environment_id, evicted_at, rebuild_seconds)),
+               SELECT * FROM unnest($2::text[], $3::text[], $4::timestamptz[], $5::integer[], $6::bigint[], $7::bigint[]) AS l(org_id, environment_id, evicted_at, rebuild_seconds, free_bytes, floor_bytes)),
              gone AS (
                DELETE FROM runtime.runtime_build_state_evictions e WHERE e.cell_id = $1
                 AND NOT EXISTS (SELECT 1 FROM listed l WHERE l.org_id = e.org_id AND l.environment_id = e.environment_id))
-             INSERT INTO runtime.runtime_build_state_evictions (cell_id, org_id, environment_id, evicted_at, rebuild_seconds)
-             SELECT $1, org_id, environment_id, evicted_at, rebuild_seconds FROM listed
-             ON CONFLICT (cell_id, org_id, environment_id) DO UPDATE SET evicted_at = EXCLUDED.evicted_at, rebuild_seconds = EXCLUDED.rebuild_seconds`,
-            [cellId, rows.map((r) => r.orgId), rows.map((r) => r.environmentId), rows.map((r) => r.evictedAt), rows.map((r) => r.rebuildSeconds ?? null)],
+             INSERT INTO runtime.runtime_build_state_evictions (cell_id, org_id, environment_id, evicted_at, rebuild_seconds, free_bytes, floor_bytes)
+             SELECT $1, org_id, environment_id, evicted_at, rebuild_seconds, free_bytes, floor_bytes FROM listed
+             ON CONFLICT (cell_id, org_id, environment_id) DO UPDATE SET evicted_at = EXCLUDED.evicted_at, rebuild_seconds = EXCLUDED.rebuild_seconds,
+               free_bytes = EXCLUDED.free_bytes, floor_bytes = EXCLUDED.floor_bytes`,
+            [cellId, rows.map((r) => r.orgId), rows.map((r) => r.environmentId), rows.map((r) => r.evictedAt), rows.map((r) => r.rebuildSeconds ?? null), rows.map((r) => r.freeBytes ?? null), rows.map((r) => r.floorBytes ?? null)],
         );
     }
     async evictedBuildStateAt(cellId: string, orgId: string, environmentId: string) {
@@ -663,12 +667,12 @@ export class PgHubStore implements HubStore {
     }
     async evictedBuildState(cellId: string, orgId: string, environmentId: string) {
         const r = await this.pool.query(
-            `SELECT evicted_at, rebuild_seconds FROM runtime.runtime_build_state_evictions WHERE cell_id = $1 AND org_id = $2 AND environment_id = $3`,
+            `SELECT evicted_at, rebuild_seconds, free_bytes, floor_bytes FROM runtime.runtime_build_state_evictions WHERE cell_id = $1 AND org_id = $2 AND environment_id = $3`,
             [cellId, orgId, environmentId],
         );
         const row = r.rows[0];
         if (!row) return null;
-        return { orgId, environmentId, evictedAt: new Date(row.evicted_at).toISOString(), ...(row.rebuild_seconds ? { rebuildSeconds: Number(row.rebuild_seconds) } : {}) };
+        return { orgId, environmentId, evictedAt: new Date(row.evicted_at).toISOString(), ...(row.rebuild_seconds ? { rebuildSeconds: Number(row.rebuild_seconds) } : {}), ...(row.floor_bytes ? { freeBytes: Number(row.free_bytes ?? 0), floorBytes: Number(row.floor_bytes) } : {}) };
     }
     async recordBakeAsk(a: BakeAskRow) {
         await this.pool.query(

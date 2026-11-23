@@ -859,10 +859,10 @@ export const RUNTIME_TEMPLATE_SETUP_READER = Symbol.for('RuntimeApi.TemplateSetu
 /**
  * Reads runtime_build_state_evictions (written by the hub from each cell's
  * heartbeat): the cells whose disk floor removed the environment's build
- * state and that still say so. Ids and times only.
+ * state and that still say so, with the free space and floor when the cell said them. Ids, times and sizes only.
  */
 export interface RuntimeBuildStateEvictionReader {
-    evictions(organizationId: string, environmentId: string): Promise<Array<{ cellId: string; evictedAt: string }>>;
+    evictions(organizationId: string, environmentId: string): Promise<Array<{ cellId: string; evictedAt: string; freeBytes?: number; floorBytes?: number }>>;
 }
 
 export const RUNTIME_BUILD_STATE_EVICTION_READER = Symbol.for('RuntimeApi.BuildStateEvictionReader');

@@ -343,7 +343,7 @@ func (a *Agent) hello(trim bool) *protocol.HelloBody {
 		if feature == protocol.FeatureToolLayers && !a.toolLayersOn() {
 			continue
 		}
-		if (feature == protocol.FeatureBuildStateEvicted || feature == protocol.FeatureBuildStateRebuildCost) && a.cfg.Parts.BuildStates == nil {
+		if (feature == protocol.FeatureBuildStateEvicted || feature == protocol.FeatureBuildStateRebuildCost || feature == protocol.FeatureBuildStateDiskFacts) && a.cfg.Parts.BuildStates == nil {
 			continue
 		}
 		if feature == protocol.FeaturePreview && a.cfg.Preview == nil {
@@ -441,7 +441,7 @@ func (a *Agent) Heartbeat() *protocol.HeartbeatBody {
 		hb.Memory = a.memoryReport()
 	}
 	if a.cfg.Parts.BuildStates != nil && a.hubAccepts(protocol.FeatureBuildStateEvicted) {
-		hb.EvictedBuildStates = evictedBuildStates(a.cfg.Parts.BuildStates.EvictedBuildStates(), a.hubAccepts(protocol.FeatureBuildStateRebuildCost))
+		hb.EvictedBuildStates = evictedBuildStates(a.cfg.Parts.BuildStates.EvictedBuildStates(), a.hubAccepts(protocol.FeatureBuildStateRebuildCost), a.hubAccepts(protocol.FeatureBuildStateDiskFacts))
 	}
 	if a.cfg.Host != nil && a.hubAccepts(protocol.FeatureHostHardening) {
 		h := *a.cfg.Host
@@ -457,8 +457,9 @@ func (a *Agent) Heartbeat() *protocol.HeartbeatBody {
 // evictedBuildStates is the driver's ledger as heartbeat evictedBuildStates:
 // ids the schema takes only (an id past its bound is left out), at most the
 // schema's count. withCost adds each state's rebuild seconds, when measured
-// (a hub that accepts buildStateRebuildCost).
-func evictedBuildStates(ev []driver.EvictedBuildState, withCost bool) []protocol.HeartbeatBodyEvictedBuildStatesItem {
+// (a hub that accepts buildStateRebuildCost); withDisk adds the free space and
+// the floor that removed it, when recorded (buildStateDiskFacts).
+func evictedBuildStates(ev []driver.EvictedBuildState, withCost, withDisk bool) []protocol.HeartbeatBodyEvictedBuildStatesItem {
 	var out []protocol.HeartbeatBodyEvictedBuildStatesItem
 	for _, e := range ev {
 		if len(out) == maxEvictedBuildStates {
@@ -471,6 +472,10 @@ func evictedBuildStates(ev []driver.EvictedBuildState, withCost bool) []protocol
 		if secs := int64(e.Rebuild / time.Second); withCost && secs >= 1 {
 			secs = min(secs, maxRebuildSeconds)
 			item.RebuildSeconds = &secs
+		}
+		if withDisk && e.FloorBytes >= 1 {
+			free, floor := max(e.FreeBytes, 0), e.FloorBytes
+			item.FreeBytes, item.FloorBytes = &free, &floor
 		}
 		out = append(out, item)
 	}

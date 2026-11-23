@@ -51,7 +51,7 @@ func (d *Driver) EvictedBuildStates() []driver.EvictedBuildState {
 	ev := d.states.Evicted()
 	out := make([]driver.EvictedBuildState, 0, len(ev))
 	for _, e := range ev {
-		out = append(out, driver.EvictedBuildState{Org: e.Org, Env: e.Env, At: e.At, Rebuild: e.Rebuild})
+		out = append(out, driver.EvictedBuildState{Org: e.Org, Env: e.Env, At: e.At, Rebuild: e.Rebuild, FreeBytes: e.FreeBytes, FloorBytes: e.FloorBytes})
 	}
 	return out
 }

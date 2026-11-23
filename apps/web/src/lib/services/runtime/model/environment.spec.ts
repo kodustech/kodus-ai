@@ -48,6 +48,16 @@ describe("environmentStatus (screens 2 to 4)", () => {
         expect(status.detail).toContain("Set up again.");
     });
 
+    it("an evicted build cache says how much space the volume had and what it needs, so the next Run being cold is no mystery", () => {
+        const GB = 2 ** 30;
+        const status = environmentStatus({
+            state: "active",
+            setup: setup(),
+            buildCache: { state: "evicted", evictedAt: "2026-11-13T07:31:31.000Z", cellId: "cell-1", reason: "disk_floor", freeBytes: 8 * GB, floorBytes: 20 * GB },
+        });
+        expect(status.detail).toContain("The build cache was not kept: the cell's volume has 8 GB free and it needs 20 GB; the next Run starts cold.");
+    });
+
     it("says ready, setting up, a missing secret or a boot failure", () => {
         expect(environmentStatus(undefined)).toMatchObject({
             label: "No environment",

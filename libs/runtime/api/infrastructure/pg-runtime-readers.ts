@@ -141,12 +141,16 @@ export class PgEnvironmentSetupReader implements RuntimeEnvironmentSetupReader {
 export class PgBuildStateEvictionReader implements RuntimeBuildStateEvictionReader {
     constructor(private readonly db: SqlQuery) {}
 
-    async evictions(organizationId: string, environmentId: string): Promise<Array<{ cellId: string; evictedAt: string }>> {
+    async evictions(organizationId: string, environmentId: string): Promise<Array<{ cellId: string; evictedAt: string; freeBytes?: number; floorBytes?: number }>> {
         const res = await this.db.query(
-            `SELECT cell_id, evicted_at FROM runtime.runtime_build_state_evictions WHERE org_id = $1 AND environment_id = $2 ORDER BY evicted_at DESC LIMIT 16`,
+            `SELECT cell_id, evicted_at, free_bytes, floor_bytes FROM runtime.runtime_build_state_evictions WHERE org_id = $1 AND environment_id = $2 ORDER BY evicted_at DESC LIMIT 16`,
             [organizationId, environmentId],
         );
-        return (res.rows as Array<{ cell_id: string; evicted_at: string | Date }>).map((r) => ({ cellId: r.cell_id, evictedAt: new Date(r.evicted_at).toISOString() }));
+        return (res.rows as Array<{ cell_id: string; evicted_at: string | Date; free_bytes: string | number | null; floor_bytes: string | number | null }>).map((r) => ({
+            cellId: r.cell_id,
+            evictedAt: new Date(r.evicted_at).toISOString(),
+            ...(r.floor_bytes ? { freeBytes: Number(r.free_bytes ?? 0), floorBytes: Number(r.floor_bytes) } : {}),
+        }));
     }
 }
 
