@@ -478,6 +478,21 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
         getListMembers.mockRejectedValueOnce(new Error('403'));
         await expect(access(7)).rejects.toThrow('403');
+        // An actor with only account_id names no key members are listed by:
+        // it cannot be checked, rather than read as a non-member.
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { account_id: 'u7', display_name: 'Nina' },
+                        pullrequest: { author: { uuid: '{u9}' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).rejects.toThrow(/named no commenter/);
     });
 
     it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
