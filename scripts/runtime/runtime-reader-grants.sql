@@ -40,6 +40,11 @@ BEGIN
     IF to_regclass('runtime.runtime_cell_tokens') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (token_hash, organization_id, topology, issued_by, created_at, expires_at, used_at, revoked_at) ON runtime.runtime_cell_tokens TO kodus_runtime_reader';
     END IF;
+    -- The environment template builds waiting for their setup (v47, docs/runtime/host-providers.md §8.2): the
+    -- product issues their setup command. Ids, state and the setup key only, never the snapshot name.
+    IF to_regclass('runtime.runtime_env_templates') IS NOT NULL THEN
+      EXECUTE 'GRANT SELECT (org_id, environment_id, state, setup_key, setup_requested_at) ON runtime.runtime_env_templates TO kodus_runtime_reader';
+    END IF;
     IF to_regclass('runtime.runtime_stops') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (scope, organization_id, cleared_at) ON runtime.runtime_stops TO kodus_runtime_reader';
     END IF;
