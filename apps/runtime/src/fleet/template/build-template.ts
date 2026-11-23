@@ -42,7 +42,7 @@ export interface BuildTemplateRequest {
     fingerprint: string;
 }
 
-export type BuildTemplateResult = { ok: true; name: string; reused: boolean } | { ok: false; reason: 'org_not_admitted' | 'no_images' | 'bake_failed' | 'not_default_branch' | 'fingerprint_mismatch' | 'save_failed' };
+export type BuildTemplateResult = { ok: true; name: string; reused: boolean } | { ok: false; reason: 'org_not_admitted' | 'no_images' | 'bake_failed' | 'not_default_branch' | 'fingerprint_mismatch' | 'save_failed' | 'build_error' };
 
 export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: BuildTemplateDeps): Promise<BuildTemplateResult> {
     // Customer data at rest in the provider needs legal sign-off: until then the pool's admission list is the gate.
@@ -72,6 +72,9 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
         if (image.state !== 'ready') return await fail('save_failed');
         for (const older of await d.store.promote(key)) if (older !== name) await d.provider.images.remove(older);
         return { ok: true, name, reused: false };
+    } catch {
+        // A throw from any step (the seal, the save, the provider) records the row failed, never left building.
+        return await fail('build_error');
     } finally {
         await d.setupHosts.destroy(hostId);
     }

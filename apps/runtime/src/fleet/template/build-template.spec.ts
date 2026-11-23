@@ -116,4 +116,15 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         expect(name).not.toContain('org-with');
         expect(templateNameOf('a', 'e', FP)).not.toBe(templateNameOf('b', 'e', FP));
     });
+
+    it('records the template failed, not building, when the seal throws, and still destroys the setup host', async () => {
+        const w = world();
+        w.hosts.seal = async () => {
+            throw new Error('seal exploded');
+        };
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(r).toEqual({ ok: false, reason: 'build_error' });
+        expect(w.store.rows.map((x) => x.state)).toEqual(['failed']);
+        expect(w.hosts.destroyed).toEqual(w.hosts.booted);
+    });
 });
