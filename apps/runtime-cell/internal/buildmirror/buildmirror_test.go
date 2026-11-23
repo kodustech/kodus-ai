@@ -16,7 +16,7 @@ func TestEveryBuildGetsTheMirrorsAndTheProjectsOwnValueWins(t *testing.T) {
 		"YARN_NPM_REGISTRY_SERVER": "http://mirror.cell.internal:8080/npm", "YARN_UNSAFE_HTTP_WHITELIST": "mirror.cell.internal",
 		"PIP_INDEX_URL": m.PyPI, "PIP_TRUSTED_HOST": "mirror.cell.internal",
 		"UV_DEFAULT_INDEX": m.PyPI, "UV_INSECURE_HOST": "mirror.cell.internal",
-		"PRISMA_ENGINES_MIRROR": "http://mirror.cell.internal:8080/artifacts/prisma", "MONGOMS_DOWNLOAD_MIRROR": "http://mirror.cell.internal:8080/artifacts/mongodb",
+		"PRISMA_ENGINES_MIRROR": "http://mirror.cell.internal:8080/artifacts/prisma", "MONGOMS_DOWNLOAD_MIRROR": "http://mirror.cell.internal:8080/artifacts/mongodb", "MONGOMS_USE_HTTP": "1",
 	}
 	if !maps.Equal(got, want) {
 		t.Fatalf("%v", got)

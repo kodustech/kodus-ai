@@ -103,6 +103,9 @@ func (m Mirror) Args(project map[string]string) map[string]string {
 		// mirror.DefaultArtifacts. A project's own value wins.
 		set("PRISMA_ENGINES_MIRROR", m.Artifacts+"prisma")
 		set("MONGOMS_DOWNLOAD_MIRROR", m.Artifacts+"mongodb")
+		// mongodb-memory-server builds its URL with https unless told otherwise,
+		// whatever the mirror's scheme; the cell's mirror is plain HTTP.
+		set("MONGOMS_USE_HTTP", "1")
 	}
 	return args
 }

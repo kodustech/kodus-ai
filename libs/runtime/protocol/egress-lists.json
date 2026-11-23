@@ -149,7 +149,7 @@
     "npm": ["npm_config_registry", "pnpm_config_registry", "YARN_NPM_REGISTRY_SERVER", "YARN_UNSAFE_HTTP_WHITELIST"],
     "pypi": ["PIP_INDEX_URL", "PIP_TRUSTED_HOST", "UV_DEFAULT_INDEX", "UV_INSECURE_HOST"],
     "go": ["GOPROXY"],
-    "artifacts": ["PRISMA_ENGINES_MIRROR", "MONGOMS_DOWNLOAD_MIRROR"]
+    "artifacts": ["PRISMA_ENGINES_MIRROR", "MONGOMS_DOWNLOAD_MIRROR", "MONGOMS_USE_HTTP"]
   },
   "recommended": {
     "version": 2,
