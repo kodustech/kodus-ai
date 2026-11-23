@@ -268,6 +268,10 @@ describe('runUltraModels', () => {
                 return m.modelId === 'b' ? fail('b') : ok(m.modelId);
             },
         });
+        // A missing entry is -1, before any index: each must be there.
+        expect(order).toEqual(
+            expect.arrayContaining(['start:f', 'end:a', 'end:c']),
+        );
         expect(order.indexOf('start:f')).toBeLessThan(order.indexOf('end:a'));
         expect(order.indexOf('start:f')).toBeLessThan(order.indexOf('end:c'));
     });
