@@ -424,6 +424,19 @@ describe('POST /internal/runtime/recipe-author', () => {
         expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).toMatchObject({ status: 'no_recipe', reason: 'the run ended without a recipe' });
     });
 
+    // kr-nocodb on release v1m: "the token budget ran out", one refusal, and no line said which check refused.
+    it("logs why the checks refused Kody's recipes, in the checks' own words, cut", async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD.replace('version: 1', 'version: 1\negress: "*"') } }, { tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const t = make();
+        const logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
+        (t.uc as any).logger = logger;
+        expect((await t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).status).toBe('submitted');
+        const finished = logger.log.mock.calls.map((c) => c[0]).find((l) => l.message === 'Runtime recipe author finished');
+        expect(finished.metadata.rejected).toBe(1);
+        expect(finished.metadata.rejectedBecause).toEqual([[expect.stringContaining('egress')]]);
+        expect(finished.metadata.rejectedBecause[0][0].length).toBeLessThanOrEqual(200);
+    });
+
     it('the checks refusing every try is a verdict even when the last model call failed', async () => {
         const refusals = Array.from({ length: RECIPE_AUTHOR_LIMITS.maxRejected }, () => ({ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD.replace('version: 1', 'version: 1\negress: "*"') } }));
         scripted(refusals);

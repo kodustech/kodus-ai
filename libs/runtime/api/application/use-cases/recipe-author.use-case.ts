@@ -569,6 +569,8 @@ export class RuntimeRecipeAuthorUseCase {
                 status: answer.status,
                 steps: result.steps,
                 rejected: result.rejected.length,
+                // Why each submission was refused, in the checks' own words (kr-nocodb, v1m: one refusal, no line said which).
+                ...(result.rejected.length ? { rejectedBecause: result.rejected.map((errors) => errors.slice(0, 5).map((e) => e.slice(0, 200))) } : {}),
                 ...usage,
             },
         });
