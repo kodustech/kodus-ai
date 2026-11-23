@@ -931,6 +931,28 @@ describe("Ultra review mode", () => {
         expect(save).toHaveBeenCalledTimes(1);
     });
 
+    it("clearing the saved trio with only the model override edited saves the models first: no mode change goes first", async () => {
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mockByok.routing!.ultraModelIds = ["c", "a", "b"];
+        // Ultra is the mode of another scope only: this one keeps Balanced.
+        mount(false, false, { byokModelId: leaf("c") });
+        fireEvent.click(
+            screen.getByRole("combobox", {
+                name: "Code review model override",
+            }),
+        );
+        fireEvent.click(await screen.findByRole("option", { name: /Model B/ }));
+        for (const n of [1, 2, 3]) {
+            await chooseOrgModel(`Ultra Model ${n}`, /^None$/);
+        }
+        await waitFor(() => expect(saveButton()).toBeEnabled());
+        fireEvent.click(saveButton());
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+        expect(saveModels.mock.invocationCallOrder[0]).toBeLessThan(
+            save.mock.invocationCallOrder[0],
+        );
+    });
+
     it("a saved trio that is one model twice is not a trio: models save first, as without one", async () => {
         mockByok.models.push({
             id: "a2",

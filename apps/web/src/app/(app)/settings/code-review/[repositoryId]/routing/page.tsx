@@ -319,7 +319,11 @@ function RoutingSettings() {
             // A trio cleared together with a mode change away from Ultra:
             // the mode goes first, or the stored config would be Ultra with
             // no models if the second save failed (the API refuses it too).
-            const modeFirst = reviewDirty && organization.breaksUltraTrio;
+            // Only a mode edit goes first: one of the model override alone
+            // would leave the stored mode Ultra and be reported as saved.
+            const modeFirst =
+                !!(dirtyFields.reviewMode || dirtyFields.riskReviewRouting) &&
+                organization.breaksUltraTrio;
             const saveReview = () =>
                 reviewDirty
                     ? saveSettings(data, {
