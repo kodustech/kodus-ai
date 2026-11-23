@@ -7,6 +7,8 @@
  */
 import { createHash } from 'crypto';
 
+import { MEMO_MAX_CHARS } from './token-estimator';
+
 import {
     clampMessagesToBudget,
     compressMessages,
@@ -313,14 +315,20 @@ describe('estimateMessagesTokens — per-run counts bounds', () => {
         expect(counts.size).toBe(256);
     });
 
-    it('leaves messages up to 200k chars to the shared memo', () => {
+    it('keeps only messages above MEMO_MAX_CHARS serialized chars', () => {
+        // A user message whose JSON is exactly `chars` long.
+        const sized = (chars: number) => {
+            const empty = JSON.stringify({ role: 'user', content: '' }).length;
+            return { role: 'user', content: 'a'.repeat(chars - empty) } as any;
+        };
+        const atBound = sized(MEMO_MAX_CHARS);
+        expect(JSON.stringify(atBound)).toHaveLength(MEMO_MAX_CHARS);
+
         const counts = new Map<string, number>();
-        const mid = {
-            role: 'user',
-            content: 'const value = compute(input);\n'.repeat(5_000),
-        } as any; // ~150k chars
-        estimateMessagesTokens([{ role: 'user', content: 'hi' }, mid], counts);
+        estimateMessagesTokens([atBound], counts);
         expect(counts.size).toBe(0);
+        estimateMessagesTokens([sized(MEMO_MAX_CHARS + 1)], counts);
+        expect(counts.size).toBe(1);
     });
 
     it('counts a message whose toJSON gives undefined as the uncached path does', () => {
