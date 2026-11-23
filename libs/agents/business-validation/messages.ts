@@ -98,15 +98,22 @@ export function noReadToolMessage(trackers: string[]): string {
 Kody reads tasks from ${names}, but no tool that reads one task by its id is picked. In the Business Logic settings, choose which ${names} tool reads a task, then comment ${RERUN}.`;
 }
 
-export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
-    // A tracker that couldn't read (no tool picked) never said it isn't there.
-    const tried = [
+/**
+ * What was looked for and where, once each. A tracker that couldn't read (no
+ * tool picked) never said the task isn't there, so it is left out.
+ */
+function triedReferences(attempts: ResolutionAttempt[]): string[] {
+    return [
         ...new Set(
             attempts
                 .filter((a) => a.status === 'not_found')
                 .map((a) => `${a.reference} in ${a.tracker}`),
         ),
     ];
+}
+
+export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
+    const tried = triedReferences(attempts);
     return `## 🤔 Task not found
 
 I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them exists' : "it doesn't exist there"}. Check the reference in the title, description or branch, then comment ${RERUN}.`;
@@ -121,13 +128,7 @@ I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them exists'
 export function taskRequiredNotFoundMessage(
     attempts: ResolutionAttempt[],
 ): string {
-    const tried = [
-        ...new Set(
-            attempts
-                .filter((a) => a.status === 'not_found')
-                .map((a) => `${a.reference} in ${a.tracker}`),
-        ),
-    ];
+    const tried = triedReferences(attempts);
     if (!tried.length) {
         return taskRequiredMessage();
     }

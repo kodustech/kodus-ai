@@ -131,9 +131,10 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     ];
     if (allMet) {
         const met = requirements.filter((r) => r.state === 'met');
+        const labels = labelCounts(requirements);
         lines.push(
             `✅ ${met.length} of ${requirements.length} met: ${met
-                .map((r) => metLabel(r, requirements))
+                .map((r) => metLabel(r, labels))
                 .join(', ')}`,
         );
         if (rows.length) {
@@ -357,28 +358,36 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
     return lines.join('\n');
 }
 
+/** The label a requirement shows (`AC #1` and `AC01` both read AC01), if any. */
+function shownLabel(requirement: RequirementVerdict): string | undefined {
+    return requirement.source?.trim()
+        ? displayRequirementSource(requirement.source)
+        : undefined;
+}
+
+/** How many rows show each label, counted once per task. */
+function labelCounts(requirements: RequirementVerdict[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const requirement of requirements) {
+        const label = shownLabel(requirement);
+        if (label) {
+            counts.set(label, (counts.get(label) ?? 0) + 1);
+        }
+    }
+    return counts;
+}
+
 /**
  * A met requirement in the one-line summary: its label (`AC02`) when that
- * names only it, else its own words, so "Parent" never stands for a row.
+ * names only it, compared as shown, else its own words, so "Parent" never
+ * stands for a row.
  */
 function metLabel(
     requirement: RequirementVerdict,
-    all: RequirementVerdict[],
+    labels: Map<string, number>,
 ): string {
-    // Compared as shown: `AC #1` and `AC01` both read AC01, so neither names
-    // only its own row.
-    const label = requirement.source?.trim()
-        ? displayRequirementSource(requirement.source)
-        : undefined;
-    if (
-        label &&
-        label !== 'Parent' &&
-        all.filter(
-            (r) =>
-                r.source?.trim() &&
-                displayRequirementSource(r.source) === label,
-        ).length === 1
-    ) {
+    const label = shownLabel(requirement);
+    if (label && label !== 'Parent' && labels.get(label) === 1) {
         return label;
     }
     const text = requirement.requirement.trim();
