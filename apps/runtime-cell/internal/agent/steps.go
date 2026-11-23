@@ -200,9 +200,14 @@ func (a *Agent) runProbe(ctx context.Context, frameID string, c *claims.Claim, b
 		c.Log.Warn("observer.unavailable", "step", b.StepID, "err", err)
 		res = &protocol.StepResultBody{VMHealth: protocol.VMHealthOk}
 	}
-	// The machine's own health is the cell's word, never the observer's.
+	// The machine's own health is the cell's word, never the observer's. A
+	// running machine whose app did not answer stays unreachable: read as ok
+	// with no probe, the hub would call it a lost transport (kr-remix, v1l).
 	if a.cfg.Parts.Health != nil && m.Workload.MachineID != "" {
-		res.VMHealth = a.healthAfter(ctx, c, b.StepID, m.Workload, before, known)
+		h := a.healthAfter(ctx, c, b.StepID, m.Workload, before, known)
+		if h != protocol.VMHealthOk || res.VMHealth != protocol.VMHealthUnreachable || res.Probe != nil {
+			res.VMHealth = h
+		}
 	}
 	// What the observer says is evidence about the probe, never about which
 	// step it answers nor which machine it ran on: the step, the executor

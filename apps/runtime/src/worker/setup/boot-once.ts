@@ -396,7 +396,9 @@ export async function readyCheck(
                 message:
                     (out !== undefined && isEnvError(out)
                         ? `GET ${path} on ${target.service}:${target.port} failed (${out.code})`
-                        : `GET ${path} on ${target.service}:${target.port} answered ${status ?? 'nothing'}`) + (tries > 1 ? notReadyWaited(Math.floor(waitMs / 1_000), waitMs < waits * 1_000) : ''),
+                        : `GET ${path} on ${target.service}:${target.port} answered ${status ?? 'nothing'}`) +
+                    // A try that is not asked again (a lost transport) waited for nothing: no "after N s" it did not do.
+                    (tries > 1 && out !== undefined && notAnsweringYet(out) ? notReadyWaited(Math.floor(waitMs / 1_000), waitMs < waits * 1_000) : ''),
             },
         };
     }

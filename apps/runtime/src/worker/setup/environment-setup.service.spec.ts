@@ -446,6 +446,20 @@ describe('EnvironmentSetupService', () => {
         expect(tries).toBe(3); // 15 s / 5 s
     });
 
+    // kr-remix on release v1l: one try, then "failed (transport_lost) after 300 s" at 0.7 s.
+    it('a ready check that stops at its first try says no wait it did not do', async () => {
+        const { env } = fakeEnv();
+        let tries = 0;
+        env.probe = async () => {
+            tries++;
+            return { code: 'transport_lost', stepId: 's' } as any;
+        };
+        const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore()).run(cmd());
+        expect(tries).toBe(1);
+        expect(rec.blockers[0]).toMatchObject({ kind: 'not_ready', message: expect.stringContaining('failed (transport_lost)') });
+        expect(rec.blockers[0].message).not.toContain(' after ');
+    });
+
     it('stops the ready check at health_timeout on the clock, when each try hangs to its own timeout', async () => {
         const { env } = fakeEnv();
         let at = Date.parse('2026-10-30T12:00:00.000Z');

@@ -566,3 +566,36 @@ func TestAProbesVMHealthIsTheWorkloadsOwnOOMOrCrash(t *testing.T) {
 		})
 	}
 }
+
+type refusedObserver struct{}
+
+func (refusedObserver) Run(context.Context, []byte) (*protocol.StepResultBody, string, error) {
+	return &protocol.StepResultBody{VMHealth: protocol.VMHealthUnreachable}, "unreachable: connect: connection refused", nil
+}
+
+// kr-remix on release v1l: the app's port refused the setup's ready check
+// while it started. The machine runs, so the cell said ok and the hub read a
+// result with no probe as a lost transport, which the ready check never asks
+// again. A running machine whose app did not answer stays unreachable.
+func TestAnAppThatRefusedOnARunningMachineStaysUnreachable(t *testing.T) {
+	running := driver.MachineHealth{Running: true}
+	hd := &healthDriver{health: running, during: running}
+	h := newHarness(t, func(cfg *Config) {
+		hd.Driver = cfg.Driver.(*fake.Driver)
+		cfg.Driver, cfg.Parts.Health = hd, hd
+		cfg.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) { return refusedObserver{}, nil }
+	})
+	h.ready("claim-1")
+	probe := &protocol.ProbeRunBody{StepID: step1, Probe: protocol.Probe{
+		ID: "p", Origin: protocol.ProbeOriginAgent, Purpose: "p", Expected: "200",
+		Compare: []protocol.CompareField{protocol.CompareFieldStatus},
+		Spec:    protocol.ProbeSpec{HTTP: &protocol.HTTPProbe{Target: protocol.ProbeTarget{Service: "api", Port: 80}, Method: protocol.HTTPMethodGet, Path: "/", TimeoutMs: 1000}},
+	}}
+	if err := h.handle("claim-1", protocol.MessageTypeProbeRun, probe); err != nil {
+		t.Fatal(err)
+	}
+	r := h.conn.next(t, func(f any) bool { _, ok := f.(*protocol.StepResultBody); return ok }).(*protocol.StepResultBody)
+	if r.VMHealth != protocol.VMHealthUnreachable || r.Probe != nil {
+		t.Fatalf("vmHealth %s probe %v, want unreachable and no probe", r.VMHealth, r.Probe)
+	}
+}
