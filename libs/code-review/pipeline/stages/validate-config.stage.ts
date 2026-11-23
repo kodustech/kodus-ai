@@ -395,8 +395,9 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             stored?.configValue as ReviewCommandModesConfig | undefined,
         );
         const requested = context.requestedReviewMode;
-        const access = context.requestedReviewModeAccess;
-        // A job enqueued before the access was read carries none: it runs.
+        // Not read (a job enqueued before the check, or no organization to
+        // ask with) is refused like a lookup that failed.
+        const access = context.requestedReviewModeAccess ?? 'unknown';
         const withoutAccess =
             !blocked &&
             (requested === 'heavy' || requested === 'ultra') &&

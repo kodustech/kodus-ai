@@ -51,6 +51,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             origin: 'command',
             platformType: 'github',
             teamAutomationId: 'team-automation-id',
+            // Whoever asks by command here can write; the refusals set it.
+            requestedReviewModeAccess: 'write',
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -857,7 +859,9 @@ describe('ValidateConfigStage — v2 routing', () => {
         const run = (
             requestedReviewMode?: 'heavy' | 'ultra' | 'balanced',
             reviewMode?: string,
-            requestedReviewModeAccess?: 'write' | 'none' | 'unknown',
+            // null: not read, as from a job enqueued before the check.
+            requestedReviewModeAccess:
+                'write' | 'none' | 'unknown' | null = 'write',
         ) => {
             const context = buildContext(undefined) as any;
             if (reviewMode) context.codeReviewConfig.reviewMode = reviewMode;
@@ -865,7 +869,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             return stage.execute({
                 ...context,
                 requestedReviewMode,
-                requestedReviewModeAccess,
+                requestedReviewModeAccess:
+                    requestedReviewModeAccess ?? undefined,
             });
         };
         const comment = () =>
@@ -896,6 +901,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             ['heavy', 'none', 'Someone with write access can ask for it.'],
             ['ultra', 'none', 'Someone with write access can ask for it.'],
             ['ultra', 'unknown', 'Kody could not check yours'],
+            ['ultra', null, 'Kody could not check yours'],
         ] as const)(
             '--%s from someone whose write access is %s runs no review and says why',
             async (mode, access, text) => {
@@ -914,7 +920,6 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         it.each([
             ['with write access', 'heavy', 'write'],
-            ['from a job enqueued before access was read', 'heavy', undefined],
             ['--balanced, which needs none', 'balanced', 'none'],
         ] as const)('a command %s runs the review', async (_, mode, access) => {
             byKey(undefined);
