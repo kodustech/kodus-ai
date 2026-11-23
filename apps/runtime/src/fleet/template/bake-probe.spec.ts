@@ -1,6 +1,6 @@
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
-import { SetupRecordBakeProbe, templateSetupCommandKey } from './bake-probe';
+import { bakeFingerprintOf, SetupRecordBakeProbe, templateSetupCommandKey } from './bake-probe';
 
 const FP = 'b'.repeat(64);
 const req = { hostId: 'tpl-x', organizationId: 'org-1', environmentId: 'env-1' };
@@ -22,6 +22,14 @@ describe('reading how the template host\'s setup ended (setup record)', () => {
     it('is failed when the setup is blocked, or active with no fingerprint', async () => {
         expect(await probe(rec({ state: 'blocked' })).read(req)).toEqual({ state: 'failed', reason: 'bake_failed' });
         expect(await probe(rec({ bakeRefsDigest: undefined, imageId: undefined })).read(req)).toEqual({ state: 'failed', reason: 'bake_failed' });
+    });
+    it('names the fingerprint as bare hex when the setup recorded a sha256: digest, and has none for a tag like latest', () => {
+        expect(bakeFingerprintOf({ bakeRefsDigest: `sha256:${FP}`, imageId: 'latest' })).toBe(FP);
+        expect(bakeFingerprintOf({ bakeRefsDigest: undefined, imageId: 'latest' })).toBeNull();
+        expect(bakeFingerprintOf({ bakeRefsDigest: undefined, imageId: `sha256:${'c'.repeat(64)}` })).toBe('c'.repeat(64));
+    });
+    it('is done with the bare hex fingerprint when the template setup recorded a sha256: digest', async () => {
+        expect(await probe(rec({ bakeRefsDigest: `sha256:${FP}` })).read(req)).toEqual({ state: 'done', fingerprint: FP, ref: 'default_branch' });
     });
     it("ignores another org's record", async () => {
         expect(await probe(rec({ organizationId: 'org-2' })).read(req)).toEqual({ state: 'running' });

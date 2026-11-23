@@ -15,9 +15,17 @@ export interface SetupRecordReader {
 /** The command key of the setup that builds an environment's template: the bound key and the setup host's id, so it is unique per build. */
 export const templateSetupCommandKey = (organizationId: string, environmentId: string, hostId: string) => `${boundKeyOfTemplate(organizationId, environmentId)}:${hostId}`.slice(0, 256);
 
-/** The bake's fingerprint: the digest of every repository's commit and the recipe when the setup has one, else the cell's image id. */
+/**
+ * The bake's fingerprint: the digest of every repository's commit and the recipe when the setup has one, else the
+ * cell's image id. The setup records them as `sha256:<hex>`; the template name takes bare hex, so the prefix goes, and a
+ * value that is not a digest (an image tag such as `latest`) is no fingerprint.
+ */
 export function bakeFingerprintOf(rec: Pick<EnvironmentSetupRecord, 'bakeRefsDigest' | 'imageId'>): string | null {
-    return rec.bakeRefsDigest ?? rec.imageId ?? null;
+    for (const v of [rec.bakeRefsDigest, rec.imageId]) {
+        const hex = v?.replace(/^sha256:/, '');
+        if (hex && /^[0-9a-f]{16,64}$/.test(hex)) return hex;
+    }
+    return null;
 }
 
 export class SetupRecordBakeProbe implements BakeProbe {
