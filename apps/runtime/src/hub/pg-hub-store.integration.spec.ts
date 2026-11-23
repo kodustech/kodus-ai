@@ -147,6 +147,20 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         expect(await store.session(id)).toMatchObject({ features: [], maxClaimSize: null, defaultClaimSize: null, sandboxClaimSize: null });
     });
 
+    it('keeps the free bytes and the floor a build state was evicted under, and an older cell that names neither keeps none', async () => {
+        const id = cellId();
+        await store.upsertSession({ cellId: id, replicaId: 'r', replicaUrl: `u-${id}`, owner: 'kodus', driver: 'fake' });
+        const at = new Date().toISOString();
+        await store.syncEvictedBuildStates(id, [
+            { orgId: 'org-a', environmentId: 'env-floor', evictedAt: at, freeBytes: 8 * 1024 ** 3, floorBytes: 20 * 1024 ** 3 },
+            { orgId: 'org-a', environmentId: 'env-old', evictedAt: at },
+        ]);
+        expect(await store.evictedBuildState(id, 'org-a', 'env-floor')).toMatchObject({ freeBytes: 8 * 1024 ** 3, floorBytes: 20 * 1024 ** 3 });
+        const old = await store.evictedBuildState(id, 'org-a', 'env-old');
+        expect(old).not.toHaveProperty('floorBytes');
+        expect(old).not.toHaveProperty('freeBytes');
+    });
+
     it('keeps whether a claim is the PR side of a fork, through a rebind; a claim that says nothing is not', async () => {
         const fork = { ...claim(), side: 'pr', forkPullRequest: true };
         const own = claim();
@@ -456,6 +470,38 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
             await pool.query(`DELETE FROM runtime.runtime_cell_reservations WHERE org_id = $1`, [org]);
         }
     });
+
+    it("another cell may hold a Run's two sides only when it is live, serves the org and has the memory (an unreported size may)", () =>
+        isolated(async (_db, s) => {
+            const org = `org-${randomUUID()}`;
+            const other = `org-${randomUUID()}`;
+            const self = cellId();
+            await s.upsertSession({ cellId: self, replicaId: 'r', replicaUrl: `u-${self}`, owner: 'customer', orgId: org, driver: 'fake' });
+            await s.heartbeat(self, 'r', 1, undefined, { allocatableMb: 64_000, committedMb: 0 });
+            // Only the cell itself is big enough: no other cell may hold 20 GB.
+            expect(await s.anotherCellMayHold(org, self, 20_000)).toBe(false);
+            const small = cellId();
+            await s.upsertSession({ cellId: small, replicaId: 'r', replicaUrl: `u-${small}`, owner: 'kodus', driver: 'fake' });
+            await s.heartbeat(small, 'r', 1, undefined, { allocatableMb: 13_000, committedMb: 0 });
+            expect(await s.anotherCellMayHold(org, self, 20_000)).toBe(false);
+            // Another org's own big cell never serves this org.
+            const foreign = cellId();
+            await s.upsertSession({ cellId: foreign, replicaId: 'r', replicaUrl: `u-${foreign}`, owner: 'customer', orgId: other, driver: 'fake' });
+            await s.heartbeat(foreign, 'r', 1, undefined, { allocatableMb: 64_000, committedMb: 0 });
+            expect(await s.anotherCellMayHold(org, self, 20_000)).toBe(false);
+            // A shared cell that has not reported its memory may hold it: the Run waits rather than fails.
+            const unsized = cellId();
+            await s.upsertSession({ cellId: unsized, replicaId: 'r', replicaUrl: `u-${unsized}`, owner: 'kodus', driver: 'fake' });
+            await s.heartbeat(unsized, 'r', 1);
+            expect(await s.anotherCellMayHold(org, self, 20_000)).toBe(true);
+            await s.disconnect(unsized, 'r');
+            expect(await s.anotherCellMayHold(org, self, 20_000)).toBe(false);
+            // A big shared cell does.
+            const big = cellId();
+            await s.upsertSession({ cellId: big, replicaId: 'r', replicaUrl: `u-${big}`, owner: 'kodus', driver: 'fake' });
+            await s.heartbeat(big, 'r', 1, undefined, { allocatableMb: 32_000, committedMb: 8_000 });
+            expect(await s.anotherCellMayHold(org, self, 20_000)).toBe(true);
+        }));
 
     it('no free slot on any eligible cell is no_capacity, never a full cell; no cell at all is none', () =>
         isolated(async (db, s) => {
