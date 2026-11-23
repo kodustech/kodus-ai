@@ -67,7 +67,15 @@ describe('CrossProcessEventsBridge', () => {
 
     const makeBridge = (query = jest.fn().mockResolvedValue(undefined)) => {
         const eventEmitter = { emit: jest.fn() };
-        const dataSource = { query, options: {} };
+        const dataSource = {
+            query,
+            options: {},
+            // One transaction on one connection: the manager runs on the
+            // same mocked query so specs see every statement in order.
+            transaction: jest.fn(async (work: (m: any) => Promise<void>) =>
+                work({ query }),
+            ),
+        };
         const bridge = new CrossProcessEventsBridge(
             dataSource as any,
             eventEmitter as any,
@@ -239,16 +247,11 @@ describe('CrossProcessEventsBridge', () => {
         expect(query.mock.calls[0][0]).toContain('CREATE TABLE IF NOT EXISTS');
     });
 
-    it('sweep runs DELETE on the primary; no-op when inert or not ready', async () => {
-        // With advisory lock (added for multi-instance safety) the
-        // sweep issues 3 queries: try_advisory_lock → DELETE →
-        // advisory_unlock. First mock says "we got the lock" so DELETE
-        // proceeds.
+    it('sweep deletes expired rows on the primary, holding the cross-instance lock in the same transaction; no-op when inert or not ready', async () => {
         const query = jest
             .fn()
-            .mockResolvedValueOnce([{ locked: true }]) // pg_try_advisory_lock
-            .mockResolvedValueOnce(undefined) // DELETE
-            .mockResolvedValueOnce(undefined); // pg_advisory_unlock
+            .mockResolvedValueOnce([{ locked: true }]) // transaction-scoped lock
+            .mockResolvedValueOnce(undefined); // DELETE
         const { bridge } = makeBridge(query);
 
         // Not ready → skip everything.
@@ -257,14 +260,12 @@ describe('CrossProcessEventsBridge', () => {
 
         (bridge as any).infraReady = true;
         await bridge.sweepExpiredRows();
-        expect(query).toHaveBeenCalledTimes(3);
-        expect(query.mock.calls[0][0]).toContain('pg_try_advisory_lock');
+        expect(query).toHaveBeenCalledTimes(2);
         expect(query.mock.calls[1][0]).toContain('DELETE FROM kodus_cross_process_events');
         expect(query.mock.calls[1][0]).toContain("interval '60 minutes'");
-        expect(query.mock.calls[2][0]).toContain('pg_advisory_unlock');
     });
 
-    it('sweep skips DELETE when another task holds the advisory lock', async () => {
+    it('sweep skips DELETE when another task holds the lock', async () => {
         // Simulate: the other instance got the lock first.
         const query = jest
             .fn()
@@ -274,10 +275,7 @@ describe('CrossProcessEventsBridge', () => {
 
         await bridge.sweepExpiredRows();
 
-        // Only the lock probe ran; DELETE was skipped, no unlock
-        // needed (we don't hold the lock).
         expect(query).toHaveBeenCalledTimes(1);
-        expect(query.mock.calls[0][0]).toContain('pg_try_advisory_lock');
     });
 
     it('polling fallback anchors to MAX(id) on first tick (no cold replay)', async () => {
