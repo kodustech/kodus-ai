@@ -1755,6 +1755,56 @@ describe('SandboxLeaseManager', () => {
             expect(idleMs).toBeLessThanOrEqual(30_000);
         });
 
+        // The review does not await its release (#2628)
+        it('stamps the release when it starts, before the Mongo writes', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            leaseRepo.decrementLease.mockReturnValueOnce(
+                new Promise(() => {}) as any,
+            );
+
+            void manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().releasedAt).toBeInstanceOf(Date);
+        });
+
+        it('stops stamping after the release, and logs a use after it once', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await sandbox.run('git status');
+            const lastUsedAt = sandbox.usage?.().lastUsedAt;
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            const warn = (manager as any).logger.warn as jest.Mock;
+            warn.mockClear();
+
+            await sandbox.run('git log');
+            await sandbox.remoteCommands.read('src/a.ts', 1, 10);
+
+            expect(sandbox.usage?.().lastUsedAt).toBe(lastUsedAt);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.mock.calls[0][0].message).toContain(
+                'sandbox used after release',
+            );
+        });
+
+        it('a command still running at the release does not stamp after it', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finish!: (content: string) => void;
+            (provided.readFile as jest.Mock).mockReturnValueOnce(
+                new Promise<string>((resolve) => (finish = resolve)),
+            );
+
+            const reading = sandbox.readFile('src/a.ts');
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            finish('content');
+            await reading;
+
+            expect(sandbox.usage?.().firstUsedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().lastUsedAt).toBeUndefined();
+        });
+
         it('stamps a command that fails too', async () => {
             const { sandbox } = await acquireCreated();
             const provided = await (sandboxProvider.createSandboxWithRepo.mock

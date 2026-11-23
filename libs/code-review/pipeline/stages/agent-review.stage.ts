@@ -810,7 +810,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * Give the review's sandbox lease back once the orchestrator returns: it
      * is the review's last reader of the checkout, and everything after it
      * reads the diff the platform returned (#2628). Another holder of the
-     * PR's sandbox, such as a `@kody` reply, keeps it running.
+     * PR's sandbox, such as a `@kody` reply, keeps it running. Not awaited by
+     * the stage: on the local provider the release deletes the clone, and the
+     * comments must not wait for it; the observer awaits the same release at
+     * pipeline end.
      */
     private async releaseSandbox(
         context: CodeReviewPipelineContext,
@@ -819,7 +822,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             await context.sandboxHandle?.cleanup?.();
         } catch (error) {
             this.logger.warn({
-                message: `[AGENT] Could not release the sandbox for PR#${context.pullRequest?.number}; the pipeline end retries`,
+                message: `[AGENT] Could not release the sandbox for PR#${context.pullRequest?.number}; the lease TTL reaper frees it`,
                 context: this.stageName,
                 error,
                 metadata: {
@@ -1131,7 +1134,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     },
                 });
             } finally {
-                await this.releaseSandbox(context);
+                void this.releaseSandbox(context);
             }
 
             // Snapshot linked-repo metadata after the review so clone status

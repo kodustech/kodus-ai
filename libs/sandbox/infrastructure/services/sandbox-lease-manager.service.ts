@@ -601,12 +601,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             return;
         }
 
-        const updated = await this.leaseRepo.decrementLease(prKey);
-        this.leaseIdToPrKey.delete(leaseId);
-
+        // Stamped before the Mongo writes: a caller that does not wait for the
+        // release (the review, #2628) still records when it gave it back.
         const use = this.leaseIdToUse.get(leaseId);
         this.leaseIdToUse.delete(leaseId);
         if (use) use.releasedAt = new Date();
+
+        const updated = await this.leaseRepo.decrementLease(prKey);
+        this.leaseIdToPrKey.delete(leaseId);
 
         this.logger.log({
             message: `SandboxLeaseManager: released leaseId="${leaseId}" prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
@@ -616,14 +618,17 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 prKey,
                 leaseCount: updated?.leaseCount,
                 consumer: use?.consumer,
-                heldMs: use ? Date.now() - use.acquiredAt.getTime() : undefined,
+                heldMs: use?.releasedAt
+                    ? use.releasedAt.getTime() - use.acquiredAt.getTime()
+                    : undefined,
                 // Both unset when the holder never ran a command on the sandbox
                 acquireToFirstUseMs: use?.firstUsedAt
                     ? use.firstUsedAt.getTime() - use.acquiredAt.getTime()
                     : undefined,
-                lastUseToReleaseMs: use?.lastUsedAt
-                    ? Date.now() - use.lastUsedAt.getTime()
-                    : undefined,
+                lastUseToReleaseMs:
+                    use?.lastUsedAt && use.releasedAt
+                        ? use.releasedAt.getTime() - use.lastUsedAt.getTime()
+                        : undefined,
             },
         });
 
@@ -1371,10 +1376,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
     /**
      * Stamp the commands the lease's holder runs on its sandbox: when the
-     * first one starts and when the last one settles. A release can then
-     * tell how long the sandbox stayed held before its first use and after
-     * its last (#2628). The null sandbox runs nothing and is handed out as it
-     * is.
+     * first one starts and when the last one settles before the release. A
+     * release can then tell how long the sandbox stayed held before its first
+     * use and after its last (#2628). The null sandbox runs nothing and is
+     * handed out as it is.
      */
     private trackUse(
         sandbox: SandboxInstance,
@@ -1386,14 +1391,32 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         const use: SandboxUsage = { consumer, acquiredAt: new Date() };
         this.leaseIdToUse.set(leaseId, use);
 
+        // After the release nothing is stamped, so the usage never shows a use
+        // after it; a command started then is still run, and logged once.
+        let warnedUseAfterRelease = false;
         const stamped =
             <A extends unknown[], R>(command: (...args: A) => Promise<R>) =>
             async (...args: A): Promise<R> => {
+                if (use.releasedAt) {
+                    if (!warnedUseAfterRelease) {
+                        warnedUseAfterRelease = true;
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: sandbox used after release consumer="${consumer}" leaseId="${leaseId}"`,
+                            context: SandboxLeaseManager.name,
+                            metadata: {
+                                leaseId,
+                                consumer,
+                                releasedAt: use.releasedAt,
+                            },
+                        });
+                    }
+                    return command(...args);
+                }
                 use.firstUsedAt ??= new Date();
                 try {
                     return await command(...args);
                 } finally {
-                    use.lastUsedAt = new Date();
+                    if (!use.releasedAt) use.lastUsedAt = new Date();
                 }
             };
 

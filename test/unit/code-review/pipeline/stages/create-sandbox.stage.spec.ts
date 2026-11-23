@@ -301,7 +301,9 @@ describe('CreateSandboxStage', () => {
             expect(mockLeaseManager.release).toHaveBeenCalledTimes(1);
         });
 
-        it('releases again at the next cleanup when the first release failed', async () => {
+        // release() is not idempotent: a retry after a write that applied
+        // could take a co-holder's lease count
+        it('does not retry a failed release at the next cleanup', async () => {
             mockLeaseManager.release.mockRejectedValueOnce(
                 new Error('mongo down'),
             );
@@ -314,10 +316,11 @@ describe('CreateSandboxStage', () => {
             await expect(result.sandboxHandle.cleanup()).rejects.toThrow(
                 'mongo down',
             );
-            await result.sandboxHandle.cleanup();
-            await result.sandboxHandle.cleanup();
+            await expect(result.sandboxHandle.cleanup()).rejects.toThrow(
+                'mongo down',
+            );
 
-            expect(mockLeaseManager.release).toHaveBeenCalledTimes(2);
+            expect(mockLeaseManager.release).toHaveBeenCalledTimes(1);
         });
 
         it('logs an invalidation as a supersede (warn, not error) and continues', async () => {

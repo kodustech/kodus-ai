@@ -420,6 +420,19 @@ describe('AgentReviewStage', () => {
             ]);
         });
 
+        // On the local provider the release deletes the clone; the comments
+        // must not wait for it
+        it('does not wait for the release to finish the stage', async () => {
+            const cleanup = jest.fn(() => new Promise<void>(() => {}));
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(cleanup).toHaveBeenCalledTimes(1);
+            expect(result.fileAnalysisResults).toHaveLength(2);
+        });
+
         it('keeps the review when the release fails', async () => {
             const cleanup = jest
                 .fn()
