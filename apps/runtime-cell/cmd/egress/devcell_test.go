@@ -78,6 +78,7 @@ func TestTheDevCellDefaults(t *testing.T) {
 		`-gvisor-build-state-min-free-gb "$BUILD_STATE_MIN_FREE_GB"`, // the floor the script checks is the one the cell gets
 		`BUILD_STATE_MIN_FREE_GB="${BUILD_STATE_MIN_FREE_GB:-20}"`,   // the cell's own default
 		`reflink=1`, // says whether the state's filesystem has reflinks
+		`-gvisor-mirror-artifacts "http://mirror.cell.internal:8080/artifacts/"`, // Prisma, MongoDB and Firebase emulator downloads go through the mirror
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("dev-gvisor-cell.sh lacks %q", want)

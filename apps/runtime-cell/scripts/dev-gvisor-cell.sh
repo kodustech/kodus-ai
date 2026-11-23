@@ -272,7 +272,7 @@ exec_cell=("$BIN/cell" -driver docker-gvisor -dev -hub-url "$HUB_URL" -git-api "
   -policy-key "$P/policy.key.pem" -egress-allow "$EGRESS_ALLOW" -cell-ca-cert "$STATE/injector/cell-ca.pem"
   -gvisor-holder-image "$HOLDER_IMAGE" -gvisor-builder-image "$BUILDER_IMAGE" ${BUILDER_TRUST:+-gvisor-builder-trust} -gvisor-egress-container "$EGRESS"
   -gvisor-mirror-goproxy "http://mirror.cell.internal:8080/go,off"
-  -gvisor-mirror-npm "http://mirror.cell.internal:8080/npm/" -gvisor-mirror-pypi "http://mirror.cell.internal:8080/pypi/simple/"
+  -gvisor-mirror-npm "http://mirror.cell.internal:8080/npm/" -gvisor-mirror-pypi "http://mirror.cell.internal:8080/pypi/simple/" -gvisor-mirror-artifacts "http://mirror.cell.internal:8080/artifacts/"
   -gvisor-mirror-registry "mirror.cell.internal:8080" ${MEM_LIMIT:+-gvisor-mem-limit "$MEM_LIMIT"} ${MEM_MAX:+-gvisor-mem-max "$MEM_MAX"} ${CPUS_MAX:+-gvisor-cpus-max "$CPUS_MAX"} ${BUILD_STATE:+-gvisor-build-state -gvisor-build-state-min-free-gb "$BUILD_STATE_MIN_FREE_GB"} ${BUILD_STATE_KEEP:+-gvisor-build-state-keep "$BUILD_STATE_KEEP"}
   ${IMAGE_TRANSFER:+-gvisor-image-transfer "$IMAGE_TRANSFER"} ${REGISTRY_IMAGE:+-gvisor-registry-image "$REGISTRY_IMAGE"} ${REGISTRY_KEEP_GB:+-gvisor-registry-keep-gb "$REGISTRY_KEEP_GB"}
   -gvisor-observer-image "$OBSERVER_IMAGE" -gvisor-observer-tls-dir "$STATE/observer-tls"
