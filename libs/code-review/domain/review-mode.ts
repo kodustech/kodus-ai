@@ -6,6 +6,21 @@ import type { RiskAssessmentResult } from './risk/risk-assessment';
  *  `--ultra`), over the mode set in settings. */
 export type RequestedReviewMode = 'balanced' | 'heavy' | 'ultra';
 
+/**
+ * The routes a legacy `reviewMode` ran on: it is the no-risk route, Ultra
+ * included, and a risky change never gets a weaker review than one with no
+ * risk.
+ */
+export function routesForLegacyMode(mode: ReviewMode | undefined): {
+    noRisk: 'balanced' | 'heavy' | 'ultra';
+    riskFound: 'heavy' | 'ultra';
+} {
+    return {
+        noRisk: mode === 'heavy' || mode === 'ultra' ? mode : 'balanced',
+        riskFound: mode === 'ultra' ? 'ultra' : 'heavy',
+    };
+}
+
 export type ReviewRoutingReason =
     | 'requested'
     | 'risk-found'

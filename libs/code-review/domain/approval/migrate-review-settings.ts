@@ -10,6 +10,7 @@ import {
     riskReviewRoutingSchema,
     type RiskCriterion,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import { routesForLegacyMode } from '../review-mode';
 
 type Settings = Pick<
     CodeReviewConfig,
@@ -143,13 +144,7 @@ export function resolveReviewSettings(
         riskCriteria: criteria,
         approvalPolicies: policies,
         riskReviewRouting: {
-            // The default mode is the no-risk route, Ultra included. A risky
-            // change never gets a weaker review than one with no risk.
-            noRisk:
-                legacyRoutingMode === 'heavy' || legacyRoutingMode === 'ultra'
-                    ? legacyRoutingMode
-                    : 'balanced',
-            riskFound: legacyRoutingMode === 'ultra' ? 'ultra' : 'heavy',
+            ...routesForLegacyMode(legacyRoutingMode),
             ...saved.riskReviewRouting,
         },
     };

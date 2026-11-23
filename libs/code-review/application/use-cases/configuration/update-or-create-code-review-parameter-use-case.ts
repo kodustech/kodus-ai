@@ -123,7 +123,7 @@ import {
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
 import {
-    isUltraReviewPlanAllowed,
+    ultraReviewPlanAccess,
     resolveUltraTrio,
     ultraTrioRefusal,
 } from '@libs/ee/ultra-review/ultra-review-plan';
@@ -135,6 +135,7 @@ import {
     migratedReviewSettings,
     resolveReviewSettings,
 } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { routesForLegacyMode } from '@libs/code-review/domain/review-mode';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
@@ -975,16 +976,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             });
         }
         if (asks('ultra')) {
-            if (
-                !(await isUltraReviewPlanAllowed(
-                    this.licenseService,
-                    organizationAndTeamData,
-                    UpdateOrCreateCodeReviewParameterUseCase.name,
-                ))
-            ) {
+            const planAccess = await ultraReviewPlanAccess(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            );
+            if (planAccess !== 'allowed') {
                 refusals.push({
                     mode: 'ultra',
-                    reason: ultraSaveRefusalMessage('plan'),
+                    reason: ultraSaveRefusalMessage(
+                        planAccess === 'unknown' ? 'plan_unreadable' : 'plan',
+                    ),
                 });
             } else if (changesTo('ultra')) {
                 const refusal = ultraTrioRefusal(
@@ -1314,21 +1316,15 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                   ).riskReviewRouting;
         // Each route is seeded with what the legacy mode ran on it, unless
         // an ancestor sets that route: the scope inherits that one.
+        const legacyRoutes = routesForLegacyMode(oldConfig.reviewMode);
         const seededRouting =
             ownsLegacyMode && editsRouting
                 ? {
                       ...(ancestorRouting?.noRisk === undefined && {
-                          noRisk:
-                              oldConfig.reviewMode === 'heavy' ||
-                              oldConfig.reviewMode === 'ultra'
-                                  ? oldConfig.reviewMode
-                                  : ('balanced' as const),
+                          noRisk: legacyRoutes.noRisk,
                       }),
                       ...(ancestorRouting?.riskFound === undefined && {
-                          riskFound:
-                              oldConfig.reviewMode === 'ultra'
-                                  ? ('ultra' as const)
-                                  : ('heavy' as const),
+                          riskFound: legacyRoutes.riskFound,
                       }),
                   }
                 : undefined;
