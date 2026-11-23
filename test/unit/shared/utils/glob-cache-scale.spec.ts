@@ -490,7 +490,11 @@ describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
         ['double quotes', '**/"node_modules"/**', 'src/node_modules/a.js'],
         // Unlike double quotes, picomatch keeps these as literal text.
         ['single quotes', "**/'node_modules'/**", 'src/node_modules/a.js'],
-        ['single quotes, quoted path', "**/'node_modules'/**", "src/'node_modules'/a.js"],
+        [
+            'single quotes, quoted path',
+            "**/'node_modules'/**",
+            "src/'node_modules'/a.js",
+        ],
         ['backticks', '**/`node_modules`/**', 'src/node_modules/a.js'],
     ])('matches as picomatch does: %s', (_label, pattern, file) => {
         for (const caseInsensitive of [false, true]) {
@@ -516,15 +520,19 @@ describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
     });
 
     it('does not cache a list larger than the whole budget', () => {
+        // Warmed differently, so each half of the stats is checked on its own.
         isFileMatchingGlob('src/a.ts', ['**/warm/**']);
-        isFileMatchingGlobCaseInsensitive('src/a.ts', ['**/warm/**']);
+        isFileMatchingGlobCaseInsensitive('src/a.ts', [
+            '**/warm/**',
+            '**/b/**',
+        ]);
+        isFileMatchingGlobCaseInsensitive('src/a.ts', ['**/c/**']);
         const huge = Array.from({ length: 50_001 }, () => '**/huge/**');
         expect(isFileMatchingGlob('src/a.ts', huge)).toBe(false);
         expect(isFileMatchingGlobCaseInsensitive('src/a.ts', huge)).toBe(false);
-        const one = { lists: 1, patterns: 1 };
         expect(_getCompiledListStats()).toEqual({
-            caseSensitive: one,
-            caseInsensitive: one,
+            caseSensitive: { lists: 1, patterns: 1 },
+            caseInsensitive: { lists: 2, patterns: 3 },
         });
     });
 });
